@@ -5,23 +5,23 @@ import { signToken } from '../../../../lib/auth'
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { email, password } = body
+    const { email } = body
 
-    if (!email || !password) {
-      return new Response(JSON.stringify({ message: 'Missing fields' }), { status: 400 })
+    if (!email) {
+      return new Response(JSON.stringify({ message: 'Email is required' }), { status: 400 })
     }
 
     await dbConnect()
 
-    const user = await User.findOne({ email })
+    // TODO: Remove this - allowing all logins for testing with email code
+    let user = await User.findOne({ email })
     if (!user) {
-      return new Response(JSON.stringify({ message: 'Invalid credentials' }), { status: 401 })
-    }
-
-    // comparePassword is defined on schema methods
-    const match = await (user as any).comparePassword(password)
-    if (!match) {
-      return new Response(JSON.stringify({ message: 'Invalid credentials' }), { status: 401 })
+      // Create a test user if they don't exist
+      user = await User.create({
+        name: email.split('@')[0],
+        email,
+        password: 'dummy-password-not-used' // Will be hashed by the User model
+      })
     }
 
     const token = signToken({ userId: String(user._id), email: user.email })
