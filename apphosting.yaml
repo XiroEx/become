@@ -1,0 +1,5 @@
+env:
+  - variable: MONGODB_URI
+    secret: MONGODB_URI
+  - variable: JWT_SECRET
+    secret: JWT_SECRET
