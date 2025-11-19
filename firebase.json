@@ -1,0 +1,13 @@
+{
+  "apphosting": {
+    "backendId": "jondonfit",
+    "rootDir": "webapp",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "functions"
+    ]
+  }
+}
