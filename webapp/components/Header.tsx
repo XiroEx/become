@@ -9,7 +9,7 @@ interface HeaderProps {
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
 const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "No-nonsense, results-oriented coaching. Transformations only.";
-const profileImage = process.env.NEXT_PUBLIC_PROFILE_IMAGE || "/jon.jpg";
+const profileImage = process.env.NEXT_PUBLIC_PROFILE_IMAGE || "/profile.jpg";
 
 export default function Header({ 
   showActions = true, 
