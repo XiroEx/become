@@ -3,6 +3,8 @@ import ProgramModel from "@/models/Program";
 import ProgrammingClient from "./ProgrammingClient";
 import { Program } from "@/lib/data/programs";
 
+export const dynamic = 'force-dynamic';
+
 async function getPrograms(): Promise<Program[]> {
   await dbConnect();
   const programs = await ProgramModel.find({}).lean();
