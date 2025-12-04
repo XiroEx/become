@@ -1,0 +1,324 @@
+{
+  "_id": "692c9dee92438e3f6d39f656",
+  "program_id": "strength-size-20",
+  "__v": 0,
+  "duration_weeks": 4,
+  "goal": "4-day Upper/Lower split focused on strength and hypertrophy. Daily ab finishers. Optional conditioning. Supersets included only for accessory work.",
+  "name": "Strength & Size 2.0",
+  "phases": [
+    {
+      "phase": "Phase 1",
+      "weeks": "1-4",
+      "focus": "4-day Upper/Lower split focused on strength and hypertrophy. Daily ab finishers. Optional conditioning. Supersets included only for accessory work.",
+      "workouts": {
+        "Upper A": {
+          "title": "Upper A",
+          "exercises": [
+            {
+              "name": "Barbell Bench Press",
+              "sets": 4,
+              "reps": "5",
+              "type": "strength",
+              "details": "RPE 7-8, rest 2-3 min"
+            },
+            {
+              "name": "Bent-Over Barbell Row",
+              "sets": 4,
+              "reps": "6",
+              "type": "strength",
+              "details": "Rest 2-3 min"
+            },
+            {
+              "name": "Incline Dumbbell Press",
+              "sets": 3,
+              "reps": "8",
+              "type": "strength",
+              "details": "Rest 2 min"
+            },
+            {
+              "name": "Lat Pulldown",
+              "sets": 3,
+              "reps": "10",
+              "type": "strength",
+              "details": "Rest 1.5-2 min"
+            },
+            {
+              "name": "Seated Dumbbell Shoulder Press",
+              "sets": 3,
+              "reps": "8-10",
+              "type": "strength",
+              "details": "Rest 1.5-2 min"
+            },
+            {
+              "name": "Dumbbell Lateral Raise",
+              "sets": 3,
+              "reps": "12-15",
+              "rest": "60-90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Cable Triceps Pressdown",
+              "sets": 3,
+              "reps": "12-15",
+              "rest": "60-90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Dumbbell Biceps Curl",
+              "sets": 3,
+              "reps": "10-12",
+              "type": "strength"
+            },
+            {
+              "name": "8-10 min incline treadmill walk",
+              "type": "conditioning"
+            },
+            {
+              "name": "Cable Crunch",
+              "reps": "12-15",
+              "type": "abs"
+            },
+            {
+              "name": "Reverse Crunch",
+              "reps": "12-15",
+              "type": "abs"
+            },
+            {
+              "name": "Plank",
+              "reps": "30-45 sec",
+              "type": "abs"
+            }
+          ]
+        },
+        "Lower A": {
+          "title": "Lower A",
+          "exercises": [
+            {
+              "name": "Back Squat",
+              "sets": 4,
+              "reps": "5",
+              "type": "strength",
+              "details": "RPE 7-8, rest 2-3 min"
+            },
+            {
+              "name": "Romanian Deadlift",
+              "sets": 3,
+              "reps": "6",
+              "type": "strength",
+              "details": "Rest 2-3 min"
+            },
+            {
+              "name": "Leg Press",
+              "sets": 3,
+              "reps": "10",
+              "type": "strength",
+              "details": "Rest 2 min"
+            },
+            {
+              "name": "Seated Leg Curl",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength",
+              "details": "Rest 1.5 min"
+            },
+            {
+              "name": "Dumbbell Walking Lunges",
+              "sets": 3,
+              "reps": "10 each leg",
+              "rest": "90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Leg Extension",
+              "sets": 3,
+              "reps": "12-15",
+              "rest": "90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Standing Calf Raise",
+              "sets": 4,
+              "reps": "12-15",
+              "type": "strength"
+            },
+            {
+              "name": "10 min incline walk or bike",
+              "type": "conditioning"
+            },
+            {
+              "name": "Hanging Knee Raise",
+              "reps": "10-12",
+              "type": "abs"
+            },
+            {
+              "name": "Cable Side Bend",
+              "reps": "12 each side",
+              "type": "abs"
+            },
+            {
+              "name": "Dead Bug",
+              "reps": "10-12 each side",
+              "type": "abs"
+            }
+          ]
+        },
+        "Upper B": {
+          "title": "Upper B",
+          "exercises": [
+            {
+              "name": "Weighted Pull-Up or Pulldown",
+              "sets": 4,
+              "reps": "5",
+              "type": "strength",
+              "details": "Rest 2-3 min"
+            },
+            {
+              "name": "Dumbbell Bench Press",
+              "sets": 4,
+              "reps": "6-8",
+              "type": "strength",
+              "details": "Rest 2-3 min"
+            },
+            {
+              "name": "Machine Row / Chest-Supported Row",
+              "sets": 3,
+              "reps": "10",
+              "type": "strength"
+            },
+            {
+              "name": "Machine Chest Press",
+              "sets": 3,
+              "reps": "10",
+              "type": "strength"
+            },
+            {
+              "name": "Rear Delt Fly",
+              "sets": 3,
+              "reps": "12-15",
+              "rest": "60-90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Face Pull",
+              "sets": 3,
+              "reps": "12-15",
+              "rest": "60-90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "EZ-Bar Curl",
+              "sets": 3,
+              "reps": "10-12",
+              "type": "strength"
+            },
+            {
+              "name": "Overhead Triceps Extension",
+              "sets": 3,
+              "reps": "12-15",
+              "type": "strength"
+            },
+            {
+              "name": "8-10 min steady bike",
+              "type": "conditioning"
+            },
+            {
+              "name": "Cable Crunch",
+              "reps": "12-15",
+              "type": "abs"
+            },
+            {
+              "name": "Toe Touches",
+              "reps": "12-15",
+              "type": "abs"
+            },
+            {
+              "name": "Plank",
+              "reps": "30-45 sec",
+              "type": "abs"
+            }
+          ]
+        },
+        "Lower B": {
+          "title": "Lower B",
+          "exercises": [
+            {
+              "name": "Front Squat",
+              "sets": 4,
+              "reps": "5",
+              "type": "strength",
+              "details": "Rest 2-3 min"
+            },
+            {
+              "name": "RDL (Barbell or Dumbbell)",
+              "sets": 4,
+              "reps": "6",
+              "type": "strength",
+              "details": "Rest 2-3 min"
+            },
+            {
+              "name": "Lying Leg Curl",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "Glute Cable Kickback",
+              "sets": 3,
+              "reps": "15 each leg",
+              "type": "strength"
+            },
+            {
+              "name": "Bulgarian Split Squat",
+              "sets": 3,
+              "reps": "8-10 each leg",
+              "rest": "90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Hip Abduction Machine",
+              "sets": 3,
+              "reps": "15",
+              "rest": "90 sec",
+              "type": "strength",
+              "details": "Superset"
+            },
+            {
+              "name": "Standing or Seated Calf Raise",
+              "sets": 4,
+              "reps": "12-15",
+              "type": "strength"
+            },
+            {
+              "name": "10-12 min incline treadmill walk",
+              "type": "conditioning"
+            },
+            {
+              "name": "Reverse Crunch",
+              "reps": "12-15",
+              "type": "abs"
+            },
+            {
+              "name": "Cable Crunch",
+              "reps": "12-15",
+              "type": "abs"
+            },
+            {
+              "name": "Side Plank",
+              "reps": "30 sec each side",
+              "type": "abs"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "target_user": "Intermediate",
+  "training_days_per_week": 4
+}
