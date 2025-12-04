@@ -1,0 +1,307 @@
+{
+  "_id": "692c9dee92438e3f6d39f658",
+  "program_id": "db-only-total-transformation",
+  "__v": 0,
+  "duration_weeks": 4,
+  "goal": "Hypertrophy, fat loss, strength, conditioning",
+  "name": "DB Only: Total Transformation",
+  "phases": [
+    {
+      "phase": "Phase 1",
+      "weeks": "1-4",
+      "focus": "Hypertrophy, fat loss, strength, conditioning",
+      "workouts": {
+        "Day 1": {
+          "title": "Upper Body Strength",
+          "exercises": [
+            {
+              "name": "DB Bench Press",
+              "sets": 4,
+              "reps": "8",
+              "type": "strength"
+            },
+            {
+              "name": "DB Bent-Over Row",
+              "sets": 4,
+              "reps": "10",
+              "type": "strength"
+            },
+            {
+              "name": "DB Shoulder Press",
+              "sets": 3,
+              "reps": "10",
+              "type": "strength"
+            },
+            {
+              "name": "DB Single-Arm Row",
+              "sets": 3,
+              "reps": "12 per arm",
+              "type": "strength"
+            },
+            {
+              "name": "DB Lateral Raises",
+              "sets": 3,
+              "reps": "15",
+              "type": "strength"
+            },
+            {
+              "name": "DB Curls",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "DB Overhead Tricep Extension",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "Arm Circles × 30 sec",
+              "type": "warmup"
+            },
+            {
+              "name": "Scap Push-Ups × 12",
+              "type": "warmup"
+            },
+            {
+              "name": "Light DB Floor Press × 15",
+              "type": "warmup"
+            },
+            {
+              "name": "EMOM 8 minutes",
+              "type": "conditioning",
+              "details": "[\"Minute 1: 12 DB Push Press\",\"Minute 2: 15 Renegade Rows\"]"
+            },
+            {
+              "name": "Plank × 60 sec",
+              "type": "abs"
+            },
+            {
+              "name": "DB Crunch × 20",
+              "type": "abs"
+            },
+            {
+              "name": "Toe Touches × 20",
+              "type": "abs"
+            }
+          ]
+        },
+        "Day 2": {
+          "title": "Lower Body — Glutes & Legs",
+          "exercises": [
+            {
+              "name": "DB Goblet Squat",
+              "sets": 4,
+              "reps": "10",
+              "type": "strength"
+            },
+            {
+              "name": "DB Romanian Deadlift",
+              "sets": 4,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "DB Reverse Lunge",
+              "sets": 3,
+              "reps": "12 per leg",
+              "type": "strength"
+            },
+            {
+              "name": "DB Hip Thrust",
+              "sets": 4,
+              "reps": "15",
+              "type": "strength"
+            },
+            {
+              "name": "DB Step-Ups",
+              "sets": 3,
+              "reps": "12 per leg",
+              "type": "strength"
+            },
+            {
+              "name": "DB Calf Raises",
+              "sets": 3,
+              "reps": "20",
+              "type": "strength"
+            },
+            {
+              "name": "Bodyweight Squats × 20",
+              "type": "warmup"
+            },
+            {
+              "name": "Hip Hinge Flow × 30 sec",
+              "type": "warmup"
+            },
+            {
+              "name": "Glute Bridge × 20",
+              "type": "warmup"
+            },
+            {
+              "name": "AMRAP 6 minutes",
+              "type": "conditioning",
+              "details": "[\"10 Jumping Lunges or Reverse Lunges\",\"10 DB Thrusters\",\"10 DB Swings\"]"
+            },
+            {
+              "name": "Deadbug × 20",
+              "type": "abs"
+            },
+            {
+              "name": "Flutter Kicks × 40",
+              "type": "abs"
+            },
+            {
+              "name": "Side Plank × 30 sec per side",
+              "type": "abs"
+            }
+          ]
+        },
+        "Day 3": {
+          "title": "Full Body Hybrid",
+          "exercises": [
+            {
+              "name": "DB Deadlift",
+              "sets": 4,
+              "reps": "10",
+              "type": "strength"
+            },
+            {
+              "name": "DB Floor Press or Bench Press",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "DB Bent-Over Row",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "DB Bulgarian Split Squat",
+              "sets": 3,
+              "reps": "10 per leg",
+              "type": "strength"
+            },
+            {
+              "name": "DB Hammer Curls",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "DB Skull Crushers",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "Light DB RDL → Upright Row × 15",
+              "type": "warmup"
+            },
+            {
+              "name": "Mobility Flow × 1 minute",
+              "type": "warmup"
+            },
+            {
+              "name": "DB Complex — 5 Rounds",
+              "type": "conditioning",
+              "details": "[\"5 Dumbbell Deadlifts\",\"5 Dumbbell Rows\",\"5 Dumbbell Hang Cleans\",\"5 Dumbbell Push Press\"]"
+            },
+            {
+              "name": "Russian Twists (with DB) × 40",
+              "type": "abs"
+            },
+            {
+              "name": "Leg Raises × 15",
+              "type": "abs"
+            },
+            {
+              "name": "Plank × 45 sec",
+              "type": "abs"
+            }
+          ]
+        },
+        "Day 4": {
+          "title": "Upper + Lower Hybrid Pump",
+          "exercises": [
+            {
+              "name": "DB Split Squat",
+              "sets": 3,
+              "reps": "12 per leg",
+              "type": "strength"
+            },
+            {
+              "name": "DB Chest Fly (Floor or Bench)",
+              "sets": 3,
+              "reps": "15",
+              "type": "strength"
+            },
+            {
+              "name": "DB Underhand Row",
+              "sets": 3,
+              "reps": "15",
+              "type": "strength"
+            },
+            {
+              "name": "DB Lateral Lunge",
+              "sets": 3,
+              "reps": "10 per leg",
+              "type": "strength"
+            },
+            {
+              "name": "DB Arnold Press",
+              "sets": 3,
+              "reps": "12",
+              "type": "strength"
+            },
+            {
+              "name": "DB Shrugs",
+              "sets": 3,
+              "reps": "15",
+              "type": "strength"
+            },
+            {
+              "name": "DB Biceps Burnout",
+              "sets": 1,
+              "reps": "50",
+              "type": "strength"
+            },
+            {
+              "name": "High Knees × 30 sec",
+              "type": "warmup"
+            },
+            {
+              "name": "DB Shoulder Openers × 20",
+              "type": "warmup"
+            },
+            {
+              "name": "Hip Mobility × 20 sec each",
+              "type": "warmup"
+            },
+            {
+              "name": "Tabata 4 minutes",
+              "type": "conditioning",
+              "details": "[\"DB Goblet Squat\",\"DB Push Press\"]"
+            },
+            {
+              "name": "DB Woodchoppers × 15 per side",
+              "type": "abs"
+            },
+            {
+              "name": "Toe Touches × 20",
+              "type": "abs"
+            },
+            {
+              "name": "Hollow Hold × 30 sec",
+              "type": "abs"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "target_user": "Beginner to Intermediate",
+  "training_days_per_week": 4
+}

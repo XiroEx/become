@@ -1,5 +1,6 @@
 "use client"
 import { useState } from 'react'
+import PageTransition from '@/components/PageTransition'
 
 interface MacroEntry {
   protein: number
@@ -173,7 +174,7 @@ export default function NutritionPage() {
 
   return (
     <>
-      <section className="pb-20">
+      <PageTransition className="pb-20">
         <h1 className="text-2xl font-bold">Nutrition</h1>
         <p className="mt-2 text-sm text-zinc-600">Daily targets, meal guidance and simple rules to stay on track.</p>
 
@@ -272,7 +273,7 @@ export default function NutritionPage() {
             ))}
           </div>
         </div>
-      </section>
+      </PageTransition>
 
       {/* Recipe Modal */}
       {selectedRecipe && (
