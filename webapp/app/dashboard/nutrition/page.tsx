@@ -175,19 +175,19 @@ export default function NutritionPage() {
   return (
     <>
       <PageTransition className="pb-20">
-        <h1 className="text-2xl font-bold">Nutrition</h1>
-        <p className="mt-2 text-sm text-zinc-600">Daily targets, meal guidance and simple rules to stay on track.</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Nutrition</h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Daily targets, meal guidance and simple rules to stay on track.</p>
 
         {/* Daily Tracking */}
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-zinc-900">Today's Macros</h2>
+        <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Today's Macros</h2>
           <div className="mt-4 space-y-4">
             <div>
               <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium text-zinc-700">Protein</span>
-                <span className="text-zinc-600">{tracked.protein}g / {dailyTargets.protein}g</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Protein</span>
+                <span className="text-zinc-600 dark:text-zinc-400">{tracked.protein}g / {dailyTargets.protein}g</span>
               </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                 <div 
                   className="h-full bg-blue-600 transition-all duration-300"
                   style={{ width: `${getProgress(tracked.protein, dailyTargets.protein)}%` }}
@@ -197,10 +197,10 @@ export default function NutritionPage() {
 
             <div>
               <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium text-zinc-700">Carbs</span>
-                <span className="text-zinc-600">{tracked.carbs}g / {dailyTargets.carbs}g</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Carbs</span>
+                <span className="text-zinc-600 dark:text-zinc-400">{tracked.carbs}g / {dailyTargets.carbs}g</span>
               </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                 <div 
                   className="h-full bg-green-600 transition-all duration-300"
                   style={{ width: `${getProgress(tracked.carbs, dailyTargets.carbs)}%` }}
@@ -210,10 +210,10 @@ export default function NutritionPage() {
 
             <div>
               <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium text-zinc-700">Fats</span>
-                <span className="text-zinc-600">{tracked.fats}g / {dailyTargets.fats}g</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">Fats</span>
+                <span className="text-zinc-600 dark:text-zinc-400">{tracked.fats}g / {dailyTargets.fats}g</span>
               </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200">
+              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                 <div 
                   className="h-full bg-yellow-600 transition-all duration-300"
                   style={{ width: `${getProgress(tracked.fats, dailyTargets.fats)}%` }}
@@ -221,17 +221,17 @@ export default function NutritionPage() {
               </div>
             </div>
 
-            <div className="border-t border-zinc-200 pt-3">
+            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-zinc-900">Calories</span>
-                <span className="text-lg font-bold text-zinc-900">{tracked.calories} / {dailyTargets.calories}</span>
+                <span className="font-semibold text-zinc-900 dark:text-white">Calories</span>
+                <span className="text-lg font-bold text-zinc-900 dark:text-white">{tracked.calories} / {dailyTargets.calories}</span>
               </div>
             </div>
           </div>
 
           <button 
             onClick={() => setShowLogMealModal(true)}
-            className="mt-4 w-full cursor-pointer rounded-lg bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black"
+            className="mt-4 w-full cursor-pointer rounded-lg bg-zinc-900 dark:bg-white py-3 font-semibold text-white dark:text-black transition-colors hover:bg-black dark:hover:bg-zinc-200"
           >
             + Log Meal
           </button>
@@ -239,21 +239,21 @@ export default function NutritionPage() {
 
         {/* Recipes */}
         <div className="mt-8">
-          <h2 className="text-lg font-semibold text-zinc-900">Recipes</h2>
-          <p className="mt-1 text-sm text-zinc-600">Quick, macro-friendly meal ideas</p>
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Recipes</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Quick, macro-friendly meal ideas</p>
 
           <div className="mt-4 space-y-3">
             {recipes.map((recipe) => (
               <button
                 key={recipe.id}
                 onClick={() => setSelectedRecipe(recipe)}
-                className="group w-full cursor-pointer rounded-lg border border-zinc-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:scale-[1.01] hover:border-zinc-300 hover:shadow-md active:scale-[0.99]"
+                className="group w-full cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left shadow-sm transition-all duration-200 hover:scale-[1.01] hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-md active:scale-[0.99]"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-zinc-900 group-hover:text-black">{recipe.title}</h3>
-                    <p className="mt-1 text-xs text-zinc-500">{recipe.category}</p>
-                    <div className="mt-2 flex gap-3 text-xs text-zinc-600">
+                    <h3 className="font-semibold text-zinc-900 dark:text-white group-hover:text-black dark:group-hover:text-white">{recipe.title}</h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{recipe.category}</p>
+                    <div className="mt-2 flex gap-3 text-xs text-zinc-600 dark:text-zinc-400">
                       <span>P: {recipe.protein}g</span>
                       <span>C: {recipe.carbs}g</span>
                       <span>F: {recipe.fats}g</span>
@@ -282,17 +282,17 @@ export default function NutritionPage() {
           onClick={() => setSelectedRecipe(null)}
         >
           <div 
-            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white p-6 sm:rounded-2xl"
+            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white dark:bg-zinc-900 p-6 sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-zinc-900">{selectedRecipe.title}</h2>
-                <p className="mt-1 text-sm text-zinc-500">{selectedRecipe.category}</p>
+                <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">{selectedRecipe.title}</h2>
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{selectedRecipe.category}</p>
               </div>
               <button
                 onClick={() => setSelectedRecipe(null)}
-                className="rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
+                className="rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -301,35 +301,35 @@ export default function NutritionPage() {
             </div>
 
             {/* Macros */}
-            <div className="mb-6 grid grid-cols-4 gap-3 rounded-lg bg-zinc-50 p-4">
+            <div className="mb-6 grid grid-cols-4 gap-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 p-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">{selectedRecipe.protein}g</div>
-                <div className="text-xs text-zinc-600">Protein</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">Protein</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">{selectedRecipe.carbs}g</div>
-                <div className="text-xs text-zinc-600">Carbs</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">Carbs</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-yellow-600">{selectedRecipe.fats}g</div>
-                <div className="text-xs text-zinc-600">Fats</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">Fats</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-zinc-900">{selectedRecipe.calories}</div>
-                <div className="text-xs text-zinc-600">Calories</div>
+                <div className="text-2xl font-bold text-zinc-900 dark:text-white">{selectedRecipe.calories}</div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400">Calories</div>
               </div>
             </div>
 
             {/* Ingredients */}
             <div className="mb-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Ingredients</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Ingredients</h3>
               <ul className="mt-3 space-y-2">
                 {selectedRecipe.ingredients.map((ingredient, index) => (
                   <li 
                     key={index}
-                    className="flex items-start gap-2 text-sm text-zinc-700"
+                    className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300"
                   >
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400" />
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400 dark:bg-zinc-600" />
                     {ingredient}
                   </li>
                 ))}
@@ -338,14 +338,14 @@ export default function NutritionPage() {
 
             {/* Instructions */}
             <div className="mb-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Instructions</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Instructions</h3>
               <ol className="mt-3 space-y-3">
                 {selectedRecipe.instructions.map((instruction, index) => (
                   <li 
                     key={index}
-                    className="flex gap-3 text-sm text-zinc-700"
+                    className="flex gap-3 text-sm text-zinc-700 dark:text-zinc-300"
                   >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-bold text-white">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-white text-xs font-bold text-white dark:text-black">
                       {index + 1}
                     </span>
                     <span className="pt-0.5">{instruction}</span>
