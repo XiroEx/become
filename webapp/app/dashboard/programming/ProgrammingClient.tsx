@@ -129,7 +129,7 @@ export default function ProgrammingClient({ programs }: ProgrammingClientProps) 
                         }`}
                       >
                         {dayKey}
-                      </button>>
+                      </button>
                     ))}
                   </div>
                 </div>
