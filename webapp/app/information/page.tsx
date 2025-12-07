@@ -60,61 +60,81 @@ export default function Information() {
         </section>
 
         {/* Features Overview */}
-        <AnimatedSection className="w-full bg-white py-16 dark:bg-zinc-900">
+        <section className="w-full bg-white py-16 dark:bg-zinc-900">
           <div className="mx-auto max-w-6xl px-6">
-            <div className="text-center">
+            <AnimatedSection className="text-center">
               <h2 className="text-3xl font-bold text-zinc-900 sm:text-4xl dark:text-white">Everything You Need to Transform</h2>
               <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">One platform. Complete results.</p>
-            </div>
-            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-5">
-              <div className="group aspect-square rounded-lg bg-zinc-50 p-6 transition-all hover:bg-zinc-100 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-zinc-900 dark:bg-white">
-                  <svg className="h-7 w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
+            </AnimatedSection>
+            <div className="mt-12 space-y-3 sm:space-y-0 sm:grid sm:gap-6 sm:grid-cols-2 lg:grid-cols-5">
+              <AnimatedSection direction="left" delay={0}>
+                <div className="group flex items-center gap-4 rounded-xl bg-zinc-50 p-4 transition-all hover:bg-zinc-100 sm:flex-col sm:items-start sm:gap-0 sm:aspect-square sm:p-6 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 sm:h-14 sm:w-14 dark:bg-white">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1 sm:flex-initial">
+                    <h3 className="text-base font-bold text-zinc-900 sm:mt-4 sm:text-xl dark:text-white">Programming</h3>
+                    <p className="mt-0.5 text-sm text-zinc-600 sm:mt-2 dark:text-zinc-400">Structured plans for strength, hypertrophy, and conditioning built by experience.</p>
+                  </div>
                 </div>
-                <h3 className="mt-4 text-xl font-bold text-zinc-900 dark:text-white">Programming</h3>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Structured plans for strength, hypertrophy, and conditioning built by experience.</p>
-              </div>
-              <div className="group aspect-square rounded-lg bg-zinc-50 p-6 transition-all hover:bg-zinc-100 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-zinc-900 dark:bg-white">
-                  <svg className="h-7 w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
+              </AnimatedSection>
+              <AnimatedSection direction="right" delay={0.1}>
+                <div className="group flex items-center gap-4 rounded-xl bg-zinc-50 p-4 transition-all hover:bg-zinc-100 sm:flex-col sm:items-start sm:gap-0 sm:aspect-square sm:p-6 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 sm:h-14 sm:w-14 dark:bg-white">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1 sm:flex-initial">
+                    <h3 className="text-base font-bold text-zinc-900 sm:mt-4 sm:text-xl dark:text-white">Nutrition</h3>
+                    <p className="mt-0.5 text-sm text-zinc-600 sm:mt-2 dark:text-zinc-400">Simple, sustainable targets to fuel your training and optimize recovery.</p>
+                  </div>
                 </div>
-                <h3 className="mt-4 text-xl font-bold text-zinc-900 dark:text-white">Nutrition</h3>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Simple, sustainable targets to fuel your training and optimize recovery.</p>
-              </div>
-              <div className="group aspect-square rounded-lg bg-zinc-50 p-6 transition-all hover:bg-zinc-100 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-zinc-900 dark:bg-white">
-                  <svg className="h-7 w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
+              </AnimatedSection>
+              <AnimatedSection direction="left" delay={0.2}>
+                <div className="group flex items-center gap-4 rounded-xl bg-zinc-50 p-4 transition-all hover:bg-zinc-100 sm:flex-col sm:items-start sm:gap-0 sm:aspect-square sm:p-6 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 sm:h-14 sm:w-14 dark:bg-white">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1 sm:flex-initial">
+                    <h3 className="text-base font-bold text-zinc-900 sm:mt-4 sm:text-xl dark:text-white">Mindset</h3>
+                    <p className="mt-0.5 text-sm text-zinc-600 sm:mt-2 dark:text-zinc-400">Mental frameworks and discipline strategies to stay consistent long-term.</p>
+                  </div>
                 </div>
-                <h3 className="mt-4 text-xl font-bold text-zinc-900 dark:text-white">Mindset</h3>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Mental frameworks and discipline strategies to stay consistent long-term.</p>
-              </div>
-              <div className="group aspect-square rounded-lg bg-zinc-50 p-6 transition-all hover:bg-zinc-100 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-zinc-900 dark:bg-white">
-                  <svg className="h-7 w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
+              </AnimatedSection>
+              <AnimatedSection direction="right" delay={0.3}>
+                <div className="group flex items-center gap-4 rounded-xl bg-zinc-50 p-4 transition-all hover:bg-zinc-100 sm:flex-col sm:items-start sm:gap-0 sm:aspect-square sm:p-6 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 sm:h-14 sm:w-14 dark:bg-white">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1 sm:flex-initial">
+                    <h3 className="text-base font-bold text-zinc-900 sm:mt-4 sm:text-xl dark:text-white">Coaching Chat</h3>
+                    <p className="mt-0.5 text-sm text-zinc-600 sm:mt-2 dark:text-zinc-400">Direct access to guidance when you need it. No guessing, just answers.</p>
+                  </div>
                 </div>
-                <h3 className="mt-4 text-xl font-bold text-zinc-900 dark:text-white">Coaching Chat</h3>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Direct access to guidance when you need it. No guessing, just answers.</p>
-              </div>
-              <div className="group aspect-square rounded-lg bg-zinc-50 p-6 transition-all hover:bg-zinc-100 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-zinc-900 dark:bg-white">
-                  <svg className="h-7 w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
+              </AnimatedSection>
+              <AnimatedSection direction="left" delay={0.4}>
+                <div className="group flex items-center gap-4 rounded-xl bg-zinc-50 p-4 transition-all hover:bg-zinc-100 sm:flex-col sm:items-start sm:gap-0 sm:aspect-square sm:p-6 hover:shadow-lg dark:bg-zinc-800 dark:hover:bg-zinc-700">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 sm:h-14 sm:w-14 dark:bg-white">
+                    <svg className="h-5 w-5 sm:h-7 sm:w-7 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1 sm:flex-initial">
+                    <h3 className="text-base font-bold text-zinc-900 sm:mt-4 sm:text-xl dark:text-white">Progress Tracking</h3>
+                    <p className="mt-0.5 text-sm text-zinc-600 sm:mt-2 dark:text-zinc-400">Track lifts, measurements, and photos. Watch your transformation unfold.</p>
+                  </div>
                 </div>
-                <h3 className="mt-4 text-xl font-bold text-zinc-900 dark:text-white">Progress Tracking</h3>
-                <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Track lifts, measurements, and photos. Watch your transformation unfold.</p>
-              </div>
+              </AnimatedSection>
             </div>
           </div>
-        </AnimatedSection>
+        </section>
 
         {/* Programming Deep Dive */}
         <section className="w-full bg-zinc-50 py-16 sm:py-24 dark:bg-black">
