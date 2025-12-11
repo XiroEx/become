@@ -38,8 +38,10 @@ export default function DashboardPage() {
           href="/dashboard/chat" 
           className="block p-6 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow"
         >
-          <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-2">AI Coach</h2>
-          <p className="text-zinc-500 dark:text-zinc-400">Chat with your personal AI fitness assistant.</p>
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-2">Connect</h2>
+          <p className="text-zinc-500 dark:text-zinc-400">
+            Chat with trainers and join the community for support and motivation.
+          </p>
         </Link>
       </div>
     </PageTransition>

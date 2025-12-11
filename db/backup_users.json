@@ -1,0 +1,83 @@
+[
+  {
+    "_id": "690d401f5350c010e6a68785",
+    "email": "george8794@gmail.com",
+    "password": "$2b$10$I3WU0bdfIB4qu7EMctQqzOvzUiYQql0hrcmXEvX5U5Yjp5d97H1e.",
+    "name": "george8794",
+    "createdAt": "2025-11-07T00:41:03.510Z",
+    "updatedAt": "2025-11-07T00:41:03.510Z",
+    "__v": 0
+  },
+  {
+    "_id": "690d5056fbae5be7c73a2d42",
+    "email": "george8794@gmial.com",
+    "password": "$2b$10$YVm9F2xEWlZs6TzvRbgdY.Xv5YNIODDoR854UOqwkTxuGCfpuUKOa",
+    "name": "george8794",
+    "createdAt": "2025-11-07T01:50:14.145Z",
+    "updatedAt": "2025-11-07T01:50:14.145Z",
+    "__v": 0
+  },
+  {
+    "_id": "690d5361fbae5be7c73a2d45",
+    "email": "george8794@gmailcom",
+    "password": "$2b$10$lMQTSFd2qiaNS0Gof4metOdvtD8gE9..2xLjOUoQYaLdakyKKYR3O",
+    "name": "george8794",
+    "createdAt": "2025-11-07T02:03:13.940Z",
+    "updatedAt": "2025-11-07T02:03:13.940Z",
+    "__v": 0
+  },
+  {
+    "_id": "692781d569a4191b88271d20",
+    "email": "george@redbtn.io",
+    "password": "$2b$10$hQhOXuu/vtDu4IPD.kNHrugNMsmnBSq0trzY5fKLBV38qVpk.U2Ki",
+    "name": "george",
+    "createdAt": "2025-11-26T22:40:21.937Z",
+    "updatedAt": "2025-11-26T22:40:21.937Z",
+    "__v": 0
+  },
+  {
+    "_id": "6930c7c19c2ff29f5e742b3e",
+    "email": "george@redbtn.ip",
+    "password": "$2b$10$qYJzDQfFsUokstCRmqxWQumxhawZBtE0NTrGVWR6kG9eEMak4mlkW",
+    "name": "george",
+    "createdAt": "2025-12-03T23:29:05.771Z",
+    "updatedAt": "2025-12-03T23:29:05.771Z",
+    "__v": 0
+  },
+  {
+    "_id": "693214b2647663a45bf0755f",
+    "email": "george@abreu.com",
+    "password": "$2b$10$0QOBZd/KShdoPNarJy0Yw.lSVwMfW.ZfTT3/mSXhTFV9ENE9TmdQC",
+    "name": "george",
+    "createdAt": "2025-12-04T23:09:38.194Z",
+    "updatedAt": "2025-12-04T23:09:38.194Z",
+    "__v": 0
+  },
+  {
+    "_id": "6935cd961c05f914d759a292",
+    "email": "george@re.com",
+    "password": "$2b$10$1CMdDUTrBovC7xbIMmUQu.4mfLRTy7vxnVHt7MR9vLZMG8WIWGXL6",
+    "name": "george",
+    "createdAt": "2025-12-07T18:55:18.711Z",
+    "updatedAt": "2025-12-07T18:55:18.711Z",
+    "__v": 0
+  },
+  {
+    "_id": "6935d2231c05f914d759a2b8",
+    "email": "ger@ge.com",
+    "password": "$2b$10$1vg2MpQrTWyVcDNeDCr/2.Z0n3TSHJOZJszrOoDDQu2SG5I5XSM/G",
+    "name": "ger",
+    "createdAt": "2025-12-07T19:14:43.814Z",
+    "updatedAt": "2025-12-07T19:14:43.814Z",
+    "__v": 0
+  },
+  {
+    "_id": "6935d3331c05f914d759a2be",
+    "email": "george@redbt.com",
+    "password": "$2b$10$zt3DJ/.PdU5sKuMchHIC..zP/0Gl4lpWUqQ.peGehWhFLXSocOQvi",
+    "name": "george",
+    "createdAt": "2025-12-07T19:19:15.688Z",
+    "updatedAt": "2025-12-07T19:19:15.688Z",
+    "__v": 0
+  }
+]
