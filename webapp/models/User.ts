@@ -1,4 +1,4 @@
-import mongoose from 'mongoose'
+import mongoose, { Schema, Document, Model } from 'mongoose'
 import bcrypt from 'bcrypt'
 
 export interface IUser {
@@ -10,7 +10,13 @@ export interface IUser {
   updatedAt?: Date
 }
 
-const UserSchema = new mongoose.Schema<IUser>({
+interface IUserMethods {
+  comparePassword(candidatePassword: string): Promise<boolean>
+}
+
+type UserModel = Model<IUser, object, IUserMethods>
+
+const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   email: {
     type: String,
     required: [true, 'Email is required'],
@@ -33,16 +39,11 @@ const UserSchema = new mongoose.Schema<IUser>({
 })
 
 // Hash password before saving
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next()
+UserSchema.pre('save', async function() {
+  if (!this.isModified('password')) return
   
-  try {
-    const salt = await bcrypt.genSalt(10)
-    this.password = await bcrypt.hash(this.password, salt)
-    next()
-  } catch (error: any) {
-    next(error)
-  }
+  const salt = await bcrypt.genSalt(10)
+  this.password = await bcrypt.hash(this.password, salt)
 })
 
 // Compare password method
@@ -50,4 +51,4 @@ UserSchema.methods.comparePassword = async function(candidatePassword: string) {
   return bcrypt.compare(candidatePassword, this.password)
 }
 
-export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema)
+export default mongoose.models.User || mongoose.model<IUser, UserModel>('User', UserSchema)

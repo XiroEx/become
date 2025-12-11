@@ -16,8 +16,8 @@ export default function ProgramDetailClient({ program }: Props) {
   const [selectedDayKey, setSelectedDayKey] = useState("Day 1");
 
   const currentPhase = program.phases[selectedPhaseIndex];
-  const currentWorkout = currentPhase?.workouts[selectedDayKey];
-  const dayKeys = currentPhase ? Object.keys(currentPhase.workouts) : [];
+  const currentWorkout = currentPhase?.workouts.find(w => w.day === selectedDayKey);
+  const dayKeys = currentPhase ? currentPhase.workouts.map(w => w.day) : [];
 
   return (
     <PageTransition className="min-h-screen pb-24">
@@ -95,8 +95,8 @@ export default function ProgramDetailClient({ program }: Props) {
                   key={index}
                   onClick={() => {
                     setSelectedPhaseIndex(index);
-                    const firstDay = Object.keys(phase.workouts)[0];
-                    if (!phase.workouts[selectedDayKey]) {
+                    const firstDay = phase.workouts[0]?.day;
+                    if (!phase.workouts.find(w => w.day === selectedDayKey)) {
                       setSelectedDayKey(firstDay);
                     }
                   }}
