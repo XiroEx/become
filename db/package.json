@@ -1,0 +1,18 @@
+{
+  "name": "db",
+  "version": "1.0.0",
+  "description": "JonDonFit database utilities and seeding scripts",
+  "main": "seed.js",
+  "scripts": {
+    "seed": "node seed.js",
+    "seed:local": "node seed.js 'mongodb://admin:admin123@localhost:27017/jondonfitdb?authSource=admin'",
+    "seed:local:clear": "node seed.js 'mongodb://admin:admin123@localhost:27017/jondonfitdb?authSource=admin' --clear",
+    "seed:normalized": "node seed.js --normalized"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mongodb": "^7.0.0"
+  }
+}
