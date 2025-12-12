@@ -3,11 +3,26 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Program } from "@/lib/data/programs";
+import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 
 interface Props {
   program: Program;
+}
+
+// Helper to normalize workouts from object format to array format
+function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'day'>> | undefined | null): Workout[] {
+  if (!workouts) {
+    return [];
+  }
+  if (Array.isArray(workouts)) {
+    return workouts;
+  }
+  // Convert object format { "Day 1": {...}, "Day 2": {...} } to array format
+  return Object.entries(workouts).map(([day, workout]) => ({
+    day,
+    ...workout,
+  }));
 }
 
 export default function ProgramDetailClient({ program }: Props) {
@@ -16,8 +31,9 @@ export default function ProgramDetailClient({ program }: Props) {
   const [selectedDayKey, setSelectedDayKey] = useState("Day 1");
 
   const currentPhase = program.phases[selectedPhaseIndex];
-  const currentWorkout = currentPhase?.workouts.find(w => w.day === selectedDayKey);
-  const dayKeys = currentPhase ? currentPhase.workouts.map(w => w.day) : [];
+  const normalizedWorkouts = currentPhase ? normalizeWorkouts(currentPhase.workouts) : [];
+  const currentWorkout = normalizedWorkouts.find(w => w.day === selectedDayKey);
+  const dayKeys = normalizedWorkouts.map(w => w.day);
 
   return (
     <PageTransition className="min-h-screen pb-24">
@@ -90,13 +106,15 @@ export default function ProgramDetailClient({ program }: Props) {
               Select Phase
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {program.phases.map((phase, index) => (
+              {program.phases.map((phase, index) => {
+                const phaseWorkouts = normalizeWorkouts(phase.workouts);
+                return (
                 <button
                   key={index}
                   onClick={() => {
                     setSelectedPhaseIndex(index);
-                    const firstDay = phase.workouts[0]?.day;
-                    if (!phase.workouts.find(w => w.day === selectedDayKey)) {
+                    const firstDay = phaseWorkouts[0]?.day;
+                    if (!phaseWorkouts.find(w => w.day === selectedDayKey)) {
                       setSelectedDayKey(firstDay);
                     }
                   }}
@@ -108,7 +126,8 @@ export default function ProgramDetailClient({ program }: Props) {
                 >
                   {phase.phase} ({phase.weeks})
                 </button>
-              ))}
+              );
+              })}
             </div>
 
             {currentPhase && (
