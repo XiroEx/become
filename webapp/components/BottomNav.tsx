@@ -11,7 +11,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-200 bg-white backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80">
-      <ul className="mx-auto flex max-w-2xl items-center justify-around px-4 py-3">
+      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 py-2 sm:px-4 sm:py-3">
         <li className="flex-1">
           <Link 
             href="/dashboard/programming" 

@@ -176,10 +176,10 @@ export default function NutritionPage() {
     <>
       <PageTransition className="pb-20">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Nutrition</h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Daily targets, meal guidance and simple rules to stay on track.</p>
+        <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 sm:mt-2">Daily targets, meal guidance and simple rules to stay on track.</p>
 
         {/* Daily Tracking */}
-        <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
+        <div className="mt-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:mt-6 sm:p-6">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Today's Macros</h2>
           <div className="mt-4 space-y-4">
             <div>
@@ -238,16 +238,16 @@ export default function NutritionPage() {
         </div>
 
         {/* Recipes */}
-        <div className="mt-8">
+        <div className="mt-5 sm:mt-8">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Recipes</h2>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Quick, macro-friendly meal ideas</p>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-3 space-y-2 sm:mt-4 sm:space-y-3">
             {recipes.map((recipe) => (
               <button
                 key={recipe.id}
                 onClick={() => setSelectedRecipe(recipe)}
-                className="group w-full cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left shadow-sm transition-all duration-200 hover:scale-[1.01] hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-md active:scale-[0.99]"
+                className="group w-full cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-left shadow-sm transition-all duration-200 hover:scale-[1.01] hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-md active:scale-[0.99] sm:p-4"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">

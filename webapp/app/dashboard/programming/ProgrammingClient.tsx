@@ -12,7 +12,7 @@ export default function ProgrammingClient({ programs }: ProgrammingClientProps) 
   return (
     <PageTransition className="pb-24">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-4 sm:mb-8">
         <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
           Programs
         </h1>
@@ -27,7 +27,7 @@ export default function ProgrammingClient({ programs }: ProgrammingClientProps) 
           <Link
             key={program.program_id}
             href={`/dashboard/programming/${program.program_id}`}
-            className="group flex items-center gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all duration-200 hover:shadow-md hover:border-zinc-300 active:scale-[0.99] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+            className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md hover:border-zinc-300 active:scale-[0.99] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 sm:gap-4 sm:p-4"
           >
             {/* Accent bar */}
             <div className="h-14 w-1 shrink-0 rounded-full bg-linear-to-b from-green-500 to-emerald-600" />

@@ -41,7 +41,7 @@ export default function TopNav() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+      <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
         <h1 className="text-lg font-bold text-zinc-900 dark:text-white">{appName}</h1>
         
         <div className="relative" ref={dropdownRef}>

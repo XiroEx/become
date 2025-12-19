@@ -56,7 +56,7 @@ export default function AuthForm({ mode }: Props) {
       if (data.token) {
         localStorage.setItem('token', data.token)
       }
-      router.push('/dashboard/programming')
+      router.push('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Failed')
     } finally {

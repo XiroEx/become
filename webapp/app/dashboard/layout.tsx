@@ -9,7 +9,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <AuthGuard>
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
         <TopNav />
-        <main className="mx-auto max-w-3xl p-6 pb-24">{children}</main>
+        <main className="mx-auto max-w-3xl px-3 py-4 pb-24 sm:px-6 sm:py-6">{children}</main>
         <BottomNav />
       </div>
     </AuthGuard>

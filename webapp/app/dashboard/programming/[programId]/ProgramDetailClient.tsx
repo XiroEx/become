@@ -46,11 +46,11 @@ export default function ProgramDetailClient({ program }: Props) {
           }} />
         </div>
 
-        <div className="relative px-6 pb-8 pt-6">
+        <div className="relative px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
           {/* Back button */}
           <button
             onClick={() => router.back()}
-            className="mb-6 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
+            className="mb-4 flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:mb-6 sm:px-4 sm:py-2"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -89,8 +89,8 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
 
           {/* Start button */}
-          <div className="mt-6">
-            <button className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-8 py-3 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30 hover:scale-105 active:scale-95">
+          <div className="mt-4 sm:mt-6">
+            <button className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30 hover:scale-105 active:scale-95 sm:px-8 sm:py-3">
               Start Program
             </button>
           </div>
@@ -98,10 +98,10 @@ export default function ProgramDetailClient({ program }: Props) {
       </div>
 
       {/* Content */}
-      <div className="mx-auto max-w-4xl px-4 sm:px-6">
+      <div className="mx-auto max-w-4xl px-3 sm:px-6">
         {/* Phase Selector */}
         <div className="-mt-4 relative z-10">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:p-4">
             <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               Select Phase
             </div>
@@ -131,8 +131,8 @@ export default function ProgramDetailClient({ program }: Props) {
             </div>
 
             {currentPhase && (
-              <div className="mt-4 rounded-xl bg-linear-to-r from-zinc-50 to-zinc-100 p-4 dark:from-zinc-800 dark:to-zinc-800/50">
-                <div className="flex items-start gap-3">
+              <div className="mt-3 rounded-lg bg-linear-to-r from-zinc-50 to-zinc-100 p-3 dark:from-zinc-800 dark:to-zinc-800/50 sm:mt-4 sm:rounded-xl sm:p-4">
+                <div className="flex items-start gap-2 sm:gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-white">
                     <svg className="h-4 w-4 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -149,16 +149,16 @@ export default function ProgramDetailClient({ program }: Props) {
         </div>
 
         {/* Day Selector */}
-        <div className="mt-6">
-          <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
+        <div className="mt-4 sm:mt-6">
+          <div className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white sm:mb-3">
             Training Days
           </div>
-          <div className="grid grid-cols-4 gap-2 sm:flex sm:gap-3">
+          <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-3">
             {dayKeys.map((dayKey) => (
               <button
                 key={dayKey}
                 onClick={() => setSelectedDayKey(dayKey)}
-                className={`relative rounded-xl px-4 py-3 text-center text-sm font-semibold transition-all ${
+                className={`relative rounded-lg px-2 py-2.5 text-center text-sm font-semibold transition-all sm:rounded-xl sm:px-4 sm:py-3 ${
                   selectedDayKey === dayKey
                     ? "bg-zinc-900 text-white shadow-lg dark:bg-white dark:text-black"
                     : "border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
@@ -186,12 +186,12 @@ export default function ProgramDetailClient({ program }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="mt-8"
+              className="mt-5 sm:mt-8"
             >
               {/* Workout Title */}
-              <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-zinc-900 to-zinc-700 shadow-lg dark:from-zinc-700 dark:to-zinc-800">
-                  <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="mb-4 flex items-center gap-3 sm:mb-6 sm:gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-zinc-900 to-zinc-700 shadow-lg dark:from-zinc-700 dark:to-zinc-800 sm:h-12 sm:w-12 sm:rounded-2xl">
+                  <svg className="h-5 w-5 text-white sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                   </svg>
                 </div>
@@ -206,20 +206,20 @@ export default function ProgramDetailClient({ program }: Props) {
               </div>
 
               {/* Exercise List */}
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {currentWorkout.exercises.map((exercise, index) => (
                   <motion.div
                     key={index}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+                    className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:p-5"
                   >
                     {/* Exercise number accent */}
                     <div className="absolute -left-3 top-1/2 h-16 w-16 -translate-y-1/2 rounded-full bg-linear-to-r from-green-500/10 to-transparent" />
 
-                    <div className="relative flex items-start gap-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-zinc-900 to-zinc-700 text-lg font-bold text-white shadow-md dark:from-zinc-700 dark:to-zinc-600">
+                    <div className="relative flex items-start gap-3 sm:gap-4">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-zinc-900 to-zinc-700 text-sm font-bold text-white shadow-md dark:from-zinc-700 dark:to-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl sm:text-lg">
                         {index + 1}
                       </div>
 
