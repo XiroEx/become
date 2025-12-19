@@ -36,16 +36,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Use mock data as fallback for missing/empty fields
+    // This ensures new users see demo data until they have real data
+    const hasWeightData = progress.weightHistory && progress.weightHistory.length > 0
+    const hasMoodData = progress.moodHistory && progress.moodHistory.length > 0
+    const hasWorkoutData = progress.workoutLogs && progress.workoutLogs.length > 0
+    const hasCurrentProgram = progress.currentProgram && progress.currentProgram.programId
+
     // Format and return progress data
     const formattedData = formatProgressData(
       {
-        height: progress.height || 70,
-        weightHistory: progress.weightHistory || [],
-        moodHistory: progress.moodHistory || [],
-        workoutLogs: progress.workoutLogs || [],
-        currentProgram: progress.currentProgram || null,
-        streakDays: progress.streakDays || 0,
-        totalWorkouts: progress.totalWorkouts || 0
+        height: progress.height || mockUserProgress.height,
+        weightHistory: hasWeightData ? progress.weightHistory : mockUserProgress.weightHistory,
+        moodHistory: hasMoodData ? progress.moodHistory : mockUserProgress.moodHistory,
+        workoutLogs: hasWorkoutData ? progress.workoutLogs : mockUserProgress.workoutLogs,
+        currentProgram: hasCurrentProgram ? progress.currentProgram : mockUserProgress.currentProgram,
+        streakDays: progress.streakDays || mockUserProgress.streakDays,
+        totalWorkouts: hasWorkoutData ? progress.totalWorkouts : mockUserProgress.totalWorkouts
       },
       programName
     )
