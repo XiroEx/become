@@ -254,13 +254,60 @@ export default function DashboardClient() {
         moodData={data.moodData}
       />
 
-      {/* Current Program */}
-      {data.currentProgram && (
+      {/* Current Program & Mindset - side by side on desktop, stacked on mobile */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Current Program */}
+        {data.currentProgram && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+            <div className="mb-3 flex items-center justify-between sm:mb-4">
+              <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Current Program</h2>
+              <Link 
+                href={`/dashboard/programming/${data.currentProgram.programId}`}
+                className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              >
+                View
+              </Link>
+            </div>
+            
+            <div className="mb-3 sm:mb-4">
+              <h3 className="font-medium text-zinc-900 dark:text-white">{data.currentProgram.name}</h3>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Phase {data.currentProgram.currentPhase} • Week {data.currentProgram.currentWeek} of {data.currentProgram.totalWeeks}
+              </p>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-3 sm:mb-4">
+              <div className="mb-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                <span>Progress</span>
+                <span>{Math.round((data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100)}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                <div 
+                  className="h-full bg-linear-to-r from-green-500 to-emerald-600 transition-all duration-300"
+                  style={{ width: `${(data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <Link
+              href={`/dashboard/programming/${data.currentProgram.programId}`}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:py-3"
+            >
+              <span>Continue: {data.currentProgram.nextWorkout}</span>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+        )}
+
+        {/* Mindset Card */}
         <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div className="mb-3 flex items-center justify-between sm:mb-4">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Current Program</h2>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Mindset</h2>
             <Link 
-              href={`/dashboard/programming/${data.currentProgram.programId}`}
+              href="/dashboard/mind"
               className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
             >
               View
@@ -268,37 +315,47 @@ export default function DashboardClient() {
           </div>
           
           <div className="mb-3 sm:mb-4">
-            <h3 className="font-medium text-zinc-900 dark:text-white">{data.currentProgram.name}</h3>
+            <h3 className="font-medium text-zinc-900 dark:text-white">Daily Reflection</h3>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Phase {data.currentProgram.currentPhase} • Week {data.currentProgram.currentWeek} of {data.currentProgram.totalWeeks}
+              Track your mental wellness journey
             </p>
           </div>
 
-          {/* Progress Bar */}
-          <div className="mb-3 sm:mb-4">
-            <div className="mb-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-              <span>Progress</span>
-              <span>{Math.round((data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100)}%</span>
+          {/* Mood Summary */}
+          <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800 sm:mb-4">
+            <div className="flex -space-x-1">
+              {data.moodData.slice(-3).map((mood, idx) => (
+                <div 
+                  key={idx} 
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white dark:border-zinc-800 ${
+                    mood.value === 3 ? 'bg-emerald-400' : mood.value === 2 ? 'bg-amber-400' : 'bg-orange-400'
+                  }`}
+                >
+                  <span className="text-sm">
+                    {mood.value === 3 ? '😊' : mood.value === 2 ? '😐' : '😔'}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-              <div 
-                className="h-full bg-linear-to-r from-green-500 to-emerald-600 transition-all duration-300"
-                style={{ width: `${(data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100}%` }}
-              />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {data.moodData.length > 0 ? `${data.moodData.length} mood entries` : 'No entries yet'}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Last 7 days</p>
             </div>
           </div>
 
           <Link
-            href={`/dashboard/programming/${data.currentProgram.programId}`}
+            href="/dashboard/mind"
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:py-3"
           >
-            <span>Continue: {data.currentProgram.nextWorkout}</span>
+            <span>Explore Mindset</span>
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
         </div>
-      )}
+      </div>
 
       {/* Quick Links */}
       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
