@@ -40,17 +40,17 @@ export default function TopNav() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
-        <h1 className="text-lg font-bold text-zinc-900 dark:text-white">{appName}</h1>
+    <header className="shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80">
+      <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-2 sm:px-6 sm:py-2.5">
+        <h1 className="text-base font-bold text-zinc-900 dark:text-white sm:text-lg">{appName}</h1>
         
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
             aria-label="User menu"
           >
-            <User className="h-5 w-5" />
+            <User className="h-4 w-4" />
           </button>
 
           {isOpen && (

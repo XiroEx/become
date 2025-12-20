@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
+import ExerciseAccordion from "@/components/ExerciseAccordion";
 
 interface Props {
   program: Program;
+}
+
+interface ActiveProgram {
+  programId: string;
+  completedWorkouts: number;
+  totalWorkouts: number;
+  currentPhase: number;
+  currentDay: string;
 }
 
 // Helper to normalize workouts from object format to array format
@@ -29,11 +38,115 @@ export default function ProgramDetailClient({ program }: Props) {
   const router = useRouter();
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState(0);
   const [selectedDayKey, setSelectedDayKey] = useState("Day 1");
+  const [enrolling, setEnrolling] = useState(false);
+  const [activeProgram, setActiveProgram] = useState<ActiveProgram | null>(null);
+  const [hasInProgressWorkout, setHasInProgressWorkout] = useState(false);
 
   const currentPhase = program.phases[selectedPhaseIndex];
   const normalizedWorkouts = currentPhase ? normalizeWorkouts(currentPhase.workouts) : [];
   const currentWorkout = normalizedWorkouts.find(w => w.day === selectedDayKey);
   const dayKeys = normalizedWorkouts.map(w => w.day);
+
+  // Check if user is already enrolled in this program
+  useEffect(() => {
+    const checkEnrollment = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const res = await fetch("/api/programs/active", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const found = data.activePrograms?.find(
+            (p: ActiveProgram) => p.programId === program.program_id
+          );
+          if (found) {
+            setActiveProgram(found);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking enrollment:", error);
+      }
+    };
+
+    // Check for in-progress workout
+    const checkWorkoutProgress = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const res = await fetch(`/api/workouts?programId=${program.program_id}&day=Day 1`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isResume) {
+            setHasInProgressWorkout(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking workout progress:", error);
+      }
+    };
+
+    checkEnrollment();
+    checkWorkoutProgress();
+  }, [program.program_id]);
+
+  const handleStartProgram = async () => {
+    // If already enrolled, just navigate to workout
+    if (activeProgram) {
+      router.push(`/dashboard/programming/${program.program_id}/workout`);
+      return;
+    }
+
+    // Enroll in the program
+    setEnrolling(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const res = await fetch("/api/programs/enroll", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ programId: program.program_id })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Update local state with the new active program
+        if (data.activeProgram) {
+          setActiveProgram(data.activeProgram);
+        }
+        router.push(`/dashboard/programming/${program.program_id}/workout`);
+      } else {
+        const error = await res.json();
+        console.error("Enrollment failed:", error);
+        // If already enrolled, the API returns the activeProgram
+        if (error.alreadyEnrolled && error.activeProgram) {
+          setActiveProgram(error.activeProgram);
+        }
+        // Still navigate even if enrollment fails
+        router.push(`/dashboard/programming/${program.program_id}/workout`);
+      }
+    } catch (error) {
+      console.error("Error enrolling:", error);
+      // Still navigate even if enrollment fails
+      router.push(`/dashboard/programming/${program.program_id}/workout`);
+    } finally {
+      setEnrolling(false);
+    }
+  };
 
   return (
     <PageTransition className="min-h-screen pb-24">
@@ -89,11 +202,57 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
 
           {/* Start button */}
-          <div className="mt-4 sm:mt-6">
-            <button className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30 hover:scale-105 active:scale-95 sm:px-8 sm:py-3">
-              Start Program
+          <div className="mt-4 flex gap-3 sm:mt-6">
+            <button 
+              onClick={handleStartProgram}
+              disabled={enrolling}
+              className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed sm:px-8 sm:py-3"
+            >
+              {enrolling ? "Starting..." : activeProgram ? "Continue Program" : "Start Program"}
+            </button>
+            <button 
+              onClick={() => router.push(`/dashboard/programming/${program.program_id}/workout/live`)}
+              className={`flex items-center gap-2 rounded-full px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all sm:px-6 sm:py-3 ${
+                hasInProgressWorkout 
+                  ? "bg-yellow-500/20 hover:bg-yellow-500/30 ring-1 ring-yellow-500/50" 
+                  : "bg-white/10 hover:bg-white/20"
+              }`}
+            >
+              {hasInProgressWorkout ? (
+                <>
+                  <svg className="h-4 w-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-yellow-400">Resume</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  Workout
+                </>
+              )}
             </button>
           </div>
+          
+          {/* Progress indicator if enrolled */}
+          {activeProgram && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-sm text-zinc-300">
+                <span>Progress: {activeProgram.completedWorkouts}/{activeProgram.totalWorkouts} workouts</span>
+                <span className="text-green-400 font-semibold">
+                  {Math.round((activeProgram.completedWorkouts / activeProgram.totalWorkouts) * 100)}%
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-linear-to-r from-green-400 to-emerald-400 transition-all duration-300"
+                  style={{ width: `${(activeProgram.completedWorkouts / activeProgram.totalWorkouts) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -208,68 +367,11 @@ export default function ProgramDetailClient({ program }: Props) {
               {/* Exercise List */}
               <div className="space-y-2 sm:space-y-3">
                 {currentWorkout.exercises.map((exercise, index) => (
-                  <motion.div
+                  <ExerciseAccordion
                     key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:p-5"
-                  >
-                    {/* Exercise number accent */}
-                    <div className="absolute -left-3 top-1/2 h-16 w-16 -translate-y-1/2 rounded-full bg-linear-to-r from-green-500/10 to-transparent" />
-
-                    <div className="relative flex items-start gap-3 sm:gap-4">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-zinc-900 to-zinc-700 text-sm font-bold text-white shadow-md dark:from-zinc-700 dark:to-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl sm:text-lg">
-                        {index + 1}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-zinc-900 dark:text-white">
-                          {exercise.name}
-                        </h3>
-
-                        {exercise.type === "conditioning" ? (
-                          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                            {exercise.details}
-                          </p>
-                        ) : (
-                          <div className="mt-2 flex flex-wrap items-center gap-3">
-                            {exercise.sets && (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                                <svg className="h-3.5 w-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                                </svg>
-                                {exercise.sets} sets
-                              </span>
-                            )}
-                            {exercise.reps && (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                                <svg className="h-3.5 w-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                {exercise.reps}
-                              </span>
-                            )}
-                            {exercise.rest && (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                {exercise.rest}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Expand arrow */}
-                      <div className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
-                        <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </motion.div>
+                    exercise={exercise}
+                    index={index}
+                  />
                 ))}
               </div>
             </motion.div>
