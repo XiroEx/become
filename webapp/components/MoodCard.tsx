@@ -230,19 +230,19 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
             <p className="mb-2 px-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
               How are you feeling?
             </p>
-            <div className="flex gap-1">
+            <div className="grid grid-cols-5 gap-1">
               {moodOptions.map((option) => (
                 <button
                   key={option.level}
                   onClick={() => handleMoodSelect(option.level)}
-                  className={`flex flex-1 flex-col items-center gap-1 rounded-lg p-2 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 ${
+                  className={`flex flex-col items-center gap-1 rounded-lg p-1.5 sm:p-2 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-700 ${
                     currentMood === option.level 
                       ? 'bg-zinc-100 dark:bg-zinc-700 ring-2 ring-zinc-300 dark:ring-zinc-600' 
                       : ''
                   }`}
                 >
                   <option.Face size="lg" />
-                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  <span className="text-[10px] sm:text-xs font-medium text-zinc-600 dark:text-zinc-300 text-center leading-tight">
                     {option.label}
                   </span>
                 </button>

@@ -37,7 +37,7 @@ const chartConfig: Record<ChartType, { label: string; color: string; unit: strin
 }
 
 const moodLabels: Record<number, string> = {
-  1: '�',
+  1: '😢',
   2: '😕',
   3: '😐',
   4: '🙂',
