@@ -86,13 +86,14 @@ export const mockUserProgress = {
     { date: new Date('2024-12-17'), programId: 'become-12-week', phase: 2, day: 'Day 2', completed: true, duration: 48, exercises: [] },
     { date: new Date('2024-12-18'), programId: 'become-12-week', phase: 2, day: 'Day 3', completed: true, duration: 45, exercises: [] },
   ],
+  // Mood values now use 1-5 scale: 1=Bad, 2=Not Great, 3=Okay, 4=Pretty Good, 5=Great
   moodHistory: [
-    { date: new Date('2024-12-12'), mood: 2 },
-    { date: new Date('2024-12-13'), mood: 3 },
-    { date: new Date('2024-12-14'), mood: 3 },
-    { date: new Date('2024-12-15'), mood: 2 },
-    { date: new Date('2024-12-16'), mood: 3 },
-    { date: new Date('2024-12-17'), mood: 2 },
+    { date: new Date('2024-12-12'), mood: 3 },
+    { date: new Date('2024-12-13'), mood: 4 },
+    { date: new Date('2024-12-14'), mood: 5 },
+    { date: new Date('2024-12-15'), mood: 3 },
+    { date: new Date('2024-12-16'), mood: 4 },
+    { date: new Date('2024-12-17'), mood: 3 },
   ],
   currentProgram: {
     programId: 'become-12-week',

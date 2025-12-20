@@ -3,25 +3,27 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-export type MoodLevel = 1 | 2 | 3 // 1 = sad, 2 = neutral, 3 = happy
+export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
 interface MoodModalProps {
   isOpen: boolean
   onClose: (mood: MoodLevel) => void
 }
 
-// Solid color face components
-function SadFace({ selected }: { selected: boolean }) {
+// Solid color face components - 5 mood levels
+// 1 = Bad, 2 = Not Great, 3 = Okay, 4 = Pretty Good, 5 = Great
+
+function BadFace({ selected }: { selected: boolean }) {
   return (
     <svg viewBox="0 0 48 48" className="w-10 h-10 sm:w-12 sm:h-12">
       <circle 
         cx="24" cy="24" r="22" 
-        className={`transition-colors ${selected ? 'fill-orange-400' : 'fill-zinc-300 dark:fill-zinc-600'}`}
+        className={`transition-colors ${selected ? 'fill-red-400' : 'fill-zinc-300 dark:fill-zinc-600'}`}
       />
       <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <path 
-        d="M16 34 Q24 28 32 34" 
+        d="M14 35 Q24 26 34 35" 
         fill="none" 
         stroke="currentColor" 
         strokeWidth="2.5" 
@@ -32,7 +34,28 @@ function SadFace({ selected }: { selected: boolean }) {
   )
 }
 
-function NeutralFace({ selected }: { selected: boolean }) {
+function NotGreatFace({ selected }: { selected: boolean }) {
+  return (
+    <svg viewBox="0 0 48 48" className="w-10 h-10 sm:w-12 sm:h-12">
+      <circle 
+        cx="24" cy="24" r="22" 
+        className={`transition-colors ${selected ? 'fill-orange-400' : 'fill-zinc-300 dark:fill-zinc-600'}`}
+      />
+      <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <path 
+        d="M16 34 Q24 30 32 34" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.5" 
+        strokeLinecap="round"
+        className="text-zinc-700 dark:text-zinc-800"
+      />
+    </svg>
+  )
+}
+
+function OkayFace({ selected }: { selected: boolean }) {
   return (
     <svg viewBox="0 0 48 48" className="w-10 h-10 sm:w-12 sm:h-12">
       <circle 
@@ -52,7 +75,28 @@ function NeutralFace({ selected }: { selected: boolean }) {
   )
 }
 
-function HappyFace({ selected }: { selected: boolean }) {
+function PrettyGoodFace({ selected }: { selected: boolean }) {
+  return (
+    <svg viewBox="0 0 48 48" className="w-10 h-10 sm:w-12 sm:h-12">
+      <circle 
+        cx="24" cy="24" r="22" 
+        className={`transition-colors ${selected ? 'fill-lime-400' : 'fill-zinc-300 dark:fill-zinc-600'}`}
+      />
+      <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <path 
+        d="M16 31 Q24 36 32 31" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.5" 
+        strokeLinecap="round"
+        className="text-zinc-700 dark:text-zinc-800"
+      />
+    </svg>
+  )
+}
+
+function GreatFace({ selected }: { selected: boolean }) {
   return (
     <svg viewBox="0 0 48 48" className="w-10 h-10 sm:w-12 sm:h-12">
       <circle 
@@ -62,7 +106,7 @@ function HappyFace({ selected }: { selected: boolean }) {
       <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <path 
-        d="M16 30 Q24 38 32 30" 
+        d="M14 30 Q24 40 34 30" 
         fill="none" 
         stroke="currentColor" 
         strokeWidth="2.5" 
@@ -130,16 +174,25 @@ function getTimeBasedGreeting() {
 const moodOptions = [
   { 
     level: 1 as MoodLevel, 
-    Face: SadFace, 
-    label: 'Not great',
+    Face: BadFace, 
+    label: 'Bad',
+    color: 'from-red-400 to-red-500',
+    bgColor: 'bg-red-50 dark:bg-red-950/30',
+    borderColor: 'border-red-300 dark:border-red-800',
+    hoverColor: 'hover:border-red-400 dark:hover:border-red-600'
+  },
+  { 
+    level: 2 as MoodLevel, 
+    Face: NotGreatFace, 
+    label: 'Not Great',
     color: 'from-orange-400 to-orange-500',
     bgColor: 'bg-orange-50 dark:bg-orange-950/30',
     borderColor: 'border-orange-300 dark:border-orange-800',
     hoverColor: 'hover:border-orange-400 dark:hover:border-orange-600'
   },
   { 
-    level: 2 as MoodLevel, 
-    Face: NeutralFace, 
+    level: 3 as MoodLevel, 
+    Face: OkayFace, 
     label: 'Okay',
     color: 'from-amber-400 to-amber-500',
     bgColor: 'bg-amber-50 dark:bg-amber-950/30',
@@ -147,9 +200,18 @@ const moodOptions = [
     hoverColor: 'hover:border-amber-400 dark:hover:border-amber-600'
   },
   { 
-    level: 3 as MoodLevel, 
-    Face: HappyFace, 
-    label: 'Great!',
+    level: 4 as MoodLevel, 
+    Face: PrettyGoodFace, 
+    label: 'Pretty Good',
+    color: 'from-lime-400 to-lime-500',
+    bgColor: 'bg-lime-50 dark:bg-lime-950/30',
+    borderColor: 'border-lime-300 dark:border-lime-800',
+    hoverColor: 'hover:border-lime-400 dark:hover:border-lime-600'
+  },
+  { 
+    level: 5 as MoodLevel, 
+    Face: GreatFace, 
+    label: 'Great',
     color: 'from-emerald-400 to-emerald-500',
     bgColor: 'bg-emerald-50 dark:bg-emerald-950/30',
     borderColor: 'border-emerald-300 dark:border-emerald-800',
@@ -204,7 +266,7 @@ export default function MoodModal({ isOpen, onClose }: MoodModalProps) {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8"
           >
             {/* Header */}
             <div className="text-center mb-6 sm:mb-8">
@@ -218,12 +280,12 @@ export default function MoodModal({ isOpen, onClose }: MoodModalProps) {
             </div>
 
             {/* Mood Options */}
-            <div className="grid grid-cols-3 gap-3 mb-6 sm:mb-8">
+            <div className="grid grid-cols-5 gap-2 mb-6 sm:mb-8">
               {moodOptions.map((option) => (
                 <button
                   key={option.level}
                   onClick={() => setSelectedMood(option.level)}
-                  className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all duration-200 sm:p-5 ${
+                  className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-2 transition-all duration-200 sm:p-3 ${
                     selectedMood === option.level
                       ? `${option.bgColor} ${option.borderColor} scale-105 shadow-lg`
                       : `border-zinc-200 dark:border-zinc-700 ${option.hoverColor}`

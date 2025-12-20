@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-export type MoodLevel = 1 | 2 | 3 // 1 = sad, 2 = neutral, 3 = happy
+export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
 interface MoodCardProps {
   currentMood: MoodLevel | null
@@ -11,16 +11,18 @@ interface MoodCardProps {
   isUpdating?: boolean
 }
 
-// Small face icons for the card
-function SadFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+// Small face icons for the card - 5 mood levels
+// 1 = Bad, 2 = Not Great, 3 = Okay, 4 = Pretty Good, 5 = Great
+
+function BadFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   const sizeClass = size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'
   return (
     <svg viewBox="0 0 48 48" className={sizeClass}>
-      <circle cx="24" cy="24" r="22" className="fill-orange-400" />
+      <circle cx="24" cy="24" r="22" className="fill-red-400" />
       <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <path 
-        d="M16 34 Q24 28 32 34" 
+        d="M14 35 Q24 26 34 35" 
         fill="none" 
         stroke="currentColor" 
         strokeWidth="2.5" 
@@ -31,7 +33,26 @@ function SadFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   )
 }
 
-function NeutralFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+function NotGreatFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const sizeClass = size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'
+  return (
+    <svg viewBox="0 0 48 48" className={sizeClass}>
+      <circle cx="24" cy="24" r="22" className="fill-orange-400" />
+      <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <path 
+        d="M16 34 Q24 30 32 34" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.5" 
+        strokeLinecap="round"
+        className="text-zinc-700 dark:text-zinc-800"
+      />
+    </svg>
+  )
+}
+
+function OkayFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   const sizeClass = size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'
   return (
     <svg viewBox="0 0 48 48" className={sizeClass}>
@@ -49,7 +70,26 @@ function NeutralFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   )
 }
 
-function HappyFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+function PrettyGoodFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const sizeClass = size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'
+  return (
+    <svg viewBox="0 0 48 48" className={sizeClass}>
+      <circle cx="24" cy="24" r="22" className="fill-lime-400" />
+      <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
+      <path 
+        d="M16 31 Q24 36 32 31" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2.5" 
+        strokeLinecap="round"
+        className="text-zinc-700 dark:text-zinc-800"
+      />
+    </svg>
+  )
+}
+
+function GreatFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   const sizeClass = size === 'lg' ? 'w-8 h-8' : 'w-5 h-5'
   return (
     <svg viewBox="0 0 48 48" className={sizeClass}>
@@ -57,7 +97,7 @@ function HappyFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
       <circle cx="16" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <circle cx="32" cy="20" r="3" className="fill-zinc-700 dark:fill-zinc-800" />
       <path 
-        d="M16 30 Q24 38 32 30" 
+        d="M14 30 Q24 40 34 30" 
         fill="none" 
         stroke="currentColor" 
         strokeWidth="2.5" 
@@ -89,29 +129,43 @@ function QuestionFace({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
 
 const moodConfig = {
   1: {
-    Face: SadFace,
-    label: 'Not great',
+    Face: BadFace,
+    label: 'Bad',
+    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    textColor: 'text-red-700 dark:text-red-300',
+  },
+  2: {
+    Face: NotGreatFace,
+    label: 'Not Great',
     bgColor: 'bg-orange-100 dark:bg-orange-900/30',
     textColor: 'text-orange-700 dark:text-orange-300',
   },
-  2: {
-    Face: NeutralFace,
+  3: {
+    Face: OkayFace,
     label: 'Okay',
     bgColor: 'bg-amber-100 dark:bg-amber-900/30',
     textColor: 'text-amber-700 dark:text-amber-300',
   },
-  3: {
-    Face: HappyFace,
-    label: 'Great!',
+  4: {
+    Face: PrettyGoodFace,
+    label: 'Pretty Good',
+    bgColor: 'bg-lime-100 dark:bg-lime-900/30',
+    textColor: 'text-lime-700 dark:text-lime-300',
+  },
+  5: {
+    Face: GreatFace,
+    label: 'Great',
     bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
     textColor: 'text-emerald-700 dark:text-emerald-300',
   },
 }
 
-const moodOptions: { level: MoodLevel; Face: typeof SadFace; label: string }[] = [
-  { level: 1, Face: SadFace, label: 'Not great' },
-  { level: 2, Face: NeutralFace, label: 'Okay' },
-  { level: 3, Face: HappyFace, label: 'Great!' },
+const moodOptions: { level: MoodLevel; Face: typeof BadFace; label: string }[] = [
+  { level: 1, Face: BadFace, label: 'Bad' },
+  { level: 2, Face: NotGreatFace, label: 'Not Great' },
+  { level: 3, Face: OkayFace, label: 'Okay' },
+  { level: 4, Face: PrettyGoodFace, label: 'Pretty Good' },
+  { level: 5, Face: GreatFace, label: 'Great' },
 ]
 
 export default function MoodCard({ currentMood, onMoodChange, isUpdating = false }: MoodCardProps) {

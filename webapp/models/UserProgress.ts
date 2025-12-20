@@ -8,14 +8,14 @@ export interface IWeightEntry {
 
 export interface IMoodEntry {
   date: Date
-  mood: 1 | 2 | 3 // 1 = sad, 2 = neutral, 3 = happy
+  mood: 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 }
 
 export interface IMoodChangeEntry {
   timestamp: Date
   date: Date // The day this mood is for
-  previousMood: 1 | 2 | 3 | null
-  newMood: 1 | 2 | 3
+  previousMood: 1 | 2 | 3 | 4 | 5 | null
+  newMood: 1 | 2 | 3 | 4 | 5
 }
 
 export interface IWorkoutLog {
@@ -61,14 +61,14 @@ const WeightEntrySchema = new Schema<IWeightEntry>({
 
 const MoodEntrySchema = new Schema<IMoodEntry>({
   date: { type: Date, required: true },
-  mood: { type: Number, required: true, min: 1, max: 3 }
+  mood: { type: Number, required: true, min: 1, max: 5 }
 }, { _id: false })
 
 const MoodChangeEntrySchema = new Schema<IMoodChangeEntry>({
   timestamp: { type: Date, required: true },
   date: { type: Date, required: true },
-  previousMood: { type: Number, min: 1, max: 3, default: null },
-  newMood: { type: Number, required: true, min: 1, max: 3 }
+  previousMood: { type: Number, min: 1, max: 5, default: null },
+  newMood: { type: Number, required: true, min: 1, max: 5 }
 }, { _id: false })
 
 const WorkoutLogSchema = new Schema<IWorkoutLog>({

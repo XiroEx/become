@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { mood } = body
 
-    if (!mood || ![1, 2, 3].includes(mood)) {
+    if (!mood || ![1, 2, 3, 4, 5].includes(mood)) {
       return NextResponse.json({ error: 'Invalid mood value' }, { status: 400 })
     }
 

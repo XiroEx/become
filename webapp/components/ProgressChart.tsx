@@ -37,16 +37,20 @@ const chartConfig: Record<ChartType, { label: string; color: string; unit: strin
 }
 
 const moodLabels: Record<number, string> = {
-  1: '😔',
-  2: '😐',
-  3: '😊'
+  1: '�',
+  2: '😕',
+  3: '😐',
+  4: '🙂',
+  5: '😊'
 }
 
 // Colors for each mood level
 const moodColors: Record<number, string> = {
-  1: '#fb923c', // orange-400 for sad
-  2: '#fbbf24', // amber-400 for neutral  
-  3: '#34d399'  // emerald-400 for happy
+  1: '#f87171', // red-400 for bad
+  2: '#fb923c', // orange-400 for not great
+  3: '#fbbf24', // amber-400 for okay
+  4: '#a3e635', // lime-400 for pretty good
+  5: '#34d399'  // emerald-400 for great
 }
 
 export default function ProgressChart({ weightData, bmiData, moodData }: ProgressChartProps) {
@@ -151,8 +155,8 @@ export default function ProgressChart({ weightData, bmiData, moodData }: Progres
                 tick={{ fontSize: 11, fill: '#71717a' }}
                 tickLine={false}
                 axisLine={false}
-                domain={[0, 3]}
-                ticks={[1, 2, 3]}
+                domain={[0, 5]}
+                ticks={[1, 2, 3, 4, 5]}
                 tickFormatter={(value) => moodLabels[value] || ''}
               />
               <Tooltip

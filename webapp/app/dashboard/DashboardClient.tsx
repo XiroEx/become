@@ -324,18 +324,34 @@ export default function DashboardClient() {
           {/* Mood Summary */}
           <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800 sm:mb-4">
             <div className="flex -space-x-1">
-              {data.moodData.slice(-3).map((mood, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white dark:border-zinc-800 ${
-                    mood.value === 3 ? 'bg-emerald-400' : mood.value === 2 ? 'bg-amber-400' : 'bg-orange-400'
-                  }`}
-                >
-                  <span className="text-sm">
-                    {mood.value === 3 ? '😊' : mood.value === 2 ? '😐' : '😔'}
-                  </span>
-                </div>
-              ))}
+              {data.moodData.slice(-3).map((mood, idx) => {
+                const moodColors: Record<number, string> = {
+                  1: 'bg-red-400',
+                  2: 'bg-orange-400',
+                  3: 'bg-amber-400',
+                  4: 'bg-lime-400',
+                  5: 'bg-emerald-400'
+                }
+                const moodEmojis: Record<number, string> = {
+                  1: '😞',
+                  2: '😕',
+                  3: '😐',
+                  4: '🙂',
+                  5: '😊'
+                }
+                return (
+                  <div 
+                    key={idx} 
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white dark:border-zinc-800 ${
+                      moodColors[mood.value] || 'bg-zinc-400'
+                    }`}
+                  >
+                    <span className="text-sm">
+                      {moodEmojis[mood.value] || '😐'}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
