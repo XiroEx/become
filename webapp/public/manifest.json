@@ -1,7 +1,7 @@
 {
-  "name": "Jon Don Fit",
-  "short_name": "JonDonFit",
-  "description": "No-nonsense, results-oriented coaching. Transformations only.",
+  "name": "Become",
+  "short_name": "Become",
+  "description": "Transform your body and mind with personalized fitness coaching.",
   "start_url": "/dashboard",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "fullscreen"],

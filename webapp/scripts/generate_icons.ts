@@ -1,5 +1,5 @@
 /**
- * Generate PWA icons from SVG
+ * Generate PWA icons from logo.png
  * Run with: npx tsx scripts/generate_icons.ts
  */
 
@@ -9,56 +9,53 @@ import path from 'path';
 
 const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
 const iconDir = path.join(__dirname, '../public/icons');
+const logoPath = path.join(__dirname, '../public/logo.png');
 
 // Ensure icons directory exists
 if (!fs.existsSync(iconDir)) {
   fs.mkdirSync(iconDir, { recursive: true });
 }
 
-// Create SVG buffer with the JD logo
-const createSvg = (size: number, bgColor = '#18181b', textColor = 'white') => {
-  const fontSize = Math.round(size * 0.55);
-  const textY = Math.round(size * 0.65);
-  const radius = Math.round(size * 0.125);
-  
-  return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
-      <rect width="${size}" height="${size}" rx="${radius}" fill="${bgColor}"/>
-      <text x="${size/2}" y="${textY}" font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${textColor}" text-anchor="middle">JD</text>
-    </svg>
-  `);
-};
-
 async function generateIcons() {
-  console.log('Generating PWA icons...');
+  console.log('Generating PWA icons from logo.png...');
+
+  // Check if logo exists
+  if (!fs.existsSync(logoPath)) {
+    console.error('Error: logo.png not found at', logoPath);
+    process.exit(1);
+  }
 
   // Generate standard icons
   for (const size of sizes) {
     const outputPath = path.join(iconDir, `icon-${size}x${size}.png`);
-    await sharp(createSvg(size))
+    await sharp(logoPath)
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
       .png()
       .toFile(outputPath);
     console.log(`Generated: icon-${size}x${size}.png`);
   }
 
   // Generate Apple Touch Icon (180x180)
-  await sharp(createSvg(180))
+  await sharp(logoPath)
+    .resize(180, 180, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
     .png()
     .toFile(path.join(iconDir, 'apple-touch-icon.png'));
   console.log('Generated: apple-touch-icon.png');
 
   // Generate favicons
-  await sharp(createSvg(32))
+  await sharp(logoPath)
+    .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
     .png()
     .toFile(path.join(iconDir, 'favicon-32x32.png'));
   console.log('Generated: favicon-32x32.png');
 
-  await sharp(createSvg(16))
+  await sharp(logoPath)
+    .resize(16, 16, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
     .png()
     .toFile(path.join(iconDir, 'favicon-16x16.png'));
   console.log('Generated: favicon-16x16.png');
 
-  // Generate iOS splash screens (simplified - just solid color with logo)
+  // Generate iOS splash screens with centered logo
   const splashSizes = [
     { name: 'apple-splash-2048-2732', width: 2048, height: 2732 },
     { name: 'apple-splash-1668-2388', width: 1668, height: 2388 },
@@ -71,23 +68,29 @@ async function generateIcons() {
   ];
 
   for (const splash of splashSizes) {
-    const logoSize = Math.min(splash.width, splash.height) * 0.3;
-    const logoX = Math.round((splash.width - logoSize) / 2);
-    const logoY = Math.round((splash.height - logoSize) / 2);
+    const logoSize = Math.round(Math.min(splash.width, splash.height) * 0.4);
     
-    const splashSvg = Buffer.from(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="${splash.width}" height="${splash.height}">
-        <rect width="${splash.width}" height="${splash.height}" fill="#18181b"/>
-        <g transform="translate(${logoX}, ${logoY})">
-          <rect width="${logoSize}" height="${logoSize}" rx="${logoSize * 0.125}" fill="#18181b"/>
-          <text x="${logoSize/2}" y="${logoSize * 0.65}" font-family="system-ui, -apple-system, sans-serif" font-size="${logoSize * 0.55}" font-weight="bold" fill="white" text-anchor="middle">JD</text>
-        </g>
-      </svg>
-    `);
+    // Resize logo first
+    const resizedLogo = await sharp(logoPath)
+      .resize(logoSize, logoSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .toBuffer();
 
-    await sharp(splashSvg)
+    // Create splash with black background and centered logo
+    await sharp({
+      create: {
+        width: splash.width,
+        height: splash.height,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 1 }
+      }
+    })
+      .composite([{
+        input: resizedLogo,
+        gravity: 'center'
+      }])
       .png()
       .toFile(path.join(iconDir, `${splash.name}.png`));
+    
     console.log(`Generated: ${splash.name}.png`);
   }
 

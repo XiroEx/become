@@ -6,8 +6,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
-const profileImage = process.env.NEXT_PUBLIC_PROFILE_IMAGE || "/profile.jpg";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
+const logo = process.env.NEXT_PUBLIC_LOGO || "/logo.png";
 
 const PHRASES = [
   "Stronger",
@@ -36,7 +36,7 @@ export default function Splash() {
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
            <Image 
-            src={profileImage}
+            src={logo}
             alt={appName}
             fill
             className="object-cover"

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jondonfit-v1';
+const CACHE_NAME = 'become-v1';
 const STATIC_ASSETS = [
   '/',
   '/dashboard',

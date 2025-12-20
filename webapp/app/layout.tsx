@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
-const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "No-nonsense, results-oriented coaching. Transformations only.";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
+const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "Transform your body and mind.";
 
 export const viewport: Viewport = {
   width: "device-width",
