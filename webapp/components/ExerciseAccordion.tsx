@@ -142,84 +142,66 @@ export default function ExerciseAccordion({ exercise, index }: ExerciseAccordion
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition-all dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl"
+      className="group relative overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-100 transition-all hover:shadow-md dark:bg-zinc-900 dark:ring-zinc-800"
     >
       {/* Main row - clickable header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full p-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50 sm:p-5"
+        className="w-full px-4 py-4 text-left transition-colors sm:px-5 sm:py-5"
       >
-        {/* Exercise number accent */}
-        <div className="absolute -left-3 top-1/2 h-16 w-16 -translate-y-1/2 rounded-full bg-linear-to-r from-green-500/10 to-transparent" />
-
-        <div className="relative flex items-start gap-3 sm:gap-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-zinc-900 to-zinc-700 text-sm font-bold text-white shadow-md dark:from-zinc-700 dark:to-zinc-600 sm:h-10 sm:w-10 sm:rounded-xl sm:text-lg">
+        <div className="flex items-center gap-4">
+          {/* Exercise number */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-sm font-bold text-white sm:h-10 sm:w-10">
             {index + 1}
           </div>
 
+          {/* Exercise info */}
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-zinc-900 dark:text-white">
               {exercise.name}
             </h3>
 
             {exercise.type === "conditioning" ? (
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
                 {exercise.details}
               </p>
             ) : (
-              <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
-                {exercise.sets && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 sm:px-3 sm:py-1.5">
-                    <svg className="h-3 w-3 text-zinc-500 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                    </svg>
-                    {exercise.sets} sets
-                  </span>
-                )}
-                {exercise.reps && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 sm:px-3 sm:py-1.5">
-                    <svg className="h-3 w-3 text-zinc-500 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    {exercise.reps}
-                  </span>
-                )}
+              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                {exercise.sets && <span>{exercise.sets} sets</span>}
+                {exercise.sets && exercise.reps && <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">•</span>}
+                {exercise.reps && <span>{exercise.reps}</span>}
                 {exercise.rest && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-2 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400 sm:px-3 sm:py-1.5">
-                    <svg className="h-3 w-3 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {exercise.rest}
-                  </span>
+                  <>
+                    <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">•</span>
+                    <span className="text-green-600 dark:text-green-400">{exercise.rest}</span>
+                  </>
                 )}
-              </div>
+              </p>
             )}
           </div>
 
           {/* Video button */}
           <button
             onClick={handleVideoClick}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 transition-all hover:bg-green-100 hover:text-green-600 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-green-900/30 dark:hover:text-green-400 sm:h-10 sm:w-10"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-400 transition-all hover:bg-green-100 hover:text-green-600 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-green-900/30 dark:hover:text-green-400"
             title="Watch demo video"
           >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
           </button>
 
           {/* Expand/collapse indicator */}
-          <div className="shrink-0">
-            <motion.svg
-              animate={{ rotate: isExpanded ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-              className="h-5 w-5 text-zinc-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </motion.svg>
-          </div>
+          <motion.svg
+            animate={{ rotate: isExpanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="h-5 w-5 shrink-0 text-zinc-300 dark:text-zinc-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </motion.svg>
         </div>
       </button>
 

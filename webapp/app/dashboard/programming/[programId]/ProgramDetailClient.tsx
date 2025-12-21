@@ -257,7 +257,7 @@ export default function ProgramDetailClient({ program }: Props) {
       </div>
 
       {/* Content */}
-      <div className="mx-auto max-w-4xl px-3 sm:px-6">
+      <div className="mx-auto max-w-4xl py-2 px-0 sm:px-6">
         {/* Phase Selector */}
         <div className="-mt-4 relative z-10">
           <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:p-4">
