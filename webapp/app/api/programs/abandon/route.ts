@@ -43,6 +43,19 @@ export async function POST(request: NextRequest) {
 
     // Remove the program from active programs
     userProgress.activePrograms.splice(programIndex, 1)
+    
+    // Remove all workout logs for this program
+    if (userProgress.workoutLogs && userProgress.workoutLogs.length > 0) {
+      userProgress.workoutLogs = userProgress.workoutLogs.filter(
+        (log: { programId: string }) => log.programId !== programId
+      )
+    }
+    
+    // Clear currentProgram if it matches
+    if (userProgress.currentProgram?.programId === programId) {
+      userProgress.currentProgram = undefined
+    }
+    
     await userProgress.save()
 
     return NextResponse.json({ 
