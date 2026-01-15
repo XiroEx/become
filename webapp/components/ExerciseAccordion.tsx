@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { getExerciseVideoUrlAsync, getExerciseThumbnailAsync } from "@/lib/data/exerciseVideos";
 
 export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown';
 
@@ -24,8 +24,42 @@ type TabType = 'video' | 'instructions' | 'tips';
 
 // Video player component with local video or YouTube embed support
 function VideoPlayer({ exerciseName }: { exerciseName: string }) {
-  const videoUrl = getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function fetchVideoData() {
+      const [video, thumbnail] = await Promise.all([
+        getExerciseVideoUrlAsync(exerciseName),
+        getExerciseThumbnailAsync(exerciseName),
+      ]);
+      
+      if (isMounted) {
+        setVideoUrl(video);
+        setThumbnailUrl(thumbnail);
+        setIsLoading(false);
+      }
+    }
+    
+    fetchVideoData();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [exerciseName]);
+
+  if (isLoading || !videoUrl) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900 flex items-center justify-center">
+        <div className="animate-pulse text-zinc-500">Loading video...</div>
+      </div>
+    );
+  }
+
   const isLocalVideo = videoUrl.startsWith('/') && videoUrl.endsWith('.mp4');
 
   // For local videos, show inline video player
@@ -51,8 +85,6 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
   }
 
   // For YouTube videos (future use when real videos are added)
-  const [isPlaying, setIsPlaying] = useState(false);
-
   if (isPlaying) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg">
