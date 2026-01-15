@@ -60,7 +60,7 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
     );
   }
 
-  const isLocalVideo = videoUrl.startsWith('/') && videoUrl.endsWith('.mp4');
+  const isLocalVideo = videoUrl.startsWith('/') && (videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mov'));
 
   // For local videos, show inline video player
   if (isLocalVideo) {

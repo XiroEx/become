@@ -215,6 +215,19 @@ export default function ProgramDetailClient({ program }: Props) {
           );
           if (found) {
             setActiveProgram(found);
+            
+            // Check for in-progress workout using the actual current day
+            const currentDay = found.currentDay || 'Day 1';
+            const progressRes = await fetch(`/api/workouts?programId=${program.program_id}&day=${currentDay}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (progressRes.ok) {
+              const progressData = await progressRes.json();
+              if (progressData.isResume) {
+                setHasInProgressWorkout(true);
+              }
+            }
           }
         }
       } catch (error) {
@@ -222,29 +235,7 @@ export default function ProgramDetailClient({ program }: Props) {
       }
     };
 
-    // Check for in-progress workout
-    const checkWorkoutProgress = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) return;
-
-        const res = await fetch(`/api/workouts?programId=${program.program_id}&day=Day 1`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.isResume) {
-            setHasInProgressWorkout(true);
-          }
-        }
-      } catch (error) {
-        console.error("Error checking workout progress:", error);
-      }
-    };
-
     checkEnrollment();
-    checkWorkoutProgress();
   }, [program.program_id]);
 
   const handleStartProgram = async () => {

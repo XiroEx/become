@@ -27,8 +27,24 @@ interface SavedWorkout {
   completed: boolean;
 }
 
-// Demo workout data
-const demoExercises = [
+interface Exercise {
+  name: string;
+  type?: string;
+  sets?: number;
+  reps?: string;
+  rest?: string;
+  tip?: string;
+  details?: string;
+}
+
+interface WorkoutData {
+  day: string;
+  title: string;
+  exercises: Exercise[];
+}
+
+// Fallback demo data
+const fallbackExercises: Exercise[] = [
   { name: "Bench Press", sets: 3, reps: "8-10", rest: "90s", tip: "Keep shoulder blades pinched" },
   { name: "Seated Cable Row", sets: 3, reps: "10-12", rest: "90s", tip: "Squeeze at contraction" },
   { name: "Dumbbell Shoulder Press", sets: 3, reps: "10-12", rest: "60s", tip: "Core tight, back straight" },
@@ -41,6 +57,10 @@ export default function LiveWorkoutPage() {
   const router = useRouter();
   const params = useParams();
   const programId = params.programId as string;
+  const [workout, setWorkout] = useState<WorkoutData | null>(null);
+  const [exercises, setExercises] = useState<Exercise[]>(fallbackExercises);
+  const [currentPhase, setCurrentPhase] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [currentSetIndex, setCurrentSetIndex] = useState(0);
   const [isResting, setIsResting] = useState(false);
@@ -52,78 +72,140 @@ export default function LiveWorkoutPage() {
   const [showResumeIndicator, setShowResumeIndicator] = useState(false);
   const [workoutStartTime] = useState(Date.now());
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [exerciseData, setExerciseData] = useState<SetData[][]>(
-    demoExercises.map((ex) =>
-      Array.from({ length: ex.sets || 3 }, () => ({
-        reps: "",
-        weight: "",
-        completed: false,
-      }))
-    )
-  );
+  const [exerciseData, setExerciseData] = useState<SetData[][]>([]);
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
 
-  const currentExercise = demoExercises[currentExerciseIndex];
-  const totalExercises = demoExercises.length;
+  const currentExercise = exercises[currentExerciseIndex];
+  const totalExercises = exercises.length;
   const totalSets = currentExercise?.sets || 3;
 
-  // Load existing workout progress on mount
+  // Load the current workout from API
   useEffect(() => {
-    const loadProgress = async () => {
+    const loadWorkout = async () => {
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
+        if (!token) {
+          // Use fallback for unauthenticated users
+          setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
+          setExercises(fallbackExercises);
+          setExerciseData(
+            fallbackExercises.map((ex) =>
+              Array.from({ length: ex.sets || 3 }, () => ({
+                reps: "",
+                weight: "",
+                completed: false,
+              }))
+            )
+          );
+          setLoading(false);
+          return;
+        }
 
-        const res = await fetch(`/api/workouts?programId=${programId}&day=Day 1`, {
+        // Fetch the current workout for this program
+        const res = await fetch(`/api/programs/current-workout?programId=${programId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
         if (res.ok) {
           const data = await res.json();
-          if (data.workout && data.isResume) {
-            // Restore exercise data from saved workout
-            const savedWorkout = data.workout as SavedWorkout;
-            const restoredData = demoExercises.map((ex, exIdx) => {
-              const savedEx = savedWorkout.exercises?.find(e => e.name === ex.name);
-              if (savedEx) {
-                return savedEx.sets.map(s => ({
-                  reps: s.reps > 0 ? s.reps.toString() : "",
-                  weight: s.weight > 0 ? s.weight.toString() : "",
-                  completed: s.completed
+          const workoutData: WorkoutData = {
+            day: data.day || "Day 1",
+            title: data.workout?.title || "Training",
+            exercises: data.workout?.exercises || fallbackExercises
+          };
+          setWorkout(workoutData);
+          setExercises(workoutData.exercises);
+          setCurrentPhase(data.phase || 1);
+          
+          // Initialize exercise data
+          const initialData = workoutData.exercises.map((ex) =>
+            Array.from({ length: ex.sets || 3 }, () => ({
+              reps: "",
+              weight: "",
+              completed: false,
+            }))
+          );
+          setExerciseData(initialData);
+
+          // Now check for in-progress workout for today
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${workoutData.day}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (progressRes.ok) {
+            const progressData = await progressRes.json();
+            if (progressData.workout && progressData.isResume) {
+              // Restore exercise data from saved workout
+              const savedWorkout = progressData.workout as SavedWorkout;
+              const restoredData = workoutData.exercises.map((ex, exIdx) => {
+                const savedEx = savedWorkout.exercises?.find(e => e.name === ex.name);
+                if (savedEx) {
+                  return savedEx.sets.map(s => ({
+                    reps: s.reps > 0 ? s.reps.toString() : "",
+                    weight: s.weight > 0 ? s.weight.toString() : "",
+                    completed: s.completed
+                  }));
+                }
+                return Array.from({ length: ex.sets || 3 }, () => ({
+                  reps: "",
+                  weight: "",
+                  completed: false,
                 }));
-              }
-              return Array.from({ length: ex.sets || 3 }, () => ({
-                reps: "",
-                weight: "",
-                completed: false,
-              }));
-            });
-            
-            setExerciseData(restoredData);
-            setIsResuming(true);
-            setShowResumeIndicator(true);
-            
-            // Find the first incomplete set to resume from
-            for (let exIdx = 0; exIdx < restoredData.length; exIdx++) {
-              for (let setIdx = 0; setIdx < restoredData[exIdx].length; setIdx++) {
-                if (!restoredData[exIdx][setIdx].completed) {
-                  setCurrentExerciseIndex(exIdx);
-                  setCurrentSetIndex(setIdx);
-                  // Hide resume indicator after 3 seconds
-                  setTimeout(() => setShowResumeIndicator(false), 3000);
-                  return;
+              });
+              
+              setExerciseData(restoredData);
+              setIsResuming(true);
+              setShowResumeIndicator(true);
+              
+              // Find the first incomplete set to resume from
+              for (let exIdx = 0; exIdx < restoredData.length; exIdx++) {
+                for (let setIdx = 0; setIdx < restoredData[exIdx].length; setIdx++) {
+                  if (!restoredData[exIdx][setIdx].completed) {
+                    setCurrentExerciseIndex(exIdx);
+                    setCurrentSetIndex(setIdx);
+                    // Hide resume indicator after 3 seconds
+                    setTimeout(() => setShowResumeIndicator(false), 3000);
+                    break;
+                  }
                 }
               }
             }
           }
+        } else {
+          // Fallback
+          setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
+          setExercises(fallbackExercises);
+          setExerciseData(
+            fallbackExercises.map((ex) =>
+              Array.from({ length: ex.sets || 3 }, () => ({
+                reps: "",
+                weight: "",
+                completed: false,
+              }))
+            )
+          );
         }
       } catch (error) {
-        console.error("Error loading workout progress:", error);
+        console.error("Error loading workout:", error);
+        // Fallback
+        setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
+        setExercises(fallbackExercises);
+        setExerciseData(
+          fallbackExercises.map((ex) =>
+            Array.from({ length: ex.sets || 3 }, () => ({
+              reps: "",
+              weight: "",
+              completed: false,
+            }))
+          )
+        );
+      } finally {
+        setLoading(false);
       }
     };
 
-    loadProgress();
+    loadWorkout();
   }, [programId]);
 
   const parseRestTime = (rest: string): number => {
@@ -165,30 +247,32 @@ export default function LiveWorkoutPage() {
 
   // Save workout progress (can be called for partial saves or final save)
   const saveWorkout = useCallback(async (exerciseDataToSave: SetData[][], isComplete: boolean) => {
+    if (!workout) return;
+    
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const exercises = demoExercises.map((exercise, index) => ({
+      const exercisesToSave = exercises.map((exercise, index) => ({
         name: exercise.name,
-        sets: exerciseDataToSave[index].map((set, setIndex) => ({
+        sets: exerciseDataToSave[index]?.map((set, setIndex) => ({
           setNumber: setIndex + 1,
           reps: parseInt(set.reps) || 0,
           weight: parseFloat(set.weight) || 0,
           completed: set.completed
-        }))
+        })) || []
       }));
       await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ programId, phase: 1, day: "Day 1", exercises, completed: isComplete })
+        body: JSON.stringify({ programId, phase: currentPhase, day: workout.day, exercises: exercisesToSave, completed: isComplete })
       });
     } catch (error) {
       console.error("Error saving workout:", error);
     } finally {
       setSaving(false);
     }
-  }, [programId]);
+  }, [programId, workout, exercises, currentPhase]);
 
   const completeSet = useCallback(async () => {
     // Create updated exercise data
@@ -237,7 +321,7 @@ export default function LiveWorkoutPage() {
     if (currentSetIndex > 0) {
       setCurrentSetIndex((prev) => prev - 1);
     } else if (currentExerciseIndex > 0) {
-      const prevExercise = demoExercises[currentExerciseIndex - 1];
+      const prevExercise = exercises[currentExerciseIndex - 1];
       setCurrentExerciseIndex((prev) => prev - 1);
       setCurrentSetIndex((prevExercise?.sets || 3) - 1);
     }
@@ -253,12 +337,25 @@ export default function LiveWorkoutPage() {
         if (set.completed) completed++;
       });
     });
+    if (total === 0) return 0;
     return Math.round((completed / total) * 100);
   };
 
   // TEMPORARY: Alternate between placeholder videos based on exercise index
   const placeholderVideos = ["/placeholder.mp4", "/placeholder2.mp4"];
   const currentVideo = placeholderVideos[currentExerciseIndex % placeholderVideos.length];
+
+  // Show loading state
+  if (loading || !workout || exercises.length === 0) {
+    return (
+      <div className="fixed inset-0 z-100 bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto"></div>
+          <p className="mt-4 text-zinc-400">Loading workout...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-100 bg-black text-white">
@@ -330,7 +427,7 @@ export default function LiveWorkoutPage() {
             >
               <p className="mb-2 text-xs font-medium text-white/50">EXERCISES</p>
               <div className="space-y-2">
-                {demoExercises.map((exercise, idx) => (
+                {exercises.map((exercise, idx) => (
                   <div
                     key={idx}
                     className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
@@ -385,7 +482,7 @@ export default function LiveWorkoutPage() {
           className="flex flex-col gap-2 cursor-pointer p-2"
           onClick={() => setShowExerciseList(!showExerciseList)}
         >
-          {demoExercises.map((_, idx) => (
+          {exercises.map((_, idx) => (
             <div
               key={idx}
               className={`h-2 w-2 rounded-full transition-all ${

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import ProgramModel from '@/models/Program'
+import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 
 interface SetData {
   setNumber: number
@@ -169,14 +171,20 @@ export async function POST(request: NextRequest) {
       
       // Only increment completedWorkouts if transitioning from incomplete to complete
       if (completed && !wasAlreadyComplete) {
+        // Fetch program to calculate next workout day
+        const program = await ProgramModel.findOne({ program_id: programId }).lean()
+        const { nextDay, nextPhase } = program?.phases 
+          ? calculateNextDay(day, phase, program.phases)
+          : { nextDay: day, nextPhase: phase }
+        
         await UserProgress.updateOne(
           { userId: payload.userId, 'activePrograms.programId': programId },
           {
             $inc: { 'activePrograms.$.completedWorkouts': 1, totalWorkouts: 1 },
             $set: { 
               'activePrograms.$.lastWorkoutDate': new Date(),
-              'activePrograms.$.currentPhase': phase,
-              'activePrograms.$.currentDay': day
+              'activePrograms.$.currentPhase': nextPhase,
+              'activePrograms.$.currentDay': nextDay
             }
           }
         )
@@ -214,14 +222,20 @@ export async function POST(request: NextRequest) {
 
       // Update active program progress if workout completed
       if (completed) {
+        // Fetch program to calculate next workout day (reuse if already fetched)
+        const program = await ProgramModel.findOne({ program_id: programId }).lean()
+        const { nextDay, nextPhase } = program?.phases 
+          ? calculateNextDay(day, phase, program.phases)
+          : { nextDay: day, nextPhase: phase }
+        
         await UserProgress.updateOne(
           { userId: payload.userId, 'activePrograms.programId': programId },
           {
             $inc: { 'activePrograms.$.completedWorkouts': 1 },
             $set: { 
               'activePrograms.$.lastWorkoutDate': new Date(),
-              'activePrograms.$.currentPhase': phase,
-              'activePrograms.$.currentDay': day
+              'activePrograms.$.currentPhase': nextPhase,
+              'activePrograms.$.currentDay': nextDay
             }
           }
         )

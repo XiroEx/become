@@ -110,17 +110,32 @@ interface SavedWorkout {
   completed: boolean;
 }
 
-// Placeholder exercise data for demo
-const demoWorkout = {
+interface Exercise {
+  name: string;
+  type: string;
+  sets?: number;
+  reps?: string;
+  rest?: string;
+  details?: string;
+}
+
+interface WorkoutData {
+  day: string;
+  title: string;
+  exercises: Exercise[];
+}
+
+// Fallback demo data in case API fails
+const fallbackWorkout: WorkoutData = {
   day: "Day 1",
   title: "Upper Body Strength + Conditioning",
   exercises: [
-    { name: "Bench Press", type: "strength" as const, sets: 3, reps: "8-10", rest: "90s" },
-    { name: "Seated Cable Row", type: "strength" as const, sets: 3, reps: "10-12", rest: "90s" },
-    { name: "Dumbbell Shoulder Press", type: "strength" as const, sets: 3, reps: "10-12", rest: "60s" },
-    { name: "Lat Pulldown", type: "strength" as const, sets: 3, reps: "10-12", rest: "60s" },
-    { name: "Tricep Pushdown", type: "strength" as const, sets: 3, reps: "12-15", rest: "45s" },
-    { name: "Bicep Curls", type: "strength" as const, sets: 3, reps: "12-15", rest: "45s" },
+    { name: "Bench Press", type: "strength", sets: 3, reps: "8-10", rest: "90s" },
+    { name: "Seated Cable Row", type: "strength", sets: 3, reps: "10-12", rest: "90s" },
+    { name: "Dumbbell Shoulder Press", type: "strength", sets: 3, reps: "10-12", rest: "60s" },
+    { name: "Lat Pulldown", type: "strength", sets: 3, reps: "10-12", rest: "60s" },
+    { name: "Tricep Pushdown", type: "strength", sets: 3, reps: "12-15", rest: "45s" },
+    { name: "Bicep Curls", type: "strength", sets: 3, reps: "12-15", rest: "45s" },
   ],
 };
 
@@ -128,75 +143,141 @@ export default function WorkoutFormPage() {
   const router = useRouter();
   const params = useParams();
   const programId = params.programId as string;
+  const [workout, setWorkout] = useState<WorkoutData | null>(null);
+  const [currentPhase, setCurrentPhase] = useState(1);
+  const [loading, setLoading] = useState(true);
   const [isResuming, setIsResuming] = useState(false);
-  const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgress[]>(
-    demoWorkout.exercises.map((ex, i) => ({
-      exerciseIndex: i,
-      sets: Array.from({ length: ex.sets || 3 }, () => ({
-        reps: "",
-        weight: "",
-        completed: false,
-      })),
-    }))
-  );
+  const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgress[]>([]);
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load existing workout progress on mount
+  // Load the current workout from API
   useEffect(() => {
-    const loadProgress = async () => {
+    const loadWorkout = async () => {
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
+        if (!token) {
+          // Use fallback for unauthenticated users
+          setWorkout(fallbackWorkout);
+          setExerciseProgress(
+            fallbackWorkout.exercises.map((ex, i) => ({
+              exerciseIndex: i,
+              sets: Array.from({ length: ex.sets || 3 }, () => ({
+                reps: "",
+                weight: "",
+                completed: false,
+              })),
+            }))
+          );
+          setLoading(false);
+          return;
+        }
 
-        const res = await fetch(`/api/workouts?programId=${programId}&day=${demoWorkout.day}`, {
+        // Fetch the current workout for this program
+        const res = await fetch(`/api/programs/current-workout?programId=${programId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
         if (res.ok) {
           const data = await res.json();
-          if (data.workout && data.isResume) {
-            const savedWorkout = data.workout as SavedWorkout;
-            const restoredProgress = demoWorkout.exercises.map((ex, exIdx) => {
-              const savedEx = savedWorkout.exercises?.find(e => e.name === ex.name);
-              return {
-                exerciseIndex: exIdx,
-                sets: savedEx 
-                  ? savedEx.sets.map(s => ({
-                      reps: s.reps > 0 ? s.reps.toString() : "",
-                      weight: s.weight > 0 ? s.weight.toString() : "",
-                      completed: s.completed
-                    }))
-                  : Array.from({ length: ex.sets || 3 }, () => ({
-                      reps: "",
-                      weight: "",
-                      completed: false,
-                    }))
-              };
-            });
-            
-            setExerciseProgress(restoredProgress);
-            setIsResuming(true);
-            
-            // Expand first incomplete exercise
-            for (let i = 0; i < restoredProgress.length; i++) {
-              if (restoredProgress[i].sets.some(s => !s.completed)) {
-                setExpandedExercise(i);
-                break;
+          const workoutData: WorkoutData = {
+            day: data.day || "Day 1",
+            title: data.workout?.title || "Training",
+            exercises: data.workout?.exercises || fallbackWorkout.exercises
+          };
+          setWorkout(workoutData);
+          setCurrentPhase(data.phase || 1);
+          
+          // Initialize exercise progress
+          const initialProgress = workoutData.exercises.map((ex, i) => ({
+            exerciseIndex: i,
+            sets: Array.from({ length: ex.sets || 3 }, () => ({
+              reps: "",
+              weight: "",
+              completed: false,
+            })),
+          }));
+          setExerciseProgress(initialProgress);
+
+          // Now check for in-progress workout for today
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${workoutData.day}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (progressRes.ok) {
+            const progressData = await progressRes.json();
+            if (progressData.workout && progressData.isResume) {
+              const savedWorkout = progressData.workout as SavedWorkout;
+              const restoredProgress = workoutData.exercises.map((ex, exIdx) => {
+                const savedEx = savedWorkout.exercises?.find(e => e.name === ex.name);
+                return {
+                  exerciseIndex: exIdx,
+                  sets: savedEx 
+                    ? savedEx.sets.map(s => ({
+                        reps: s.reps > 0 ? s.reps.toString() : "",
+                        weight: s.weight > 0 ? s.weight.toString() : "",
+                        completed: s.completed
+                      }))
+                    : Array.from({ length: ex.sets || 3 }, () => ({
+                        reps: "",
+                        weight: "",
+                        completed: false,
+                      }))
+                };
+              });
+              
+              setExerciseProgress(restoredProgress);
+              setIsResuming(true);
+              
+              // Expand first incomplete exercise
+              for (let i = 0; i < restoredProgress.length; i++) {
+                if (restoredProgress[i].sets.some(s => !s.completed)) {
+                  setExpandedExercise(i);
+                  break;
+                }
               }
             }
           }
+        } else {
+          // Fallback to demo workout
+          setWorkout(fallbackWorkout);
+          setExerciseProgress(
+            fallbackWorkout.exercises.map((ex, i) => ({
+              exerciseIndex: i,
+              sets: Array.from({ length: ex.sets || 3 }, () => ({
+                reps: "",
+                weight: "",
+                completed: false,
+              })),
+            }))
+          );
         }
       } catch (error) {
-        console.error("Error loading workout progress:", error);
+        console.error("Error loading workout:", error);
+        // Fallback to demo workout
+        setWorkout(fallbackWorkout);
+        setExerciseProgress(
+          fallbackWorkout.exercises.map((ex, i) => ({
+            exerciseIndex: i,
+            sets: Array.from({ length: ex.sets || 3 }, () => ({
+              reps: "",
+              weight: "",
+              completed: false,
+            })),
+          }))
+        );
+      } finally {
+        setLoading(false);
       }
     };
 
-    loadProgress();
+    loadWorkout();
   }, [programId]);
 
   // Auto-save function
   const autoSave = useCallback(async (progress: ExerciseProgress[]) => {
+    if (!workout) return;
+    
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -206,9 +287,9 @@ export default function WorkoutFormPage() {
         (acc, ep) => acc + ep.sets.filter((s) => s.completed).length,
         0
       );
-      const isComplete = completedSets === totalSets;
+      const isComplete = completedSets === totalSets && totalSets > 0;
 
-      const exercises = demoWorkout.exercises.map((exercise, index) => {
+      const exercises = workout.exercises.map((exercise, index) => {
         const ep = progress.find((p) => p.exerciseIndex === index);
         return {
           name: exercise.name,
@@ -229,8 +310,8 @@ export default function WorkoutFormPage() {
         },
         body: JSON.stringify({
           programId,
-          phase: 1,
-          day: demoWorkout.day,
+          phase: currentPhase,
+          day: workout.day,
           exercises,
           completed: isComplete
         })
@@ -238,7 +319,7 @@ export default function WorkoutFormPage() {
     } catch (error) {
       console.error("Error auto-saving:", error);
     }
-  }, [programId]);
+  }, [programId, workout, currentPhase]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -299,12 +380,25 @@ export default function WorkoutFormPage() {
 
   const getTotalCompletion = () => {
     const totalSets = exerciseProgress.reduce((acc, ep) => acc + ep.sets.length, 0);
+    if (totalSets === 0) return 0;
     const completedSets = exerciseProgress.reduce(
       (acc, ep) => acc + ep.sets.filter((s) => s.completed).length,
       0
     );
     return Math.round((completedSets / totalSets) * 100);
   };
+
+  // Show loading state
+  if (loading || !workout) {
+    return (
+      <PageTransition className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto"></div>
+          <p className="mt-4 text-zinc-500 dark:text-zinc-400">Loading workout...</p>
+        </div>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition className="min-h-screen pb-24">
@@ -324,9 +418,9 @@ export default function WorkoutFormPage() {
 
             <div className="text-center">
               <h1 className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">
-                {demoWorkout.title}
+                {workout.title}
               </h1>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">{demoWorkout.day}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">{workout.day}</p>
             </div>
 
             <button
@@ -371,7 +465,7 @@ export default function WorkoutFormPage() {
       {/* Exercise List */}
       <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 sm:py-6">
         <div className="space-y-3 sm:space-y-4">
-          {demoWorkout.exercises.map((exercise, exerciseIndex) => {
+          {workout.exercises.map((exercise, exerciseIndex) => {
             const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
             const completion = getExerciseCompletion(exerciseIndex);
             const isExpanded = expandedExercise === exerciseIndex;

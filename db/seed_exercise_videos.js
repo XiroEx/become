@@ -42,34 +42,50 @@ const PLACEHOLDER_VIDEO_1 = '/placeholder.mp4';
 const PLACEHOLDER_VIDEO_2 = '/placeholder2.mp4';
 const PLACEHOLDER_THUMBNAIL = '/icons/icon-192.png';
 
+// Real videos mapping - exercises with actual video files
+const REAL_VIDEOS = {
+  'Back Squat': '/exercises/back-squat.mp4',
+  'Bench Press': '/exercises/bench-press.mov',
+  'Seated Cable Row': '/exercises/cable-row.mov',
+  // Add more real videos here as they become available
+};
+
 // All exercise names from the programs
 const exerciseNames = [
   // Chest exercises
   "Bench Press",
   "Incline Bench Press",
   "Incline Dumbbell Press",
+  "Dumbbell Bench Press",
   "Dumbbell Flyes",
   "Cable Flyes",
   "Push-ups",
   "Chest Dips",
+  "Machine Chest Press",
   
   // Back exercises
   "Seated Cable Row",
   "Lat Pulldown",
   "Bent Over Row",
+  "Bent Over Barbell Row",
   "Barbell Row",
   "T-Bar Row",
   "Pull-ups",
   "Chin-ups",
   "Face Pulls",
+  "Rope Face Pull",
   "Single Arm Dumbbell Row",
+  "Chest Supported Row",
   "Deadlift",
   "Romanian Deadlift",
   
   // Shoulder exercises
   "Dumbbell Shoulder Press",
+  "Machine Shoulder Press",
   "Overhead Press",
   "Lateral Raises",
+  "Dumbbell Lateral Raise",
+  "Cable Lateral Raise",
   "Front Raises",
   "Rear Delt Flyes",
   "Arnold Press",
@@ -83,9 +99,12 @@ const exerciseNames = [
   "Preacher Curls",
   "Incline Dumbbell Curls",
   "Cable Curls",
+  "Cable Curl",
+  "EZ Bar Curl",
   
   // Arm exercises - Triceps
   "Tricep Pushdown",
+  "Cable Tricep Pushdown",
   "Tricep Dips",
   "Skull Crushers",
   "Overhead Tricep Extension",
@@ -93,6 +112,7 @@ const exerciseNames = [
   "Diamond Push-ups",
   
   // Leg exercises - Quads
+  "Back Squat",
   "Barbell Squat",
   "Squat",
   "Front Squat",
@@ -100,12 +120,15 @@ const exerciseNames = [
   "Leg Extension",
   "Lunges",
   "Walking Lunges",
+  "Walking Lunge",
   "Bulgarian Split Squat",
   "Goblet Squat",
   "Hack Squat",
+  "Step Ups",
   
   // Leg exercises - Hamstrings
   "Leg Curl",
+  "Leg Curl Machine",
   "Lying Leg Curl",
   "Seated Leg Curl",
   "Stiff Leg Deadlift",
@@ -182,8 +205,9 @@ async function seedExerciseVideos(db) {
 
   for (let i = 0; i < exerciseNames.length; i++) {
     const exerciseName = exerciseNames[i];
-    // Alternate between placeholder videos
-    const videoUrl = i % 2 === 0 ? PLACEHOLDER_VIDEO_1 : PLACEHOLDER_VIDEO_2;
+    // Check if we have a real video for this exercise
+    const hasRealVideo = REAL_VIDEOS.hasOwnProperty(exerciseName);
+    const videoUrl = hasRealVideo ? REAL_VIDEOS[exerciseName] : (i % 2 === 0 ? PLACEHOLDER_VIDEO_1 : PLACEHOLDER_VIDEO_2);
     
     try {
       const result = await collection.updateOne(
@@ -193,7 +217,7 @@ async function seedExerciseVideos(db) {
             exerciseName,
             videoUrl,
             thumbnailUrl: PLACEHOLDER_THUMBNAIL,
-            isPlaceholder: true,
+            isPlaceholder: !hasRealVideo,
             updatedAt: new Date(),
           },
           $setOnInsert: {
