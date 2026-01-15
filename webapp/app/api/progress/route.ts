@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
-import { formatProgressData, mockUserProgress } from '@/lib/data/userProgress'
+import { formatProgressData, mockUserProgress, calculateNextWorkout } from '@/lib/data/userProgress'
 import { verifyAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
@@ -25,14 +25,64 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(formatProgressData(mockUserProgress))
     }
 
-    // Get current program name if exists
+    // Find the most recent active program
     let programName = 'BECOME — 12 Week Fat-Loss Foundation'
-    if (progress.currentProgram?.programId) {
-      const program = await ProgramModel.findOne({ 
+    let nextWorkout = 'Day 1 - Start Training'
+    let activeProgram = null
+    let programDetails = null
+
+    // First check activePrograms array for the most recent in-progress program
+    if (progress.activePrograms && progress.activePrograms.length > 0) {
+      // Find the most recent active program by lastWorkoutDate or startDate
+      const inProgressPrograms = progress.activePrograms.filter(
+        (p: { status: string }) => p.status === 'in-progress' || p.status === 'active'
+      )
+      
+      if (inProgressPrograms.length > 0) {
+        // Sort by lastWorkoutDate (most recent first), fallback to startDate
+        activeProgram = inProgressPrograms.sort((a: { lastWorkoutDate?: Date; startDate: Date }, b: { lastWorkoutDate?: Date; startDate: Date }) => {
+          const dateA = a.lastWorkoutDate ? new Date(a.lastWorkoutDate) : new Date(a.startDate)
+          const dateB = b.lastWorkoutDate ? new Date(b.lastWorkoutDate) : new Date(b.startDate)
+          return dateB.getTime() - dateA.getTime()
+        })[0]
+        
+        programName = activeProgram.programName
+        
+        // Fetch the program to get workout titles
+        programDetails = await ProgramModel.findOne({ 
+          program_id: activeProgram.programId 
+        }).lean()
+        
+        if (programDetails) {
+          nextWorkout = calculateNextWorkout(activeProgram, programDetails, progress.workoutLogs || [])
+        }
+      }
+    }
+    
+    // Fallback to legacy currentProgram field
+    if (!activeProgram && progress.currentProgram?.programId) {
+      programDetails = await ProgramModel.findOne({ 
         program_id: progress.currentProgram.programId 
       }).lean()
-      if (program) {
-        programName = program.name
+      if (programDetails) {
+        programName = programDetails.name
+        // Calculate next workout from workoutLogs
+        const lastLog = progress.workoutLogs?.slice().reverse().find(
+          (log: { programId: string }) => log.programId === progress.currentProgram.programId
+        )
+        if (lastLog && programDetails.phases) {
+          const phaseIdx = (lastLog.phase || 1) - 1
+          const phase = programDetails.phases[phaseIdx]
+          if (phase?.workouts) {
+            const workouts = Array.isArray(phase.workouts) 
+              ? phase.workouts 
+              : Object.entries(phase.workouts).map(([day, w]: [string, unknown]) => ({ day, ...(w as object) }))
+            const currentDayIdx = workouts.findIndex((w: { day: string }) => w.day === lastLog.day)
+            const nextDayIdx = (currentDayIdx + 1) % workouts.length
+            const nextWorkoutData = workouts[nextDayIdx] as { day: string; title?: string }
+            nextWorkout = `${nextWorkoutData.day} - ${nextWorkoutData.title || 'Training'}`
+          }
+        }
       }
     }
 
@@ -41,7 +91,7 @@ export async function GET(request: NextRequest) {
     const hasWeightData = progress.weightHistory && progress.weightHistory.length > 0
     const hasMoodData = progress.moodHistory && progress.moodHistory.length > 0
     const hasWorkoutData = progress.workoutLogs && progress.workoutLogs.length > 0
-    const hasCurrentProgram = progress.currentProgram && progress.currentProgram.programId
+    const hasCurrentProgram = (activeProgram || progress.currentProgram?.programId)
 
     // Format and return progress data
     const formattedData = formatProgressData(
@@ -50,11 +100,17 @@ export async function GET(request: NextRequest) {
         weightHistory: hasWeightData ? progress.weightHistory : mockUserProgress.weightHistory,
         moodHistory: hasMoodData ? progress.moodHistory : mockUserProgress.moodHistory,
         workoutLogs: hasWorkoutData ? progress.workoutLogs : mockUserProgress.workoutLogs,
-        currentProgram: hasCurrentProgram ? progress.currentProgram : mockUserProgress.currentProgram,
+        currentProgram: hasCurrentProgram ? (activeProgram ? {
+          programId: activeProgram.programId,
+          startDate: activeProgram.startDate,
+          currentPhase: activeProgram.currentPhase || 1,
+          currentWeek: activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1
+        } : progress.currentProgram) : mockUserProgress.currentProgram,
         streakDays: progress.streakDays || mockUserProgress.streakDays,
         totalWorkouts: hasWorkoutData ? progress.totalWorkouts : mockUserProgress.totalWorkouts
       },
-      programName
+      programName,
+      nextWorkout
     )
 
     return NextResponse.json(formattedData)

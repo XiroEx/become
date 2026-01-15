@@ -1,133 +1,107 @@
 "use client"
 import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 interface Props {
   mode: 'login' | 'register'
 }
 
 export default function AuthForm({ mode }: Props) {
-  const router = useRouter()
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
   const [name, setName] = useState('')
-  const [codeSent, setCodeSent] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  async function handleSendCode(e: React.FormEvent) {
+  async function handleSendLink(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
     try {
-      // TODO: Send email with code
-      // For now, just simulate sending and set codeSent to true
-      await new Promise(resolve => setTimeout(resolve, 500))
-      setCodeSent(true)
-    } catch (err: any) {
-      setError(err.message || 'Failed to send code')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleVerifyCode(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
-
-    try {
-      // Verify code is 1234
-      if (code !== '1234') {
-        throw new Error('Invalid code. Use 1234 for testing.')
-      }
-
-      const res = await fetch(`/api/auth/${mode}`, {
+      const res = await fetch('/api/auth/send-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name }),
+        body: JSON.stringify({ email, name, mode }),
       })
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.message || 'Unknown error')
 
-      // Save token and redirect to dashboard
-      if (data.token) {
-        localStorage.setItem('token', data.token)
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to send verification email')
       }
-      router.push('/dashboard')
-    } catch (err: any) {
-      setError(err.message || 'Failed')
+
+      setEmailSent(true)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to send email')
     } finally {
       setLoading(false)
     }
   }
 
-  if (!codeSent) {
+  if (emailSent) {
     return (
-      <form onSubmit={handleSendCode} className="flex w-full max-w-md flex-col gap-4">
-        {mode === 'register' && (
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Full name"
-            required
-            className="rounded border px-3 py-2"
-          />
-        )}
+      <div className="flex w-full max-w-md flex-col gap-4">
+        <div className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-6 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
+            <svg className="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">
+            Check your email
+          </h3>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">
+            We sent a verification link to
+          </p>
+          <p className="text-sm font-medium text-zinc-900 dark:text-white mb-4">
+            {email}
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-500">
+            Click the link in the email to {mode === 'register' ? 'complete your registration' : 'sign in'}.
+            The link expires in 15 minutes.
+          </p>
+        </div>
 
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          type="email"
-          required
-          className="rounded border px-3 py-2"
-        />
-
-        <button disabled={loading} className="cursor-pointer rounded bg-foreground px-4 py-2 text-background disabled:cursor-not-allowed">
-          {loading ? 'Sending...' : 'Send code'}
+        <button
+          type="button"
+          onClick={() => setEmailSent(false)}
+          className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white underline"
+        >
+          Use a different email
         </button>
-
-        {error && <div className="text-sm text-red-600">{error}</div>}
-      </form>
+      </div>
     )
   }
 
   return (
-    <form onSubmit={handleVerifyCode} className="flex w-full max-w-md flex-col gap-4">
-      <div className="rounded-lg bg-zinc-100 p-4 text-sm text-zinc-700">
-        Code sent to <strong>{email}</strong>
-        <button
-          type="button"
-          onClick={() => setCodeSent(false)}
-          className="ml-2 cursor-pointer text-foreground underline"
-        >
-          Change
-        </button>
-      </div>
+    <form onSubmit={handleSendLink} className="flex w-full max-w-md flex-col gap-4">
+      {mode === 'register' && (
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Full name"
+          required
+          className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-white placeholder:text-zinc-500"
+        />
+      )}
 
       <input
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="Enter 4-digit code"
-        type="text"
-        maxLength={4}
-        pattern="[0-9]{4}"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+        type="email"
         required
-        className="rounded border px-3 py-2 text-center text-2xl tracking-widest"
+        className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-white placeholder:text-zinc-500"
       />
 
-      <p className="text-xs text-zinc-500">
-        For testing, use code: <strong>1234</strong>
-      </p>
-
-      <button disabled={loading} className="cursor-pointer rounded bg-foreground px-4 py-2 text-background disabled:cursor-not-allowed">
-        {loading ? 'Verifying...' : 'Verify code'}
+      <button 
+        disabled={loading} 
+        className="cursor-pointer rounded bg-zinc-900 dark:bg-white px-4 py-2 text-white dark:text-zinc-900 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {loading ? 'Sending...' : 'Continue with email'}
       </button>
 
-      {error && <div className="text-sm text-red-600">{error}</div>}
+      {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
     </form>
   )
 }

@@ -110,8 +110,94 @@ export function calculateBMI(weight: number, heightInches: number): number {
   return (weight * 703) / (heightInches * heightInches)
 }
 
+// Calculate the next workout based on active program and workout logs
+export function calculateNextWorkout(
+  activeProgram: {
+    programId: string
+    programName: string
+    currentPhase: number
+    currentDay: string
+    completedWorkouts: number
+    totalWorkouts: number
+    lastWorkoutDate?: Date
+  },
+  programDetails: {
+    phases: Array<{
+      phase: string
+      workouts: Array<{ day: string; title: string }> | Record<string, { title: string }>
+    }>
+  },
+  workoutLogs: Array<{ programId: string; phase: number; day: string; date: Date; completed: boolean }>
+): string {
+  // Find the last completed workout for this program
+  const programLogs = workoutLogs
+    .filter(log => log.programId === activeProgram.programId && log.completed)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  
+  const lastLog = programLogs[0]
+  
+  if (!lastLog || !programDetails.phases) {
+    // No completed workouts yet - start at Day 1
+    const firstPhase = programDetails.phases?.[0]
+    if (firstPhase?.workouts) {
+      const workouts = Array.isArray(firstPhase.workouts) 
+        ? firstPhase.workouts 
+        : Object.entries(firstPhase.workouts).map(([day, w]) => ({ day, ...w }))
+      if (workouts[0]) {
+        return `${workouts[0].day} - ${workouts[0].title || 'Training'}`
+      }
+    }
+    return 'Day 1 - Start Training'
+  }
+  
+  // Get the phase and calculate next workout
+  const phaseIdx = (lastLog.phase || activeProgram.currentPhase || 1) - 1
+  const phase = programDetails.phases[phaseIdx]
+  
+  if (!phase?.workouts) {
+    return `${activeProgram.currentDay || 'Day 1'} - Training`
+  }
+  
+  // Normalize workouts to array
+  const workouts = Array.isArray(phase.workouts) 
+    ? phase.workouts 
+    : Object.entries(phase.workouts).map(([day, w]) => ({ day, ...w }))
+  
+  // Find current day index
+  const currentDayIdx = workouts.findIndex(w => w.day === lastLog.day)
+  
+  if (currentDayIdx === -1) {
+    // Day not found, start at Day 1
+    return `${workouts[0]?.day || 'Day 1'} - ${workouts[0]?.title || 'Training'}`
+  }
+  
+  // Calculate next day
+  const nextDayIdx = currentDayIdx + 1
+  
+  if (nextDayIdx >= workouts.length) {
+    // End of phase - check if there's another phase
+    const nextPhaseIdx = phaseIdx + 1
+    if (nextPhaseIdx < programDetails.phases.length) {
+      const nextPhase = programDetails.phases[nextPhaseIdx]
+      const nextPhaseWorkouts = Array.isArray(nextPhase.workouts) 
+        ? nextPhase.workouts 
+        : Object.entries(nextPhase.workouts).map(([day, w]) => ({ day, ...w }))
+      return `${nextPhaseWorkouts[0]?.day || 'Day 1'} - ${nextPhaseWorkouts[0]?.title || 'Training'}`
+    }
+    // Restart from beginning of current phase (or program complete)
+    return `${workouts[0]?.day || 'Day 1'} - ${workouts[0]?.title || 'Training'}`
+  }
+  
+  const nextWorkout = workouts[nextDayIdx]
+  return `${nextWorkout.day} - ${nextWorkout.title || 'Training'}`
+}
+
 // Format data for API response
-export function formatProgressData(progress: typeof mockUserProgress, programName: string = 'BECOME — 12 Week Fat-Loss Foundation') {
+export function formatProgressData(
+  progress: typeof mockUserProgress, 
+  programName: string = 'BECOME — 12 Week Fat-Loss Foundation',
+  nextWorkout: string = 'Day 1 - Start Training'
+) {
   const weightData = progress.weightHistory.map(entry => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     value: entry.weight
@@ -148,7 +234,7 @@ export function formatProgressData(progress: typeof mockUserProgress, programNam
       currentPhase: progress.currentProgram.currentPhase,
       currentWeek: progress.currentProgram.currentWeek,
       totalWeeks: 12,
-      nextWorkout: 'Day 4 - Lower Body Power'
+      nextWorkout: nextWorkout
     } : null,
     stats: {
       streakDays: progress.streakDays,

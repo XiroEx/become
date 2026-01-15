@@ -4,6 +4,83 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+
+// Video player component with local video or YouTube embed support
+function VideoPlayer({ exerciseName }: { exerciseName: string }) {
+  const videoUrl = getExerciseVideoUrl(exerciseName);
+  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const isLocalVideo = videoUrl.startsWith('/') && videoUrl.endsWith('.mp4');
+
+  // For local videos, show inline video player
+  if (isLocalVideo) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
+        <video
+          className="h-full w-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src={videoUrl} type="video/mp4" />
+        </video>
+        <div className="absolute top-2 right-2">
+          <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            Demo
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // For YouTube videos (future use when real videos are added)
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  if (isPlaying) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg">
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={`${videoUrl}?autoplay=1&rel=0&modestbranding=1`}
+          title={`${exerciseName} demo video`}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setIsPlaying(true)}
+      className="relative aspect-video w-full overflow-hidden rounded-lg group cursor-pointer"
+    >
+      {thumbnailUrl ? (
+        <img
+          src={thumbnailUrl}
+          alt={`${exerciseName} thumbnail`}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="h-full w-full bg-linear-to-br from-zinc-600 to-zinc-700" />
+      )}
+      <div className="absolute inset-0 bg-black/30 transition-opacity group-hover:bg-black/40" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110">
+          <svg className="h-7 w-7 text-green-600 ml-1" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+      <div className="absolute bottom-2 left-2 right-2">
+        <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+          Watch Demo
+        </span>
+      </div>
+    </button>
+  );
+}
 
 interface SetData {
   reps: string;
@@ -373,6 +450,11 @@ export default function WorkoutFormPage() {
                       className="overflow-hidden"
                     >
                       <div className="border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                        {/* Video Demo Section */}
+                        <div className="mb-4">
+                          <VideoPlayer exerciseName={exercise.name} />
+                        </div>
+
                         {/* Column headers */}
                         <div className="mb-3 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                           <div className="col-span-2">Set</div>

@@ -291,11 +291,11 @@ export default function DashboardClient() {
             </div>
 
             <Link
-              href={`/dashboard/programming/${data.currentProgram.programId}`}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:py-3"
+              href={`/dashboard/programming/${data.currentProgram.programId}/workout`}
+              className="flex w-full items-center justify-between gap-2 rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
-              <span>Continue: {data.currentProgram.nextWorkout}</span>
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <span className="text-left">Continue: {data.currentProgram.nextWorkout}</span>
+              <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
