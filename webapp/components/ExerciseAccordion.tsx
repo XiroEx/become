@@ -67,6 +67,7 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
         <video
+          key={videoUrl}
           className="h-full w-full object-cover"
           autoPlay
           loop
@@ -74,6 +75,7 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
           playsInline
         >
           <source src={videoUrl} type="video/mp4" />
+          Your browser does not support the video tag.
         </video>
         <div className="absolute top-3 right-3">
           <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
