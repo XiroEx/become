@@ -5,8 +5,8 @@ const ATLAS_URI = 'mongodb+srv://george8794:iLmYV8dMSgJoVEwx@jondonfit.ctp0tfj.m
 // Real videos mapping - exercises with actual video files
 const REAL_VIDEOS = {
   'Back Squat': '/exercises/back-squat.mp4',
-  'Bench Press': '/exercises/bench-press.mov',
-  'Seated Cable Row': '/exercises/cable-row.mov',
+  'Bench Press': '/exercises/bench-press.mp4',
+  'Seated Cable Row': '/exercises/cable-row.mp4',
   // Add more real videos here as they become available
 };
 
