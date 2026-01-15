@@ -76,10 +76,18 @@ export default function LiveWorkoutPage() {
   const [exerciseData, setExerciseData] = useState<SetData[][]>([]);
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const currentExercise = exercises[currentExerciseIndex];
   const totalExercises = exercises.length;
   const totalSets = currentExercise?.sets || 3;
+
+  // Toggle fullscreen mode when tapping video
+  const handleVideoTap = () => {
+    if (!isResting) {
+      setIsFullscreen(!isFullscreen);
+    }
+  };
 
   // Load the current workout from API
   useEffect(() => {
@@ -366,8 +374,11 @@ export default function LiveWorkoutPage() {
 
   return (
     <div className="fixed inset-0 z-100 bg-black text-white">
-      {/* Fullscreen video background */}
-      <div className="absolute inset-0">
+      {/* Fullscreen video background - tappable */}
+      <div 
+        className="absolute inset-0 cursor-pointer"
+        onClick={handleVideoTap}
+      >
         <video
           key={currentVideo} // Force re-render when video changes
           autoPlay
@@ -381,44 +392,78 @@ export default function LiveWorkoutPage() {
       </div>
 
       {/* Top overlay - Exit & Timer */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-linear-to-b from-black/60 to-transparent">
-        <button
-          onClick={() => router.back()}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+      <AnimatePresence>
+        {!isFullscreen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-linear-to-b from-black/60 to-transparent"
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); router.back(); }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
 
-        <div className="flex items-center gap-3">
-          {/* Resume indicator */}
-          <AnimatePresence>
-            {showResumeIndicator && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="flex items-center gap-1.5 rounded-full bg-yellow-500/20 px-3 py-1.5 backdrop-blur-sm"
-              >
-                <svg className="h-4 w-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm font-medium text-yellow-400">Resuming</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-            <span className="font-mono text-sm tabular-nums">{formatTime(elapsedTime)}</span>
-          </div>
-        </div>
-      </div>
+            <div className="flex items-center gap-3">
+              {/* Resume indicator */}
+              <AnimatePresence>
+                {showResumeIndicator && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className="flex items-center gap-1.5 rounded-full bg-yellow-500/20 px-3 py-1.5 backdrop-blur-sm"
+                  >
+                    <svg className="h-4 w-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-medium text-yellow-400">Resuming</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              
+              <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                <span className="font-mono text-sm tabular-nums">{formatTime(elapsedTime)}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen mode indicator - small timer only */}
+      <AnimatePresence>
+        {isFullscreen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute top-4 right-4 z-10"
+          >
+            <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+              <span className="font-mono text-sm tabular-nums">{formatTime(elapsedTime)}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Right side - Progress dots (like story indicators) */}
-      <div 
-        className="absolute right-4 top-1/2 z-50 -translate-y-1/2 flex items-center"
+      <AnimatePresence>
+        {!isFullscreen && (
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2 }}
+            className="absolute right-4 top-1/2 z-50 -translate-y-1/2 flex items-center"
+            onClick={(e) => e.stopPropagation()}
         onMouseEnter={() => setShowExerciseList(true)}
         onMouseLeave={() => setShowExerciseList(false)}
       >
@@ -502,7 +547,9 @@ export default function LiveWorkoutPage() {
             />
           ))}
         </div>
-      </div>
+      </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Rest overlay */}
       <AnimatePresence>
@@ -543,34 +590,43 @@ export default function LiveWorkoutPage() {
       </AnimatePresence>
 
       {/* Bottom overlay - Exercise info & controls */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent p-4 pb-8">
-        {/* Exercise info */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 text-sm text-white/60">
-            <span>Exercise {currentExerciseIndex + 1}/{totalExercises}</span>
-            <span>•</span>
-            <span>Set {currentSetIndex + 1}/{totalSets}</span>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold">{currentExercise?.name}</h1>
-          <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
-        </div>
+      <AnimatePresence>
+        {!isFullscreen && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.2 }}
+            className="absolute bottom-0 left-0 right-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent p-4 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Exercise info */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2 text-sm text-white/60">
+                <span>Exercise {currentExerciseIndex + 1}/{totalExercises}</span>
+                <span>•</span>
+                <span>Set {currentSetIndex + 1}/{totalSets}</span>
+              </div>
+              <h1 className="mt-1 text-2xl font-bold">{currentExercise?.name}</h1>
+              <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
+            </div>
 
-        {/* Progress bar */}
-        <div className="mb-4 flex items-center gap-3">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
-            <div
-              className="h-full bg-green-500 transition-all"
-              style={{ width: `${getOverallProgress()}%` }}
-            />
-          </div>
-          <span className="text-sm font-medium text-white/70 tabular-nums">{getOverallProgress()}%</span>
-        </div>
+            {/* Progress bar */}
+            <div className="mb-4 flex items-center gap-3">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full bg-green-500 transition-all"
+                  style={{ width: `${getOverallProgress()}%` }}
+                />
+              </div>
+              <span className="text-sm font-medium text-white/70 tabular-nums">{getOverallProgress()}%</span>
+            </div>
 
-        {/* Collapsible inputs */}
-        <AnimatePresence>
-          {showInputs && !isResting && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
+            {/* Collapsible inputs */}
+            <AnimatePresence>
+              {showInputs && !isResting && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden"
@@ -656,20 +712,32 @@ export default function LiveWorkoutPage() {
             Last set: {exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × {exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps
           </p>
         )}
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Set indicators (like Snapchat story progress) */}
-      <div className="absolute top-16 left-4 right-4 z-10 flex gap-1">
-        {Array.from({ length: totalSets }).map((_, i) => (
-          <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/20">
-            <div
-              className={`h-full transition-all ${
-                i < currentSetIndex ? "w-full bg-green-500" : i === currentSetIndex ? "w-1/2 bg-white" : "w-0"
-              }`}
-            />
-          </div>
-        ))}
-      </div>
+      <AnimatePresence>
+        {!isFullscreen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-16 left-4 right-4 z-10 flex gap-1"
+          >
+            {Array.from({ length: totalSets }).map((_, i) => (
+              <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className={`h-full transition-all ${
+                    i < currentSetIndex ? "w-full bg-green-500" : i === currentSetIndex ? "w-1/2 bg-white" : "w-0"
+                  }`}
+                />
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
