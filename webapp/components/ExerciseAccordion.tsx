@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 
 export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown';
 
@@ -21,30 +22,79 @@ interface ExerciseAccordionProps {
 
 type TabType = 'video' | 'instructions' | 'tips';
 
-// Placeholder video thumbnail
-function VideoPlaceholder() {
+// Video player component with local video or YouTube embed support
+function VideoPlayer({ exerciseName }: { exerciseName: string }) {
+  const videoUrl = getExerciseVideoUrl(exerciseName);
+  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const isLocalVideo = videoUrl.startsWith('/') && videoUrl.endsWith('.mp4');
+
+  // For local videos, show inline video player
+  if (isLocalVideo) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
+        <video
+          className="h-full w-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src={videoUrl} type="video/mp4" />
+        </video>
+        <div className="absolute top-3 right-3">
+          <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            Demo
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // For YouTube videos (future use when real videos are added)
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  if (isPlaying) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg">
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={`${videoUrl}?autoplay=1&rel=0&modestbranding=1`}
+          title={`${exerciseName} demo video`}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-linear-to-br from-zinc-800 to-zinc-900">
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-          <svg className="h-8 w-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+    <button
+      onClick={() => setIsPlaying(true)}
+      className="relative aspect-video w-full overflow-hidden rounded-lg group cursor-pointer"
+    >
+      {thumbnailUrl ? (
+        <img
+          src={thumbnailUrl}
+          alt={`${exerciseName} thumbnail`}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="h-full w-full bg-linear-to-br from-zinc-700 to-zinc-800" />
+      )}
+      <div className="absolute inset-0 bg-black/30 transition-opacity group-hover:bg-black/40" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110">
+          <svg className="h-8 w-8 text-green-600 ml-1" fill="currentColor" viewBox="0 0 24 24">
             <path d="M8 5v14l11-7z" />
           </svg>
         </div>
-        <p className="text-sm text-zinc-400">Demo video coming soon</p>
       </div>
-      {/* Placeholder image pattern */}
-      <div className="absolute inset-0 opacity-20">
-        <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" className="text-zinc-600" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
+      <div className="absolute bottom-3 left-3 right-3">
+        <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
+          Watch Demo
+        </span>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -169,11 +219,11 @@ export default function ExerciseAccordion({ exercise, index }: ExerciseAccordion
               <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
                 {exercise.sets && <span>{exercise.sets} sets</span>}
                 {exercise.sets && exercise.reps && <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">•</span>}
-                {exercise.reps && <span>{exercise.reps}</span>}
+                {exercise.reps && <span>{exercise.reps} reps</span>}
                 {exercise.rest && (
                   <>
                     <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">•</span>
-                    <span className="text-green-600 dark:text-green-400">{exercise.rest}</span>
+                    <span className="text-green-600 dark:text-green-400">{exercise.rest} rest</span>
                   </>
                 )}
               </p>
@@ -244,7 +294,7 @@ export default function ExerciseAccordion({ exercise, index }: ExerciseAccordion
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.15 }}
                     >
-                      <VideoPlaceholder />
+                      <VideoPlayer exerciseName={exercise.name} />
                     </motion.div>
                   )}
 

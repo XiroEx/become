@@ -20,6 +20,7 @@
     "lucide-react": "^0.559.0",
     "mongoose": "^9.0.1",
     "next": "^16.0.8",
+    "nodemailer": "^7.0.12",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "recharts": "^3.6.0"
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^25",
+    "@types/nodemailer": "^7.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
