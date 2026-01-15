@@ -19,6 +19,118 @@ interface ActiveProgram {
   currentDay: string;
 }
 
+// Confirmation Dialog Component
+function ConfirmationDialog({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  hasProgress,
+  isAbandoning
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onConfirm: () => void;
+  hasProgress: boolean;
+  isAbandoning: boolean;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  
+  if (!isOpen) return null;
+
+  const canConfirm = !hasProgress || confirmText.toLowerCase() === "abandon";
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          
+          {/* Dialog */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+          >
+            {/* Warning Icon */}
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+              <svg className="h-7 w-7 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <h3 className="mb-2 text-center text-xl font-bold text-zinc-900 dark:text-white">
+              Abandon Program?
+            </h3>
+            
+            <p className="mb-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
+              Are you sure you want to abandon this program? 
+              {hasProgress && " You've already made progress on this program."}
+            </p>
+
+            {hasProgress && (
+              <div className="mb-4 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
+                <p className="mb-2 text-sm text-amber-800 dark:text-amber-200">
+                  <strong>Warning:</strong> You have completed workouts in this program. 
+                  Type <span className="font-mono font-bold">&quot;abandon&quot;</span> to confirm.
+                </p>
+                <input
+                  type="text"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder='Type "abandon" to confirm'
+                  className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm dark:border-amber-700 dark:bg-zinc-800 dark:text-white"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                disabled={isAbandoning}
+                className="flex-1 rounded-lg border border-zinc-300 px-4 py-2.5 font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                disabled={!canConfirm || isAbandoning}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAbandoning ? "Abandoning..." : "Abandon"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+interface Props {
+  program: Program;
+}
+
+interface ActiveProgram {
+  programId: string;
+  completedWorkouts: number;
+  totalWorkouts: number;
+  currentPhase: number;
+  currentDay: string;
+}
+
 // Helper to normalize workouts from object format to array format
 function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'day'>> | undefined | null): Workout[] {
   if (!workouts) {
@@ -41,11 +153,49 @@ export default function ProgramDetailClient({ program }: Props) {
   const [enrolling, setEnrolling] = useState(false);
   const [activeProgram, setActiveProgram] = useState<ActiveProgram | null>(null);
   const [hasInProgressWorkout, setHasInProgressWorkout] = useState(false);
+  const [showAbandonDialog, setShowAbandonDialog] = useState(false);
+  const [isAbandoning, setIsAbandoning] = useState(false);
 
   const currentPhase = program.phases[selectedPhaseIndex];
   const normalizedWorkouts = currentPhase ? normalizeWorkouts(currentPhase.workouts) : [];
   const currentWorkout = normalizedWorkouts.find(w => w.day === selectedDayKey);
   const dayKeys = normalizedWorkouts.map(w => w.day);
+
+  const hasProgress = activeProgram ? activeProgram.completedWorkouts > 0 : false;
+
+  const handleAbandonProgram = async () => {
+    setIsAbandoning(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const res = await fetch("/api/programs/abandon", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ programId: program.program_id })
+      });
+
+      if (res.ok) {
+        setActiveProgram(null);
+        setShowAbandonDialog(false);
+        // Navigate back to programs list
+        router.push("/dashboard/programming");
+      } else {
+        const error = await res.json();
+        console.error("Failed to abandon program:", error);
+      }
+    } catch (error) {
+      console.error("Error abandoning program:", error);
+    } finally {
+      setIsAbandoning(false);
+    }
+  };
 
   // Check if user is already enrolled in this program
   useEffect(() => {
@@ -251,6 +401,14 @@ export default function ProgramDetailClient({ program }: Props) {
                   style={{ width: `${(activeProgram.completedWorkouts / activeProgram.totalWorkouts) * 100}%` }}
                 />
               </div>
+              
+              {/* Abandon Program Button */}
+              <button
+                onClick={() => setShowAbandonDialog(true)}
+                className="mt-3 text-sm text-zinc-400 hover:text-red-400 transition-colors underline underline-offset-2"
+              >
+                Abandon program
+              </button>
             </div>
           )}
         </div>
@@ -378,6 +536,15 @@ export default function ProgramDetailClient({ program }: Props) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Abandon Program Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showAbandonDialog}
+        onClose={() => setShowAbandonDialog(false)}
+        onConfirm={handleAbandonProgram}
+        hasProgress={hasProgress}
+        isAbandoning={isAbandoning}
+      />
     </PageTransition>
   );
 }
