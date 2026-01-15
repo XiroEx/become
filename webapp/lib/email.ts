@@ -29,8 +29,8 @@ export async function sendEmail({ to, subject, html }: SendEmailOptions) {
   return transporter.sendMail(mailOptions)
 }
 
-export async function sendVerificationEmail(email: string, token: string, mode: 'login' | 'register', name?: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+export async function sendVerificationEmail(email: string, token: string, mode: 'login' | 'register', name?: string, baseUrl?: string) {
+  const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const verifyUrl = `${appUrl}/verify?token=${token}&mode=${mode}`
   
   const greeting = name ? `Hi ${name},` : 'Hi,'
