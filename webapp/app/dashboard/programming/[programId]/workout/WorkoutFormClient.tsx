@@ -10,7 +10,7 @@ import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVi
 function VideoPlayer({ exerciseName }: { exerciseName: string }) {
   const videoUrl = getExerciseVideoUrl(exerciseName);
   const thumbnailUrl = getExerciseThumbnail(exerciseName);
-  const isLocalVideo = videoUrl.startsWith('/') && videoUrl.endsWith('.mp4');
+  const isLocalVideo = videoUrl.startsWith('/') && (videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mov'));
 
   // For local videos, show inline video player
   if (isLocalVideo) {
@@ -23,7 +23,7 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
           muted
           playsInline
         >
-          <source src={videoUrl} type="video/mp4" />
+          <source src={videoUrl} type={videoUrl.endsWith('.mov') ? 'video/quicktime' : 'video/mp4'} />
         </video>
         <div className="absolute top-2 right-2">
           <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">

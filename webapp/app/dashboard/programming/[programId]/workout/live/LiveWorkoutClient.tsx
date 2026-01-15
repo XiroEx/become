@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 
 interface SetData {
   reps: string;
@@ -341,9 +342,15 @@ export default function LiveWorkoutPage() {
     return Math.round((completed / total) * 100);
   };
 
-  // TEMPORARY: Alternate between placeholder videos based on exercise index
-  const placeholderVideos = ["/placeholder.mp4", "/placeholder2.mp4"];
-  const currentVideo = placeholderVideos[currentExerciseIndex % placeholderVideos.length];
+  // Get video URL for current exercise
+  const [currentVideo, setCurrentVideo] = useState<string>("/placeholder.mp4");
+  
+  useEffect(() => {
+    if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
+      const exerciseName = exercises[currentExerciseIndex].name;
+      getExerciseVideoUrlAsync(exerciseName).then(setCurrentVideo);
+    }
+  }, [exercises, currentExerciseIndex]);
 
   // Show loading state
   if (loading || !workout || exercises.length === 0) {
@@ -369,7 +376,7 @@ export default function LiveWorkoutPage() {
           playsInline
           className="h-full w-full object-cover"
         >
-          <source src={currentVideo} type="video/mp4" />
+          <source src={currentVideo} type={currentVideo.endsWith('.mov') ? 'video/quicktime' : 'video/mp4'} />
         </video>
       </div>
 
