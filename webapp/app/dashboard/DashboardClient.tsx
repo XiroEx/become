@@ -5,6 +5,7 @@ import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart, { MetricData } from '@/components/ProgressChart'
 import MoodModal, { MoodLevel } from '@/components/MoodModal'
+import WeightModal from '@/components/WeightModal'
 import MoodCard from '@/components/MoodCard'
 import { ClipboardList, Flame, Target, TrendingUp } from 'lucide-react'
 
@@ -76,17 +77,22 @@ export default function DashboardClient() {
   const [data, setData] = useState<UserProgressData>(mockData)
   const [loading, setLoading] = useState(true)
   const [showMoodModal, setShowMoodModal] = useState(false)
+  const [showWeightModal, setShowWeightModal] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
+  const [weightModalInfo, setWeightModalInfo] = useState({ isMandatory: false, consecutiveSkips: 0 })
 
   useEffect(() => {
+    let shouldShowWeightModal = false
+    let weightInfo = { isMandatory: false, consecutiveSkips: 0 }
+
     // Check if we need to show mood modal and get today's mood from DB
     async function checkMoodStatus() {
       try {
         const token = localStorage.getItem('token')
         if (!token) {
           // Not authenticated - don't show mood modal for guests
-          return
+          return false
         }
 
         const headers: HeadersInit = {
@@ -101,10 +107,40 @@ export default function DashboardClient() {
           }
           if (needsMoodCheck) {
             setShowMoodModal(true)
+            return true // Mood modal will be shown
+          }
+        }
+        return false
+      } catch (error) {
+        console.error('Failed to check mood status:', error)
+        return false
+      }
+    }
+
+    // Check if we need to show weight modal
+    async function checkWeightStatus() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) {
+          // Not authenticated - don't show weight modal for guests
+          return
+        }
+
+        const headers: HeadersInit = {
+          'Authorization': `Bearer ${token}`
+        }
+
+        const res = await fetch('/api/weight', { headers })
+        if (res.ok) {
+          const { needsWeightCheck, consecutiveSkips, isMandatory } = await res.json()
+          if (needsWeightCheck) {
+            weightInfo = { isMandatory, consecutiveSkips }
+            setWeightModalInfo(weightInfo)
+            shouldShowWeightModal = true
           }
         }
       } catch (error) {
-        console.error('Failed to check mood status:', error)
+        console.error('Failed to check weight status:', error)
       }
     }
 
@@ -132,10 +168,14 @@ export default function DashboardClient() {
 
     // Initialize dashboard
     async function init() {
-      await Promise.all([
-        checkMoodStatus(),
-        fetchProgress()
-      ])
+      const moodModalShown = await checkMoodStatus()
+      await checkWeightStatus()
+      await fetchProgress()
+      
+      // If mood modal is not shown but weight modal should be shown, show it
+      if (!moodModalShown && shouldShowWeightModal) {
+        setShowWeightModal(true)
+      }
     }
 
     init()
@@ -151,6 +191,27 @@ export default function DashboardClient() {
       ...prev,
       moodData: [...prev.moodData, { date: todayFormatted, value: mood }]
     }))
+
+    // Check if we need to show weight modal after mood modal
+    if (weightModalInfo.consecutiveSkips > 0 || weightModalInfo.isMandatory) {
+      // Small delay to allow mood modal to close smoothly
+      setTimeout(() => {
+        setShowWeightModal(true)
+      }, 300)
+    }
+  }
+
+  const handleWeightClose = (weight?: number) => {
+    setShowWeightModal(false)
+    
+    if (weight) {
+      // Update weight data in state for chart
+      const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      setData(prev => ({
+        ...prev,
+        weightData: [...prev.weightData, { date: todayFormatted, value: weight }]
+      }))
+    }
   }
 
   // Handle mood change from the MoodCard
@@ -199,6 +260,12 @@ export default function DashboardClient() {
   return (
     <>
       <MoodModal isOpen={showMoodModal} onClose={handleMoodClose} />
+      <WeightModal 
+        isOpen={showWeightModal} 
+        onClose={handleWeightClose}
+        isMandatory={weightModalInfo.isMandatory}
+        consecutiveSkips={weightModalInfo.consecutiveSkips}
+      />
       
       <PageTransition className="space-y-4 sm:space-y-6">
       {/* Header */}
