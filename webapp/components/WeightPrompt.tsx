@@ -1,13 +1,6 @@
 "use client"
 import React, { useState } from 'react'
-
-// Constants for reminder thresholds
-const REMINDER_THRESHOLDS = {
-  GENTLE: 3,      // Day 3
-  REMINDER: 7,    // Day 7
-  STRONG: 12,     // Day 12
-  MANDATORY: 14   // Day 14+
-}
+import { REMINDER_THRESHOLDS } from '@/lib/constants'
 
 interface WeightPromptProps {
   onSubmit: (weight: number) => void
@@ -25,9 +18,9 @@ export default function WeightPrompt({ onSubmit, onSkip, isMandatory, reminderLe
     if (reminderLevel === 4 || isMandatory) {
       return `⚠️ It's been ${REMINDER_THRESHOLDS.MANDATORY} days since your last weight entry. Please record your weight to continue.`
     } else if (reminderLevel === 3) {
-      return `📊 You've skipped ${REMINDER_THRESHOLDS.STRONG} days. Regular tracking helps you reach your goals!`
+      return `📊 You've skipped ${consecutiveSkips} days. Regular tracking helps you reach your goals!`
     } else if (reminderLevel === 2) {
-      return `💪 It's been ${REMINDER_THRESHOLDS.REMINDER} days! Let's get back on track with your progress.`
+      return `💪 It's been ${consecutiveSkips} days! Let's get back on track with your progress.`
     } else if (reminderLevel === 1) {
       return "👋 Quick reminder to track your weight when you get a chance."
     }

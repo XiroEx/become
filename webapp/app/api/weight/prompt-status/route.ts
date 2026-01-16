@@ -1,16 +1,7 @@
 import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
 import { getTokenFromRequest, verifyToken } from '../../../../lib/auth'
-
-// Constants for reminder thresholds
-const REMINDER_THRESHOLDS = {
-  GENTLE: 3,      // Day 3
-  REMINDER: 7,    // Day 7
-  STRONG: 12,     // Day 12
-  MANDATORY: 14   // Day 14+
-}
-
-const MS_PER_DAY = 1000 * 60 * 60 * 24
+import { REMINDER_THRESHOLDS, MS_PER_DAY } from '../../../../lib/constants'
 
 export async function GET(req: Request) {
   try {
