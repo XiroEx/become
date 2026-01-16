@@ -2,6 +2,16 @@ import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
 import { getTokenFromRequest, verifyToken } from '../../../../lib/auth'
 
+// Constants for reminder thresholds
+const REMINDER_THRESHOLDS = {
+  GENTLE: 3,      // Day 3
+  REMINDER: 7,    // Day 7
+  STRONG: 12,     // Day 12
+  MANDATORY: 14   // Day 14+
+}
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24
+
 export async function GET(req: Request) {
   try {
     const token = getTokenFromRequest(req)
@@ -27,20 +37,20 @@ export async function GET(req: Request) {
       shouldPrompt = true
     } else {
       // Check if it's been at least 1 day since last prompt
-      const daysSinceLastPrompt = Math.floor((now.getTime() - lastPrompt.getTime()) / (1000 * 60 * 60 * 24))
+      const daysSinceLastPrompt = Math.floor((now.getTime() - lastPrompt.getTime()) / MS_PER_DAY)
       
       if (daysSinceLastPrompt >= 1) {
         shouldPrompt = true
         
         // Determine reminder level based on consecutive skips
-        if (consecutiveSkips >= 14) {
+        if (consecutiveSkips >= REMINDER_THRESHOLDS.MANDATORY) {
           reminderLevel = 4
           isMandatory = true
-        } else if (consecutiveSkips >= 12) {
+        } else if (consecutiveSkips >= REMINDER_THRESHOLDS.STRONG) {
           reminderLevel = 3
-        } else if (consecutiveSkips >= 7) {
+        } else if (consecutiveSkips >= REMINDER_THRESHOLDS.REMINDER) {
           reminderLevel = 2
-        } else if (consecutiveSkips >= 3) {
+        } else if (consecutiveSkips >= REMINDER_THRESHOLDS.GENTLE) {
           reminderLevel = 1
         }
       }

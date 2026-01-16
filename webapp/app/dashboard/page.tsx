@@ -10,6 +10,7 @@ export default function DashboardPage() {
   const [reminderLevel, setReminderLevel] = useState(0)
   const [consecutiveSkips, setConsecutiveSkips] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     checkWeightPromptStatus()
@@ -47,6 +48,7 @@ export default function DashboardPage() {
 
   async function handleWeightSubmit(weight: number) {
     try {
+      setError(null)
       const token = localStorage.getItem('token')
       const response = await fetch('/api/weight', {
         method: 'POST',
@@ -60,16 +62,17 @@ export default function DashboardPage() {
       if (response.ok) {
         setShowWeightPrompt(false)
       } else {
-        alert('Failed to save weight. Please try again.')
+        setError('Failed to save weight. Please try again.')
       }
     } catch (err) {
       console.error('Error submitting weight:', err)
-      alert('Failed to save weight. Please try again.')
+      setError('Failed to save weight. Please try again.')
     }
   }
 
   async function handleWeightSkip() {
     try {
+      setError(null)
       const token = localStorage.getItem('token')
       const response = await fetch('/api/weight/skip', {
         method: 'POST',
@@ -81,11 +84,11 @@ export default function DashboardPage() {
       if (response.ok) {
         setShowWeightPrompt(false)
       } else {
-        alert('Failed to skip. Please try again.')
+        setError('Failed to skip. Please try again.')
       }
     } catch (err) {
       console.error('Error skipping weight:', err)
-      alert('Failed to skip. Please try again.')
+      setError('Failed to skip. Please try again.')
     }
   }
 
@@ -96,6 +99,12 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">Dashboard</h1>
           <p className="text-zinc-500 dark:text-zinc-400">Welcome back to your fitness journey.</p>
         </header>
+
+        {error && (
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+          </div>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <Link 
