@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     const shouldShowReminder = consecutiveSkips === 3 || consecutiveSkips === 7 || consecutiveSkips === 12 || isMandatory
 
     return NextResponse.json({
-      needsWeightCheck: true, // Always prompt daily, like mood
+      needsWeightCheck: true, // Prompt daily if not already prompted today and no weight logged
       consecutiveSkips,
       isMandatory,
       showReminder: shouldShowReminder

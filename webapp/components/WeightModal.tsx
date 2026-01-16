@@ -18,7 +18,7 @@ function getTimeBasedGreeting() {
     return {
       greeting: 'Good morning!',
       icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-linear-to-br from-blue-400 to-cyan-500 flex items-center justify-center shadow-lg">
+        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center shadow-lg">
           <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round"/>
             <circle cx="12" cy="12" r="5" fill="currentColor" />
@@ -30,7 +30,7 @@ function getTimeBasedGreeting() {
     return {
       greeting: 'Good afternoon!',
       icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-linear-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg">
+        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg">
           <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 13h2a3 3 0 003-3V7a3 3 0 00-3-3H3M3 17h2a3 3 0 003-3v-1M13 8V5l3 3-3 3M17 8h4" strokeLinecap="round" strokeLinejoin="round"/>
             <rect x="10" y="8" width="11" height="9" rx="1" fill="currentColor" opacity="0.5"/>
@@ -42,7 +42,7 @@ function getTimeBasedGreeting() {
     return {
       greeting: 'Good evening!',
       icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-linear-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg">
+        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg">
           <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="currentColor">
             <circle cx="12" cy="14" r="5" />
             <path d="M2 14h3M19 14h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
@@ -54,7 +54,7 @@ function getTimeBasedGreeting() {
     return {
       greeting: 'Good night!',
       icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
           <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="currentColor">
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
           </svg>
