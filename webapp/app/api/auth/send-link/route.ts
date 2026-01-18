@@ -86,5 +86,5 @@ function getRequestOrigin(req: Request) {
   if (host) return `${forwardedProto}://${host}`
 
   const url = new URL(req.url)
-  return process.env.NEXT_PUBLIC_APP_URL || `${url.protocol}//${url.host}`
+  return `${url.protocol}//${url.host}`
 }
