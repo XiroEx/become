@@ -8,7 +8,7 @@ import PageTransition from "@/components/PageTransition";
 import AnimatedSection from "@/components/AnimatedSection";
 import PhoneMockup from "@/components/PhoneMockup";
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
 
 export default function Information() {
   return (

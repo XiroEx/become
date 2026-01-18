@@ -7,9 +7,9 @@ interface HeaderProps {
   backUrl?: string;
 }
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
-const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "No-nonsense, results-oriented coaching. Transformations only.";
-const profileImage = process.env.NEXT_PUBLIC_PROFILE_IMAGE || "/profile.jpg";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
+const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "Transform your body and mind.";
+const logo = process.env.NEXT_PUBLIC_LOGO || "/logo.png";
 
 export default function Header({ 
   showActions = true, 
@@ -30,7 +30,7 @@ export default function Header({
           </Link>
         ) : (
           <Image 
-            src={profileImage}
+            src={logo}
             alt={appName}
             width={56} 
             height={56} 

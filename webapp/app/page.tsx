@@ -6,8 +6,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
-const profileImage = process.env.NEXT_PUBLIC_PROFILE_IMAGE || "/profile.jpg";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
+const logo = process.env.NEXT_PUBLIC_LOGO || "/logo.png";
 
 const PHRASES = [
   "Stronger",
@@ -19,12 +19,19 @@ const PHRASES = [
 
 export default function Splash() {
   const [index, setIndex] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setIndex((prev) => (prev + 1) % PHRASES.length);
     }, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Check if user is logged in
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    setIsLoggedIn(!!token);
   }, []);
 
   return (
@@ -36,7 +43,7 @@ export default function Splash() {
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
            <Image 
-            src={profileImage}
+            src={logo}
             alt={appName}
             fill
             className="object-cover"
@@ -64,7 +71,7 @@ export default function Splash() {
 
         <div className="flex w-full max-w-xs flex-col gap-3">
           <Link 
-            href="/login"  
+            href={isLoggedIn ? "/dashboard" : "/login"}  
             className="w-full"
           >
             <motion.div
@@ -72,7 +79,7 @@ export default function Splash() {
               whileTap={{ scale: 0.98 }}
               className="flex w-full items-center justify-center rounded-full bg-white px-6 py-3.5 font-semibold text-black"
             >
-              Log In
+              {isLoggedIn ? "Dashboard" : "Log In"}
             </motion.div>
           </Link>
           <Link 

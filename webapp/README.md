@@ -29,11 +29,11 @@ A Next.js 16 application delivering client onboarding, authentication, and coach
    MONGODB_URI=mongodb://localhost:27017/jondonfitdb
    JWT_SECRET=replace-with-strong-secret
    ```
-3. **Run the dev server**
+3. **Run the dev server (starts local MongoDB via ../db/compose.yml)**
    ```bash
    npm run dev
    ```
-   Visit http://localhost:3000.
+   This brings up the Dockerized MongoDB (idempotent) and starts Next.js at http://localhost:3000.
 
 4. **Lint**
    ```bash
@@ -59,7 +59,8 @@ A Next.js 16 application delivering client onboarding, authentication, and coach
 
 | Command | Description |
 | ------- | ----------- |
-| `npm run dev` | Start Next.js in development mode. |
+| `npm run dev` | Start Dockerized MongoDB (../db/compose.yml) then Next.js dev server. |
+| `npm run dev:db` | Start only the local MongoDB container (idempotent). |
 | `npm run build` | Create production build. |
 | `npm run start` | Run production server (after build). |
 | `npm run lint` | Execute ESLint using the config in [`eslint.config.mjs`](eslint.config.mjs). |
