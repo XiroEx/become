@@ -59,6 +59,11 @@ export interface IUserProgress {
   weightHistory: IWeightEntry[]
   moodHistory: IMoodEntry[]
   moodChangeHistory: IMoodChangeEntry[] // All mood changes for audit trail
+  weightSkipTracking?: {
+    lastPromptDate?: Date // Last date we prompted for weight
+    lastWeightDate?: Date // Last date weight was logged
+    consecutiveSkips: number // Number of consecutive days skipped
+  }
   workoutLogs: IWorkoutLog[]
   activePrograms: IActiveProgram[]
   currentProgram?: {
@@ -136,6 +141,11 @@ const UserProgressSchema = new Schema<IUserProgress>({
   weightHistory: [WeightEntrySchema],
   moodHistory: [MoodEntrySchema],
   moodChangeHistory: [MoodChangeEntrySchema],
+  weightSkipTracking: {
+    lastPromptDate: { type: Date },
+    lastWeightDate: { type: Date },
+    consecutiveSkips: { type: Number, default: 0 }
+  },
   workoutLogs: [WorkoutLogSchema],
   activePrograms: { type: [ActiveProgramSchema], default: [] },
   currentProgram: {
