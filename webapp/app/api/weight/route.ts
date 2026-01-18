@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         needsWeightCheck: false, 
         consecutiveSkips: 0,
-        isMandatory: false 
+        isMandatory: false,
+        daysSinceLastEntry: 0
       })
     }
 
@@ -32,12 +33,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         needsWeightCheck: true, 
         consecutiveSkips: 0,
-        isMandatory: false 
+        isMandatory: false,
+        daysSinceLastEntry: 999
       })
     }
 
     const today = getStartOfToday()
     const tracking = progress.weightSkipTracking || { consecutiveSkips: 0 }
+
+    // Calculate days since last weight entry and get last weight
+    let daysSinceLastEntry = 999
+    let lastWeight: number | null = null
+    if (progress.weightHistory && progress.weightHistory.length > 0) {
+      const sortedHistory = [...progress.weightHistory].sort((a: { date: Date }, b: { date: Date }) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
+      const lastEntryDate = new Date(sortedHistory[0].date)
+      lastEntryDate.setHours(0, 0, 0, 0)
+      daysSinceLastEntry = Math.floor((today.getTime() - lastEntryDate.getTime()) / (1000 * 60 * 60 * 24))
+      lastWeight = (sortedHistory[0] as { date: Date; weight: number }).weight
+    }
 
     // Check if we already prompted today
     if (tracking.lastPromptDate) {
@@ -48,7 +63,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ 
           needsWeightCheck: false, 
           consecutiveSkips: tracking.consecutiveSkips || 0,
-          isMandatory: false 
+          isMandatory: false,
+          daysSinceLastEntry,
+          lastWeight
         })
       }
     }
@@ -64,7 +81,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         needsWeightCheck: false, 
         consecutiveSkips: 0,
-        isMandatory: false 
+        isMandatory: false,
+        daysSinceLastEntry: 0,
+        lastWeight
       })
     }
 
@@ -92,14 +111,17 @@ export async function GET(request: NextRequest) {
       needsWeightCheck: true, // Prompt daily if not already prompted today and no weight logged
       consecutiveSkips,
       isMandatory,
-      showReminder: shouldShowReminder
+      showReminder: shouldShowReminder,
+      daysSinceLastEntry,
+      lastWeight
     })
   } catch (error) {
     console.error('Error checking weight:', error)
     return NextResponse.json({ 
       needsWeightCheck: false, 
       consecutiveSkips: 0,
-      isMandatory: false 
+      isMandatory: false,
+      daysSinceLastEntry: 0
     })
   }
 }

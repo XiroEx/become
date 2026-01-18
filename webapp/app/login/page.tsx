@@ -13,9 +13,6 @@ export default function LoginPage() {
         <main className="mx-auto w-full max-w-md rounded-lg bg-white dark:bg-zinc-900 p-8 shadow dark:border dark:border-zinc-800">
           <h1 className="mb-4 text-2xl font-bold text-zinc-900 dark:text-white">Sign in</h1>
           <AuthForm mode="login" />
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-            New here? <Link href="/register" className="text-foreground hover:underline">Create an account</Link>
-          </p>
         </main>
       </PageTransition>
     </div>

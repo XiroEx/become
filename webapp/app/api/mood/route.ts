@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     
     if (!authResult.success) {
       // For unauthenticated users, check localStorage on client side
-      return NextResponse.json({ needsMoodCheck: true, todaysMood: null })
+      return NextResponse.json({ needsMoodCheck: true, todaysMood: null, daysSinceLastEntry: 0 })
     }
 
     await dbConnect()
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const progress = await UserProgress.findOne({ userId: authResult.userId }).lean()
 
     if (!progress || !progress.moodHistory || progress.moodHistory.length === 0) {
-      return NextResponse.json({ needsMoodCheck: true, todaysMood: null })
+      return NextResponse.json({ needsMoodCheck: true, todaysMood: null, daysSinceLastEntry: 999 })
     }
 
     // Check if there's a mood entry for today
@@ -37,13 +37,25 @@ export async function GET(request: NextRequest) {
       return entryDate.getTime() === today.getTime()
     })
 
+    // Calculate days since last entry
+    let daysSinceLastEntry = 0
+    if (progress.moodHistory.length > 0) {
+      const sortedHistory = [...progress.moodHistory].sort((a: { date: Date }, b: { date: Date }) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
+      const lastEntryDate = new Date(sortedHistory[0].date)
+      lastEntryDate.setHours(0, 0, 0, 0)
+      daysSinceLastEntry = Math.floor((today.getTime() - lastEntryDate.getTime()) / (1000 * 60 * 60 * 24))
+    }
+
     return NextResponse.json({
       needsMoodCheck: !todaysMood,
-      todaysMood: todaysMood?.mood || null
+      todaysMood: todaysMood?.mood || null,
+      daysSinceLastEntry
     })
   } catch (error) {
     console.error('Error checking mood:', error)
-    return NextResponse.json({ needsMoodCheck: true, todaysMood: null })
+    return NextResponse.json({ needsMoodCheck: true, todaysMood: null, daysSinceLastEntry: 0 })
   }
 }
 

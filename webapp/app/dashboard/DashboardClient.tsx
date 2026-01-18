@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart, { MetricData } from '@/components/ProgressChart'
-import MoodModal, { MoodLevel } from '@/components/MoodModal'
-import WeightModal from '@/components/WeightModal'
+import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import MoodCard from '@/components/MoodCard'
 import { ClipboardList, Flame, Target, TrendingUp } from 'lucide-react'
 
@@ -76,57 +75,21 @@ const mockData: UserProgressData = {
 export default function DashboardClient() {
   const [data, setData] = useState<UserProgressData>(mockData)
   const [loading, setLoading] = useState(true)
-  const [showMoodModal, setShowMoodModal] = useState(false)
-  const [showWeightModal, setShowWeightModal] = useState(false)
+  const [showCheckInModal, setShowCheckInModal] = useState(true) // DEBUG: always show
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
-  const [weightModalInfo, setWeightModalInfo] = useState({ 
-    isMandatory: false, 
-    consecutiveSkips: 0,
-    needsWeightCheck: false 
+  const [checkInInfo, setCheckInInfo] = useState({ 
+    daysSinceMood: 0,
+    daysSinceWeight: 0,
+    lastWeight: undefined as number | undefined
   })
 
   useEffect(() => {
-    let shouldShowWeightModal = false
-    let weightInfo = { isMandatory: false, consecutiveSkips: 0, needsWeightCheck: false }
-
-    // Check if we need to show mood modal and get today's mood from DB
-    async function checkMoodStatus() {
+    // Check days since last mood and weight entries
+    async function checkCheckInStatus() {
       try {
         const token = localStorage.getItem('token')
         if (!token) {
-          // Not authenticated - don't show mood modal for guests
-          return false
-        }
-
-        const headers: HeadersInit = {
-          'Authorization': `Bearer ${token}`
-        }
-
-        const res = await fetch('/api/mood', { headers })
-        if (res.ok) {
-          const { needsMoodCheck, todaysMood: moodFromApi } = await res.json()
-          if (moodFromApi) {
-            setTodaysMood(moodFromApi as MoodLevel)
-          }
-          if (needsMoodCheck) {
-            setShowMoodModal(true)
-            return true // Mood modal will be shown
-          }
-        }
-        return false
-      } catch (error) {
-        console.error('Failed to check mood status:', error)
-        return false
-      }
-    }
-
-    // Check if we need to show weight modal
-    async function checkWeightStatus() {
-      try {
-        const token = localStorage.getItem('token')
-        if (!token) {
-          // Not authenticated - don't show weight modal for guests
           return
         }
 
@@ -134,15 +97,30 @@ export default function DashboardClient() {
           'Authorization': `Bearer ${token}`
         }
 
-        const res = await fetch('/api/weight', { headers })
-        if (res.ok) {
-          const { needsWeightCheck, consecutiveSkips, isMandatory } = await res.json()
-          weightInfo = { isMandatory, consecutiveSkips, needsWeightCheck }
-          setWeightModalInfo(weightInfo)
-          shouldShowWeightModal = needsWeightCheck
+        // Fetch mood status
+        const moodRes = await fetch('/api/mood', { headers })
+        let daysSinceMood = 0
+        if (moodRes.ok) {
+          const { daysSinceLastEntry, todaysMood: moodFromApi } = await moodRes.json()
+          daysSinceMood = daysSinceLastEntry || 0
+          if (moodFromApi) {
+            setTodaysMood(moodFromApi as MoodLevel)
+          }
         }
+
+        // Fetch weight status
+        const weightRes = await fetch('/api/weight', { headers })
+        let daysSinceWeight = 0
+        let lastWeight: number | undefined = undefined
+        if (weightRes.ok) {
+          const { daysSinceLastEntry, lastWeight: lastWeightFromApi } = await weightRes.json()
+          daysSinceWeight = daysSinceLastEntry || 0
+          lastWeight = lastWeightFromApi || undefined
+        }
+
+        setCheckInInfo({ daysSinceMood, daysSinceWeight, lastWeight })
       } catch (error) {
-        console.error('Failed to check weight status:', error)
+        console.error('Failed to check check-in status:', error)
       }
     }
 
@@ -170,48 +148,32 @@ export default function DashboardClient() {
 
     // Initialize dashboard
     async function init() {
-      const moodModalShown = await checkMoodStatus()
-      await checkWeightStatus()
+      await checkCheckInStatus()
       await fetchProgress()
-      
-      // If mood modal is not shown but weight modal should be shown, show it
-      if (!moodModalShown && shouldShowWeightModal) {
-        setShowWeightModal(true)
-      }
     }
 
     init()
   }, [])
 
-  const handleMoodClose = (mood: MoodLevel) => {
-    setShowMoodModal(false)
-    setTodaysMood(mood)
+  const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
+    setShowCheckInModal(false)
     
-    // Update mood data in state for chart
     const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    setData(prev => ({
-      ...prev,
-      moodData: [...prev.moodData, { date: todayFormatted, value: mood }]
-    }))
-
-    // Check if we need to show weight modal after mood modal
-    if (weightModalInfo.needsWeightCheck) {
-      // Small delay to allow mood modal to close smoothly
-      setTimeout(() => {
-        setShowWeightModal(true)
-      }, 300)
-    }
-  }
-
-  const handleWeightClose = (weight?: number) => {
-    setShowWeightModal(false)
     
-    if (weight) {
-      // Update weight data in state for chart
-      const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    if (checkInData.mood) {
+      setTodaysMood(checkInData.mood)
+      // Update mood data in state for chart
       setData(prev => ({
         ...prev,
-        weightData: [...prev.weightData, { date: todayFormatted, value: weight }]
+        moodData: [...prev.moodData, { date: todayFormatted, value: checkInData.mood! }]
+      }))
+    }
+    
+    if (checkInData.weight) {
+      // Update weight data in state for chart
+      setData(prev => ({
+        ...prev,
+        weightData: [...prev.weightData, { date: todayFormatted, value: checkInData.weight! }]
       }))
     }
   }
@@ -261,12 +223,12 @@ export default function DashboardClient() {
 
   return (
     <>
-      <MoodModal isOpen={showMoodModal} onClose={handleMoodClose} />
-      <WeightModal 
-        isOpen={showWeightModal} 
-        onClose={handleWeightClose}
-        isMandatory={weightModalInfo.isMandatory}
-        consecutiveSkips={weightModalInfo.consecutiveSkips}
+      <DailyCheckInModal 
+        isOpen={showCheckInModal} 
+        onClose={handleCheckInClose}
+        daysSinceMood={checkInInfo.daysSinceMood}
+        daysSinceWeight={checkInInfo.daysSinceWeight}
+        lastWeight={checkInInfo.lastWeight}
       />
       
       <PageTransition className="space-y-4 sm:space-y-6">

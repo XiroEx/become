@@ -10,57 +10,53 @@ interface WeightModalProps {
   consecutiveSkips?: number
 }
 
+// Icon options for selection - DEBUG MODE
+const iconOptions = [
+  {
+    id: 1,
+    name: "Up/Down Arrows Simple",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="currentColor">
+        <path d="M7 10l5-5 5 5H7z"/>
+        <path d="M7 14l5 5 5-5H7z"/>
+      </svg>
+    )
+  },
+  {
+    id: 2,
+    name: "Expand Arrows",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3v5M9 5l3-3 3 3"/>
+        <path d="M12 21v-5M9 19l3 3 3-3"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    )
+  },
+  {
+    id: 3,
+    name: "Arrows Rounded",
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="currentColor">
+        <path d="M12 4a1 1 0 01.7.3l4 4a1 1 0 01-1.4 1.4L12 6.4 8.7 9.7a1 1 0 01-1.4-1.4l4-4A1 1 0 0112 4z"/>
+        <path d="M12 20a1 1 0 01-.7-.3l-4-4a1 1 0 011.4-1.4l3.3 3.3 3.3-3.3a1 1 0 011.4 1.4l-4 4a1 1 0 01-.7.3z"/>
+      </svg>
+    )
+  },
+]
+
 // Time-based greeting configuration
 function getTimeBasedGreeting() {
   const hour = new Date().getHours()
   
   if (hour >= 5 && hour < 12) {
-    return {
-      greeting: 'Good morning!',
-      icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-cyan-500 flex items-center justify-center shadow-lg">
-          <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" strokeLinecap="round"/>
-            <circle cx="12" cy="12" r="5" fill="currentColor" />
-          </svg>
-        </div>
-      )
-    }
+    return { greeting: 'Good morning!' }
   } else if (hour >= 12 && hour < 17) {
-    return {
-      greeting: 'Good afternoon!',
-      icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg">
-          <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 13h2a3 3 0 003-3V7a3 3 0 00-3-3H3M3 17h2a3 3 0 003-3v-1M13 8V5l3 3-3 3M17 8h4" strokeLinecap="round" strokeLinejoin="round"/>
-            <rect x="10" y="8" width="11" height="9" rx="1" fill="currentColor" opacity="0.5"/>
-          </svg>
-        </div>
-      )
-    }
+    return { greeting: 'Good afternoon!' }
   } else if (hour >= 17 && hour < 21) {
-    return {
-      greeting: 'Good evening!',
-      icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center shadow-lg">
-          <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="currentColor">
-            <circle cx="12" cy="14" r="5" />
-            <path d="M2 14h3M19 14h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
-          </svg>
-        </div>
-      )
-    }
+    return { greeting: 'Good evening!' }
   } else {
-    return {
-      greeting: 'Good night!',
-      icon: (
-        <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-          <svg viewBox="0 0 24 24" className="w-8 h-8 sm:w-9 sm:h-9 text-white" fill="currentColor">
-            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-          </svg>
-        </div>
-      )
-    }
+    return { greeting: 'Good night!' }
   }
 }
 
@@ -160,9 +156,21 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8"
           >
-            {/* Header */}
+            {/* Header - DEBUG: Show all icon options */}
             <div className="text-center mb-6 sm:mb-8">
-              <div className="mb-4 flex justify-center">{timeGreeting.icon}</div>
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-white mb-4">
+                Pick an icon:
+              </h2>
+              <div className="grid grid-cols-4 gap-3 mb-6">
+                {iconOptions.map((opt) => (
+                  <div key={opt.id} className="flex flex-col items-center gap-1">
+                    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center shadow-lg">
+                      {opt.icon}
+                    </div>
+                    <span className="text-xs text-zinc-500">{opt.id}</span>
+                  </div>
+                ))}
+              </div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">
                 {timeGreeting.greeting}
               </h2>
