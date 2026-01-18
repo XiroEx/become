@@ -91,6 +91,6 @@ function getRequestOrigin(req: Request) {
   } catch (err) {
     // If we reach here, the request is malformed and cannot determine origin
     console.error('Failed to parse request URL for origin detection')
-    throw new Error('Cannot determine request origin - request headers missing required information')
+    throw new Error('Cannot determine request origin from headers or URL')
   }
 }
