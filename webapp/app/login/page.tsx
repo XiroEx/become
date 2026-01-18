@@ -1,6 +1,5 @@
 import AuthForm from '../../components/AuthForm'
 import Header from '../../components/Header'
-import Link from 'next/link'
 import PageTransition from '../../components/PageTransition'
 
 export default function LoginPage() {
