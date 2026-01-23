@@ -79,10 +79,14 @@ export default function LiveWorkoutPage() {
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
   const currentExercise = exercises[currentExerciseIndex];
   const totalExercises = exercises.length;
   const totalSets = currentExercise?.sets || 3;
+  
+  // Check if inputs are empty (for skip button text)
+  const isSkipping = !currentReps && !currentWeight;
 
   // Toggle fullscreen mode when tapping video
   const handleVideoTap = () => {
@@ -326,6 +330,83 @@ export default function LiveWorkoutPage() {
   const skipRest = () => {
     setIsResting(false);
     setRestTimeRemaining(0);
+  };
+
+  const skipSet = useCallback(async () => {
+    // Mark set as skipped (completed but with 0 values)
+    const updatedData = [...exerciseData];
+    updatedData[currentExerciseIndex] = [...updatedData[currentExerciseIndex]];
+    updatedData[currentExerciseIndex][currentSetIndex] = {
+      reps: "0",
+      weight: "0",
+      completed: true,
+    };
+    
+    setExerciseData(updatedData);
+
+    const isLastSet = currentSetIndex === totalSets - 1;
+    const isLastExercise = currentExerciseIndex === totalExercises - 1;
+    const isComplete = isLastSet && isLastExercise;
+
+    // Save progress
+    saveWorkout(updatedData, isComplete);
+
+    if (isComplete) {
+      router.push("/dashboard/programming");
+      return;
+    }
+
+    setIsResting(true);
+    setRestTimeRemaining(parseRestTime(currentExercise.rest || "60s"));
+    setCurrentReps("");
+    setCurrentWeight("");
+    setShowSkipModal(false);
+
+    if (isLastSet) {
+      setCurrentExerciseIndex((prev) => prev + 1);
+      setCurrentSetIndex(0);
+    } else {
+      setCurrentSetIndex((prev) => prev + 1);
+    }
+  }, [currentExerciseIndex, currentSetIndex, totalSets, totalExercises, currentExercise, router, exerciseData, saveWorkout]);
+
+  const skipExercise = useCallback(async () => {
+    // Mark all remaining sets for current exercise as skipped
+    const updatedData = [...exerciseData];
+    updatedData[currentExerciseIndex] = updatedData[currentExerciseIndex].map(() => ({
+      reps: "0",
+      weight: "0",
+      completed: true,
+    }));
+    
+    setExerciseData(updatedData);
+
+    const isLastExercise = currentExerciseIndex === totalExercises - 1;
+    const isComplete = isLastExercise;
+
+    // Save progress
+    saveWorkout(updatedData, isComplete);
+
+    if (isComplete) {
+      router.push("/dashboard/programming");
+      return;
+    }
+
+    setIsResting(true);
+    setRestTimeRemaining(parseRestTime(currentExercise.rest || "60s"));
+    setCurrentReps("");
+    setCurrentWeight("");
+    setShowSkipModal(false);
+    setCurrentExerciseIndex((prev) => prev + 1);
+    setCurrentSetIndex(0);
+  }, [currentExerciseIndex, totalExercises, currentExercise, router, exerciseData, saveWorkout]);
+
+  const handleCompleteOrSkipSet = () => {
+    if (isSkipping) {
+      setShowSkipModal(true);
+    } else {
+      completeSet();
+    }
   };
 
   const goToPrevious = () => {
@@ -698,12 +779,18 @@ export default function LiveWorkoutPage() {
           </button>
 
           <button
-            onClick={completeSet}
+            onClick={handleCompleteOrSkipSet}
             disabled={isResting}
-            className="flex-1 rounded-full bg-green-500 py-4 text-lg font-bold shadow-lg shadow-green-500/30 transition-all hover:bg-green-400 disabled:opacity-50"
+            className={`flex-1 rounded-full py-4 text-lg font-bold shadow-lg transition-all disabled:opacity-50 ${
+              isSkipping 
+                ? "bg-zinc-600 shadow-zinc-600/30 hover:bg-zinc-500"
+                : "bg-green-500 shadow-green-500/30 hover:bg-green-400"
+            }`}
           >
             {currentExerciseIndex === totalExercises - 1 && currentSetIndex === totalSets - 1
               ? "Finish Workout 🎉"
+              : isSkipping
+              ? "Skip Set →"
               : "Complete Set →"}
           </button>
         </div>
@@ -737,6 +824,84 @@ export default function LiveWorkoutPage() {
                 />
               </div>
             ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Skip Confirmation Modal */}
+      <AnimatePresence>
+        {showSkipModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowSkipModal(false)}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-2xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800"
+            >
+              {/* Warning Icon */}
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/20">
+                <svg className="h-7 w-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+
+              <h3 className="mb-2 text-center text-xl font-bold text-white">
+                Skip Set?
+              </h3>
+              
+              <p className="mb-1 text-center text-sm text-zinc-400">
+                Are you sure you want to skip this set of <span className="font-semibold text-white">{currentExercise?.name}</span>?
+              </p>
+
+              <p className="mb-6 text-center text-xs text-zinc-500">
+                Set {currentSetIndex + 1} of {totalSets}
+              </p>
+
+              {/* Info Box */}
+              <div className="mb-6 rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+                <p className="text-xs text-blue-300 text-center">
+                  💡 <span className="font-semibold">Coming soon:</span> Alternative exercise suggestions when you need to skip
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    skipSet();
+                  }}
+                  className="rounded-lg bg-zinc-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-600"
+                >
+                  Skip This Set Only
+                </button>
+                
+                <button
+                  onClick={() => {
+                    skipExercise();
+                  }}
+                  className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
+                >
+                  Skip All Sets ({totalSets} sets total)
+                </button>
+
+                <button
+                  onClick={() => setShowSkipModal(false)}
+                  className="rounded-lg border border-zinc-700 px-4 py-3 font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
