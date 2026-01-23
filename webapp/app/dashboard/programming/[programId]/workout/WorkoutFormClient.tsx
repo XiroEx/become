@@ -151,6 +151,9 @@ export default function WorkoutFormPage() {
   const [isResuming, setIsResuming] = useState(false);
   const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgress[]>([]);
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
+  const [showSkipModal, setShowSkipModal] = useState(false);
+  const [skipModalExerciseIndex, setSkipModalExerciseIndex] = useState<number | null>(null);
+  const [skipModalSetIndex, setSkipModalSetIndex] = useState<number | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load the current workout from API
@@ -373,6 +376,52 @@ export default function WorkoutFormPage() {
     }
   };
 
+  const skipSet = useCallback((exerciseIndex: number, setIndex: number) => {
+    setExerciseProgress((prev) => {
+      const updated = prev.map((ep) =>
+        ep.exerciseIndex === exerciseIndex
+          ? {
+              ...ep,
+              sets: ep.sets.map((set, si) =>
+                si === setIndex
+                  ? { reps: "0", weight: "0", completed: true }
+                  : set
+              ),
+            }
+          : ep
+      );
+      autoSave(updated);
+      return updated;
+    });
+    setShowSkipModal(false);
+  }, [autoSave]);
+
+  const skipExercise = useCallback((exerciseIndex: number) => {
+    setExerciseProgress((prev) => {
+      const updated = prev.map((ep) =>
+        ep.exerciseIndex === exerciseIndex
+          ? {
+              ...ep,
+              sets: ep.sets.map(() => ({
+                reps: "0",
+                weight: "0",
+                completed: true,
+              })),
+            }
+          : ep
+      );
+      autoSave(updated);
+      return updated;
+    });
+    setShowSkipModal(false);
+  }, [autoSave]);
+
+  const openSkipModal = (exerciseIndex: number, setIndex: number) => {
+    setSkipModalExerciseIndex(exerciseIndex);
+    setSkipModalSetIndex(setIndex);
+    setShowSkipModal(true);
+  };
+
   const getExerciseCompletion = (exerciseIndex: number) => {
     const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
     if (!progress) return 0;
@@ -554,9 +603,9 @@ export default function WorkoutFormPage() {
                         {/* Column headers */}
                         <div className="mb-3 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                           <div className="col-span-2">Set</div>
-                          <div className="col-span-4">Weight (lbs)</div>
-                          <div className="col-span-4">Reps</div>
-                          <div className="col-span-2 text-center">Done</div>
+                          <div className="col-span-3">Weight</div>
+                          <div className="col-span-3">Reps</div>
+                          <div className="col-span-4 text-center">Actions</div>
                         </div>
 
                         {/* Set rows */}
@@ -578,7 +627,7 @@ export default function WorkoutFormPage() {
                                   {setIndex + 1}
                                 </span>
                               </div>
-                              <div className="col-span-4">
+                              <div className="col-span-3">
                                 <input
                                   type="number"
                                   placeholder="0"
@@ -587,7 +636,7 @@ export default function WorkoutFormPage() {
                                   className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
                                 />
                               </div>
-                              <div className="col-span-4">
+                              <div className="col-span-3">
                                 <input
                                   type="number"
                                   placeholder={exercise.reps?.split("-")[0] || "0"}
@@ -596,7 +645,18 @@ export default function WorkoutFormPage() {
                                   className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
                                 />
                               </div>
-                              <div className="col-span-2 flex justify-center">
+                              <div className="col-span-4 flex justify-center gap-1">
+                                {!set.completed && !set.weight && !set.reps && (
+                                  <button
+                                    onClick={() => openSkipModal(exerciseIndex, setIndex)}
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
+                                    title="Skip set"
+                                  >
+                                    <svg className="h-4 w-4 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => toggleSetComplete(exerciseIndex, setIndex)}
                                   className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all ${
@@ -643,6 +703,83 @@ export default function WorkoutFormPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Skip Confirmation Modal */}
+      <AnimatePresence>
+        {showSkipModal && skipModalExerciseIndex !== null && skipModalSetIndex !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowSkipModal(false)}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+            >
+              {/* Warning Icon */}
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <svg className="h-7 w-7 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+
+              <h3 className="mb-2 text-center text-xl font-bold text-zinc-900 dark:text-white">
+                Skip Set?
+              </h3>
+              
+              <p className="mb-1 text-center text-sm text-zinc-600 dark:text-zinc-400">
+                Are you sure you want to skip this set of{" "}
+                <span className="font-semibold text-zinc-900 dark:text-white">
+                  {workout?.exercises[skipModalExerciseIndex]?.name}
+                </span>?
+              </p>
+
+              <p className="mb-6 text-center text-xs text-zinc-500 dark:text-zinc-500">
+                Set {skipModalSetIndex + 1} of {workout?.exercises[skipModalExerciseIndex]?.sets}
+              </p>
+
+              {/* Info Box */}
+              <div className="mb-6 rounded-lg bg-blue-50 border border-blue-200 p-3 dark:bg-blue-900/10 dark:border-blue-800/30">
+                <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
+                  💡 <span className="font-semibold">Coming soon:</span> Alternative exercise suggestions when you need to skip
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => skipSet(skipModalExerciseIndex, skipModalSetIndex)}
+                  className="rounded-lg bg-zinc-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                >
+                  Skip This Set Only
+                </button>
+                
+                <button
+                  onClick={() => skipExercise(skipModalExerciseIndex)}
+                  className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
+                >
+                  Skip All Sets ({workout?.exercises[skipModalExerciseIndex]?.sets} sets total)
+                </button>
+
+                <button
+                  onClick={() => setShowSkipModal(false)}
+                  className="rounded-lg border border-zinc-300 px-4 py-3 font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageTransition>
   );
 }
