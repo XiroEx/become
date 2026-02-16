@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import Schedule from '@/models/Schedule'
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,6 +58,13 @@ export async function POST(request: NextRequest) {
     }
     
     await userProgress.save()
+
+    // Delete associated schedule and clear hasSchedule flag
+    await Schedule.deleteOne({ userId: payload.userId, programId })
+    await UserProgress.updateOne(
+      { userId: payload.userId, 'activePrograms.programId': programId },
+      { $set: { 'activePrograms.$.hasSchedule': false } }
+    )
 
     return NextResponse.json({ 
       success: true,

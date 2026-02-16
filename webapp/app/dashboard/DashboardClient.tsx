@@ -7,6 +7,7 @@ import ProgressChart, { MetricData } from '@/components/ProgressChart'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import MoodCard from '@/components/MoodCard'
 import { ClipboardList, Flame, Target, TrendingUp } from 'lucide-react'
+import UpcomingWorkouts from '@/components/UpcomingWorkouts'
 
 interface UserProgressData {
   weightData: MetricData[]
@@ -277,6 +278,9 @@ export default function DashboardClient() {
           </div>
         </div>
       </div>
+
+      {/* Upcoming Workouts Calendar Strip */}
+      <UpcomingWorkouts />
 
       {/* Progress Chart */}
       <ProgressChart

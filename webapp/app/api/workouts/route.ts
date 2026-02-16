@@ -3,6 +3,7 @@ import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 
 interface SetData {
@@ -262,6 +263,35 @@ export async function POST(request: NextRequest) {
             { $set: { 'activePrograms.$.status': 'completed' } }
           )
         }
+      }
+    }
+
+    // Sync schedule: mark the corresponding scheduled workout as completed
+    // Match the earliest non-completed workout with the same dayLabel (handles out-of-order completion)
+    if (completed) {
+      try {
+        const schedule = await Schedule.findOne({ userId: payload.userId, programId })
+        if (schedule) {
+          const match = schedule.scheduledWorkouts
+            .filter((w: { dayLabel: string; status: string }) => w.dayLabel === day && w.status !== 'completed')
+            .sort((a: { date: Date }, b: { date: Date }) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+          if (match) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const matchId = (match as any)._id
+            await Schedule.updateOne(
+              { userId: payload.userId, programId, 'scheduledWorkouts._id': matchId },
+              {
+                $set: {
+                  'scheduledWorkouts.$.status': 'completed',
+                  'scheduledWorkouts.$.completedAt': new Date(),
+                },
+              }
+            )
+          }
+        }
+      } catch (scheduleError) {
+        // Non-critical: don't fail the workout save if schedule sync fails
+        console.error('Error syncing schedule:', scheduleError)
       }
     }
 

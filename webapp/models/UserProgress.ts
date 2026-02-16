@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Model, Types } from 'mongoose'
+import mongoose, { Schema, Types } from 'mongoose'
 
 export interface IWeightEntry {
   date: Date
@@ -50,6 +50,7 @@ export interface IActiveProgram {
   totalWorkouts: number // Total workouts in program
   lastWorkoutDate?: Date
   status: 'active' | 'in-progress' | 'paused' | 'completed'
+  hasSchedule?: boolean
 }
 
 export interface IUserProgress {
@@ -127,7 +128,8 @@ const ActiveProgramSchema = new Schema<IActiveProgram>({
   completedWorkouts: { type: Number, default: 0 },
   totalWorkouts: { type: Number, required: true },
   lastWorkoutDate: { type: Date },
-  status: { type: String, enum: ['active', 'in-progress', 'paused', 'completed'], default: 'in-progress' }
+  status: { type: String, enum: ['active', 'in-progress', 'paused', 'completed'], default: 'in-progress' },
+  hasSchedule: { type: Boolean, default: false }
 }, { _id: false })
 
 const UserProgressSchema = new Schema<IUserProgress>({

@@ -303,7 +303,8 @@ export default function ProgramDetailClient({ program }: Props) {
         if (data.activeProgram) {
           setActiveProgram(data.activeProgram);
         }
-        router.push(`/dashboard/programming/${program.program_id}/workout?day=${encodeURIComponent(selectedDayKey)}`);
+        // Redirect to schedule setup for new enrollments
+        router.push(`/dashboard/programming/${program.program_id}/schedule`);
       } else {
         const error = await res.json();
         console.error("Enrollment failed:", error);
@@ -427,6 +428,17 @@ export default function ProgramDetailClient({ program }: Props) {
                 />
               </div>
               
+              {/* Schedule Link */}
+              <button
+                onClick={() => router.push(`/dashboard/programming/${program.program_id}/schedule`)}
+                className="mt-3 flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                View / Edit Schedule
+              </button>
+
               {/* Abandon Program Button */}
               <button
                 onClick={() => setShowAbandonDialog(true)}
