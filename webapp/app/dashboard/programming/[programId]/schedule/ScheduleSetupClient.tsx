@@ -407,7 +407,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
                 value={toISODateString(startDate)}
                 min={toISODateString(new Date())}
                 onChange={(e) => setStartDate(new Date(e.target.value + 'T00:00:00'))}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                className="box-border w-full max-w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
               />
             </div>
 

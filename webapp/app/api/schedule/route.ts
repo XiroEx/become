@@ -247,11 +247,11 @@ export async function POST(request: NextRequest) {
 
     const activeProgram = userProgress.activePrograms?.find(
       (p: { programId: string; status: string }) =>
-        p.programId === programId && (p.status === 'in-progress' || p.status === 'active')
+        p.programId === programId
     )
 
     if (!activeProgram) {
-      return NextResponse.json({ error: 'Program is not active' }, { status: 400 })
+      return NextResponse.json({ error: 'Program not found in your active programs' }, { status: 400 })
     }
 
     // Fetch program to get phases/workouts
