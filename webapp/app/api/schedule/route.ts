@@ -137,10 +137,8 @@ export async function GET(request: NextRequest) {
       toDate = new Date(to)
     } else if (view === 'week') {
       fromDate = new Date(now)
-      // Start of current week (Monday)
-      const dayOfWeek = fromDate.getDay()
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-      fromDate.setDate(fromDate.getDate() - diff)
+      // Start of current week (Sunday)
+      fromDate.setDate(fromDate.getDate() - fromDate.getDay())
       toDate = new Date(fromDate)
       toDate.setDate(toDate.getDate() + 7)
     } else if (view === 'upcoming') {

@@ -30,15 +30,14 @@ function isSameDay(d1: Date, d2: Date): boolean {
 function getWeekDays(): Date[] {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const day = today.getDay()
-  // Start from Monday
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1))
+  // Start from Sunday
+  const sunday = new Date(today)
+  sunday.setDate(today.getDate() - today.getDay())
   
   const days: Date[] = []
   for (let i = 0; i < 7; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
+    const d = new Date(sunday)
+    d.setDate(sunday.getDate() + i)
     days.push(d)
   }
   return days

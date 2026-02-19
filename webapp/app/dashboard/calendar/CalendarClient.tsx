@@ -46,7 +46,7 @@ type ViewMode = 'month' | 'week'
 
 // ------ Helpers ------
 
-const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -77,8 +77,8 @@ function getMonthDays(year: number, month: number): Date[] {
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
 
-  // Pad to start on Monday
-  const startPad = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1
+  // Pad to start on Sunday
+  const startPad = firstDay.getDay()
   const days: Date[] = []
 
   for (let i = startPad; i > 0; i--) {
@@ -104,14 +104,13 @@ function getMonthDays(year: number, month: number): Date[] {
 function getWeekDays(referenceDate: Date): Date[] {
   const d = new Date(referenceDate)
   d.setHours(0, 0, 0, 0)
-  const day = d.getDay()
-  const monday = new Date(d)
-  monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+  const sunday = new Date(d)
+  sunday.setDate(d.getDate() - d.getDay())
 
   const days: Date[] = []
   for (let i = 0; i < 7; i++) {
-    const wd = new Date(monday)
-    wd.setDate(monday.getDate() + i)
+    const wd = new Date(sunday)
+    wd.setDate(sunday.getDate() + i)
     days.push(wd)
   }
   return days
@@ -181,11 +180,9 @@ export default function CalendarClient() {
         to.setDate(to.getDate() + 7)
         url += `from=${from.toISOString()}&to=${to.toISOString()}`
       } else {
-        // Week view: compute the Mon-Sun range based on currentDate
+        // Week view: compute the Sun-Sat range based on currentDate
         const weekStart = new Date(currentDate)
-        const dayOfWeek = weekStart.getDay()
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-        weekStart.setDate(weekStart.getDate() - diff)
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay())
         weekStart.setHours(0, 0, 0, 0)
         const weekEnd = new Date(weekStart)
         weekEnd.setDate(weekEnd.getDate() + 7)

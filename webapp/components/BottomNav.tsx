@@ -1,7 +1,7 @@
 "use client"
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ClipboardList, CalendarDays, Home, UtensilsCrossed, MessageCircle } from 'lucide-react'
+import { ClipboardList, Brain, Home, UtensilsCrossed, MessageCircle } from 'lucide-react'
 
 export default function BottomNav() {
   const pathname = usePathname()
@@ -33,15 +33,15 @@ export default function BottomNav() {
         </li>
         <li className="flex-1">
           <Link 
-            href="/dashboard/calendar" 
+            href="/dashboard/mind" 
             className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-medium transition-colors sm:text-xs ${
-              isActive('/dashboard/calendar') 
+              isActive('/dashboard/mind') 
                 ? 'text-black dark:text-white' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
             }`}
           >
-            <CalendarDays className="h-5 w-5" />
-            Calendar
+            <Brain className="h-5 w-5" />
+            Mind
           </Link>
         </li>
         <li className="flex-1">
