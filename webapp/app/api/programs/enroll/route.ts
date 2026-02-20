@@ -17,10 +17,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const { programId } = await request.json()
+    const { programId, startDate: startDateStr } = await request.json()
     if (!programId) {
       return NextResponse.json({ error: 'Program ID is required' }, { status: 400 })
     }
+
+    // Accept optional startDate (YYYY-MM-DD string); default to today
+    const programStartDate = startDateStr ? new Date(startDateStr + 'T00:00:00.000Z') : new Date()
 
     await dbConnect()
 
@@ -69,7 +72,7 @@ export async function POST(request: NextRequest) {
     const activeProgram = {
       programId,
       programName: program.name,
-      startDate: new Date(),
+      startDate: programStartDate,
       currentPhase: 1,
       currentDay: 'Day 1',
       completedWorkouts: 0,

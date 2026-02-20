@@ -36,6 +36,26 @@ interface SearchResult {
   availableTags: string[];
 }
 
+/** Format a program start date as a smart label */
+function formatStartLabel(startDate: string | undefined): { label: string; isFuture: boolean } {
+  if (!startDate) return { label: '', isFuture: false }
+  const start = typeof startDate === 'string' ? startDate.split('T')[0] : new Date(startDate).toISOString().split('T')[0]
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+  if (start > todayStr) {
+    // Future start — show how many days until
+    const startMs = new Date(start + 'T12:00:00').getTime()
+    const todayMs = new Date(todayStr + 'T12:00:00').getTime()
+    const diffDays = Math.round((startMs - todayMs) / (1000 * 60 * 60 * 24))
+    if (diffDays === 1) return { label: 'Starts tomorrow', isFuture: true }
+    if (diffDays <= 7) return { label: `Starts in ${diffDays} days`, isFuture: true }
+    const d = new Date(start + 'T12:00:00')
+    return { label: `Starts ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`, isFuture: true }
+  }
+  return { label: '', isFuture: false }
+}
+
 export default function ProgrammingClient() {
   const [activePrograms, setActivePrograms] = useState<ActiveProgram[]>([]);
   const [savedPrograms, setSavedPrograms] = useState<SavedProgram[]>([]);
@@ -271,10 +291,16 @@ export default function ProgrammingClient() {
             Continue Training
           </h2>
           <div className="space-y-3">
-            {activePrograms.map((program) => (
+            {activePrograms.map((program) => {
+              const { label: startLabel, isFuture } = formatStartLabel(program.startDate)
+              return (
               <div
                 key={program.programId}
-                className="group relative rounded-xl border-2 border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 p-4 shadow-sm transition-all duration-200 hover:border-green-500/50 hover:shadow-md dark:from-green-500/5 dark:to-emerald-500/5"
+                className={`group relative rounded-xl border-2 p-4 shadow-sm transition-all duration-200 hover:shadow-md ${
+                  isFuture
+                    ? 'border-blue-500/30 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 hover:border-blue-500/50 dark:from-blue-500/5 dark:to-indigo-500/5'
+                    : 'border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 hover:border-green-500/50 dark:from-green-500/5 dark:to-emerald-500/5'
+                }`}
               >
                 <Link href={`/dashboard/programming/${program.programId}`} className="block">
                   <div className="flex items-center justify-between">
@@ -282,13 +308,19 @@ export default function ProgrammingClient() {
                       <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
                         {program.programName}
                       </h3>
-                      <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
-                        Phase {program.currentPhase} • Day {program.currentDay}
-                      </p>
+                      {isFuture ? (
+                        <p className="mt-0.5 text-sm font-medium text-blue-600 dark:text-blue-400">
+                          {startLabel}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
+                          Phase {program.currentPhase} • Day {program.currentDay}
+                        </p>
+                      )}
                     </div>
                     <div className="ml-4 flex items-center gap-3">
                       <div className="text-right">
-                        <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        <span className={`text-sm font-semibold ${isFuture ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
                           {program.progress}%
                         </span>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -300,14 +332,20 @@ export default function ProgrammingClient() {
                   </div>
                   <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-300"
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        isFuture
+                          ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-500'
+                      }`}
                       style={{ width: `${program.progress}%` }}
                     />
                   </div>
                 </Link>
                 <Link
                   href={`/dashboard/programming/${program.programId}/workout`}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition-transform duration-200 hover:scale-110 hover:bg-green-600 active:scale-95"
+                  className={`absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 hover:scale-110 active:scale-95 ${
+                    isFuture ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'
+                  }`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
@@ -315,7 +353,8 @@ export default function ProgrammingClient() {
                   </svg>
                 </Link>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

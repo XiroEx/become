@@ -297,10 +297,10 @@ export async function POST(request: NextRequest) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     )
 
-    // Set hasSchedule flag on the active program
+    // Set hasSchedule flag and sync startDate on the active program
     await UserProgress.updateOne(
       { userId: payload.userId, 'activePrograms.programId': programId },
-      { $set: { 'activePrograms.$.hasSchedule': true } }
+      { $set: { 'activePrograms.$.hasSchedule': true, 'activePrograms.$.startDate': new Date(startDate) } }
     )
 
     return NextResponse.json({

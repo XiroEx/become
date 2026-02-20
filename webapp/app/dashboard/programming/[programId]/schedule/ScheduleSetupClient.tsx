@@ -67,7 +67,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // Check for existing schedule on mount
+  // Check for existing schedule on mount, and load program start date
   useEffect(() => {
     const checkExisting = async () => {
       try {
@@ -85,6 +85,21 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
             setStartDate(new Date(match.settings.startDate))
             setMode('view')
             return
+          }
+        }
+
+        // No schedule yet — try to load the program's start date from enrollment
+        const activeRes = await fetch('/api/programs/active', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (activeRes.ok) {
+          const activeData = await activeRes.json()
+          const activeMatch = activeData.activePrograms?.find(
+            (p: { programId: string }) => p.programId === programId
+          )
+          if (activeMatch?.startDate) {
+            const sd = typeof activeMatch.startDate === 'string' ? activeMatch.startDate.split('T')[0] : new Date(activeMatch.startDate).toISOString().split('T')[0]
+            setStartDate(new Date(sd + 'T12:00:00'))
           }
         }
       } catch { /* ignore */ }

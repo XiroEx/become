@@ -138,6 +138,11 @@ export async function PUT(request: NextRequest) {
     schedule.settings.trainingDays = trainingDays
     if (startDate) {
       schedule.settings.startDate = new Date(startDate)
+      // Sync startDate on the active program too
+      await (await import('@/models/UserProgress')).default.updateOne(
+        { userId: payload.userId, 'activePrograms.programId': programId },
+        { $set: { 'activePrograms.$.startDate': new Date(startDate) } }
+      )
     }
 
     await schedule.save()

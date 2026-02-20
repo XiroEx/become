@@ -17,6 +17,7 @@ interface ActiveProgram {
   totalWorkouts: number;
   currentPhase: number;
   currentDay: string;
+  startDate?: string;
 }
 
 // Confirmation Dialog Component
@@ -129,6 +130,7 @@ interface ActiveProgram {
   totalWorkouts: number;
   currentPhase: number;
   currentDay: string;
+  startDate?: string;
 }
 
 // Helper to normalize workouts from object format to array format
@@ -157,6 +159,18 @@ export default function ProgramDetailClient({ program }: Props) {
   const [isAbandoning, setIsAbandoning] = useState(false);
   const [completedDays, setCompletedDays] = useState<Set<string>>(new Set());
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [editingStartDate, setEditingStartDate] = useState(false);
+  const [pendingStartDate, setPendingStartDate] = useState('');
+  const [savingStartDate, setSavingStartDate] = useState(false);
+  const [showEnrollDialog, setShowEnrollDialog] = useState(false);
+  const [enrollStartDate, setEnrollStartDate] = useState(() => {
+    const d = new Date();
+    // Default to next Monday
+    const day = d.getDay();
+    const daysUntilMonday = day === 0 ? 1 : day === 1 ? 0 : 8 - day;
+    d.setDate(d.getDate() + daysUntilMonday);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const currentPhase = program.phases[selectedPhaseIndex];
   const normalizedWorkouts = currentPhase ? normalizeWorkouts(currentPhase.workouts) : [];
@@ -279,8 +293,14 @@ export default function ProgramDetailClient({ program }: Props) {
       return;
     }
 
+    // Show enrollment dialog with start date picker
+    setShowEnrollDialog(true);
+  };
+
+  const handleConfirmEnroll = async () => {
     // Enroll in the program
     setEnrolling(true);
+    setShowEnrollDialog(false);
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -294,7 +314,7 @@ export default function ProgramDetailClient({ program }: Props) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ programId: program.program_id })
+        body: JSON.stringify({ programId: program.program_id, startDate: enrollStartDate })
       });
 
       if (res.ok) {
@@ -415,6 +435,69 @@ export default function ProgramDetailClient({ program }: Props) {
           {/* Progress indicator if enrolled */}
           {activeProgram && (
             <div className="mt-4">
+              {/* Start Date Display/Edit */}
+              <div className="mb-3 flex items-center gap-2">
+                <svg className="h-3.5 w-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                {editingStartDate ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={pendingStartDate}
+                      onChange={(e) => setPendingStartDate(e.target.value)}
+                      className="box-border rounded-lg border border-zinc-600 bg-zinc-800 px-2 py-1 text-sm text-white"
+                    />
+                    <button
+                      disabled={savingStartDate}
+                      onClick={async () => {
+                        setSavingStartDate(true)
+                        try {
+                          const token = localStorage.getItem('token')
+                          const res = await fetch('/api/programs/start-date', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ programId: program.program_id, startDate: pendingStartDate }),
+                          })
+                          if (res.ok) {
+                            setActiveProgram(prev => prev ? { ...prev, startDate: pendingStartDate } : prev)
+                            setEditingStartDate(false)
+                          }
+                        } catch { /* ignore */ }
+                        setSavingStartDate(false)
+                      }}
+                      className="rounded-lg bg-blue-500 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-600"
+                    >
+                      {savingStartDate ? '...' : 'Save'}
+                    </button>
+                    <button onClick={() => setEditingStartDate(false)} className="text-xs text-zinc-400 hover:text-white">Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const sd = activeProgram.startDate
+                        ? (typeof activeProgram.startDate === 'string' ? activeProgram.startDate.split('T')[0] : new Date(activeProgram.startDate).toISOString().split('T')[0])
+                        : new Date().toISOString().split('T')[0]
+                      setPendingStartDate(sd)
+                      setEditingStartDate(true)
+                    }}
+                    className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    {(() => {
+                      if (!activeProgram.startDate) return 'Set start date'
+                      const sd = typeof activeProgram.startDate === 'string' ? activeProgram.startDate.split('T')[0] : new Date(activeProgram.startDate).toISOString().split('T')[0]
+                      const d = new Date(sd + 'T12:00:00')
+                      const now = new Date()
+                      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+                      if (sd > todayStr) {
+                        return `Starts ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}`
+                      }
+                      return `Started ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                    })()}
+                  </button>
+                )}
+              </div>
+
               <div className="flex items-center justify-between text-sm text-zinc-300">
                 <span>Progress: {activeProgram.completedWorkouts}/{activeProgram.totalWorkouts} workouts</span>
                 <span className="text-green-400 font-semibold">
@@ -594,6 +677,80 @@ export default function ProgramDetailClient({ program }: Props) {
         hasProgress={hasProgress}
         isAbandoning={isAbandoning}
       />
+
+      {/* Enroll with Start Date Dialog */}
+      <AnimatePresence>
+        {showEnrollDialog && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowEnrollDialog(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+            >
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
+                <svg className="h-7 w-7 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+
+              <h3 className="mb-1 text-center text-xl font-bold text-zinc-900 dark:text-white">
+                When do you want to start?
+              </h3>
+              <p className="mb-5 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                Pick a start date for this {program.duration_weeks}-week program. You can schedule it weeks or months ahead.
+              </p>
+
+              <div className="mb-4">
+                <input
+                  type="date"
+                  value={enrollStartDate}
+                  min={(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()}
+                  onChange={(e) => setEnrollStartDate(e.target.value)}
+                  className="box-border w-full max-w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                />
+              </div>
+
+              <p className="mb-5 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                {(() => {
+                  const d = new Date(enrollStartDate + 'T12:00:00')
+                  const endDate = new Date(d)
+                  endDate.setDate(endDate.getDate() + (program.duration_weeks || 4) * 7)
+                  return `Est. completion: ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                })()}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEnrollDialog(false)}
+                  className="flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmEnroll}
+                  disabled={enrolling}
+                  className="flex-1 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                >
+                  {enrolling ? 'Enrolling...' : 'Enroll & Set Up'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageTransition>
   );
 }
