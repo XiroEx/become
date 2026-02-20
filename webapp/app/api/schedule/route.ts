@@ -24,6 +24,15 @@ function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'd
   return Object.entries(workouts).map(([day, workout]) => ({ day, ...workout }))
 }
 
+/** Parse phase weeks string like "1-4" to get number of weeks the split repeats */
+function parsePhaseWeeks(weeksStr: string): number {
+  const match = weeksStr.match(/(\d+)\s*[-–]\s*(\d+)/)
+  if (match) return parseInt(match[2]) - parseInt(match[1]) + 1
+  const single = weeksStr.match(/^(\d+)$/)
+  if (single) return 1
+  return 1
+}
+
 /** Generate scheduled workouts from program phases mapped to calendar dates */
 function generateScheduledWorkouts(
   phases: Phase[],
@@ -38,16 +47,19 @@ function generateScheduledWorkouts(
   workoutTitle: string
   status: 'scheduled'
 }> {
-  // Collect all workouts across all phases in order
+  // Collect all workouts across all phases in order, repeating each phase's split for its duration
   const allWorkouts: { phase: number; dayLabel: string; title: string }[] = []
   for (let i = 0; i < phases.length; i++) {
     const workouts = normalizeWorkouts(phases[i].workouts)
-    for (const w of workouts) {
-      allWorkouts.push({
-        phase: i + 1,
-        dayLabel: w.day,
-        title: w.title,
-      })
+    const numWeeks = parsePhaseWeeks(phases[i].weeks || '1')
+    for (let week = 0; week < numWeeks; week++) {
+      for (const w of workouts) {
+        allWorkouts.push({
+          phase: i + 1,
+          dayLabel: w.day,
+          title: w.title,
+        })
+      }
     }
   }
 

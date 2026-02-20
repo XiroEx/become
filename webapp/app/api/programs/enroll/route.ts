@@ -30,16 +30,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Program not found' }, { status: 404 })
     }
 
-    // Calculate total workouts in the program
+    // Calculate total workouts in the program (workouts per phase × weeks per phase)
     let totalWorkouts = 0
     if (program.phases) {
       for (const phase of program.phases) {
         const workouts = phase.workouts
+        const weeksStr = (phase as { weeks?: string }).weeks || '1'
+        const weeksMatch = weeksStr.match(/(\d+)\s*[-–]\s*(\d+)/)
+        const numWeeks = weeksMatch ? parseInt(weeksMatch[2]) - parseInt(weeksMatch[1]) + 1 : 1
+        let workoutsPerWeek = 0
         if (Array.isArray(workouts)) {
-          totalWorkouts += workouts.length
+          workoutsPerWeek = workouts.length
         } else if (workouts && typeof workouts === 'object') {
-          totalWorkouts += Object.keys(workouts).length
+          workoutsPerWeek = Object.keys(workouts).length
         }
+        totalWorkouts += workoutsPerWeek * numWeeks
       }
     }
 

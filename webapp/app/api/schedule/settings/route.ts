@@ -23,6 +23,15 @@ function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'd
   return Object.entries(workouts).map(([day, workout]) => ({ day, ...workout }))
 }
 
+/** Parse phase weeks string like "1-4" to get number of weeks the split repeats */
+function parsePhaseWeeks(weeksStr: string): number {
+  const match = weeksStr.match(/(\d+)\s*[-–]\s*(\d+)/)
+  if (match) return parseInt(match[2]) - parseInt(match[1]) + 1
+  const single = weeksStr.match(/^(\d+)$/)
+  if (single) return 1
+  return 1
+}
+
 // PUT: Update training day preferences and regenerate future workouts
 export async function PUT(request: NextRequest) {
   try {
@@ -65,22 +74,33 @@ export async function PUT(request: NextRequest) {
       return d < now && (w.status === 'completed' || w.status === 'missed' || w.status === 'skipped')
     })
 
-    // Determine which workout day labels have already been completed
-    const completedLabels = new Set(
-      pastWorkouts
-        .filter((w) => w.status === 'completed')
-        .map((w) => `${w.phase}-${w.dayLabel}`)
-    )
+    // Count how many times each phase+dayLabel was completed
+    const completedCounts = new Map<string, number>()
+    for (const w of pastWorkouts) {
+      if (w.status === 'completed') {
+        const key = `${w.phase}-${w.dayLabel}`
+        completedCounts.set(key, (completedCounts.get(key) || 0) + 1)
+      }
+    }
 
-    // Collect remaining workouts from program that haven't been completed
+    // Collect remaining workouts from program, subtracting already-completed occurrences
     const phases = (program.phases || []) as Phase[]
     const remainingWorkouts: { phase: number; dayLabel: string; title: string }[] = []
+    const usedCounts = new Map<string, number>()
     for (let i = 0; i < phases.length; i++) {
       const workouts = normalizeWorkouts(phases[i].workouts)
-      for (const w of workouts) {
-        const key = `${i + 1}-${w.day}`
-        if (!completedLabels.has(key)) {
-          remainingWorkouts.push({ phase: i + 1, dayLabel: w.day, title: w.title })
+      const numWeeks = parsePhaseWeeks(phases[i].weeks || '1')
+      for (let week = 0; week < numWeeks; week++) {
+        for (const w of workouts) {
+          const key = `${i + 1}-${w.day}`
+          const used = usedCounts.get(key) || 0
+          const completed = completedCounts.get(key) || 0
+          if (used < completed) {
+            // This occurrence was already completed, skip it
+            usedCounts.set(key, used + 1)
+          } else {
+            remainingWorkouts.push({ phase: i + 1, dayLabel: w.day, title: w.title })
+          }
         }
       }
     }
