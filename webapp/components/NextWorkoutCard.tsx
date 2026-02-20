@@ -37,18 +37,21 @@ export default function NextWorkoutCard() {
           const schedules: ScheduleData[] = data.schedules || []
 
           // Find first upcoming scheduled workout across all programs
+          // Use YYYY-MM-DD string keys to avoid timezone shift issues
           const now = new Date()
-          now.setHours(0, 0, 0, 0)
+          const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
           let earliest: (ScheduledWorkout & { programName: string }) | null = null
+          let earliestKey = ''
           for (const schedule of schedules) {
             for (const w of schedule.scheduledWorkouts) {
               if (w.status !== 'scheduled') continue
-              const wDate = new Date(w.date)
-              wDate.setHours(0, 0, 0, 0)
-              if (wDate < now) continue
-              if (!earliest || wDate < new Date(earliest.date)) {
+              // Extract UTC date portion from ISO string
+              const wKey = typeof w.date === 'string' ? w.date.split('T')[0] : new Date(w.date).toISOString().split('T')[0]
+              if (wKey < todayKey) continue
+              if (!earliest || wKey < earliestKey) {
                 earliest = { ...w, programName: schedule.programName }
+                earliestKey = wKey
               }
             }
           }
@@ -80,16 +83,17 @@ export default function NextWorkoutCard() {
 
   if (!nextWorkout) return null
 
-  const workoutDate = new Date(nextWorkout.date)
+  const workoutDateStr = typeof nextWorkout.date === 'string' ? nextWorkout.date.split('T')[0] : new Date(nextWorkout.date).toISOString().split('T')[0]
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  workoutDate.setHours(0, 0, 0, 0)
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`
 
-  const diffDays = Math.round((workoutDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   const dateLabel =
-    diffDays === 0 ? 'Today' :
-    diffDays === 1 ? 'Tomorrow' :
-    workoutDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    workoutDateStr === todayStr ? 'Today' :
+    workoutDateStr === tomorrowStr ? 'Tomorrow' :
+    new Date(workoutDateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">

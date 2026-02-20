@@ -108,7 +108,7 @@ export async function PUT(request: NextRequest) {
     // Generate new schedule dates for remaining workouts
     const sortedDays = [...trainingDays].sort((a, b) => a - b)
     const effectiveStart = startDate ? new Date(startDate) : now
-    effectiveStart.setHours(0, 0, 0, 0)
+    effectiveStart.setUTCHours(0, 0, 0, 0)
 
     const newScheduled: typeof schedule.scheduledWorkouts = []
     const current = new Date(effectiveStart)
@@ -118,7 +118,7 @@ export async function PUT(request: NextRequest) {
     maxDate.setFullYear(maxDate.getFullYear() + 1)
 
     while (widx < remainingWorkouts.length && current < maxDate) {
-      if (sortedDays.includes(current.getDay())) {
+      if (sortedDays.includes(current.getUTCDay())) {
         const w = remainingWorkouts[widx]
         newScheduled.push({
           date: new Date(current),
@@ -130,7 +130,7 @@ export async function PUT(request: NextRequest) {
         })
         widx++
       }
-      current.setDate(current.getDate() + 1)
+      current.setUTCDate(current.getUTCDate() + 1)
     }
 
     // Merge: past completed + new future

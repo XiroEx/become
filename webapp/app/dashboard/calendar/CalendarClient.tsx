@@ -66,6 +66,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
     d1.getDate() === d2.getDate()
 }
 
+// Format a local Date as YYYY-MM-DD using local time components
 function toDateKey(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -208,13 +209,14 @@ export default function CalendarClient() {
     fetchSchedules()
   }, [fetchSchedules])
 
-  // Build workout map
+  // Build workout map — key by the date portion of the stored ISO string.
+  // Workout dates are stored as UTC midnight and the YYYY-MM-DD portion represents
+  // the intended local calendar date (server generates with UTC methods from a local date string).
   const workoutsByDate = new Map<string, Array<ScheduledWorkout & { programName: string; programId: string }>>()
   for (const schedule of schedules) {
     for (const w of schedule.scheduledWorkouts) {
-      const d = new Date(w.date)
-      d.setHours(0, 0, 0, 0)
-      const key = toDateKey(d)
+      // Extract the YYYY-MM-DD portion from the UTC ISO string
+      const key = typeof w.date === 'string' ? w.date.split('T')[0] : new Date(w.date).toISOString().split('T')[0]
       const existing = workoutsByDate.get(key) || []
       existing.push({ ...w, programName: schedule.programName, programId: schedule.programId })
       workoutsByDate.set(key, existing)

@@ -79,7 +79,7 @@ function generateScheduledWorkouts(
 
   // Start from the startDate and walk forward, assigning workouts to training days
   const current = new Date(startDate)
-  current.setHours(0, 0, 0, 0)
+  current.setUTCHours(0, 0, 0, 0)
   let workoutIndex = 0
 
   // Safety limit: don't generate more than 365 days out
@@ -87,7 +87,7 @@ function generateScheduledWorkouts(
   maxDate.setFullYear(maxDate.getFullYear() + 1)
 
   while (workoutIndex < allWorkouts.length && current < maxDate) {
-    const dayOfWeek = current.getDay()
+    const dayOfWeek = current.getUTCDay()
     if (sortedDays.includes(dayOfWeek)) {
       const workout = allWorkouts[workoutIndex]
       scheduled.push({
@@ -100,7 +100,7 @@ function generateScheduledWorkouts(
       })
       workoutIndex++
     }
-    current.setDate(current.getDate() + 1)
+    current.setUTCDate(current.getUTCDate() + 1)
   }
 
   return scheduled
@@ -349,11 +349,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const targetDate = new Date(workoutDate)
-    targetDate.setHours(0, 0, 0, 0)
+    targetDate.setUTCHours(0, 0, 0, 0)
 
     const targetIdx = schedule.scheduledWorkouts.findIndex((w) => {
       const d = new Date(w.date)
-      d.setHours(0, 0, 0, 0)
+      d.setUTCHours(0, 0, 0, 0)
       return d.getTime() === targetDate.getTime()
     })
 
@@ -372,7 +372,7 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'newDate is required for reschedule' }, { status: 400 })
         }
         const nd = new Date(newDate)
-        nd.setHours(0, 0, 0, 0)
+        nd.setUTCHours(0, 0, 0, 0)
         schedule.scheduledWorkouts[targetIdx].date = nd
         // Re-sort by date
         schedule.scheduledWorkouts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -384,10 +384,10 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'swapWithDate is required for swap' }, { status: 400 })
         }
         const swapDate = new Date(swapWithDate)
-        swapDate.setHours(0, 0, 0, 0)
+        swapDate.setUTCHours(0, 0, 0, 0)
         const swapIdx = schedule.scheduledWorkouts.findIndex((w) => {
           const d = new Date(w.date)
-          d.setHours(0, 0, 0, 0)
+          d.setUTCHours(0, 0, 0, 0)
           return d.getTime() === swapDate.getTime()
         })
 

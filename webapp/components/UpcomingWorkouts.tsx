@@ -21,6 +21,14 @@ interface ScheduleData {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+// Format a local Date as YYYY-MM-DD using local time components
+function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function isSameDay(d1: Date, d2: Date): boolean {
   return d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
@@ -137,9 +145,8 @@ export default function UpcomingWorkouts() {
   const workoutsByDate = new Map<string, Array<ScheduledWorkout & { programName: string }>>()
   for (const schedule of schedules) {
     for (const w of schedule.scheduledWorkouts) {
-      const d = new Date(w.date)
-      d.setHours(0, 0, 0, 0)
-      const key = d.toISOString().split('T')[0]
+      // Use the UTC date portion from the ISO string to avoid timezone shift
+      const key = typeof w.date === 'string' ? w.date.split('T')[0] : new Date(w.date).toISOString().split('T')[0]
       const existing = workoutsByDate.get(key) || []
       existing.push({ ...w, programName: schedule.programName })
       workoutsByDate.set(key, existing)
@@ -164,7 +171,7 @@ export default function UpcomingWorkouts() {
 
       <div className="grid grid-cols-7 gap-1.5">
         {weekDays.map((day) => {
-          const key = day.toISOString().split('T')[0]
+          const key = toLocalDateKey(day)
           const workouts = workoutsByDate.get(key)
           const workout = workouts?.[0] // Primary workout for display
           const isToday = isSameDay(day, today)
@@ -225,7 +232,7 @@ export default function UpcomingWorkouts() {
 
       {/* Today's workout detail */}
       {(() => {
-        const todayKey = today.toISOString().split('T')[0]
+        const todayKey = toLocalDateKey(today)
         const todayWorkouts = workoutsByDate.get(todayKey)
         if (!todayWorkouts || todayWorkouts.length === 0) return null
         // Show first non-completed workout, or nothing if all done
