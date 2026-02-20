@@ -200,17 +200,34 @@ export async function POST(request: NextRequest) {
           }
         )
         
-        // Check if program is completed
+        // Check if program is completed — use schedule workout count if available
         const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
         const activeProgram = userProgress?.activePrograms?.find(
           (p: { programId: string }) => p.programId === programId
         )
-        
-        if (activeProgram && activeProgram.completedWorkouts >= activeProgram.totalWorkouts) {
-          await UserProgress.updateOne(
-            { userId: payload.userId, 'activePrograms.programId': programId },
-            { $set: { 'activePrograms.$.status': 'completed' } }
+
+        if (activeProgram) {
+          let effectiveTotal = activeProgram.totalWorkouts
+          // If a schedule exists, its workout count is the source of truth
+          const schedule = await import('@/models/Schedule').then(m =>
+            m.default.findOne({ userId: payload.userId, programId }).lean()
           )
+          if (schedule?.scheduledWorkouts?.length) {
+            effectiveTotal = schedule.scheduledWorkouts.length
+            // Sync if out of date
+            if (activeProgram.totalWorkouts !== effectiveTotal) {
+              await UserProgress.updateOne(
+                { userId: payload.userId, 'activePrograms.programId': programId },
+                { $set: { 'activePrograms.$.totalWorkouts': effectiveTotal } }
+              )
+            }
+          }
+          if (activeProgram.completedWorkouts >= effectiveTotal) {
+            await UserProgress.updateOne(
+              { userId: payload.userId, 'activePrograms.programId': programId },
+              { $set: { 'activePrograms.$.status': 'completed' } }
+            )
+          }
         }
       }
     } else {
@@ -251,17 +268,32 @@ export async function POST(request: NextRequest) {
           }
         )
 
-        // Check if program is completed
-        const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
-        const activeProgram = userProgress?.activePrograms?.find(
+        // Check if program is completed — use schedule workout count if available
+        const userProgress2 = await UserProgress.findOne({ userId: payload.userId }).lean()
+        const activeProgram2 = userProgress2?.activePrograms?.find(
           (p: { programId: string }) => p.programId === programId
         )
-        
-        if (activeProgram && activeProgram.completedWorkouts >= activeProgram.totalWorkouts) {
-          await UserProgress.updateOne(
-            { userId: payload.userId, 'activePrograms.programId': programId },
-            { $set: { 'activePrograms.$.status': 'completed' } }
+
+        if (activeProgram2) {
+          let effectiveTotal2 = activeProgram2.totalWorkouts
+          const schedule2 = await import('@/models/Schedule').then(m =>
+            m.default.findOne({ userId: payload.userId, programId }).lean()
           )
+          if (schedule2?.scheduledWorkouts?.length) {
+            effectiveTotal2 = schedule2.scheduledWorkouts.length
+            if (activeProgram2.totalWorkouts !== effectiveTotal2) {
+              await UserProgress.updateOne(
+                { userId: payload.userId, 'activePrograms.programId': programId },
+                { $set: { 'activePrograms.$.totalWorkouts': effectiveTotal2 } }
+              )
+            }
+          }
+          if (activeProgram2.completedWorkouts >= effectiveTotal2) {
+            await UserProgress.updateOne(
+              { userId: payload.userId, 'activePrograms.programId': programId },
+              { $set: { 'activePrograms.$.status': 'completed' } }
+            )
+          }
         }
       }
     }

@@ -297,10 +297,17 @@ export async function POST(request: NextRequest) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     )
 
-    // Set hasSchedule flag and sync startDate on the active program
+    // Sync hasSchedule, startDate, totalWorkouts, and reset status if needed
     await UserProgress.updateOne(
       { userId: payload.userId, 'activePrograms.programId': programId },
-      { $set: { 'activePrograms.$.hasSchedule': true, 'activePrograms.$.startDate': new Date(startDate) } }
+      {
+        $set: {
+          'activePrograms.$.hasSchedule': true,
+          'activePrograms.$.startDate': new Date(startDate),
+          'activePrograms.$.totalWorkouts': scheduledWorkouts.length,
+          'activePrograms.$.status': 'in-progress',
+        },
+      }
     )
 
     return NextResponse.json({

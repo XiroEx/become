@@ -136,14 +136,32 @@ export async function PUT(request: NextRequest) {
     // Merge: past completed + new future
     schedule.scheduledWorkouts = [...pastWorkouts, ...newScheduled]
     schedule.settings.trainingDays = trainingDays
+
+    const totalScheduled = schedule.scheduledWorkouts.length
+    const syncUpdate: Record<string, unknown> = {
+      'activePrograms.$.totalWorkouts': totalScheduled,
+    }
     if (startDate) {
       schedule.settings.startDate = new Date(startDate)
-      // Sync startDate on the active program too
-      await (await import('@/models/UserProgress')).default.updateOne(
-        { userId: payload.userId, 'activePrograms.programId': programId },
-        { $set: { 'activePrograms.$.startDate': new Date(startDate) } }
-      )
+      syncUpdate['activePrograms.$.startDate'] = new Date(startDate)
     }
+
+    // Sync totalWorkouts (and startDate if changed) on the active program
+    const UserProgressModel = (await import('@/models/UserProgress')).default
+    await UserProgressModel.updateOne(
+      { userId: payload.userId, 'activePrograms.programId': programId },
+      { $set: syncUpdate }
+    )
+
+    // If the program was marked completed due to old totalWorkouts, reactivate it
+    await UserProgressModel.updateOne(
+      {
+        userId: payload.userId,
+        'activePrograms.programId': programId,
+        'activePrograms.status': 'completed',
+      },
+      { $set: { 'activePrograms.$.status': 'in-progress' } }
+    )
 
     await schedule.save()
 

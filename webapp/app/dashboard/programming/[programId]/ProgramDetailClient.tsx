@@ -293,6 +293,45 @@ export default function ProgramDetailClient({ program }: Props) {
       return;
     }
 
+    // Compute smart default start date: after existing programs finish
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const res = await fetch('/api/schedule?view=all', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const schedules = data.schedules || [];
+          // Find the latest scheduled workout date across all programs
+          let latestDate = '';
+          for (const s of schedules) {
+            for (const w of (s.scheduledWorkouts || [])) {
+              const d = typeof w.date === 'string' ? w.date.split('T')[0] : new Date(w.date).toISOString().split('T')[0];
+              if (d > latestDate) latestDate = d;
+            }
+          }
+          if (latestDate) {
+            // Suggest the next Monday after the last workout ends
+            const endDate = new Date(latestDate + 'T12:00:00');
+            endDate.setDate(endDate.getDate() + 1); // day after last workout
+            const dow = endDate.getDay();
+            const daysUntilMon = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
+            endDate.setDate(endDate.getDate() + daysUntilMon);
+            const suggested = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+            // Only use if it's after the current default
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            if (suggested > todayStr) {
+              setEnrollStartDate(suggested);
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore — will use the default next Monday
+    }
+
     // Show enrollment dialog with start date picker
     setShowEnrollDialog(true);
   };
