@@ -16,6 +16,9 @@ interface SetData {
 interface ExerciseData {
   name: string
   sets: SetData[]
+  // Grouping metadata (optional, passed through from program data)
+  groupId?: string
+  groupType?: string
 }
 
 interface WorkoutSaveRequest {

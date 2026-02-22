@@ -117,6 +117,12 @@ interface Exercise {
   reps?: string;
   rest?: string;
   details?: string;
+  // Exercise grouping (supersets, circuits, etc.)
+  groupId?: string;
+  groupType?: string;
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
 }
 
 interface WorkoutData {
@@ -124,6 +130,59 @@ interface WorkoutData {
   title: string;
   exercises: Exercise[];
 }
+
+// Group consecutive exercises that share the same groupId
+interface ExerciseGroup {
+  groupId: string | null;
+  groupType?: string;
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
+  exercises: { exercise: Exercise; originalIndex: number }[];
+}
+
+function groupExercises(exercises: Exercise[]): ExerciseGroup[] {
+  const groups: ExerciseGroup[] = [];
+  let i = 0;
+
+  while (i < exercises.length) {
+    const ex = exercises[i];
+    if (ex.groupId) {
+      // Collect all consecutive exercises with the same groupId
+      const group: ExerciseGroup = {
+        groupId: ex.groupId,
+        groupType: ex.groupType,
+        groupLabel: ex.groupLabel,
+        groupRest: ex.groupRest,
+        groupRounds: ex.groupRounds,
+        exercises: [],
+      };
+      while (i < exercises.length && exercises[i].groupId === ex.groupId) {
+        group.exercises.push({ exercise: exercises[i], originalIndex: i });
+        i++;
+      }
+      groups.push(group);
+    } else {
+      // Ungrouped exercise
+      groups.push({
+        groupId: null,
+        exercises: [{ exercise: ex, originalIndex: i }],
+      });
+      i++;
+    }
+  }
+  return groups;
+}
+
+// Color/style config per group type
+const GROUP_STYLES: Record<string, { border: string; bg: string; badge: string; icon: string }> = {
+  superset: { border: "border-purple-300 dark:border-purple-700", bg: "bg-purple-50 dark:bg-purple-950/30", badge: "bg-purple-500", icon: "⇄" },
+  circuit: { border: "border-orange-300 dark:border-orange-700", bg: "bg-orange-50 dark:bg-orange-950/30", badge: "bg-orange-500", icon: "🔄" },
+  triset: { border: "border-indigo-300 dark:border-indigo-700", bg: "bg-indigo-50 dark:bg-indigo-950/30", badge: "bg-indigo-500", icon: "⇄" },
+  giant_set: { border: "border-rose-300 dark:border-rose-700", bg: "bg-rose-50 dark:bg-rose-950/30", badge: "bg-rose-500", icon: "⇄" },
+  emom: { border: "border-teal-300 dark:border-teal-700", bg: "bg-teal-50 dark:bg-teal-950/30", badge: "bg-teal-500", icon: "⏱" },
+  amrap: { border: "border-amber-300 dark:border-amber-700", bg: "bg-amber-50 dark:bg-amber-950/30", badge: "bg-amber-500", icon: "🔥" },
+};
 
 // Fallback demo data in case API fails
 const fallbackWorkout: WorkoutData = {
@@ -303,7 +362,10 @@ export default function WorkoutFormPage() {
             reps: parseInt(set.reps) || 0,
             weight: parseFloat(set.weight) || 0,
             completed: set.completed
-          })) || []
+          })) || [],
+          // Pass through grouping metadata for analytics
+          ...(exercise.groupId && { groupId: exercise.groupId }),
+          ...(exercise.groupType && { groupType: exercise.groupType }),
         };
       });
 
@@ -516,170 +578,218 @@ export default function WorkoutFormPage() {
       {/* Exercise List */}
       <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 sm:py-6">
         <div className="space-y-3 sm:space-y-4">
-          {workout.exercises.map((exercise, exerciseIndex) => {
-            const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
-            const completion = getExerciseCompletion(exerciseIndex);
-            const isExpanded = expandedExercise === exerciseIndex;
+          {groupExercises(workout.exercises).map((group, groupIndex) => {
+            const isGrouped = group.groupId !== null && group.exercises.length > 1;
+            const groupStyle = isGrouped ? GROUP_STYLES[group.groupType || "superset"] || GROUP_STYLES.superset : null;
 
-            return (
-              <motion.div
-                key={exerciseIndex}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: exerciseIndex * 0.05 }}
-                className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-all dark:bg-zinc-900 sm:rounded-2xl ${
-                  completion === 100
-                    ? "border-green-300 dark:border-green-800"
-                    : "border-zinc-200 dark:border-zinc-800"
-                }`}
-              >
-                {/* Exercise header */}
-                <button
-                  onClick={() => setExpandedExercise(isExpanded ? null : exerciseIndex)}
-                  className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+            // Render a single exercise card (reused for grouped and ungrouped)
+            const renderExerciseCard = (exercise: Exercise, exerciseIndex: number, isInsideGroup: boolean) => {
+              const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
+              const completion = getExerciseCompletion(exerciseIndex);
+              const isExpanded = expandedExercise === exerciseIndex;
+
+              return (
+                <motion.div
+                  key={exerciseIndex}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: exerciseIndex * 0.05 }}
+                  className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-all dark:bg-zinc-900 ${isInsideGroup ? "sm:rounded-xl" : "sm:rounded-2xl"} ${
+                    completion === 100
+                      ? "border-green-300 dark:border-green-800"
+                      : isInsideGroup
+                        ? "border-zinc-100 dark:border-zinc-800"
+                        : "border-zinc-200 dark:border-zinc-800"
+                  }`}
                 >
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-md ${
-                      completion === 100
-                        ? "bg-linear-to-br from-green-500 to-emerald-600 text-white"
-                        : "bg-linear-to-br from-zinc-900 to-zinc-700 text-white dark:from-zinc-700 dark:to-zinc-600"
-                    }`}
+                  {/* Exercise header */}
+                  <button
+                    onClick={() => setExpandedExercise(isExpanded ? null : exerciseIndex)}
+                    className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                   >
-                    {completion === 100 ? (
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : (
-                      exerciseIndex + 1
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-md ${
+                        completion === 100
+                          ? "bg-linear-to-br from-green-500 to-emerald-600 text-white"
+                          : "bg-linear-to-br from-zinc-900 to-zinc-700 text-white dark:from-zinc-700 dark:to-zinc-600"
+                      }`}
+                    >
+                      {completion === 100 ? (
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        exerciseIndex + 1
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-zinc-900 dark:text-white">{exercise.name}</h3>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {exercise.sets} sets × {exercise.reps}
+                        </span>
+                        <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>
+                      </div>
+                    </div>
+
+                    {/* Mini progress */}
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                        <div
+                          className="h-full bg-linear-to-r from-green-500 to-emerald-500 transition-all"
+                          style={{ width: `${completion}%` }}
+                        />
+                      </div>
+                      <motion.svg
+                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                        className="h-5 w-5 text-zinc-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </motion.svg>
+                    </div>
+                  </button>
+
+                  {/* Expanded sets form */}
+                  <AnimatePresence>
+                    {isExpanded && progress && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                          {/* Video Demo Section */}
+                          <div className="mb-4">
+                            <VideoPlayer exerciseName={exercise.name} />
+                          </div>
+
+                          {/* Column headers */}
+                          <div className="mb-3 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                            <div className="col-span-2">Set</div>
+                            <div className="col-span-3">Weight</div>
+                            <div className="col-span-3">Reps</div>
+                            <div className="col-span-4 text-center">Actions</div>
+                          </div>
+
+                          {/* Set rows */}
+                          <div className="space-y-2">
+                            {progress.sets.map((set, setIndex) => (
+                              <motion.div
+                                key={setIndex}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: setIndex * 0.05 }}
+                                className={`grid grid-cols-12 items-center gap-2 rounded-lg p-2 transition-colors ${
+                                  set.completed
+                                    ? "bg-green-100 dark:bg-green-900/20"
+                                    : "bg-white dark:bg-zinc-800"
+                                }`}
+                              >
+                                <div className="col-span-2">
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
+                                    {setIndex + 1}
+                                  </span>
+                                </div>
+                                <div className="col-span-3">
+                                  <input
+                                    type="number"
+                                    placeholder="0"
+                                    value={set.weight}
+                                    onChange={(e) => updateSet(exerciseIndex, setIndex, "weight", e.target.value)}
+                                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                  />
+                                </div>
+                                <div className="col-span-3">
+                                  <input
+                                    type="number"
+                                    placeholder={exercise.reps?.split("-")[0] || "0"}
+                                    value={set.reps}
+                                    onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
+                                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                  />
+                                </div>
+                                <div className="col-span-4 flex justify-center gap-1">
+                                  {!set.completed && !set.weight && !set.reps && (
+                                    <button
+                                      onClick={() => openSkipModal(exerciseIndex, setIndex)}
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
+                                      title="Skip set"
+                                    >
+                                      <svg className="h-4 w-4 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => toggleSetComplete(exerciseIndex, setIndex)}
+                                    className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all ${
+                                      set.completed
+                                        ? "border-green-500 bg-green-500 text-white"
+                                        : "border-zinc-300 bg-white hover:border-green-400 dark:border-zinc-600 dark:bg-zinc-700"
+                                    }`}
+                                  >
+                                    {set.completed && (
+                                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                </div>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            };
+
+            // GROUPED exercises: wrap in a visual container
+            if (isGrouped && groupStyle) {
+              return (
+                <div
+                  key={`group-${groupIndex}`}
+                  className={`overflow-hidden rounded-2xl border-2 ${groupStyle.border} ${groupStyle.bg} p-3 sm:p-4`}
+                >
+                  {/* Group header */}
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${groupStyle.badge} text-white`}>
+                      {groupStyle.icon}
+                    </span>
+                    <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200">
+                      {group.groupLabel || group.groupType}
+                    </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      — {group.exercises.length} exercises{group.groupRest ? `, ${group.groupRest} rest between rounds` : ", minimal rest between exercises"}
+                    </span>
+                    {group.groupRounds && group.groupRounds > 1 && (
+                      <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {group.groupRounds} rounds
+                      </span>
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-zinc-900 dark:text-white">{exercise.name}</h3>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {exercise.sets} sets × {exercise.reps}
-                      </span>
-                      <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>
-                    </div>
+                  {/* Grouped exercise cards */}
+                  <div className="space-y-2">
+                    {group.exercises.map(({ exercise, originalIndex }) =>
+                      renderExerciseCard(exercise, originalIndex, true)
+                    )}
                   </div>
+                </div>
+              );
+            }
 
-                  {/* Mini progress */}
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                      <div
-                        className="h-full bg-linear-to-r from-green-500 to-emerald-500 transition-all"
-                        style={{ width: `${completion}%` }}
-                      />
-                    </div>
-                    <motion.svg
-                      animate={{ rotate: isExpanded ? 180 : 0 }}
-                      className="h-5 w-5 text-zinc-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </motion.svg>
-                  </div>
-                </button>
-
-                {/* Expanded sets form */}
-                <AnimatePresence>
-                  {isExpanded && progress && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-                        {/* Video Demo Section */}
-                        <div className="mb-4">
-                          <VideoPlayer exerciseName={exercise.name} />
-                        </div>
-
-                        {/* Column headers */}
-                        <div className="mb-3 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                          <div className="col-span-2">Set</div>
-                          <div className="col-span-3">Weight</div>
-                          <div className="col-span-3">Reps</div>
-                          <div className="col-span-4 text-center">Actions</div>
-                        </div>
-
-                        {/* Set rows */}
-                        <div className="space-y-2">
-                          {progress.sets.map((set, setIndex) => (
-                            <motion.div
-                              key={setIndex}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: setIndex * 0.05 }}
-                              className={`grid grid-cols-12 items-center gap-2 rounded-lg p-2 transition-colors ${
-                                set.completed
-                                  ? "bg-green-100 dark:bg-green-900/20"
-                                  : "bg-white dark:bg-zinc-800"
-                              }`}
-                            >
-                              <div className="col-span-2">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
-                                  {setIndex + 1}
-                                </span>
-                              </div>
-                              <div className="col-span-3">
-                                <input
-                                  type="number"
-                                  placeholder="0"
-                                  value={set.weight}
-                                  onChange={(e) => updateSet(exerciseIndex, setIndex, "weight", e.target.value)}
-                                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                />
-                              </div>
-                              <div className="col-span-3">
-                                <input
-                                  type="number"
-                                  placeholder={exercise.reps?.split("-")[0] || "0"}
-                                  value={set.reps}
-                                  onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
-                                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                />
-                              </div>
-                              <div className="col-span-4 flex justify-center gap-1">
-                                {!set.completed && !set.weight && !set.reps && (
-                                  <button
-                                    onClick={() => openSkipModal(exerciseIndex, setIndex)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
-                                    title="Skip set"
-                                  >
-                                    <svg className="h-4 w-4 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                                    </svg>
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => toggleSetComplete(exerciseIndex, setIndex)}
-                                  className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all ${
-                                    set.completed
-                                      ? "border-green-500 bg-green-500 text-white"
-                                      : "border-zinc-300 bg-white hover:border-green-400 dark:border-zinc-600 dark:bg-zinc-700"
-                                  }`}
-                                >
-                                  {set.completed && (
-                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  )}
-                                </button>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+            // UNGROUPED exercise: render normally
+            return group.exercises.map(({ exercise, originalIndex }) =>
+              renderExerciseCard(exercise, originalIndex, false)
             );
           })}
         </div>

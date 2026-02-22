@@ -28,6 +28,9 @@ export interface ISetLog {
 export interface IExerciseLog {
   name: string
   sets: ISetLog[]
+  // Grouping metadata (mirrors program exercise grouping for analysis)
+  groupId?: string
+  groupType?: string
 }
 
 export interface IWorkoutLog {
@@ -106,7 +109,9 @@ const SetLogSchema = new Schema<ISetLog>({
 
 const ExerciseLogSchema = new Schema<IExerciseLog>({
   name: { type: String, required: true },
-  sets: [SetLogSchema]
+  sets: [SetLogSchema],
+  groupId: { type: String },
+  groupType: { type: String }
 }, { _id: false })
 
 const WorkoutLogSchema = new Schema<IWorkoutLog>({

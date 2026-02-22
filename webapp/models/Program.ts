@@ -3,6 +3,9 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 // Exercise Types
 export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown';
 
+// Exercise Grouping Types
+export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' | 'emom' | 'amrap';
+
 // Target User Levels
 export type TargetUserLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Beginner to Intermediate' | 'Intermediate to Advanced';
 
@@ -13,6 +16,12 @@ export interface IExercise {
   reps?: string;
   rest?: string;
   details?: string;
+  // Exercise grouping fields
+  groupId?: string;
+  groupType?: ExerciseGroupType;
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
 }
 
 export interface IWorkout {
@@ -52,6 +61,15 @@ const ExerciseSchema = new Schema<IExercise>({
   reps: { type: String },
   rest: { type: String },
   details: { type: String },
+  // Exercise grouping fields
+  groupId: { type: String },
+  groupType: { 
+    type: String,
+    enum: ['superset', 'circuit', 'triset', 'giant_set', 'emom', 'amrap']
+  },
+  groupLabel: { type: String },
+  groupRest: { type: String },
+  groupRounds: { type: Number },
 }, { _id: false });
 
 const WorkoutSchema = new Schema<IWorkout>({

@@ -695,13 +695,56 @@ export default function ProgramDetailClient({ program }: Props) {
 
               {/* Exercise List */}
               <div className="space-y-2 sm:space-y-3">
-                {currentWorkout.exercises.map((exercise, index) => (
-                  <ExerciseAccordion
-                    key={index}
-                    exercise={exercise}
-                    index={index}
-                  />
-                ))}
+                {(() => {
+                  // Group consecutive exercises sharing the same groupId
+                  const elements: React.ReactNode[] = [];
+                  let i = 0;
+                  const exercises = currentWorkout.exercises;
+                  const GROUP_COLORS: Record<string, { border: string; bg: string; badge: string }> = {
+                    superset: { border: "border-purple-300 dark:border-purple-700", bg: "bg-purple-50 dark:bg-purple-950/30", badge: "bg-purple-500" },
+                    circuit: { border: "border-orange-300 dark:border-orange-700", bg: "bg-orange-50 dark:bg-orange-950/30", badge: "bg-orange-500" },
+                    triset: { border: "border-indigo-300 dark:border-indigo-700", bg: "bg-indigo-50 dark:bg-indigo-950/30", badge: "bg-indigo-500" },
+                    giant_set: { border: "border-rose-300 dark:border-rose-700", bg: "bg-rose-50 dark:bg-rose-950/30", badge: "bg-rose-500" },
+                    emom: { border: "border-teal-300 dark:border-teal-700", bg: "bg-teal-50 dark:bg-teal-950/30", badge: "bg-teal-500" },
+                    amrap: { border: "border-amber-300 dark:border-amber-700", bg: "bg-amber-50 dark:bg-amber-950/30", badge: "bg-amber-500" },
+                  };
+
+                  while (i < exercises.length) {
+                    const ex = exercises[i];
+                    if (ex.groupId) {
+                      const groupId = ex.groupId;
+                      const groupExercises: { exercise: typeof ex; index: number }[] = [];
+                      while (i < exercises.length && exercises[i].groupId === groupId) {
+                        groupExercises.push({ exercise: exercises[i], index: i });
+                        i++;
+                      }
+                      const colors = GROUP_COLORS[ex.groupType || "superset"] || GROUP_COLORS.superset;
+                      elements.push(
+                        <div key={`group-${groupId}`} className={`rounded-xl border-2 ${colors.border} ${colors.bg} p-3`}>
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold text-white ${colors.badge}`}>
+                              {ex.groupLabel || ex.groupType || "Group"}
+                            </span>
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {groupExercises.length} exercises{ex.groupRest ? ` · ${ex.groupRest} rest between rounds` : " · minimal rest between exercises"}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {groupExercises.map(({ exercise: gEx, index: idx }) => (
+                              <ExerciseAccordion key={idx} exercise={gEx} index={idx} isInGroup />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      elements.push(
+                        <ExerciseAccordion key={i} exercise={ex} index={i} />
+                      );
+                      i++;
+                    }
+                  }
+                  return elements;
+                })()}
               </div>
             </motion.div>
           )}

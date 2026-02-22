@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrlAsync, getExerciseThumbnailAsync } from "@/lib/data/exerciseVideos";
 
 export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown';
+export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' | 'emom' | 'amrap';
 
 interface Exercise {
   name: string;
@@ -13,11 +14,17 @@ interface Exercise {
   reps?: string;
   rest?: string;
   details?: string;
+  groupId?: string;
+  groupType?: ExerciseGroupType;
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
 }
 
 interface ExerciseAccordionProps {
   exercise: Exercise;
   index: number;
+  isInGroup?: boolean;
 }
 
 type TabType = 'video' | 'instructions' | 'tips';
@@ -131,7 +138,7 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
   );
 }
 
-export default function ExerciseAccordion({ exercise, index }: ExerciseAccordionProps) {
+export default function ExerciseAccordion({ exercise, index, isInGroup }: ExerciseAccordionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('video');
 

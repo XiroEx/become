@@ -36,6 +36,12 @@ interface Exercise {
   rest?: string;
   tip?: string;
   details?: string;
+  // Exercise grouping
+  groupId?: string;
+  groupType?: string;
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
 }
 
 interface WorkoutData {
@@ -275,7 +281,10 @@ export default function LiveWorkoutPage() {
           reps: parseInt(set.reps) || 0,
           weight: parseFloat(set.weight) || 0,
           completed: set.completed
-        })) || []
+        })) || [],
+        // Pass through grouping metadata
+        ...(exercise.groupId && { groupId: exercise.groupId }),
+        ...(exercise.groupType && { groupType: exercise.groupType }),
       }));
       await fetch("/api/workouts", {
         method: "POST",

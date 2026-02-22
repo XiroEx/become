@@ -12,6 +12,7 @@ interface ExerciseEditorProps {
   onDuplicate: () => void;
   canRemove: boolean;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
+  isInGroup?: boolean;
 }
 
 const EXERCISE_TYPES: { value: ExerciseType; label: string; color: string }[] = [
@@ -55,6 +56,15 @@ const EXERCISE_SUGGESTIONS: Record<ExerciseType, string[]> = {
   ],
 };
 
+const GROUP_TYPE_COLORS: Record<string, string> = {
+  superset: "bg-purple-500",
+  circuit: "bg-orange-500",
+  triset: "bg-indigo-500",
+  giant_set: "bg-rose-500",
+  emom: "bg-teal-500",
+  amrap: "bg-amber-500",
+};
+
 export default function ExerciseEditor({
   exercise,
   index,
@@ -63,6 +73,7 @@ export default function ExerciseEditor({
   onDuplicate,
   canRemove,
   dragHandleProps,
+  isInGroup,
 }: ExerciseEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -100,6 +111,13 @@ export default function ExerciseEditor({
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-white ${typeConfig.color}`}>
           {typeConfig.label}
         </span>
+
+        {/* Group badge */}
+        {exercise.groupId && (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-white ${GROUP_TYPE_COLORS[exercise.groupType || 'superset'] || 'bg-purple-500'}`}>
+            {exercise.groupLabel || exercise.groupType || 'Group'}
+          </span>
+        )}
 
         {/* Exercise Name Preview */}
         <span className="flex-1 truncate text-sm font-medium text-zinc-900 dark:text-white">
@@ -263,7 +281,7 @@ export default function ExerciseEditor({
               onChange={(e) => updateField("details", e.target.value)}
               placeholder={
                 showSetsReps
-                  ? "e.g., Tempo 3-1-2, superset with next exercise"
+                  ? "e.g., Tempo 3-1-2, pause at bottom"
                   : "e.g., 10 rounds: 20s work / 40s rest"
               }
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
