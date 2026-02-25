@@ -537,7 +537,7 @@ export default function WorkoutFormPage() {
             </div>
 
             <button
-              onClick={() => router.push(`/dashboard/programming/${programId}/workout/live${requestedDay ? `?day=${encodeURIComponent(requestedDay)}` : ''}`)}
+              onClick={() => router.push(`/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(workout.day)}`)}
               className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-sm font-medium text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-600"
             >
               <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
