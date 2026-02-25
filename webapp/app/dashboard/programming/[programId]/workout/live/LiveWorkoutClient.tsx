@@ -493,6 +493,7 @@ export default function LiveWorkoutPage() {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
             className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-linear-to-b from-black/60 to-transparent"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
           >
             <button
               onClick={(e) => { e.stopPropagation(); router.back(); }}
@@ -537,7 +538,8 @@ export default function LiveWorkoutPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute top-4 right-4 z-10"
+            className="absolute right-4 z-10"
+            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
           >
             <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
               <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
@@ -690,7 +692,8 @@ export default function LiveWorkoutPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
-            className="absolute bottom-0 left-0 right-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent p-4 pb-8"
+            className="absolute bottom-0 left-0 right-0 z-10 bg-linear-to-t from-black/80 via-black/40 to-transparent p-4"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 2rem)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Exercise info */}
@@ -823,7 +826,8 @@ export default function LiveWorkoutPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="absolute top-16 left-4 right-4 z-10 flex gap-1"
+            className="absolute left-4 right-4 z-10 flex gap-1"
+            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4rem)' }}
           >
             {Array.from({ length: totalSets }).map((_, i) => (
               <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/20">
