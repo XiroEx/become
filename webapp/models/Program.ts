@@ -1,7 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
-
-// Exercise Types
-export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown';
+import type { ExerciseRole } from './Exercise';
 
 // Exercise Grouping Types
 export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' | 'emom' | 'amrap';
@@ -9,14 +7,33 @@ export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' 
 // Target User Levels
 export type TargetUserLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Beginner to Intermediate' | 'Intermediate to Advanced';
 
-export interface IExercise {
-  name: string;
-  type: ExerciseType;
+/**
+ * A reference to an Exercise document with programming-specific overrides.
+ *
+ * The Exercise document defines WHAT the exercise IS (muscles, patterns, equipment).
+ * This interface defines what the exercise DOES in this specific program context
+ * (sets, reps, rest, tempo, RPE).
+ *
+ * exerciseSlug is the sole link — every entry must reference a real Exercise doc.
+ */
+export interface IProgramExercise {
+  exerciseSlug: string;      // references Exercise.slug — required
+
+  // Programming prescription (how it's performed HERE)
   sets?: number;
-  reps?: string;
-  rest?: string;
-  details?: string;
-  // Exercise grouping fields
+  reps?: string;             // "5", "8-12", "AMRAP"
+  rest?: string;             // "90 sec", "2-3 min"
+  tempo?: string;            // "3-1-1-0" (eccentric-pause-concentric-pause)
+  rpe?: number;              // rate of perceived exertion 1-10
+  percentOf1RM?: number;     // for percentage-based programming
+  duration?: string;         // for timed work: "30 sec", "60 sec"
+
+  // Coaching context
+  role?: ExerciseRole;       // overrides Exercise.role for THIS program
+                             // (RDL is compound on hamstring day, accessory on squat day)
+  details?: string;          // coach notes specific to this workout
+
+  // Exercise grouping (supersets, circuits, etc.)
   groupId?: string;
   groupType?: ExerciseGroupType;
   groupLabel?: string;
@@ -27,7 +44,7 @@ export interface IExercise {
 export interface IWorkout {
   day: string;
   title: string;
-  exercises: IExercise[];
+  exercises: IProgramExercise[];
 }
 
 export interface IPhase {
@@ -50,17 +67,25 @@ export interface IProgram extends Document {
   phases: IPhase[];
 }
 
-const ExerciseSchema = new Schema<IExercise>({
-  name: { type: String, required: true },
-  type: { 
-    type: String, 
-    required: true,
-    enum: ['strength', 'conditioning', 'warmup', 'abs', 'cooldown']
-  },
+const ProgramExerciseSchema = new Schema<IProgramExercise>({
+  exerciseSlug: { type: String, required: true },
+
+  // Programming prescription
   sets: { type: Number },
   reps: { type: String },
   rest: { type: String },
+  tempo: { type: String },
+  rpe: { type: Number, min: 1, max: 10 },
+  percentOf1RM: { type: Number, min: 0, max: 100 },
+  duration: { type: String },
+
+  // Coaching context
+  role: {
+    type: String,
+    enum: ['compound', 'secondary', 'accessory'],
+  },
   details: { type: String },
+
   // Exercise grouping fields
   groupId: { type: String },
   groupType: { 
@@ -75,7 +100,7 @@ const ExerciseSchema = new Schema<IExercise>({
 const WorkoutSchema = new Schema<IWorkout>({
   day: { type: String, required: true },
   title: { type: String, required: true },
-  exercises: [ExerciseSchema],
+  exercises: [ProgramExerciseSchema],
 }, { _id: false });
 
 const PhaseSchema = new Schema<IPhase>({
