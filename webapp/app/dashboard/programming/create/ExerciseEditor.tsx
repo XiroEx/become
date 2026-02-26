@@ -24,7 +24,7 @@ const EXERCISE_TYPES: { value: ExerciseType; label: string; color: string }[] = 
 ];
 
 // Common exercise suggestions by type
-const EXERCISE_SUGGESTIONS: Record<ExerciseType, string[]> = {
+const EXERCISE_SUGGESTIONS: Partial<Record<ExerciseType, string[]>> = {
   strength: [
     "Bench Press", "Incline Bench Press", "Dumbbell Press", "Push-ups",
     "Squat", "Front Squat", "Goblet Squat", "Leg Press",
@@ -83,14 +83,14 @@ export default function ExerciseEditor({
   };
 
   const typeConfig = EXERCISE_TYPES.find((t) => t.value === exercise.type) || EXERCISE_TYPES[0];
-  const suggestions = EXERCISE_SUGGESTIONS[exercise.type] || [];
+  const suggestions = EXERCISE_SUGGESTIONS[exercise.type || 'strength'] || [];
   
   // Filter suggestions based on current input
   const filteredSuggestions = suggestions.filter(
-    (s) => s.toLowerCase().includes(exercise.name.toLowerCase()) && s.toLowerCase() !== exercise.name.toLowerCase()
+    (s) => s.toLowerCase().includes((exercise.name || '').toLowerCase()) && s.toLowerCase() !== (exercise.name || '').toLowerCase()
   );
 
-  const showSetsReps = exercise.type === "strength" || exercise.type === "abs";
+  const showSetsReps = exercise.type === "strength" || exercise.type === "abs" || !exercise.type;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">

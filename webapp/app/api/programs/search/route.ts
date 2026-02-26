@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Program from '@/models/Program';
+import { hydratePrograms } from '@/lib/hydrateExercises';
 
 // GET programs with search, filtering, and pagination
 export async function GET(request: NextRequest) {

@@ -3,13 +3,15 @@ import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import { hydrateWorkout } from '@/lib/hydrateExercises'
 
 interface Workout {
   day: string
   title: string
   exercises: Array<{
-    name: string
-    type: string
+    exerciseSlug?: string
+    name?: string
+    type?: string
     sets?: number
     reps?: string
     rest?: string
@@ -144,8 +146,9 @@ export async function GET(request: NextRequest) {
       const preferredMatch = preferredWorkouts.find(w => w.day === requestedDay)
 
       if (preferredMatch) {
+        const hydratedWorkout = await hydrateWorkout({ ...preferredMatch });
         return NextResponse.json({
-          workout: preferredMatch,
+          workout: hydratedWorkout,
           phase: preferredPhaseIdx + 1,
           day: preferredMatch.day,
           phaseInfo: {
@@ -164,8 +167,9 @@ export async function GET(request: NextRequest) {
         const workouts = normalizeWorkouts(phase.workouts)
         const requestedWorkout = workouts.find(w => w.day === requestedDay) || workouts[0]
         if (requestedWorkout) {
+          const hydratedWorkout = await hydrateWorkout({ ...requestedWorkout });
           return NextResponse.json({
-            workout: requestedWorkout,
+            workout: hydratedWorkout,
             phase: anyPhaseIdx + 1,
             day: requestedWorkout.day,
             phaseInfo: {
@@ -196,8 +200,9 @@ export async function GET(request: NextRequest) {
       if (!fallbackWorkout) {
         return NextResponse.json({ error: 'No workouts found' }, { status: 404 })
       }
+      const hydratedFallback = await hydrateWorkout({ ...fallbackWorkout });
       return NextResponse.json({
-        workout: fallbackWorkout,
+        workout: hydratedFallback,
         phase: currentPhase,
         day: fallbackWorkout.day,
         phaseInfo: {
@@ -210,8 +215,9 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    const hydratedCurrent = await hydrateWorkout({ ...currentWorkout });
     return NextResponse.json({
-      workout: currentWorkout,
+      workout: hydratedCurrent,
       phase: currentPhase,
       day: currentDay,
       phaseInfo: {

@@ -1,0 +1,239 @@
+/**
+ * Server-side exercise hydration utility.
+ *
+ * Programs store exercise references as `exerciseSlug`.
+ * This module resolves slugs → { name, category, videoUrl, thumbnailUrl }
+ * from the exercises collection and injects them into program data
+ * before returning to the client.
+ *
+ * This keeps the client layer unchanged — it still reads `exercise.name`.
+ */
+import ExerciseModel from '@/models/Exercise';
+
+interface HydratedExerciseFields {
+  name: string;
+  category: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+}
+
+// Module-level slug cache (reset per cold start)
+let slugCache: Map<string, HydratedExerciseFields> | null = null;
+
+/**
+ * Build (or return cached) slug → { name, category, videoUrl, thumbnailUrl } map.
+ */
+async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
+  if (slugCache) return slugCache;
+
+  const exercises = await ExerciseModel.find(
+    {},
+    { slug: 1, name: 1, category: 1, videoUrl: 1, thumbnailUrl: 1, _id: 0 }
+  ).lean();
+
+  slugCache = new Map();
+  for (const ex of exercises) {
+    slugCache.set(ex.slug, {
+      name: ex.name,
+      category: ex.category,
+      videoUrl: ex.videoUrl || undefined,
+      thumbnailUrl: ex.thumbnailUrl || undefined,
+    });
+  }
+
+  return slugCache;
+}
+
+/**
+ * Invalidate the slug cache (call after seeding / modifying exercises).
+ */
+export function invalidateExerciseCache() {
+  slugCache = null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyExercise = Record<string, any>;
+
+/**
+ * Hydrate a single exercise object: adds `name`, `type`, `videoUrl`, `thumbnailUrl`
+ * resolved from the exercises collection via `exerciseSlug`.
+ */
+function hydrateExercise(
+  exercise: AnyExercise,
+  map: Map<string, HydratedExerciseFields>
+): AnyExercise {
+  const slug = exercise.exerciseSlug;
+  if (!slug) return exercise; // already has name set (e.g. creation flow)
+
+  const info = map.get(slug);
+  if (!info) {
+    // Protocol entries (__protocol__*) or unknown slugs — derive name from slug
+    const derivedName = slug
+      .replace(/^__protocol__/, '')
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+    return {
+      ...exercise,
+      name: derivedName,
+      type: exercise.exerciseSlug?.startsWith('__protocol__') ? 'conditioning' : 'strength',
+    };
+  }
+
+  return {
+    ...exercise,
+    name: info.name,
+    type: info.category, // maps Exercise.category → client-side "type"
+    ...(info.videoUrl && { videoUrl: info.videoUrl }),
+    ...(info.thumbnailUrl && { thumbnailUrl: info.thumbnailUrl }),
+  };
+}
+
+/**
+ * Hydrate all exercises inside a single program document (mutates a plain object).
+ * Works on `.lean()` results.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function hydrateProgram<T extends Record<string, any>>(program: T): Promise<T> {
+  const map = await getSlugMap();
+
+  if (!program.phases) return program;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const phase of program.phases as any[]) {
+    if (!phase.workouts) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const workout of phase.workouts as any[]) {
+      if (!workout.exercises) continue;
+      workout.exercises = workout.exercises.map((ex: AnyExercise) =>
+        hydrateExercise(ex, map)
+      );
+    }
+  }
+
+  return program;
+}
+
+/**
+ * Hydrate an array of programs.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function hydratePrograms<T extends Record<string, any>>(programs: T[]): Promise<T[]> {
+  const map = await getSlugMap();
+
+  for (const program of programs) {
+    if (!program.phases) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const phase of program.phases as any[]) {
+      if (!phase.workouts) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const workout of phase.workouts as any[]) {
+        if (!workout.exercises) continue;
+        workout.exercises = workout.exercises.map((ex: AnyExercise) =>
+          hydrateExercise(ex, map)
+        );
+      }
+    }
+  }
+
+  return programs;
+}
+
+/**
+ * Hydrate a single workout object (used by current-workout route).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function hydrateWorkout<T extends Record<string, any>>(workout: T): Promise<T> {
+  const map = await getSlugMap();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = workout as any;
+  if (w.exercises) {
+    w.exercises = (w.exercises as AnyExercise[]).map((ex) =>
+      hydrateExercise(ex, map)
+    );
+  }
+
+  return w as T;
+}
+
+/**
+ * Convert exercise `name` to `exerciseSlug` for saving.
+ * Used in the POST /api/programs handler.
+ * Builds a reverse map: lowercase name / alias → slug.
+ */
+let reverseMap: Map<string, string> | null = null;
+
+async function getReverseMap(): Promise<Map<string, string>> {
+  if (reverseMap) return reverseMap;
+
+  const exercises = await ExerciseModel.find({}, { slug: 1, name: 1, aliases: 1, _id: 0 }).lean();
+
+  reverseMap = new Map();
+  for (const ex of exercises) {
+    reverseMap.set(ex.name.toLowerCase(), ex.slug);
+    for (const alias of ex.aliases || []) {
+      reverseMap.set(alias.toLowerCase(), ex.slug);
+    }
+  }
+
+  return reverseMap;
+}
+
+/**
+ * Slugify a string (fallback for exercises not found in the DB).
+ */
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+/**
+ * Convert a program's exercises from `{ name, type }` to `{ exerciseSlug }` for DB storage.
+ * Called before saving a new program via POST.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function dehydrateProgram(program: Record<string, any>): Promise<Record<string, any>> {
+  const map = await getReverseMap();
+
+  if (!program.phases) return program;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const phase of program.phases as any[]) {
+    if (!phase.workouts) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const workout of phase.workouts as any[]) {
+      if (!workout.exercises) continue;
+      workout.exercises = workout.exercises.map((ex: AnyExercise) => {
+        // If already has exerciseSlug, keep it
+        if (ex.exerciseSlug) return ex;
+
+        const name = ex.name || '';
+        const slug = map.get(name.toLowerCase()) || slugify(name);
+
+        // Build clean exercise entry
+        const result: AnyExercise = { exerciseSlug: slug };
+        if (ex.sets != null) result.sets = ex.sets;
+        if (ex.reps != null) result.reps = ex.reps;
+        if (ex.rest != null) result.rest = ex.rest;
+        if (ex.details != null) result.details = ex.details;
+        if (ex.tempo != null) result.tempo = ex.tempo;
+        if (ex.rpe != null) result.rpe = ex.rpe;
+        if (ex.percentOf1RM != null) result.percentOf1RM = ex.percentOf1RM;
+        if (ex.duration != null) result.duration = ex.duration;
+        if (ex.role != null) result.role = ex.role;
+        if (ex.groupId != null) result.groupId = ex.groupId;
+        if (ex.groupType != null) result.groupType = ex.groupType;
+        if (ex.groupLabel != null) result.groupLabel = ex.groupLabel;
+        if (ex.groupRest != null) result.groupRest = ex.groupRest;
+        if (ex.groupRounds != null) result.groupRounds = ex.groupRounds;
+
+        return result;
+      });
+    }
+  }
+
+  return program;
+}

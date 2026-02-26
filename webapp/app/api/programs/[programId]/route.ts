@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ProgramModel from '@/models/Program';
+import { hydrateProgram } from '@/lib/hydrateExercises';
 
 interface RouteParams {
   params: Promise<{ programId: string }>;
@@ -21,7 +22,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
     
-    return NextResponse.json(program);
+    const hydrated = await hydrateProgram(program);
+    return NextResponse.json(hydrated);
   } catch (error) {
     console.error('Error fetching program:', error);
     return NextResponse.json(

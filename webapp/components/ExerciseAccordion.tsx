@@ -4,16 +4,21 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrlAsync, getExerciseThumbnailAsync } from "@/lib/data/exerciseVideos";
 
-export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown';
+export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown'
+  | 'power' | 'cardio' | 'plyometric' | 'calisthenics' | 'olympic'
+  | 'strongman' | 'flexibility' | 'mobility' | 'protocol';
 export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' | 'emom' | 'amrap';
 
 interface Exercise {
+  exerciseSlug?: string;
   name: string;
-  type: ExerciseType;
+  type?: ExerciseType;
   sets?: number;
   reps?: string;
   rest?: string;
   details?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
   groupId?: string;
   groupType?: ExerciseGroupType;
   groupLabel?: string;
@@ -30,13 +35,21 @@ interface ExerciseAccordionProps {
 type TabType = 'video' | 'instructions' | 'tips';
 
 // Video player component with local video or YouTube embed support
-function VideoPlayer({ exerciseName }: { exerciseName: string }) {
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exerciseName: string; directVideoUrl?: string; directThumbnailUrl?: string }) {
+  const [videoUrl, setVideoUrl] = useState<string | null>(directVideoUrl || null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(directThumbnailUrl || null);
+  const [isLoading, setIsLoading] = useState(!directVideoUrl);
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
+    // Skip fetch if we already have a direct URL
+    if (directVideoUrl) {
+      setVideoUrl(directVideoUrl);
+      setThumbnailUrl(directThumbnailUrl || null);
+      setIsLoading(false);
+      return;
+    }
+
     let isMounted = true;
     
     async function fetchVideoData() {
@@ -156,7 +169,8 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
 
   // Get exercise-specific placeholder content
   const getInstructions = () => {
-    const instructions: Record<ExerciseType, string[]> = {
+    const exerciseType = exercise.type || 'strength';
+    const instructions: Record<string, string[]> = {
       strength: [
         "Set up your equipment and ensure proper form before starting.",
         "Control the weight through the full range of motion.",
@@ -188,11 +202,12 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
         "Focus on the muscles you worked during the session.",
       ],
     };
-    return instructions[exercise.type] || instructions.strength;
+    return instructions[exerciseType] || instructions.strength;
   };
 
   const getTips = () => {
-    const tips: Record<ExerciseType, string[]> = {
+    const exerciseType = exercise.type || 'strength';
+    const tips: Record<string, string[]> = {
       strength: [
         "Start with a weight you can control for all reps.",
         "Focus on mind-muscle connection.",
@@ -224,7 +239,7 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
         "Light stretching helps reduce next-day soreness.",
       ],
     };
-    return tips[exercise.type] || tips.strength;
+    return tips[exerciseType] || tips.strength;
   };
 
   return (
@@ -342,7 +357,7 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.15 }}
                     >
-                      <VideoPlayer exerciseName={exercise.name} />
+                      <VideoPlayer exerciseName={exercise.name} directVideoUrl={exercise.videoUrl} directThumbnailUrl={exercise.thumbnailUrl} />
                     </motion.div>
                   )}
 

@@ -111,12 +111,15 @@ interface SavedWorkout {
 }
 
 interface Exercise {
+  exerciseSlug?: string;
   name: string;
-  type: string;
+  type?: string;
   sets?: number;
   reps?: string;
   rest?: string;
   details?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
   // Exercise grouping (supersets, circuits, etc.)
   groupId?: string;
   groupType?: string;
@@ -357,6 +360,7 @@ export default function WorkoutFormPage() {
         const ep = progress.find((p) => p.exerciseIndex === index);
         return {
           name: exercise.name,
+          ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
           sets: ep?.sets.map((set, setIndex) => ({
             setNumber: setIndex + 1,
             reps: parseInt(set.reps) || 0,

@@ -29,6 +29,7 @@ interface SavedWorkout {
 }
 
 interface Exercise {
+  exerciseSlug?: string;
   name: string;
   type?: string;
   sets?: number;
@@ -36,6 +37,8 @@ interface Exercise {
   rest?: string;
   tip?: string;
   details?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
   // Exercise grouping
   groupId?: string;
   groupType?: string;
@@ -276,6 +279,7 @@ export default function LiveWorkoutPage() {
       if (!token) return;
       const exercisesToSave = exercises.map((exercise, index) => ({
         name: exercise.name,
+        ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
         sets: exerciseDataToSave[index]?.map((set, setIndex) => ({
           setNumber: setIndex + 1,
           reps: parseInt(set.reps) || 0,
@@ -447,8 +451,13 @@ export default function LiveWorkoutPage() {
   
   useEffect(() => {
     if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
-      const exerciseName = exercises[currentExerciseIndex].name;
-      getExerciseVideoUrlAsync(exerciseName).then(setCurrentVideo);
+      const exercise = exercises[currentExerciseIndex];
+      // Prefer hydrated videoUrl; fall back to name-based lookup
+      if (exercise.videoUrl) {
+        setCurrentVideo(exercise.videoUrl);
+      } else {
+        getExerciseVideoUrlAsync(exercise.name).then(setCurrentVideo);
+      }
     }
   }, [exercises, currentExerciseIndex]);
 

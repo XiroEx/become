@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ProgramModel from '@/models/Program';
+import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises';
 
 // GET all programs
 export async function GET() {
   try {
     await dbConnect();
     const programs = await ProgramModel.find({}).lean();
-    return NextResponse.json(programs);
+    const hydrated = await hydratePrograms(programs);
+    return NextResponse.json(hydrated);
   } catch (error) {
     console.error('Error fetching programs:', error);
     return NextResponse.json(
@@ -23,9 +25,12 @@ export async function POST(request: NextRequest) {
     await dbConnect();
     const body = await request.json();
     
+    // Convert exercise names to slugs for DB storage
+    const dehydrated = await dehydrateProgram(body);
+
     // Generate program_id from name if not provided
-    if (!body.program_id) {
-      body.program_id = body.name
+    if (!dehydrated.program_id) {
+      dehydrated.program_id = dehydrated.name
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
         .replace(/\s+/g, '-')
@@ -33,13 +38,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if program_id already exists
-    const existing = await ProgramModel.findOne({ program_id: body.program_id });
+    const existing = await ProgramModel.findOne({ program_id: dehydrated.program_id });
     if (existing) {
       // Append a random suffix
-      body.program_id = `${body.program_id}-${Date.now().toString(36)}`;
+      dehydrated.program_id = `${dehydrated.program_id}-${Date.now().toString(36)}`;
     }
     
-    const program = await ProgramModel.create(body);
+    const program = await ProgramModel.create(dehydrated);
     return NextResponse.json(program, { status: 201 });
   } catch (error) {
     console.error('Error creating program:', error);

@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import PhaseEditor from "./PhaseEditor";
 import { 
-  ExerciseType, 
   TargetUserLevel,
   Exercise,
   Workout,
@@ -55,7 +54,7 @@ interface ProgramFormData {
 
 const createEmptyExercise = (): Exercise => ({
   name: "",
-  type: "strength" as ExerciseType,
+  type: "strength",
   sets: 3,
   reps: "10",
   rest: "60s",

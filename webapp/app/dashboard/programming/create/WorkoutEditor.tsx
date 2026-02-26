@@ -1,6 +1,6 @@
 "use client";
 
-import { Workout, Exercise, ExerciseType, ExerciseGroupType } from "@/lib/data/programs";
+import { Workout, Exercise, ExerciseGroupType } from "@/lib/data/programs";
 import ExerciseEditor from "./ExerciseEditor";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { useState } from "react";
@@ -12,7 +12,7 @@ interface WorkoutEditorProps {
 
 const createEmptyExercise = (): Exercise => ({
   name: "",
-  type: "strength" as ExerciseType,
+  type: "strength",
   sets: 3,
   reps: "10",
   rest: "60s",
@@ -171,17 +171,17 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
 
   // Quick add common exercises
   const quickAddExercises = [
-    { name: "Bench Press", type: "strength" as ExerciseType, sets: 4, reps: "8-10", rest: "90s" },
-    { name: "Squat", type: "strength" as ExerciseType, sets: 4, reps: "6-8", rest: "120s" },
-    { name: "Deadlift", type: "strength" as ExerciseType, sets: 3, reps: "5", rest: "180s" },
-    { name: "Pull-ups", type: "strength" as ExerciseType, sets: 3, reps: "max", rest: "90s" },
-    { name: "Warm-up", type: "warmup" as ExerciseType, details: "5-10 min light cardio + dynamic stretching" },
-    { name: "HIIT Finisher", type: "conditioning" as ExerciseType, details: "10 rounds: 20s work / 40s rest" },
-    { name: "Ab Circuit", type: "abs" as ExerciseType, sets: 3, reps: "15 each", rest: "30s" },
-    { name: "Cool Down", type: "cooldown" as ExerciseType, details: "5 min stretching" },
-  ];
+    { name: "Bench Press", type: "strength", sets: 4, reps: "8-10", rest: "90s" },
+    { name: "Squat", type: "strength", sets: 4, reps: "6-8", rest: "120s" },
+    { name: "Deadlift", type: "strength", sets: 3, reps: "5", rest: "180s" },
+    { name: "Pull-ups", type: "strength", sets: 3, reps: "max", rest: "90s" },
+    { name: "Warm-up", type: "warmup", details: "5-10 min light cardio + dynamic stretching" },
+    { name: "HIIT Finisher", type: "conditioning", details: "10 rounds: 20s work / 40s rest" },
+    { name: "Ab Circuit", type: "abs", sets: 3, reps: "15 each", rest: "30s" },
+    { name: "Cool Down", type: "cooldown", details: "5 min stretching" },
+  ] as const;
 
-  const addQuickExercise = (exercise: Partial<Exercise>) => {
+  const addQuickExercise = (exercise: Partial<Exercise> & { name: string }) => {
     onUpdate({
       ...workout,
       exercises: [...workout.exercises, { ...createEmptyExercise(), ...exercise }],

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Phase, Workout, Exercise, ExerciseType } from "@/lib/data/programs";
+import { Phase, Workout, Exercise } from "@/lib/data/programs";
 import WorkoutEditor from "./WorkoutEditor";
 
 interface PhaseEditorProps {
@@ -16,7 +16,7 @@ interface PhaseEditorProps {
 
 const createEmptyExercise = (): Exercise => ({
   name: "",
-  type: "strength" as ExerciseType,
+  type: "strength",
   sets: 3,
   reps: "10",
   rest: "60s",
