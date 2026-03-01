@@ -4,107 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Schedule from '@/models/Schedule'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
-
-interface Workout {
-  day: string
-  title: string
-  exercises: unknown[]
-}
-
-interface Phase {
-  phase: string
-  weeks: string
-  focus: string
-  workouts: Workout[] | Record<string, Omit<Workout, 'day'>>
-}
-
-function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'day'>> | undefined | null): Workout[] {
-  if (!workouts) return []
-  if (Array.isArray(workouts)) return workouts
-  return Object.entries(workouts).map(([day, workout]) => ({ day, ...workout }))
-}
-
-/** Parse phase weeks string like "1-4" to get number of weeks the split repeats */
-function parsePhaseWeeks(weeksStr: string): number {
-  const match = weeksStr.match(/(\d+)\s*[-–]\s*(\d+)/)
-  if (match) return parseInt(match[2]) - parseInt(match[1]) + 1
-  const single = weeksStr.match(/^(\d+)$/)
-  if (single) return 1
-  return 1
-}
-
-/** Generate scheduled workouts from program phases mapped to calendar dates */
-function generateScheduledWorkouts(
-  phases: Phase[],
-  trainingDays: number[],
-  startDate: Date,
-  programId: string
-): Array<{
-  date: Date
-  programId: string
-  phase: number
-  dayLabel: string
-  workoutTitle: string
-  status: 'scheduled'
-}> {
-  // Collect all workouts across all phases in order, repeating each phase's split for its duration
-  const allWorkouts: { phase: number; dayLabel: string; title: string }[] = []
-  for (let i = 0; i < phases.length; i++) {
-    const workouts = normalizeWorkouts(phases[i].workouts)
-    const numWeeks = parsePhaseWeeks(phases[i].weeks || '1')
-    for (let week = 0; week < numWeeks; week++) {
-      for (const w of workouts) {
-        allWorkouts.push({
-          phase: i + 1,
-          dayLabel: w.day,
-          title: w.title,
-        })
-      }
-    }
-  }
-
-  if (allWorkouts.length === 0 || trainingDays.length === 0) return []
-
-  // Sort training days for consistent iteration
-  const sortedDays = [...trainingDays].sort((a, b) => a - b)
-
-  const scheduled: Array<{
-    date: Date
-    programId: string
-    phase: number
-    dayLabel: string
-    workoutTitle: string
-    status: 'scheduled'
-  }> = []
-
-  // Start from the startDate and walk forward, assigning workouts to training days
-  const current = new Date(startDate)
-  current.setUTCHours(0, 0, 0, 0)
-  let workoutIndex = 0
-
-  // Safety limit: don't generate more than 365 days out
-  const maxDate = new Date(current)
-  maxDate.setFullYear(maxDate.getFullYear() + 1)
-
-  while (workoutIndex < allWorkouts.length && current < maxDate) {
-    const dayOfWeek = current.getUTCDay()
-    if (sortedDays.includes(dayOfWeek)) {
-      const workout = allWorkouts[workoutIndex]
-      scheduled.push({
-        date: new Date(current),
-        programId,
-        phase: workout.phase,
-        dayLabel: workout.dayLabel,
-        workoutTitle: workout.title,
-        status: 'scheduled',
-      })
-      workoutIndex++
-    }
-    current.setUTCDate(current.getUTCDate() + 1)
-  }
-
-  return scheduled
-}
+import { generateScheduledWorkouts, regenerateSchedule, type PhaseData } from '@/lib/schedule'
 
 // GET: Fetch schedule(s) for a user
 export async function GET(request: NextRequest) {
@@ -162,9 +62,14 @@ export async function GET(request: NextRequest) {
       toDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     }
 
-    // Get workout logs to cross-reference completion status
+    // Get workout logs and active program statuses
     const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
     const workoutLogs = userProgress?.workoutLogs || []
+    const activePrograms = userProgress?.activePrograms || []
+    const programStatusMap = new Map<string, string>()
+    for (const p of activePrograms as Array<{ programId: string; status: string }>) {
+      programStatusMap.set(p.programId, p.status)
+    }
 
     // Process schedules: filter by date range and update statuses
     const processedSchedules = schedules.map((schedule) => {
@@ -209,6 +114,7 @@ export async function GET(request: NextRequest) {
         _id: schedule._id,
         programId: schedule.programId,
         programName: schedule.programName,
+        programStatus: programStatusMap.get(schedule.programId) || 'in-progress',
         settings: schedule.settings,
         scheduledWorkouts: updatedWorkouts,
       }
@@ -272,7 +178,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Program not found' }, { status: 404 })
     }
 
-    const phases = (program.phases || []) as Phase[]
+    const phases = (program.phases || []) as PhaseData[]
     const scheduledWorkouts = generateScheduledWorkouts(
       phases,
       trainingDays,
@@ -328,7 +234,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH: Modify schedule entries (reschedule, swap, skip)
+// PATCH: Modify schedule entries (reschedule, swap, skip) or program-level actions (shift, pause, resume)
 export async function PATCH(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -342,14 +248,135 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const { programId, action, workoutDate, newDate, swapWithDate } = await request.json()
+    const { programId, action, workoutDate, newDate, swapWithDate, days, resumeDate } = await request.json()
 
-    if (!programId || !action || !workoutDate) {
-      return NextResponse.json({ error: 'programId, action, and workoutDate are required' }, { status: 400 })
+    if (!programId || !action) {
+      return NextResponse.json({ error: 'programId and action are required' }, { status: 400 })
+    }
+
+    // Program-level actions don't require workoutDate
+    const programLevelActions = ['shift', 'pause', 'resume']
+    if (!programLevelActions.includes(action) && !workoutDate) {
+      return NextResponse.json({ error: 'workoutDate is required for this action' }, { status: 400 })
     }
 
     await dbConnect()
 
+    // Handle pause (doesn't need a schedule to exist)
+    if (action === 'pause') {
+      await UserProgress.updateOne(
+        { userId: payload.userId, 'activePrograms.programId': programId },
+        { $set: { 'activePrograms.$.status': 'paused' } }
+      )
+      return NextResponse.json({ message: 'Program paused', programId })
+    }
+
+    // Handle resume
+    if (action === 'resume') {
+      const schedule = await Schedule.findOne({ userId: payload.userId, programId })
+      if (schedule) {
+        const program = await ProgramModel.findOne({ program_id: programId }).lean()
+        if (program) {
+          const phases = (program.phases || []) as PhaseData[]
+          const effectiveDate = resumeDate ? new Date(resumeDate) : new Date()
+          const result = regenerateSchedule(
+            schedule.scheduledWorkouts,
+            phases,
+            schedule.settings.trainingDays,
+            effectiveDate,
+            programId
+          )
+          schedule.scheduledWorkouts = result.allWorkouts
+          await schedule.save()
+
+          await UserProgress.updateOne(
+            { userId: payload.userId, 'activePrograms.programId': programId },
+            {
+              $set: {
+                'activePrograms.$.status': 'in-progress',
+                'activePrograms.$.totalWorkouts': result.allWorkouts.length,
+              },
+            }
+          )
+
+          return NextResponse.json({
+            message: 'Program resumed and schedule regenerated',
+            programId,
+            totalScheduledWorkouts: result.allWorkouts.length,
+            futureWorkouts: result.futureWorkouts.length,
+          })
+        }
+      }
+
+      // No schedule — just resume the status
+      await UserProgress.updateOne(
+        { userId: payload.userId, 'activePrograms.programId': programId },
+        { $set: { 'activePrograms.$.status': 'in-progress' } }
+      )
+      return NextResponse.json({ message: 'Program resumed', programId })
+    }
+
+    // Handle shift (delay/advance all future workouts by N days)
+    if (action === 'shift') {
+      if (!days || typeof days !== 'number') {
+        return NextResponse.json({ error: 'days (number) is required for shift' }, { status: 400 })
+      }
+
+      const schedule = await Schedule.findOne({ userId: payload.userId, programId })
+      if (!schedule) {
+        return NextResponse.json({ error: 'Schedule not found' }, { status: 404 })
+      }
+
+      const program = await ProgramModel.findOne({ program_id: programId }).lean()
+      if (!program) {
+        return NextResponse.json({ error: 'Program not found' }, { status: 404 })
+      }
+
+      const now = new Date()
+      now.setUTCHours(0, 0, 0, 0)
+
+      // Find the earliest future scheduled workout
+      const futureWorkouts = schedule.scheduledWorkouts.filter((w) => {
+        const d = new Date(w.date)
+        d.setUTCHours(0, 0, 0, 0)
+        return d >= now && w.status === 'scheduled'
+      })
+
+      if (futureWorkouts.length === 0) {
+        return NextResponse.json({ error: 'No future workouts to shift' }, { status: 400 })
+      }
+
+      const earliestFuture = new Date(Math.min(...futureWorkouts.map(w => new Date(w.date).getTime())))
+      const shiftedStart = new Date(earliestFuture)
+      shiftedStart.setUTCDate(shiftedStart.getUTCDate() + days)
+
+      const phases = (program.phases || []) as PhaseData[]
+      const result = regenerateSchedule(
+        schedule.scheduledWorkouts,
+        phases,
+        schedule.settings.trainingDays,
+        shiftedStart,
+        programId
+      )
+
+      schedule.scheduledWorkouts = result.allWorkouts
+      await schedule.save()
+
+      await UserProgress.updateOne(
+        { userId: payload.userId, 'activePrograms.programId': programId },
+        { $set: { 'activePrograms.$.totalWorkouts': result.allWorkouts.length } }
+      )
+
+      return NextResponse.json({
+        message: `Schedule shifted by ${days} day(s)`,
+        programId,
+        totalScheduledWorkouts: result.allWorkouts.length,
+        futureWorkouts: result.futureWorkouts.length,
+        nextWorkout: result.futureWorkouts[0]?.date,
+      })
+    }
+
+    // Per-workout actions below — require workoutDate
     const schedule = await Schedule.findOne({ userId: payload.userId, programId })
     if (!schedule) {
       return NextResponse.json({ error: 'Schedule not found' }, { status: 404 })
@@ -419,7 +446,7 @@ export async function PATCH(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip' }, { status: 400 })
+        return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip, shift, pause, resume' }, { status: 400 })
     }
 
     await schedule.save()

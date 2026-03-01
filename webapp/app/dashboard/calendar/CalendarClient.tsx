@@ -34,6 +34,7 @@ interface ScheduleData {
   _id: string
   programId: string
   programName: string
+  programStatus?: string
   settings: {
     trainingDays: number[]
     startDate: string
@@ -160,10 +161,12 @@ export default function CalendarClient() {
   const [actionMenuWorkout, setActionMenuWorkout] = useState<(ScheduledWorkout & { programName: string }) | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  // Build a color map for programs
+  // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
+  const pausedProgramIds = new Set<string>()
   schedules.forEach((s, i) => {
     programColorMap.set(s.programId, PROGRAM_COLORS[i % PROGRAM_COLORS.length])
+    if (s.programStatus === 'paused') pausedProgramIds.add(s.programId)
   })
 
   // Fetch schedules
@@ -511,56 +514,74 @@ export default function CalendarClient() {
                   <div className="space-y-3">
                     {selectedWorkouts.map((w, idx) => {
                       const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
+                      const isProgramPaused = pausedProgramIds.has(w.programId)
                       return (
-                        <div key={idx} className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                        <div key={idx} className={`rounded-lg border border-zinc-100 p-3 dark:border-zinc-800 ${isProgramPaused ? 'opacity-60' : ''}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${colors.dot}`} />
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${isProgramPaused ? 'bg-amber-400' : colors.dot}`} />
                                 <p className="text-sm font-medium text-zinc-900 dark:text-white">
                                   {w.dayLabel}: {w.workoutTitle}
                                 </p>
                               </div>
                               <p className="mt-0.5 ml-4 text-xs text-zinc-500 dark:text-zinc-400">
-                                Phase {w.phase} · {w.programName}
+                                Phase {w.phase} · {w.programName}{isProgramPaused ? ' (Paused)' : ''}
                               </p>
                             </div>
-                            <StatusBadge status={w.status} />
+                            {isProgramPaused ? (
+                              <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                Paused
+                              </span>
+                            ) : (
+                              <StatusBadge status={w.status} />
+                            )}
                           </div>
 
                           {/* Actions */}
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {w.status === 'scheduled' && (
-                              <>
-                                <Link
-                                  href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
-                                  className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                                >
-                                  <Dumbbell className="h-3 w-3" />
-                                  Start Workout
-                                </Link>
-                                <button
-                                  onClick={() => setActionMenuWorkout(w)}
-                                  className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                                >
-                                  <Settings className="h-3 w-3" />
-                                  Manage
-                                </button>
-                              </>
-                            )}
-                            {w.status === 'missed' && (
+                            {isProgramPaused ? (
                               <Link
-                                href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
-                                className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                href={`/dashboard/programming/${w.programId}`}
+                                className="flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
                               >
-                                <Dumbbell className="h-3 w-3" />
-                                Do It Now
+                                Resume Program
                               </Link>
-                            )}
-                            {w.status === 'completed' && (
-                              <span className="text-xs text-green-600 dark:text-green-400">
-                                Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-                              </span>
+                            ) : (
+                              <>
+                                {w.status === 'scheduled' && (
+                                  <>
+                                    <Link
+                                      href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                    >
+                                      <Dumbbell className="h-3 w-3" />
+                                      Start Workout
+                                    </Link>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Manage
+                                    </button>
+                                  </>
+                                )}
+                                {w.status === 'missed' && (
+                                  <Link
+                                    href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                    className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                  >
+                                    <Dumbbell className="h-3 w-3" />
+                                    Do It Now
+                                  </Link>
+                                )}
+                                {w.status === 'completed' && (
+                                  <span className="text-xs text-green-600 dark:text-green-400">
+                                    Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
