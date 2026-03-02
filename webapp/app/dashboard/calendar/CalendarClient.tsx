@@ -18,6 +18,7 @@ import {
     Pause,
     Play,
     ChevronsRight,
+    CalendarDays,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -165,6 +166,8 @@ export default function CalendarClient() {
   const [actionLoading, setActionLoading] = useState(false)
   const [shiftDays, setShiftDays] = useState(7)
   const [showShiftInput, setShowShiftInput] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [pickerMonth, setPickerMonth] = useState(() => new Date())
 
   // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
@@ -609,7 +612,7 @@ export default function CalendarClient() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
           >
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setActionMenuWorkout(null); setShowShiftInput(false) }} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setActionMenuWorkout(null); setShowShiftInput(false); setShowDatePicker(false) }} />
             <motion.div
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
@@ -670,6 +673,103 @@ export default function CalendarClient() {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">Move only this workout, others stay put</p>
                   </div>
                 </button>
+
+                {/* Move to Specific Date */}
+                {showDatePicker ? (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+                    <p className="mb-2 text-sm font-medium text-zinc-900 dark:text-white">Pick a date</p>
+                    {/* Mini calendar nav */}
+                    <div className="mb-2 flex items-center justify-between">
+                      <button
+                        onClick={() => setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        {MONTH_NAMES[pickerMonth.getMonth()]} {pickerMonth.getFullYear()}
+                      </span>
+                      <button
+                        onClick={() => setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {/* Day-of-week headers */}
+                    <div className="grid grid-cols-7 mb-0.5">
+                      {DAY_LABELS.map((d) => (
+                        <div key={d} className="py-0.5 text-center text-[9px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                          {d.charAt(0)}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Date grid */}
+                    <div className="grid grid-cols-7">
+                      {getMonthDays(pickerMonth.getFullYear(), pickerMonth.getMonth()).map((day) => {
+                        const isPickerMonth = day.getMonth() === pickerMonth.getMonth()
+                        const isPast = day < today
+                        const isWorkoutDay = isSameDay(day, new Date(actionMenuWorkout.date))
+                        const isTodayCell = isSameDay(day, today)
+                        return (
+                          <button
+                            key={toDateKey(day)}
+                            disabled={isPast || isWorkoutDay || actionLoading}
+                            onClick={() => {
+                              const token = localStorage.getItem('token')
+                              if (!token) return
+                              setActionLoading(true)
+                              fetch('/api/schedule', {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  programId: actionMenuWorkout.programId,
+                                  action: 'reschedule',
+                                  workoutDate: actionMenuWorkout.date,
+                                  newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
+                                }),
+                              }).then(() => {
+                                setActionMenuWorkout(null)
+                                setShowDatePicker(false)
+                                fetchSchedules()
+                              }).finally(() => setActionLoading(false))
+                            }}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] transition-colors mx-auto ${
+                              !isPickerMonth ? 'text-zinc-300 dark:text-zinc-700' :
+                              isWorkoutDay ? 'bg-amber-200 text-amber-700 dark:bg-amber-800/40 dark:text-amber-400 cursor-default' :
+                              isPast ? 'text-zinc-300 dark:text-zinc-700 cursor-default' :
+                              isTodayCell ? 'bg-zinc-900 text-white dark:bg-white dark:text-black font-bold hover:ring-2 hover:ring-blue-400' :
+                              'text-zinc-700 dark:text-zinc-300 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-900/40 dark:hover:text-blue-300'
+                            }`}
+                          >
+                            {day.getDate()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Tap a date to move this workout there.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowDatePicker(true)
+                      setPickerMonth(new Date(actionMenuWorkout.date))
+                    }}
+                    disabled={actionLoading}
+                    className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                  >
+                    <CalendarDays className="h-4 w-4 text-indigo-500" />
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Date</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Pick any date from a calendar</p>
+                    </div>
+                  </button>
+                )}
               </div>
 
               {/* Program-Level Actions */}
@@ -801,7 +901,7 @@ export default function CalendarClient() {
               </div>
 
               <button
-                onClick={() => { setActionMenuWorkout(null); setShowShiftInput(false) }}
+                onClick={() => { setActionMenuWorkout(null); setShowShiftInput(false); setShowDatePicker(false) }}
                 className="mt-4 w-full rounded-xl bg-zinc-100 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
               >
                 Cancel
