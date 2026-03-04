@@ -17,11 +17,11 @@ export default function BottomNav() {
         paddingRight: 'env(safe-area-inset-right, 0px)',
       }}
     >
-      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 py-1.5 sm:px-4 sm:py-2">
+      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 pt-1.5 pb-0 sm:px-4 sm:pt-2 sm:pb-0">
         <li className="flex-1">
           <Link 
             href="/dashboard/programming" 
-            className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-medium transition-colors sm:text-xs ${
+            className={`flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
               isActive('/dashboard/programming') 
                 ? 'text-black dark:text-white' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -34,7 +34,7 @@ export default function BottomNav() {
         <li className="flex-1">
           <Link 
             href="/dashboard/mind" 
-            className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-medium transition-colors sm:text-xs ${
+            className={`flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
               isActive('/dashboard/mind') 
                 ? 'text-black dark:text-white' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -47,7 +47,7 @@ export default function BottomNav() {
         <li className="flex-1">
           <Link 
             href="/dashboard" 
-            className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-medium transition-colors sm:text-xs ${
+            className={`flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
               pathname === '/dashboard' 
                 ? 'text-black dark:text-white' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -60,7 +60,7 @@ export default function BottomNav() {
         <li className="flex-1">
           <Link 
             href="/dashboard/nutrition" 
-            className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-medium transition-colors sm:text-xs ${
+            className={`flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
               isActive('/dashboard/nutrition') 
                 ? 'text-black dark:text-white' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -73,7 +73,7 @@ export default function BottomNav() {
         <li className="flex-1">
           <Link 
             href="/dashboard/chat" 
-            className={`flex flex-col items-center gap-0.5 py-1 text-[10px] font-medium transition-colors sm:text-xs ${
+            className={`flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
               isActive('/dashboard/chat') 
                 ? 'text-black dark:text-white' 
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
+import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 
 interface SetData {
   reps: string;
@@ -39,7 +40,6 @@ interface Exercise {
   details?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
-  // Exercise grouping
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -73,10 +73,14 @@ export default function LiveWorkoutPage() {
   const [exercises, setExercises] = useState<Exercise[]>(fallbackExercises);
   const [currentPhase, setCurrentPhase] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
-  const [currentSetIndex, setCurrentSetIndex] = useState(0);
+
+  // Step-based flow for superset interleaving
+  const [workoutFlow, setWorkoutFlow] = useState<WorkoutStep[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
   const [isResting, setIsResting] = useState(false);
   const [restTimeRemaining, setRestTimeRemaining] = useState(0);
+  const [restTotalTime, setRestTotalTime] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showInputs, setShowInputs] = useState(true);
   const [showExerciseList, setShowExerciseList] = useState(false);
@@ -90,10 +94,22 @@ export default function LiveWorkoutPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
 
+  // Auto-save ref
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Derive current position from the flow
+  const currentStep = workoutFlow[currentStepIndex];
+  const currentExerciseIndex = currentStep?.exerciseIndex ?? 0;
+  const currentSetIndex = currentStep?.setIndex ?? 0;
   const currentExercise = exercises[currentExerciseIndex];
   const totalExercises = exercises.length;
   const totalSets = currentExercise?.sets || 3;
-  
+
+  // Next step info (for rest overlay "Up next" text)
+  const nextStep = currentStepIndex < workoutFlow.length - 1 ? workoutFlow[currentStepIndex + 1] : null;
+  const nextExercise = nextStep ? exercises[nextStep.exerciseIndex] : null;
+  const isLastStep = currentStepIndex === workoutFlow.length - 1;
+
   // Check if inputs are empty (for skip button text)
   const isSkipping = !currentReps && !currentWeight;
 
@@ -104,29 +120,34 @@ export default function LiveWorkoutPage() {
     }
   };
 
+  // Initialize exercises and build flow helper
+  const initializeExercises = (exList: Exercise[]) => {
+    const data = exList.map((ex) =>
+      Array.from({ length: ex.sets || 3 }, () => ({
+        reps: "",
+        weight: "",
+        completed: false,
+      }))
+    );
+    const flow = buildWorkoutFlow(exList);
+    return { data, flow };
+  };
+
   // Load the current workout from API
   useEffect(() => {
     const loadWorkout = async () => {
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          // Use fallback for unauthenticated users
           setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
           setExercises(fallbackExercises);
-          setExerciseData(
-            fallbackExercises.map((ex) =>
-              Array.from({ length: ex.sets || 3 }, () => ({
-                reps: "",
-                weight: "",
-                completed: false,
-              }))
-            )
-          );
+          const { data, flow } = initializeExercises(fallbackExercises);
+          setExerciseData(data);
+          setWorkoutFlow(flow);
           setLoading(false);
           return;
         }
 
-        // Fetch the current workout for this program
         const res = await fetch(`/api/programs/current-workout?programId=${programId}${requestedDay ? `&day=${encodeURIComponent(requestedDay)}` : ""}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -141,18 +162,12 @@ export default function LiveWorkoutPage() {
           setWorkout(workoutData);
           setExercises(workoutData.exercises);
           setCurrentPhase(data.phase || 1);
-          
-          // Initialize exercise data
-          const initialData = workoutData.exercises.map((ex) =>
-            Array.from({ length: ex.sets || 3 }, () => ({
-              reps: "",
-              weight: "",
-              completed: false,
-            }))
-          );
-          setExerciseData(initialData);
 
-          // Now check for in-progress workout for today
+          const { data: initialData, flow } = initializeExercises(workoutData.exercises);
+          setExerciseData(initialData);
+          setWorkoutFlow(flow);
+
+          // Check for in-progress workout to resume
           const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -160,9 +175,8 @@ export default function LiveWorkoutPage() {
           if (progressRes.ok) {
             const progressData = await progressRes.json();
             if (progressData.workout && progressData.isResume) {
-              // Restore exercise data from saved workout
               const savedWorkout = progressData.workout as SavedWorkout;
-              const restoredData = workoutData.exercises.map((ex, exIdx) => {
+              const restoredData = workoutData.exercises.map((ex) => {
                 const savedEx = savedWorkout.exercises?.find(e => e.name === ex.name);
                 if (savedEx) {
                   return savedEx.sets.map(s => ({
@@ -177,53 +191,42 @@ export default function LiveWorkoutPage() {
                   completed: false,
                 }));
               });
-              
+
               setExerciseData(restoredData);
               setIsResuming(true);
               setShowResumeIndicator(true);
-              
-              // Find the first incomplete set to resume from
-              for (let exIdx = 0; exIdx < restoredData.length; exIdx++) {
-                for (let setIdx = 0; setIdx < restoredData[exIdx].length; setIdx++) {
-                  if (!restoredData[exIdx][setIdx].completed) {
-                    setCurrentExerciseIndex(exIdx);
-                    setCurrentSetIndex(setIdx);
-                    // Hide resume indicator after 3 seconds
-                    setTimeout(() => setShowResumeIndicator(false), 3000);
-                    break;
-                  }
+
+              // Find first incomplete step (fixed: uses flow with early return)
+              const resumeIdx = findFirstIncompleteStep(flow, restoredData);
+              setCurrentStepIndex(resumeIdx);
+
+              // Restore partial input for the resume step
+              const step = flow[resumeIdx];
+              if (step) {
+                const setData = restoredData[step.exerciseIndex]?.[step.setIndex];
+                if (setData) {
+                  setCurrentReps(setData.reps);
+                  setCurrentWeight(setData.weight);
                 }
               }
+
+              setTimeout(() => setShowResumeIndicator(false), 3000);
             }
           }
         } else {
-          // Fallback
           setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
           setExercises(fallbackExercises);
-          setExerciseData(
-            fallbackExercises.map((ex) =>
-              Array.from({ length: ex.sets || 3 }, () => ({
-                reps: "",
-                weight: "",
-                completed: false,
-              }))
-            )
-          );
+          const { data: d, flow: f } = initializeExercises(fallbackExercises);
+          setExerciseData(d);
+          setWorkoutFlow(f);
         }
       } catch (error) {
         console.error("Error loading workout:", error);
-        // Fallback
         setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
         setExercises(fallbackExercises);
-        setExerciseData(
-          fallbackExercises.map((ex) =>
-            Array.from({ length: ex.sets || 3 }, () => ({
-              reps: "",
-              weight: "",
-              completed: false,
-            }))
-          )
-        );
+        const { data: d, flow: f } = initializeExercises(fallbackExercises);
+        setExerciseData(d);
+        setWorkoutFlow(f);
       } finally {
         setLoading(false);
       }
@@ -231,6 +234,17 @@ export default function LiveWorkoutPage() {
 
     loadWorkout();
   }, [programId, requestedDay]);
+
+  // Find the first incomplete step in the flow
+  function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
+    for (let i = 0; i < flow.length; i++) {
+      const step = flow[i];
+      if (!data[step.exerciseIndex]?.[step.setIndex]?.completed) {
+        return i;
+      }
+    }
+    return flow.length - 1;
+  }
 
   const parseRestTime = (rest: string): number => {
     const match = rest.match(/(\d+)/);
@@ -263,16 +277,23 @@ export default function LiveWorkoutPage() {
     return () => clearInterval(interval);
   }, [workoutStartTime]);
 
+  // Cleanup auto-save timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    };
+  }, []);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Save workout progress (can be called for partial saves or final save)
+  // Save workout progress
   const saveWorkout = useCallback(async (exerciseDataToSave: SetData[][], isComplete: boolean) => {
     if (!workout) return;
-    
+
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -286,7 +307,6 @@ export default function LiveWorkoutPage() {
           weight: parseFloat(set.weight) || 0,
           completed: set.completed
         })) || [],
-        // Pass through grouping metadata
         ...(exercise.groupId && { groupId: exercise.groupId }),
         ...(exercise.groupType && { groupType: exercise.groupType }),
       }));
@@ -302,43 +322,89 @@ export default function LiveWorkoutPage() {
     }
   }, [programId, workout, exercises, currentPhase]);
 
-  const completeSet = useCallback(async () => {
-    // Create updated exercise data
-    const updatedData = [...exerciseData];
-    updatedData[currentExerciseIndex] = [...updatedData[currentExerciseIndex]];
-    updatedData[currentExerciseIndex][currentSetIndex] = {
-      reps: currentReps,
-      weight: currentWeight,
-      completed: true,
-    };
-    
-    // Update state
-    setExerciseData(updatedData);
+  // Auto-save: update exerciseData on input change + debounced save
+  const updateCurrentInput = useCallback((field: "reps" | "weight", value: string) => {
+    if (field === "reps") setCurrentReps(value);
+    if (field === "weight") setCurrentWeight(value);
 
-    const isLastSet = currentSetIndex === totalSets - 1;
-    const isLastExercise = currentExerciseIndex === totalExercises - 1;
-    const isComplete = isLastSet && isLastExercise;
+    if (!currentStep) return;
 
-    // Save progress after each set (async, don't wait)
-    saveWorkout(updatedData, isComplete);
+    setExerciseData(prev => {
+      const updated = prev.map((sets, exIdx) =>
+        exIdx === currentStep.exerciseIndex
+          ? sets.map((set, sIdx) =>
+              sIdx === currentStep.setIndex ? { ...set, [field]: value } : set
+            )
+          : sets
+      );
 
+      // Debounced save
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        saveWorkout(updated, false);
+      }, 1500);
+
+      return updated;
+    });
+  }, [currentStep, saveWorkout]);
+
+  // Determine rest duration based on step context
+  const getRestDuration = (step: WorkoutStep): number => {
+    const exercise = exercises[step.exerciseIndex];
+    if (step.groupId && !step.isLastInRound) {
+      // Within a superset round — no rest between exercises
+      return 0;
+    } else if (step.groupId && step.isLastInRound) {
+      // End of a superset round — use groupRest or exercise rest
+      return parseRestTime(exercise?.groupRest || exercise?.rest || "60s");
+    }
+    // Normal exercise
+    return parseRestTime(exercise?.rest || "60s");
+  };
+
+  // Advance to next step with appropriate rest
+  const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
     if (isComplete) {
       router.push("/dashboard/programming");
       return;
     }
 
-    setIsResting(true);
-    setRestTimeRemaining(parseRestTime(currentExercise.rest || "60s"));
+    const step = workoutFlow[currentStepIndex];
+    const restDuration = getRestDuration(step);
+
     setCurrentReps("");
     setCurrentWeight("");
 
-    if (isLastSet) {
-      setCurrentExerciseIndex((prev) => prev + 1);
-      setCurrentSetIndex(0);
-    } else {
-      setCurrentSetIndex((prev) => prev + 1);
+    if (restDuration > 0) {
+      setIsResting(true);
+      setRestTimeRemaining(restDuration);
+      setRestTotalTime(restDuration);
     }
-  }, [currentExerciseIndex, currentSetIndex, currentReps, currentWeight, totalSets, totalExercises, currentExercise, router, exerciseData, saveWorkout]);
+
+    setCurrentStepIndex(prev => prev + 1);
+  }, [currentStepIndex, workoutFlow, exercises, router]);
+
+  const completeSet = useCallback(async () => {
+    if (!currentStep) return;
+
+    const updatedData = exerciseData.map((sets, exIdx) =>
+      exIdx === currentStep.exerciseIndex
+        ? sets.map((set, sIdx) =>
+            sIdx === currentStep.setIndex
+              ? { reps: currentReps, weight: currentWeight, completed: true }
+              : set
+          )
+        : sets
+    );
+
+    setExerciseData(updatedData);
+
+    // Clear auto-save timeout since we're doing an immediate save
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+
+    saveWorkout(updatedData, isLastStep);
+    advanceStep(updatedData, isLastStep);
+  }, [currentStep, currentReps, currentWeight, isLastStep, exerciseData, saveWorkout, advanceStep]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -346,73 +412,68 @@ export default function LiveWorkoutPage() {
   };
 
   const skipSet = useCallback(async () => {
-    // Mark set as skipped (completed but with 0 values)
-    const updatedData = [...exerciseData];
-    updatedData[currentExerciseIndex] = [...updatedData[currentExerciseIndex]];
-    updatedData[currentExerciseIndex][currentSetIndex] = {
-      reps: "0",
-      weight: "0",
-      completed: true,
-    };
-    
+    if (!currentStep) return;
+
+    const updatedData = exerciseData.map((sets, exIdx) =>
+      exIdx === currentStep.exerciseIndex
+        ? sets.map((set, sIdx) =>
+            sIdx === currentStep.setIndex
+              ? { reps: "0", weight: "0", completed: true }
+              : set
+          )
+        : sets
+    );
+
     setExerciseData(updatedData);
-
-    const isLastSet = currentSetIndex === totalSets - 1;
-    const isLastExercise = currentExerciseIndex === totalExercises - 1;
-    const isComplete = isLastSet && isLastExercise;
-
-    // Save progress
-    saveWorkout(updatedData, isComplete);
-
-    if (isComplete) {
-      router.push("/dashboard/programming");
-      return;
-    }
-
-    setIsResting(true);
-    setRestTimeRemaining(parseRestTime(currentExercise.rest || "60s"));
-    setCurrentReps("");
-    setCurrentWeight("");
     setShowSkipModal(false);
 
-    if (isLastSet) {
-      setCurrentExerciseIndex((prev) => prev + 1);
-      setCurrentSetIndex(0);
-    } else {
-      setCurrentSetIndex((prev) => prev + 1);
-    }
-  }, [currentExerciseIndex, currentSetIndex, totalSets, totalExercises, currentExercise, router, exerciseData, saveWorkout]);
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+
+    saveWorkout(updatedData, isLastStep);
+    advanceStep(updatedData, isLastStep);
+  }, [currentStep, isLastStep, exerciseData, saveWorkout, advanceStep]);
 
   const skipExercise = useCallback(async () => {
-    // Mark all remaining sets for current exercise as skipped
-    const updatedData = [...exerciseData];
-    updatedData[currentExerciseIndex] = updatedData[currentExerciseIndex].map(() => ({
-      reps: "0",
-      weight: "0",
-      completed: true,
-    }));
-    
+    if (!currentStep) return;
+
+    // Mark all sets for the current exercise as skipped
+    const updatedData = exerciseData.map((sets, exIdx) =>
+      exIdx === currentStep.exerciseIndex
+        ? sets.map(() => ({ reps: "0", weight: "0", completed: true }))
+        : sets
+    );
+
     setExerciseData(updatedData);
+    setShowSkipModal(false);
 
-    const isLastExercise = currentExerciseIndex === totalExercises - 1;
-    const isComplete = isLastExercise;
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
-    // Save progress
-    saveWorkout(updatedData, isComplete);
+    // Find the next step that isn't for the skipped exercise
+    let nextIdx = currentStepIndex + 1;
+    while (nextIdx < workoutFlow.length && workoutFlow[nextIdx].exerciseIndex === currentStep.exerciseIndex) {
+      nextIdx++;
+    }
 
-    if (isComplete) {
+    const allDone = nextIdx >= workoutFlow.length;
+    saveWorkout(updatedData, allDone);
+
+    if (allDone) {
       router.push("/dashboard/programming");
       return;
     }
 
-    setIsResting(true);
-    setRestTimeRemaining(parseRestTime(currentExercise.rest || "60s"));
     setCurrentReps("");
     setCurrentWeight("");
-    setShowSkipModal(false);
-    setCurrentExerciseIndex((prev) => prev + 1);
-    setCurrentSetIndex(0);
-  }, [currentExerciseIndex, totalExercises, currentExercise, router, exerciseData, saveWorkout]);
+
+    const restDuration = getRestDuration(currentStep);
+    if (restDuration > 0) {
+      setIsResting(true);
+      setRestTimeRemaining(restDuration);
+      setRestTotalTime(restDuration);
+    }
+
+    setCurrentStepIndex(nextIdx);
+  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, saveWorkout, router, exercises]);
 
   const handleCompleteOrSkipSet = () => {
     if (isSkipping) {
@@ -423,14 +484,20 @@ export default function LiveWorkoutPage() {
   };
 
   const goToPrevious = () => {
-    if (currentSetIndex > 0) {
-      setCurrentSetIndex((prev) => prev - 1);
-    } else if (currentExerciseIndex > 0) {
-      const prevExercise = exercises[currentExerciseIndex - 1];
-      setCurrentExerciseIndex((prev) => prev - 1);
-      setCurrentSetIndex((prevExercise?.sets || 3) - 1);
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(prev => prev - 1);
+      setIsResting(false);
+
+      // Restore input values from exerciseData for the previous step
+      const prevStep = workoutFlow[currentStepIndex - 1];
+      if (prevStep) {
+        const setData = exerciseData[prevStep.exerciseIndex]?.[prevStep.setIndex];
+        if (setData) {
+          setCurrentReps(setData.completed ? "" : setData.reps);
+          setCurrentWeight(setData.completed ? "" : setData.weight);
+        }
+      }
     }
-    setIsResting(false);
   };
 
   const getOverallProgress = () => {
@@ -446,13 +513,17 @@ export default function LiveWorkoutPage() {
     return Math.round((completed / total) * 100);
   };
 
+  // Check if an exercise is fully complete (for dot indicators)
+  const isExerciseComplete = (exIdx: number) => {
+    return exerciseData[exIdx]?.every(s => s.completed) ?? false;
+  };
+
   // Get video URL for current exercise
   const [currentVideo, setCurrentVideo] = useState<string>("/placeholder.mp4");
-  
+
   useEffect(() => {
     if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
       const exercise = exercises[currentExerciseIndex];
-      // Prefer hydrated videoUrl; fall back to name-based lookup
       if (exercise.videoUrl) {
         setCurrentVideo(exercise.videoUrl);
       } else {
@@ -462,7 +533,7 @@ export default function LiveWorkoutPage() {
   }, [exercises, currentExerciseIndex]);
 
   // Show loading state
-  if (loading || !workout || exercises.length === 0) {
+  if (loading || !workout || exercises.length === 0 || workoutFlow.length === 0) {
     return (
       <div className="fixed inset-0 z-100 bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -473,15 +544,20 @@ export default function LiveWorkoutPage() {
     );
   }
 
+  // Superset context label
+  const supersetLabel = currentStep?.groupId
+    ? `Round ${currentStep.roundNumber + 1}`
+    : null;
+
   return (
     <div className="fixed inset-0 z-100 bg-black text-white">
       {/* Fullscreen video background - tappable */}
-      <div 
+      <div
         className="absolute inset-0 cursor-pointer"
         onClick={handleVideoTap}
       >
         <video
-          key={currentVideo} // Force re-render when video changes
+          key={currentVideo}
           autoPlay
           loop
           muted
@@ -496,7 +572,7 @@ export default function LiveWorkoutPage() {
       {/* Top overlay - Exit & Timer */}
       <AnimatePresence>
         {!isFullscreen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -530,7 +606,7 @@ export default function LiveWorkoutPage() {
                   </motion.div>
                 )}
               </AnimatePresence>
-              
+
               <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
                 <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                 <span className="font-mono text-sm tabular-nums">{formatTime(elapsedTime)}</span>
@@ -561,97 +637,97 @@ export default function LiveWorkoutPage() {
       {/* Right side - Progress dots (like story indicators) */}
       <AnimatePresence>
         {!isFullscreen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.2 }}
             className="absolute right-4 top-1/2 z-50 -translate-y-1/2 flex items-center"
             onClick={(e) => e.stopPropagation()}
-        onMouseEnter={() => setShowExerciseList(true)}
-        onMouseLeave={() => setShowExerciseList(false)}
-      >
-        {/* Expanded exercise list */}
-        <AnimatePresence>
-          {showExerciseList && (
-            <motion.div
-              initial={{ opacity: 0, x: 20, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 20, scale: 0.95 }}
-              transition={{ duration: 0.15 }}
-              className="mr-3 rounded-xl bg-black/80 p-3 backdrop-blur-md"
-            >
-              <p className="mb-2 text-xs font-medium text-white/50">EXERCISES</p>
-              <div className="space-y-2">
-                {exercises.map((exercise, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                      idx === currentExerciseIndex
-                        ? "bg-white/10"
-                        : "hover:bg-white/5"
-                    }`}
-                  >
-                    <div
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                        idx < currentExerciseIndex
-                          ? "bg-green-500 text-white"
-                          : idx === currentExerciseIndex
-                          ? "bg-white text-black"
-                          : "bg-white/20 text-white/60"
-                      }`}
-                    >
-                      {idx < currentExerciseIndex ? (
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        idx + 1
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-medium truncate ${
-                        idx === currentExerciseIndex ? "text-white" : "text-white/70"
-                      }`}>
-                        {exercise.name}
-                      </p>
-                      <p className="text-xs text-white/40">
-                        {exercise.sets} sets × {exercise.reps}
-                      </p>
-                    </div>
-                    {idx === currentExerciseIndex && (
-                      <div className="ml-auto shrink-0">
-                        <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
-                          Current
-                        </span>
+            onMouseEnter={() => setShowExerciseList(true)}
+            onMouseLeave={() => setShowExerciseList(false)}
+          >
+            {/* Expanded exercise list */}
+            <AnimatePresence>
+              {showExerciseList && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                  transition={{ duration: 0.15 }}
+                  className="mr-3 rounded-xl bg-black/80 p-3 backdrop-blur-md"
+                >
+                  <p className="mb-2 text-xs font-medium text-white/50">EXERCISES</p>
+                  <div className="space-y-2">
+                    {exercises.map((exercise, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+                          idx === currentExerciseIndex
+                            ? "bg-white/10"
+                            : "hover:bg-white/5"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            isExerciseComplete(idx)
+                              ? "bg-green-500 text-white"
+                              : idx === currentExerciseIndex
+                              ? "bg-white text-black"
+                              : "bg-white/20 text-white/60"
+                          }`}
+                        >
+                          {isExerciseComplete(idx) ? (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            idx + 1
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium truncate ${
+                            idx === currentExerciseIndex ? "text-white" : "text-white/70"
+                          }`}>
+                            {exercise.name}
+                          </p>
+                          <p className="text-xs text-white/40">
+                            {exercise.sets} sets × {exercise.reps}
+                          </p>
+                        </div>
+                        {idx === currentExerciseIndex && (
+                          <div className="ml-auto shrink-0">
+                            <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+                              Current
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* Dots */}
-        <div 
-          className="flex flex-col gap-2 cursor-pointer p-2"
-          onClick={() => setShowExerciseList(!showExerciseList)}
-        >
-          {exercises.map((_, idx) => (
+            {/* Dots */}
             <div
-              key={idx}
-              className={`h-2 w-2 rounded-full transition-all ${
-                idx < currentExerciseIndex
-                  ? "bg-green-500"
-                  : idx === currentExerciseIndex
-                  ? "bg-white h-4"
-                  : "bg-white/30"
-              }`}
-            />
-          ))}
-        </div>
-      </motion.div>
+              className="flex flex-col gap-2 cursor-pointer p-2"
+              onClick={() => setShowExerciseList(!showExerciseList)}
+            >
+              {exercises.map((_, idx) => (
+                <div
+                  key={idx}
+                  className={`h-2 w-2 rounded-full transition-all ${
+                    isExerciseComplete(idx)
+                      ? "bg-green-500"
+                      : idx === currentExerciseIndex
+                      ? "bg-white h-4"
+                      : "bg-white/30"
+                  }`}
+                />
+              ))}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -670,7 +746,7 @@ export default function LiveWorkoutPage() {
                 <circle cx="50" cy="50" r="45" fill="none" stroke="white" strokeWidth="2" opacity="0.2" />
                 <circle
                   cx="50" cy="50" r="45" fill="none" stroke="#22c55e" strokeWidth="3" strokeLinecap="round"
-                  strokeDasharray={`${(restTimeRemaining / parseRestTime(currentExercise?.rest || "60s")) * 283} 283`}
+                  strokeDasharray={`${(restTimeRemaining / (restTotalTime || 1)) * 283} 283`}
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -680,7 +756,15 @@ export default function LiveWorkoutPage() {
             </div>
 
             <p className="mt-6 text-lg text-white/80">
-              Up next: <span className="font-semibold text-white">{currentExercise?.name}</span>
+              Up next:{" "}
+              <span className="font-semibold text-white">
+                {nextExercise?.name || currentExercise?.name}
+              </span>
+              {nextStep?.groupId && (
+                <span className="ml-2 text-sm text-white/60">
+                  (Round {nextStep.roundNumber + 1})
+                </span>
+              )}
             </p>
 
             <button
@@ -696,7 +780,7 @@ export default function LiveWorkoutPage() {
       {/* Bottom overlay - Exercise info & controls */}
       <AnimatePresence>
         {!isFullscreen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
@@ -711,6 +795,12 @@ export default function LiveWorkoutPage() {
                 <span>Exercise {currentExerciseIndex + 1}/{totalExercises}</span>
                 <span>•</span>
                 <span>Set {currentSetIndex + 1}/{totalSets}</span>
+                {supersetLabel && (
+                  <>
+                    <span>•</span>
+                    <span className="text-purple-400">{supersetLabel}</span>
+                  </>
+                )}
               </div>
               <h1 className="mt-1 text-2xl font-bold">{currentExercise?.name}</h1>
               <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
@@ -732,97 +822,97 @@ export default function LiveWorkoutPage() {
               {showInputs && !isResting && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="flex gap-3 mb-4">
-                {/* Weight input */}
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-white/60">Weight (lbs)</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={currentWeight}
-                    onChange={(e) => setCurrentWeight(e.target.value)}
-                    placeholder="0"
-                    className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
-                  />
-                </div>
-                {/* Reps input */}
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-white/60">Reps</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={currentReps}
-                    onChange={(e) => setCurrentReps(e.target.value)}
-                    placeholder={currentExercise?.reps?.split("-")[0] || "0"}
-                    className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
-                  />
-                </div>
-              </div>
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex gap-3 mb-4">
+                    {/* Weight input */}
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-white/60">Weight (lbs)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={currentWeight}
+                        onChange={(e) => updateCurrentInput("weight", e.target.value)}
+                        placeholder="0"
+                        className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                      />
+                    </div>
+                    {/* Reps input */}
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-white/60">Reps</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={currentReps}
+                        onChange={(e) => updateCurrentInput("reps", e.target.value)}
+                        placeholder={currentExercise?.reps?.split("-")[0] || "0"}
+                        className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                      />
+                    </div>
+                  </div>
 
-              {/* Quick weight buttons */}
-              <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                {[45, 95, 135, 185, 225].map((weight) => (
-                  <button
-                    key={weight}
-                    onClick={() => setCurrentWeight(weight.toString())}
-                    className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/20"
-                  >
-                    {weight}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  {/* Quick weight buttons */}
+                  <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                    {[45, 95, 135, 185, 225].map((weight) => (
+                      <button
+                        key={weight}
+                        onClick={() => updateCurrentInput("weight", weight.toString())}
+                        className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/20"
+                      >
+                        {weight}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        {/* Action buttons */}
-        <div className="flex gap-3">
-          <button
-            onClick={goToPrevious}
-            disabled={currentExerciseIndex === 0 && currentSetIndex === 0}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm disabled:opacity-30"
-          >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={goToPrevious}
+                disabled={currentStepIndex === 0}
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm disabled:opacity-30"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
 
-          <button
-            onClick={() => setShowInputs(!showInputs)}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
-          >
-            <svg className={`h-6 w-6 transition-transform ${showInputs ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
+              <button
+                onClick={() => setShowInputs(!showInputs)}
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm"
+              >
+                <svg className={`h-6 w-6 transition-transform ${showInputs ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
 
-          <button
-            onClick={handleCompleteOrSkipSet}
-            disabled={isResting}
-            className={`flex-1 rounded-full py-4 text-lg font-bold shadow-lg transition-all disabled:opacity-50 ${
-              isSkipping 
-                ? "bg-zinc-600 shadow-zinc-600/30 hover:bg-zinc-500"
-                : "bg-green-500 shadow-green-500/30 hover:bg-green-400"
-            }`}
-          >
-            {currentExerciseIndex === totalExercises - 1 && currentSetIndex === totalSets - 1
-              ? "Finish Workout 🎉"
-              : isSkipping
-              ? "Skip Set →"
-              : "Complete Set →"}
-          </button>
-        </div>
+              <button
+                onClick={handleCompleteOrSkipSet}
+                disabled={isResting}
+                className={`flex-1 rounded-full py-4 text-lg font-bold shadow-lg transition-all disabled:opacity-50 ${
+                  isSkipping
+                    ? "bg-zinc-600 shadow-zinc-600/30 hover:bg-zinc-500"
+                    : "bg-green-500 shadow-green-500/30 hover:bg-green-400"
+                }`}
+              >
+                {isLastStep
+                  ? "Finish Workout 🎉"
+                  : isSkipping
+                  ? "Skip Set →"
+                  : "Complete Set →"}
+              </button>
+            </div>
 
-        {/* Previous set reference */}
-        {currentSetIndex > 0 && exerciseData[currentExerciseIndex]?.[currentSetIndex - 1]?.completed && (
-          <p className="mt-3 text-center text-sm text-white/50">
-            Last set: {exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × {exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps
-          </p>
-        )}
+            {/* Previous set reference */}
+            {currentSetIndex > 0 && exerciseData[currentExerciseIndex]?.[currentSetIndex - 1]?.completed && (
+              <p className="mt-3 text-center text-sm text-white/50">
+                Last set: {exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × {exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps
+              </p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -830,7 +920,7 @@ export default function LiveWorkoutPage() {
       {/* Set indicators (like Snapchat story progress) */}
       <AnimatePresence>
         {!isFullscreen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -863,7 +953,7 @@ export default function LiveWorkoutPage() {
           >
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-            
+
             {/* Modal */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -882,7 +972,7 @@ export default function LiveWorkoutPage() {
               <h3 className="mb-2 text-center text-xl font-bold text-white">
                 Skip Set?
               </h3>
-              
+
               <p className="mb-1 text-center text-sm text-zinc-400">
                 Are you sure you want to skip this set of <span className="font-semibold text-white">{currentExercise?.name}</span>?
               </p>
@@ -900,18 +990,14 @@ export default function LiveWorkoutPage() {
 
               <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => {
-                    skipSet();
-                  }}
+                  onClick={() => skipSet()}
                   className="rounded-lg bg-zinc-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-600"
                 >
                   Skip This Set Only
                 </button>
-                
+
                 <button
-                  onClick={() => {
-                    skipExercise();
-                  }}
+                  onClick={() => skipExercise()}
                   className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
                 >
                   Skip All Sets ({totalSets} sets total)
