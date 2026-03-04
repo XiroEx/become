@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ProgramModel from '@/models/Program';
 import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises';
+import { verifyAuth } from '@/lib/auth';
 
 // GET all programs
 export async function GET() {
@@ -19,9 +20,14 @@ export async function GET() {
   }
 }
 
-// POST create new program
+// POST create new program (requires auth)
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await dbConnect();
     const body = await request.json();
     

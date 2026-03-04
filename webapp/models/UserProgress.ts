@@ -167,6 +167,10 @@ const UserProgressSchema = new Schema<IUserProgress>({
   timestamps: true
 })
 
+// Indexes for common queries
+UserProgressSchema.index({ 'activePrograms.programId': 1 })
+UserProgressSchema.index({ 'workoutLogs.programId': 1, 'workoutLogs.date': -1 })
+
 // Calculate BMI from weight and height
 UserProgressSchema.methods.calculateBMI = function(weight: number): number | null {
   if (!this.height) return null

@@ -76,7 +76,7 @@ const mockData: UserProgressData = {
 export default function DashboardClient() {
   const [data, setData] = useState<UserProgressData>(mockData)
   const [loading, setLoading] = useState(true)
-  const [showCheckInModal, setShowCheckInModal] = useState(true) // DEBUG: always show
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
   const [checkInInfo, setCheckInInfo] = useState({ 
@@ -120,6 +120,11 @@ export default function DashboardClient() {
         }
 
         setCheckInInfo({ daysSinceMood, daysSinceWeight, lastWeight })
+
+        // Show check-in modal if mood or weight is due
+        if (daysSinceMood > 0 || daysSinceWeight > 0) {
+          setShowCheckInModal(true)
+        }
       } catch (error) {
         console.error('Failed to check check-in status:', error)
       }
