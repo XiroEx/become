@@ -33,6 +33,7 @@ interface Exercise {
   exerciseSlug?: string;
   name: string;
   type?: string;
+  trackingType?: string; // reps_weight | reps_bodyweight | reps_only | time | time_distance | intervals | none
   sets?: number;
   reps?: string;
   rest?: string;
@@ -111,8 +112,14 @@ export default function LiveWorkoutPage() {
   const nextExercise = nextStep ? exercises[nextStep.exerciseIndex] : null;
   const isLastStep = currentStepIndex === workoutFlow.length - 1;
 
+  // Determine which inputs to show based on trackingType
+  const tracking = currentExercise?.trackingType || "reps_weight";
+  const showWeightInput = tracking === "reps_weight";
+  const showRepsInput = ["reps_weight", "reps_bodyweight", "reps_only"].includes(tracking);
+  const showTimeInput = ["time", "time_distance"].includes(tracking);
+
   // Check if inputs are empty (for skip button text)
-  const isSkipping = !currentReps && !currentWeight;
+  const isSkipping = showWeightInput ? !currentReps && !currentWeight : !currentReps;
 
   // Toggle fullscreen mode when tapping video
   const handleVideoTap = () => {
@@ -842,44 +849,64 @@ export default function LiveWorkoutPage() {
                   className="overflow-hidden"
                 >
                   <div className="flex gap-3 mb-4">
-                    {/* Weight input */}
-                    <div className="flex-1">
-                      <label className="mb-1 block text-xs text-white/60">Weight (lbs)</label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={currentWeight}
-                        onChange={(e) => updateCurrentInput("weight", e.target.value)}
-                        placeholder="0"
-                        className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
-                      />
-                    </div>
-                    {/* Reps input */}
-                    <div className="flex-1">
-                      <label className="mb-1 block text-xs text-white/60">Reps</label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={currentReps}
-                        onChange={(e) => updateCurrentInput("reps", e.target.value)}
-                        placeholder={currentExercise?.reps?.split("-")[0] || "0"}
-                        className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
-                      />
-                    </div>
+                    {/* Weight input — only for reps_weight */}
+                    {showWeightInput && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Weight (lbs)</label>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={currentWeight}
+                          onChange={(e) => updateCurrentInput("weight", e.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {/* Reps input — for reps_weight, reps_bodyweight, reps_only */}
+                    {showRepsInput && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Reps</label>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={currentReps}
+                          onChange={(e) => updateCurrentInput("reps", e.target.value)}
+                          placeholder={currentExercise?.reps?.split("-")[0] || "0"}
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {/* Duration input — for time, time_distance */}
+                    {showTimeInput && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Duration (sec)</label>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={currentReps}
+                          onChange={(e) => updateCurrentInput("reps", e.target.value)}
+                          placeholder={currentExercise?.reps || "30"}
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {/* Quick weight buttons */}
-                  <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                    {[45, 95, 135, 185, 225].map((weight) => (
-                      <button
-                        key={weight}
-                        onClick={() => updateCurrentInput("weight", weight.toString())}
-                        className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/20"
-                      >
-                        {weight}
-                      </button>
-                    ))}
-                  </div>
+                  {/* Quick weight buttons — only for weighted exercises */}
+                  {showWeightInput && (
+                    <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                      {[45, 95, 135, 185, 225].map((weight) => (
+                        <button
+                          key={weight}
+                          onClick={() => updateCurrentInput("weight", weight.toString())}
+                          className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/20"
+                        >
+                          {weight}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -925,7 +952,11 @@ export default function LiveWorkoutPage() {
             {/* Previous set reference */}
             {currentSetIndex > 0 && exerciseData[currentExerciseIndex]?.[currentSetIndex - 1]?.completed && (
               <p className="mt-3 text-center text-sm text-white/50">
-                Last set: {exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × {exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps
+                Last set: {showWeightInput
+                  ? `${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
+                  : showTimeInput
+                  ? `${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
+                  : `${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
               </p>
             )}
           </motion.div>

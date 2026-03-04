@@ -13,6 +13,7 @@ import ExerciseModel from '@/models/Exercise';
 interface HydratedExerciseFields {
   name: string;
   category: string;
+  trackingType?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
 }
@@ -28,7 +29,7 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
 
   const exercises = await ExerciseModel.find(
     {},
-    { slug: 1, name: 1, category: 1, videoUrl: 1, thumbnailUrl: 1, _id: 0 }
+    { slug: 1, name: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, _id: 0 }
   ).lean();
 
   slugCache = new Map();
@@ -36,6 +37,7 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
     slugCache.set(ex.slug, {
       name: ex.name,
       category: ex.category,
+      trackingType: ex.trackingType || undefined,
       videoUrl: ex.videoUrl || undefined,
       thumbnailUrl: ex.thumbnailUrl || undefined,
     });
@@ -84,6 +86,7 @@ function hydrateExercise(
     ...exercise,
     name: info.name,
     type: info.category, // maps Exercise.category → client-side "type"
+    ...(info.trackingType && { trackingType: info.trackingType }),
     ...(info.videoUrl && { videoUrl: info.videoUrl }),
     ...(info.thumbnailUrl && { thumbnailUrl: info.thumbnailUrl }),
   };
