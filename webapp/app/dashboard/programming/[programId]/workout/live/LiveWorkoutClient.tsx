@@ -96,6 +96,9 @@ export default function LiveWorkoutPage() {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
 
+  // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
+
   // Auto-save ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -175,13 +178,16 @@ export default function LiveWorkoutPage() {
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
-          // Check for in-progress workout to resume
-          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}`, {
+          // Check for in-progress workout to resume (also fetch exercise history)
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
           if (progressRes.ok) {
             const progressData = await progressRes.json();
+            if (progressData.exerciseHistory) {
+              setExerciseHistory(progressData.exerciseHistory);
+            }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
               const restoredData = workoutData.exercises.map((ex) => {
@@ -826,6 +832,17 @@ export default function LiveWorkoutPage() {
               </div>
               <h1 className="mt-1 text-2xl font-bold">{currentExercise?.name}</h1>
               <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
+              {/* Exercise history from past workouts */}
+              {currentExercise && exerciseHistory[currentExercise.name] && (
+                <p className="mt-1.5 text-sm text-white/50">
+                  Last time:{" "}
+                  <span className="font-medium text-white/70">
+                    {exerciseHistory[currentExercise.name].weight > 0
+                      ? `${exerciseHistory[currentExercise.name].weight} lbs × ${exerciseHistory[currentExercise.name].reps} reps`
+                      : `${exerciseHistory[currentExercise.name].reps} reps`}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Progress bar */}
