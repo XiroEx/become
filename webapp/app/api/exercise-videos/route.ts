@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ExerciseVideo from '@/models/ExerciseVideo';
+import { verifyAuth } from '@/lib/auth';
 
 // GET /api/exercise-videos - Get all exercise videos
 // GET /api/exercise-videos?name=Bench%20Press - Get video for specific exercise
@@ -48,9 +49,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/exercise-videos - Create or update exercise video
+// POST /api/exercise-videos - Create or update exercise video (requires auth)
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await dbConnect();
     const body = await request.json();
 
