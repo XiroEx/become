@@ -15,6 +15,10 @@ import {
     Settings,
     SkipForward,
     ArrowRightLeft,
+    Pause,
+    Play,
+    ChevronsRight,
+    CalendarDays,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -34,6 +38,7 @@ interface ScheduleData {
   _id: string
   programId: string
   programName: string
+  programStatus?: string
   settings: {
     trainingDays: number[]
     startDate: string
@@ -159,11 +164,17 @@ export default function CalendarClient() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [actionMenuWorkout, setActionMenuWorkout] = useState<(ScheduledWorkout & { programName: string }) | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [shiftDays, setShiftDays] = useState(7)
+  const [showShiftInput, setShowShiftInput] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [pickerMonth, setPickerMonth] = useState(() => new Date())
 
-  // Build a color map for programs
+  // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
+  const pausedProgramIds = new Set<string>()
   schedules.forEach((s, i) => {
     programColorMap.set(s.programId, PROGRAM_COLORS[i % PROGRAM_COLORS.length])
+    if (s.programStatus === 'paused') pausedProgramIds.add(s.programId)
   })
 
   // Fetch schedules
@@ -511,56 +522,74 @@ export default function CalendarClient() {
                   <div className="space-y-3">
                     {selectedWorkouts.map((w, idx) => {
                       const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
+                      const isProgramPaused = pausedProgramIds.has(w.programId)
                       return (
-                        <div key={idx} className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                        <div key={idx} className={`rounded-lg border border-zinc-100 p-3 dark:border-zinc-800 ${isProgramPaused ? 'opacity-60' : ''}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <div className={`h-2 w-2 shrink-0 rounded-full ${colors.dot}`} />
+                                <div className={`h-2 w-2 shrink-0 rounded-full ${isProgramPaused ? 'bg-amber-400' : colors.dot}`} />
                                 <p className="text-sm font-medium text-zinc-900 dark:text-white">
                                   {w.dayLabel}: {w.workoutTitle}
                                 </p>
                               </div>
                               <p className="mt-0.5 ml-4 text-xs text-zinc-500 dark:text-zinc-400">
-                                Phase {w.phase} · {w.programName}
+                                Phase {w.phase} · {w.programName}{isProgramPaused ? ' (Paused)' : ''}
                               </p>
                             </div>
-                            <StatusBadge status={w.status} />
+                            {isProgramPaused ? (
+                              <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                Paused
+                              </span>
+                            ) : (
+                              <StatusBadge status={w.status} />
+                            )}
                           </div>
 
                           {/* Actions */}
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {w.status === 'scheduled' && (
-                              <>
-                                <Link
-                                  href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
-                                  className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                                >
-                                  <Dumbbell className="h-3 w-3" />
-                                  Start Workout
-                                </Link>
-                                <button
-                                  onClick={() => setActionMenuWorkout(w)}
-                                  className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                                >
-                                  <Settings className="h-3 w-3" />
-                                  Manage
-                                </button>
-                              </>
-                            )}
-                            {w.status === 'missed' && (
+                            {isProgramPaused ? (
                               <Link
-                                href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
-                                className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                href={`/dashboard/programming/${w.programId}`}
+                                className="flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
                               >
-                                <Dumbbell className="h-3 w-3" />
-                                Do It Now
+                                Resume Program
                               </Link>
-                            )}
-                            {w.status === 'completed' && (
-                              <span className="text-xs text-green-600 dark:text-green-400">
-                                Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-                              </span>
+                            ) : (
+                              <>
+                                {w.status === 'scheduled' && (
+                                  <>
+                                    <Link
+                                      href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                    >
+                                      <Dumbbell className="h-3 w-3" />
+                                      Start Workout
+                                    </Link>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Manage
+                                    </button>
+                                  </>
+                                )}
+                                {w.status === 'missed' && (
+                                  <Link
+                                    href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                    className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                  >
+                                    <Dumbbell className="h-3 w-3" />
+                                    Do It Now
+                                  </Link>
+                                )}
+                                {w.status === 'completed' && (
+                                  <span className="text-xs text-green-600 dark:text-green-400">
+                                    Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -583,7 +612,7 @@ export default function CalendarClient() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
           >
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setActionMenuWorkout(null)} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setActionMenuWorkout(null); setShowShiftInput(false); setShowDatePicker(false) }} />
             <motion.div
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
@@ -597,6 +626,7 @@ export default function CalendarClient() {
                 {actionMenuWorkout.dayLabel} · {new Date(actionMenuWorkout.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               </p>
 
+              {/* This Workout */}
               <div className="space-y-2">
                 <button
                   onClick={() => handleAction('skip')}
@@ -605,15 +635,13 @@ export default function CalendarClient() {
                 >
                   <SkipForward className="h-4 w-4 text-amber-500" />
                   <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Skip This Day</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Mark as skipped, move on to next</p>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Skip This Workout</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Mark as skipped, other workouts stay put</p>
                   </div>
                 </button>
 
                 <button
                   onClick={() => {
-                    // For reschedule, we'd need a date picker — for now just skip forward one day
-                    // This is a simplified version; a full implementation would show a date picker
                     const currentWDate = new Date(actionMenuWorkout.date)
                     currentWDate.setDate(currentWDate.getDate() + 1)
                     const token = localStorage.getItem('token')
@@ -642,14 +670,239 @@ export default function CalendarClient() {
                   <ArrowRightLeft className="h-4 w-4 text-blue-500" />
                   <div>
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Tomorrow</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Reschedule this workout</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Move only this workout, others stay put</p>
                   </div>
                 </button>
+
+                {/* Move to Specific Date */}
+                {showDatePicker ? (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+                    <p className="mb-2 text-sm font-medium text-zinc-900 dark:text-white">Pick a date</p>
+                    {/* Mini calendar nav */}
+                    <div className="mb-2 flex items-center justify-between">
+                      <button
+                        onClick={() => setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        {MONTH_NAMES[pickerMonth.getMonth()]} {pickerMonth.getFullYear()}
+                      </span>
+                      <button
+                        onClick={() => setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {/* Day-of-week headers */}
+                    <div className="grid grid-cols-7 mb-0.5">
+                      {DAY_LABELS.map((d) => (
+                        <div key={d} className="py-0.5 text-center text-[9px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                          {d.charAt(0)}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Date grid */}
+                    <div className="grid grid-cols-7">
+                      {getMonthDays(pickerMonth.getFullYear(), pickerMonth.getMonth()).map((day) => {
+                        const isPickerMonth = day.getMonth() === pickerMonth.getMonth()
+                        const isPast = day < today
+                        const isWorkoutDay = isSameDay(day, new Date(actionMenuWorkout.date))
+                        const isTodayCell = isSameDay(day, today)
+                        return (
+                          <button
+                            key={toDateKey(day)}
+                            disabled={isPast || isWorkoutDay || actionLoading}
+                            onClick={() => {
+                              const token = localStorage.getItem('token')
+                              if (!token) return
+                              setActionLoading(true)
+                              fetch('/api/schedule', {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({
+                                  programId: actionMenuWorkout.programId,
+                                  action: 'reschedule',
+                                  workoutDate: actionMenuWorkout.date,
+                                  newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
+                                }),
+                              }).then(() => {
+                                setActionMenuWorkout(null)
+                                setShowDatePicker(false)
+                                fetchSchedules()
+                              }).finally(() => setActionLoading(false))
+                            }}
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] transition-colors mx-auto ${
+                              !isPickerMonth ? 'text-zinc-300 dark:text-zinc-700' :
+                              isWorkoutDay ? 'bg-amber-200 text-amber-700 dark:bg-amber-800/40 dark:text-amber-400 cursor-default' :
+                              isPast ? 'text-zinc-300 dark:text-zinc-700 cursor-default' :
+                              isTodayCell ? 'bg-zinc-900 text-white dark:bg-white dark:text-black font-bold hover:ring-2 hover:ring-blue-400' :
+                              'text-zinc-700 dark:text-zinc-300 hover:bg-blue-100 hover:text-blue-700 dark:hover:bg-blue-900/40 dark:hover:text-blue-300'
+                            }`}
+                          >
+                            {day.getDate()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      Tap a date to move this workout there.
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowDatePicker(true)
+                      setPickerMonth(new Date(actionMenuWorkout.date))
+                    }}
+                    disabled={actionLoading}
+                    className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                  >
+                    <CalendarDays className="h-4 w-4 text-indigo-500" />
+                    <div>
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Date</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">Pick any date from a calendar</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              {/* Program-Level Actions */}
+              <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                  Entire Program: {actionMenuWorkout.programName}
+                </p>
+                <div className="space-y-2">
+                  {/* Shift / Delay Schedule */}
+                  {showShiftInput ? (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+                      <p className="mb-2 text-sm font-medium text-zinc-900 dark:text-white">Delay all remaining workouts</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShiftDays(Math.max(1, shiftDays - 1))}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 text-sm font-bold dark:border-zinc-600"
+                        >−</button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={shiftDays}
+                          onChange={(e) => setShiftDays(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                        />
+                        <button
+                          onClick={() => setShiftDays(Math.min(90, shiftDays + 1))}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 text-sm font-bold dark:border-zinc-600"
+                        >+</button>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">days</span>
+                        <button
+                          onClick={async () => {
+                            const token = localStorage.getItem('token')
+                            if (!token) return
+                            setActionLoading(true)
+                            try {
+                              const res = await fetch('/api/schedule', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'shift', days: shiftDays }),
+                              })
+                              if (res.ok) {
+                                setActionMenuWorkout(null)
+                                setShowShiftInput(false)
+                                fetchSchedules()
+                              }
+                            } finally { setActionLoading(false) }
+                          }}
+                          disabled={actionLoading}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {actionLoading ? '...' : 'Shift'}
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Pushes all future workouts forward by {shiftDays} day{shiftDays !== 1 ? 's' : ''}, respecting your training days.
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowShiftInput(true)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      <ChevronsRight className="h-4 w-4 text-blue-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">Delay Entire Schedule</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Push all remaining workouts forward</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Pause / Resume */}
+                  {pausedProgramIds.has(actionMenuWorkout.programId) ? (
+                    <button
+                      onClick={async () => {
+                        const token = localStorage.getItem('token')
+                        if (!token) return
+                        setActionLoading(true)
+                        try {
+                          const res = await fetch('/api/schedule', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'resume' }),
+                          })
+                          if (res.ok) {
+                            setActionMenuWorkout(null)
+                            fetchSchedules()
+                          }
+                        } finally { setActionLoading(false) }
+                      }}
+                      disabled={actionLoading}
+                      className="flex w-full items-center gap-3 rounded-xl border border-green-200 p-3 text-left transition-colors hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:hover:bg-green-900/20"
+                    >
+                      <Play className="h-4 w-4 text-green-500" />
+                      <div>
+                        <p className="text-sm font-medium text-green-700 dark:text-green-400">Resume Program</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Unfreeze schedule and regenerate from today</p>
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        const token = localStorage.getItem('token')
+                        if (!token) return
+                        setActionLoading(true)
+                        try {
+                          const res = await fetch('/api/schedule', {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'pause' }),
+                          })
+                          if (res.ok) {
+                            setActionMenuWorkout(null)
+                            fetchSchedules()
+                          }
+                        } finally { setActionLoading(false) }
+                      }}
+                      disabled={actionLoading}
+                      className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      <Pause className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">Pause Program</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Freeze all workouts until you resume</p>
+                      </div>
+                    </button>
+                  )}
+                </div>
               </div>
 
               <button
-                onClick={() => setActionMenuWorkout(null)}
-                className="mt-3 w-full rounded-xl bg-zinc-100 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                onClick={() => { setActionMenuWorkout(null); setShowShiftInput(false); setShowDatePicker(false) }}
+                className="mt-4 w-full rounded-xl bg-zinc-100 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
               >
                 Cancel
               </button>

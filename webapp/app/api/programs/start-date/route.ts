@@ -3,8 +3,10 @@ import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import Schedule from '@/models/Schedule'
+import ProgramModel from '@/models/Program'
+import { regenerateSchedule, type PhaseData } from '@/lib/schedule'
 
-// PUT: Update the start date of an enrolled program
+// PUT: Update the start date of an enrolled program and regenerate its schedule
 export async function PUT(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization')
@@ -26,26 +28,59 @@ export async function PUT(request: NextRequest) {
 
     await dbConnect()
 
+    const newStartDate = new Date(startDate + 'T00:00:00.000Z')
+
     // Update the activeProgram's startDate
     const result = await UserProgress.updateOne(
       { userId: payload.userId, 'activePrograms.programId': programId },
-      { $set: { 'activePrograms.$.startDate': new Date(startDate + 'T00:00:00.000Z') } }
+      { $set: { 'activePrograms.$.startDate': newStartDate } }
     )
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: 'Program not found in your active programs' }, { status: 404 })
     }
 
-    // Also update the schedule's startDate if one exists
+    // If a schedule exists, regenerate it from the new start date
     const schedule = await Schedule.findOne({ userId: payload.userId, programId })
     if (schedule) {
-      schedule.settings.startDate = new Date(startDate + 'T00:00:00.000Z')
-      await schedule.save()
+      const program = await ProgramModel.findOne({ program_id: programId }).lean()
+      if (program) {
+        const phases = (program.phases || []) as PhaseData[]
+        const regen = regenerateSchedule(
+          schedule.scheduledWorkouts,
+          phases,
+          schedule.settings.trainingDays,
+          newStartDate,
+          programId
+        )
+
+        schedule.settings.startDate = newStartDate
+        schedule.scheduledWorkouts = regen.allWorkouts
+        await schedule.save()
+
+        // Sync totalWorkouts back to UserProgress
+        await UserProgress.updateOne(
+          { userId: payload.userId, 'activePrograms.programId': programId },
+          { $set: { 'activePrograms.$.totalWorkouts': regen.allWorkouts.length } }
+        )
+
+        return NextResponse.json({
+          message: 'Start date updated and schedule regenerated',
+          startDate: newStartDate,
+          totalScheduledWorkouts: regen.allWorkouts.length,
+          futureWorkouts: regen.futureWorkouts.length,
+          nextWorkout: regen.futureWorkouts[0]?.date,
+        })
+      } else {
+        // Program not found in DB but schedule exists — just update the date
+        schedule.settings.startDate = newStartDate
+        await schedule.save()
+      }
     }
 
     return NextResponse.json({
       message: 'Start date updated',
-      startDate: new Date(startDate + 'T00:00:00.000Z'),
+      startDate: newStartDate,
     })
   } catch (error) {
     console.error('Error updating start date:', error)

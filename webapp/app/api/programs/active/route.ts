@@ -25,9 +25,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ activePrograms: [] })
     }
 
-    // Filter to only in-progress or active programs (not completed or paused)
+    // Filter to in-progress, active, or paused programs (not completed)
     const inProgressPrograms = userProgress.activePrograms.filter(
-      (p: { status: string }) => p.status === 'in-progress' || p.status === 'active'
+      (p: { status: string }) => p.status === 'in-progress' || p.status === 'active' || p.status === 'paused'
     )
 
     // Return active programs with progress info

@@ -293,13 +293,16 @@ export default function ProgrammingClient() {
           <div className="space-y-3">
             {activePrograms.map((program) => {
               const { label: startLabel, isFuture } = formatStartLabel(program.startDate)
+              const isPaused = program.status === 'paused'
               return (
               <div
                 key={program.programId}
                 className={`group relative rounded-xl border-2 p-4 shadow-sm transition-all duration-200 hover:shadow-md ${
-                  isFuture
-                    ? 'border-blue-500/30 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 hover:border-blue-500/50 dark:from-blue-500/5 dark:to-indigo-500/5'
-                    : 'border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 hover:border-green-500/50 dark:from-green-500/5 dark:to-emerald-500/5'
+                  isPaused
+                    ? 'border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 hover:border-amber-500/50 dark:from-amber-500/5 dark:to-yellow-500/5'
+                    : isFuture
+                      ? 'border-blue-500/30 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 hover:border-blue-500/50 dark:from-blue-500/5 dark:to-indigo-500/5'
+                      : 'border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 hover:border-green-500/50 dark:from-green-500/5 dark:to-emerald-500/5'
                 }`}
               >
                 <Link href={`/dashboard/programming/${program.programId}`} className="block">
@@ -308,7 +311,12 @@ export default function ProgrammingClient() {
                       <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
                         {program.programName}
                       </h3>
-                      {isFuture ? (
+                      {isPaused ? (
+                        <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-amber-600 dark:text-amber-400">
+                          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                          Paused
+                        </p>
+                      ) : isFuture ? (
                         <p className="mt-0.5 text-sm font-medium text-blue-600 dark:text-blue-400">
                           {startLabel}
                         </p>
@@ -320,7 +328,7 @@ export default function ProgrammingClient() {
                     </div>
                     <div className="ml-4 flex items-center gap-3">
                       <div className="text-right">
-                        <span className={`text-sm font-semibold ${isFuture ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+                        <span className={`text-sm font-semibold ${isPaused ? 'text-amber-600 dark:text-amber-400' : isFuture ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
                           {program.progress}%
                         </span>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -333,25 +341,37 @@ export default function ProgrammingClient() {
                   <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
-                        isFuture
-                          ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
-                          : 'bg-gradient-to-r from-green-500 to-emerald-500'
+                        isPaused
+                          ? 'bg-gradient-to-r from-amber-500 to-yellow-500'
+                          : isFuture
+                            ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                            : 'bg-gradient-to-r from-green-500 to-emerald-500'
                       }`}
                       style={{ width: `${program.progress}%` }}
                     />
                   </div>
                 </Link>
-                <Link
-                  href={`/dashboard/programming/${program.programId}/workout`}
-                  className={`absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 hover:scale-110 active:scale-95 ${
-                    isFuture ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'
-                  }`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </Link>
+                {isPaused ? (
+                  <Link
+                    href={`/dashboard/programming/${program.programId}`}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg transition-transform duration-200 hover:scale-110 hover:bg-amber-600 active:scale-95"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                  </Link>
+                ) : (
+                  <Link
+                    href={`/dashboard/programming/${program.programId}/workout`}
+                    className={`absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 hover:scale-110 active:scale-95 ${
+                      isFuture ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </Link>
+                )}
               </div>
               )
             })}
