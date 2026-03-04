@@ -93,6 +93,7 @@ export default function LiveWorkoutPage() {
   const [currentWeight, setCurrentWeight] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
+  const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
 
   // Auto-save ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -478,9 +479,23 @@ export default function LiveWorkoutPage() {
   const handleCompleteOrSkipSet = () => {
     if (isSkipping) {
       setShowSkipModal(true);
-    } else {
-      completeSet();
+      return;
     }
+
+    // Check if this set was already completed with different values
+    if (currentStep) {
+      const setData = exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex];
+      if (setData?.completed) {
+        const savedReps = setData.reps;
+        const savedWeight = setData.weight;
+        if (savedReps !== currentReps || savedWeight !== currentWeight) {
+          setShowEditConfirmModal(true);
+          return;
+        }
+      }
+    }
+
+    completeSet();
   };
 
   const goToPrevious = () => {
@@ -493,8 +508,8 @@ export default function LiveWorkoutPage() {
       if (prevStep) {
         const setData = exerciseData[prevStep.exerciseIndex]?.[prevStep.setIndex];
         if (setData) {
-          setCurrentReps(setData.completed ? "" : setData.reps);
-          setCurrentWeight(setData.completed ? "" : setData.weight);
+          setCurrentReps(setData.reps);
+          setCurrentWeight(setData.weight);
         }
       }
     }
@@ -1005,6 +1020,80 @@ export default function LiveWorkoutPage() {
 
                 <button
                   onClick={() => setShowSkipModal(false)}
+                  className="rounded-lg border border-zinc-700 px-4 py-3 font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Confirmation Modal */}
+      <AnimatePresence>
+        {showEditConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowEditConfirmModal(false)}
+          >
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-2xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800"
+            >
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20">
+                <svg className="h-7 w-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+
+              <h3 className="mb-2 text-center text-xl font-bold text-white">
+                Update Set?
+              </h3>
+
+              <p className="mb-2 text-center text-sm text-zinc-400">
+                This set was already logged. Save new values?
+              </p>
+
+              {currentStep && (
+                <div className="mb-6 flex justify-center gap-4 text-sm">
+                  <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
+                    <p className="text-xs text-zinc-500">Before</p>
+                    <p className="font-semibold text-white">
+                      {exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex]?.weight || 0} lbs &times; {exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex]?.reps || 0}
+                    </p>
+                  </div>
+                  <div className="flex items-center text-zinc-600">&rarr;</div>
+                  <div className="rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2 text-center">
+                    <p className="text-xs text-green-400">After</p>
+                    <p className="font-semibold text-white">
+                      {currentWeight || 0} lbs &times; {currentReps || 0}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    setShowEditConfirmModal(false);
+                    completeSet();
+                  }}
+                  className="rounded-lg bg-green-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-green-500"
+                >
+                  Save Changes
+                </button>
+
+                <button
+                  onClick={() => setShowEditConfirmModal(false)}
                   className="rounded-lg border border-zinc-700 px-4 py-3 font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
                 >
                   Cancel
