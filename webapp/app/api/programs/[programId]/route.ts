@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ProgramModel from '@/models/Program';
 import { hydrateProgram } from '@/lib/hydrateExercises';
+import { verifyAuth } from '@/lib/auth';
 
 interface RouteParams {
   params: Promise<{ programId: string }>;
@@ -33,9 +34,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PUT update program
+// PUT update program (requires auth)
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    const authResult = await verifyAuth(request);
+    if (!authResult) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { programId } = await params;
     await dbConnect();
     
@@ -64,9 +70,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE program
+// DELETE program (requires auth)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const authResult = await verifyAuth(request);
+    if (!authResult) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { programId } = await params;
     await dbConnect();
     
