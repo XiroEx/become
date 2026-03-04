@@ -131,6 +131,7 @@ interface ActiveProgram {
   currentPhase: number;
   currentDay: string;
   startDate?: string;
+  status?: string;
 }
 
 // Helper to normalize workouts from object format to array format
@@ -162,6 +163,10 @@ export default function ProgramDetailClient({ program }: Props) {
   const [editingStartDate, setEditingStartDate] = useState(false);
   const [pendingStartDate, setPendingStartDate] = useState('');
   const [savingStartDate, setSavingStartDate] = useState(false);
+  const [pausingProgram, setPausingProgram] = useState(false);
+  const [showDelayInput, setShowDelayInput] = useState(false);
+  const [delayDays, setDelayDays] = useState(7);
+  const [shiftingSchedule, setShiftingSchedule] = useState(false);
   const [showEnrollDialog, setShowEnrollDialog] = useState(false);
   const [enrollStartDate, setEnrollStartDate] = useState(() => {
     const d = new Date();
@@ -210,6 +215,55 @@ export default function ProgramDetailClient({ program }: Props) {
       console.error("Error abandoning program:", error);
     } finally {
       setIsAbandoning(false);
+    }
+  };
+
+  const handlePauseResume = async () => {
+    setPausingProgram(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const isPaused = activeProgram?.status === 'paused';
+      const res = await fetch("/api/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          programId: program.program_id,
+          action: isPaused ? 'resume' : 'pause',
+        }),
+      });
+      if (res.ok) {
+        setActiveProgram(prev => prev ? { ...prev, status: isPaused ? 'in-progress' : 'paused' } : prev);
+      }
+    } catch (error) {
+      console.error("Error toggling pause:", error);
+    } finally {
+      setPausingProgram(false);
+    }
+  };
+
+  const handleShiftSchedule = async () => {
+    if (!delayDays || delayDays < 1) return;
+    setShiftingSchedule(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await fetch("/api/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          programId: program.program_id,
+          action: 'shift',
+          days: delayDays,
+        }),
+      });
+      if (res.ok) {
+        setShowDelayInput(false);
+      }
+    } catch (error) {
+      console.error("Error shifting schedule:", error);
+    } finally {
+      setShiftingSchedule(false);
     }
   };
 
@@ -560,6 +614,74 @@ export default function ProgramDetailClient({ program }: Props) {
                 </svg>
                 View / Edit Schedule
               </button>
+
+              {/* Schedule Management */}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {/* Pause / Resume */}
+                <button
+                  onClick={handlePauseResume}
+                  disabled={pausingProgram}
+                  className={`flex items-center gap-1.5 text-sm transition-colors ${
+                    activeProgram.status === 'paused'
+                      ? 'text-green-400 hover:text-green-300'
+                      : 'text-amber-400 hover:text-amber-300'
+                  }`}
+                >
+                  {activeProgram.status === 'paused' ? (
+                    <>
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                      {pausingProgram ? 'Resuming...' : 'Resume Program'}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
+                      {pausingProgram ? 'Pausing...' : 'Pause Program'}
+                    </>
+                  )}
+                </button>
+
+                <span className="text-zinc-600">|</span>
+
+                {/* Delay Schedule */}
+                {showDelayInput ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={delayDays}
+                      onChange={(e) => setDelayDays(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 rounded-lg border border-zinc-600 bg-zinc-800 px-2 py-1 text-sm text-white text-center"
+                    />
+                    <span className="text-xs text-zinc-400">days</span>
+                    <button
+                      onClick={handleShiftSchedule}
+                      disabled={shiftingSchedule}
+                      className="rounded-lg bg-blue-500 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-600"
+                    >
+                      {shiftingSchedule ? '...' : 'Delay'}
+                    </button>
+                    <button onClick={() => setShowDelayInput(false)} className="text-xs text-zinc-400 hover:text-white">Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowDelayInput(true)}
+                    className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Delay Schedule
+                  </button>
+                )}
+              </div>
+
+              {/* Paused indicator */}
+              {activeProgram.status === 'paused' && (
+                <div className="mt-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                  <p className="text-xs text-amber-400 font-medium">Program is paused. Workouts are frozen until you resume.</p>
+                </div>
+              )}
 
               {/* Abandon Program Button */}
               <button
