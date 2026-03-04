@@ -95,6 +95,7 @@ export default function LiveWorkoutPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
@@ -379,7 +380,7 @@ export default function LiveWorkoutPage() {
   // Advance to next step with appropriate rest
   const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
     if (isComplete) {
-      router.push("/dashboard/programming");
+      setShowSummary(true);
       return;
     }
 
@@ -472,7 +473,7 @@ export default function LiveWorkoutPage() {
     saveWorkout(updatedData, allDone);
 
     if (allDone) {
-      router.push("/dashboard/programming");
+      setShowSummary(true);
       return;
     }
 
@@ -1147,6 +1148,146 @@ export default function LiveWorkoutPage() {
                   Cancel
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Workout Summary Overlay */}
+      <AnimatePresence>
+        {showSummary && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-y-auto"
+            style={{
+              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+              paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
+            }}
+          >
+            <div className="flex-1 px-6 py-4">
+              {/* Header */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-center mb-8"
+              >
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
+                  <svg className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h1 className="text-3xl font-bold">Workout Complete!</h1>
+                <p className="mt-1 text-zinc-400">{workout?.day} — {workout?.title}</p>
+              </motion.div>
+
+              {/* Stats Grid */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+                className="grid grid-cols-3 gap-3 mb-8"
+              >
+                <div className="rounded-xl bg-zinc-900 p-4 text-center">
+                  <p className="text-2xl font-bold text-green-400">{formatTime(elapsedTime)}</p>
+                  <p className="text-xs text-zinc-500 mt-1">Duration</p>
+                </div>
+                <div className="rounded-xl bg-zinc-900 p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-400">
+                    {exerciseData.reduce((sum, sets) => sum + sets.filter(s => s.completed).length, 0)}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">Sets</p>
+                </div>
+                <div className="rounded-xl bg-zinc-900 p-4 text-center">
+                  <p className="text-2xl font-bold text-purple-400">
+                    {Math.round(exerciseData.reduce((sum, sets) =>
+                      sum + sets.reduce((setSum, s) =>
+                        s.completed ? setSum + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0) : setSum, 0
+                      ), 0
+                    )).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">Volume (lbs)</p>
+                </div>
+              </motion.div>
+
+              {/* Per-exercise breakdown */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-3">Exercise Breakdown</h2>
+                <div className="space-y-3">
+                  {exercises.map((exercise, exIdx) => {
+                    const sets = exerciseData[exIdx] || [];
+                    const completedSets = sets.filter(s => s.completed);
+                    const skippedSets = completedSets.filter(s => s.reps === "0" && s.weight === "0");
+                    const activeSets = completedSets.filter(s => !(s.reps === "0" && s.weight === "0"));
+                    const bestSet = activeSets.reduce(
+                      (best, s) => {
+                        const w = parseFloat(s.weight) || 0;
+                        const r = parseInt(s.reps) || 0;
+                        const bw = parseFloat(best.weight) || 0;
+                        const br = parseInt(best.reps) || 0;
+                        return w > bw || (w === bw && r > br) ? s : best;
+                      },
+                      activeSets[0] || { weight: "0", reps: "0" }
+                    );
+                    const history = exerciseHistory[exercise.name];
+
+                    return (
+                      <div key={exIdx} className="rounded-xl bg-zinc-900 p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-white">{exercise.name}</h3>
+                          <span className="text-xs text-zinc-500">
+                            {activeSets.length}/{sets.length} sets
+                            {skippedSets.length > 0 && ` (${skippedSets.length} skipped)`}
+                          </span>
+                        </div>
+                        {activeSets.length > 0 && (
+                          <div className="flex gap-2 flex-wrap">
+                            {activeSets.map((s, i) => (
+                              <span key={i} className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
+                                {parseFloat(s.weight) > 0 ? `${s.weight}×${s.reps}` : `${s.reps} reps`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Show PR indicator if beat history */}
+                        {history && activeSets.length > 0 && (
+                          (() => {
+                            const bestW = parseFloat(bestSet.weight) || 0;
+                            const bestR = parseInt(bestSet.reps) || 0;
+                            const isPR = bestW > history.weight || (bestW === history.weight && bestR > history.reps);
+                            return isPR ? (
+                              <p className="mt-2 text-xs text-yellow-400 font-medium">
+                                New PR! Previous best: {history.weight > 0 ? `${history.weight}×${history.reps}` : `${history.reps} reps`}
+                              </p>
+                            ) : null;
+                          })()
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Done button */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.65 }}
+              className="px-6 pb-4"
+            >
+              <button
+                onClick={() => router.push("/dashboard/programming")}
+                className="w-full rounded-full bg-green-500 py-4 text-lg font-bold shadow-lg shadow-green-500/30 transition-colors hover:bg-green-400"
+              >
+                Done
+              </button>
             </motion.div>
           </motion.div>
         )}
