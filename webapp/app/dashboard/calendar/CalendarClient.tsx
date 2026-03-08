@@ -318,7 +318,7 @@ export default function CalendarClient() {
     : []
 
   return (
-    <PageTransition className="min-h-screen pb-24">
+    <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">

@@ -535,7 +535,7 @@ export default function WorkoutFormPage() {
   }
 
   return (
-    <PageTransition className="min-h-screen pb-24">
+    <PageTransition className="pb-6">
       {/* Header */}
       <div className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur-lg dark:border-zinc-800 dark:bg-zinc-900/80">
         <div className="mx-auto max-w-4xl px-4 py-3 sm:px-6 sm:py-4">

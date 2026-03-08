@@ -268,7 +268,7 @@ export default function ProgrammingClient() {
   );
 
   return (
-    <PageTransition className="pb-24">
+    <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 sm:mb-8">
         <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">

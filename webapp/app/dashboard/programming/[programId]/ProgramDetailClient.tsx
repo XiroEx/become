@@ -438,7 +438,7 @@ export default function ProgramDetailClient({ program }: Props) {
   };
 
   return (
-    <PageTransition className="min-h-screen pb-24">
+    <PageTransition className="pb-6">
       {/* Hero Header */}
       <div className="relative overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0 sm:rounded-t-2xl">
         {/* Background pattern */}
