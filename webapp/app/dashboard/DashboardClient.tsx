@@ -148,12 +148,16 @@ export default function DashboardClient() {
           const logData = await logRes.json()
           const goalsData = await goalsRes.json()
 
+          // logData.water may be an object {current, goal} or a number
+          const waterCurrent = typeof logData.water === 'object' ? logData.water?.current ?? 0 : logData.water ?? 0
+          const totals = logData.dailyTotals || {}
+
           setNutritionData({
-            calories: { consumed: logData.calories || 0, goal: goalsData.calories || 2000 },
-            protein: { current: logData.protein || 0, goal: goalsData.protein || 150 },
-            carbs: { current: logData.carbs || 0, goal: goalsData.carbs || 250 },
-            fats: { current: logData.fats || 0, goal: goalsData.fats || 65 },
-            water: { current: logData.water || 0, goal: goalsData.water || 8 }
+            calories: { consumed: totals.calories || logData.calories || 0, goal: goalsData.calories || 2000 },
+            protein: { current: totals.protein || logData.protein || 0, goal: goalsData.protein || 150 },
+            carbs: { current: totals.carbs || logData.carbs || 0, goal: goalsData.carbs || 250 },
+            fats: { current: totals.fats || logData.fats || 0, goal: goalsData.fats || 65 },
+            water: { current: waterCurrent, goal: goalsData.waterGoal || goalsData.water || 96 }
           })
         }
       } catch (error) {
