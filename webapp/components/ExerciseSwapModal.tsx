@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -635,6 +636,9 @@ function AlternativeCard({
             className="overflow-hidden"
           >
             <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+              {/* Exercise video */}
+              <ExerciseVideoPreview exerciseName={alt.name} />
+
               {/* Match reasons */}
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {alt.reasons.map((reason, i) => (
@@ -707,5 +711,87 @@ function AlternativeCard({
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ─── Exercise Video Preview ──────────────────────────────────────────────────
+
+function ExerciseVideoPreview({ exerciseName }: { exerciseName: string }) {
+  const videoUrl = getExerciseVideoUrl(exerciseName);
+  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const isLocalVideo =
+    videoUrl.startsWith("/") && (videoUrl.endsWith(".mp4") || videoUrl.endsWith(".mov"));
+
+  if (isLocalVideo) {
+    return (
+      <div className="relative mb-3 aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
+        <video
+          className="h-full w-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source
+            src={videoUrl}
+            type={videoUrl.endsWith(".mov") ? "video/quicktime" : "video/mp4"}
+          />
+        </video>
+      </div>
+    );
+  }
+
+  // YouTube or external URL — show click-to-play thumbnail
+  return <YouTubePreview videoUrl={videoUrl} thumbnailUrl={thumbnailUrl} exerciseName={exerciseName} />;
+}
+
+function YouTubePreview({
+  videoUrl,
+  thumbnailUrl,
+  exerciseName,
+}: {
+  videoUrl: string;
+  thumbnailUrl: string;
+  exerciseName: string;
+}) {
+  const [playing, setPlaying] = useState(false);
+
+  if (playing) {
+    return (
+      <div className="relative mb-3 aspect-video w-full overflow-hidden rounded-lg">
+        <iframe
+          className="absolute inset-0 h-full w-full"
+          src={`${videoUrl}?autoplay=1&rel=0&modestbranding=1`}
+          title={`${exerciseName} demo`}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setPlaying(true)}
+      className="relative mb-3 aspect-video w-full overflow-hidden rounded-lg group cursor-pointer"
+    >
+      {thumbnailUrl ? (
+        <img
+          src={thumbnailUrl}
+          alt={`${exerciseName} thumbnail`}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <div className="h-full w-full bg-gradient-to-br from-zinc-600 to-zinc-700" />
+      )}
+      <div className="absolute inset-0 bg-black/30 transition-opacity group-hover:bg-black/40" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg transition-transform group-hover:scale-110">
+          <svg className="h-6 w-6 text-green-600 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        </div>
+      </div>
+    </button>
   );
 }
