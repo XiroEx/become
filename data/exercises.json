@@ -1,0 +1,7078 @@
+[
+  {
+    "_id": "699fbd44751d9854c0799302",
+    "slug": "barbell-back-squat",
+    "aliases": [
+      "Back Squat",
+      "Barbell or Dumbbell Squat",
+      "Squat to Tempo (3-1-1)"
+    ],
+    "alternatives": [
+      "leg-press",
+      "hack-squat"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.798Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5",
+    "defaultRest": "3-5 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell",
+      "squat_rack"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Barbell Back Squat",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "glutes",
+      "adductors"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae"
+    ],
+    "tags": [
+      "powerlifting",
+      "big_3",
+      "squat"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "front-squat",
+      "goblet-squat"
+    ],
+    "videoUrl": "/exercises/back-squat.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799303",
+    "slug": "front-squat",
+    "aliases": [
+      "Dumbbell Front Squat"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.821Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5",
+    "defaultRest": "3 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell",
+      "squat_rack"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Front Squat",
+    "optionalEquipment": [
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "glutes",
+      "abs"
+    ],
+    "stabilizers": [
+      "upper_back",
+      "erector_spinae"
+    ],
+    "tags": [
+      "squat",
+      "olympic"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "barbell-back-squat",
+      "goblet-squat"
+    ],
+    "videoUrl": "/exercises/back-squat.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799304",
+    "slug": "goblet-squat",
+    "aliases": [
+      "DB Goblet Squat"
+    ],
+    "alternatives": [
+      "leg-press"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.827Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Goblet Squat",
+    "optionalEquipment": [
+      "kettlebell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "squat",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "front-squat"
+    ],
+    "videoUrl": "/exercises/goblet-squat.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799305",
+    "slug": "hack-squat",
+    "aliases": [],
+    "alternatives": [
+      "leg-press",
+      "barbell-back-squat"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.831Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "hack_squat"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Hack Squat",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "squat",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c0799306",
+    "slug": "leg-press",
+    "aliases": [],
+    "alternatives": [
+      "hack-squat",
+      "barbell-back-squat"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.836Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "leg_press"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Leg Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "squat",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c0799307",
+    "slug": "belt-squat",
+    "aliases": [
+      "Belt Squat Machine"
+    ],
+    "alternatives": [
+      "leg-press",
+      "hack-squat"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.841Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "belt_squat_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Belt Squat",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "squat",
+      "machine",
+      "spine_friendly"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799308",
+    "slug": "leg-extension",
+    "aliases": [
+      "Leg Extension Machine"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.845Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "leg_extension"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "knee_extension"
+    ],
+    "name": "Leg Extension",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "squat_accessory",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c0799309",
+    "slug": "bodyweight-squat",
+    "aliases": [
+      "Bodyweight Squats × 20",
+      "Bodyweight Squats & Leg Swings"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "calisthenics",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.849Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": null,
+    "defaultSets": 2,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Bodyweight Squat",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "warmup",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/exercises/bodyweight-squats-20.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079930a",
+    "slug": "wall-sit",
+    "aliases": [
+      "Quad Wall Sit",
+      "Squat Hold × 20 sec"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.854Z",
+    "cues": [],
+    "defaultDuration": "30-60 sec",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Wall Sit",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "isometric",
+      "squat_accessory"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "time",
+    "variations": [],
+    "videoUrl": "/exercises/bodyweight-squats-20.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079930b",
+    "slug": "deadlift",
+    "aliases": [
+      "Conventional Deadlift"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.858Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5",
+    "defaultRest": "3-5 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Deadlift",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "lower_back",
+      "quads"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip",
+      "upper_back"
+    ],
+    "tags": [
+      "powerlifting",
+      "big_3",
+      "hinge"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "romanian-deadlift",
+      "trap-bar-deadlift"
+    ],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c079930c",
+    "slug": "romanian-deadlift",
+    "aliases": [
+      "RDL",
+      "RDL (Barbell or Dumbbell)",
+      "Dumbbell RDL",
+      "DB Romanian Deadlift",
+      "Dumbbell Romanian Deadlift"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.863Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-10",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Romanian Deadlift",
+    "optionalEquipment": [
+      "dumbbell",
+      "kettlebell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "glutes",
+      "lower_back"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "hinge",
+      "posterior_chain"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "stiff-leg-deadlift",
+      "single-leg-rdl"
+    ],
+    "videoUrl": "/exercises/romanian-deadlift.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079930d",
+    "slug": "stiff-leg-deadlift",
+    "aliases": [
+      "Dumbbell Stiff-Leg Deadlift"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.867Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Stiff-Leg Deadlift",
+    "optionalEquipment": [
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes",
+      "lower_back"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "hinge",
+      "posterior_chain"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "romanian-deadlift"
+    ]
+  },
+  {
+    "_id": "699fbd44751d9854c079930e",
+    "slug": "dumbbell-deadlift",
+    "aliases": [
+      "DB Deadlift"
+    ],
+    "alternatives": [
+      "deadlift",
+      "kettlebell-deadlift"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.871Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Dumbbell Deadlift",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "quads",
+      "lower_back"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "hinge",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c079930f",
+    "slug": "kettlebell-deadlift",
+    "aliases": [],
+    "alternatives": [
+      "dumbbell-deadlift",
+      "deadlift"
+    ],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.876Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "kettlebell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Kettlebell Deadlift",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "quads"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "hinge",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799310",
+    "slug": "trap-bar-deadlift",
+    "aliases": [
+      "Hex Bar Deadlift"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.882Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5",
+    "defaultRest": "3-5 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "trap_bar"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge",
+      "squat"
+    ],
+    "name": "Trap Bar Deadlift",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "hamstrings",
+      "traps"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae",
+      "grip"
+    ],
+    "tags": [
+      "hinge",
+      "hybrid",
+      "power"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "deadlift"
+    ]
+  },
+  {
+    "_id": "699fbd44751d9854c0799311",
+    "slug": "hip-thrust",
+    "aliases": [
+      "Barbell Hip Thrust",
+      "DB Hip Thrust",
+      "Dumbbell Hip Thrust"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.886Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell",
+      "flat_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Hip Thrust",
+    "optionalEquipment": [
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "glute_builder",
+      "hinge"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "glute-bridge"
+    ],
+    "videoUrl": "/exercises/hip-thrust.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799312",
+    "slug": "glute-bridge",
+    "aliases": [
+      "Glute Bridge × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.891Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Glute Bridge",
+    "optionalEquipment": [
+      "dumbbell",
+      "resistance_band"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "glute_builder",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [
+      "single-leg-glute-bridge",
+      "hip-thrust"
+    ],
+    "videoUrl": "/exercises/glute-bridge.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799313",
+    "slug": "single-leg-glute-bridge",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.895Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Single-Leg Glute Bridge",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs",
+      "hip_flexors"
+    ],
+    "tags": [
+      "glute_builder",
+      "unilateral",
+      "bodyweight"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [
+      "glute-bridge"
+    ],
+    "videoUrl": "/exercises/glute-bridge.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799314",
+    "slug": "good-morning",
+    "aliases": [
+      "Bodyweight Good Mornings × 15"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.899Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Good Morning",
+    "optionalEquipment": [
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes",
+      "erector_spinae"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "hinge",
+      "posterior_chain"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799315",
+    "slug": "single-leg-rdl",
+    "aliases": [
+      "Single-Leg RDL Balance"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.901Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-10 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Single-Leg RDL",
+    "optionalEquipment": [
+      "kettlebell",
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings",
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "lower_back"
+    ],
+    "stabilizers": [
+      "abs",
+      "calves"
+    ],
+    "tags": [
+      "hinge",
+      "unilateral",
+      "balance"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "romanian-deadlift"
+    ]
+  },
+  {
+    "_id": "699fbd44751d9854c0799316",
+    "slug": "lying-leg-curl",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.905Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "leg_curl"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "knee_flexion"
+    ],
+    "name": "Lying Leg Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "hinge_accessory",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "seated-leg-curl"
+    ],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c0799317",
+    "slug": "seated-leg-curl",
+    "aliases": [
+      "Leg Curl Machine"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.909Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "leg_curl"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "knee_flexion"
+    ],
+    "name": "Seated Leg Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "hinge_accessory",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "lying-leg-curl"
+    ],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c0799318",
+    "slug": "glute-cable-kickback",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.912Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "hip_extension"
+    ],
+    "name": "Glute Cable Kickback",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "glute_builder",
+      "isolation",
+      "cable"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799319",
+    "slug": "bulgarian-split-squat",
+    "aliases": [
+      "DB Bulgarian Split Squat"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.915Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-10 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Bulgarian Split Squat",
+    "optionalEquipment": [
+      "barbell",
+      "bodyweight",
+      "flat_bench"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs",
+      "adductors"
+    ],
+    "tags": [
+      "lunge",
+      "unilateral"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "split-squat"
+    ],
+    "videoUrl": "/exercises/bulgarian-split-squat.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079931a",
+    "slug": "split-squat",
+    "aliases": [
+      "DB Split Squat",
+      "Dumbbell Split Squat"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.920Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Split Squat",
+    "optionalEquipment": [
+      "barbell",
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "lunge",
+      "unilateral",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "bulgarian-split-squat"
+    ]
+  },
+  {
+    "_id": "699fbd44751d9854c079931b",
+    "slug": "walking-lunge",
+    "aliases": [
+      "Walking Lunges",
+      "Dumbbell Walking Lunge",
+      "Dumbbell Walking Lunges",
+      "Walking Lunges × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.923Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Walking Lunge",
+    "optionalEquipment": [
+      "barbell",
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "lunge",
+      "locomotion"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "reverse-lunge"
+    ],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c079931c",
+    "slug": "reverse-lunge",
+    "aliases": [
+      "DB Reverse Lunge",
+      "Dumbbell Reverse Lunge",
+      "Reverse Lunges × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.929Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Reverse Lunge",
+    "optionalEquipment": [
+      "barbell",
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "lunge",
+      "knee_friendly"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "walking-lunge"
+    ]
+  },
+  {
+    "_id": "699fbd44751d9854c079931d",
+    "slug": "step-up",
+    "aliases": [
+      "Step Ups",
+      "DB Step-Ups",
+      "Box Step-Ups"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.933Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "box"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Step-Up",
+    "optionalEquipment": [
+      "dumbbell",
+      "barbell",
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs",
+      "calves"
+    ],
+    "tags": [
+      "lunge",
+      "unilateral",
+      "functional"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c079931e",
+    "slug": "lateral-lunge",
+    "aliases": [
+      "DB Lateral Lunge"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.938Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Lateral Lunge",
+    "optionalEquipment": [
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "adductors"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "lunge",
+      "frontal_plane",
+      "adductor"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c079931f",
+    "slug": "barbell-bench-press",
+    "aliases": [
+      "Bench Press",
+      "Bench Press (DB/bar)"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.942Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5-8",
+    "defaultRest": "3 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell",
+      "flat_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Barbell Bench Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "rotator_cuff"
+    ],
+    "tags": [
+      "powerlifting",
+      "big_3",
+      "push"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "incline-bench-press",
+      "dumbbell-bench-press"
+    ],
+    "videoUrl": "/exercises/bench-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799320",
+    "slug": "dumbbell-bench-press",
+    "aliases": [
+      "DB Bench Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.949Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell",
+      "flat_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Dumbbell Bench Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "rotator_cuff"
+    ],
+    "tags": [
+      "push",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "barbell-bench-press",
+      "dumbbell-floor-press"
+    ],
+    "videoUrl": "/exercises/db-bench-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799321",
+    "slug": "dumbbell-floor-press",
+    "aliases": [
+      "DB Floor Press or Bench Press",
+      "Dumbbell Floor Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.953Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Dumbbell Floor Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest",
+      "triceps"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "push",
+      "no_bench",
+      "tricep_emphasis"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-bench-press"
+    ],
+    "videoUrl": "/exercises/db-bench-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799322",
+    "slug": "incline-bench-press",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.958Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-10",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell",
+      "incline_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Incline Bench Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "upper_chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "rotator_cuff"
+    ],
+    "tags": [
+      "push",
+      "upper_chest"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "incline-dumbbell-press"
+    ],
+    "videoUrl": "/exercises/incline-dumbbell-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799323",
+    "slug": "incline-dumbbell-press",
+    "aliases": [
+      "Incline DB Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.963Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell",
+      "incline_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Incline Dumbbell Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "upper_chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "rotator_cuff"
+    ],
+    "tags": [
+      "push",
+      "upper_chest",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "incline-bench-press"
+    ],
+    "videoUrl": "/exercises/incline-dumbbell-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799324",
+    "slug": "close-grip-dumbbell-press",
+    "aliases": [
+      "Close Grip DB Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.969Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell",
+      "flat_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Close-Grip Dumbbell Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps",
+      "chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "push",
+      "tricep_emphasis"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/close-grip-db-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799325",
+    "slug": "incline-close-grip-dumbbell-press",
+    "aliases": [
+      "Incline Close Grip DB Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.973Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell",
+      "incline_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Incline Close-Grip Dumbbell Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "upper_chest",
+      "triceps"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "push",
+      "upper_chest",
+      "tricep_emphasis"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/incline-close-grip-db-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799326",
+    "slug": "push-up",
+    "aliases": [
+      "Push-Ups",
+      "Push-ups",
+      "Slow Push-Ups × 10",
+      "Push-Ups × 10"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "calisthenics",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.979Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Push-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae"
+    ],
+    "tags": [
+      "push",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [
+      "decline-push-up",
+      "hand-release-push-up"
+    ],
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799327",
+    "slug": "decline-push-up",
+    "aliases": [
+      "Decline Push-Ups (Feet on Chair)"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "calisthenics",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.984Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight",
+      "chair"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Decline Push-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "upper_chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "push",
+      "bodyweight",
+      "upper_chest"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": [
+      "push-up"
+    ]
+  },
+  {
+    "_id": "699fbd44751d9854c0799328",
+    "slug": "hand-release-push-up",
+    "aliases": [
+      "Hand-Release Push-Ups"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "calisthenics",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.988Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Hand-Release Push-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts",
+      "upper_back"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "push",
+      "bodyweight",
+      "full_rom"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [
+      "push-up"
+    ],
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799329",
+    "slug": "machine-chest-press",
+    "aliases": [
+      "Chest Press Machine"
+    ],
+    "alternatives": [
+      "barbell-bench-press",
+      "dumbbell-bench-press"
+    ],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.993Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "chest_press_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Machine Chest Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "push",
+      "machine",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/chest-press-machine.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079932a",
+    "slug": "dumbbell-chest-fly",
+    "aliases": [
+      "Chest Fly (Cable or Dumbbell)",
+      "DB Chest Fly (Floor or Bench)",
+      "Dumbbell Chest Fly on Floor"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:55.997Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "horizontal_adduction"
+    ],
+    "name": "Dumbbell Chest Fly",
+    "optionalEquipment": [
+      "flat_bench",
+      "incline_bench"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "rotator_cuff"
+    ],
+    "tags": [
+      "push_accessory",
+      "isolation",
+      "chest"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "cable-chest-fly",
+      "machine-fly"
+    ],
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079932b",
+    "slug": "cable-chest-fly",
+    "aliases": [
+      "Decline Cable Chest Fly"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.000Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "horizontal_adduction"
+    ],
+    "name": "Cable Chest Fly",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "push_accessory",
+      "isolation",
+      "cable"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-chest-fly",
+      "machine-fly"
+    ],
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079932c",
+    "slug": "machine-fly",
+    "aliases": [
+      "Pec Deck"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.004Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "pec_deck"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "horizontal_adduction"
+    ],
+    "name": "Machine Fly",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "push_accessory",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-chest-fly",
+      "cable-chest-fly"
+    ],
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079932d",
+    "slug": "inchworm-to-push-up",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "calisthenics",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.009Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-10",
+    "defaultRest": "60 sec",
+    "defaultSets": 2,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Inchworm to Push-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest",
+      "abs"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps",
+      "front_delts",
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "erector_spinae"
+    ],
+    "tags": [
+      "warmup",
+      "full_body",
+      "bodyweight"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c079932e",
+    "slug": "barbell-row",
+    "aliases": [
+      "Bent Over Barbell Row",
+      "Bent-Over Barbell Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.013Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "6-8",
+    "defaultRest": "2-3 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Barbell Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae",
+      "grip"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "barbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-row",
+      "cable-row"
+    ],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c079932f",
+    "slug": "cable-row",
+    "aliases": [
+      "Seated Cable Row",
+      "Seated Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.017Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Cable Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "cable"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "barbell-row"
+    ],
+    "videoUrl": "/exercises/cable-row.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799330",
+    "slug": "chest-supported-row",
+    "aliases": [
+      "Chest Supported Row",
+      "Machine Row / Chest-Supported Row",
+      "Incline DB Row or Cable Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.022Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell",
+      "incline_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Chest-Supported Row",
+    "optionalEquipment": [
+      "seated_row_machine"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "pull",
+      "back",
+      "spine_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c0799331",
+    "slug": "dumbbell-row",
+    "aliases": [
+      "DB Bent-Over Row",
+      "Dumbbell Bent Over Row",
+      "Dumbbell Bent-Over Row",
+      "DB Single-Arm Row",
+      "Dumbbell Single-Arm Row",
+      "Single-Arm Row",
+      "Dumbbell Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.026Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Dumbbell Row",
+    "optionalEquipment": [
+      "flat_bench"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "unilateral",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "barbell-row"
+    ],
+    "videoUrl": "/exercises/db-single-arm-row.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799332",
+    "slug": "dumbbell-underhand-row",
+    "aliases": [
+      "DB Underhand Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.030Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Dumbbell Underhand Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "biceps"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "mid_back"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "bicep_emphasis"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799333",
+    "slug": "single-arm-cable-row",
+    "aliases": [
+      "Single Arm Cable Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.034Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Single-Arm Cable Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "obliques"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "unilateral",
+      "cable"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/single-arm-cable-row.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799334",
+    "slug": "low-row-machine",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.043Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "low_row_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Low Row Machine",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "pull",
+      "back",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/cable-row.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799335",
+    "slug": "backpack-row",
+    "aliases": [
+      "Backpack Bent-Over Row",
+      "Backpack or Towel Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.048Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "backpack"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Backpack Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "home_workout",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799336",
+    "slug": "renegade-row",
+    "aliases": [
+      "Dumbbell Push-ups to Renegade Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.052Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-10 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull",
+      "anti_rotation"
+    ],
+    "name": "Renegade Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "biceps",
+      "chest",
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs",
+      "obliques"
+    ],
+    "tags": [
+      "pull",
+      "core",
+      "hybrid"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd44751d9854c0799337",
+    "slug": "face-pull",
+    "aliases": [
+      "Face Pulls",
+      "Cable Face Pull",
+      "Rope Face Pull"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.056Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "scapular_retraction"
+    ],
+    "name": "Face Pull",
+    "optionalEquipment": [
+      "resistance_band"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rear_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "rhomboids",
+      "rotator_cuff",
+      "mid_back"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "pull_accessory",
+      "shoulder_health",
+      "posture"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/face-pulls.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799338",
+    "slug": "rear-delt-fly",
+    "aliases": [
+      "Dumbbell Rear Delt Fly"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.061Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "scapular_retraction"
+    ],
+    "name": "Rear Delt Fly",
+    "optionalEquipment": [
+      "cable"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rear_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "rhomboids",
+      "mid_back"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "pull_accessory",
+      "isolation"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "rear-delt-fly-machine"
+    ],
+    "videoUrl": "/exercises/rear-delt-fly.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c0799339",
+    "slug": "rear-delt-fly-machine",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.067Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "rear_delt_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "scapular_retraction"
+    ],
+    "name": "Rear Delt Fly Machine",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rear_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "rhomboids"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "pull_accessory",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "rear-delt-fly"
+    ],
+    "videoUrl": "/exercises/rear-delt-fly.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079933a",
+    "slug": "overhead-press",
+    "aliases": [
+      "Shoulder Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.072Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5-8",
+    "defaultRest": "2-3 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell",
+      "squat_rack"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Overhead Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs",
+      "upper_back"
+    ],
+    "tags": [
+      "press",
+      "overhead",
+      "barbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-shoulder-press",
+      "push-press"
+    ],
+    "videoUrl": "/exercises/shoulder-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079933b",
+    "slug": "dumbbell-shoulder-press",
+    "aliases": [
+      "DB Shoulder Press",
+      "Seated Dumbbell Shoulder Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.076Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Dumbbell Shoulder Press",
+    "optionalEquipment": [
+      "flat_bench"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs",
+      "rotator_cuff"
+    ],
+    "tags": [
+      "press",
+      "overhead",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "overhead-press",
+      "arnold-press"
+    ],
+    "videoUrl": "/exercises/shoulder-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079933c",
+    "slug": "arnold-press",
+    "aliases": [
+      "DB Arnold Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.081Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Arnold Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs",
+      "rotator_cuff"
+    ],
+    "tags": [
+      "press",
+      "overhead",
+      "rotation"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-shoulder-press"
+    ],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd44751d9854c079933d",
+    "slug": "push-press",
+    "aliases": [
+      "Push-Press",
+      "Dumbbell Push Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.087Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5-6",
+    "defaultRest": "2-3 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Push Press",
+    "optionalEquipment": [
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps",
+      "quads",
+      "glutes"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "press",
+      "overhead",
+      "power",
+      "explosive"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "overhead-press"
+    ],
+    "videoUrl": "/exercises/shoulder-press.mov"
+  },
+  {
+    "_id": "699fbd44751d9854c079933e",
+    "slug": "machine-shoulder-press",
+    "aliases": [],
+    "alternatives": [
+      "dumbbell-shoulder-press"
+    ],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.091Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "shoulder_press_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Machine Shoulder Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "press",
+      "overhead",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/shoulder-press.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c079933f",
+    "slug": "pike-shoulder-press",
+    "aliases": [],
+    "alternatives": [
+      "dumbbell-shoulder-press"
+    ],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "calisthenics",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.095Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Pike Shoulder Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "press",
+      "overhead",
+      "bodyweight"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/exercises/pike-shoulder-press.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799340",
+    "slug": "dumbbell-lateral-raise",
+    "aliases": [
+      "DB Lateral Raises",
+      "Cable Lateral Raise",
+      "Side Lateral Raises",
+      "Dumbbell Lateral Raise"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.099Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "shoulder_abduction"
+    ],
+    "name": "Dumbbell Lateral Raise",
+    "optionalEquipment": [
+      "cable"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "side_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "traps"
+    ],
+    "stabilizers": [
+      "rotator_cuff"
+    ],
+    "tags": [
+      "shoulder",
+      "isolation",
+      "accessory"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "lateral-raise-machine"
+    ],
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799341",
+    "slug": "lateral-raise-machine",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.102Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "lateral_raise_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "shoulder_abduction"
+    ],
+    "name": "Lateral Raise Machine",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "side_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "traps"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "shoulder",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-lateral-raise"
+    ],
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799342",
+    "slug": "pull-up",
+    "aliases": [
+      "Pull-ups (or Assisted)",
+      "Pull-ups (or Lat Pulldown)",
+      "Weighted Pull-Up or Pulldown"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.105Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "6-10",
+    "defaultRest": "2 min",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "pull_up_bar"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_pull"
+    ],
+    "name": "Pull-Up",
+    "optionalEquipment": [
+      "resistance_band"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts",
+      "mid_back"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "pull",
+      "vertical",
+      "bodyweight"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [
+      "lat-pulldown"
+    ],
+    "videoUrl": "/exercises/lat-pulldown.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799343",
+    "slug": "lat-pulldown",
+    "aliases": [
+      "Lat Pulldowns",
+      "Close Grip Lat Pulldown"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.108Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "lat_pulldown"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_pull"
+    ],
+    "name": "Lat Pulldown",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts",
+      "mid_back"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "pull",
+      "vertical",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "pull-up"
+    ],
+    "videoUrl": "/exercises/lat-pulldown.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799344",
+    "slug": "cable-pullover",
+    "aliases": [
+      "Cable Pullovers"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.111Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "vertical_pull"
+    ],
+    "name": "Cable Pullover",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "chest",
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "pull_accessory",
+      "isolation",
+      "cable"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799345",
+    "slug": "diagonal-cable-pulldown",
+    "aliases": [
+      "Diagonal Single Arm Cable Pull Downs"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.114Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_pull"
+    ],
+    "name": "Diagonal Cable Pulldown",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "obliques"
+    ],
+    "tags": [
+      "pull",
+      "unilateral",
+      "cable"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799346",
+    "slug": "suitcase-carry",
+    "aliases": [
+      "Dumbbell Suitcase Carry"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.117Z",
+    "cues": [],
+    "defaultDuration": "30-60 sec per side",
+    "defaultReps": null,
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "carry",
+      "anti_lateral_flexion"
+    ],
+    "name": "Suitcase Carry",
+    "optionalEquipment": [
+      "kettlebell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "grip",
+      "obliques"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "traps",
+      "forearms"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae"
+    ],
+    "tags": [
+      "carry",
+      "core",
+      "grip_strength",
+      "functional"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799347",
+    "slug": "farmer-carry",
+    "aliases": [
+      "Farmer Walk",
+      "Kettlebell Carry Circuit"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.120Z",
+    "cues": [],
+    "defaultDuration": "30-60 sec",
+    "defaultReps": null,
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "carry"
+    ],
+    "name": "Farmer Carry",
+    "optionalEquipment": [
+      "kettlebell",
+      "trap_bar"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "grip",
+      "traps"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "forearms",
+      "abs"
+    ],
+    "stabilizers": [
+      "erector_spinae",
+      "glutes"
+    ],
+    "tags": [
+      "carry",
+      "grip_strength",
+      "full_body",
+      "functional"
+    ],
+    "trackingType": "time",
+    "variations": [
+      "suitcase-carry"
+    ]
+  },
+  {
+    "_id": "699fbd45751d9854c0799348",
+    "slug": "cable-woodchopper",
+    "aliases": [
+      "DB Woodchoppers × 15 per side"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.124Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "rotation"
+    ],
+    "name": "Cable Woodchopper",
+    "optionalEquipment": [
+      "dumbbell",
+      "medicine_ball"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "hip_flexors",
+      "glutes"
+    ],
+    "tags": [
+      "core",
+      "rotation",
+      "functional"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799349",
+    "slug": "russian-twist",
+    "aliases": [
+      "Russian Twists",
+      "Russian Twists × 40",
+      "Russian Twists (with DB) × 40",
+      "Dumbbell Russian Twist"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.133Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "20 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "rotation"
+    ],
+    "name": "Russian Twist",
+    "optionalEquipment": [
+      "dumbbell",
+      "medicine_ball"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "rotation"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c079934a",
+    "slug": "plank",
+    "aliases": [
+      "Plank × 45 sec",
+      "Plank × 60 sec"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.139Z",
+    "cues": [],
+    "defaultDuration": "30-60 sec",
+    "defaultReps": null,
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "anti_extension"
+    ],
+    "name": "Plank",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "transverse_abdominis"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "obliques"
+    ],
+    "stabilizers": [
+      "erector_spinae",
+      "glutes",
+      "front_delts"
+    ],
+    "tags": [
+      "core",
+      "stability",
+      "isometric",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "time",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c079934b",
+    "slug": "side-plank",
+    "aliases": [
+      "Side Plank × 30 sec per side"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.144Z",
+    "cues": [],
+    "defaultDuration": "30 sec per side",
+    "defaultReps": null,
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "anti_lateral_flexion"
+    ],
+    "name": "Side Plank",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs",
+      "glutes"
+    ],
+    "stabilizers": [
+      "erector_spinae"
+    ],
+    "tags": [
+      "core",
+      "stability",
+      "isometric"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "time",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c079934c",
+    "slug": "dead-bug",
+    "aliases": [
+      "Deadbug × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.148Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12 per side",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "anti_extension"
+    ],
+    "name": "Dead Bug",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "transverse_abdominis"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "hip_flexors"
+    ],
+    "stabilizers": [
+      "obliques"
+    ],
+    "tags": [
+      "core",
+      "stability",
+      "beginner_friendly"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c079934d",
+    "slug": "hollow-hold",
+    "aliases": [
+      "Hollow Hold × 30 sec"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.154Z",
+    "cues": [],
+    "defaultDuration": "20-30 sec",
+    "defaultReps": null,
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "anti_extension"
+    ],
+    "name": "Hollow Hold",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "transverse_abdominis"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "hip_flexors"
+    ],
+    "stabilizers": [
+      "obliques"
+    ],
+    "tags": [
+      "core",
+      "stability",
+      "gymnastics"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079934e",
+    "slug": "cable-crunch",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.159Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Cable Crunch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "obliques"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "isolation",
+      "cable"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079934f",
+    "slug": "cable-side-bend",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.163Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Cable Side Bend",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "isolation",
+      "cable"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799350",
+    "slug": "hanging-knee-raise",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.168Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "pull_up_bar"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Hanging Knee Raise",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "obliques"
+    ],
+    "stabilizers": [
+      "grip",
+      "forearms"
+    ],
+    "tags": [
+      "core",
+      "hanging"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799351",
+    "slug": "bicycle-crunch",
+    "aliases": [
+      "Bicycle Crunches",
+      "Bicycle Crunches × 40"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.172Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "20 per side",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "rotation"
+    ],
+    "name": "Bicycle Crunch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques",
+      "abs"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "hip_flexors"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799352",
+    "slug": "leg-raise",
+    "aliases": [
+      "Leg Raises × 15"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.176Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Leg Raise",
+    "optionalEquipment": [
+      "exercise_mat"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "obliques"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799353",
+    "slug": "toe-touch",
+    "aliases": [
+      "Toe Touches",
+      "Toe Touches × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.180Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Toe Touch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799354",
+    "slug": "v-up",
+    "aliases": [
+      "V-Ups",
+      "V-Ups × 12"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.183Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "V-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "obliques"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799355",
+    "slug": "reverse-crunch",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.187Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Reverse Crunch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "hip_flexors"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799356",
+    "slug": "flutter-kick",
+    "aliases": [
+      "Flutter Kicks × 40"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.192Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "20 per side",
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Flutter Kick",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799357",
+    "slug": "heel-tap",
+    "aliases": [
+      "Heel Taps × 30"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.196Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15 per side",
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Heel Tap",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799358",
+    "slug": "mountain-climber",
+    "aliases": [
+      "Mountain Climbers"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "conditioning",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.201Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "20 per side",
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "anti_extension"
+    ],
+    "name": "Mountain Climber",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "quads",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "obliques"
+    ],
+    "tags": [
+      "core",
+      "conditioning",
+      "bodyweight"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c0799359",
+    "slug": "crunch",
+    "aliases": [
+      "DB Crunch × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.205Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Crunch",
+    "optionalEquipment": [
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "bodyweight",
+      "beginner_friendly"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079935a",
+    "slug": "barbell-curl",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.209Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "Barbell Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "brachialis",
+      "forearms"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "biceps",
+      "isolation"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "ez-bar-curl",
+      "dumbbell-curl"
+    ]
+  },
+  {
+    "_id": "699fbd45751d9854c079935b",
+    "slug": "dumbbell-curl",
+    "aliases": [
+      "DB Curls",
+      "Dumbbell Bicep Curl",
+      "Dumbbell Biceps Curl",
+      "DB Biceps Burnout"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.213Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "Dumbbell Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "brachialis"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "biceps",
+      "isolation",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "hammer-curl",
+      "barbell-curl"
+    ],
+    "videoUrl": "/exercises/bicep-curls.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c079935c",
+    "slug": "hammer-curl",
+    "aliases": [
+      "Hammer Curls",
+      "DB Hammer Curls"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.217Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "Hammer Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "brachialis",
+      "biceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "biceps",
+      "brachialis",
+      "isolation"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-curl"
+    ],
+    "videoUrl": "/exercises/hammer-curls.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c079935d",
+    "slug": "cable-curl",
+    "aliases": [
+      "Bicep Cable Curl"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.222Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "Cable Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "brachialis"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "biceps",
+      "isolation",
+      "cable"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/bicep-curls.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c079935e",
+    "slug": "ez-bar-curl",
+    "aliases": [
+      "EZ Bar Curl"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.228Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "ez_bar"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "EZ-Bar Curl",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "brachialis",
+      "forearms"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "biceps",
+      "isolation"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "barbell-curl"
+    ],
+    "videoUrl": "/exercises/preacher-curl-machine.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c079935f",
+    "slug": "preacher-curl",
+    "aliases": [
+      "Preacher Curl Machine"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.235Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "preacher_curl_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "Preacher Curl",
+    "optionalEquipment": [
+      "ez_bar",
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "biceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "brachialis"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "biceps",
+      "isolation",
+      "machine"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/preacher-curl-machine.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799360",
+    "slug": "reverse-curl",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.239Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "barbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_flexion"
+    ],
+    "name": "Reverse Curl",
+    "optionalEquipment": [
+      "ez_bar",
+      "dumbbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "brachialis",
+      "forearms"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "biceps"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "forearms",
+      "isolation"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799361",
+    "slug": "cable-tricep-pushdown",
+    "aliases": [
+      "Cable Tricep Pushdown",
+      "Cable Triceps Pressdown",
+      "Tricep Cable Pushdowns",
+      "Tricep Pushdowns",
+      "Tricep Rope Pressdown"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.244Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_extension"
+    ],
+    "name": "Cable Tricep Pushdown",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "arms",
+      "triceps",
+      "isolation",
+      "cable"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "overhead-tricep-extension",
+      "skull-crusher"
+    ],
+    "videoUrl": "/exercises/tricep-cable-pushdowns.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799362",
+    "slug": "overhead-tricep-extension",
+    "aliases": [
+      "Overhead Triceps Extension",
+      "DB Overhead Tricep Extension",
+      "Dumbbell Triceps Overhead Extension"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.249Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_extension"
+    ],
+    "name": "Overhead Tricep Extension",
+    "optionalEquipment": [
+      "cable",
+      "ez_bar"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "arms",
+      "triceps",
+      "isolation",
+      "long_head"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "cable-tricep-pushdown"
+    ],
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799363",
+    "slug": "skull-crusher",
+    "aliases": [
+      "Skull Crushers",
+      "DB Skull Crushers"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.252Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "ez_bar",
+      "flat_bench"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_extension"
+    ],
+    "name": "Skull Crusher",
+    "optionalEquipment": [
+      "dumbbell",
+      "barbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [
+      "front_delts"
+    ],
+    "tags": [
+      "arms",
+      "triceps",
+      "isolation"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "cable-tricep-pushdown",
+      "overhead-tricep-extension"
+    ],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c0799364",
+    "slug": "tricep-dip",
+    "aliases": [
+      "Chair Tricep Dips"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.256Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dip_station"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "elbow_extension",
+      "horizontal_push"
+    ],
+    "name": "Tricep Dip",
+    "optionalEquipment": [
+      "chair"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "chest",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "arms",
+      "triceps",
+      "bodyweight",
+      "push"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799365",
+    "slug": "tricep-cable-kickback",
+    "aliases": [
+      "Single Arm Cable Kickbacks",
+      "Tricep Cable Kickbacks"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.261Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15 per side",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "cable"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_extension"
+    ],
+    "name": "Tricep Cable Kickback",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [
+      "rear_delts"
+    ],
+    "tags": [
+      "arms",
+      "triceps",
+      "isolation",
+      "cable"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799366",
+    "slug": "standing-calf-raise",
+    "aliases": [
+      "Standing Calf Raise (with DBs)",
+      "Standing or Seated Calf Raise",
+      "DB Calf Raises"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.265Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "calf_raise_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "ankle_flexion"
+    ],
+    "name": "Standing Calf Raise",
+    "optionalEquipment": [
+      "dumbbell",
+      "bodyweight",
+      "smith_machine"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "calves"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "calves",
+      "isolation"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "seated-calf-raise"
+    ]
+  },
+  {
+    "_id": "699fbd45751d9854c0799367",
+    "slug": "seated-calf-raise",
+    "aliases": [
+      "Seated Calf Raise Machine"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.270Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "calf_raise_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "ankle_flexion"
+    ],
+    "name": "Seated Calf Raise",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "calves"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "calves",
+      "isolation",
+      "machine"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "standing-calf-raise"
+    ]
+  },
+  {
+    "_id": "699fbd45751d9854c0799368",
+    "slug": "hip-abduction-machine",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.274Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "hip_abduction_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Hip Abduction Machine",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abductors",
+      "glutes"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "hip",
+      "isolation",
+      "machine"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799369",
+    "slug": "hip-adduction-machine",
+    "aliases": [
+      "Hip Adductor Machine"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.279Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "hip_adduction_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Hip Adduction Machine",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "adductors"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "hip",
+      "isolation",
+      "machine"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079936a",
+    "slug": "dumbbell-shrug",
+    "aliases": [
+      "DB Shrugs"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.283Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Dumbbell Shrug",
+    "optionalEquipment": [
+      "barbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "traps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "forearms"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "traps",
+      "isolation"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079936b",
+    "slug": "dumbbell-snatch",
+    "aliases": [],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "power",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.289Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "5 per side",
+    "defaultRest": "90 sec",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "triple_extension"
+    ],
+    "name": "Dumbbell Snatch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings",
+      "front_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "quads",
+      "traps",
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "power",
+      "explosive",
+      "full_body",
+      "olympic"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079936c",
+    "slug": "dumbbell-thruster",
+    "aliases": [
+      "Dumbbell Thrusters"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.294Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat",
+      "vertical_push"
+    ],
+    "name": "Dumbbell Thruster",
+    "optionalEquipment": [
+      "barbell"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "front_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "glutes",
+      "triceps"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "hybrid",
+      "functional",
+      "conditioning"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079936d",
+    "slug": "kettlebell-swing",
+    "aliases": [
+      "Kettlebell Swings"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "power",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.298Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "60 sec",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "kettlebell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Kettlebell Swing",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "abs",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "grip",
+      "erector_spinae"
+    ],
+    "tags": [
+      "power",
+      "explosive",
+      "hinge",
+      "conditioning"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c079936e",
+    "slug": "assault-bike-intervals",
+    "aliases": [
+      "Intervals"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "conditioning",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.302Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "assault_bike"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "Assault Bike Intervals",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "hamstrings",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "calves",
+      "front_delts",
+      "biceps"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "conditioning",
+      "hiit",
+      "cardio"
+    ],
+    "trackingType": "intervals",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079936f",
+    "slug": "bike-sprint",
+    "aliases": [
+      "Bike Sprint Pyramid",
+      "8-10 min steady bike"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": {
+      "trackDistance": true,
+      "trackPace": true,
+      "trackCalories": true,
+      "trackHeartRate": true,
+      "trackIncline": false,
+      "trackResistance": true,
+      "trackCadence": true
+    },
+    "category": "cardio",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.306Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "stationary_bike"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "Bike Sprint",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "hamstrings",
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "cardio",
+      "conditioning",
+      "bike"
+    ],
+    "trackingType": "time_distance",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799370",
+    "slug": "incline-treadmill-walk",
+    "aliases": [
+      "10 min incline walk or bike",
+      "10-12 min incline treadmill walk",
+      "8-10 min incline treadmill walk",
+      "Treadmill Incline Power Walk"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": {
+      "trackDistance": true,
+      "trackPace": true,
+      "trackCalories": true,
+      "trackHeartRate": true,
+      "trackIncline": true,
+      "trackResistance": false,
+      "trackCadence": false
+    },
+    "category": "cardio",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.310Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "treadmill"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "Incline Treadmill Walk",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings",
+      "calves"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "quads"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "cardio",
+      "low_impact",
+      "glute_builder"
+    ],
+    "trackingType": "time_distance",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799371",
+    "slug": "rowing-machine-sprint",
+    "aliases": [
+      "Rowing Machine Sprints"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": {
+      "trackDistance": true,
+      "trackPace": true,
+      "trackCalories": true,
+      "trackHeartRate": true,
+      "trackIncline": false,
+      "trackResistance": true,
+      "trackCadence": false
+    },
+    "category": "conditioning",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.315Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "intermediate",
+    "equipment": [
+      "rowing_machine"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull",
+      "hinge"
+    ],
+    "name": "Rowing Machine Sprint",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "biceps",
+      "hamstrings",
+      "abs"
+    ],
+    "stabilizers": [
+      "grip"
+    ],
+    "tags": [
+      "conditioning",
+      "hiit",
+      "full_body"
+    ],
+    "trackingType": "time_distance",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799372",
+    "slug": "burpee",
+    "aliases": [
+      "Burpees"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "conditioning",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.329Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat",
+      "horizontal_push"
+    ],
+    "name": "Burpee",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "full_body"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "conditioning",
+      "bodyweight",
+      "full_body"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/exercises/burpees.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799373",
+    "slug": "squat-jump",
+    "aliases": [
+      "Jump Squat",
+      "Squat Jumps"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "plyometric",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.334Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "squat"
+    ],
+    "name": "Squat Jump",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "calves",
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "plyometric",
+      "explosive",
+      "bodyweight"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799374",
+    "slug": "arm-circle",
+    "aliases": [
+      "Arm Circles & Band Pull-Aparts",
+      "Arm Circles × 30 sec"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.339Z",
+    "cues": [],
+    "defaultDuration": "30 sec",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Arm Circle",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rotator_cuff",
+      "front_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "side_delts"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "mobility",
+      "shoulder"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799375",
+    "slug": "scap-push-up",
+    "aliases": [
+      "Scap Push-Ups × 12",
+      "Scap Push-Ups × 15"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.345Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": null,
+    "defaultSets": 2,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "scapular_retraction"
+    ],
+    "name": "Scap Push-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rhomboids",
+      "mid_back"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "warmup",
+      "shoulder_health",
+      "scapular"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "699fbd45751d9854c0799376",
+    "slug": "high-knee",
+    "aliases": [
+      "High Knees × 30 sec"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.351Z",
+    "cues": [],
+    "defaultDuration": "30 sec",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "High Knee",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hip_flexors",
+      "quads"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "calves",
+      "abs"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "cardio",
+      "bodyweight"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799377",
+    "slug": "jumping-jack",
+    "aliases": [
+      "Jumping Jacks",
+      "Jumping Jacks × 30"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.356Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "30",
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Jumping Jack",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "calves",
+      "front_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "quads",
+      "side_delts"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "cardio",
+      "bodyweight"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_bodyweight",
+    "variations": [],
+    "videoUrl": "/placeholder.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c0799378",
+    "slug": "jump-rope",
+    "aliases": [
+      "Light Jog or Jump Rope"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.361Z",
+    "cues": [],
+    "defaultDuration": "3-5 min",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "jump_rope"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "Jump Rope",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "calves"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "quads",
+      "forearms"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "warmup",
+      "cardio",
+      "coordination"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "time",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c0799379",
+    "slug": "dynamic-stretch",
+    "aliases": [
+      "Dynamic Stretching",
+      "Dynamic Warm-up",
+      "Mobility Flow",
+      "Mobility Flow × 1 minute"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.365Z",
+    "cues": [],
+    "defaultDuration": "3-5 min",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Dynamic Stretch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "full_body"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "mobility",
+      "flexibility"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079937a",
+    "slug": "hip-circle",
+    "aliases": [
+      "Hip CARs & Bodyweight Lunges",
+      "Hip Airplanes × 20",
+      "Hip Mobility × 20 sec each",
+      "Hip Mobility Flow × 30 sec each",
+      "Hip Hinge Flow × 30 sec"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "mobility",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.369Z",
+    "cues": [],
+    "defaultDuration": "30-60 sec",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Hip Circle",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hip_flexors",
+      "glutes"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "adductors",
+      "abductors"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "mobility",
+      "hip"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079937b",
+    "slug": "band-pull-apart",
+    "aliases": [
+      "Band Dislocates & Push-ups"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.374Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "resistance_band"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "scapular_retraction"
+    ],
+    "name": "Band Pull-Apart",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rear_delts",
+      "rhomboids"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "mid_back",
+      "rotator_cuff"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "shoulder_health",
+      "posture"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079937c",
+    "slug": "shoulder-opener",
+    "aliases": [
+      "DB Shoulder Openers × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.378Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Shoulder Opener",
+    "optionalEquipment": [
+      "bodyweight"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "rotator_cuff",
+      "front_delts"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "side_delts"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "mobility",
+      "shoulder"
+    ],
+    "trackingType": "reps_bodyweight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079937d",
+    "slug": "light-dumbbell-floor-press",
+    "aliases": [
+      "Light DB Floor Press × 15"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.383Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15",
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_push"
+    ],
+    "name": "Light Dumbbell Floor Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "chest",
+      "triceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "warmup",
+      "activation"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079937e",
+    "slug": "light-dumbbell-rdl-to-upright-row",
+    "aliases": [
+      "Light DB RDL → Upright Row × 15"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.387Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": "15",
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge",
+      "vertical_pull"
+    ],
+    "name": "Light Dumbbell RDL to Upright Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings",
+      "traps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "glutes",
+      "side_delts"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "warmup",
+      "activation",
+      "combo"
+    ],
+    "trackingType": "reps_weight",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c079937f",
+    "slug": "bike-warmup",
+    "aliases": [
+      "Bike or Rower"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "warmup",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.391Z",
+    "cues": [],
+    "defaultDuration": "5 min",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "stationary_bike"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "Bike Warmup",
+    "optionalEquipment": [
+      "rowing_machine"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "hamstrings"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "calves"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "warmup",
+      "cardio",
+      "low_impact"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799380",
+    "slug": "foam-rolling",
+    "aliases": [
+      "Foam Roll & Stretch",
+      "Foam Rolling & Stretching"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "cooldown",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.395Z",
+    "cues": [],
+    "defaultDuration": "5-10 min",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "foam_roller"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Foam Rolling",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "full_body"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "cooldown",
+      "recovery",
+      "flexibility"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "time",
+    "variations": [],
+    "videoUrl": "/placeholder2.mp4"
+  },
+  {
+    "_id": "699fbd45751d9854c0799381",
+    "slug": "static-stretch",
+    "aliases": [
+      "Static Stretching",
+      "Light Stretching",
+      "Cool Down",
+      "Cool Down Stretching"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "cooldown",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.399Z",
+    "cues": [],
+    "defaultDuration": "5-10 min",
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "n/a",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Static Stretch",
+    "optionalEquipment": [
+      "exercise_mat"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "full_body"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "cooldown",
+      "recovery",
+      "flexibility"
+    ],
+    "trackingType": "time",
+    "variations": []
+  },
+  {
+    "_id": "699fbd45751d9854c0799382",
+    "slug": "walk",
+    "aliases": [
+      "Walk or Easy Bike"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "cardio",
+    "commonMistakes": [],
+    "createdAt": "2026-02-26T03:25:56.403Z",
+    "cues": [],
+    "defaultDuration": null,
+    "defaultReps": null,
+    "defaultRest": null,
+    "defaultSets": null,
+    "defaultTempo": null,
+    "description": "",
+    "difficulty": "beginner",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "gait"
+    ],
+    "name": "Walk",
+    "optionalEquipment": [
+      "treadmill"
+    ],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "hamstrings",
+      "calves"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "glutes"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "cardio",
+      "low_impact",
+      "recovery"
+    ],
+    "trackingType": "time_distance",
+    "variations": []
+  }
+]
