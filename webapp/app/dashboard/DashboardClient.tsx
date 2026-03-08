@@ -30,52 +30,22 @@ interface UserProgressData {
   }
 }
 
-// Mock data for initial display
-const mockData: UserProgressData = {
-  weightData: [
-    { date: 'Nov 1', value: 185 },
-    { date: 'Nov 8', value: 183.5 },
-    { date: 'Nov 15', value: 182 },
-    { date: 'Nov 22', value: 181.5 },
-    { date: 'Nov 29', value: 180 },
-    { date: 'Dec 6', value: 179.5 },
-    { date: 'Dec 13', value: 178 },
-  ],
-  bmiData: [
-    { date: 'Nov 1', value: 26.5 },
-    { date: 'Nov 8', value: 26.3 },
-    { date: 'Nov 15', value: 26.1 },
-    { date: 'Nov 22', value: 26.0 },
-    { date: 'Nov 29', value: 25.8 },
-    { date: 'Dec 6', value: 25.7 },
-    { date: 'Dec 13', value: 25.5 },
-  ],
-  moodData: [
-    { date: 'Dec 12', value: 2 },
-    { date: 'Dec 13', value: 3 },
-    { date: 'Dec 14', value: 3 },
-    { date: 'Dec 15', value: 2 },
-    { date: 'Dec 16', value: 3 },
-    { date: 'Dec 17', value: 2 },
-  ],
-  currentProgram: {
-    programId: 'become-12-week',
-    name: 'BECOME — 12 Week Fat-Loss Foundation',
-    currentPhase: 1,
-    currentWeek: 3,
-    totalWeeks: 12,
-    nextWorkout: 'Day 2 - Lower Body Strength'
-  },
+// Empty initial state — real data loads from /api/progress
+const emptyData: UserProgressData = {
+  weightData: [],
+  bmiData: [],
+  moodData: [],
+  currentProgram: null,
   stats: {
-    streakDays: 12,
-    totalWorkouts: 25,
-    thisWeekWorkouts: 3,
-    goalProgress: 65
+    streakDays: 0,
+    totalWorkouts: 0,
+    thisWeekWorkouts: 0,
+    goalProgress: 0
   }
 }
 
 export default function DashboardClient() {
-  const [data, setData] = useState<UserProgressData>(mockData)
+  const [data, setData] = useState<UserProgressData>(emptyData)
   const [loading, setLoading] = useState(true)
   const [showCheckInModal, setShowCheckInModal] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
