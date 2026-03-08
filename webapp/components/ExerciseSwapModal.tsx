@@ -156,6 +156,7 @@ export default function ExerciseSwapModal({
   });
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(3);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Fetch alternatives when modal opens
@@ -204,6 +205,7 @@ export default function ExerciseSwapModal({
     if (isOpen) {
       fetchAlternatives();
       setSelectedSlug(null);
+      setVisibleCount(3);
       setSearchQuery("");
       setFilters({ equipment: null, bodyRegion: null, difficulty: null, category: null });
     }
@@ -215,6 +217,11 @@ export default function ExerciseSwapModal({
       setTimeout(() => searchRef.current?.focus(), 200);
     }
   }, [isOpen, loading]);
+
+  // Reset visible count when search/filters change
+  useEffect(() => {
+    setVisibleCount(3);
+  }, [searchQuery, filters]);
 
   // Filter & search
   const filteredAlternatives = alternatives.filter((alt) => {
@@ -258,6 +265,9 @@ export default function ExerciseSwapModal({
   const bodyRegionOptions = [...new Set(alternatives.map((a) => a.bodyRegion))].sort();
   const difficultyOptions = [...new Set(alternatives.map((a) => a.difficulty))].sort();
   const categoryOptions = [...new Set(alternatives.map((a) => a.category))].sort();
+
+  const visibleAlternatives = filteredAlternatives.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredAlternatives.length;
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -468,7 +478,7 @@ export default function ExerciseSwapModal({
 
               {!loading && !error && (
                 <div className="space-y-2">
-                  {filteredAlternatives.map((alt, i) => (
+                  {visibleAlternatives.map((alt, i) => (
                     <motion.div
                       key={alt.slug}
                       initial={{ opacity: 0, y: 10 }}
@@ -484,6 +494,15 @@ export default function ExerciseSwapModal({
                       />
                     </motion.div>
                   ))}
+
+                  {hasMore && (
+                    <button
+                      onClick={() => setVisibleCount((c) => c + 10)}
+                      className="w-full rounded-lg border border-zinc-200 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    >
+                      Show more ({filteredAlternatives.length - visibleCount} remaining)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
