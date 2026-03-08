@@ -18,21 +18,24 @@ interface HydratedExerciseFields {
   thumbnailUrl?: string;
 }
 
-// Module-level slug cache (reset per cold start)
+// Module-level caches (reset per cold start)
 let slugCache: Map<string, HydratedExerciseFields> | null = null;
+let nameToSlugCache: Map<string, string> | null = null;
 
 /**
  * Build (or return cached) slug → { name, category, videoUrl, thumbnailUrl } map.
+ * Also builds a lowercase name/alias → slug reverse map for legacy exercises.
  */
 async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
   if (slugCache) return slugCache;
 
   const exercises = await ExerciseModel.find(
     {},
-    { slug: 1, name: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, _id: 0 }
+    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, _id: 0 }
   ).lean();
 
   slugCache = new Map();
+  nameToSlugCache = new Map();
   for (const ex of exercises) {
     slugCache.set(ex.slug, {
       name: ex.name,
@@ -41,6 +44,10 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
       videoUrl: ex.videoUrl || undefined,
       thumbnailUrl: ex.thumbnailUrl || undefined,
     });
+    nameToSlugCache.set(ex.name.toLowerCase(), ex.slug);
+    for (const alias of ex.aliases || []) {
+      nameToSlugCache.set(alias.toLowerCase(), ex.slug);
+    }
   }
 
   return slugCache;
@@ -64,8 +71,17 @@ function hydrateExercise(
   exercise: AnyExercise,
   map: Map<string, HydratedExerciseFields>
 ): AnyExercise {
-  const slug = exercise.exerciseSlug;
-  if (!slug) return exercise; // already has name set (e.g. creation flow)
+  let slug = exercise.exerciseSlug;
+
+  // Legacy exercises: no slug, only name — resolve slug via reverse lookup
+  if (!slug && exercise.name && nameToSlugCache) {
+    slug = nameToSlugCache.get(exercise.name.toLowerCase());
+    if (slug) {
+      exercise = { ...exercise, exerciseSlug: slug };
+    }
+  }
+
+  if (!slug) return exercise; // truly unknown — keep as-is
 
   const info = map.get(slug);
   if (!info) {
