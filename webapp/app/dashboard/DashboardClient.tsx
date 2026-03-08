@@ -6,8 +6,9 @@ import PageTransition from '@/components/PageTransition'
 import ProgressChart, { MetricData } from '@/components/ProgressChart'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import MoodCard from '@/components/MoodCard'
-import { ClipboardList, Flame, Target, TrendingUp } from 'lucide-react'
+import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
+import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 
 interface UserProgressData {
   weightData: MetricData[]
@@ -79,11 +80,18 @@ export default function DashboardClient() {
   const [showCheckInModal, setShowCheckInModal] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
-  const [checkInInfo, setCheckInInfo] = useState({ 
+  const [checkInInfo, setCheckInInfo] = useState({
     daysSinceMood: 0,
     daysSinceWeight: 0,
     lastWeight: undefined as number | undefined
   })
+  const [nutritionData, setNutritionData] = useState<{
+    calories: { consumed: number; goal: number }
+    protein: { current: number; goal: number }
+    carbs: { current: number; goal: number }
+    fats: { current: number; goal: number }
+    water: { current: number; goal: number }
+  } | null>(null)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -152,10 +160,42 @@ export default function DashboardClient() {
       }
     }
 
+    // Fetch nutrition data for today
+    async function fetchNutrition() {
+      try {
+        const token = localStorage.getItem('token')
+        const headers: HeadersInit = {}
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+
+        const [logRes, goalsRes] = await Promise.all([
+          fetch('/api/nutrition/log', { headers }),
+          fetch('/api/nutrition/goals', { headers })
+        ])
+
+        if (logRes.ok && goalsRes.ok) {
+          const logData = await logRes.json()
+          const goalsData = await goalsRes.json()
+
+          setNutritionData({
+            calories: { consumed: logData.calories || 0, goal: goalsData.calories || 2000 },
+            protein: { current: logData.protein || 0, goal: goalsData.protein || 150 },
+            carbs: { current: logData.carbs || 0, goal: goalsData.carbs || 250 },
+            fats: { current: logData.fats || 0, goal: goalsData.fats || 65 },
+            water: { current: logData.water || 0, goal: goalsData.water || 8 }
+          })
+        }
+      } catch (error) {
+        console.error('Failed to fetch nutrition data:', error)
+        // Don't break dashboard if nutrition API fails
+      }
+    }
+
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
-      await fetchProgress()
+      await Promise.all([fetchProgress(), fetchNutrition()])
     }
 
     init()
@@ -294,6 +334,17 @@ export default function DashboardClient() {
         moodData={data.moodData}
       />
 
+      {/* Nutrition Summary */}
+      {nutritionData && (
+        <NutritionSummaryCard
+          calories={nutritionData.calories}
+          protein={nutritionData.protein}
+          carbs={nutritionData.carbs}
+          fats={nutritionData.fats}
+          water={nutritionData.water}
+        />
+      )}
+
       {/* Current Program & Mindset - side by side on desktop, stacked on mobile */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Current Program */}
@@ -431,18 +482,20 @@ export default function DashboardClient() {
           </svg>
         </Link>
 
-        <Link 
-          href="/dashboard/nutrition" 
+        <Link
+          href="/dashboard/nutrition"
           className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-            <svg className="h-5 w-5 text-zinc-600 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+            <UtensilsCrossed className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold text-zinc-900 dark:text-white">Nutrition</h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Track meals & macros</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {nutritionData
+                ? `${nutritionData.calories.consumed.toLocaleString()} / ${nutritionData.calories.goal.toLocaleString()} cal today`
+                : 'Track meals & macros'}
+            </p>
           </div>
           <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
