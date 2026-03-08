@@ -31,6 +31,9 @@ export interface IExerciseLog {
   // Grouping metadata (mirrors program exercise grouping for analysis)
   groupId?: string
   groupType?: string
+  // Exercise swap tracking
+  originalExerciseSlug?: string  // If swapped, the originally programmed exercise slug
+  swappedFromName?: string       // The original exercise name before swap
 }
 
 export interface IWorkoutLog {
@@ -111,7 +114,9 @@ const ExerciseLogSchema = new Schema<IExerciseLog>({
   name: { type: String, required: true },
   sets: [SetLogSchema],
   groupId: { type: String },
-  groupType: { type: String }
+  groupType: { type: String },
+  originalExerciseSlug: { type: String },
+  swappedFromName: { type: String }
 }, { _id: false })
 
 const WorkoutLogSchema = new Schema<IWorkoutLog>({

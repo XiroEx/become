@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+import ExerciseSwapModal from "@/components/ExerciseSwapModal";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 
@@ -174,6 +175,10 @@ export default function WorkoutFormPage() {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [skipModalExerciseIndex, setSkipModalExerciseIndex] = useState<number | null>(null);
   const [skipModalSetIndex, setSkipModalSetIndex] = useState<number | null>(null);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapExerciseIndex, setSwapExerciseIndex] = useState<number | null>(null);
+  // Track which exercises have been swapped: exerciseIndex -> { originalSlug, originalName }
+  const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load the current workout from API
@@ -316,6 +321,7 @@ export default function WorkoutFormPage() {
 
       const exercises = workout.exercises.map((exercise, index) => {
         const ep = progress.find((p) => p.exerciseIndex === index);
+        const swap = swappedExercises[index];
         return {
           name: exercise.name,
           ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
@@ -328,6 +334,8 @@ export default function WorkoutFormPage() {
           // Pass through grouping metadata for analytics
           ...(exercise.groupId && { groupId: exercise.groupId }),
           ...(exercise.groupType && { groupType: exercise.groupType }),
+          // Swap tracking
+          ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
       });
 
@@ -348,7 +356,7 @@ export default function WorkoutFormPage() {
     } catch (error) {
       console.error("Error auto-saving:", error);
     }
-  }, [programId, workout, currentPhase]);
+  }, [programId, workout, currentPhase, swappedExercises]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -445,6 +453,57 @@ export default function WorkoutFormPage() {
     setSkipModalSetIndex(setIndex);
     setShowSkipModal(true);
   };
+
+  const openSwapModal = (exerciseIndex: number) => {
+    setSwapExerciseIndex(exerciseIndex);
+    setShowSwapModal(true);
+  };
+
+  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }) => {
+    if (!workout) return;
+
+    const oldExercise = workout.exercises[exerciseIndex];
+    const originalSlug = swappedExercises[exerciseIndex]?.originalSlug || oldExercise.exerciseSlug || "";
+    const originalName = swappedExercises[exerciseIndex]?.originalName || oldExercise.name;
+
+    // Track the swap
+    setSwappedExercises(prev => ({
+      ...prev,
+      [exerciseIndex]: { originalSlug, originalName }
+    }));
+
+    // Replace the exercise in the workout, preserving sets/reps/rest prescription
+    const updatedExercises = [...workout.exercises];
+    updatedExercises[exerciseIndex] = {
+      ...oldExercise,
+      exerciseSlug: alternative.slug,
+      name: alternative.name,
+      type: alternative.category,
+    };
+
+    setWorkout({ ...workout, exercises: updatedExercises });
+
+    // Reset progress for this exercise (fresh start with new exercise)
+    setExerciseProgress(prev => {
+      const updated = prev.map(ep =>
+        ep.exerciseIndex === exerciseIndex
+          ? {
+              ...ep,
+              sets: Array.from({ length: oldExercise.sets || 3 }, () => ({
+                reps: "",
+                weight: "",
+                completed: false,
+              })),
+            }
+          : ep
+      );
+      // Auto-save after swap
+      autoSave(updated);
+      return updated;
+    });
+
+    setShowSwapModal(false);
+  }, [workout, swappedExercises, autoSave]);
 
   const getExerciseCompletion = (exerciseIndex: number) => {
     const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
@@ -586,7 +645,14 @@ export default function WorkoutFormPage() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-zinc-900 dark:text-white">{exercise.name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-zinc-900 dark:text-white truncate">{exercise.name}</h3>
+                        {swappedExercises[exerciseIndex] && (
+                          <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            Swapped
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-xs text-zinc-500 dark:text-zinc-400">
                           {exercise.sets} sets × {exercise.reps}
@@ -594,6 +660,20 @@ export default function WorkoutFormPage() {
                         <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>
                       </div>
                     </div>
+
+                    {/* Swap button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openSwapModal(exerciseIndex);
+                      }}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-400 transition-all hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                      title="Swap exercise"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                    </button>
 
                     {/* Mini progress */}
                     <div className="flex items-center gap-2">
@@ -784,10 +864,31 @@ export default function WorkoutFormPage() {
                             return (
                               <div key={originalIndex} className="rounded-lg border border-zinc-100 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                                 <div className="mb-2 flex items-center justify-between">
-                                  <span className="text-sm font-semibold text-zinc-900 dark:text-white">
-                                    {exercise.name}
-                                  </span>
-                                  <span className="text-xs text-zinc-500 dark:text-zinc-400">{exercise.reps}</span>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
+                                      {exercise.name}
+                                    </span>
+                                    {swappedExercises[originalIndex] && (
+                                      <span className="shrink-0 rounded bg-blue-100 px-1 py-0.5 text-[9px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                        Swapped
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openSwapModal(originalIndex);
+                                      }}
+                                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-all hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                                      title="Swap exercise"
+                                    >
+                                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                      </svg>
+                                    </button>
+                                    <span className="text-xs text-zinc-500 dark:text-zinc-400">{exercise.reps}</span>
+                                  </div>
                                 </div>
                                 <div className="grid grid-cols-12 items-center gap-2">
                                   <div className="col-span-4">
@@ -921,21 +1022,28 @@ export default function WorkoutFormPage() {
                 Set {skipModalSetIndex + 1} of {workout?.exercises[skipModalExerciseIndex]?.sets}
               </p>
 
-              {/* Info Box */}
-              <div className="mb-6 rounded-lg bg-blue-50 border border-blue-200 p-3 dark:bg-blue-900/10 dark:border-blue-800/30">
-                <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
-                  💡 <span className="font-semibold">Coming soon:</span> Alternative exercise suggestions when you need to skip
-                </p>
-              </div>
-
               <div className="flex flex-col gap-3">
+                {/* Swap alternative option */}
+                <button
+                  onClick={() => {
+                    setShowSkipModal(false);
+                    openSwapModal(skipModalExerciseIndex);
+                  }}
+                  className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  Swap for Alternative
+                </button>
+
                 <button
                   onClick={() => skipSet(skipModalExerciseIndex, skipModalSetIndex)}
                   className="rounded-lg bg-zinc-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
                 >
                   Skip This Set Only
                 </button>
-                
+
                 <button
                   onClick={() => skipExercise(skipModalExerciseIndex)}
                   className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
@@ -954,6 +1062,22 @@ export default function WorkoutFormPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Exercise Swap Modal */}
+      {swapExerciseIndex !== null && workout?.exercises[swapExerciseIndex] && (
+        <ExerciseSwapModal
+          isOpen={showSwapModal}
+          onClose={() => {
+            setShowSwapModal(false);
+            setSwapExerciseIndex(null);
+          }}
+          onSwap={(alt) => handleSwapExercise(swapExerciseIndex, alt)}
+          exerciseSlug={workout.exercises[swapExerciseIndex].exerciseSlug || ""}
+          exerciseName={workout.exercises[swapExerciseIndex].name}
+          workoutExerciseSlugs={workout.exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
+          programRole={workout.exercises[swapExerciseIndex].type === "conditioning" ? undefined : undefined}
+        />
+      )}
     </PageTransition>
   );
 }

@@ -1,0 +1,1669 @@
+[
+  {
+    "_id": "6968562f91581c5fe7a841b6",
+    "exerciseName": "Single Arm Dumbbell Row",
+    "videoUrl": "/exercises/db-single-arm-row.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.909Z",
+    "updatedAt": "2026-01-29T00:43:50.054Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c9",
+    "exerciseName": "Skull Crushers",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.086Z",
+    "updatedAt": "2026-01-15T02:51:28.086Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d4",
+    "exerciseName": "Bulgarian Split Squat",
+    "videoUrl": "/exercises/bulgarian-split-squat.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.187Z",
+    "updatedAt": "2026-01-29T00:43:49.899Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f2",
+    "exerciseName": "Jump Rope",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.949Z",
+    "updatedAt": "2026-01-15T02:51:28.949Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841fa",
+    "exerciseName": "Leg Swings",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.020Z",
+    "updatedAt": "2026-01-15T02:51:29.020Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b2",
+    "exerciseName": "T-Bar Row",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.873Z",
+    "updatedAt": "2026-01-15T02:51:27.873Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841ba",
+    "exerciseName": "Overhead Press",
+    "videoUrl": "/exercises/shoulder-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.945Z",
+    "updatedAt": "2026-01-29T00:43:50.730Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841bc",
+    "exerciseName": "Front Raises",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.964Z",
+    "updatedAt": "2026-01-15T02:51:27.964Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841f9",
+    "exerciseName": "Hip Circles",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.012Z",
+    "updatedAt": "2026-01-15T02:51:29.012Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84204",
+    "exerciseName": "Childs Pose",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.108Z",
+    "updatedAt": "2026-01-15T02:51:29.108Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841bb",
+    "exerciseName": "Lateral Raises",
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.954Z",
+    "updatedAt": "2026-01-29T00:43:50.137Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841db",
+    "exerciseName": "Good Mornings",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.743Z",
+    "updatedAt": "2026-01-15T02:51:28.743Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ee",
+    "exerciseName": "Treadmill",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.913Z",
+    "updatedAt": "2026-01-15T02:51:28.913Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f0",
+    "exerciseName": "Bike",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.931Z",
+    "updatedAt": "2026-01-15T02:51:28.931Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f7",
+    "exerciseName": "Jumping Jacks",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.994Z",
+    "updatedAt": "2026-01-15T02:51:28.994Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84202",
+    "exerciseName": "Shoulder Stretch",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.091Z",
+    "updatedAt": "2026-01-15T02:51:29.091Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a8420b",
+    "exerciseName": "Cable Tricep Pushdown",
+    "videoUrl": "/exercises/tricep-cable-pushdowns.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.715Z",
+    "updatedAt": "2026-01-29T00:43:50.798Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84214",
+    "exerciseName": "Chest Supported Row",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.795Z",
+    "updatedAt": "2026-01-15T02:51:29.795Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d7",
+    "exerciseName": "Leg Curl",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.707Z",
+    "updatedAt": "2026-01-15T02:51:28.707Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e1",
+    "exerciseName": "Seated Calf Raises",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.796Z",
+    "updatedAt": "2026-01-15T02:51:28.796Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84213",
+    "exerciseName": "Leg Curl Machine",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.787Z",
+    "updatedAt": "2026-01-15T02:51:29.787Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841aa",
+    "exerciseName": "Dumbbell Flyes",
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.799Z",
+    "updatedAt": "2026-01-29T00:43:50.090Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b3",
+    "exerciseName": "Pull-ups",
+    "videoUrl": "/exercises/weighted-pull-up-or-pulldown.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.882Z",
+    "updatedAt": "2026-01-29T00:43:50.340Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c1",
+    "exerciseName": "Dumbbell Curls",
+    "videoUrl": "/exercises/bicep-curls.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.011Z",
+    "updatedAt": "2026-01-29T00:43:49.875Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841fe",
+    "exerciseName": "Hamstring Stretch",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.056Z",
+    "updatedAt": "2026-01-15T02:51:29.056Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84203",
+    "exerciseName": "Tricep Stretch",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.099Z",
+    "updatedAt": "2026-01-15T02:51:29.099Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84210",
+    "exerciseName": "Rope Face Pull",
+    "videoUrl": "/exercises/face-pulls.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.759Z",
+    "updatedAt": "2026-01-29T00:43:50.195Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841af",
+    "exerciseName": "Lat Pulldown",
+    "videoUrl": "/exercises/lat-pulldown.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.846Z",
+    "updatedAt": "2026-01-29T00:43:50.253Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841bd",
+    "exerciseName": "Rear Delt Flyes",
+    "videoUrl": "/exercises/rear-delt-fly.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.973Z",
+    "updatedAt": "2026-01-29T00:43:50.372Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841cd",
+    "exerciseName": "Barbell Squat",
+    "videoUrl": "/exercises/back-squat.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.123Z",
+    "updatedAt": "2026-01-29T00:43:49.806Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841dd",
+    "exerciseName": "Glute Bridge",
+    "videoUrl": "/exercises/glute-bridge.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.761Z",
+    "updatedAt": "2026-01-29T00:43:50.202Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e0",
+    "exerciseName": "Calf Raises",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.787Z",
+    "updatedAt": "2026-01-15T02:51:28.787Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841ff",
+    "exerciseName": "Quad Stretch",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.065Z",
+    "updatedAt": "2026-01-15T02:51:29.065Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84207",
+    "exerciseName": "Back Squat",
+    "videoUrl": "/exercises/back-squat.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.134Z",
+    "updatedAt": "2026-01-29T00:43:49.782Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b0",
+    "exerciseName": "Bent Over Row",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.855Z",
+    "updatedAt": "2026-01-15T02:51:27.855Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b4",
+    "exerciseName": "Chin-ups",
+    "videoUrl": "/exercises/weighted-pull-up-or-pulldown.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.891Z",
+    "updatedAt": "2026-01-29T00:43:50.353Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c7",
+    "exerciseName": "Tricep Pushdown",
+    "videoUrl": "/exercises/tricep-cable-pushdowns.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.067Z",
+    "updatedAt": "2026-01-29T00:43:50.822Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841cc",
+    "exerciseName": "Diamond Push-ups",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.113Z",
+    "updatedAt": "2026-01-15T02:51:28.113Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d3",
+    "exerciseName": "Walking Lunges",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.179Z",
+    "updatedAt": "2026-01-15T02:51:28.179Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ef",
+    "exerciseName": "Rowing Machine",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.922Z",
+    "updatedAt": "2026-01-15T02:51:28.922Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841fb",
+    "exerciseName": "Cat-Cow Stretch",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.029Z",
+    "updatedAt": "2026-01-15T02:51:29.029Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84209",
+    "exerciseName": "Machine Chest Press",
+    "videoUrl": "/exercises/chest-press-machine.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.696Z",
+    "updatedAt": "2026-01-29T00:43:49.954Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a8420e",
+    "exerciseName": "Machine Shoulder Press",
+    "videoUrl": "/exercises/shoulder-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.742Z",
+    "updatedAt": "2026-01-29T00:43:50.724Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84215",
+    "exerciseName": "Walking Lunge",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.804Z",
+    "updatedAt": "2026-01-15T02:51:29.804Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841a7",
+    "exerciseName": "Bench Press",
+    "videoUrl": "/exercises/bench-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.760Z",
+    "updatedAt": "2026-01-29T00:43:49.826Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b8",
+    "exerciseName": "Romanian Deadlift",
+    "videoUrl": "/exercises/romanian-deadlift.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.927Z",
+    "updatedAt": "2026-01-29T00:43:50.171Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b9",
+    "exerciseName": "Dumbbell Shoulder Press",
+    "videoUrl": "/exercises/shoulder-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.936Z",
+    "updatedAt": "2026-01-29T00:43:50.384Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c2",
+    "exerciseName": "Barbell Curls",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.021Z",
+    "updatedAt": "2026-01-15T02:51:28.021Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ec",
+    "exerciseName": "Bird Dog",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.895Z",
+    "updatedAt": "2026-01-15T02:51:28.895Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84200",
+    "exerciseName": "Hip Flexor Stretch",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.074Z",
+    "updatedAt": "2026-01-15T02:51:29.074Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a8420a",
+    "exerciseName": "Dumbbell Lateral Raise",
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.705Z",
+    "updatedAt": "2026-01-29T00:43:50.114Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b5",
+    "exerciseName": "Face Pulls",
+    "videoUrl": "/exercises/face-pulls.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.900Z",
+    "updatedAt": "2026-01-29T00:43:50.183Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d6",
+    "exerciseName": "Hack Squat",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.206Z",
+    "updatedAt": "2026-01-15T02:51:28.206Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f5",
+    "exerciseName": "Kettlebell Swings",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.976Z",
+    "updatedAt": "2026-01-15T02:51:28.976Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84206",
+    "exerciseName": "Foam Rolling",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.126Z",
+    "updatedAt": "2026-01-15T02:51:29.126Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841a9",
+    "exerciseName": "Incline Dumbbell Press",
+    "videoUrl": "/exercises/incline-dumbbell-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.790Z",
+    "updatedAt": "2026-01-29T00:43:50.236Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841ab",
+    "exerciseName": "Cable Flyes",
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.809Z",
+    "updatedAt": "2026-01-29T00:43:50.084Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d2",
+    "exerciseName": "Lunges",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.169Z",
+    "updatedAt": "2026-01-15T02:51:28.169Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d9",
+    "exerciseName": "Seated Leg Curl",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.725Z",
+    "updatedAt": "2026-01-15T02:51:28.725Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841f8",
+    "exerciseName": "Arm Circles",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.003Z",
+    "updatedAt": "2026-01-15T02:51:29.003Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84212",
+    "exerciseName": "Step Ups",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.777Z",
+    "updatedAt": "2026-01-15T02:51:29.777Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c3",
+    "exerciseName": "Hammer Curls",
+    "videoUrl": "/exercises/hammer-curls.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.032Z",
+    "updatedAt": "2026-01-29T00:43:50.230Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c4",
+    "exerciseName": "Preacher Curls",
+    "videoUrl": "/exercises/preacher-curl-machine.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.041Z",
+    "updatedAt": "2026-01-29T00:43:50.293Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841cb",
+    "exerciseName": "Close Grip Bench Press",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.105Z",
+    "updatedAt": "2026-01-15T02:51:28.105Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841cf",
+    "exerciseName": "Front Squat",
+    "videoUrl": "/exercises/back-squat.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.143Z",
+    "updatedAt": "2026-01-29T00:43:49.820Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d1",
+    "exerciseName": "Leg Extension",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.161Z",
+    "updatedAt": "2026-01-15T02:51:28.161Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841dc",
+    "exerciseName": "Hip Thrust",
+    "videoUrl": "/exercises/hip-thrust.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.752Z",
+    "updatedAt": "2026-01-29T00:43:50.108Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e3",
+    "exerciseName": "Plank",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.815Z",
+    "updatedAt": "2026-01-15T02:51:28.815Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e6",
+    "exerciseName": "Leg Raises",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.842Z",
+    "updatedAt": "2026-01-15T02:51:28.842Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ea",
+    "exerciseName": "Mountain Climbers",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.877Z",
+    "updatedAt": "2026-01-15T02:51:28.877Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84201",
+    "exerciseName": "Chest Stretch",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.082Z",
+    "updatedAt": "2026-01-15T02:51:29.082Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84205",
+    "exerciseName": "Pigeon Pose",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.117Z",
+    "updatedAt": "2026-01-15T02:51:29.117Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84208",
+    "exerciseName": "Dumbbell Bench Press",
+    "videoUrl": "/exercises/db-bench-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.143Z",
+    "updatedAt": "2026-01-29T00:43:49.984Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a8420d",
+    "exerciseName": "Bent Over Barbell Row",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.733Z",
+    "updatedAt": "2026-01-15T02:51:29.733Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b1",
+    "exerciseName": "Barbell Row",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.864Z",
+    "updatedAt": "2026-01-15T02:51:27.864Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c5",
+    "exerciseName": "Incline Dumbbell Curls",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.050Z",
+    "updatedAt": "2026-01-15T02:51:28.050Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ed",
+    "exerciseName": "Side Plank",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.904Z",
+    "updatedAt": "2026-01-15T02:51:28.904Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f6",
+    "exerciseName": "Battle Ropes",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.985Z",
+    "updatedAt": "2026-01-15T02:51:28.985Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841ac",
+    "exerciseName": "Push-ups",
+    "videoUrl": "/exercises/push-ups.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.819Z",
+    "updatedAt": "2026-01-29T00:43:50.305Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841ae",
+    "exerciseName": "Seated Cable Row",
+    "videoUrl": "/exercises/seated-cable-row.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.837Z",
+    "updatedAt": "2026-01-29T00:43:49.923Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c6",
+    "exerciseName": "Cable Curls",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.058Z",
+    "updatedAt": "2026-01-15T02:51:28.058Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ca",
+    "exerciseName": "Overhead Tricep Extension",
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.095Z",
+    "updatedAt": "2026-01-29T00:43:50.780Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841ce",
+    "exerciseName": "Squat",
+    "videoUrl": "/exercises/back-squat.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.132Z",
+    "updatedAt": "2026-01-29T00:43:49.812Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e4",
+    "exerciseName": "Crunches",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.824Z",
+    "updatedAt": "2026-01-15T02:51:28.824Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e8",
+    "exerciseName": "Cable Crunches",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.860Z",
+    "updatedAt": "2026-01-15T02:51:28.860Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841fd",
+    "exerciseName": "Inchworm",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.048Z",
+    "updatedAt": "2026-01-15T02:51:29.048Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841a8",
+    "exerciseName": "Incline Bench Press",
+    "videoUrl": "/exercises/incline-dumbbell-press.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.779Z",
+    "updatedAt": "2026-01-29T00:43:50.248Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d0",
+    "exerciseName": "Leg Press",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.152Z",
+    "updatedAt": "2026-01-15T02:51:28.152Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d5",
+    "exerciseName": "Goblet Squat",
+    "videoUrl": "/exercises/goblet-squat.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.197Z",
+    "updatedAt": "2026-01-29T00:43:50.218Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841d8",
+    "exerciseName": "Lying Leg Curl",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.716Z",
+    "updatedAt": "2026-01-15T02:51:28.716Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841da",
+    "exerciseName": "Stiff Leg Deadlift",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.733Z",
+    "updatedAt": "2026-01-15T02:51:28.733Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e9",
+    "exerciseName": "Ab Rollouts",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.868Z",
+    "updatedAt": "2026-01-15T02:51:28.868Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841eb",
+    "exerciseName": "Dead Bug",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.886Z",
+    "updatedAt": "2026-01-15T02:51:28.886Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f3",
+    "exerciseName": "Burpees",
+    "videoUrl": "/exercises/burpees.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:28.958Z",
+    "updatedAt": "2026-01-29T00:43:49.911Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a841fc",
+    "exerciseName": "Worlds Greatest Stretch",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:29.038Z",
+    "updatedAt": "2026-01-15T02:51:29.038Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a84211",
+    "exerciseName": "EZ Bar Curl",
+    "videoUrl": "/exercises/preacher-curl-machine.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.768Z",
+    "updatedAt": "2026-01-29T00:43:50.282Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841ad",
+    "exerciseName": "Chest Dips",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.828Z",
+    "updatedAt": "2026-01-15T02:51:27.828Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841b7",
+    "exerciseName": "Deadlift",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.917Z",
+    "updatedAt": "2026-01-15T02:51:27.917Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841be",
+    "exerciseName": "Arnold Press",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.982Z",
+    "updatedAt": "2026-01-15T02:51:27.982Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841df",
+    "exerciseName": "Sumo Deadlift",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.779Z",
+    "updatedAt": "2026-01-15T02:51:28.779Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e5",
+    "exerciseName": "Russian Twists",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.833Z",
+    "updatedAt": "2026-01-15T02:51:28.833Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e7",
+    "exerciseName": "Hanging Leg Raises",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.851Z",
+    "updatedAt": "2026-01-15T02:51:28.851Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f1",
+    "exerciseName": "Stationary Bike",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.940Z",
+    "updatedAt": "2026-01-15T02:51:28.940Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841bf",
+    "exerciseName": "Upright Row",
+    "videoUrl": "/placeholder.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:27.990Z",
+    "updatedAt": "2026-01-15T02:51:27.990Z"
+  },
+  {
+    "_id": "6968562f91581c5fe7a841c0",
+    "exerciseName": "Bicep Curls",
+    "videoUrl": "/exercises/bicep-curls.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:27.999Z",
+    "updatedAt": "2026-01-29T00:43:49.848Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841c8",
+    "exerciseName": "Tricep Dips",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.077Z",
+    "updatedAt": "2026-01-15T02:51:28.077Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841de",
+    "exerciseName": "Cable Kickbacks",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.770Z",
+    "updatedAt": "2026-01-15T02:51:28.770Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841e2",
+    "exerciseName": "Standing Calf Raises",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.806Z",
+    "updatedAt": "2026-01-15T02:51:28.806Z"
+  },
+  {
+    "_id": "6968563091581c5fe7a841f4",
+    "exerciseName": "Box Jumps",
+    "videoUrl": "/placeholder2.mp4",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": true,
+    "createdAt": "2026-01-15T02:51:28.968Z",
+    "updatedAt": "2026-01-15T02:51:28.968Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a8420c",
+    "exerciseName": "Cable Curl",
+    "videoUrl": "/exercises/bicep-curls.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.724Z",
+    "updatedAt": "2026-01-29T00:43:49.862Z"
+  },
+  {
+    "_id": "6968563191581c5fe7a8420f",
+    "exerciseName": "Cable Lateral Raise",
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov",
+    "thumbnailUrl": "/icons/icon-192.png",
+    "isPlaceholder": false,
+    "createdAt": "2026-01-15T02:51:29.750Z",
+    "updatedAt": "2026-01-29T00:43:50.154Z"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac61",
+    "exerciseName": "Barbell Bench Press",
+    "createdAt": "2026-01-29T00:43:49.833Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.833Z",
+    "videoUrl": "/exercises/bench-press.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac62",
+    "exerciseName": "Bench Press (DB/bar)",
+    "createdAt": "2026-01-29T00:43:49.842Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.842Z",
+    "videoUrl": "/exercises/bench-press.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac63",
+    "exerciseName": "DB Curls",
+    "createdAt": "2026-01-29T00:43:49.855Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.855Z",
+    "videoUrl": "/exercises/bicep-curls.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac64",
+    "exerciseName": "Bicep Cable Curl",
+    "createdAt": "2026-01-29T00:43:49.868Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.868Z",
+    "videoUrl": "/exercises/bicep-curls.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac65",
+    "exerciseName": "Bodyweight Squats × 20",
+    "createdAt": "2026-01-29T00:43:49.881Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.881Z",
+    "videoUrl": "/exercises/bodyweight-squats-20.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac66",
+    "exerciseName": "Squat to Tempo (3-1-1)",
+    "createdAt": "2026-01-29T00:43:49.887Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.887Z",
+    "videoUrl": "/exercises/bodyweight-squats-20.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac67",
+    "exerciseName": "Squat Hold × 20 sec",
+    "createdAt": "2026-01-29T00:43:49.893Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.893Z",
+    "videoUrl": "/exercises/bodyweight-squats-20.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac68",
+    "exerciseName": "DB Bulgarian Split Squat",
+    "createdAt": "2026-01-29T00:43:49.905Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.905Z",
+    "videoUrl": "/exercises/bulgarian-split-squat.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac69",
+    "exerciseName": "Cable Row",
+    "createdAt": "2026-01-29T00:43:49.917Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.917Z",
+    "videoUrl": "/exercises/cable-row.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac6a",
+    "exerciseName": "Seated Row",
+    "createdAt": "2026-01-29T00:43:49.929Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.929Z",
+    "videoUrl": "/exercises/seated-cable-row.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac6b",
+    "exerciseName": "Machine Row / Chest-Supported Row",
+    "createdAt": "2026-01-29T00:43:49.935Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.935Z",
+    "videoUrl": "/exercises/seated-cable-row.mov"
+  },
+  {
+    "_id": "697aad4582009eb5b89cac6c",
+    "exerciseName": "Low Row Machine",
+    "createdAt": "2026-01-29T00:43:49.941Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.941Z",
+    "videoUrl": "/exercises/cable-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac6d",
+    "exerciseName": "Chest Press Machine",
+    "createdAt": "2026-01-29T00:43:49.948Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.948Z",
+    "videoUrl": "/exercises/chest-press-machine.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac6e",
+    "exerciseName": "Close Grip DB Press",
+    "createdAt": "2026-01-29T00:43:49.961Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.961Z",
+    "videoUrl": "/exercises/close-grip-db-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac6f",
+    "exerciseName": "Close Grip Lat Pulldown",
+    "createdAt": "2026-01-29T00:43:49.967Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.967Z",
+    "videoUrl": "/exercises/close-grip-lat-pulldown.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac70",
+    "exerciseName": "Incline Close Grip DB Press",
+    "createdAt": "2026-01-29T00:43:49.973Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.973Z",
+    "videoUrl": "/exercises/incline-close-grip-db-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac71",
+    "exerciseName": "DB Bench Press",
+    "createdAt": "2026-01-29T00:43:49.979Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.979Z",
+    "videoUrl": "/exercises/db-bench-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac72",
+    "exerciseName": "Dumbbell Floor Press",
+    "createdAt": "2026-01-29T00:43:49.990Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.990Z",
+    "videoUrl": "/exercises/db-bench-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac73",
+    "exerciseName": "DB Floor Press or Bench Press",
+    "createdAt": "2026-01-29T00:43:49.996Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:49.996Z",
+    "videoUrl": "/exercises/db-bench-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac74",
+    "exerciseName": "DB Hammer Curls",
+    "createdAt": "2026-01-29T00:43:50.002Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.002Z",
+    "videoUrl": "/exercises/db-hammer-curls.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac75",
+    "exerciseName": "Dumbbell Biceps Curl",
+    "createdAt": "2026-01-29T00:43:50.008Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.008Z",
+    "videoUrl": "/exercises/db-hammer-curls.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac76",
+    "exerciseName": "DB Shoulder Press",
+    "createdAt": "2026-01-29T00:43:50.014Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.014Z",
+    "videoUrl": "/exercises/db-shoulder-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac77",
+    "exerciseName": "Seated Dumbbell Shoulder Press",
+    "createdAt": "2026-01-29T00:43:50.019Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.019Z",
+    "videoUrl": "/exercises/db-shoulder-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac78",
+    "exerciseName": "DB Single-Arm Row",
+    "createdAt": "2026-01-29T00:43:50.025Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.025Z",
+    "videoUrl": "/exercises/db-single-arm-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac79",
+    "exerciseName": "Dumbbell Single-Arm Row",
+    "createdAt": "2026-01-29T00:43:50.031Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.031Z",
+    "videoUrl": "/exercises/db-single-arm-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac7a",
+    "exerciseName": "Dumbbell Row",
+    "createdAt": "2026-01-29T00:43:50.037Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.037Z",
+    "videoUrl": "/exercises/db-single-arm-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac7b",
+    "exerciseName": "Dumbbell Bent Over Row",
+    "createdAt": "2026-01-29T00:43:50.043Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.043Z",
+    "videoUrl": "/exercises/db-single-arm-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac7c",
+    "exerciseName": "DB Bent-Over Row",
+    "createdAt": "2026-01-29T00:43:50.049Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.049Z",
+    "videoUrl": "/exercises/db-single-arm-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac7d",
+    "exerciseName": "Decline Cable Chest Fly",
+    "createdAt": "2026-01-29T00:43:50.060Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.060Z",
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac7e",
+    "exerciseName": "Machine Fly",
+    "createdAt": "2026-01-29T00:43:50.066Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.066Z",
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac7f",
+    "exerciseName": "DB Chest Fly (Floor or Bench)",
+    "createdAt": "2026-01-29T00:43:50.072Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.072Z",
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac80",
+    "exerciseName": "Dumbbell Chest Fly on Floor",
+    "createdAt": "2026-01-29T00:43:50.078Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.078Z",
+    "videoUrl": "/exercises/decline-cable-chest-fly.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac81",
+    "exerciseName": "Dumbbell Hip Thrust",
+    "createdAt": "2026-01-29T00:43:50.095Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.095Z",
+    "videoUrl": "/exercises/dumbbell-hip-thrust.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac82",
+    "exerciseName": "DB Hip Thrust",
+    "createdAt": "2026-01-29T00:43:50.101Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.101Z",
+    "videoUrl": "/exercises/dumbbell-hip-thrust.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac83",
+    "exerciseName": "DB Lateral Raises",
+    "createdAt": "2026-01-29T00:43:50.131Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.131Z",
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac84",
+    "exerciseName": "Dumbbell Lateral Raises",
+    "createdAt": "2026-01-29T00:43:50.143Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.143Z",
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac85",
+    "exerciseName": "Lateral Raise Machine",
+    "createdAt": "2026-01-29T00:43:50.149Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.149Z",
+    "videoUrl": "/exercises/dumbbell-lateral-raise.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac86",
+    "exerciseName": "Dumbbell RDL",
+    "createdAt": "2026-01-29T00:43:50.160Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.160Z",
+    "videoUrl": "/exercises/dumbbell-rdl.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac87",
+    "exerciseName": "DB Romanian Deadlift",
+    "createdAt": "2026-01-29T00:43:50.166Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.166Z",
+    "videoUrl": "/exercises/dumbbell-rdl.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac88",
+    "exerciseName": "RDL (Barbell or Dumbbell)",
+    "createdAt": "2026-01-29T00:43:50.177Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.177Z",
+    "videoUrl": "/exercises/romanian-deadlift.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac89",
+    "exerciseName": "Face Pull",
+    "createdAt": "2026-01-29T00:43:50.189Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.189Z",
+    "videoUrl": "/exercises/face-pulls.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac8a",
+    "exerciseName": "Glute Bridge × 20",
+    "createdAt": "2026-01-29T00:43:50.207Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.207Z",
+    "videoUrl": "/exercises/glute-bridge.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac8b",
+    "exerciseName": "Single-Leg Glute Bridge",
+    "createdAt": "2026-01-29T00:43:50.213Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.213Z",
+    "videoUrl": "/exercises/glute-bridge.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac8c",
+    "exerciseName": "DB Goblet Squat",
+    "createdAt": "2026-01-29T00:43:50.224Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.224Z",
+    "videoUrl": "/exercises/goblet-squat.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac8d",
+    "exerciseName": "Incline DB Row or Cable Row",
+    "createdAt": "2026-01-29T00:43:50.242Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.242Z",
+    "videoUrl": "/exercises/incline-dumbbell-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac8e",
+    "exerciseName": "Lat Pulldowns",
+    "createdAt": "2026-01-29T00:43:50.259Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.259Z",
+    "videoUrl": "/exercises/lat-pulldown.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac8f",
+    "exerciseName": "Weighted Pull-Up or Pulldown",
+    "createdAt": "2026-01-29T00:43:50.265Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.265Z",
+    "videoUrl": "/exercises/lat-pulldown.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac90",
+    "exerciseName": "Pike Shoulder Press",
+    "createdAt": "2026-01-29T00:43:50.271Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.271Z",
+    "videoUrl": "/exercises/pike-shoulder-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac91",
+    "exerciseName": "Preacher Curl Machine",
+    "createdAt": "2026-01-29T00:43:50.276Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.276Z",
+    "videoUrl": "/exercises/preacher-curl-machine.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac92",
+    "exerciseName": "EZ-Bar Curl",
+    "createdAt": "2026-01-29T00:43:50.288Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.288Z",
+    "videoUrl": "/exercises/preacher-curl-machine.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac93",
+    "exerciseName": "Push-Ups",
+    "createdAt": "2026-01-29T00:43:50.300Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.300Z",
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac94",
+    "exerciseName": "Hand-Release Push-Ups",
+    "createdAt": "2026-01-29T00:43:50.311Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.311Z",
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac95",
+    "exerciseName": "Push-Ups × 10",
+    "createdAt": "2026-01-29T00:43:50.317Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.317Z",
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac96",
+    "exerciseName": "Slow Push-Ups × 10",
+    "createdAt": "2026-01-29T00:43:50.322Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.322Z",
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac97",
+    "exerciseName": "Scap Push-Ups × 12",
+    "createdAt": "2026-01-29T00:43:50.328Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.328Z",
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac98",
+    "exerciseName": "Scap Push-Ups × 15",
+    "createdAt": "2026-01-29T00:43:50.334Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.334Z",
+    "videoUrl": "/exercises/push-ups.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac99",
+    "exerciseName": "Pull-Ups",
+    "createdAt": "2026-01-29T00:43:50.347Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.347Z",
+    "videoUrl": "/exercises/weighted-pull-up-or-pulldown.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac9a",
+    "exerciseName": "Rear Delt Fly",
+    "createdAt": "2026-01-29T00:43:50.360Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.360Z",
+    "videoUrl": "/exercises/rear-delt-fly.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac9b",
+    "exerciseName": "Rear Delt Fly Machine",
+    "createdAt": "2026-01-29T00:43:50.366Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.366Z",
+    "videoUrl": "/exercises/rear-delt-fly.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac9c",
+    "exerciseName": "Shoulder Press",
+    "createdAt": "2026-01-29T00:43:50.378Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.378Z",
+    "videoUrl": "/exercises/shoulder-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac9d",
+    "exerciseName": "Push-Press",
+    "createdAt": "2026-01-29T00:43:50.718Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.718Z",
+    "videoUrl": "/exercises/shoulder-press.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac9e",
+    "exerciseName": "Side Lateral Raises",
+    "createdAt": "2026-01-29T00:43:50.736Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.736Z",
+    "videoUrl": "/exercises/side-lateral-raises.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89cac9f",
+    "exerciseName": "Single Arm Cable Row",
+    "createdAt": "2026-01-29T00:43:50.742Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.742Z",
+    "videoUrl": "/exercises/single-arm-cable-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca0",
+    "exerciseName": "Single-Arm Row",
+    "createdAt": "2026-01-29T00:43:50.748Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.748Z",
+    "videoUrl": "/exercises/single-arm-cable-row.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca1",
+    "exerciseName": "Tricep Cable Kickbacks",
+    "createdAt": "2026-01-29T00:43:50.753Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.753Z",
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca2",
+    "exerciseName": "Single Arm Cable Kickbacks",
+    "createdAt": "2026-01-29T00:43:50.762Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.762Z",
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca3",
+    "exerciseName": "Overhead Triceps Extension",
+    "createdAt": "2026-01-29T00:43:50.768Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.768Z",
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca4",
+    "exerciseName": "DB Overhead Tricep Extension",
+    "createdAt": "2026-01-29T00:43:50.774Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.774Z",
+    "videoUrl": "/exercises/tricep-cable-kickbacks.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca5",
+    "exerciseName": "Tricep Cable Pushdowns",
+    "createdAt": "2026-01-29T00:43:50.786Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.786Z",
+    "videoUrl": "/exercises/tricep-cable-pushdowns.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca6",
+    "exerciseName": "Tricep Pushdowns",
+    "createdAt": "2026-01-29T00:43:50.792Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.792Z",
+    "videoUrl": "/exercises/tricep-cable-pushdowns.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca7",
+    "exerciseName": "Cable Triceps Pressdown",
+    "createdAt": "2026-01-29T00:43:50.816Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.816Z",
+    "videoUrl": "/exercises/tricep-cable-pushdowns.mov"
+  },
+  {
+    "_id": "697aad4682009eb5b89caca8",
+    "exerciseName": "Tricep Rope Pressdown",
+    "createdAt": "2026-01-29T00:43:50.828Z",
+    "isPlaceholder": false,
+    "thumbnailUrl": "/icons/icon-192.png",
+    "updatedAt": "2026-01-29T00:43:50.828Z",
+    "videoUrl": "/exercises/tricep-rope-pressdown.mov"
+  },
+  {
+    "_id": "69a7cd4e443673532d5a59bc",
+    "exerciseName": "test",
+    "__v": 0,
+    "createdAt": "2026-03-04T06:12:30.654Z",
+    "isPlaceholder": true,
+    "thumbnailUrl": null,
+    "updatedAt": "2026-03-04T06:14:50.746Z",
+    "videoUrl": "test"
+  },
+  {
+    "_id": "69a7cddf443673532d5a59bd",
+    "exerciseName": "t2",
+    "__v": 0,
+    "createdAt": "2026-03-04T06:14:55.963Z",
+    "isPlaceholder": true,
+    "thumbnailUrl": null,
+    "updatedAt": "2026-03-04T06:14:55.963Z",
+    "videoUrl": "t2"
+  }
+]
