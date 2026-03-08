@@ -217,7 +217,7 @@ export default function ProgramCreator() {
   const canProceed = currentStep === 0 ? isStep1Valid : currentStep === 1 ? isStep2Valid : true;
 
   return (
-    <PageTransition className="min-h-screen pb-24">
+    <PageTransition className="pb-6">
       {/* Header */}
       <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
