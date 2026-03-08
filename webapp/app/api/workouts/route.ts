@@ -54,6 +54,8 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
+    const includeHistory = searchParams.get('includeHistory') === 'true'
+
     // Find today's date range
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -62,40 +64,84 @@ export async function GET(request: NextRequest) {
 
     // Find workout log for today
     const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
-    
+
     if (!userProgress || !userProgress.workoutLogs) {
-      return NextResponse.json({ workout: null, isResume: false })
+      return NextResponse.json({ workout: null, isResume: false, exerciseHistory: {} })
+    }
+
+    // Build exercise history from past completed workouts (before today)
+    let exerciseHistory: Record<string, { weight: number; reps: number; date: string }> = {}
+    if (includeHistory) {
+      // Get all completed workout logs for this program, sorted newest first
+      const pastLogs = userProgress.workoutLogs
+        .filter((log: { programId: string; date: Date; completed: boolean }) =>
+          log.programId === programId &&
+          log.completed &&
+          new Date(log.date) < today
+        )
+        .sort((a: { date: Date }, b: { date: Date }) =>
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+
+      // For each exercise, find the most recent completed set with data
+      for (const log of pastLogs) {
+        for (const exercise of (log.exercises || [])) {
+          if (exerciseHistory[exercise.name]) continue // already have most recent
+
+          // Find the best completed set (highest weight, or most reps for bodyweight)
+          const completedSets = (exercise.sets || []).filter(
+            (s: { completed: boolean; reps: number }) => s.completed && s.reps > 0
+          )
+          if (completedSets.length === 0) continue
+
+          // Pick the set with highest weight (or most reps if no weight)
+          const bestSet = completedSets.reduce(
+            (best: { weight: number; reps: number }, s: { weight: number; reps: number }) =>
+              s.weight > best.weight || (s.weight === best.weight && s.reps > best.reps)
+                ? s
+                : best,
+            completedSets[0]
+          )
+
+          exerciseHistory[exercise.name] = {
+            weight: bestSet.weight,
+            reps: bestSet.reps,
+            date: new Date(log.date).toISOString()
+          }
+        }
+      }
     }
 
     // Find today's workout for this program/day
     const todayWorkout = userProgress.workoutLogs.find(
       (log: { programId: string; day: string; date: Date; completed: boolean }) => {
         const logDate = new Date(log.date)
-        return log.programId === programId && 
+        return log.programId === programId &&
                (!day || log.day === day) &&
-               logDate >= today && 
+               logDate >= today &&
                logDate < tomorrow
       }
     )
 
     if (todayWorkout) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         workout: todayWorkout,
-        isResume: !todayWorkout.completed // Resume if workout exists but not completed
+        isResume: !todayWorkout.completed,
+        exerciseHistory
       })
     }
 
     // Fall back to the most recent log for this program/day to allow resuming past sessions
     const lastLog = userProgress.workoutLogs
-      ?.filter((log: { programId: string; day: string }) => 
+      ?.filter((log: { programId: string; day: string }) =>
         log.programId === programId && (!day || log.day === day))
       .sort((a: { date: Date }, b: { date: Date }) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
 
     if (!lastLog) {
-      return NextResponse.json({ workout: null, isResume: false })
+      return NextResponse.json({ workout: null, isResume: false, exerciseHistory })
     }
 
-    return NextResponse.json({ workout: lastLog, isResume: !lastLog.completed })
+    return NextResponse.json({ workout: lastLog, isResume: !lastLog.completed, exerciseHistory })
 
   } catch (error) {
     console.error('Error fetching workout:', error)

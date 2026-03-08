@@ -1,0 +1,2445 @@
+[
+  {
+    "_id": "699b68f14c57ad11239e03b6",
+    "program_id": "program_1_become",
+    "description": "12-week, 4x/week program. Build foundational strength, lose fat, improve conditioning, develop exercise consistency.",
+    "duration_weeks": 12,
+    "equipment": [
+      "Barbell",
+      "Bike",
+      "Cable Machine",
+      "Dumbbells",
+      "Kettlebell",
+      "Machines",
+      "Rowing Machine",
+      "Treadmill"
+    ],
+    "goal": "Build foundational strength, lose fat, improve conditioning, develop exercise consistency.",
+    "name": "BECOME — 12 Week Fat-Loss Foundation Program",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-4",
+        "focus": "Movement quality, perfecting form, building a base of strength + conditioning.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Strength + Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-bench-press",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "cable-row",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "dumbbell-shoulder-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 3,
+                "reps": "12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "incline-dumbbell-press",
+                "sets": 2,
+                "reps": "12-15",
+                "rest": "75s"
+              },
+              {
+                "exerciseSlug": "assault-bike-intervals",
+                "details": "10 rounds: 15 sec fast / 45 sec easy"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body Strength",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-back-squat",
+                "sets": 3,
+                "reps": "8",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "leg-press",
+                "sets": 3,
+                "reps": "12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "walking-lunge",
+                "sets": 2,
+                "reps": "20 steps",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "seated-leg-curl",
+                "sets": 2,
+                "reps": "12-15",
+                "rest": "75s"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Strength + Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "deadlift",
+                "sets": 3,
+                "reps": "5",
+                "rest": "180s"
+              },
+              {
+                "exerciseSlug": "dumbbell-bench-press",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "chest-supported-row",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "step-up",
+                "sets": 2,
+                "reps": "12 each leg",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "incline-treadmill-walk",
+                "details": "12 min, RPE 6-7"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Upper Body Hypertrophy",
+            "exercises": [
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "machine-chest-press",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-tricep-pushdown",
+                "sets": 2,
+                "reps": "12-15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-curl",
+                "sets": 2,
+                "reps": "12-15",
+                "rest": "60s"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "Phase 2",
+        "weeks": "5-8",
+        "focus": "Increase weights, increase volume, add slightly harder conditioning.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Strength + Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-bench-press",
+                "sets": 4,
+                "reps": "6-8",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "barbell-row",
+                "sets": 4,
+                "reps": "8",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "machine-shoulder-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "rowing-machine-sprint",
+                "details": "8 rounds: 20 sec sprint / 70 sec rest"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body Strength",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-back-squat",
+                "sets": 4,
+                "reps": "6-8",
+                "rest": "180s"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 4,
+                "reps": "8",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "leg-press",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "bulgarian-split-squat",
+                "sets": 2,
+                "reps": "10 each leg",
+                "rest": "90s"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Strength + Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "deadlift",
+                "sets": 4,
+                "reps": "4-6",
+                "rest": "180s"
+              },
+              {
+                "exerciseSlug": "incline-bench-press",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "chest-supported-row",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "farmer-carry",
+                "details": "Farmer Carry 40s + Rest 20s x 6 rounds"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Upper Body Hypertrophy",
+            "exercises": [
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 4,
+                "reps": "10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "machine-chest-press",
+                "sets": 4,
+                "reps": "10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "face-pull",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "ez-bar-curl",
+                "sets": 2,
+                "reps": "12-15",
+                "rest": "60s"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "Phase 3",
+        "weeks": "9-12",
+        "focus": "Peak results: highest volume, higher intensity, harder conditioning to finish strong.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Strength + Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-bench-press",
+                "sets": 5,
+                "reps": "5",
+                "rest": "180s"
+              },
+              {
+                "exerciseSlug": "barbell-row",
+                "sets": 4,
+                "reps": "6-8",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "overhead-press",
+                "sets": 3,
+                "reps": "8",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "bike-sprint",
+                "details": "20s / 30s / 40s / 30s / 20s — twice through"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body Strength",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-back-squat",
+                "sets": 5,
+                "reps": "5",
+                "rest": "180s"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 4,
+                "reps": "6-8",
+                "rest": "120s"
+              },
+              {
+                "exerciseSlug": "hack-squat",
+                "sets": 3,
+                "reps": "10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "walking-lunge",
+                "sets": 2,
+                "reps": "20 steps",
+                "rest": "90s"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Strength + Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "deadlift",
+                "sets": 4,
+                "reps": "3-5",
+                "rest": "180s"
+              },
+              {
+                "exerciseSlug": "dumbbell-bench-press",
+                "sets": 3,
+                "reps": "8",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "cable-row",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "__protocol__10-minute-amrap-non-athletic",
+                "details": "Air Bike 10 cals → Kettlebell Carry 30s → Rest 30s (repeat)"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Upper Body Hypertrophy",
+            "exercises": [
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 4,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "incline-dumbbell-press",
+                "sets": 4,
+                "reps": "8-10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "machine-fly",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-tricep-pushdown",
+                "sets": 2,
+                "reps": "12-15",
+                "rest": "60s"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Fat Loss",
+      "Strength",
+      "Conditioning",
+      "Foundation",
+      "Full Body"
+    ],
+    "target_user": "Beginner to Intermediate",
+    "training_days_per_week": 4
+  },
+  {
+    "_id": "699b68f14c57ad11239e03b7",
+    "program_id": "program_2_30day_shred",
+    "description": "4-week, 5x/week program. Rapid fat loss and conditioning with safe, low-impact high intensity training.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Barbell",
+      "Bike",
+      "Cable Machine",
+      "Dumbbells"
+    ],
+    "goal": "Rapid fat loss and conditioning with safe, low-impact high intensity training.",
+    "name": "30-Day Shred",
+    "phases": [
+      {
+        "phase": "Weeks 1-4",
+        "weeks": "1-4",
+        "focus": "High intensity, metabolic conditioning, strength maintenance.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Total Body Strength + Metabolic Finisher",
+            "exercises": [
+              {
+                "exerciseSlug": "goblet-squat",
+                "sets": 4,
+                "reps": "8",
+                "details": "Chest up, Knees track, Sit back"
+              },
+              {
+                "exerciseSlug": "push-press",
+                "sets": 4,
+                "reps": "6",
+                "details": "Dip quick, Hip drive"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 3,
+                "reps": "8/side",
+                "details": "Pull with elbow"
+              },
+              {
+                "exerciseSlug": "__protocol__metabolic-finisher-amrap-10",
+                "details": "8 KB Swings, 12 Step-Back Burpee, 150m Row or 12 cal bike"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Full-Body HIIT Circuit",
+            "exercises": [
+              {
+                "exerciseSlug": "__protocol__hiit-circuit-4-rounds",
+                "details": "40s work / 20s rest. 1. Assault bike/row, 2. DB Thrusters, 3. Walking Lunges, 4. Plank to Push-Up"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Upper Focus Strength + Ladder",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-bench-press",
+                "sets": 4,
+                "reps": "6-8"
+              },
+              {
+                "exerciseSlug": "chest-supported-row",
+                "sets": 3,
+                "reps": "8-10"
+              },
+              {
+                "exerciseSlug": "face-pull",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "__protocol__conditioning-ladder-emom-10",
+                "details": "Min 1: Row 12-14 cal, Min 2: 10 Push-Ups, Min 3: 15 Russian Twists, Min 4: Rest"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Lower Focus Strength + Metabolic Circuit",
+            "exercises": [
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 4,
+                "reps": "8"
+              },
+              {
+                "exerciseSlug": "bulgarian-split-squat",
+                "sets": 3,
+                "reps": "8-10/leg"
+              },
+              {
+                "exerciseSlug": "hip-thrust",
+                "sets": 3,
+                "reps": "10-12"
+              },
+              {
+                "exerciseSlug": "__protocol__metabolic-circuit-3-rounds",
+                "details": "Sled push or 20 cal bike, 12 Step-Back Burpees, 20 Russian deadlift (light). Rest 60-75s between rounds."
+              }
+            ]
+          },
+          {
+            "day": "Day 5",
+            "title": "Engine Day (Intervals + Core)",
+            "exercises": [
+              {
+                "exerciseSlug": "assault-bike-intervals",
+                "details": "10 rounds 30s on / 30s off. Modalities: Bike, Row, Ski erg."
+              },
+              {
+                "exerciseSlug": "__protocol__core-finisher-3-rounds",
+                "details": "30s hollow hold, 30s side plank each side, 15 slow V-ups"
+              }
+            ]
+          },
+          {
+            "day": "Day 6",
+            "title": "Active Recovery",
+            "exercises": [
+              {
+                "exerciseSlug": "walk",
+                "details": "20-30 minutes"
+              },
+              {
+                "exerciseSlug": "dynamic-stretch",
+                "details": "15 min (hips, T-spine, shoulders)"
+              }
+            ]
+          },
+          {
+            "day": "Day 7",
+            "title": "Rest",
+            "exercises": [
+              {
+                "exerciseSlug": "__protocol__full-rest",
+                "details": "Light stretching optional"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Fat Loss",
+      "HIIT",
+      "Conditioning",
+      "Quick Results",
+      "30 Day"
+    ],
+    "target_user": "Intermediate",
+    "training_days_per_week": 5
+  },
+  {
+    "_id": "699b68f14c57ad11239e03b8",
+    "program_id": "strength-size-20",
+    "description": "4-week, 4x/week program. 4-day Upper/Lower split focused on strength and hypertrophy.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Barbell",
+      "Bike",
+      "Cable Machine",
+      "Dumbbells",
+      "Machines",
+      "Pull-up Bar",
+      "Treadmill"
+    ],
+    "goal": "4-day Upper/Lower split focused on strength and hypertrophy. Daily ab finishers. Optional conditioning. Supersets included only for accessory work.",
+    "name": "Strength & Size 2.0",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-4",
+        "focus": "4-day Upper/Lower split focused on strength and hypertrophy. Daily ab finishers. Optional conditioning. Supersets included only for accessory work.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper A",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-bench-press",
+                "sets": 4,
+                "reps": "5",
+                "details": "RPE 7-8, rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "barbell-row",
+                "sets": 4,
+                "reps": "6",
+                "details": "Rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "incline-dumbbell-press",
+                "sets": 3,
+                "reps": "8",
+                "details": "Rest 2 min"
+              },
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 3,
+                "reps": "10",
+                "details": "Rest 1.5-2 min"
+              },
+              {
+                "exerciseSlug": "dumbbell-shoulder-press",
+                "sets": 3,
+                "reps": "8-10",
+                "details": "Rest 1.5-2 min"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "90s",
+                "groupId": "ss-1",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "cable-tricep-pushdown",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "90s",
+                "groupId": "ss-1",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "dumbbell-curl",
+                "sets": 3,
+                "reps": "10-12"
+              },
+              {
+                "exerciseSlug": "incline-treadmill-walk"
+              },
+              {
+                "exerciseSlug": "cable-crunch",
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "reverse-crunch",
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "plank",
+                "reps": "30-45 sec"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower A",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-back-squat",
+                "sets": 4,
+                "reps": "5",
+                "details": "RPE 7-8, rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 3,
+                "reps": "6",
+                "details": "Rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "leg-press",
+                "sets": 3,
+                "reps": "10",
+                "details": "Rest 2 min"
+              },
+              {
+                "exerciseSlug": "seated-leg-curl",
+                "sets": 3,
+                "reps": "12",
+                "details": "Rest 1.5 min"
+              },
+              {
+                "exerciseSlug": "walking-lunge",
+                "sets": 3,
+                "reps": "10 each leg",
+                "rest": "90s",
+                "groupId": "ss-2",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "leg-extension",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "90s",
+                "groupId": "ss-2",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "standing-calf-raise",
+                "sets": 4,
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "incline-treadmill-walk"
+              },
+              {
+                "exerciseSlug": "hanging-knee-raise",
+                "reps": "10-12"
+              },
+              {
+                "exerciseSlug": "cable-side-bend",
+                "reps": "12 each side"
+              },
+              {
+                "exerciseSlug": "dead-bug",
+                "reps": "10-12 each side"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Upper B",
+            "exercises": [
+              {
+                "exerciseSlug": "pull-up",
+                "sets": 4,
+                "reps": "5",
+                "details": "Rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "dumbbell-bench-press",
+                "sets": 4,
+                "reps": "6-8",
+                "details": "Rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "chest-supported-row",
+                "sets": 3,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "machine-chest-press",
+                "sets": 3,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "rear-delt-fly",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "90s",
+                "groupId": "ss-3",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "face-pull",
+                "sets": 3,
+                "reps": "12-15",
+                "rest": "90s",
+                "groupId": "ss-3",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "ez-bar-curl",
+                "sets": 3,
+                "reps": "10-12"
+              },
+              {
+                "exerciseSlug": "overhead-tricep-extension",
+                "sets": 3,
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "bike-sprint"
+              },
+              {
+                "exerciseSlug": "cable-crunch",
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "toe-touch",
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "plank",
+                "reps": "30-45 sec"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Lower B",
+            "exercises": [
+              {
+                "exerciseSlug": "front-squat",
+                "sets": 4,
+                "reps": "5",
+                "details": "Rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 4,
+                "reps": "6",
+                "details": "Rest 2-3 min"
+              },
+              {
+                "exerciseSlug": "lying-leg-curl",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "glute-cable-kickback",
+                "sets": 3,
+                "reps": "15 each leg"
+              },
+              {
+                "exerciseSlug": "bulgarian-split-squat",
+                "sets": 3,
+                "reps": "8-10 each leg",
+                "rest": "90s",
+                "groupId": "ss-4",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "hip-abduction-machine",
+                "sets": 3,
+                "reps": "15",
+                "rest": "90s",
+                "groupId": "ss-4",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "standing-calf-raise",
+                "sets": 4,
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "incline-treadmill-walk"
+              },
+              {
+                "exerciseSlug": "reverse-crunch",
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "cable-crunch",
+                "reps": "12-15"
+              },
+              {
+                "exerciseSlug": "side-plank",
+                "reps": "30 sec each side"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Muscle Building",
+      "Strength",
+      "Hypertrophy",
+      "Size",
+      "Advanced"
+    ],
+    "target_user": "Intermediate",
+    "training_days_per_week": 4
+  },
+  {
+    "_id": "699b68f14c57ad11239e03b9",
+    "program_id": "no-excuses-at-home-transformation",
+    "description": "4-week, 4x/week program. Fat loss, conditioning, functional strength, core stability.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Barbell"
+    ],
+    "goal": "Fat loss, conditioning, functional strength, core stability",
+    "name": "No Excuses: At-Home Transformation",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-4",
+        "focus": "Fat loss, conditioning, functional strength, core stability",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Lower Body + Core (Strength Focus)",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-back-squat",
+                "sets": 4,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "reverse-lunge",
+                "sets": 3,
+                "reps": "10 per leg"
+              },
+              {
+                "exerciseSlug": "glute-bridge",
+                "sets": 4,
+                "reps": "20"
+              },
+              {
+                "exerciseSlug": "single-leg-rdl",
+                "sets": 3,
+                "reps": "12 per leg"
+              },
+              {
+                "exerciseSlug": "wall-sit",
+                "sets": 3,
+                "reps": "45 sec"
+              },
+              {
+                "exerciseSlug": "good-morning"
+              },
+              {
+                "exerciseSlug": "hip-circle"
+              },
+              {
+                "exerciseSlug": "walking-lunge"
+              },
+              {
+                "exerciseSlug": "__protocol__emom-8-min",
+                "details": "[\"Minute 1: 20 Air Squats\",\"Minute 2: 12 Burpees\"]"
+              },
+              {
+                "exerciseSlug": "dead-bug"
+              },
+              {
+                "exerciseSlug": "plank"
+              },
+              {
+                "exerciseSlug": "heel-tap"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Upper Body + Core",
+            "exercises": [
+              {
+                "exerciseSlug": "push-up",
+                "sets": 4,
+                "reps": "max"
+              },
+              {
+                "exerciseSlug": "pike-shoulder-press",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "tricep-dip",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "backpack-row",
+                "sets": 4,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "hand-release-push-up",
+                "sets": 2,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "scap-push-up"
+              },
+              {
+                "exerciseSlug": "arm-circle"
+              },
+              {
+                "exerciseSlug": "push-up"
+              },
+              {
+                "exerciseSlug": "assault-bike-intervals",
+                "details": "\"30 sec ON / 15 sec OFF × 6 rounds\""
+              },
+              {
+                "exerciseSlug": "hollow-hold"
+              },
+              {
+                "exerciseSlug": "v-up"
+              },
+              {
+                "exerciseSlug": "side-plank"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body + Core (Metabolic)",
+            "exercises": [
+              {
+                "exerciseSlug": "jumping-jack"
+              },
+              {
+                "exerciseSlug": "hip-circle"
+              },
+              {
+                "exerciseSlug": "wall-sit"
+              },
+              {
+                "exerciseSlug": "russian-twist"
+              },
+              {
+                "exerciseSlug": "leg-raise"
+              },
+              {
+                "exerciseSlug": "toe-touch"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Lower + Upper Hybrid + Core",
+            "exercises": [
+              {
+                "exerciseSlug": "split-squat",
+                "sets": 3,
+                "reps": "12 per leg"
+              },
+              {
+                "exerciseSlug": "inchworm-to-push-up",
+                "sets": 3,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "single-leg-glute-bridge",
+                "sets": 3,
+                "reps": "15 per leg"
+              },
+              {
+                "exerciseSlug": "backpack-row",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "decline-push-up",
+                "sets": 3,
+                "reps": "8–12"
+              },
+              {
+                "exerciseSlug": "reverse-lunge"
+              },
+              {
+                "exerciseSlug": "push-up"
+              },
+              {
+                "exerciseSlug": "hip-circle"
+              },
+              {
+                "exerciseSlug": "__protocol__tabata-4-minutes",
+                "details": "\"20 sec ON / 10 sec OFF\""
+              },
+              {
+                "exerciseSlug": "bicycle-crunch"
+              },
+              {
+                "exerciseSlug": "plank"
+              },
+              {
+                "exerciseSlug": "flutter-kick"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Home Workout",
+      "No Equipment",
+      "Bodyweight",
+      "Transformation"
+    ],
+    "target_user": "Beginner to Intermediate",
+    "training_days_per_week": 4
+  },
+  {
+    "_id": "699b68f14c57ad11239e03ba",
+    "program_id": "db-only-total-transformation",
+    "description": "4-week, 4x/week program. Hypertrophy, fat loss, strength, conditioning.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Barbell",
+      "Dumbbells"
+    ],
+    "goal": "Hypertrophy, fat loss, strength, conditioning",
+    "name": "DB Only: Total Transformation",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-4",
+        "focus": "Hypertrophy, fat loss, strength, conditioning",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Strength",
+            "exercises": [
+              {
+                "exerciseSlug": "dumbbell-bench-press",
+                "sets": 4,
+                "reps": "8"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 4,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "dumbbell-shoulder-press",
+                "sets": 3,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 3,
+                "reps": "12 per arm"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "dumbbell-curl",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "overhead-tricep-extension",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "arm-circle"
+              },
+              {
+                "exerciseSlug": "scap-push-up"
+              },
+              {
+                "exerciseSlug": "light-dumbbell-floor-press"
+              },
+              {
+                "exerciseSlug": "__protocol__emom-8-minutes",
+                "details": "[\"Minute 1: 12 DB Push Press\",\"Minute 2: 15 Renegade Rows\"]"
+              },
+              {
+                "exerciseSlug": "plank"
+              },
+              {
+                "exerciseSlug": "crunch"
+              },
+              {
+                "exerciseSlug": "toe-touch"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body — Glutes & Legs",
+            "exercises": [
+              {
+                "exerciseSlug": "goblet-squat",
+                "sets": 4,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 4,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "reverse-lunge",
+                "sets": 3,
+                "reps": "12 per leg"
+              },
+              {
+                "exerciseSlug": "hip-thrust",
+                "sets": 4,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "step-up",
+                "sets": 3,
+                "reps": "12 per leg"
+              },
+              {
+                "exerciseSlug": "standing-calf-raise",
+                "sets": 3,
+                "reps": "20"
+              },
+              {
+                "exerciseSlug": "bodyweight-squat"
+              },
+              {
+                "exerciseSlug": "hip-circle"
+              },
+              {
+                "exerciseSlug": "glute-bridge"
+              },
+              {
+                "exerciseSlug": "__protocol__amrap-6-minutes",
+                "details": "[\"10 Jumping Lunges or Reverse Lunges\",\"10 DB Thrusters\",\"10 DB Swings\"]"
+              },
+              {
+                "exerciseSlug": "dead-bug"
+              },
+              {
+                "exerciseSlug": "flutter-kick"
+              },
+              {
+                "exerciseSlug": "side-plank"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Hybrid",
+            "exercises": [
+              {
+                "exerciseSlug": "dumbbell-deadlift",
+                "sets": 4,
+                "reps": "10"
+              },
+              {
+                "exerciseSlug": "dumbbell-floor-press",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "bulgarian-split-squat",
+                "sets": 3,
+                "reps": "10 per leg"
+              },
+              {
+                "exerciseSlug": "hammer-curl",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "skull-crusher",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "light-dumbbell-rdl-to-upright-row"
+              },
+              {
+                "exerciseSlug": "dynamic-stretch"
+              },
+              {
+                "exerciseSlug": "__protocol__db-complex-5-rounds",
+                "details": "[\"5 Dumbbell Deadlifts\",\"5 Dumbbell Rows\",\"5 Dumbbell Hang Cleans\",\"5 Dumbbell Push Press\"]"
+              },
+              {
+                "exerciseSlug": "russian-twist"
+              },
+              {
+                "exerciseSlug": "leg-raise"
+              },
+              {
+                "exerciseSlug": "plank"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Upper + Lower Hybrid Pump",
+            "exercises": [
+              {
+                "exerciseSlug": "split-squat",
+                "sets": 3,
+                "reps": "12 per leg"
+              },
+              {
+                "exerciseSlug": "dumbbell-chest-fly",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "dumbbell-underhand-row",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "lateral-lunge",
+                "sets": 3,
+                "reps": "10 per leg"
+              },
+              {
+                "exerciseSlug": "arnold-press",
+                "sets": 3,
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "dumbbell-shrug",
+                "sets": 3,
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "dumbbell-curl",
+                "sets": 1,
+                "reps": "50"
+              },
+              {
+                "exerciseSlug": "high-knee"
+              },
+              {
+                "exerciseSlug": "shoulder-opener"
+              },
+              {
+                "exerciseSlug": "hip-circle"
+              },
+              {
+                "exerciseSlug": "__protocol__tabata-4-minutes",
+                "details": "[\"DB Goblet Squat\",\"DB Push Press\"]"
+              },
+              {
+                "exerciseSlug": "cable-woodchopper"
+              },
+              {
+                "exerciseSlug": "toe-touch"
+              },
+              {
+                "exerciseSlug": "hollow-hold"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Dumbbells Only",
+      "Home Workout",
+      "Minimal Equipment",
+      "Transformation"
+    ],
+    "target_user": "Beginner to Intermediate",
+    "training_days_per_week": 4
+  },
+  {
+    "_id": "699b68f14c57ad11239e03bb",
+    "program_id": "program_5",
+    "description": "4-week, 4x/week program. A fast, efficient 4-day dumbbell-only program designed for fat loss, muscle tone, and improved conditioning.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Barbell",
+      "Dumbbells"
+    ],
+    "goal": "A fast, efficient 4-day dumbbell-only program designed for fat loss, muscle tone, and improved conditioning. Every workout is capped at 30 minutes with minimal rest and simple dumbbell movements.",
+    "name": "30-Minute Dumbbell-Only Program",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-4",
+        "focus": "A fast, efficient 4-day dumbbell-only program designed for fat loss, muscle tone, and improved conditioning. Every workout is capped at 30 minutes with minimal rest and simple dumbbell movements.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Strength",
+            "exercises": [
+              {
+                "exerciseSlug": "dumbbell-bench-press",
+                "sets": 3,
+                "reps": "12",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 3,
+                "reps": "12/side",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-shoulder-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-curl",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s"
+              },
+              {
+                "exerciseSlug": "overhead-tricep-extension",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body Strength",
+            "exercises": [
+              {
+                "exerciseSlug": "goblet-squat",
+                "sets": 3,
+                "reps": "15",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 3,
+                "reps": "12",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "reverse-lunge",
+                "sets": 3,
+                "reps": "10/side",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "hip-thrust",
+                "sets": 3,
+                "reps": "15",
+                "rest": "45s"
+              },
+              {
+                "exerciseSlug": "standing-calf-raise",
+                "sets": 3,
+                "reps": "20",
+                "rest": "45s"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Conditioning",
+            "exercises": [
+              {
+                "exerciseSlug": "dumbbell-thruster",
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "dumbbell-deadlift",
+                "reps": "15"
+              },
+              {
+                "exerciseSlug": "dumbbell-floor-press",
+                "reps": "12"
+              },
+              {
+                "exerciseSlug": "suitcase-carry"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Upper/Lower Hybrid",
+            "exercises": [
+              {
+                "exerciseSlug": "push-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "45s"
+              },
+              {
+                "exerciseSlug": "split-squat",
+                "sets": 3,
+                "reps": "10/side",
+                "rest": "45s"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 3,
+                "reps": "12/side",
+                "rest": "45s"
+              },
+              {
+                "exerciseSlug": "dumbbell-chest-fly",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s"
+              },
+              {
+                "exerciseSlug": "russian-twist",
+                "sets": 3,
+                "reps": "20",
+                "rest": "45s"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Dumbbells Only",
+      "Quick Workout",
+      "Time Efficient",
+      "30 Minutes",
+      "Minimal Equipment"
+    ],
+    "target_user": "Intermediate",
+    "training_days_per_week": 4
+  },
+  {
+    "_id": "699b68f14c57ad11239e03bc",
+    "program_id": "program_jon_don_split",
+    "description": "4-week, 5x/week hypertrophy-focused program. Build muscle mass through progressive overload and targeted supersets across chest, shoulders, back, arms, and legs.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Barbell",
+      "Cable Machine",
+      "Dumbbells",
+      "Kettlebell",
+      "Machines"
+    ],
+    "goal": "Build muscle mass, improve strength through progressive overload, develop balanced physique.",
+    "name": "The Jon Don Split",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-4",
+        "focus": "Hypertrophy through progressive overload, supersets, and controlled negatives.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Chest, Shoulders, Biceps",
+            "exercises": [
+              {
+                "exerciseSlug": "barbell-bench-press",
+                "sets": 3,
+                "reps": "10, 8, 6",
+                "rest": "90s",
+                "details": "Progressive overload - increase weight each set"
+              },
+              {
+                "exerciseSlug": "incline-close-grip-dumbbell-press",
+                "sets": 3,
+                "reps": "8",
+                "rest": "75s",
+                "details": "Slow negatives on the descend (3-4 seconds)",
+                "groupId": "ss-5",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "push-up",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s",
+                "groupId": "ss-5",
+                "groupType": "superset",
+                "groupLabel": "Superset"
+              },
+              {
+                "exerciseSlug": "lateral-raise-machine",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "preacher-curl",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-curl",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Rear Delts, Back, Triceps",
+            "exercises": [
+              {
+                "exerciseSlug": "rear-delt-fly-machine",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 3,
+                "reps": "10",
+                "rest": "75s"
+              },
+              {
+                "exerciseSlug": "diagonal-cable-pulldown",
+                "sets": 3,
+                "reps": "10 each arm",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-pullover",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-tricep-pushdown",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "tricep-cable-kickback",
+                "sets": 3,
+                "reps": "10 each arm",
+                "rest": "60s"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Legs",
+            "exercises": [
+              {
+                "exerciseSlug": "hip-adduction-machine",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "seated-calf-raise",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "belt-squat",
+                "sets": 3,
+                "reps": "10",
+                "rest": "90s"
+              },
+              {
+                "exerciseSlug": "leg-extension",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "kettlebell-swing",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              }
+            ]
+          },
+          {
+            "day": "Day 4",
+            "title": "Chest, Back",
+            "exercises": [
+              {
+                "exerciseSlug": "machine-chest-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "75s"
+              },
+              {
+                "exerciseSlug": "close-grip-dumbbell-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "75s"
+              },
+              {
+                "exerciseSlug": "cable-chest-fly",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "lat-pulldown",
+                "sets": 3,
+                "reps": "10",
+                "rest": "75s"
+              },
+              {
+                "exerciseSlug": "single-arm-cable-row",
+                "sets": 3,
+                "reps": "10 each arm",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "low-row-machine",
+                "sets": 3,
+                "reps": "10",
+                "rest": "75s"
+              }
+            ]
+          },
+          {
+            "day": "Day 5",
+            "title": "Shoulders, Biceps, Triceps",
+            "exercises": [
+              {
+                "exerciseSlug": "dumbbell-shoulder-press",
+                "sets": 3,
+                "reps": "10, 8, 6",
+                "rest": "90s",
+                "details": "Progressive overload - increase weight each set"
+              },
+              {
+                "exerciseSlug": "face-pull",
+                "sets": 3,
+                "reps": "12",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-tricep-pushdown",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "preacher-curl",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "tricep-cable-kickback",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              },
+              {
+                "exerciseSlug": "hammer-curl",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "Hypertrophy",
+      "Split Training",
+      "5 Day",
+      "Muscle Building",
+      "Push Pull Legs"
+    ],
+    "target_user": "Intermediate",
+    "training_days_per_week": 5
+  },
+  {
+    "_id": "699b68f14c57ad11239e03bd",
+    "program_id": "circuit-superset-shred",
+    "description": "4-week, 3x/week high-intensity program built around supersets and circuits. Designed to burn fat, build lean muscle, and improve conditioning using time-efficient training methods.",
+    "duration_weeks": 4,
+    "equipment": [
+      "Dumbbells",
+      "Cable Machine",
+      "Kettlebell",
+      "Pull-up Bar",
+      "Bench"
+    ],
+    "goal": "Burn fat, build lean muscle, and improve conditioning using supersets and circuits.",
+    "name": "Circuit & Superset Shred — 4 Week Fat Burn",
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "weeks": "1-2",
+        "focus": "Build work capacity with moderate-intensity circuits and introductory supersets.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Supersets + Core Circuit",
+            "exercises": [
+              {
+                "exerciseSlug": "jumping-jack",
+                "details": "2 min light warm-up"
+              },
+              {
+                "exerciseSlug": "arm-circle",
+                "details": "1 min each direction"
+              },
+              {
+                "exerciseSlug": "dumbbell-bench-press",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "0s",
+                "groupId": "ss-A1",
+                "groupType": "superset",
+                "groupLabel": "Superset A"
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "sets": 3,
+                "reps": "10-12",
+                "rest": "60s",
+                "groupId": "ss-A1",
+                "groupType": "superset",
+                "groupLabel": "Superset A",
+                "groupRest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-shoulder-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "0s",
+                "groupId": "ss-B1",
+                "groupType": "superset",
+                "groupLabel": "Superset B"
+              },
+              {
+                "exerciseSlug": "dumbbell-curl",
+                "sets": 3,
+                "reps": "12",
+                "rest": "60s",
+                "groupId": "ss-B1",
+                "groupType": "superset",
+                "groupLabel": "Superset B",
+                "groupRest": "60s"
+              },
+              {
+                "exerciseSlug": "cable-tricep-pushdown",
+                "sets": 3,
+                "reps": "15",
+                "rest": "0s",
+                "groupId": "ss-C1",
+                "groupType": "superset",
+                "groupLabel": "Superset C"
+              },
+              {
+                "exerciseSlug": "face-pull",
+                "sets": 3,
+                "reps": "15",
+                "rest": "45s",
+                "groupId": "ss-C1",
+                "groupType": "superset",
+                "groupLabel": "Superset C",
+                "groupRest": "45s"
+              },
+              {
+                "exerciseSlug": "plank",
+                "reps": "30s",
+                "groupId": "circuit-core1",
+                "groupType": "circuit",
+                "groupLabel": "Core Circuit",
+                "groupRest": "60s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "bicycle-crunch",
+                "reps": "15 each side",
+                "groupId": "circuit-core1",
+                "groupType": "circuit",
+                "groupLabel": "Core Circuit",
+                "groupRest": "60s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "dead-bug",
+                "reps": "10 each side",
+                "groupId": "circuit-core1",
+                "groupType": "circuit",
+                "groupLabel": "Core Circuit",
+                "groupRest": "60s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "static-stretch",
+                "details": "5 min upper body stretches"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body Circuits",
+            "exercises": [
+              {
+                "exerciseSlug": "jump-rope",
+                "details": "3 min warm-up"
+              },
+              {
+                "exerciseSlug": "bodyweight-squat",
+                "details": "10 reps each"
+              },
+              {
+                "exerciseSlug": "goblet-squat",
+                "sets": 4,
+                "reps": "12",
+                "groupId": "circuit-legs1",
+                "groupType": "circuit",
+                "groupLabel": "Leg Circuit A",
+                "groupRest": "90s",
+                "groupRounds": 4
+              },
+              {
+                "exerciseSlug": "romanian-deadlift",
+                "sets": 4,
+                "reps": "10",
+                "groupId": "circuit-legs1",
+                "groupType": "circuit",
+                "groupLabel": "Leg Circuit A",
+                "groupRest": "90s",
+                "groupRounds": 4
+              },
+              {
+                "exerciseSlug": "reverse-lunge",
+                "sets": 4,
+                "reps": "10 each leg",
+                "groupId": "circuit-legs1",
+                "groupType": "circuit",
+                "groupLabel": "Leg Circuit A",
+                "groupRest": "90s",
+                "groupRounds": 4
+              },
+              {
+                "exerciseSlug": "leg-press",
+                "sets": 3,
+                "reps": "15",
+                "rest": "0s",
+                "groupId": "ss-D1",
+                "groupType": "superset",
+                "groupLabel": "Superset D"
+              },
+              {
+                "exerciseSlug": "seated-leg-curl",
+                "sets": 3,
+                "reps": "12",
+                "rest": "60s",
+                "groupId": "ss-D1",
+                "groupType": "superset",
+                "groupLabel": "Superset D",
+                "groupRest": "60s"
+              },
+              {
+                "exerciseSlug": "kettlebell-swing",
+                "sets": 3,
+                "reps": "20",
+                "groupId": "circuit-cond1",
+                "groupType": "circuit",
+                "groupLabel": "Conditioning Circuit",
+                "groupRest": "60s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "step-up",
+                "sets": 3,
+                "reps": "12 each leg",
+                "groupId": "circuit-cond1",
+                "groupType": "circuit",
+                "groupLabel": "Conditioning Circuit",
+                "groupRest": "60s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "squat-jump",
+                "sets": 3,
+                "reps": "10",
+                "groupId": "circuit-cond1",
+                "groupType": "circuit",
+                "groupLabel": "Conditioning Circuit",
+                "groupRest": "60s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "foam-rolling",
+                "details": "5 min lower body"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Superset Blitz",
+            "exercises": [
+              {
+                "exerciseSlug": "dynamic-stretch",
+                "details": "5 min full body warm-up"
+              },
+              {
+                "exerciseSlug": "pull-up",
+                "sets": 3,
+                "reps": "8-10",
+                "rest": "0s",
+                "groupId": "ss-E1",
+                "groupType": "superset",
+                "groupLabel": "Superset A"
+              },
+              {
+                "exerciseSlug": "renegade-row",
+                "sets": 3,
+                "reps": "8 each arm",
+                "rest": "60s",
+                "groupId": "ss-E1",
+                "groupType": "superset",
+                "groupLabel": "Superset A",
+                "groupRest": "60s"
+              },
+              {
+                "exerciseSlug": "front-squat",
+                "sets": 3,
+                "reps": "10",
+                "rest": "0s",
+                "groupId": "ss-F1",
+                "groupType": "superset",
+                "groupLabel": "Superset B"
+              },
+              {
+                "exerciseSlug": "stiff-leg-deadlift",
+                "sets": 3,
+                "reps": "10",
+                "rest": "60s",
+                "groupId": "ss-F1",
+                "groupType": "superset",
+                "groupLabel": "Superset B",
+                "groupRest": "60s"
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "15",
+                "rest": "0s",
+                "groupId": "ss-G1",
+                "groupType": "triset",
+                "groupLabel": "Triset"
+              },
+              {
+                "exerciseSlug": "hammer-curl",
+                "sets": 3,
+                "reps": "12",
+                "rest": "0s",
+                "groupId": "ss-G1",
+                "groupType": "triset",
+                "groupLabel": "Triset"
+              },
+              {
+                "exerciseSlug": "overhead-tricep-extension",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s",
+                "groupId": "ss-G1",
+                "groupType": "triset",
+                "groupLabel": "Triset",
+                "groupRest": "45s"
+              },
+              {
+                "exerciseSlug": "mountain-climber",
+                "reps": "30s",
+                "groupId": "circuit-finisher1",
+                "groupType": "circuit",
+                "groupLabel": "Finisher Circuit",
+                "groupRest": "45s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "burpee",
+                "reps": "8",
+                "groupId": "circuit-finisher1",
+                "groupType": "circuit",
+                "groupLabel": "Finisher Circuit",
+                "groupRest": "45s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "russian-twist",
+                "reps": "20 total",
+                "groupId": "circuit-finisher1",
+                "groupType": "circuit",
+                "groupLabel": "Finisher Circuit",
+                "groupRest": "45s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "static-stretch",
+                "details": "5 min full body stretches"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "Phase 2",
+        "weeks": "3-4",
+        "focus": "Increase intensity with heavier loads, tighter rest, and added AMRAP/EMOM finishers.",
+        "workouts": [
+          {
+            "day": "Day 1",
+            "title": "Upper Body Power Supersets",
+            "exercises": [
+              {
+                "exerciseSlug": "jump-rope",
+                "details": "3 min warm-up"
+              },
+              {
+                "exerciseSlug": "band-pull-apart",
+                "details": "10 reps each"
+              },
+              {
+                "exerciseSlug": "incline-dumbbell-press",
+                "sets": 4,
+                "reps": "8-10",
+                "rest": "0s",
+                "groupId": "ss-H2",
+                "groupType": "superset",
+                "groupLabel": "Superset A"
+              },
+              {
+                "exerciseSlug": "cable-row",
+                "sets": 4,
+                "reps": "10",
+                "rest": "60s",
+                "groupId": "ss-H2",
+                "groupType": "superset",
+                "groupLabel": "Superset A",
+                "groupRest": "60s"
+              },
+              {
+                "exerciseSlug": "arnold-press",
+                "sets": 3,
+                "reps": "10",
+                "rest": "0s",
+                "groupId": "ss-I2",
+                "groupType": "superset",
+                "groupLabel": "Superset B"
+              },
+              {
+                "exerciseSlug": "dumbbell-chest-fly",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s",
+                "groupId": "ss-I2",
+                "groupType": "superset",
+                "groupLabel": "Superset B",
+                "groupRest": "45s"
+              },
+              {
+                "exerciseSlug": "ez-bar-curl",
+                "sets": 3,
+                "reps": "10",
+                "rest": "0s",
+                "groupId": "ss-J2",
+                "groupType": "triset",
+                "groupLabel": "Arm Triset"
+              },
+              {
+                "exerciseSlug": "skull-crusher",
+                "sets": 3,
+                "reps": "10",
+                "rest": "0s",
+                "groupId": "ss-J2",
+                "groupType": "triset",
+                "groupLabel": "Arm Triset"
+              },
+              {
+                "exerciseSlug": "reverse-curl",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s",
+                "groupId": "ss-J2",
+                "groupType": "triset",
+                "groupLabel": "Arm Triset",
+                "groupRest": "45s"
+              },
+              {
+                "exerciseSlug": "push-up",
+                "reps": "max",
+                "details": "4 min — cycle through exercises",
+                "groupId": "amrap-upper2",
+                "groupType": "amrap",
+                "groupLabel": "AMRAP 4 min",
+                "groupRest": "0s",
+                "groupRounds": 1
+              },
+              {
+                "exerciseSlug": "dumbbell-row",
+                "reps": "10 each arm",
+                "details": "4 min — cycle through exercises",
+                "groupId": "amrap-upper2",
+                "groupType": "amrap",
+                "groupLabel": "AMRAP 4 min",
+                "groupRest": "0s",
+                "groupRounds": 1
+              },
+              {
+                "exerciseSlug": "static-stretch",
+                "details": "5 min upper body"
+              }
+            ]
+          },
+          {
+            "day": "Day 2",
+            "title": "Lower Body Power Circuits",
+            "exercises": [
+              {
+                "exerciseSlug": "bike-warmup",
+                "details": "3 min light cardio"
+              },
+              {
+                "exerciseSlug": "hip-circle",
+                "details": "10 reps each"
+              },
+              {
+                "exerciseSlug": "barbell-back-squat",
+                "sets": 4,
+                "reps": "8",
+                "groupId": "circuit-power-legs2",
+                "groupType": "circuit",
+                "groupLabel": "Power Leg Circuit",
+                "groupRest": "90s",
+                "groupRounds": 4
+              },
+              {
+                "exerciseSlug": "walking-lunge",
+                "sets": 4,
+                "reps": "10 each leg",
+                "groupId": "circuit-power-legs2",
+                "groupType": "circuit",
+                "groupLabel": "Power Leg Circuit",
+                "groupRest": "90s",
+                "groupRounds": 4
+              },
+              {
+                "exerciseSlug": "kettlebell-deadlift",
+                "sets": 4,
+                "reps": "10",
+                "groupId": "circuit-power-legs2",
+                "groupType": "circuit",
+                "groupLabel": "Power Leg Circuit",
+                "groupRest": "90s",
+                "groupRounds": 4
+              },
+              {
+                "exerciseSlug": "leg-extension",
+                "sets": 3,
+                "reps": "15",
+                "rest": "0s",
+                "groupId": "ss-K2",
+                "groupType": "superset",
+                "groupLabel": "Superset C"
+              },
+              {
+                "exerciseSlug": "lying-leg-curl",
+                "sets": 3,
+                "reps": "12",
+                "rest": "45s",
+                "groupId": "ss-K2",
+                "groupType": "superset",
+                "groupLabel": "Superset C",
+                "groupRest": "45s"
+              },
+              {
+                "exerciseSlug": "kettlebell-swing",
+                "reps": "15",
+                "details": "Odd minutes: Swings, Even minutes: Squat Jumps",
+                "groupId": "emom-cond2",
+                "groupType": "emom",
+                "groupLabel": "EMOM 8 min"
+              },
+              {
+                "exerciseSlug": "squat-jump",
+                "reps": "10",
+                "details": "Odd minutes: Swings, Even minutes: Squat Jumps",
+                "groupId": "emom-cond2",
+                "groupType": "emom",
+                "groupLabel": "EMOM 8 min"
+              },
+              {
+                "exerciseSlug": "foam-rolling",
+                "details": "5 min lower body"
+              }
+            ]
+          },
+          {
+            "day": "Day 3",
+            "title": "Full Body Giant Sets + AMRAP Finisher",
+            "exercises": [
+              {
+                "exerciseSlug": "dynamic-stretch",
+                "details": "5 min — jumping jacks, high knees, hip circles"
+              },
+              {
+                "exerciseSlug": "dumbbell-thruster",
+                "sets": 3,
+                "reps": "10",
+                "groupId": "giant-fb2",
+                "groupType": "giant_set",
+                "groupLabel": "Giant Set A",
+                "groupRest": "90s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "pull-up",
+                "sets": 3,
+                "reps": "8",
+                "groupId": "giant-fb2",
+                "groupType": "giant_set",
+                "groupLabel": "Giant Set A",
+                "groupRest": "90s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "reverse-lunge",
+                "sets": 3,
+                "reps": "10 each leg",
+                "groupId": "giant-fb2",
+                "groupType": "giant_set",
+                "groupLabel": "Giant Set A",
+                "groupRest": "90s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "renegade-row",
+                "sets": 3,
+                "reps": "8 each arm",
+                "groupId": "giant-fb2",
+                "groupType": "giant_set",
+                "groupLabel": "Giant Set A",
+                "groupRest": "90s",
+                "groupRounds": 3
+              },
+              {
+                "exerciseSlug": "dumbbell-lateral-raise",
+                "sets": 3,
+                "reps": "15",
+                "rest": "0s",
+                "groupId": "ss-L2",
+                "groupType": "superset",
+                "groupLabel": "Superset D"
+              },
+              {
+                "exerciseSlug": "rear-delt-fly",
+                "sets": 3,
+                "reps": "15",
+                "rest": "45s",
+                "groupId": "ss-L2",
+                "groupType": "superset",
+                "groupLabel": "Superset D",
+                "groupRest": "45s"
+              },
+              {
+                "exerciseSlug": "burpee",
+                "reps": "8",
+                "details": "5 min — cycle through all 3",
+                "groupId": "amrap-finisher2",
+                "groupType": "amrap",
+                "groupLabel": "AMRAP 5 min"
+              },
+              {
+                "exerciseSlug": "dumbbell-snatch",
+                "reps": "5 each arm",
+                "details": "5 min — cycle through all 3",
+                "groupId": "amrap-finisher2",
+                "groupType": "amrap",
+                "groupLabel": "AMRAP 5 min"
+              },
+              {
+                "exerciseSlug": "v-up",
+                "reps": "12",
+                "details": "5 min — cycle through all 3",
+                "groupId": "amrap-finisher2",
+                "groupType": "amrap",
+                "groupLabel": "AMRAP 5 min"
+              },
+              {
+                "exerciseSlug": "static-stretch",
+                "details": "5 min stretching & deep breathing"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "tags": [
+      "circuit",
+      "superset",
+      "fat loss",
+      "conditioning",
+      "intermediate",
+      "3 days"
+    ],
+    "target_user": "Intermediate",
+    "training_days_per_week": 3
+  }
+]

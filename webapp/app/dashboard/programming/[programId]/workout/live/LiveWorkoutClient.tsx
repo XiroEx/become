@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
+import ExerciseSwapModal from "@/components/ExerciseSwapModal";
 
 interface SetData {
   reps: string;
@@ -95,6 +96,13 @@ export default function LiveWorkoutPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  // Track which exercises have been swapped: exerciseIndex -> { originalSlug, originalName }
+  const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
+
+  // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
 
   // Auto-save ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -175,13 +183,16 @@ export default function LiveWorkoutPage() {
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
-          // Check for in-progress workout to resume
-          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}`, {
+          // Check for in-progress workout to resume (also fetch exercise history)
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
           if (progressRes.ok) {
             const progressData = await progressRes.json();
+            if (progressData.exerciseHistory) {
+              setExerciseHistory(progressData.exerciseHistory);
+            }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
               const restoredData = workoutData.exercises.map((ex) => {
@@ -306,18 +317,22 @@ export default function LiveWorkoutPage() {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const exercisesToSave = exercises.map((exercise, index) => ({
-        name: exercise.name,
-        ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
-        sets: exerciseDataToSave[index]?.map((set, setIndex) => ({
-          setNumber: setIndex + 1,
-          reps: parseInt(set.reps) || 0,
-          weight: parseFloat(set.weight) || 0,
-          completed: set.completed
-        })) || [],
-        ...(exercise.groupId && { groupId: exercise.groupId }),
-        ...(exercise.groupType && { groupType: exercise.groupType }),
-      }));
+      const exercisesToSave = exercises.map((exercise, index) => {
+        const swap = swappedExercises[index];
+        return {
+          name: exercise.name,
+          ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
+          sets: exerciseDataToSave[index]?.map((set, setIndex) => ({
+            setNumber: setIndex + 1,
+            reps: parseInt(set.reps) || 0,
+            weight: parseFloat(set.weight) || 0,
+            completed: set.completed
+          })) || [],
+          ...(exercise.groupId && { groupId: exercise.groupId }),
+          ...(exercise.groupType && { groupType: exercise.groupType }),
+          ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
+        };
+      });
       await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -328,7 +343,7 @@ export default function LiveWorkoutPage() {
     } finally {
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises]);
 
   // Auto-save: update exerciseData on input change + debounced save
   const updateCurrentInput = useCallback((field: "reps" | "weight", value: string) => {
@@ -373,7 +388,7 @@ export default function LiveWorkoutPage() {
   // Advance to next step with appropriate rest
   const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
     if (isComplete) {
-      router.push("/dashboard/programming");
+      setShowSummary(true);
       return;
     }
 
@@ -466,7 +481,7 @@ export default function LiveWorkoutPage() {
     saveWorkout(updatedData, allDone);
 
     if (allDone) {
-      router.push("/dashboard/programming");
+      setShowSummary(true);
       return;
     }
 
@@ -482,6 +497,59 @@ export default function LiveWorkoutPage() {
 
     setCurrentStepIndex(nextIdx);
   }, [currentStep, currentStepIndex, workoutFlow, exerciseData, saveWorkout, router, exercises]);
+
+  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }) => {
+    const exIdx = currentExerciseIndex;
+    const oldExercise = exercises[exIdx];
+    if (!oldExercise) return;
+
+    const originalSlug = swappedExercises[exIdx]?.originalSlug || oldExercise.exerciseSlug || "";
+    const originalName = swappedExercises[exIdx]?.originalName || oldExercise.name;
+
+    // Track the swap
+    setSwappedExercises(prev => ({
+      ...prev,
+      [exIdx]: { originalSlug, originalName }
+    }));
+
+    // Replace the exercise, preserving programming prescription
+    const updatedExercises = [...exercises];
+    updatedExercises[exIdx] = {
+      ...oldExercise,
+      exerciseSlug: alternative.slug,
+      name: alternative.name,
+      type: alternative.category,
+      trackingType: alternative.trackingType,
+    };
+    setExercises(updatedExercises);
+
+    // Reset set data for this exercise
+    const updatedData = exerciseData.map((sets, idx) =>
+      idx === exIdx
+        ? Array.from({ length: oldExercise.sets || 3 }, () => ({
+            reps: "",
+            weight: "",
+            completed: false,
+          }))
+        : sets
+    );
+    setExerciseData(updatedData);
+
+    // Rebuild the workout flow (exercise count unchanged, so step indices stay valid)
+    const newFlow = buildWorkoutFlow(updatedExercises);
+    setWorkoutFlow(newFlow);
+
+    // Clear current inputs
+    setCurrentReps("");
+    setCurrentWeight("");
+
+    // Auto-save the swap
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    saveWorkout(updatedData, false);
+
+    setShowSwapModal(false);
+    setShowSkipModal(false);
+  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout]);
 
   const handleCompleteOrSkipSet = () => {
     if (isSkipping) {
@@ -824,8 +892,35 @@ export default function LiveWorkoutPage() {
                   </>
                 )}
               </div>
-              <h1 className="mt-1 text-2xl font-bold">{currentExercise?.name}</h1>
+              <div className="mt-1 flex items-center gap-3">
+                <h1 className="text-2xl font-bold">{currentExercise?.name}</h1>
+                {swappedExercises[currentExerciseIndex] && (
+                  <span className="shrink-0 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
+                    Swapped
+                  </span>
+                )}
+                <button
+                  onClick={() => setShowSwapModal(true)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
+                  title="Swap exercise"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                </button>
+              </div>
               <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
+              {/* Exercise history from past workouts */}
+              {currentExercise && exerciseHistory[currentExercise.name] && (
+                <p className="mt-1.5 text-sm text-white/50">
+                  Last time:{" "}
+                  <span className="font-medium text-white/70">
+                    {exerciseHistory[currentExercise.name].weight > 0
+                      ? `${exerciseHistory[currentExercise.name].weight} lbs × ${exerciseHistory[currentExercise.name].reps} reps`
+                      : `${exerciseHistory[currentExercise.name].reps} reps`}
+                  </span>
+                </p>
+              )}
             </div>
 
             {/* Progress bar */}
@@ -1027,14 +1122,21 @@ export default function LiveWorkoutPage() {
                 Set {currentSetIndex + 1} of {totalSets}
               </p>
 
-              {/* Info Box */}
-              <div className="mb-6 rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
-                <p className="text-xs text-blue-300 text-center">
-                  💡 <span className="font-semibold">Coming soon:</span> Alternative exercise suggestions when you need to skip
-                </p>
-              </div>
-
               <div className="flex flex-col gap-3">
+                {/* Swap alternative option */}
+                <button
+                  onClick={() => {
+                    setShowSkipModal(false);
+                    setShowSwapModal(true);
+                  }}
+                  className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  Swap for Alternative
+                </button>
+
                 <button
                   onClick={() => skipSet()}
                   className="rounded-lg bg-zinc-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-600"
@@ -1134,6 +1236,159 @@ export default function LiveWorkoutPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Workout Summary Overlay */}
+      <AnimatePresence>
+        {showSummary && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-y-auto"
+            style={{
+              paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+              paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',
+            }}
+          >
+            <div className="flex-1 px-6 py-4">
+              {/* Header */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-center mb-8"
+              >
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
+                  <svg className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h1 className="text-3xl font-bold">Workout Complete!</h1>
+                <p className="mt-1 text-zinc-400">{workout?.day} — {workout?.title}</p>
+              </motion.div>
+
+              {/* Stats Grid */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
+                className="grid grid-cols-3 gap-3 mb-8"
+              >
+                <div className="rounded-xl bg-zinc-900 p-4 text-center">
+                  <p className="text-2xl font-bold text-green-400">{formatTime(elapsedTime)}</p>
+                  <p className="text-xs text-zinc-500 mt-1">Duration</p>
+                </div>
+                <div className="rounded-xl bg-zinc-900 p-4 text-center">
+                  <p className="text-2xl font-bold text-blue-400">
+                    {exerciseData.reduce((sum, sets) => sum + sets.filter(s => s.completed).length, 0)}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">Sets</p>
+                </div>
+                <div className="rounded-xl bg-zinc-900 p-4 text-center">
+                  <p className="text-2xl font-bold text-purple-400">
+                    {Math.round(exerciseData.reduce((sum, sets) =>
+                      sum + sets.reduce((setSum, s) =>
+                        s.completed ? setSum + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0) : setSum, 0
+                      ), 0
+                    )).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-1">Volume (lbs)</p>
+                </div>
+              </motion.div>
+
+              {/* Per-exercise breakdown */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-3">Exercise Breakdown</h2>
+                <div className="space-y-3">
+                  {exercises.map((exercise, exIdx) => {
+                    const sets = exerciseData[exIdx] || [];
+                    const completedSets = sets.filter(s => s.completed);
+                    const skippedSets = completedSets.filter(s => s.reps === "0" && s.weight === "0");
+                    const activeSets = completedSets.filter(s => !(s.reps === "0" && s.weight === "0"));
+                    const bestSet = activeSets.reduce(
+                      (best, s) => {
+                        const w = parseFloat(s.weight) || 0;
+                        const r = parseInt(s.reps) || 0;
+                        const bw = parseFloat(best.weight) || 0;
+                        const br = parseInt(best.reps) || 0;
+                        return w > bw || (w === bw && r > br) ? s : best;
+                      },
+                      activeSets[0] || { weight: "0", reps: "0" }
+                    );
+                    const history = exerciseHistory[exercise.name];
+
+                    return (
+                      <div key={exIdx} className="rounded-xl bg-zinc-900 p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-white">{exercise.name}</h3>
+                          <span className="text-xs text-zinc-500">
+                            {activeSets.length}/{sets.length} sets
+                            {skippedSets.length > 0 && ` (${skippedSets.length} skipped)`}
+                          </span>
+                        </div>
+                        {activeSets.length > 0 && (
+                          <div className="flex gap-2 flex-wrap">
+                            {activeSets.map((s, i) => (
+                              <span key={i} className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
+                                {parseFloat(s.weight) > 0 ? `${s.weight}×${s.reps}` : `${s.reps} reps`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Show PR indicator if beat history */}
+                        {history && activeSets.length > 0 && (
+                          (() => {
+                            const bestW = parseFloat(bestSet.weight) || 0;
+                            const bestR = parseInt(bestSet.reps) || 0;
+                            const isPR = bestW > history.weight || (bestW === history.weight && bestR > history.reps);
+                            return isPR ? (
+                              <p className="mt-2 text-xs text-yellow-400 font-medium">
+                                New PR! Previous best: {history.weight > 0 ? `${history.weight}×${history.reps}` : `${history.reps} reps`}
+                              </p>
+                            ) : null;
+                          })()
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Done button */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.65 }}
+              className="px-6 pb-4"
+            >
+              <button
+                onClick={() => router.push("/dashboard/programming")}
+                className="w-full rounded-full bg-green-500 py-4 text-lg font-bold shadow-lg shadow-green-500/30 transition-colors hover:bg-green-400"
+              >
+                Done
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Exercise Swap Modal */}
+      {currentExercise && (
+        <ExerciseSwapModal
+          isOpen={showSwapModal}
+          onClose={() => setShowSwapModal(false)}
+          onSwap={(alt) => handleSwapExercise(alt)}
+          exerciseSlug={currentExercise.exerciseSlug || ""}
+          exerciseName={currentExercise.name}
+          workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
+          programRole={undefined}
+        />
+      )}
     </div>
   );
 }
