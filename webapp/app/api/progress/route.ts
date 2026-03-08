@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
-import { formatProgressData, mockUserProgress, calculateNextWorkout } from '@/lib/data/userProgress'
+import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
 import { verifyAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
@@ -11,8 +11,7 @@ export async function GET(request: NextRequest) {
     const authResult = await verifyAuth(request)
     
     if (!authResult.success) {
-      // Return mock data for unauthenticated users (demo mode)
-      return NextResponse.json(formatProgressData(mockUserProgress))
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     await dbConnect()
@@ -21,8 +20,14 @@ export async function GET(request: NextRequest) {
     const progress = await UserProgress.findOne({ userId: authResult.userId }).lean()
 
     if (!progress) {
-      // Return mock data if no progress exists
-      return NextResponse.json(formatProgressData(mockUserProgress))
+      // New user — return empty progress (no mock program that could 404)
+      return NextResponse.json({
+        weightData: [],
+        bmiData: [],
+        moodData: [],
+        currentProgram: null,
+        stats: { streakDays: 0, totalWorkouts: 0, thisWeekWorkouts: 0, goalProgress: 0 }
+      })
     }
 
     // Find the most recent active program
@@ -86,28 +91,24 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Use mock data as fallback for missing/empty fields
-    // This ensures new users see demo data until they have real data
-    const hasWeightData = progress.weightHistory && progress.weightHistory.length > 0
-    const hasMoodData = progress.moodHistory && progress.moodHistory.length > 0
-    const hasWorkoutData = progress.workoutLogs && progress.workoutLogs.length > 0
-    const hasCurrentProgram = (activeProgram || progress.currentProgram?.programId)
+    // Build current program from real data only (never use mock programId)
+    const currentProgramData = activeProgram ? {
+      programId: activeProgram.programId,
+      startDate: activeProgram.startDate,
+      currentPhase: activeProgram.currentPhase || 1,
+      currentWeek: activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1
+    } : progress.currentProgram?.programId ? progress.currentProgram : null
 
     // Format and return progress data
     const formattedData = formatProgressData(
       {
-        height: progress.height || mockUserProgress.height,
-        weightHistory: hasWeightData ? progress.weightHistory : mockUserProgress.weightHistory,
-        moodHistory: hasMoodData ? progress.moodHistory : mockUserProgress.moodHistory,
-        workoutLogs: hasWorkoutData ? progress.workoutLogs : mockUserProgress.workoutLogs,
-        currentProgram: hasCurrentProgram ? (activeProgram ? {
-          programId: activeProgram.programId,
-          startDate: activeProgram.startDate,
-          currentPhase: activeProgram.currentPhase || 1,
-          currentWeek: activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1
-        } : progress.currentProgram) : mockUserProgress.currentProgram,
-        streakDays: progress.streakDays || mockUserProgress.streakDays,
-        totalWorkouts: hasWorkoutData ? progress.totalWorkouts : mockUserProgress.totalWorkouts
+        height: progress.height || 70,
+        weightHistory: progress.weightHistory || [],
+        moodHistory: progress.moodHistory || [],
+        workoutLogs: progress.workoutLogs || [],
+        currentProgram: currentProgramData,
+        streakDays: progress.streakDays || 0,
+        totalWorkouts: progress.totalWorkouts || 0
       },
       programName,
       nextWorkout
@@ -116,8 +117,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(formattedData)
   } catch (error) {
     console.error('Error fetching progress:', error)
-    // Return mock data on error
-    return NextResponse.json(formatProgressData(mockUserProgress))
+    return NextResponse.json({
+      weightData: [],
+      bmiData: [],
+      moodData: [],
+      currentProgram: null,
+      stats: { streakDays: 0, totalWorkouts: 0, thisWeekWorkouts: 0, goalProgress: 0 }
+    })
   }
 }
 
