@@ -1,483 +1,377 @@
 "use client"
-import { useState } from 'react'
+
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
+import DateNav from '@/components/nutrition/DateNav'
+import CalorieRing from '@/components/nutrition/CalorieRing'
+import MealSection from '@/components/nutrition/MealSection'
+import WaterTracker from '@/components/nutrition/WaterTracker'
+import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import QuickAddModal from '@/components/nutrition/QuickAddModal'
+import { Plus, BookOpen, Target } from 'lucide-react'
+import type { IFoodEntry } from '@/models/NutritionLog'
 
-interface MacroEntry {
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+type FoodEntry = IFoodEntry
+
+interface Meal {
+  id: string
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  foods: FoodEntry[]
+  loggedAt: string
+}
+
+interface NutritionLog {
+  date: string
+  meals: Meal[]
+  water: { current: number; goal: number }
+  quickAdds: { id: string; calories: number; protein: number; carbs: number; fats: number; note?: string }[]
+  dailyTotals: { calories: number; protein: number; carbs: number; fats: number; fiber: number }
+}
+
+interface NutritionGoals {
+  calories: number
   protein: number
   carbs: number
   fats: number
-  calories: number
+  waterGoal: number
 }
 
-interface Recipe {
-  id: number
-  title: string
-  category: string
-  protein: number
-  carbs: number
-  fats: number
-  calories: number
-  ingredients: string[]
-  instructions: string[]
+type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function formatDateParam(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-const recipes: Recipe[] = [
-  {
-    id: 1,
-    title: "High-Protein Chicken Bowl",
-    category: "Lunch/Dinner",
-    protein: 45,
-    carbs: 50,
-    fats: 12,
-    calories: 476,
-    ingredients: [
-      "6oz grilled chicken breast",
-      "1 cup cooked brown rice",
-      "1 cup steamed broccoli",
-      "1 tbsp olive oil",
-      "Salt, pepper, garlic powder"
-    ],
-    instructions: [
-      "Season chicken breast with salt, pepper, and garlic powder",
-      "Grill chicken for 6-7 minutes per side until cooked through",
-      "Cook brown rice according to package directions",
-      "Steam broccoli for 5-7 minutes",
-      "Assemble bowl and drizzle with olive oil"
-    ]
-  },
-  {
-    id: 2,
-    title: "Protein Pancakes",
-    category: "Breakfast",
-    protein: 30,
-    carbs: 35,
-    fats: 8,
-    calories: 332,
-    ingredients: [
-      "1 scoop protein powder (vanilla)",
-      "2 eggs",
-      "1/2 cup oats",
-      "1/4 cup almond milk",
-      "1/2 banana, mashed",
-      "1 tsp baking powder"
-    ],
-    instructions: [
-      "Blend all ingredients until smooth",
-      "Heat non-stick pan over medium heat",
-      "Pour batter to make 3-4 pancakes",
-      "Cook 2-3 minutes per side until golden",
-      "Top with berries or sugar-free syrup"
-    ]
-  },
-  {
-    id: 3,
-    title: "Greek Yogurt Power Bowl",
-    category: "Snack",
-    protein: 25,
-    carbs: 40,
-    fats: 6,
-    calories: 310,
-    ingredients: [
-      "1 cup non-fat Greek yogurt",
-      "1/2 cup mixed berries",
-      "1/4 cup granola",
-      "1 tbsp honey",
-      "1 tbsp chia seeds"
-    ],
-    instructions: [
-      "Add Greek yogurt to bowl",
-      "Top with mixed berries",
-      "Add granola and chia seeds",
-      "Drizzle with honey",
-      "Mix and enjoy"
-    ]
-  }
-]
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+}
+
+// ── Defaults ───────────────────────────────────────────────────────────────────
+
+const defaultLog: NutritionLog = {
+  date: formatDateParam(new Date()),
+  meals: [],
+  water: { current: 0, goal: 8 },
+  quickAdds: [],
+  dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 },
+}
+
+const defaultGoals: NutritionGoals = {
+  calories: 2300,
+  protein: 180,
+  carbs: 250,
+  fats: 60,
+  waterGoal: 8,
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
 
 export default function NutritionPage() {
-  const [dailyTargets] = useState<MacroEntry>({
-    protein: 180,
-    carbs: 250,
-    fats: 60,
-    calories: 2300
-  })
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  const [log, setLog] = useState<NutritionLog>(defaultLog)
+  const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
+  const [loading, setLoading] = useState(true)
 
-  const [tracked, setTracked] = useState<MacroEntry>({
-    protein: 85,
-    carbs: 120,
-    fats: 28,
-    calories: 1048
-  })
+  // Modal state
+  const [foodSearchOpen, setFoodSearchOpen] = useState(false)
+  const [foodSearchMealType, setFoodSearchMealType] = useState<MealType>('breakfast')
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
 
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
-  const [showLogMealModal, setShowLogMealModal] = useState(false)
-  const [mealForm, setMealForm] = useState({
-    name: '',
-    protein: '',
-    carbs: '',
-    fats: '',
-    calories: ''
-  })
+  const dateParam = formatDateParam(selectedDate)
+  const isToday = isSameDay(selectedDate, new Date())
 
-  const getProgress = (current: number, target: number) => {
-    return Math.min((current / target) * 100, 100)
-  }
+  // ── Auth helper ────────────────────────────────────────────────────────────
 
-  const calculateCalories = (protein: string, carbs: string, fats: string) => {
-    const p = Number(protein) || 0
-    const c = Number(carbs) || 0
-    const f = Number(fats) || 0
-    return (p * 4 + c * 4 + f * 9).toString()
-  }
-
-  const updateMealForm = (field: string, value: string) => {
-    const updated = { ...mealForm, [field]: value }
-    
-    // Auto-calculate calories when macros change
-    if (field === 'protein' || field === 'carbs' || field === 'fats') {
-      updated.calories = calculateCalories(
-        field === 'protein' ? value : mealForm.protein,
-        field === 'carbs' ? value : mealForm.carbs,
-        field === 'fats' ? value : mealForm.fats
-      )
+  const getHeaders = useCallback((): HeadersInit => {
+    const token = localStorage.getItem('token')
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
     }
-    
-    setMealForm(updated)
-  }
+    return headers
+  }, [])
 
-  const handleLogMeal = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const newTracked = {
-      protein: tracked.protein + Number(mealForm.protein),
-      carbs: tracked.carbs + Number(mealForm.carbs),
-      fats: tracked.fats + Number(mealForm.fats),
-      calories: tracked.calories + Number(mealForm.calories)
+  // ── Fetch nutrition log ────────────────────────────────────────────────────
+
+  const fetchLog = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/nutrition/log?date=${dateParam}`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setLog(data)
+      } else {
+        setLog({ ...defaultLog, date: dateParam })
+      }
+    } catch (err) {
+      console.error('Failed to fetch nutrition log:', err)
+      setLog({ ...defaultLog, date: dateParam })
     }
-    
-    setTracked(newTracked)
-    setMealForm({ name: '', protein: '', carbs: '', fats: '', calories: '' })
-    setShowLogMealModal(false)
-  }
+  }, [dateParam, getHeaders])
 
-  const handleLogRecipe = (recipe: Recipe) => {
-    const newTracked = {
-      protein: tracked.protein + recipe.protein,
-      carbs: tracked.carbs + recipe.carbs,
-      fats: tracked.fats + recipe.fats,
-      calories: tracked.calories + recipe.calories
+  // ── Fetch goals ────────────────────────────────────────────────────────────
+
+  const fetchGoals = useCallback(async () => {
+    try {
+      const res = await fetch('/api/nutrition/goals', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setGoals(data)
+      }
+    } catch (err) {
+      console.error('Failed to fetch nutrition goals:', err)
     }
-    
-    setTracked(newTracked)
-    setSelectedRecipe(null)
+  }, [getHeaders])
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    async function init() {
+      setLoading(true)
+      await Promise.all([fetchLog(), fetchGoals()])
+      setLoading(false)
+    }
+    init()
+  }, [fetchLog, fetchGoals])
+
+  // ── Date navigation ───────────────────────────────────────────────────────
+
+  const handlePrevDay = () => {
+    setSelectedDate(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() - 1)
+      return d
+    })
   }
 
-  return (
-    <>
-      <PageTransition className="pb-6">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Nutrition</h1>
-        <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 sm:mt-2">Daily targets, meal guidance and simple rules to stay on track.</p>
+  const handleNextDay = () => {
+    setSelectedDate(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() + 1)
+      return d
+    })
+  }
 
-        {/* Daily Tracking */}
-        <div className="mt-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-sm sm:mt-6 sm:p-6">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Today's Macros</h2>
-          <div className="mt-4 space-y-4">
-            <div>
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">Protein</span>
-                <span className="text-zinc-600 dark:text-zinc-400">{tracked.protein}g / {dailyTargets.protein}g</span>
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                <div 
-                  className="h-full bg-blue-600 transition-all duration-300"
-                  style={{ width: `${getProgress(tracked.protein, dailyTargets.protein)}%` }}
-                />
-              </div>
-            </div>
+  // ── Event handlers ────────────────────────────────────────────────────────
 
-            <div>
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">Carbs</span>
-                <span className="text-zinc-600 dark:text-zinc-400">{tracked.carbs}g / {dailyTargets.carbs}g</span>
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                <div 
-                  className="h-full bg-green-600 transition-all duration-300"
-                  style={{ width: `${getProgress(tracked.carbs, dailyTargets.carbs)}%` }}
-                />
-              </div>
-            </div>
+  const handleAddFood = async (mealType: MealType, food: FoodEntry) => {
+    try {
+      const res = await fetch('/api/nutrition/log', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ mealType, food, date: dateParam }),
+      })
+      if (res.ok) {
+        await fetchLog()
+      }
+    } catch (err) {
+      console.error('Failed to add food:', err)
+    }
+    setFoodSearchOpen(false)
+  }
 
-            <div>
-              <div className="mb-1 flex items-center justify-between text-sm">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">Fats</span>
-                <span className="text-zinc-600 dark:text-zinc-400">{tracked.fats}g / {dailyTargets.fats}g</span>
-              </div>
-              <div className="h-3 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                <div 
-                  className="h-full bg-yellow-600 transition-all duration-300"
-                  style={{ width: `${getProgress(tracked.fats, dailyTargets.fats)}%` }}
-                />
-              </div>
-            </div>
+  const handleDeleteFood = async (mealId: string, foodEntryId: string) => {
+    try {
+      const res = await fetch('/api/nutrition/log', {
+        method: 'DELETE',
+        headers: getHeaders(),
+        body: JSON.stringify({ mealId, foodEntryId, date: dateParam }),
+      })
+      if (res.ok) {
+        await fetchLog()
+      }
+    } catch (err) {
+      console.error('Failed to delete food:', err)
+    }
+  }
 
-            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-zinc-900 dark:text-white">Calories</span>
-                <span className="text-lg font-bold text-zinc-900 dark:text-white">{tracked.calories} / {dailyTargets.calories}</span>
-              </div>
-            </div>
-          </div>
+  const handleAddWater = async (amount: number) => {
+    try {
+      const res = await fetch('/api/nutrition/water', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ amount, date: dateParam }),
+      })
+      if (res.ok) {
+        await fetchLog()
+      }
+    } catch (err) {
+      console.error('Failed to add water:', err)
+    }
+  }
 
-          <button 
-            onClick={() => setShowLogMealModal(true)}
-            className="mt-4 w-full cursor-pointer rounded-lg bg-zinc-900 dark:bg-white py-3 font-semibold text-white dark:text-black transition-colors hover:bg-black dark:hover:bg-zinc-200"
-          >
-            + Log Meal
-          </button>
+  const handleQuickAdd = async (data: { calories: number; protein: number; carbs: number; fats: number; note?: string }) => {
+    try {
+      const res = await fetch('/api/nutrition/quick-add', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ ...data, date: dateParam }),
+      })
+      if (res.ok) {
+        await fetchLog()
+      }
+    } catch (err) {
+      console.error('Failed to quick add:', err)
+    }
+    setQuickAddOpen(false)
+  }
+
+  const openFoodSearch = (mealType: MealType) => {
+    setFoodSearchMealType(mealType)
+    setFoodSearchOpen(true)
+  }
+
+  // ── Meal helpers ──────────────────────────────────────────────────────────
+
+  const getMealsForType = (type: MealType): Meal[] => {
+    return log.meals.filter(m => m.mealType === type)
+  }
+
+  // ── Loading skeleton ──────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <PageTransition className="space-y-4 pb-6 sm:space-y-6">
+        <header className="mb-2 sm:mb-4">
+          <div className="h-8 w-32 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+          <div className="mt-2 h-4 w-56 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+        </header>
+
+        {/* Date nav skeleton */}
+        <div className="flex items-center justify-center gap-4">
+          <div className="h-10 w-10 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-6 w-40 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-10 w-10 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
         </div>
 
-        {/* Recipes */}
-        <div className="mt-5 sm:mt-8">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Recipes</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Quick, macro-friendly meal ideas</p>
-
-          <div className="mt-3 space-y-2 sm:mt-4 sm:space-y-3">
-            {recipes.map((recipe) => (
-              <button
-                key={recipe.id}
-                onClick={() => setSelectedRecipe(recipe)}
-                className="group w-full cursor-pointer rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-left shadow-sm transition-all duration-200 hover:scale-[1.01] hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-md active:scale-[0.99] sm:p-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-zinc-900 dark:text-white group-hover:text-black dark:group-hover:text-white">{recipe.title}</h3>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{recipe.category}</p>
-                    <div className="mt-2 flex gap-3 text-xs text-zinc-600 dark:text-zinc-400">
-                      <span>P: {recipe.protein}g</span>
-                      <span>C: {recipe.carbs}g</span>
-                      <span>F: {recipe.fats}g</span>
-                      <span className="font-semibold">{recipe.calories} cal</span>
-                    </div>
-                  </div>
-                  <svg 
-                    className="h-5 w-5 text-zinc-400 transition-transform group-hover:translate-x-1" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </button>
+        {/* Ring skeleton */}
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="h-40 w-40 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+          <div className="flex w-full gap-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-8 flex-1 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
             ))}
           </div>
         </div>
+
+        {/* Meal sections skeleton */}
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+        ))}
+      </PageTransition>
+    )
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <>
+      <PageTransition className="space-y-4 pb-6 sm:space-y-6">
+        {/* Header */}
+        <header className="mb-2 sm:mb-4">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
+            Track your meals, macros, and hydration
+          </p>
+        </header>
+
+        {/* Date Navigation */}
+        <DateNav
+          date={selectedDate}
+          onDateChange={setSelectedDate}
+        />
+
+        {/* Calorie Ring + Macro Summary */}
+        <CalorieRing
+          consumed={log.dailyTotals.calories}
+          goal={goals.calories}
+          protein={{ current: log.dailyTotals.protein, goal: goals.protein }}
+          carbs={{ current: log.dailyTotals.carbs, goal: goals.carbs }}
+          fats={{ current: log.dailyTotals.fats, goal: goals.fats }}
+        />
+
+        {/* Meal Sections */}
+        {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map(type => {
+          const meals = getMealsForType(type)
+          const foods = meals.flatMap(m => m.foods)
+          const mealId = meals[0]?.id
+          return (
+            <MealSection
+              key={type}
+              mealType={type}
+              foods={foods}
+              onAddFood={() => openFoodSearch(type)}
+              onEditFood={() => {}}
+              onDeleteFood={(_, foodEntryId) => handleDeleteFood(mealId || '', foodEntryId)}
+              mealId={mealId}
+            />
+          )
+        })}
+
+        {/* Water Tracker */}
+        <WaterTracker
+          current={log.water.current}
+          goal={goals.waterGoal}
+          onAddWater={handleAddWater}
+        />
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <button
+            onClick={() => setQuickAddOpen(true)}
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+              <Plus className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Quick Add</span>
+          </button>
+
+          <Link
+            href="/dashboard/nutrition/recipes"
+            className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30">
+              <BookOpen className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            </div>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Recipes</span>
+          </Link>
+
+          <Link
+            href="/dashboard/nutrition/goals"
+            className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
+              <Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Goals</span>
+          </Link>
+        </div>
       </PageTransition>
 
-      {/* Recipe Modal */}
-      {selectedRecipe && (
-        <div 
-          className="fixed inset-0 z-100 flex items-end justify-center bg-black/50 sm:items-center"
-          onClick={() => setSelectedRecipe(null)}
-        >
-          <div 
-            className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white dark:bg-zinc-900 p-6 sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">{selectedRecipe.title}</h2>
-                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{selectedRecipe.category}</p>
-              </div>
-              <button
-                onClick={() => setSelectedRecipe(null)}
-                className="rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+      {/* Food Search Modal */}
+      <FoodSearchModal
+        isOpen={foodSearchOpen}
+        mealType={foodSearchMealType}
+        onClose={() => setFoodSearchOpen(false)}
+        onSelectFood={(food: FoodEntry) => handleAddFood(foodSearchMealType, food)}
+      />
 
-            {/* Macros */}
-            <div className="mb-6 grid grid-cols-4 gap-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 p-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{selectedRecipe.protein}g</div>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">Protein</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">{selectedRecipe.carbs}g</div>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">Carbs</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">{selectedRecipe.fats}g</div>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">Fats</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-zinc-900 dark:text-white">{selectedRecipe.calories}</div>
-                <div className="text-xs text-zinc-600 dark:text-zinc-400">Calories</div>
-              </div>
-            </div>
-
-            {/* Ingredients */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Ingredients</h3>
-              <ul className="mt-3 space-y-2">
-                {selectedRecipe.ingredients.map((ingredient, index) => (
-                  <li 
-                    key={index}
-                    className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300"
-                  >
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-400 dark:bg-zinc-600" />
-                    {ingredient}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Instructions */}
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Instructions</h3>
-              <ol className="mt-3 space-y-3">
-                {selectedRecipe.instructions.map((instruction, index) => (
-                  <li 
-                    key={index}
-                    className="flex gap-3 text-sm text-zinc-700 dark:text-zinc-300"
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-white text-xs font-bold text-white dark:text-black">
-                      {index + 1}
-                    </span>
-                    <span className="pt-0.5">{instruction}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleLogRecipe(selectedRecipe)}
-                className="flex-1 cursor-pointer rounded-lg bg-green-600 py-3 font-semibold text-white transition-colors hover:bg-green-700"
-              >
-                Log This Meal
-              </button>
-              <button
-                onClick={() => setSelectedRecipe(null)}
-                className="flex-1 cursor-pointer rounded-lg bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Log Meal Modal */}
-      {showLogMealModal && (
-        <div 
-          className="fixed inset-0 z-100 flex items-end justify-center bg-black/50 sm:items-center"
-          onClick={() => setShowLogMealModal(false)}
-        >
-          <div 
-            className="w-full max-w-md rounded-t-2xl bg-white p-6 sm:rounded-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between">
-              <h2 className="text-2xl font-bold text-zinc-900">Log Meal</h2>
-              <button
-                onClick={() => setShowLogMealModal(false)}
-                className="rounded-full p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <form onSubmit={handleLogMeal} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">Meal Name</label>
-                <input
-                  type="text"
-                  value={mealForm.name}
-                  onChange={(e) => updateMealForm('name', e.target.value)}
-                  placeholder="e.g., Chicken and Rice"
-                  required
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-700">Protein (g)</label>
-                  <input
-                    type="number"
-                    value={mealForm.protein}
-                    onChange={(e) => updateMealForm('protein', e.target.value)}
-                    placeholder="45"
-                    required
-                    min="0"
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-700">Carbs (g)</label>
-                  <input
-                    type="number"
-                    value={mealForm.carbs}
-                    onChange={(e) => updateMealForm('carbs', e.target.value)}
-                    placeholder="50"
-                    required
-                    min="0"
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-700">Fats (g)</label>
-                  <input
-                    type="number"
-                    value={mealForm.fats}
-                    onChange={(e) => updateMealForm('fats', e.target.value)}
-                    placeholder="12"
-                    required
-                    min="0"
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-700">Calories (auto)</label>
-                  <input
-                    type="number"
-                    value={mealForm.calories}
-                    readOnly
-                    placeholder="Auto-calculated"
-                    className="w-full rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-2 text-zinc-600"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowLogMealModal(false)}
-                  className="flex-1 cursor-pointer rounded-lg border border-zinc-300 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 cursor-pointer rounded-lg bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black"
-                >
-                  Log Meal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Quick Add Modal */}
+      <QuickAddModal
+        isOpen={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        onSubmit={handleQuickAdd}
+      />
     </>
   )
 }
