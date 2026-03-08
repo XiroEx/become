@@ -111,7 +111,7 @@ export default function CalendarSettingsPage() {
   }
 
   return (
-    <PageTransition className="min-h-screen pb-24">
+    <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-6">
         <button

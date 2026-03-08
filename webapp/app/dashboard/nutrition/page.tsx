@@ -174,7 +174,7 @@ export default function NutritionPage() {
 
   return (
     <>
-      <PageTransition className="pb-20">
+      <PageTransition className="pb-6">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Nutrition</h1>
         <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 sm:mt-2">Daily targets, meal guidance and simple rules to stay on track.</p>
 

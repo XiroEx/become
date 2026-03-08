@@ -199,7 +199,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
 
   if (mode === 'loading') {
     return (
-      <PageTransition className="min-h-screen pb-24">
+      <PageTransition className="pb-6">
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-white" />
         </div>
@@ -216,7 +216,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
     const total = existingSchedule.scheduledWorkouts.length
 
     return (
-      <PageTransition className="min-h-screen pb-24">
+      <PageTransition className="pb-6">
         <div className="mb-6">
           <button
             onClick={() => router.back()}
@@ -299,7 +299,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
   }
 
   return (
-    <PageTransition className="min-h-screen pb-24">
+    <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-6">
         <button
