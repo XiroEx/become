@@ -422,7 +422,7 @@ export default function ChatPage() {
   const isOtherTrainer = otherParticipant?.role === "trainer";
 
   return (
-    <div className="flex h-full flex-col -mx-3 -my-4 sm:-mx-6 sm:-my-6">
+    <div className="fixed inset-0 z-40 flex flex-col bg-zinc-50 dark:bg-zinc-950">
       {/* Header */}
       <div className="shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
