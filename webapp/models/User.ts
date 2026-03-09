@@ -1,6 +1,8 @@
 import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 
+export type UserRole = 'user' | 'trainer' | 'admin';
+
 export interface ISavedProgram {
   programId: string;
   savedAt: Date;
@@ -12,6 +14,8 @@ export interface IUser {
   email: string
   password: string
   name: string
+  role: UserRole
+  trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
   createdAt?: Date
   updatedAt?: Date
@@ -47,6 +51,8 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
     required: [true, 'Name is required'],
     trim: true,
   },
+  role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
+  trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
 }, {
   timestamps: true,
