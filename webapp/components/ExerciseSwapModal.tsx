@@ -162,6 +162,9 @@ export default function ExerciseSwapModal({
   const [visibleCount, setVisibleCount] = useState(3);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Stabilize workoutExerciseSlugs to avoid re-fetching on every parent render
+  const workoutSlugsKey = workoutExerciseSlugs.join(",");
+
   // Fetch alternatives when modal opens
   const fetchAlternatives = useCallback(async () => {
     if (!exerciseSlug) return;
@@ -177,8 +180,8 @@ export default function ExerciseSwapModal({
       }
 
       const params = new URLSearchParams({ slug: exerciseSlug, limit: "30" });
-      if (workoutExerciseSlugs.length > 0) {
-        params.set("workoutSlugs", workoutExerciseSlugs.join(","));
+      if (workoutSlugsKey) {
+        params.set("workoutSlugs", workoutSlugsKey);
       }
       if (programRole) {
         params.set("programRole", programRole);
@@ -202,7 +205,7 @@ export default function ExerciseSwapModal({
     } finally {
       setLoading(false);
     }
-  }, [exerciseSlug, workoutExerciseSlugs, programRole]);
+  }, [exerciseSlug, workoutSlugsKey, programRole]);
 
   useEffect(() => {
     if (isOpen) {
