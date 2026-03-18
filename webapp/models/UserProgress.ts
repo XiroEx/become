@@ -27,6 +27,7 @@ export interface ISetLog {
 
 export interface IExerciseLog {
   name: string
+  exerciseSlug?: string          // The exercise slug used (may differ from program if swapped)
   sets: ISetLog[]
   // Grouping metadata (mirrors program exercise grouping for analysis)
   groupId?: string
@@ -46,6 +47,13 @@ export interface IWorkoutLog {
   exercises: IExerciseLog[]
 }
 
+export interface IExerciseSwap {
+  originalSlug: string       // The originally programmed exercise slug
+  replacementSlug: string    // The replacement exercise slug
+  replacementName: string    // The replacement exercise name (for display)
+  swappedAt: Date
+}
+
 export interface IActiveProgram {
   programId: string
   programName: string
@@ -57,6 +65,7 @@ export interface IActiveProgram {
   lastWorkoutDate?: Date
   status: 'active' | 'in-progress' | 'paused' | 'completed'
   hasSchedule?: boolean
+  exerciseSwaps?: IExerciseSwap[] // Permanent swaps for this program
 }
 
 export interface IUserProgress {
@@ -112,6 +121,7 @@ const SetLogSchema = new Schema<ISetLog>({
 
 const ExerciseLogSchema = new Schema<IExerciseLog>({
   name: { type: String, required: true },
+  exerciseSlug: { type: String },
   sets: [SetLogSchema],
   groupId: { type: String },
   groupType: { type: String },
@@ -129,6 +139,13 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   exercises: [ExerciseLogSchema]
 }, { _id: false })
 
+const ExerciseSwapSchema = new Schema({
+  originalSlug: { type: String, required: true },
+  replacementSlug: { type: String, required: true },
+  replacementName: { type: String, required: true },
+  swappedAt: { type: Date, default: Date.now }
+}, { _id: false })
+
 const ActiveProgramSchema = new Schema<IActiveProgram>({
   programId: { type: String, required: true },
   programName: { type: String, required: true },
@@ -139,7 +156,8 @@ const ActiveProgramSchema = new Schema<IActiveProgram>({
   totalWorkouts: { type: Number, required: true },
   lastWorkoutDate: { type: Date },
   status: { type: String, enum: ['active', 'in-progress', 'paused', 'completed'], default: 'in-progress' },
-  hasSchedule: { type: Boolean, default: false }
+  hasSchedule: { type: Boolean, default: false },
+  exerciseSwaps: { type: [ExerciseSwapSchema], default: [] }
 }, { _id: false })
 
 const UserProgressSchema = new Schema<IUserProgress>({
