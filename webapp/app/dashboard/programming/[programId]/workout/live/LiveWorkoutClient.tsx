@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
-import ExerciseSwapModal from "@/components/ExerciseSwapModal";
+import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 
 interface SetData {
   reps: string;
@@ -22,7 +22,10 @@ interface SavedSetData {
 
 interface SavedExercise {
   name: string;
+  exerciseSlug?: string;
   sets: SavedSetData[];
+  originalExerciseSlug?: string;
+  swappedFromName?: string;
 }
 
 interface SavedWorkout {
@@ -179,7 +182,7 @@ export default function LiveWorkoutPage() {
           setExercises(workoutData.exercises);
           setCurrentPhase(data.phase || 1);
 
-          const { data: initialData, flow } = initializeExercises(workoutData.exercises);
+          let { data: initialData, flow } = initializeExercises(workoutData.exercises);
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
@@ -195,9 +198,44 @@ export default function LiveWorkoutPage() {
             }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
-              const restoredData = workoutData.exercises.map((ex) => {
-                const savedEx = savedWorkout.exercises?.find(e => e.name === ex.name);
-                if (savedEx) {
+
+              // Restore swapped exercises from saved workout
+              const updatedExercises = [...workoutData.exercises];
+              const restoredSwaps: Record<number, { originalSlug: string; originalName: string }> = {};
+
+              savedWorkout.exercises?.forEach((savedEx, idx) => {
+                if (idx < updatedExercises.length && savedEx.originalExerciseSlug) {
+                  updatedExercises[idx] = {
+                    ...updatedExercises[idx],
+                    name: savedEx.name,
+                    exerciseSlug: savedEx.exerciseSlug || updatedExercises[idx].exerciseSlug,
+                  };
+                  restoredSwaps[idx] = {
+                    originalSlug: savedEx.originalExerciseSlug,
+                    originalName: savedEx.swappedFromName || updatedExercises[idx].name,
+                  };
+                }
+              });
+
+              if (Object.keys(restoredSwaps).length > 0) {
+                setExercises(updatedExercises);
+                setSwappedExercises(restoredSwaps);
+                // Rebuild flow with updated exercises
+                const newFlow = buildWorkoutFlow(updatedExercises);
+                setWorkoutFlow(newFlow);
+                // Use newFlow for resume index below
+                flow = newFlow;
+              }
+
+              // Match progress by index (not name) so swapped exercises restore correctly
+              const restoredData = updatedExercises.map((ex, exIdx) => {
+                const savedEx = savedWorkout.exercises?.[exIdx];
+                const isMatch = savedEx && (
+                  savedEx.name === ex.name ||
+                  savedEx.originalExerciseSlug ||
+                  savedEx.swappedFromName
+                );
+                if (isMatch && savedEx) {
                   return savedEx.sets.map(s => ({
                     reps: s.reps > 0 ? s.reps.toString() : "",
                     weight: s.weight > 0 ? s.weight.toString() : "",
@@ -498,7 +536,7 @@ export default function LiveWorkoutPage() {
     setCurrentStepIndex(nextIdx);
   }, [currentStep, currentStepIndex, workoutFlow, exerciseData, saveWorkout, router, exercises]);
 
-  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }) => {
+  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }, scope: SwapScope) => {
     const exIdx = currentExerciseIndex;
     const oldExercise = exercises[exIdx];
     if (!oldExercise) return;
@@ -522,6 +560,23 @@ export default function LiveWorkoutPage() {
       trackingType: alternative.trackingType,
     };
     setExercises(updatedExercises);
+
+    // Save permanent swap if scope is 'program'
+    if (scope === 'program') {
+      const token = localStorage.getItem("token");
+      if (token) {
+        fetch("/api/programs/swap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            programId,
+            originalSlug,
+            replacementSlug: alternative.slug,
+            replacementName: alternative.name,
+          })
+        }).catch(err => console.error("Error saving permanent swap:", err));
+      }
+    }
 
     // Reset set data for this exercise
     const updatedData = exerciseData.map((sets, idx) =>
@@ -549,7 +604,7 @@ export default function LiveWorkoutPage() {
 
     setShowSwapModal(false);
     setShowSkipModal(false);
-  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout]);
+  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId]);
 
   const handleCompleteOrSkipSet = () => {
     if (isSkipping) {
@@ -1382,7 +1437,7 @@ export default function LiveWorkoutPage() {
         <ExerciseSwapModal
           isOpen={showSwapModal}
           onClose={() => setShowSwapModal(false)}
-          onSwap={(alt) => handleSwapExercise(alt)}
+          onSwap={(alt, scope) => handleSwapExercise(alt, scope)}
           exerciseSlug={currentExercise.exerciseSlug || ""}
           exerciseName={currentExercise.name}
           workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}

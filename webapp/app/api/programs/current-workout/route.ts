@@ -138,6 +138,22 @@ export async function GET(request: NextRequest) {
     const currentDay = activeProgram.currentDay || 'Day 1'
     const phases = (program.phases || []) as Phase[]
 
+    // Helper: apply permanent exercise swaps to a workout before hydration
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const applyPermanentSwaps = (workout: Record<string, any>) => {
+      const swaps = activeProgram.exerciseSwaps as Array<{ originalSlug: string; replacementSlug: string }> | undefined
+      if (!swaps?.length || !workout.exercises) return workout
+      const result = { ...workout, exercises: [...workout.exercises] }
+      for (const swap of swaps) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const idx = result.exercises.findIndex((e: any) => e.exerciseSlug === swap.originalSlug)
+        if (idx !== -1) {
+          result.exercises[idx] = { ...result.exercises[idx], exerciseSlug: swap.replacementSlug }
+        }
+      }
+      return result
+    }
+
     // If a specific day was requested, try to serve that workout (search current phase first, then others)
     if (requestedDay) {
       const preferredPhaseIdx = Math.max(0, currentPhase - 1)
@@ -146,7 +162,7 @@ export async function GET(request: NextRequest) {
       const preferredMatch = preferredWorkouts.find(w => w.day === requestedDay)
 
       if (preferredMatch) {
-        const hydratedWorkout = await hydrateWorkout({ ...preferredMatch });
+        const hydratedWorkout = await hydrateWorkout(applyPermanentSwaps({ ...preferredMatch }));
         return NextResponse.json({
           workout: hydratedWorkout,
           phase: preferredPhaseIdx + 1,
@@ -167,7 +183,7 @@ export async function GET(request: NextRequest) {
         const workouts = normalizeWorkouts(phase.workouts)
         const requestedWorkout = workouts.find(w => w.day === requestedDay) || workouts[0]
         if (requestedWorkout) {
-          const hydratedWorkout = await hydrateWorkout({ ...requestedWorkout });
+          const hydratedWorkout = await hydrateWorkout(applyPermanentSwaps({ ...requestedWorkout }));
           return NextResponse.json({
             workout: hydratedWorkout,
             phase: anyPhaseIdx + 1,
@@ -200,7 +216,7 @@ export async function GET(request: NextRequest) {
       if (!fallbackWorkout) {
         return NextResponse.json({ error: 'No workouts found' }, { status: 404 })
       }
-      const hydratedFallback = await hydrateWorkout({ ...fallbackWorkout });
+      const hydratedFallback = await hydrateWorkout(applyPermanentSwaps({ ...fallbackWorkout }));
       return NextResponse.json({
         workout: hydratedFallback,
         phase: currentPhase,
@@ -215,7 +231,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const hydratedCurrent = await hydrateWorkout({ ...currentWorkout });
+    const hydratedCurrent = await hydrateWorkout(applyPermanentSwaps({ ...currentWorkout }));
     return NextResponse.json({
       workout: hydratedCurrent,
       phase: currentPhase,

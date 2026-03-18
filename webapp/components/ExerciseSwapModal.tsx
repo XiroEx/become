@@ -33,10 +33,12 @@ interface SourceExercise {
   category: string;
 }
 
+export type SwapScope = 'session' | 'program';
+
 interface ExerciseSwapModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSwap: (alternative: AlternativeExercise) => void;
+  onSwap: (alternative: AlternativeExercise, scope: SwapScope) => void;
   exerciseSlug: string;
   exerciseName: string;
   /** Other exercise slugs in the current workout (to avoid duplicates) */
@@ -272,8 +274,8 @@ export default function ExerciseSwapModal({
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  const handleSwap = (alt: AlternativeExercise) => {
-    onSwap(alt);
+  const handleSwap = (alt: AlternativeExercise, scope: SwapScope) => {
+    onSwap(alt, scope);
     onClose();
   };
 
@@ -490,7 +492,7 @@ export default function ExerciseSwapModal({
                         alternative={alt}
                         isSelected={selectedSlug === alt.slug}
                         onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
-                        onSwap={() => handleSwap(alt)}
+                        onSwap={(scope) => handleSwap(alt, scope)}
                         source={source}
                       />
                     </motion.div>
@@ -565,7 +567,7 @@ function AlternativeCard({
   alternative: AlternativeExercise;
   isSelected: boolean;
   onSelect: () => void;
-  onSwap: () => void;
+  onSwap: (scope: SwapScope) => void;
   source: SourceExercise | null;
 }) {
   return (
@@ -696,16 +698,27 @@ function AlternativeCard({
                 </div>
               </div>
 
-              {/* Swap button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSwap();
-                }}
-                className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
-              >
-                Swap to {alt.name}
-              </button>
+              {/* Swap buttons */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSwap('program');
+                  }}
+                  className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
+                >
+                  Swap for All Future Workouts
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSwap('session');
+                  }}
+                  className="w-full rounded-lg border border-zinc-300 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Just This Session
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
