@@ -162,12 +162,18 @@ export default function ExerciseSwapModal({
   const [visibleCount, setVisibleCount] = useState(3);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Stabilize workoutExerciseSlugs to avoid re-fetching on every parent render
-  const workoutSlugsKey = workoutExerciseSlugs.join(",");
+  // Use refs to access latest prop values without re-creating the fetch callback
+  const exerciseSlugRef = useRef(exerciseSlug);
+  exerciseSlugRef.current = exerciseSlug;
+  const workoutSlugsRef = useRef(workoutExerciseSlugs);
+  workoutSlugsRef.current = workoutExerciseSlugs;
+  const programRoleRef = useRef(programRole);
+  programRoleRef.current = programRole;
 
-  // Fetch alternatives when modal opens
+  // Fetch alternatives — stable callback that reads from refs
   const fetchAlternatives = useCallback(async () => {
-    if (!exerciseSlug) return;
+    const slug = exerciseSlugRef.current;
+    if (!slug) return;
 
     setLoading(true);
     setError(null);
@@ -179,12 +185,14 @@ export default function ExerciseSwapModal({
         return;
       }
 
-      const params = new URLSearchParams({ slug: exerciseSlug, limit: "30" });
-      if (workoutSlugsKey) {
-        params.set("workoutSlugs", workoutSlugsKey);
+      const params = new URLSearchParams({ slug, limit: "30" });
+      const slugs = workoutSlugsRef.current;
+      if (slugs.length > 0) {
+        params.set("workoutSlugs", slugs.join(","));
       }
-      if (programRole) {
-        params.set("programRole", programRole);
+      const role = programRoleRef.current;
+      if (role) {
+        params.set("programRole", role);
       }
 
       const res = await fetch(`/api/exercises/alternatives?${params}`, {
@@ -205,8 +213,9 @@ export default function ExerciseSwapModal({
     } finally {
       setLoading(false);
     }
-  }, [exerciseSlug, workoutSlugsKey, programRole]);
+  }, []); // Stable — no dependencies, reads from refs
 
+  // Only fetch when modal opens (isOpen transitions to true)
   useEffect(() => {
     if (isOpen) {
       fetchAlternatives();
