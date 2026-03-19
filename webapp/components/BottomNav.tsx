@@ -42,13 +42,8 @@ export default function BottomNav() {
   return (
     <nav
       className="shrink-0 border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-      style={{
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        paddingLeft: 'env(safe-area-inset-left, 0px)',
-        paddingRight: 'env(safe-area-inset-right, 0px)',
-      }}
     >
-      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 pt-1 pb-0 sm:px-4 sm:pt-1.5 sm:pb-0">
+      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 py-1 sm:px-4 sm:py-1.5">
         <li className="flex-1">
           <Link
             href="/dashboard/programming"
