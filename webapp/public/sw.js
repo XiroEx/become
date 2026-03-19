@@ -1,57 +1,40 @@
-const CACHE_NAME = 'become-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/dashboard',
-  '/login',
-  '/register',
-  '/manifest.json',
-];
+// No pre-caching of HTML pages — Next.js handles its own caching.
+// This SW only provides offline fallback for static assets (JS/CSS/images).
 
-// Install event - cache static assets
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+// Install — skip waiting to activate immediately on update
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
+// Activate — wipe ALL old caches so stale HTML/CSS never persists
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then((names) =>
+      Promise.all(names.map((name) => caches.delete(name)))
+    )
   );
   self.clients.claim();
 });
 
-// Fetch event - network first, fall back to cache
+// Fetch — network only for navigation, network-first for static assets
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
-  
-  // Skip API requests - always fetch from network
-  if (event.request.url.includes('/api/')) return;
 
+  // Never intercept API calls or page navigations
+  if (event.request.url.includes('/api/') || event.request.mode === 'navigate') {
+    return;
+  }
+
+  // Static assets (JS, CSS, images, fonts): network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone the response before caching
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open('become-static').then((cache) => cache.put(event.request, clone));
+        }
         return response;
       })
-      .catch(() => {
-        // Fall back to cache if network fails
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });
