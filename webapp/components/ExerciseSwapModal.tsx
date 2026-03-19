@@ -215,14 +215,21 @@ export default function ExerciseSwapModal({
     }
   }, []); // Stable — no dependencies, reads from refs
 
-  // Only fetch when modal opens (isOpen transitions to true)
+  // Track whether we've already fetched for this open session
+  const hasFetchedRef = useRef(false);
+
+  // Only fetch when modal opens — not on re-renders while open
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchAlternatives();
       setSelectedSlug(null);
       setVisibleCount(3);
       setSearchQuery("");
       setFilters({ equipment: null, bodyRegion: null, difficulty: null, category: null });
+    }
+    if (!isOpen) {
+      hasFetchedRef.current = false;
     }
   }, [isOpen, fetchAlternatives]);
 
