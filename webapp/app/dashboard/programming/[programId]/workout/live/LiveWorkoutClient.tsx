@@ -947,23 +947,23 @@ export default function LiveWorkoutPage() {
                   </>
                 )}
               </div>
-              <div className="mt-1 flex items-center gap-3">
-                <h1 className="text-2xl font-bold">{currentExercise?.name}</h1>
+              <div className="mt-1 flex items-center gap-2">
+                <h1 className="text-2xl font-bold truncate">{currentExercise?.name}</h1>
                 {swappedExercises[currentExerciseIndex] && (
                   <span className="shrink-0 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
                     Swapped
                   </span>
                 )}
-                <button
-                  onClick={() => setShowSwapModal(true)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
-                  title="Swap exercise"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                </button>
               </div>
+              <button
+                onClick={() => setShowSwapModal(true)}
+                className="mt-1.5 flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/20 hover:text-white active:bg-white/30"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+                Swap Exercise
+              </button>
               <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
               {/* Exercise history from past workouts */}
               {currentExercise && exerciseHistory[currentExercise.name] && (
@@ -1432,18 +1432,16 @@ export default function LiveWorkoutPage() {
         )}
       </AnimatePresence>
 
-      {/* Exercise Swap Modal */}
-      {currentExercise && (
-        <ExerciseSwapModal
-          isOpen={showSwapModal}
-          onClose={() => setShowSwapModal(false)}
-          onSwap={(alt, scope) => handleSwapExercise(alt, scope)}
-          exerciseSlug={currentExercise.exerciseSlug || ""}
-          exerciseName={currentExercise.name}
-          workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
-          programRole={undefined}
-        />
-      )}
+      {/* Exercise Swap Modal — always mounted to prevent unmount/remount flashing */}
+      <ExerciseSwapModal
+        isOpen={showSwapModal}
+        onClose={() => setShowSwapModal(false)}
+        onSwap={(alt, scope) => handleSwapExercise(alt, scope)}
+        exerciseSlug={currentExercise?.exerciseSlug || ""}
+        exerciseName={currentExercise?.name || ""}
+        workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
+        programRole={undefined}
+      />
     </div>
   );
 }
