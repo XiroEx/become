@@ -48,7 +48,7 @@ export default function BottomNav() {
         paddingRight: 'env(safe-area-inset-right, 0px)',
       }}
     >
-      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 pt-1.5 pb-0 sm:px-4 sm:pt-2 sm:pb-0">
+      <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 pt-1 pb-0 sm:px-4 sm:pt-1.5 sm:pb-0">
         <li className="flex-1">
           <Link
             href="/dashboard/programming"
