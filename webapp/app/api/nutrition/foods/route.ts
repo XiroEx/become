@@ -3,19 +3,16 @@ import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import FoodItem from '@/models/FoodItem'
 import { verifyAuth } from '@/lib/auth'
+import { searchUSDA } from '@/lib/usda'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
 
 // ---------------------------------------------------------------------------
 // Map an OpenFoodFact document to the same shape as a FoodItem
-// so the frontend doesn't need changes.
-// OFF stores nutrition per 100g — we return it as a "100g" serving by default,
-// and include the product's own serving_size as an alternate serving.
 // ---------------------------------------------------------------------------
 
 function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId }) {
   const n = off.nutriments
 
-  // Base nutrition is per 100g
   const nutrition = {
     calories: Math.round(n.energy_kcal_100g) || 0,
     protein: Math.round((n.proteins_100g ?? 0) * 10) / 10,
@@ -23,19 +20,15 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
     fats: Math.round((n.fat_100g ?? 0) * 10) / 10,
     fiber: n.fiber_100g != null ? Math.round(n.fiber_100g * 10) / 10 : undefined,
     sugar: n.sugars_100g != null ? Math.round(n.sugars_100g * 10) / 10 : undefined,
-    sodium: n.sodium_100g != null ? Math.round(n.sodium_100g * 1000) / 1000 : undefined, // g
+    sodium: n.sodium_100g != null ? Math.round(n.sodium_100g * 1000) / 1000 : undefined,
     saturatedFat: n.saturated_fat_100g != null ? Math.round(n.saturated_fat_100g * 10) / 10 : undefined
   }
 
-  // Build alternate servings
   const alternateServings: { label: string; multiplier: number }[] = []
 
   if (off.serving_quantity && off.serving_quantity > 0 && off.serving_quantity !== 100) {
     const label = off.serving_size || `${off.serving_quantity}${off.serving_unit || 'g'}`
-    alternateServings.push({
-      label,
-      multiplier: off.serving_quantity / 100
-    })
+    alternateServings.push({ label, multiplier: off.serving_quantity / 100 })
   }
 
   return {
@@ -48,8 +41,6 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
     alternateServings,
     nutrition,
     barcode: off.code,
-    isVerified: false,
-    usageCount: 0,
     source: 'openfoodfacts' as const,
     image_url: off.image_url || undefined,
     nutriscore_grade: off.nutriscore_grade || undefined
@@ -57,7 +48,7 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
 }
 
 // ---------------------------------------------------------------------------
-// GET: Search foods — queries both FoodItem (custom) and openfoodfacts
+// GET: Search foods — custom first, then USDA (primary), OFF (fallback)
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -73,17 +64,13 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q')
     const category = searchParams.get('category')
     const customOnly = searchParams.get('custom') === 'true'
-    const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100)
+    const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 100)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
-    // Build base filter for FoodItem
     const baseFilter: Record<string, unknown> = {}
-    if (category) {
-      baseFilter.category = category
-    }
+    if (category) baseFilter.category = category
 
     if (!q) {
-      // No search query — return popular custom foods only
       const foods = await FoodItem.find(baseFilter)
         .sort({ usageCount: -1 })
         .skip(offset)
@@ -91,81 +78,70 @@ export async function GET(request: NextRequest) {
         .lean()
 
       const total = await FoodItem.countDocuments(baseFilter)
-      const tagged = foods.map(f => ({ ...f, source: 'custom' }))
-      return NextResponse.json({ foods: tagged, total, offset, limit })
+      return NextResponse.json({ foods: foods.map(f => ({ ...f, source: 'custom' })), total, offset, limit })
     }
 
-    // --- Search custom FoodItem collection ---
+    // --- 1. Custom foods (always first) ---
 
-    const customLimit = 10
+    const customLimit = 5
 
-    // Text search for full-word matches
     const textFilter = { ...baseFilter, $text: { $search: q } }
     const textResults = await FoodItem.find(textFilter, { score: { $meta: 'textScore' } })
       .sort({ score: { $meta: 'textScore' }, usageCount: -1 })
       .limit(customLimit)
       .lean()
 
-    // Regex fallback for partial matches
-    const regexFilter = {
-      ...baseFilter,
-      name: { $regex: q, $options: 'i' }
-    }
+    const regexFilter = { ...baseFilter, name: { $regex: q, $options: 'i' } }
     const regexResults = await FoodItem.find(regexFilter)
       .sort({ usageCount: -1 })
       .limit(customLimit)
       .lean()
 
-    // Combine and deduplicate custom results
     const seenIds = new Set<string>()
-    const customFoods: (Record<string, unknown> & { source: string })[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const customFoods: any[] = []
 
     for (const item of textResults) {
       const id = item._id.toString()
-      if (!seenIds.has(id)) {
-        seenIds.add(id)
-        customFoods.push({ ...item, source: 'custom' })
-      }
+      if (!seenIds.has(id)) { seenIds.add(id); customFoods.push({ ...item, source: 'custom' }) }
     }
-
     for (const item of regexResults) {
       const id = item._id.toString()
-      if (!seenIds.has(id) && customFoods.length < customLimit) {
-        seenIds.add(id)
-        customFoods.push({ ...item, source: 'custom' })
-      }
+      if (!seenIds.has(id) && customFoods.length < customLimit) { seenIds.add(id); customFoods.push({ ...item, source: 'custom' }) }
     }
 
-    // --- Search Open Food Facts collection (unless custom-only) ---
+    if (customOnly) {
+      return NextResponse.json({ foods: customFoods, total: customFoods.length, offset, limit })
+    }
+
+    // --- 2. USDA (primary external source) ---
+
+    const usdaResults = await searchUSDA(q, 15)
+
+    // --- 3. Open Food Facts (supplemental for packaged goods) ---
 
     let offFoods: ReturnType<typeof mapOffToFoodResult>[] = []
-
-    if (!customOnly) {
-      const offLimit = 20 - Math.min(customFoods.length, 10)
-      const offCollection = mongoose.connection.db!.collection('openfoodfacts')
-
-      // Build OFF filter
-      const offFilter: Record<string, unknown> = { $text: { $search: q } }
-      if (category) {
-        offFilter.category = category
-      }
-
+    // Only query OFF if USDA returned few results
+    if (usdaResults.length < 10) {
       try {
+        const offCollection = mongoose.connection.db!.collection('openfoodfacts')
+        const offFilter: Record<string, unknown> = { $text: { $search: q } }
+        if (category) offFilter.category = category
+
         const offResults = await offCollection
           .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
           .sort({ score: { $meta: 'textScore' } })
-          .limit(offLimit)
+          .limit(10)
           .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
 
         offFoods = offResults.map(mapOffToFoodResult)
       } catch {
-        // OFF collection might not exist yet — fail gracefully
-        offFoods = []
+        // OFF collection might not exist — fail gracefully
       }
     }
 
-    // Combine: custom foods first, then OFF results
-    const combined = [...customFoods, ...offFoods]
+    // Combine: custom → USDA → OFF
+    const combined = [...customFoods, ...usdaResults, ...offFoods]
     const paged = combined.slice(offset, offset + limit)
 
     return NextResponse.json({ foods: paged, total: combined.length, offset, limit })

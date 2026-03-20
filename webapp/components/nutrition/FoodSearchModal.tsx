@@ -33,7 +33,7 @@ interface FoodResult {
     sugar?: number
     sodium?: number
   }
-  source?: 'custom' | 'openfoodfacts'
+  source?: 'custom' | 'openfoodfacts' | 'usda'
   image_url?: string
   nutriscore_grade?: string
 }
@@ -323,7 +323,7 @@ export default function FoodSearchModal({
                             <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                               {food.name}
                             </p>
-                            {food.source === 'openfoodfacts' && (
+                            {(food.source === 'openfoodfacts' || food.source === 'usda') && (
                               <Globe className="h-3 w-3 shrink-0 text-emerald-500" />
                             )}
                           </div>
