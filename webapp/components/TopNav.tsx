@@ -1,18 +1,19 @@
 "use client"
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, LogOut } from 'lucide-react'
+import { User, LogOut, MessageSquareText } from 'lucide-react'
+import FeedbackModal from './FeedbackModal'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
 
 export default function TopNav() {
   const [isOpen, setIsOpen] = useState(false)
   const [userName, setUserName] = useState<string | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
   useEffect(() => {
-    // Decode the JWT to get user info
     const token = localStorage.getItem('token')
     if (token) {
       try {
@@ -35,52 +36,59 @@ export default function TopNav() {
   }, [])
 
   async function handleLogout() {
-    // Clear cookie via API
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-    // Clear localStorage
     localStorage.removeItem('token')
     router.push('/login')
   }
 
   return (
-    <header 
-      className="shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80"
-      style={{
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingLeft: 'env(safe-area-inset-left, 0px)',
-        paddingRight: 'env(safe-area-inset-right, 0px)',
-      }}
-    >
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-2 sm:px-6 sm:py-2.5">
-        <h1 className="text-base font-bold text-zinc-900 dark:text-white sm:text-lg">{appName}</h1>
-        
-        <div className="relative" ref={dropdownRef}>
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-            aria-label="User menu"
-          >
-            <User className="h-4 w-4" />
-          </button>
+    <>
+      <header
+        className="shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80"
+      >
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-2 sm:px-6 sm:py-2.5">
+          <h1 className="text-base font-bold text-zinc-900 dark:text-white sm:text-lg">{appName}</h1>
 
-          {isOpen && (
-            <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-              {userName && (
-                <div className="border-b border-zinc-100 px-4 py-2 dark:border-zinc-700">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
-                </div>
-              )}
-              <button
-                onClick={handleLogout}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-zinc-50 dark:text-red-400 dark:hover:bg-zinc-700"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
-            </div>
-          )}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              aria-label="User menu"
+            >
+              <User className="h-4 w-4" />
+            </button>
+
+            {isOpen && (
+              <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                {userName && (
+                  <div className="border-b border-zinc-100 px-4 py-2 dark:border-zinc-700">
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setIsOpen(false)
+                    setFeedbackOpen(true)
+                  }}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                  Send Feedback
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-zinc-50 dark:text-red-400 dark:hover:bg-zinc-700"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+    </>
   )
 }
