@@ -118,9 +118,6 @@ export default function LiveWorkoutPage() {
   const totalExercises = exercises.length;
   const totalSets = currentExercise?.sets || 3;
 
-  // Next step info (for rest overlay "Up next" text)
-  const nextStep = currentStepIndex < workoutFlow.length - 1 ? workoutFlow[currentStepIndex + 1] : null;
-  const nextExercise = nextStep ? exercises[nextStep.exerciseIndex] : null;
   const isLastStep = currentStepIndex === workoutFlow.length - 1;
 
   // Determine which inputs to show based on trackingType
@@ -903,13 +900,17 @@ export default function LiveWorkoutPage() {
             <p className="mt-6 text-lg text-white/80">
               Up next:{" "}
               <span className="font-semibold text-white">
-                {nextExercise?.name || currentExercise?.name}
+                {currentExercise?.name}
               </span>
-              {nextStep?.groupId && (
+              {currentStep?.groupId ? (
                 <span className="ml-2 text-sm text-white/60">
-                  (Round {nextStep.roundNumber + 1})
+                  (Round {currentStep.roundNumber + 1})
                 </span>
-              )}
+              ) : totalSets > 1 ? (
+                <span className="ml-2 text-sm text-white/60">
+                  (Set {currentSetIndex + 1} of {totalSets})
+                </span>
+              ) : null}
             </p>
 
             <button
