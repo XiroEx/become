@@ -15,7 +15,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AppShell.Content>
           <div className="mx-auto max-w-3xl px-3 py-4 pb-4 sm:px-6 sm:py-6">{children}</div>
         </AppShell.Content>
-        <BottomNav />
+        <AppShell.Footer>
+          <BottomNav />
+        </AppShell.Footer>
       </AppShell>
     </AuthGuard>
   )
