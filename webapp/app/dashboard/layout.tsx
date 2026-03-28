@@ -8,7 +8,7 @@ import AuthGuard from '../../components/AuthGuard'
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <AppShell className="bg-zinc-950">
+      <AppShell className="bg-zinc-50 dark:bg-zinc-950">
         <AppShell.Header>
           <TopNav />
         </AppShell.Header>
