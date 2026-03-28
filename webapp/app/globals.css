@@ -2,8 +2,6 @@
 @import "@redbtn/redstyle/tokens.css";
 @import "@redbtn/redstyle/base.css";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,8 +10,39 @@
 }
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Override redstyle tokens for light mode (redstyle defaults to dark) */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #fafafa;
+    --bg-secondary: #f4f4f5;
+    --bg-tertiary: #e4e4e7;
+    --bg-elevated: #ffffff;
+    --bg-hover: #f0f0f2;
+    --bg-active: #e4e4e7;
+    --text-primary: #18181b;
+    --text-secondary: #3f3f46;
+    --text-muted: #71717a;
+    --text-disabled: #a1a1aa;
+    --border: #e4e4e7;
+    --border-hover: #d4d4d8;
+    --border-focus: rgba(220, 38, 38, 0.5);
+    --scrollbar-track: #fafafa;
+    --scrollbar-thumb: #d4d4d8;
+    --scrollbar-thumb-hover: #a1a1aa;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --backdrop: rgba(0, 0, 0, 0.2);
+  }
 }
 
 html, body {
