@@ -181,6 +181,14 @@ class CSVLineParser extends Transform {
   _transform(chunk: Buffer, _encoding: string, callback: () => void) {
     this.buffer += chunk.toString('utf-8')
 
+    // Safety: if buffer grows beyond 10MB, a malformed quoted field is likely
+    // causing unbounded accumulation. Discard and reset.
+    if (this.buffer.length > 10_000_000) {
+      // Find the last newline and keep only what's after it
+      const lastNl = this.buffer.lastIndexOf('\n')
+      this.buffer = lastNl >= 0 ? this.buffer.slice(lastNl + 1) : ''
+    }
+
     // eslint-disable-next-line no-constant-condition
     while (true) {
       const record = this.extractRecord()

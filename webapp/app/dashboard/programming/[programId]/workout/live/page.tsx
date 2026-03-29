@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import LiveWorkoutClient from "./LiveWorkoutClient";
 
 export default function LiveWorkoutPage() {
-  return <LiveWorkoutClient />;
+  return (
+    <Suspense>
+      <LiveWorkoutClient />
+    </Suspense>
+  );
 }
