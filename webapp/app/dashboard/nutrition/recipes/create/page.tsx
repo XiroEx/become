@@ -634,7 +634,8 @@ export default function CreateRecipePage() {
           }}
         >
           <div
-            className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-6 dark:bg-zinc-900 sm:rounded-2xl"
+            className="max-h-[80vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-6 dark:bg-zinc-900 sm:rounded-2xl"
+            style={{ WebkitOverflowScrolling: 'touch' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between">
