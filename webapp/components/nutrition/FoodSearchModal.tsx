@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe } from 'lucide-react'
+import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 
 interface FoodSearchModalProps {
@@ -64,6 +65,8 @@ export default function FoodSearchModal({
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
+
+  useLockScroll(isOpen)
 
   // Focus input on open
   useEffect(() => {
@@ -217,7 +220,7 @@ export default function FoodSearchModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-900 sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm sm:p-4"
+          className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-900 sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm sm:p-4 touch-none"
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',

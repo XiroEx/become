@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useLockScroll } from '@/lib/useLockScroll'
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
@@ -249,6 +250,8 @@ export default function DailyCheckInModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showWarningConfirm, setShowWarningConfirm] = useState(false)
   const [pendingAction, setPendingAction] = useState<'submit' | 'skip' | null>(null)
+
+  useLockScroll(isOpen)
   
   // Update weight when lastWeight prop changes (async load)
   useEffect(() => {
@@ -475,15 +478,14 @@ export default function DailyCheckInModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 touch-none"
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8 max-h-[90vh] overflow-y-auto overscroll-contain"
-            style={{ WebkitOverflowScrolling: 'touch' }}
+            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8 max-h-[90vh] overflow-y-auto overscroll-contain touch-auto"
           >
             {/* Warning Confirmation Overlay */}
             <AnimatePresence>

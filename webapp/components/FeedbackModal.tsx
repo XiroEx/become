@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, Bug, Lightbulb, MessageSquare, Check } from 'lucide-react'
+import { useLockScroll } from '@/lib/useLockScroll'
 
 interface FeedbackModalProps {
   isOpen: boolean
@@ -22,6 +23,17 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useLockScroll(isOpen)
+
+  // Delay focus until modal animation completes to prevent keyboard from covering modal
+  useEffect(() => {
+    if (isOpen) {
+      const t = setTimeout(() => textareaRef.current?.focus(), 500)
+      return () => clearTimeout(t)
+    }
+  }, [isOpen])
 
   const handleSubmit = async () => {
     if (!message.trim() || sending) return
@@ -67,7 +79,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 touch-none"
           onClick={handleClose}
         >
           <motion.div
@@ -123,7 +135,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                   maxLength={2000}
                   rows={4}
                   className="w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800"
-                  autoFocus
+                  ref={textareaRef}
                 />
 
                 <div className="mt-1 flex items-center justify-between">
