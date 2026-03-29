@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Zap } from 'lucide-react'
+import { useLockScroll } from '@/lib/useLockScroll'
 
 interface QuickAddModalProps {
   isOpen: boolean
@@ -22,6 +23,8 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
   const [carbs, setCarbs] = useState('')
   const [fats, setFats] = useState('')
   const [note, setNote] = useState('')
+
+  useLockScroll(isOpen)
 
   const calculatedCalories = useMemo(() => {
     const p = Number(protein) || 0
@@ -68,7 +71,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 touch-none"
           onClick={handleClose}
         >
           <motion.div
