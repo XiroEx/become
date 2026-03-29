@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { useLockScroll } from "@/lib/useLockScroll";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,8 @@ export default function ExerciseSwapModal({
   const [visibleCount, setVisibleCount] = useState(3);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  useLockScroll(isOpen);
+
   // Use refs to access latest prop values without re-creating the fetch callback
   const exerciseSlugRef = useRef(exerciseSlug);
   exerciseSlugRef.current = exerciseSlug;
@@ -314,7 +317,7 @@ export default function ExerciseSwapModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center touch-none"
         >
           {/* Backdrop */}
           <motion.div
@@ -469,7 +472,7 @@ export default function ExerciseSwapModal({
             <div className="border-t border-zinc-200 dark:border-zinc-800" />
 
             {/* Results list */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="flex-1 overflow-y-auto overscroll-contain touch-auto px-5 py-3" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading && (
                 <div className="flex items-center justify-center py-12">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />

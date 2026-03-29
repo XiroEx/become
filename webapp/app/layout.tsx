@@ -30,6 +30,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: appName,
   description: appTagline,
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: appName,
+  },
 };
 
 export default function RootLayout({
