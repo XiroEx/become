@@ -469,7 +469,7 @@ export default function ExerciseSwapModal({
             <div className="border-t border-zinc-200 dark:border-zinc-800" />
 
             {/* Results list */}
-            <div className="flex-1 overflow-y-auto px-5 py-3">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading && (
                 <div className="flex items-center justify-center py-12">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
