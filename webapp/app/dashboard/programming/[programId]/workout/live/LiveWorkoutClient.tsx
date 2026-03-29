@@ -1300,7 +1300,7 @@ export default function LiveWorkoutPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-y-auto"
+            className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-y-auto overscroll-contain"
             style={{
               paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
               paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)',

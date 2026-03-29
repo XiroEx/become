@@ -461,7 +461,8 @@ export default function ChatPage() {
       {/* Messages */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-4"
+        className="flex-1 overflow-y-auto overscroll-contain px-4 py-4"
+        style={{ WebkitOverflowScrolling: 'touch' }}
       >
         <div className="mx-auto max-w-3xl">
           {loadingMessages ? (

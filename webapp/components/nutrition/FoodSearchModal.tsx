@@ -285,7 +285,7 @@ export default function FoodSearchModal({
             </div>
 
             {/* Results */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
