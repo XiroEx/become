@@ -3,6 +3,7 @@ import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import Schedule from '@/models/Schedule'
 import { hydrateWorkout } from '@/lib/hydrateExercises'
 
 interface Workout {
@@ -135,8 +136,33 @@ export async function GET(request: NextRequest) {
 
     // Get the current day's workout
     const currentPhase = activeProgram.currentPhase || 1
-    const currentDay = activeProgram.currentDay || 'Day 1'
     const phases = (program.phases || []) as Phase[]
+
+    // Determine effective day: if no ?day= param, prefer the next scheduled workout from Schedule
+    let effectiveDay: string
+    if (!requestedDay) {
+      const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean()
+      let scheduledDay: string | null = null
+      if (schedule?.scheduledWorkouts?.length) {
+        const now = new Date()
+        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        let earliestKey = ''
+        for (const w of schedule.scheduledWorkouts) {
+          if (w.status !== 'scheduled') continue
+          const wKey = typeof w.date === 'string'
+            ? (w.date as string).split('T')[0]
+            : new Date(w.date as Date).toISOString().split('T')[0]
+          if (wKey < todayKey) continue
+          if (!scheduledDay || wKey < earliestKey) {
+            scheduledDay = w.dayLabel
+            earliestKey = wKey
+          }
+        }
+      }
+      effectiveDay = scheduledDay ?? (activeProgram.currentDay || 'Day 1')
+    } else {
+      effectiveDay = requestedDay
+    }
 
     // Helper: apply permanent exercise swaps to a workout before hydration
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -208,7 +234,7 @@ export async function GET(request: NextRequest) {
     }
 
     const workouts = normalizeWorkouts(phase.workouts)
-    const currentWorkout = workouts.find(w => w.day === currentDay)
+    const currentWorkout = workouts.find(w => w.day === effectiveDay)
 
     if (!currentWorkout) {
       // Fallback to first workout of the phase
@@ -235,7 +261,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       workout: hydratedCurrent,
       phase: currentPhase,
-      day: currentDay,
+      day: effectiveDay,
       phaseInfo: {
         name: phase.phase,
         focus: phase.focus,

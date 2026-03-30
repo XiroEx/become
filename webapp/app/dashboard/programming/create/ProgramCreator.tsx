@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
@@ -31,6 +31,8 @@ const EQUIPMENT_OPTIONS = [
   "Foam Roller",
   "Bodyweight Only",
 ];
+
+const DRAFT_KEY = "become_program_creator_draft";
 
 const TARGET_USER_OPTIONS: TargetUserLevel[] = [
   "Beginner",
@@ -90,6 +92,30 @@ export default function ProgramCreator() {
     equipment: [],
     phases: [createEmptyPhase(1, 4)],
   });
+
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object" && Array.isArray(parsed.phases)) {
+          setFormData((prev) => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch {
+      // Ignore malformed draft
+    }
+  }, []);
+
+  // Auto-save draft to localStorage whenever formData changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+    } catch {
+      // Ignore storage errors (e.g. private browsing quota)
+    }
+  }, [formData]);
 
   const steps = [
     { id: "basics", title: "Program Basics", icon: "📋" },
@@ -186,6 +212,7 @@ export default function ProgramCreator() {
         throw new Error(data.error || "Failed to save program");
       }
       
+      localStorage.removeItem(DRAFT_KEY);
       router.push("/dashboard/programming");
       router.refresh();
     } catch (err) {
