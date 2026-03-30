@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import Schedule from '@/models/Schedule'
 import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
 import { verifyAuth } from '@/lib/auth'
 
@@ -91,12 +92,53 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Enrich with Schedule data so Current Program card and NextWorkoutCard use the same source
+    let scheduleNextWorkoutDay: string | undefined
+    let scheduleTotalWeeks: number | undefined
+    let scheduleCurrentWeek: number | undefined
+
+    if (activeProgram) {
+      const schedule = await Schedule.findOne({
+        userId: authResult.userId,
+        programId: activeProgram.programId,
+      }).lean()
+
+      if (schedule) {
+        // Mirror NextWorkoutCard logic: first upcoming status=scheduled entry
+        const now = new Date()
+        now.setHours(0, 0, 0, 0)
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+
+        const nextScheduled = (schedule.scheduledWorkouts || [])
+          .filter(w => {
+            const d = new Date(w.date).toISOString().split('T')[0]
+            return w.status === 'scheduled' && d >= todayStr
+          })
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+
+        if (nextScheduled) {
+          scheduleNextWorkoutDay = nextScheduled.dayLabel
+          nextWorkout = `${nextScheduled.dayLabel} - ${nextScheduled.workoutTitle}`
+        }
+
+        // currentWeek: use actual training-days-per-week from schedule settings
+        const daysPerWeek = schedule.settings?.trainingDays?.length || 4
+        const completed = activeProgram.completedWorkouts || 0
+        scheduleCurrentWeek = Math.max(1, Math.ceil(completed / daysPerWeek))
+      }
+
+      // totalWeeks from the real program data
+      if (programDetails && 'duration_weeks' in programDetails) {
+        scheduleTotalWeeks = (programDetails as { duration_weeks: number }).duration_weeks
+      }
+    }
+
     // Build current program from real data only (never use mock programId)
     const currentProgramData = activeProgram ? {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
       currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1
+      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1)
     } : progress.currentProgram?.programId ? progress.currentProgram : null
 
     // Format and return progress data
@@ -111,7 +153,8 @@ export async function GET(request: NextRequest) {
         totalWorkouts: progress.totalWorkouts || 0
       },
       programName,
-      nextWorkout
+      nextWorkout,
+      { totalWeeks: scheduleTotalWeeks, nextWorkoutDay: scheduleNextWorkoutDay }
     )
 
     return NextResponse.json(formattedData)
