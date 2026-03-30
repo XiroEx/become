@@ -194,9 +194,10 @@ export function calculateNextWorkout(
 
 // Format data for API response
 export function formatProgressData(
-  progress: typeof mockUserProgress, 
+  progress: typeof mockUserProgress,
   programName: string = 'BECOME — 12 Week Fat-Loss Foundation',
-  nextWorkout: string = 'Day 1 - Start Training'
+  nextWorkout: string = 'Day 1 - Start Training',
+  overrides?: { totalWeeks?: number; nextWorkoutDay?: string }
 ) {
   const weightData = progress.weightHistory.map(entry => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -233,14 +234,15 @@ export function formatProgressData(
       name: programName,
       currentPhase: progress.currentProgram.currentPhase,
       currentWeek: progress.currentProgram.currentWeek,
-      totalWeeks: 12,
-      nextWorkout: nextWorkout
+      totalWeeks: overrides?.totalWeeks ?? 12,
+      nextWorkout: nextWorkout,
+      nextWorkoutDay: overrides?.nextWorkoutDay,
     } : null,
     stats: {
       streakDays: progress.streakDays,
       totalWorkouts: progress.totalWorkouts,
       thisWeekWorkouts,
-      goalProgress: Math.round((progress.currentProgram?.currentWeek || 0) / 12 * 100)
+      goalProgress: Math.round((progress.currentProgram?.currentWeek || 0) / (overrides?.totalWeeks ?? 12) * 100)
     }
   }
 }

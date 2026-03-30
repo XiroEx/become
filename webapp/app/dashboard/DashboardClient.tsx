@@ -21,6 +21,7 @@ interface UserProgressData {
     currentWeek: number
     totalWeeks: number
     nextWorkout: string
+    nextWorkoutDay?: string
   } | null
   stats: {
     streakDays: number
@@ -356,7 +357,7 @@ export default function DashboardClient() {
             </div>
 
             <Link
-              href={`/dashboard/programming/${data.currentProgram.programId}/workout`}
+              href={`/dashboard/programming/${data.currentProgram.programId}/workout${data.currentProgram.nextWorkoutDay ? `?day=${encodeURIComponent(data.currentProgram.nextWorkoutDay)}` : ''}`}
               className="flex w-full items-center justify-between gap-2 rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               <span className="text-left">Continue: {data.currentProgram.nextWorkout}</span>
