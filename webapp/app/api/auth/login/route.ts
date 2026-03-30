@@ -13,15 +13,9 @@ export async function POST(req: Request) {
 
     await dbConnect()
 
-    // TODO: Remove this - allowing all logins for testing with email code
-    let user = await User.findOne({ email })
+    const user = await User.findOne({ email })
     if (!user) {
-      // Create a test user if they don't exist
-      user = await User.create({
-        name: email.split('@')[0],
-        email,
-        password: 'dummy-password-not-used' // Will be hashed by the User model
-      })
+      return new Response(JSON.stringify({ message: 'No account found for this email' }), { status: 404 })
     }
 
     const token = signToken({ userId: String(user._id), email: user.email })
