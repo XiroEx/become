@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { Dumbbell } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
@@ -698,17 +699,24 @@ export default function LiveWorkoutPage() {
         className="absolute inset-0 cursor-pointer"
         onClick={handleVideoTap}
       >
-        <video
-          key={currentVideo}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="h-full w-full object-cover"
-        >
-          <source src={currentVideo} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
+        {currentVideo === '/placeholder.mp4' || currentVideo === '/placeholder2.mp4' ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-white/5 backdrop-blur-sm">
+            <Dumbbell className="h-12 w-12 text-white/30" />
+            <span className="text-sm font-medium text-white/40">No video available</span>
+          </div>
+        ) : (
+          <video
+            key={currentVideo}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="h-full w-full object-cover"
+          >
+            <source src={currentVideo} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        )}
       </div>
 
       {/* Top overlay - Exit & Timer */}

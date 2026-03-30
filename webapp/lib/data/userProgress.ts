@@ -192,9 +192,20 @@ export function calculateNextWorkout(
   return `${nextWorkout.day} - ${nextWorkout.title || 'Training'}`
 }
 
+// Proper input type for formatProgressData
+export interface ProgressInput {
+  height: number;
+  weightHistory: Array<{ date: Date | string; weight: number; bodyFat?: number }>;
+  moodHistory: Array<{ date: Date | string; mood: number }>;
+  workoutLogs: Array<{ date: Date | string; programId: string; completed?: boolean; [key: string]: unknown }>;
+  currentProgram: { programId: string; startDate?: Date | string; currentPhase: number; currentWeek: number } | null | undefined;
+  streakDays: number;
+  totalWorkouts: number;
+}
+
 // Format data for API response
 export function formatProgressData(
-  progress: typeof mockUserProgress,
+  progress: ProgressInput,
   programName: string = 'BECOME — 12 Week Fat-Loss Foundation',
   nextWorkout: string = 'Day 1 - Start Training',
   overrides?: { totalWeeks?: number; nextWorkoutDay?: string }
