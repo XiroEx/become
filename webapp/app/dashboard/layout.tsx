@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Content — grows to fill remaining space, scrolls vertically */}
         <main
           className="min-h-0 flex-1 overflow-y-auto"
-          style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' }}
+          style={{ overscrollBehaviorY: 'contain' }}
         >
           <div className="mx-auto max-w-3xl px-3 py-4 pb-6 sm:px-6 sm:py-6">
             {children}
