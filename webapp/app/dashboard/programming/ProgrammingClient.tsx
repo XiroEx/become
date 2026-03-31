@@ -297,7 +297,7 @@ export default function ProgrammingClient() {
               return (
               <div
                 key={program.programId}
-                className={`group relative rounded-xl border-2 p-4 shadow-sm transition-all duration-200 hover:shadow-md ${
+                className={`group relative rounded-xl border-2 p-4 transition-all duration-200 ${
                   isPaused
                     ? 'border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 hover:border-amber-500/50 dark:from-amber-500/5 dark:to-yellow-500/5'
                     : isFuture
@@ -354,7 +354,7 @@ export default function ProgrammingClient() {
                 {isPaused ? (
                   <Link
                     href={`/dashboard/programming/${program.programId}`}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg transition-transform duration-200 hover:scale-110 hover:bg-amber-600 active:scale-95"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition-transform duration-200 hover:scale-110 hover:bg-amber-600 active:scale-95"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /></svg>
@@ -362,7 +362,7 @@ export default function ProgrammingClient() {
                 ) : (
                   <Link
                     href={`/dashboard/programming/${program.programId}/workout`}
-                    className={`absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-transform duration-200 hover:scale-110 active:scale-95 ${
+                    className={`absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition-transform duration-200 hover:scale-110 active:scale-95 ${
                       isFuture ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'
                     }`}
                     onClick={(e) => e.stopPropagation()}
@@ -637,7 +637,7 @@ export default function ProgrammingClient() {
             {filteredPrograms.map((program) => (
               <div
                 key={program.program_id}
-                className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-all duration-200 hover:shadow-md hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 sm:gap-4 sm:p-4"
+                className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 transition-all duration-200 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 sm:gap-4 sm:p-4"
               >
                 {/* Save Button */}
                 <button
