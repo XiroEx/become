@@ -44,7 +44,7 @@ export default function TopNav() {
   return (
     <>
       <header
-        className="shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80"
+        className="relative z-10 shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80"
       >
         <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-2 sm:px-6 sm:py-2.5">
           <h1 className="text-base font-bold text-zinc-900 dark:text-white sm:text-lg">{appName}</h1>
