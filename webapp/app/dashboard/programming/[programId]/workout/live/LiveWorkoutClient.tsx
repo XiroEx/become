@@ -203,6 +203,8 @@ export default function LiveWorkoutPage() {
             // Show incomplete workout prompt if there's a stale session from a previous day
             if (progressData.staleIncomplete && !progressData.isResume) {
               setStaleIncomplete(progressData.staleIncomplete);
+            } else {
+              setStaleIncomplete(null);
             }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
@@ -324,7 +326,8 @@ export default function LiveWorkoutPage() {
       // Stale log was deleted; workout is already in fresh state, just close modal
       setStaleIncomplete(null);
     } else {
-      // count or skip — navigate to the next day (or reload without a specific day)
+      // count or skip — clear modal then navigate to the next day
+      setStaleIncomplete(null);
       const target = nextDay
         ? `/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(nextDay)}`
         : `/dashboard/programming/${programId}/workout/live`;

@@ -243,6 +243,8 @@ export default function WorkoutFormPage() {
             const progressData = await progressRes.json();
             if (progressData.staleIncomplete && !progressData.isResume) {
               setStaleIncomplete(progressData.staleIncomplete);
+            } else {
+              setStaleIncomplete(null);
             }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
@@ -431,7 +433,8 @@ export default function WorkoutFormPage() {
       // Stale log deleted, close modal and proceed to the current workout fresh
       setStaleIncomplete(null);
     } else {
-      // count or skip — go to next day
+      // count or skip — clear modal then go to next day
+      setStaleIncomplete(null);
       const target = nextDay
         ? `/dashboard/programming/${programId}/workout?day=${encodeURIComponent(nextDay)}`
         : `/dashboard/programming/${programId}/workout`;
