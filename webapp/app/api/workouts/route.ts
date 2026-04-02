@@ -131,17 +131,8 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Fall back to the most recent log for this program/day to allow resuming past sessions
-    const lastLog = userProgress.workoutLogs
-      ?.filter((log: { programId: string; day: string }) =>
-        log.programId === programId && (!day || log.day === day))
-      .sort((a: { date: Date }, b: { date: Date }) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
-
-    if (!lastLog) {
-      return NextResponse.json({ workout: null, isResume: false, exerciseHistory })
-    }
-
-    return NextResponse.json({ workout: lastLog, isResume: !lastLog.completed, exerciseHistory })
+    // No log found for today — return empty so the workout starts fresh
+    return NextResponse.json({ workout: null, isResume: false, exerciseHistory })
 
   } catch (error) {
     console.error('Error fetching workout:', error)
