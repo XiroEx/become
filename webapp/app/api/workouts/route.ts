@@ -123,16 +123,38 @@ export async function GET(request: NextRequest) {
       }
     )
 
+    // Find most recent incomplete workout from a previous day (stale)
+    type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
+    const staleLog = (userProgress.workoutLogs as WorkoutLog[])
+      .filter(log =>
+        log.programId === programId &&
+        !log.completed &&
+        new Date(log.date) < today
+      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
+
+    const staleIncomplete = staleLog ? {
+      day: staleLog.day,
+      phase: staleLog.phase,
+      date: new Date(staleLog.date).toISOString(),
+      exercises: staleLog.exercises,
+      completedExerciseCount: staleLog.exercises.filter(
+        (ex) => ex.sets?.some((s) => s.completed)
+      ).length,
+      totalExerciseCount: staleLog.exercises.length,
+    } : null
+
     if (todayWorkout) {
       return NextResponse.json({
         workout: todayWorkout,
         isResume: !todayWorkout.completed,
-        exerciseHistory
+        exerciseHistory,
+        staleIncomplete
       })
     }
 
     // No log found for today — return empty so the workout starts fresh
-    return NextResponse.json({ workout: null, isResume: false, exerciseHistory })
+    return NextResponse.json({ workout: null, isResume: false, exerciseHistory, staleIncomplete })
 
   } catch (error) {
     console.error('Error fetching workout:', error)
