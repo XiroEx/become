@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { useLockScroll } from "@/lib/useLockScroll";
@@ -172,7 +172,11 @@ export default function ExerciseSwapModal({
   // Variations: cache per alternative slug, and which variant is selected
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  // Source exercise variations (shown at top of modal)
+  const [sourceVariations, setSourceVariations] = useState<ExerciseVariation[] | null>(null);
+  const [selectedSourceVariant, setSelectedSourceVariant] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useLockScroll(isOpen);
 
@@ -238,16 +242,33 @@ export default function ExerciseSwapModal({
       hasFetchedRef.current = true;
       fetchAlternatives();
       setSelectedSlug(null);
-      setVisibleCount(3);
+      setVisibleCount(8);
       setSearchQuery("");
       setFilters({ equipment: null, bodyRegion: null, difficulty: null, category: null });
       setVariationsCache({});
       setSelectedVariants({});
+      setSourceVariations(null);
+      setSelectedSourceVariant(null);
+
+      // Fetch variations of the source exercise immediately
+      const token = localStorage.getItem("token");
+      if (token && exerciseSlug) {
+        fetch(`/api/exercises/variations?slug=${encodeURIComponent(exerciseSlug)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((r) => r.ok ? r.json() : null)
+          .then((data) => {
+            if (data?.variations?.length > 1) {
+              setSourceVariations(data.variations);
+            }
+          })
+          .catch(() => {});
+      }
     }
     if (!isOpen) {
       hasFetchedRef.current = false;
     }
-  }, [isOpen, fetchAlternatives]);
+  }, [isOpen, fetchAlternatives, exerciseSlug]);
 
   // Fetch variations when a card is expanded (cached per slug)
   useEffect(() => {
@@ -327,7 +348,6 @@ export default function ExerciseSwapModal({
   const categoryOptions = [...new Set(alternatives.map((a) => a.category))].sort();
 
   const visibleAlternatives = filteredAlternatives.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredAlternatives.length;
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -352,6 +372,50 @@ export default function ExerciseSwapModal({
       ...prev,
       [key]: prev[key] === value ? null : value,
     }));
+  };
+
+  // Infinite scroll: bump visibleCount when sentinel enters viewport
+  const hasMore = useMemo(() => visibleCount < filteredAlternatives.length, [visibleCount, filteredAlternatives.length]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((c) => c + 10);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
+  // Swap to a specific variation of the source exercise
+  const handleSourceVariantSwap = (scope: SwapScope) => {
+    if (!selectedSourceVariant || !sourceVariations) return;
+    const variation = sourceVariations.find((v) => v.slug === selectedSourceVariant);
+    if (!variation) return;
+    onSwap(
+      {
+        slug: variation.slug,
+        name: variation.name,
+        score: 100,
+        reasons: ["Variation of original exercise"],
+        equipment: variation.equipment,
+        primaryMuscles: source?.primaryMuscles ?? [],
+        movementPatterns: source?.movementPatterns ?? [],
+        difficulty: variation.difficulty,
+        category: source?.category ?? "",
+        bodyRegion: source?.bodyRegion ?? "",
+        role: source?.role ?? "",
+        trackingType: "",
+        isExplicitAlternative: false,
+      },
+      scope
+    );
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -518,69 +582,128 @@ export default function ExerciseSwapModal({
             <div className="border-t border-zinc-200 dark:border-zinc-800" />
 
             {/* Results list */}
-            <div className="flex-1 overflow-y-auto overscroll-contain touch-auto px-5 py-3" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {loading && (
-                <div className="flex items-center justify-center py-12">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
-                </div>
-              )}
+            <div className="flex-1 overflow-y-auto overscroll-contain touch-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
 
-              {error && (
-                <div className="py-8 text-center">
-                  <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
-                  <button
-                    onClick={fetchAlternatives}
-                    className="mt-2 text-sm text-green-600 hover:text-green-500 dark:text-green-400"
-                  >
-                    Try again
-                  </button>
-                </div>
-              )}
-
-              {!loading && !error && filteredAlternatives.length === 0 && (
-                <div className="py-8 text-center">
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {alternatives.length > 0
-                      ? "No exercises match your filters"
-                      : "No alternatives found"}
+              {/* ── Source exercise variations ── */}
+              {sourceVariations && sourceVariations.length > 1 && (
+                <div className="px-5 pt-4 pb-3">
+                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                    Variations of {exerciseName}
                   </p>
-                </div>
-              )}
+                  <div className="flex flex-wrap gap-2">
+                    {sourceVariations.map((v) => {
+                      const isActive = (selectedSourceVariant ?? exerciseSlug) === v.slug;
+                      const eqLabel = v.equipment.slice(0, 2).map(formatEquipment).join(" / ");
+                      return (
+                        <button
+                          key={v.slug}
+                          onClick={() => setSelectedSourceVariant(v.slug === exerciseSlug && !selectedSourceVariant ? null : v.slug)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isActive
+                              ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/30 dark:text-blue-300"
+                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                          }`}
+                        >
+                          {v.name}
+                          {eqLabel && (
+                            <span className="ml-1 opacity-60">· {eqLabel}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {!loading && !error && (
-                <div className="space-y-2">
-                  {visibleAlternatives.map((alt, i) => (
-                    <motion.div
-                      key={alt.slug}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                    >
-                      <AlternativeCard
-                        alternative={alt}
-                        isSelected={selectedSlug === alt.slug}
-                        onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
-                        onSwap={(scope) => handleSwap(alt, scope)}
-                        source={source}
-                        variations={variationsCache[alt.slug] || null}
-                        selectedVariationSlug={selectedVariants[alt.slug] ?? alt.slug}
-                        onSelectVariation={(varSlug) =>
-                          setSelectedVariants((prev) => ({ ...prev, [alt.slug]: varSlug }))
-                        }
-                      />
-                    </motion.div>
-                  ))}
-
-                  {hasMore && (
-                    <button
-                      onClick={() => setVisibleCount((c) => c + 10)}
-                      className="w-full rounded-lg border border-zinc-200 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                    >
-                      Show more ({filteredAlternatives.length - visibleCount} remaining)
-                    </button>
+                  {/* Swap actions for selected source variation */}
+                  {selectedSourceVariant && selectedSourceVariant !== exerciseSlug && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => handleSourceVariantSwap("session")}
+                        className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
+                      >
+                        Just This Session
+                      </button>
+                      <button
+                        onClick={() => handleSourceVariantSwap("program")}
+                        className="flex-1 rounded-lg border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950/20 transition-colors"
+                      >
+                        All Future Workouts
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
+
+              {/* Divider + section label */}
+              <div className={`border-t border-zinc-100 dark:border-zinc-800 ${sourceVariations && sourceVariations.length > 1 ? "mx-5" : "hidden"}`} />
+              <div className="px-5 pt-3 pb-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                  Top Suggestions
+                </p>
+              </div>
+
+              {/* Alternatives */}
+              <div className="px-5 pb-4">
+                {loading && (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
+                  </div>
+                )}
+
+                {error && (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-red-500 dark:text-red-400">{error}</p>
+                    <button
+                      onClick={fetchAlternatives}
+                      className="mt-2 text-sm text-green-600 hover:text-green-500 dark:text-green-400"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+
+                {!loading && !error && filteredAlternatives.length === 0 && (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                      {alternatives.length > 0
+                        ? "No exercises match your filters"
+                        : "No alternatives found"}
+                    </p>
+                  </div>
+                )}
+
+                {!loading && !error && (
+                  <div className="space-y-2">
+                    {visibleAlternatives.map((alt, i) => (
+                      <motion.div
+                        key={alt.slug}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: Math.min(i, 5) * 0.03 }}
+                      >
+                        <AlternativeCard
+                          alternative={alt}
+                          isSelected={selectedSlug === alt.slug}
+                          onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
+                          onSwap={(scope) => handleSwap(alt, scope)}
+                          source={source}
+                          variations={variationsCache[alt.slug] || null}
+                          selectedVariationSlug={selectedVariants[alt.slug] ?? alt.slug}
+                          onSelectVariation={(varSlug) =>
+                            setSelectedVariants((prev) => ({ ...prev, [alt.slug]: varSlug }))
+                          }
+                        />
+                      </motion.div>
+                    ))}
+
+                    {/* Infinite scroll sentinel */}
+                    {hasMore && (
+                      <div ref={sentinelRef} className="flex items-center justify-center py-4">
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300" />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         </motion.div>
