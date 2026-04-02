@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
+import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 
@@ -182,6 +183,7 @@ export default function WorkoutFormPage() {
   const [swapExerciseIndex, setSwapExerciseIndex] = useState<number | null>(null);
   // Track which exercises have been swapped: exerciseIndex -> { originalSlug, originalName }
   const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
+  const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load the current workout from API
@@ -239,6 +241,9 @@ export default function WorkoutFormPage() {
 
           if (progressRes.ok) {
             const progressData = await progressRes.json();
+            if (progressData.staleIncomplete && !progressData.isResume) {
+              setStaleIncomplete(progressData.staleIncomplete);
+            }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
 
@@ -412,6 +417,27 @@ export default function WorkoutFormPage() {
       }
     };
   }, []);
+
+  const handleResolveIncomplete = (
+    action: "continue" | "restart" | "count" | "skip",
+    nextDay?: string | null,
+  ) => {
+    if (action === "continue") {
+      // Navigate to live workout — the resolve API re-dated the log so it will resume
+      router.push(
+        `/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(staleIncomplete!.day)}`
+      );
+    } else if (action === "restart") {
+      // Stale log deleted, close modal and proceed to the current workout fresh
+      setStaleIncomplete(null);
+    } else {
+      // count or skip — go to next day
+      const target = nextDay
+        ? `/dashboard/programming/${programId}/workout?day=${encodeURIComponent(nextDay)}`
+        : `/dashboard/programming/${programId}/workout`;
+      router.replace(target);
+    }
+  };
 
   const updateSet = (exerciseIndex: number, setIndex: number, field: keyof SetData, value: string | boolean) => {
     setExerciseProgress((prev) => {
@@ -589,6 +615,15 @@ export default function WorkoutFormPage() {
 
   return (
     <PageTransition className="pb-6">
+      {/* Stale incomplete workout prompt */}
+      {staleIncomplete && (
+        <IncompleteWorkoutModal
+          stale={staleIncomplete}
+          programId={programId}
+          onResolve={handleResolveIncomplete}
+        />
+      )}
+
       {/* Header */}
       <div className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur-lg dark:border-zinc-800 dark:bg-zinc-900/80">
         <div className="mx-auto max-w-4xl px-4 py-3 sm:px-6 sm:py-4">

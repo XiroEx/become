@@ -7,6 +7,7 @@ import { Dumbbell } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
+import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 
 interface SetData {
   reps: string;
@@ -108,6 +109,11 @@ export default function LiveWorkoutPage() {
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
 
+  // Stale incomplete workout detection
+  const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
+  // Increment to re-trigger loadWorkout (used when user picks "continue" after stale detection)
+  const [loadKey, setLoadKey] = useState(0);
+
   // Auto-save ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -193,6 +199,10 @@ export default function LiveWorkoutPage() {
             const progressData = await progressRes.json();
             if (progressData.exerciseHistory) {
               setExerciseHistory(progressData.exerciseHistory);
+            }
+            // Show incomplete workout prompt if there's a stale session from a previous day
+            if (progressData.staleIncomplete && !progressData.isResume) {
+              setStaleIncomplete(progressData.staleIncomplete);
             }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
@@ -288,7 +298,8 @@ export default function LiveWorkoutPage() {
     };
 
     loadWorkout();
-  }, [programId, requestedDay]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programId, requestedDay, loadKey]);
 
   // Find the first incomplete step in the flow
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
@@ -300,6 +311,26 @@ export default function LiveWorkoutPage() {
     }
     return flow.length - 1;
   }
+
+  const handleResolveIncomplete = (
+    action: "continue" | "restart" | "count" | "skip",
+    nextDay?: string | null,
+  ) => {
+    if (action === "continue") {
+      // Re-trigger loadWorkout — the resolve API re-dated the log so isResume will fire
+      setStaleIncomplete(null);
+      setLoadKey((k) => k + 1);
+    } else if (action === "restart") {
+      // Stale log was deleted; workout is already in fresh state, just close modal
+      setStaleIncomplete(null);
+    } else {
+      // count or skip — navigate to the next day (or reload without a specific day)
+      const target = nextDay
+        ? `/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(nextDay)}`
+        : `/dashboard/programming/${programId}/workout/live`;
+      router.replace(target);
+    }
+  };
 
   const parseRestTime = (rest: string): number => {
     const match = rest.match(/(\d+)/);
@@ -694,6 +725,15 @@ export default function LiveWorkoutPage() {
 
   return (
     <div className="fixed inset-0 z-100 bg-black text-white">
+      {/* Stale incomplete workout prompt */}
+      {staleIncomplete && (
+        <IncompleteWorkoutModal
+          stale={staleIncomplete}
+          programId={programId}
+          onResolve={handleResolveIncomplete}
+        />
+      )}
+
       {/* Fullscreen video background - tappable */}
       <div
         className="absolute inset-0 cursor-pointer"
