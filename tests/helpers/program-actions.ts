@@ -10,12 +10,14 @@ export interface ProgramConfig {
 }
 
 export const PROGRAMS: ProgramConfig[] = [
-  { id: 'program_2_30day_shred',                   name: '30-Day Shred',                              firstDay: 'Day 1', trainingDaysCount: 5 },
+  // Fast programs first (4-day or short schedules) — these run within the 5/8m timeout
   { id: 'strength-size-20',                         name: 'Strength & Size 2.0',                       firstDay: 'Day 1', trainingDaysCount: 4 },
   { id: 'no-excuses-at-home-transformation',        name: 'No Excuses',                                firstDay: 'Day 1', trainingDaysCount: 4 },
   { id: 'program_5',                                name: '30-Minute Dumbbell',                        firstDay: 'Day 1', trainingDaysCount: 4 },
   { id: 'program_jon_don_split',                    name: 'Jon Don Split',                             firstDay: 'Day 1', trainingDaysCount: 5 },
   { id: 'db-only-total-transformation',             name: 'DB Only',                                   firstDay: 'Day 1', trainingDaysCount: 4 },
+  // Slow: 30-Day Shred creates ~150 scheduled workouts — keep outside slice(0,5)
+  { id: 'program_2_30day_shred',                   name: '30-Day Shred',                              firstDay: 'Day 1', trainingDaysCount: 5 },
   { id: 'circuit-superset-shred',                   name: 'Circuit',                                   firstDay: 'Day 1', trainingDaysCount: 3 },
   { id: 'program_1_become',                         name: 'BECOME',                                    firstDay: 'Day 1', trainingDaysCount: 4 },
 ];
@@ -182,7 +184,8 @@ export async function doWorkoutFormView(page: Page, programId: string, day: stri
 async function dismissIncompleteModal(page: Page) {
   try {
     const restartBtn = page.locator('button:has-text("Restart this day")').first();
-    if (await restartBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    // Short timeout — if modal isn't there within 800ms, move on
+    if (await restartBtn.isVisible({ timeout: 800 }).catch(() => false)) {
       await restartBtn.click({ force: true }).catch(() => {});
       await page.waitForTimeout(500).catch(() => {});
     }
@@ -343,6 +346,9 @@ export async function swapExercise(page: Page, programId: string, day: string, s
     () => !document.querySelector('.animate-spin'),
     { timeout: 30_000 }
   ).catch(() => {});
+
+  // Dismiss incomplete workout modal if it appears before swap buttons
+  await dismissIncompleteModal(page);
 
   // Wait specifically for swap buttons to appear in the DOM (up to 30s for slow API)
   await page.waitForFunction(
