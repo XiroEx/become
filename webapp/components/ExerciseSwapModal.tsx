@@ -7,6 +7,14 @@ import { useLockScroll } from "@/lib/useLockScroll";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+interface ExerciseVariation {
+  slug: string;
+  name: string;
+  equipment: string[];
+  laterality: string;
+  difficulty: string;
+}
+
 interface AlternativeExercise {
   slug: string;
   name: string;
@@ -161,6 +169,9 @@ export default function ExerciseSwapModal({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(3);
+  // Variations: cache per alternative slug, and which variant is selected
+  const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const searchRef = useRef<HTMLInputElement>(null);
 
   useLockScroll(isOpen);
@@ -230,11 +241,35 @@ export default function ExerciseSwapModal({
       setVisibleCount(3);
       setSearchQuery("");
       setFilters({ equipment: null, bodyRegion: null, difficulty: null, category: null });
+      setVariationsCache({});
+      setSelectedVariants({});
     }
     if (!isOpen) {
       hasFetchedRef.current = false;
     }
   }, [isOpen, fetchAlternatives]);
+
+  // Fetch variations when a card is expanded (cached per slug)
+  useEffect(() => {
+    if (!selectedSlug || variationsCache[selectedSlug] !== undefined) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    // Mark as loading (empty array = loading, will replace)
+    setVariationsCache((prev) => ({ ...prev, [selectedSlug]: [] }));
+
+    fetch(`/api/exercises/variations?slug=${encodeURIComponent(selectedSlug)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.variations) {
+          setVariationsCache((prev) => ({ ...prev, [selectedSlug]: data.variations }));
+        }
+      })
+      .catch(() => {/* silently ignore — variations are optional */});
+  }, [selectedSlug, variationsCache]);
 
   // Focus search on open
   useEffect(() => {
@@ -297,6 +332,17 @@ export default function ExerciseSwapModal({
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const handleSwap = (alt: AlternativeExercise, scope: SwapScope) => {
+    // If the user picked a specific variation, swap to that instead
+    const chosenSlug = selectedVariants[alt.slug];
+    if (chosenSlug && chosenSlug !== alt.slug) {
+      const variations = variationsCache[alt.slug] || [];
+      const chosenVariation = variations.find((v) => v.slug === chosenSlug);
+      if (chosenVariation) {
+        onSwap({ ...alt, slug: chosenVariation.slug, name: chosenVariation.name, equipment: chosenVariation.equipment }, scope);
+        onClose();
+        return;
+      }
+    }
     onSwap(alt, scope);
     onClose();
   };
@@ -516,6 +562,11 @@ export default function ExerciseSwapModal({
                         onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
                         onSwap={(scope) => handleSwap(alt, scope)}
                         source={source}
+                        variations={variationsCache[alt.slug] || null}
+                        selectedVariationSlug={selectedVariants[alt.slug] ?? alt.slug}
+                        onSelectVariation={(varSlug) =>
+                          setSelectedVariants((prev) => ({ ...prev, [alt.slug]: varSlug }))
+                        }
                       />
                     </motion.div>
                   ))}
@@ -585,13 +636,24 @@ function AlternativeCard({
   onSelect,
   onSwap,
   source,
+  variations,
+  selectedVariationSlug,
+  onSelectVariation,
 }: {
   alternative: AlternativeExercise;
   isSelected: boolean;
   onSelect: () => void;
   onSwap: (scope: SwapScope) => void;
   source: SourceExercise | null;
+  variations: ExerciseVariation[] | null;
+  selectedVariationSlug: string;
+  onSelectVariation: (slug: string) => void;
 }) {
+  const hasVariations = variations !== null && variations.length > 1;
+  const chosenVariation = hasVariations
+    ? variations.find((v) => v.slug === selectedVariationSlug) ?? variations[0]
+    : null;
+  const displayName = chosenVariation ? chosenVariation.name : alt.name;
   return (
     <div
       className={`rounded-xl border transition-all ${
@@ -615,23 +677,28 @@ function AlternativeCard({
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold text-zinc-900 dark:text-white truncate text-sm">
-                {alt.name}
+                {displayName}
               </h3>
               {alt.isExplicitAlternative && (
                 <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
                   Recommended
                 </span>
               )}
+              {hasVariations && (
+                <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                  {variations!.length} variations
+                </span>
+              )}
             </div>
             <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 truncate">
-              {alt.equipment
+              {(chosenVariation?.equipment ?? alt.equipment)
                 .filter((e) => e !== "none" && e !== "bodyweight")
                 .map(formatEquipment)
                 .join(", ") || "Bodyweight"}
               {" · "}
-              {DIFFICULTY_LABELS[alt.difficulty] || alt.difficulty}
+              {DIFFICULTY_LABELS[chosenVariation?.difficulty ?? alt.difficulty] || alt.difficulty}
             </p>
           </div>
 
@@ -661,7 +728,7 @@ function AlternativeCard({
           >
             <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
               {/* Exercise video */}
-              <ExerciseVideoPreview exerciseName={alt.name} />
+              <ExerciseVideoPreview exerciseName={displayName} />
 
               {/* Match reasons */}
               <div className="flex flex-wrap gap-1.5 mb-3">
@@ -720,6 +787,38 @@ function AlternativeCard({
                 </div>
               </div>
 
+              {/* Variation picker */}
+              {hasVariations && (
+                <div className="mb-3">
+                  <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    Pick a variation
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {variations!.map((v) => (
+                      <button
+                        key={v.slug}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectVariation(v.slug);
+                        }}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                          (selectedVariationSlug === v.slug || (!selectedVariationSlug && v.slug === alt.slug))
+                            ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-900/20 dark:text-blue-400"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600"
+                        }`}
+                      >
+                        <span className="block max-w-[140px] truncate">{v.name}</span>
+                        {v.equipment.filter(eq => eq !== "none" && eq !== "bodyweight").length > 0 && (
+                          <span className="block text-[10px] opacity-70 max-w-[140px] truncate">
+                            {v.equipment.filter(eq => eq !== "none" && eq !== "bodyweight").map(formatEquipment).join(", ")}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Swap buttons */}
               <div className="flex flex-col gap-2">
                 <button
@@ -729,7 +828,7 @@ function AlternativeCard({
                   }}
                   className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
                 >
-                  Swap for All Future Workouts
+                  Swap {chosenVariation ? `"${chosenVariation.name}"` : ""} for All Future Workouts
                 </button>
                 <button
                   onClick={(e) => {
