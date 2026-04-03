@@ -67,67 +67,65 @@ export async function enrollAndSchedule(page: Page, programId: string) {
 
   // Wait for either Start or Continue Program button
   const enrollBtn = page.locator('button:has-text("Start Program"), button:has-text("Continue Program")').first();
-  await enrollBtn.waitFor({ timeout: 20_000 });
+  await enrollBtn.waitFor({ timeout: 12_000 });
   await enrollBtn.click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(200);
 
   // Handle enrollment dialog (appears only if NOT already enrolled)
-  const enrollDialog = page.locator('.fixed.inset-0.z-50');
-  if (await enrollDialog.isVisible({ timeout: 5_000 }).catch(() => false)) {
+  const enrollDialog = page.locator('.fixed.inset-0.z-50:has(button:has-text("Enroll & Set Up"))');
+  if (await enrollDialog.isVisible({ timeout: 4_000 }).catch(() => false)) {
     // Set start date to today
     const dateInput = enrollDialog.locator('input[type="date"]');
-    if (await dateInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    if (await dateInput.isVisible({ timeout: 1_500 }).catch(() => false)) {
       const today = new Date().toISOString().split('T')[0];
       await dateInput.fill(today);
-      await page.waitForTimeout(100);
     }
     const confirmBtn = enrollDialog.locator('button:has-text("Enroll & Set Up")');
-    await confirmBtn.waitFor({ timeout: 5_000 });
+    await confirmBtn.waitFor({ timeout: 4_000 });
     await confirmBtn.click();
     // Wait for navigation to schedule setup page
-    await page.waitForURL(`**/programming/${programId}/schedule`, { timeout: 15_000 }).catch(() => {});
-    await page.waitForTimeout(300);
+    await page.waitForURL(`**/programming/${programId}/schedule`, { timeout: 10_000 }).catch(() => {});
   }
 
   // --- Schedule setup page ---
   // Wait for h1 to confirm we're on the schedule page
   const scheduleH1 = page.locator('h1:has-text("Set Up Schedule"), h1:has-text("Your Schedule")');
-  await scheduleH1.waitFor({ timeout: 15_000 }).catch(() => {});
+  await scheduleH1.waitFor({ timeout: 10_000 }).catch(() => {});
 
   // If in "view" mode (existing schedule), recreate it
   const recreateBtn = page.locator('button:has-text("Recreate Schedule")');
-  if (await recreateBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+  if (await recreateBtn.isVisible({ timeout: 1_500 }).catch(() => false)) {
     await recreateBtn.click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(200);
   }
 
   // Step 1: Training days — click Next
   const nextBtn = page.locator('button:has-text("Next")');
-  if (await nextBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+  if (await nextBtn.isVisible({ timeout: 4_000 }).catch(() => false)) {
     await nextBtn.click();
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(150);
   }
 
   // Step 2: Start date — set to today and click Preview Schedule
   const previewBtn = page.locator('button:has-text("Preview Schedule")');
-  if (await previewBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+  if (await previewBtn.isVisible({ timeout: 4_000 }).catch(() => false)) {
     const scheduleDateInput = page.locator('input[type="date"]').first();
-    if (await scheduleDateInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    if (await scheduleDateInput.isVisible({ timeout: 1_500 }).catch(() => false)) {
       const today = new Date().toISOString().split('T')[0];
       await scheduleDateInput.fill(today);
-      await page.waitForTimeout(150);
+      await page.waitForTimeout(100);
     }
     await previewBtn.click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(200);
   }
 
   // Step 3: Confirm Schedule
   const confirmScheduleBtn = page.locator('button:has-text("Confirm Schedule")');
-  if (await confirmScheduleBtn.isVisible({ timeout: 8_000 }).catch(() => false)) {
+  if (await confirmScheduleBtn.isVisible({ timeout: 6_000 }).catch(() => false)) {
     await confirmScheduleBtn.click();
     // Wait for redirect back to program detail
-    await page.waitForURL(`**/programming/${programId}`, { timeout: 15_000 }).catch(() => {});
-    await page.waitForTimeout(300);
+    await page.waitForURL(`**/programming/${programId}`, { timeout: 10_000 }).catch(() => {});
+    await page.waitForTimeout(200);
   }
 }
 
@@ -143,14 +141,14 @@ export async function doWorkoutFormView(page: Page, programId: string, day: stri
   // Wait for loading spinner to disappear
   await page.waitForFunction(
     () => !document.querySelector('.animate-spin'),
-    { timeout: 30_000 }
+    { timeout: 8_000 }
   ).catch(() => {});
 
   // Dismiss incomplete workout modal if it appears
   await dismissIncompleteModal(page);
 
   // Wait for exercise content to appear
-  await page.waitForSelector('button:has-text("sets"), [title="Swap exercise"]', { timeout: 15_000 }).catch(() => {});
+  await page.waitForSelector('button:has-text("sets"), [title="Swap exercise"]', { timeout: 8_000 }).catch(() => {});
   await page.waitForTimeout(300);
 
   let setsCompleted = 0;
@@ -180,14 +178,17 @@ export async function doWorkoutFormView(page: Page, programId: string, day: stri
   return setsCompleted;
 }
 
-/** Dismiss the incomplete workout modal if it appears (click "Restart this day" to stay on requested day) */
+/** Dismiss the incomplete workout modal if it appears (click "Restart this day" to clear stale log without navigating) */
 async function dismissIncompleteModal(page: Page) {
   try {
+    // Wait up to 2.5s for the incomplete modal to appear (API fetch for stale log can take 1-2s)
     const restartBtn = page.locator('button:has-text("Restart this day")').first();
-    // Short timeout — if modal isn't there within 800ms, move on
-    if (await restartBtn.isVisible({ timeout: 800 }).catch(() => false)) {
+    if (await restartBtn.isVisible({ timeout: 2_500 }).catch(() => false)) {
       await restartBtn.click({ force: true }).catch(() => {});
-      await page.waitForTimeout(500).catch(() => {});
+      // Wait for the incomplete modal overlay to close before proceeding
+      const overlay = page.locator('.fixed.inset-0.z-50:has(button:has-text("Restart this day"))');
+      await overlay.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => {});
+      await page.waitForTimeout(300).catch(() => {});
     }
   } catch {
     // Modal not present — ignore
@@ -219,7 +220,7 @@ export async function doWorkoutLiveView(page: Page, programId: string, day: stri
   // Wait for loading spinner to disappear
   await page.waitForFunction(
     () => !document.querySelector('.animate-spin'),
-    { timeout: 30_000 }
+    { timeout: 8_000 }
   ).catch(() => {});
 
   // Dismiss incomplete workout modal if it appears
@@ -230,7 +231,7 @@ export async function doWorkoutLiveView(page: Page, programId: string, day: stri
     { timeout: 20_000 }
   ).catch(() => {});
 
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 45_000;
   for (let step = 0; step < 30 && Date.now() < deadline; step++) {
     try {
       const skipRest = page.locator('button:has-text("Skip Rest")').first();
@@ -344,16 +345,16 @@ export async function swapExercise(page: Page, programId: string, day: string, s
   // Wait for loading spinner to disappear (API response received)
   await page.waitForFunction(
     () => !document.querySelector('.animate-spin'),
-    { timeout: 30_000 }
+    { timeout: 8_000 }
   ).catch(() => {});
 
   // Dismiss incomplete workout modal if it appears before swap buttons
   await dismissIncompleteModal(page);
 
-  // Wait specifically for swap buttons to appear in the DOM (up to 30s for slow API)
+  // Wait specifically for swap buttons to appear in the DOM
   await page.waitForFunction(
     () => document.querySelectorAll('[title="Swap exercise"]').length > 0,
-    { timeout: 30_000 }
+    { timeout: 10_000 }
   ).catch(() => {});
 
   await page.waitForTimeout(200);
@@ -367,30 +368,40 @@ export async function swapExercise(page: Page, programId: string, day: string, s
   _swapClickIndex++;
 
   const btn = swapBtns.nth(targetIndex);
-  if (!(await btn.isVisible().catch(() => false))) {
-    console.log(`[swapExercise] btn at index ${targetIndex} not visible`);
-    return false;
-  }
+  const btnVisible = await btn.isVisible().catch(() => false);
+  console.log(`[swapExercise] clicking index ${targetIndex}, visible=${btnVisible}`);
+  if (!btnVisible) return false;
+
   await btn.scrollIntoViewIfNeeded().catch(() => {});
   await btn.click({ force: true });
+  console.log(`[swapExercise] clicked swap btn, waiting for modal`);
 
-  // Wait for swap modal to appear (z-50 overlay)
-  const modal = page.locator('.fixed.inset-0.z-50');
-  await modal.waitFor({ timeout: 8_000 }).catch(() => {});
-  if (!(await modal.isVisible().catch(() => false))) {
-    console.log(`[swapExercise] modal did not appear`);
+  // Wait for the ExerciseSwapModal specifically (identified by its "Swap Exercise" heading)
+  const swapModalHeading = page.locator('h2:has-text("Swap Exercise")');
+  await swapModalHeading.waitFor({ timeout: 8_000 }).catch(() => {});
+  const headingVisible = await swapModalHeading.isVisible().catch(() => false);
+  console.log(`[swapExercise] heading visible=${headingVisible}`);
+  if (!headingVisible) {
+    console.log(`[swapExercise] swap modal did not appear`);
     return false;
   }
 
+  // The modal container is the fixed overlay containing the heading
+  const modal = page.locator('.fixed.inset-0.z-50:has(h2:has-text("Swap Exercise"))');
+
   // Wait for alternatives to load: spinner gone AND cards appear (or empty state)
+  // Use 6s — fast enough to keep tests moving, covers typical cold DB queries
   await page.waitForFunction(() => {
-    const m = document.querySelector('.fixed.inset-0.z-50');
+    const headings = Array.from(document.querySelectorAll('h2'));
+    const swapHeading = headings.find(h => h.textContent?.includes('Swap Exercise'));
+    if (!swapHeading) return false;
+    const m = swapHeading.closest('.fixed') as HTMLElement | null;
     if (!m) return false;
     if (m.querySelector('.animate-spin')) return false;
-    const cards = m.querySelectorAll('button.w-full');
+    const cards = m.querySelectorAll('button.w-full.text-left');
     return cards.length > 0 || (m.textContent || '').includes('No alternatives');
-  }, { timeout: 15_000 }).catch(() => {});
-  await page.waitForTimeout(200);
+  }, { timeout: 6_000 }).catch(() => {});
+  await page.waitForTimeout(150);
 
   // Click the first alternative card
   const altCards = modal.locator('button.w-full.text-left');
@@ -402,7 +413,7 @@ export async function swapExercise(page: Page, programId: string, day: string, s
   }
 
   await altCards.first().click();
-  await page.waitForTimeout(600); // Wait for Framer Motion expand
+  await page.waitForTimeout(400); // Wait for Framer Motion expand
 
   // Click the appropriate scope button
   if (scope === 'program') {
@@ -438,15 +449,17 @@ export async function swapExercise(page: Page, programId: string, day: string, s
 }
 
 /** Helper to close the swap modal reliably */
-async function closeSwapModal(page: Page, modal: ReturnType<Page['locator']>) {
-  const closeBtn = modal.locator('button.rounded-full.h-8.w-8, button[aria-label*="close"], button[aria-label*="Close"]').first();
+async function closeSwapModal(page: Page, _modal: ReturnType<Page['locator']>) {
+  // Target the close button inside the ExerciseSwapModal specifically
+  const closeBtn = page.locator('h2:has-text("Swap Exercise") ~ * button, h2:has-text("Swap Exercise") + * button').first();
   if (await closeBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await closeBtn.click().catch(() => {});
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(200);
     return;
   }
+  // Fallback: press Escape to close any open modal
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(200);
 }
 
 /** Helper: click a calendar date cell that has a "scheduled" workout dot.
