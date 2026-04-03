@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { recordStreakActivity } from '@/lib/streak'
 
 // Helper to get start of today
 function getStartOfToday(): Date {
@@ -198,7 +199,22 @@ export async function POST(request: NextRequest) {
       await progress.save()
     }
 
-    return NextResponse.json({ success: true })
+    // Record streak activity when weight is actually logged (not skipped)
+    let streakResult = null
+    if (!skip && weight) {
+      streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
+    }
+
+    return NextResponse.json({
+      success: true,
+      ...(streakResult && {
+        streak: {
+          streakDays: streakResult.streakDays,
+          streakExtended: streakResult.streakExtended,
+          newMilestone: streakResult.newMilestone,
+        },
+      }),
+    })
   } catch (error) {
     console.error('Error saving weight:', error)
     return NextResponse.json({ error: 'Failed to save weight' }, { status: 500 })

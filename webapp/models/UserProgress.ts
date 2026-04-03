@@ -89,6 +89,11 @@ export interface IUserProgress {
     currentWeek: number
   }
   streakDays: number
+  longestStreak: number
+  lastActivityDate?: Date
+  streakFreezes: number
+  milestonesReached: number[]
+  lastStreakEmailDate?: Date
   totalWorkouts: number
   createdAt?: Date
   updatedAt?: Date
@@ -185,6 +190,11 @@ const UserProgressSchema = new Schema<IUserProgress>({
     currentWeek: Number
   },
   streakDays: { type: Number, default: 0 },
+  longestStreak: { type: Number, default: 0 },
+  lastActivityDate: { type: Date },
+  streakFreezes: { type: Number, default: 1 },
+  milestonesReached: { type: [Number], default: [] },
+  lastStreakEmailDate: { type: Date },
   totalWorkouts: { type: Number, default: 0 }
 }, {
   timestamps: true

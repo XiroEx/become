@@ -5,6 +5,7 @@ import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
+import { recordStreakActivity } from '@/lib/streak'
 
 interface SetData {
   setNumber: number
@@ -413,11 +414,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Record streak activity on workout completion
+    let streakResult = null
+    if (completed) {
+      streakResult = await recordStreakActivity(payload.userId, payload.email).catch(() => null)
+    }
+
     return NextResponse.json({
       message: 'Workout saved successfully',
       completed,
       programCompleted,
       ...(programCompleted && { programName }),
+      ...(streakResult && {
+        streak: {
+          streakDays: streakResult.streakDays,
+          streakExtended: streakResult.streakExtended,
+          freezeUsed: streakResult.freezeUsed,
+          newMilestone: streakResult.newMilestone,
+          longestStreak: streakResult.longestStreak,
+        },
+      }),
     })
 
   } catch (error) {

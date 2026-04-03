@@ -6,9 +6,11 @@ import PageTransition from '@/components/PageTransition'
 import ProgressChart, { MetricData } from '@/components/ProgressChart'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import MoodCard from '@/components/MoodCard'
+import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
+import { STREAK_MILESTONES } from '@/lib/streak'
 
 interface UserProgressData {
   weightData: MetricData[]
@@ -63,6 +65,15 @@ export default function DashboardClient() {
     fats: { current: number; goal: number }
     water: { current: number; goal: number }
   } | null>(null)
+  const [streakData, setStreakData] = useState<{
+    streakDays: number
+    longestStreak: number
+    streakFreezes: number
+    milestonesReached: number[]
+    activityToday: boolean
+    nextMilestone: number | null
+  } | null>(null)
+  const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -167,10 +178,25 @@ export default function DashboardClient() {
       }
     }
 
+    // Fetch streak data
+    async function fetchStreak() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch('/api/streak', { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) {
+          const data = await res.json()
+          setStreakData(data)
+        }
+      } catch {
+        // non-critical
+      }
+    }
+
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
-      await Promise.all([fetchProgress(), fetchNutrition()])
+      await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak()])
     }
 
     init()
@@ -219,12 +245,12 @@ export default function DashboardClient() {
       })
 
       if (res.ok) {
+        const resData = await res.json()
         setTodaysMood(mood)
-        
+
         // Update mood data in chart
         const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         setData(prev => {
-          // Check if today already exists in mood data
           const existingIndex = prev.moodData.findIndex(d => d.date === todayFormatted)
           if (existingIndex >= 0) {
             const newMoodData = [...prev.moodData]
@@ -234,6 +260,18 @@ export default function DashboardClient() {
             return { ...prev, moodData: [...prev.moodData, { date: todayFormatted, value: mood }] }
           }
         })
+
+        // Update streak state + check milestone
+        if (resData.streak) {
+          setStreakData(prev => prev ? {
+            ...prev,
+            streakDays: resData.streak.streakDays,
+            activityToday: true,
+          } : prev)
+          if (resData.streak.newMilestone) {
+            setMilestoneCelebration(resData.streak.newMilestone)
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to update mood:', error)
@@ -244,12 +282,18 @@ export default function DashboardClient() {
 
   return (
     <>
-      <DailyCheckInModal 
-        isOpen={showCheckInModal} 
+      <DailyCheckInModal
+        isOpen={showCheckInModal}
         onClose={handleCheckInClose}
         daysSinceMood={checkInInfo.daysSinceMood}
         daysSinceWeight={checkInInfo.daysSinceWeight}
         lastWeight={checkInInfo.lastWeight}
+      />
+
+      <StreakMilestoneModal
+        milestone={milestoneCelebration}
+        streakDays={streakData?.streakDays ?? data.stats.streakDays}
+        onClose={() => setMilestoneCelebration(null)}
       />
       
       <PageTransition className="space-y-4 sm:space-y-6">
@@ -261,14 +305,39 @@ export default function DashboardClient() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30 sm:h-10 sm:w-10">
-            <Flame className="h-4 w-4 text-orange-600 dark:text-orange-400 sm:h-5 sm:w-5" />
+        {/* Streak card */}
+        <div className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30 sm:h-10 sm:w-10">
+              <Flame className={`h-4 w-4 sm:h-5 sm:w-5 ${streakData?.activityToday ? 'text-orange-500 dark:text-orange-400' : 'text-zinc-400 dark:text-zinc-600'}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl leading-none">
+                {streakData?.streakDays ?? data.stats.streakDays}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Day Streak
+                {streakData && streakData.streakFreezes > 0 && (
+                  <span className="ml-1.5 text-blue-500 dark:text-blue-400">
+                    {'❄'.repeat(streakData.streakFreezes)}
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.streakDays}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Day Streak</p>
-          </div>
+          {/* Progress to next milestone */}
+          {streakData?.nextMilestone && streakData.streakDays > 0 && (() => {
+            const prev = STREAK_MILESTONES.filter(m => m <= streakData.streakDays).slice(-1)[0] ?? 0
+            const pct = Math.min(100, Math.round(((streakData.streakDays - prev) / (streakData.nextMilestone - prev)) * 100))
+            return (
+              <div>
+                <div className="h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-yellow-400 transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-0.5">{streakData.nextMilestone - streakData.streakDays}d to 🏆</p>
+              </div>
+            )
+          })()}
         </div>
         
         {/* Today's Mood Card - replaces Workouts */}
