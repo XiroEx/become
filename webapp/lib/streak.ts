@@ -1,8 +1,9 @@
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import { STREAK_MILESTONES, MAX_FREEZES } from '@/lib/streakConstants'
 
-export const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365]
-export const MAX_FREEZES = 2
+export { STREAK_MILESTONES, MAX_FREEZES }
+
 // Earn a freeze back at every 7-day streak milestone (7, 14, 21 ...)
 const FREEZE_EARN_INTERVAL = 7
 

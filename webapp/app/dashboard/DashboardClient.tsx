@@ -10,7 +10,7 @@ import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
-import { STREAK_MILESTONES } from '@/lib/streak'
+import { STREAK_MILESTONES } from '@/lib/streakConstants'
 
 interface UserProgressData {
   weightData: MetricData[]
