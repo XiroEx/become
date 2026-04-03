@@ -4,6 +4,7 @@ import NutritionLog from '@/models/NutritionLog'
 import NutritionGoal from '@/models/NutritionGoal'
 import FoodItem from '@/models/FoodItem'
 import { verifyAuth } from '@/lib/auth'
+import { recordStreakActivity } from '@/lib/streak'
 
 function getDateStart(dateStr?: string | null): Date {
   const d = dateStr ? new Date(dateStr + 'T00:00:00.000Z') : new Date()
@@ -138,7 +139,20 @@ export async function POST(request: NextRequest) {
       await FoodItem.updateOne({ _id: food.foodId }, { $inc: { usageCount: 1 } })
     }
 
-    return NextResponse.json({ success: true, log })
+    // Record streak activity for logging food
+    const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
+
+    return NextResponse.json({
+      success: true,
+      log,
+      ...(streakResult && {
+        streak: {
+          streakDays: streakResult.streakDays,
+          streakExtended: streakResult.streakExtended,
+          newMilestone: streakResult.newMilestone,
+        },
+      }),
+    })
   } catch (error) {
     console.error('Error adding food entry:', error)
     return NextResponse.json({ error: 'Failed to add food entry' }, { status: 500 })
