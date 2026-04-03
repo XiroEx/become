@@ -102,6 +102,8 @@ export default function LiveWorkoutPage() {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [programCompleted, setProgramCompleted] = useState(false);
+  const [completedProgramName, setCompletedProgramName] = useState("");
   const [showSwapModal, setShowSwapModal] = useState(false);
   // Track which exercises have been swapped: exerciseIndex -> { originalSlug, originalName }
   const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
@@ -403,11 +405,18 @@ export default function LiveWorkoutPage() {
           ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
       });
-      await fetch("/api/workouts", {
+      const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ programId, phase: currentPhase, day: workout.day, exercises: exercisesToSave, completed: isComplete })
       });
+      if (isComplete && res.ok) {
+        const data = await res.json();
+        if (data.programCompleted) {
+          setProgramCompleted(true);
+          setCompletedProgramName(data.programName || "");
+        }
+      }
     } catch (error) {
       console.error("Error saving workout:", error);
     } finally {
@@ -1365,13 +1374,28 @@ export default function LiveWorkoutPage() {
                 transition={{ delay: 0.2 }}
                 className="text-center mb-8"
               >
-                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
-                  <svg className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h1 className="text-3xl font-bold">Workout Complete!</h1>
-                <p className="mt-1 text-zinc-400">{workout?.day} — {workout?.title}</p>
+                {programCompleted ? (
+                  <>
+                    <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-500/20">
+                      <svg className="h-10 w-10 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                      </svg>
+                    </div>
+                    <h1 className="text-3xl font-bold text-yellow-400">Program Complete!</h1>
+                    <p className="mt-1 text-zinc-300 font-medium">{completedProgramName || workout?.title}</p>
+                    <p className="mt-1 text-zinc-500 text-sm">You finished every workout. That&apos;s a huge win.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
+                      <svg className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h1 className="text-3xl font-bold">Workout Complete!</h1>
+                    <p className="mt-1 text-zinc-400">{workout?.day} — {workout?.title}</p>
+                  </>
+                )}
               </motion.div>
 
               {/* Stats Grid */}
@@ -1475,9 +1499,13 @@ export default function LiveWorkoutPage() {
             >
               <button
                 onClick={() => router.push("/dashboard/programming")}
-                className="w-full rounded-full bg-green-500 py-4 text-lg font-bold shadow-lg shadow-green-500/30 transition-colors hover:bg-green-400"
+                className={`w-full rounded-full py-4 text-lg font-bold shadow-lg transition-colors ${
+                  programCompleted
+                    ? "bg-yellow-500 shadow-yellow-500/30 hover:bg-yellow-400 text-black"
+                    : "bg-green-500 shadow-green-500/30 hover:bg-green-400 text-white"
+                }`}
               >
-                Done
+                {programCompleted ? "Find Your Next Program" : "Done"}
               </button>
             </motion.div>
           </motion.div>

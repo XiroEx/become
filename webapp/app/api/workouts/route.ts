@@ -201,6 +201,9 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    let programCompleted = false
+    let programName = ''
+
     // Create workout log entry
     const workoutLog = {
       date: new Date(),
@@ -306,6 +309,8 @@ export async function POST(request: NextRequest) {
               { userId: payload.userId, 'activePrograms.programId': programId },
               { $set: { 'activePrograms.$.status': 'completed' } }
             )
+            programCompleted = true
+            programName = activeProgram.programName || ''
           }
         }
       }
@@ -372,6 +377,8 @@ export async function POST(request: NextRequest) {
               { userId: payload.userId, 'activePrograms.programId': programId },
               { $set: { 'activePrograms.$.status': 'completed' } }
             )
+            programCompleted = true
+            programName = activeProgram2.programName || ''
           }
         }
       }
@@ -406,9 +413,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: 'Workout saved successfully',
-      completed
+      completed,
+      programCompleted,
+      ...(programCompleted && { programName }),
     })
 
   } catch (error) {
