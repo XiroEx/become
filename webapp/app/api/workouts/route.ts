@@ -123,13 +123,30 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    // Find most recent incomplete workout from a previous day (stale)
+    // Auto-cleanup: delete incomplete logs older than 30 days for this program
+    const STALE_CUTOFF_DAYS = 30
+    const staleCutoff = new Date(today)
+    staleCutoff.setDate(staleCutoff.getDate() - STALE_CUTOFF_DAYS)
+
+    const hasExpiredLogs = (userProgress.workoutLogs as Array<{ programId: string; completed: boolean; date: Date }>)
+      .some(log => log.programId === programId && !log.completed && new Date(log.date) < staleCutoff)
+
+    if (hasExpiredLogs) {
+      // Fire-and-forget — don't block response
+      UserProgress.updateOne(
+        { userId: payload.userId },
+        { $pull: { workoutLogs: { programId, completed: false, date: { $lt: staleCutoff } } } }
+      ).catch(() => {})
+    }
+
+    // Find most recent incomplete workout from a previous day (stale, within cutoff window)
     type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
     const staleLog = (userProgress.workoutLogs as WorkoutLog[])
       .filter(log =>
         log.programId === programId &&
         !log.completed &&
-        new Date(log.date) < today
+        new Date(log.date) < today &&
+        new Date(log.date) >= staleCutoff
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
 

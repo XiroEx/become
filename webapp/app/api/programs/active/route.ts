@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import ProgramModel from '@/models/Program'
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,9 +26,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ activePrograms: [] })
     }
 
-    // Filter to in-progress, active, or paused programs (not completed)
+    // Auto-cleanup: remove activePrograms entries for programs that no longer exist
+    const activeProgramIds = userProgress.activePrograms.map((p: { programId: string }) => p.programId)
+    const existingPrograms = await ProgramModel.find(
+      { program_id: { $in: activeProgramIds } },
+      { program_id: 1 }
+    ).lean()
+    const existingIds = new Set(existingPrograms.map((p: { program_id: string }) => p.program_id))
+    const orphanedIds = activeProgramIds.filter((id: string) => !existingIds.has(id))
+
+    if (orphanedIds.length > 0) {
+      // Fire-and-forget cleanup of orphaned entries and their logs
+      UserProgress.updateOne(
+        { userId: payload.userId },
+        {
+          $pull: {
+            activePrograms: { programId: { $in: orphanedIds } },
+            workoutLogs: { programId: { $in: orphanedIds } },
+          }
+        }
+      ).catch(() => {})
+    }
+
+    // Filter to in-progress, active, or paused programs (not completed, not orphaned)
     const inProgressPrograms = userProgress.activePrograms.filter(
-      (p: { status: string }) => p.status === 'in-progress' || p.status === 'active' || p.status === 'paused'
+      (p: { programId: string; status: string }) =>
+        existingIds.has(p.programId) &&
+        (p.status === 'in-progress' || p.status === 'active' || p.status === 'paused')
     )
 
     // Return active programs with progress info
