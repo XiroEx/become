@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       profile: user.profile ?? {},
-      onboardingCompleted: user.onboardingCompleted ?? false,
+      // undefined (old users without the field) serialises to absent in JSON,
+      // so the AuthGuard's strict `=== false` check won't fire for them.
+      onboardingCompleted: user.onboardingCompleted,
       name: user.name,
       email: user.email,
     });
@@ -82,7 +84,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({
       profile: updatedUser.profile ?? {},
-      onboardingCompleted: updatedUser.onboardingCompleted ?? false,
+      onboardingCompleted: updatedUser.onboardingCompleted,
       name: updatedUser.name,
       email: updatedUser.email,
     });
