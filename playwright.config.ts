@@ -46,5 +46,16 @@ export default defineConfig({
       timeout: 600_000,
       use: { ...devices['iPhone 14'], video: 'off', trace: 'off' },
     },
+    {
+      name: 'chat-review',
+      testMatch: '**/chat.spec.ts',
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        video: 'off',
+        trace: 'retain-on-failure',
+      },
+    },
   ],
 });
