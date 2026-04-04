@@ -65,12 +65,20 @@ export async function POST(req: Request) {
 }
 
 function getRequestOrigin(req: Request) {
+  // Prefer the statically configured app URL in production
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (configuredUrl) return configuredUrl
+
   const originHeader = req.headers.get('origin')
   if (originHeader) return originHeader
 
-  const forwardedProto = req.headers.get('x-forwarded-proto') || 'https'
+  // x-forwarded-proto can contain comma-separated values when multiple proxies
+  // are in the chain (e.g. "http,http" or "https,http"). Take only the first.
+  const rawProto = req.headers.get('x-forwarded-proto') || 'https'
+  const forwardedProto = rawProto.split(',')[0].trim()
   const forwardedHost = req.headers.get('x-forwarded-host')
-  if (forwardedHost) return `${forwardedProto}://${forwardedHost}`
+  // Strip any accidentally-included protocol from x-forwarded-host
+  if (forwardedHost) return `${forwardedProto}://${forwardedHost.replace(/^https?:\/\//, '')}`
 
   const referer = req.headers.get('referer')
   if (referer) {
