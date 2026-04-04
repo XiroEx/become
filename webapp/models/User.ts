@@ -2,11 +2,28 @@ import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 
 export type UserRole = 'user' | 'trainer' | 'admin';
+export type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_performance' | 'general_health';
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+export type BiologicalSex = 'male' | 'female' | 'prefer_not_to_say';
+export type EquipmentType = 'none' | 'dumbbells' | 'barbell' | 'cables' | 'full_gym';
 
 export interface ISavedProgram {
   programId: string;
   savedAt: Date;
   order: number;
+}
+
+export interface IUserProfile {
+  fitnessGoal?: FitnessGoal;
+  experienceLevel?: ExperienceLevel;
+  age?: number;
+  biologicalSex?: BiologicalSex;
+  heightCm?: number;
+  currentWeightKg?: number;
+  targetWeightKg?: number;
+  equipmentAccess?: EquipmentType[];
+  injuryNotes?: string;
+  weeklyAvailability?: number;
 }
 
 export interface IUser {
@@ -17,6 +34,8 @@ export interface IUser {
   role: UserRole
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
+  profile?: IUserProfile;
+  onboardingCompleted?: boolean;
   createdAt?: Date
   updatedAt?: Date
 }
@@ -31,6 +50,19 @@ const SavedProgramSchema = new Schema({
   programId: { type: String, required: true },
   savedAt: { type: Date, default: Date.now },
   order: { type: Number, default: 0 },
+}, { _id: false });
+
+const UserProfileSchema = new Schema({
+  fitnessGoal: { type: String, enum: ['lose_weight', 'gain_muscle', 'maintain', 'improve_performance', 'general_health'] },
+  experienceLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
+  age: { type: Number },
+  biologicalSex: { type: String, enum: ['male', 'female', 'prefer_not_to_say'] },
+  heightCm: { type: Number },
+  currentWeightKg: { type: Number },
+  targetWeightKg: { type: Number },
+  equipmentAccess: [{ type: String, enum: ['none', 'dumbbells', 'barbell', 'cables', 'full_gym'] }],
+  injuryNotes: { type: String },
+  weeklyAvailability: { type: Number, min: 1, max: 7 },
 }, { _id: false });
 
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
@@ -54,6 +86,8 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
+  profile: { type: UserProfileSchema, default: {} },
+  onboardingCompleted: { type: Boolean, default: false },
 }, {
   timestamps: true,
 })

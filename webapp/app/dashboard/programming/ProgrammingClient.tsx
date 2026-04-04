@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
+import type { FitnessGoal, ExperienceLevel } from "@/models/User";
 
 interface ActiveProgram {
   programId: string;
@@ -77,6 +78,10 @@ export default function ProgrammingClient() {
   // Drag state for reordering
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // User profile for recommendations
+  const [userFitnessGoal, setUserFitnessGoal] = useState<FitnessGoal | undefined>(undefined);
+  const [userExperienceLevel, setUserExperienceLevel] = useState<ExperienceLevel | undefined>(undefined);
 
   // Saved program IDs for quick lookup
   const savedProgramIds = new Set(savedPrograms.map(p => p.program_id));
@@ -163,6 +168,18 @@ export default function ProgrammingClient() {
   useEffect(() => {
     fetchActivePrograms();
     fetchSavedPrograms();
+
+    // Fetch user profile for goal-based recommendations (best-effort)
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetch("/api/profile", { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.profile?.fitnessGoal) setUserFitnessGoal(data.profile.fitnessGoal);
+          if (data?.profile?.experienceLevel) setUserExperienceLevel(data.profile.experienceLevel);
+        })
+        .catch(() => {});
+    }
   }, [fetchActivePrograms, fetchSavedPrograms]);
 
   useEffect(() => {
@@ -262,10 +279,57 @@ export default function ProgrammingClient() {
 
   // Filter out enrolled and saved programs from "All Programs"
   const filteredPrograms = allPrograms.filter(
-    (program) => 
+    (program) =>
       !activePrograms.some((ap) => ap.programId === program.program_id) &&
       !savedProgramIds.has(program.program_id)
   );
+
+  // ─── Goal-based recommendation matching ──────────────────────────────────
+  const GOAL_KEYWORDS: Record<FitnessGoal, string[]> = {
+    lose_weight: ["weight loss", "fat loss", "cut", "cutting", "lean", "shred"],
+    gain_muscle: ["muscle", "bulk", "bulking", "strength", "hypertrophy", "mass", "size"],
+    maintain: ["maintain", "maintenance", "general", "fitness"],
+    improve_performance: ["performance", "athletic", "conditioning", "sport", "speed", "power"],
+    general_health: ["health", "wellness", "general", "fitness", "lifestyle"],
+  };
+
+  const LEVEL_MAP: Record<ExperienceLevel, string[]> = {
+    beginner: ["beginner", "beginner to intermediate"],
+    intermediate: ["intermediate", "beginner to intermediate", "intermediate to advanced"],
+    advanced: ["advanced", "intermediate to advanced"],
+  };
+
+  const recommendedPrograms = (() => {
+    // Only show recommendations when there's no active search/filter query
+    if (searchQuery || selectedTags.length > 0 || selectedLevel) return [];
+    if (!userFitnessGoal && !userExperienceLevel) return [];
+
+    return filteredPrograms.filter(program => {
+      const goalField = (program.goal ?? "").toLowerCase();
+      const targetUser = (program.target_user ?? "").toLowerCase();
+      const tags = (program.tags ?? []).map(t => t.toLowerCase());
+      const allText = [goalField, targetUser, ...tags].join(" ");
+
+      // Goal match
+      let goalMatch = false;
+      if (userFitnessGoal) {
+        const keywords = GOAL_KEYWORDS[userFitnessGoal];
+        goalMatch = keywords.some(kw => allText.includes(kw));
+      }
+
+      // Level match
+      let levelMatch = false;
+      if (userExperienceLevel) {
+        const levels = LEVEL_MAP[userExperienceLevel];
+        levelMatch = levels.some(l => targetUser.includes(l));
+      }
+
+      // Show if either dimension matches (or if only one dimension is set)
+      if (userFitnessGoal && userExperienceLevel) return goalMatch || levelMatch;
+      if (userFitnessGoal) return goalMatch;
+      return levelMatch;
+    });
+  })();
 
   return (
     <PageTransition className="pb-6">
@@ -480,6 +544,76 @@ export default function ProgrammingClient() {
           <div className="space-y-2">
             <div className="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
             <div className="h-16 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+          </div>
+        </div>
+      )}
+
+      {/* Recommended for You Section */}
+      {recommendedPrograms.length > 0 && (
+        <div className="mb-6">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+              Recommended for You
+            </h2>
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              Based on your goal
+            </span>
+          </div>
+          <div className="space-y-3">
+            {recommendedPrograms.slice(0, 3).map((program) => (
+              <div
+                key={program.program_id}
+                className="group flex items-center gap-3 rounded-xl border-2 border-green-200 bg-white p-3 transition-all duration-200 hover:border-green-300 dark:border-green-800/40 dark:bg-zinc-900 dark:hover:border-green-700/60 sm:gap-4 sm:p-4"
+              >
+                {/* Save Button */}
+                <button
+                  onClick={() => toggleSaveProgram(program.program_id)}
+                  className="shrink-0 p-1 text-zinc-400 hover:text-amber-500 transition-colors"
+                  title="Save for later"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                </button>
+
+                {/* Content */}
+                <Link href={`/dashboard/programming/${program.program_id}`} className="min-w-0 flex-1">
+                  <div className="flex items-center gap-3">
+                    <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
+                      {program.name}
+                    </h3>
+                    <div className="flex shrink-0 gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        {program.duration_weeks}w
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        {program.training_days_per_week}x/wk
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{program.target_user}</p>
+                  {program.tags && program.tags.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {program.tags.slice(0, 4).map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-400"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </Link>
+
+                {/* Arrow */}
+                <div className="shrink-0 text-zinc-400 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-zinc-600 dark:group-hover:text-zinc-300">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

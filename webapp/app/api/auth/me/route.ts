@@ -26,11 +26,13 @@ export async function GET(req: NextRequest) {
 
     const payload = verifyToken(token)
     await dbConnect()
-    const user = await User.findById(payload.userId).select('-password')
+    const user = await User.findById(payload.userId)
+      .select('email name role trainerId savedPrograms profile onboardingCompleted createdAt updatedAt')
+      .lean()
     if (!user) return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 })
 
     // If token came from cookie, include it in response so client can sync to localStorage
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       user,
       ...(fromCookie && { token })
     }), { status: 200 })
