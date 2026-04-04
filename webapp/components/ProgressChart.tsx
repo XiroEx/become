@@ -15,6 +15,7 @@ import {
   Bar,
   Cell
 } from 'recharts'
+import type { FitnessGoal } from '@/models/User'
 
 export interface MetricData {
   date: string
@@ -26,6 +27,7 @@ interface ProgressChartProps {
   weightData: MetricData[]
   bmiData: MetricData[]
   moodData: MetricData[]
+  fitnessGoal?: FitnessGoal
 }
 
 type ChartType = 'weight' | 'bmi' | 'mood'
@@ -53,7 +55,16 @@ const moodColors: Record<number, string> = {
   5: '#34d399'  // emerald-400 for great
 }
 
-export default function ProgressChart({ weightData, bmiData, moodData }: ProgressChartProps) {
+// Given a weight change direction and the user's fitness goal, determine
+// whether the change is positive, negative, or neutral for framing.
+function weightTrendSentiment(trend: 'up' | 'down' | 'neutral', goal?: FitnessGoal): 'positive' | 'warning' | 'neutral' {
+  if (trend === 'neutral') return 'neutral'
+  if (goal === 'gain_muscle') return trend === 'up' ? 'positive' : 'warning'
+  if (goal === 'lose_weight') return trend === 'down' ? 'positive' : 'warning'
+  return 'neutral'
+}
+
+export default function ProgressChart({ weightData, bmiData, moodData, fitnessGoal }: ProgressChartProps) {
   const [activeChart, setActiveChart] = useState<ChartType>('weight')
 
   const getData = () => {
@@ -119,24 +130,33 @@ export default function ProgressChart({ weightData, bmiData, moodData }: Progres
             )}
           </>
         )}
-        {stats.change !== 0 && activeChart !== 'mood' && (
-          <span className={`flex items-center gap-1 text-sm font-medium ${
-            activeChart === 'weight' 
-              ? stats.trend === 'down' ? 'text-green-600' : 'text-red-500'
-              : stats.trend === 'up' ? 'text-green-600' : 'text-red-500'
-          }`}>
-            {stats.trend === 'up' ? (
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-            ) : (
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            )}
-            {Math.abs(stats.change).toFixed(1)}
-          </span>
-        )}
+        {stats.change !== 0 && activeChart !== 'mood' && (() => {
+          // Determine sentiment for weight changes based on goal; BMI follows same logic
+          const isWeightLike = activeChart === 'weight' || activeChart === 'bmi'
+          let colorClass: string
+          if (isWeightLike) {
+            const sentiment = weightTrendSentiment(stats.trend as 'up' | 'down' | 'neutral', fitnessGoal)
+            if (sentiment === 'positive') colorClass = 'text-green-600 dark:text-green-400'
+            else if (sentiment === 'warning') colorClass = 'text-amber-500 dark:text-amber-400'
+            else colorClass = 'text-zinc-500 dark:text-zinc-400'
+          } else {
+            colorClass = stats.trend === 'up' ? 'text-green-600' : 'text-red-500'
+          }
+          return (
+            <span className={`flex items-center gap-1 text-sm font-medium ${colorClass}`}>
+              {stats.trend === 'up' ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
+              {Math.abs(stats.change).toFixed(1)}
+            </span>
+          )
+        })()}
       </div>
 
       {/* Chart */}

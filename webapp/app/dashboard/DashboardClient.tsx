@@ -11,6 +11,7 @@ import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed } from 'lucid
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
+import type { FitnessGoal } from '@/models/User'
 
 interface UserProgressData {
   weightData: MetricData[]
@@ -74,6 +75,7 @@ export default function DashboardClient() {
     nextMilestone: number | null
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
+  const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -193,10 +195,27 @@ export default function DashboardClient() {
       }
     }
 
+    // Fetch user profile for goal-aware UI framing
+    async function fetchProfile() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) {
+          const profileData = await res.json()
+          if (profileData.profile?.fitnessGoal) {
+            setFitnessGoal(profileData.profile.fitnessGoal as FitnessGoal)
+          }
+        }
+      } catch {
+        // non-critical
+      }
+    }
+
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
-      await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak()])
+      await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
     }
 
     init()
@@ -376,6 +395,7 @@ export default function DashboardClient() {
         weightData={data.weightData}
         bmiData={data.bmiData}
         moodData={data.moodData}
+        fitnessGoal={fitnessGoal}
       />
 
       {/* Nutrition Summary */}
