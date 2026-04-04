@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -9,10 +9,11 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
+  const pathname = usePathname()
 
   const checkAuth = useCallback(async () => {
     const token = localStorage.getItem('token')
-    
+
     if (token) {
       // Validate the token locally first
       try {
@@ -23,6 +24,23 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           localStorage.removeItem('token')
           router.replace('/login')
           return
+        }
+        // Token is valid — check onboarding status only for /dashboard/* paths
+        if (pathname?.startsWith('/dashboard')) {
+          try {
+            const profileRes = await fetch('/api/profile', {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (profileRes.ok) {
+              const data = await profileRes.json()
+              if (data.onboardingCompleted === false) {
+                router.replace('/onboarding')
+                return
+              }
+            }
+          } catch {
+            // Non-critical — if profile fetch fails, allow access
+          }
         }
         setIsAuthenticated(true)
         return
@@ -37,13 +55,35 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       const res = await fetch('/api/auth/me', {
         credentials: 'include' // Include cookies
       })
-      
+
       if (res.ok) {
         const data = await res.json()
         // If server returned a token (from cookie), sync to localStorage
         if (data.token) {
           localStorage.setItem('token', data.token)
         }
+
+        // Check onboarding status for /dashboard/* paths
+        if (pathname?.startsWith('/dashboard')) {
+          const syncedToken = data.token || localStorage.getItem('token')
+          if (syncedToken) {
+            try {
+              const profileRes = await fetch('/api/profile', {
+                headers: { Authorization: `Bearer ${syncedToken}` },
+              })
+              if (profileRes.ok) {
+                const profileData = await profileRes.json()
+                if (profileData.onboardingCompleted === false) {
+                  router.replace('/onboarding')
+                  return
+                }
+              }
+            } catch {
+              // Non-critical — allow access on error
+            }
+          }
+        }
+
         setIsAuthenticated(true)
       } else {
         router.replace('/login')
@@ -51,7 +91,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     } catch {
       router.replace('/login')
     }
-  }, [router])
+  }, [router, pathname])
 
   useEffect(() => {
     checkAuth()

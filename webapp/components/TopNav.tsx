@@ -1,7 +1,8 @@
 "use client"
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, MessageSquareText } from 'lucide-react'
+import Link from 'next/link'
+import { User, LogOut, MessageSquareText, Settings } from 'lucide-react'
 import FeedbackModal from './FeedbackModal'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
@@ -65,6 +66,14 @@ export default function TopNav() {
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
                   </div>
                 )}
+                <Link
+                  href="/dashboard/profile"
+                  onClick={() => setIsOpen(false)}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
+                  <Settings className="h-4 w-4" />
+                  Profile &amp; Settings
+                </Link>
                 <button
                   onClick={() => {
                     setIsOpen(false)
