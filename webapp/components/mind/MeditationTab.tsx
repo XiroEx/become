@@ -431,7 +431,7 @@ function playPhaseChime(phase: string, ctx: AudioContext) {
     osc.type = 'sine'
     osc.frequency.setValueAtTime(PHASE_FREQ[phase] ?? 440, ctx.currentTime)
     gain.gain.setValueAtTime(0, ctx.currentTime)
-    gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.08)
+    gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.08)
     gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.45)
     osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.5)
