@@ -1482,7 +1482,6 @@ function ConfettiBurst() {
             height: p.size,
             backgroundColor: p.color,
             borderRadius: p.isCircle ? '50%' : '2px',
-            transform: 'translate(-50%, -50%)',
           }}
         />
       ))}
