@@ -14,6 +14,8 @@ import {
   Flame,
   Trophy,
   CheckCircle2,
+  Leaf,
+  PenLine,
 } from 'lucide-react'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
 import type { FitnessGoal } from '@/models/User'
@@ -27,14 +29,14 @@ type TabId = 'meditation' | 'sleep' | 'motivation' | 'journal'
 interface Tab {
   id: TabId
   label: string
-  emoji: string
+  Icon: React.ElementType
 }
 
 const TABS: Tab[] = [
-  { id: 'meditation', label: 'Meditation', emoji: '🧘' },
-  { id: 'sleep', label: 'Sleep', emoji: '😴' },
-  { id: 'motivation', label: 'Motivation', emoji: '🔥' },
-  { id: 'journal', label: 'Journal', emoji: '📓' },
+  { id: 'meditation', label: 'Meditation', Icon: Leaf },
+  { id: 'sleep', label: 'Sleep', Icon: Moon },
+  { id: 'motivation', label: 'Motivation', Icon: Flame },
+  { id: 'journal', label: 'Journal', Icon: PenLine },
 ]
 
 // ---------------------------------------------------------------------------
@@ -55,48 +57,48 @@ const MEDITATION_CATEGORIES: MeditationCategory[] = [
     id: 'breathing',
     name: 'Breathing',
     Icon: Wind,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-500/10 border-blue-500/20',
+    color: 'text-blue-500 dark:text-blue-400',
+    bgColor: 'bg-blue-50 border-blue-200 dark:bg-blue-500/10 dark:border-blue-500/20',
     durations: [3, 5, 10],
   },
   {
     id: 'focus',
     name: 'Focus',
     Icon: Target,
-    color: 'text-violet-400',
-    bgColor: 'bg-violet-500/10 border-violet-500/20',
+    color: 'text-violet-500 dark:text-violet-400',
+    bgColor: 'bg-violet-50 border-violet-200 dark:bg-violet-500/10 dark:border-violet-500/20',
     durations: [5, 10, 20],
   },
   {
     id: 'stress',
     name: 'Stress Relief',
     Icon: Heart,
-    color: 'text-rose-400',
-    bgColor: 'bg-rose-500/10 border-rose-500/20',
+    color: 'text-rose-500 dark:text-rose-400',
+    bgColor: 'bg-rose-50 border-rose-200 dark:bg-rose-500/10 dark:border-rose-500/20',
     durations: [5, 10, 15],
   },
   {
     id: 'sleep-prep',
     name: 'Sleep Prep',
     Icon: Moon,
-    color: 'text-indigo-400',
-    bgColor: 'bg-indigo-500/10 border-indigo-500/20',
+    color: 'text-indigo-500 dark:text-indigo-400',
+    bgColor: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-500/10 dark:border-indigo-500/20',
     durations: [10, 15, 20],
   },
   {
     id: 'morning',
     name: 'Morning Routine',
     Icon: Sun,
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-500/10 border-amber-500/20',
+    color: 'text-amber-500 dark:text-amber-400',
+    bgColor: 'bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20',
     durations: [5, 10],
   },
   {
     id: 'body-scan',
     name: 'Body Scan',
     Icon: ScanLine,
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+    color: 'text-emerald-500 dark:text-emerald-400',
+    bgColor: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/20',
     durations: [10, 20],
   },
 ]
@@ -324,7 +326,7 @@ function MeditationTab() {
     return (
       <div className="space-y-4">
         {/* Session panel */}
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
           {/* Header */}
           <div className="mb-6 flex items-center gap-3">
             <div
@@ -333,10 +335,10 @@ function MeditationTab() {
               <Icon className={`h-6 w-6 ${color}`} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
                 {selectedCategory.name}
               </h3>
-              <p className="text-sm text-zinc-400">Choose a duration</p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Choose a duration</p>
             </div>
           </div>
 
@@ -352,8 +354,8 @@ function MeditationTab() {
                 }}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
                   selectedDuration === d
-                    ? 'bg-white text-zinc-900'
-                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
                 }`}
               >
                 {d} min
@@ -386,7 +388,7 @@ function MeditationTab() {
                     transition: 'transform 50ms linear',
                   }}
                 >
-                  <span className="text-3xl font-mono font-bold text-white">
+                  <span className="text-3xl font-mono font-bold text-zinc-900 dark:text-white">
                     {sessionStarted ? formatTime(timeLeft) : formatTime(selectedDuration * 60)}
                   </span>
                 </div>
@@ -394,7 +396,7 @@ function MeditationTab() {
 
               {/* Breath phase label */}
               {sessionStarted && !isPaused && (
-                <p className="text-sm font-medium text-indigo-300 tracking-widest uppercase">
+                <p className="text-sm font-medium text-indigo-600 dark:text-indigo-300 tracking-widest uppercase">
                   {currentPhase.label}
                 </p>
               )}
@@ -404,7 +406,7 @@ function MeditationTab() {
                 {!sessionStarted ? (
                   <button
                     onClick={handleStartSession}
-                    className="rounded-xl bg-white px-8 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-100 active:scale-95 transition-all"
+                    className="rounded-xl bg-zinc-900 dark:bg-white px-8 py-3 text-sm font-semibold text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-100 active:scale-95 transition-all"
                   >
                     Start
                   </button>
@@ -412,13 +414,13 @@ function MeditationTab() {
                   <>
                     <button
                       onClick={() => setIsPaused((p) => !p)}
-                      className="rounded-xl bg-zinc-700 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-600 active:scale-95 transition-all"
+                      className="rounded-xl bg-zinc-200 dark:bg-zinc-700 px-6 py-3 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-zinc-600 active:scale-95 transition-all"
                     >
                       {isPaused ? 'Resume' : 'Pause'}
                     </button>
                     <button
                       onClick={handleReset}
-                      className="rounded-xl bg-zinc-800 px-6 py-3 text-sm font-medium text-zinc-300 hover:bg-zinc-700 active:scale-95 transition-all"
+                      className="rounded-xl bg-zinc-100 dark:bg-zinc-800 px-6 py-3 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:scale-95 transition-all"
                     >
                       Reset
                     </button>
@@ -429,10 +431,10 @@ function MeditationTab() {
           )}
 
           {/* End session */}
-          <div className="mt-6 flex items-center justify-between border-t border-zinc-800 pt-4">
+          <div className="mt-6 flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800 pt-4">
             <button
               onClick={handleEndSession}
-              className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
             >
               ← Back to categories
             </button>
@@ -451,10 +453,10 @@ function MeditationTab() {
   return (
     <div className="space-y-4">
       {sessionCount > 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center gap-2">
-          <span className="text-indigo-400">✦</span>
-          <p className="text-sm text-zinc-300">
-            <span className="font-semibold text-white">{sessionCount}</span>{' '}
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3 flex items-center gap-2">
+          <span className="text-indigo-500">✦</span>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            <span className="font-semibold text-zinc-900 dark:text-white">{sessionCount}</span>{' '}
             meditation session{sessionCount !== 1 ? 's' : ''} completed
           </p>
         </div>
@@ -467,7 +469,7 @@ function MeditationTab() {
             <button
               key={cat.id}
               onClick={() => handleSelectCategory(cat)}
-              className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left hover:border-zinc-700 hover:bg-zinc-800 active:scale-95 transition-all"
+              className="flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 active:scale-95 transition-all"
             >
               <div
                 className={`flex h-10 w-10 items-center justify-center rounded-xl border ${bgColor}`}
@@ -475,12 +477,12 @@ function MeditationTab() {
                 <Icon className={`h-5 w-5 ${color}`} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">{cat.name}</p>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white">{cat.name}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {cat.durations.map((d) => (
                     <span
                       key={d}
-                      className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400"
+                      className="rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs text-zinc-500 dark:text-zinc-400"
                     >
                       {d}m
                     </span>
@@ -563,39 +565,39 @@ function MotivationTab() {
   return (
     <div className="space-y-4">
       {/* Daily affirmation */}
-      <div className="rounded-2xl border border-zinc-700 bg-gradient-to-br from-zinc-900 to-zinc-800 p-5">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-900 dark:to-zinc-800 p-5">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
           Daily Affirmation
         </p>
-        <blockquote className="text-lg font-medium leading-snug text-white">
+        <blockquote className="text-lg font-medium leading-snug text-zinc-900 dark:text-white">
           &ldquo;{quote}&rdquo;
         </blockquote>
       </div>
 
       {/* Your Goal card */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
           Your Goal
         </p>
         {loadingGoal ? (
-          <div className="h-10 animate-pulse rounded-lg bg-zinc-800" />
+          <div className="h-10 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
         ) : fitnessGoal ? (
           <>
-            <p className="text-base font-semibold text-white">
+            <p className="text-base font-semibold text-zinc-900 dark:text-white">
               {GOAL_COPY[fitnessGoal].headline}
             </p>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               {GOAL_COPY[fitnessGoal].subtext}
             </p>
           </>
         ) : (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Set a fitness goal to get personalised motivation.
             </p>
             <a
               href="/dashboard/profile"
-              className="ml-4 shrink-0 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 transition-colors"
+              className="ml-4 shrink-0 rounded-lg bg-zinc-900 dark:bg-zinc-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 transition-colors"
             >
               Set goal
             </a>
@@ -604,29 +606,29 @@ function MotivationTab() {
       </div>
 
       {/* Streak card */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
         <div className="mb-3 flex items-center gap-2">
           <Flame className="h-4 w-4 text-orange-400" />
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Current Streak
           </p>
         </div>
         {loadingStreak ? (
           <div className="space-y-2">
-            <div className="h-8 w-24 animate-pulse rounded-lg bg-zinc-800" />
-            <div className="h-2 animate-pulse rounded-full bg-zinc-800" />
+            <div className="h-8 w-24 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+            <div className="h-2 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
           </div>
         ) : streakData ? (
           <>
             <div className="mb-3 flex items-end gap-2">
-              <span className="text-4xl font-bold text-white">
+              <span className="text-4xl font-bold text-zinc-900 dark:text-white">
                 {streakData.streakDays}
               </span>
-              <span className="mb-1 text-sm text-zinc-400">
+              <span className="mb-1 text-sm text-zinc-500 dark:text-zinc-400">
                 day{streakData.streakDays !== 1 ? 's' : ''}
               </span>
               {streakData.activityToday && (
-                <span className="mb-1 ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                <span className="mb-1 ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                   Active today
                 </span>
               )}
@@ -641,7 +643,7 @@ function MotivationTab() {
                   </span>
                   <span>{Math.round(milestoneProgress * 100)}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+                <div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
                   <div
                     className="h-full rounded-full bg-orange-400 transition-all duration-500"
                     style={{ width: `${milestoneProgress * 100}%` }}
@@ -653,7 +655,7 @@ function MotivationTab() {
             {/* Freeze count */}
             {streakData.streakFreezes > 0 && (
               <p className="mt-2 text-xs text-zinc-500">
-                ❄️ {streakData.streakFreezes} streak freeze
+                {streakData.streakFreezes} streak freeze
                 {streakData.streakFreezes !== 1 ? 's' : ''} available
               </p>
             )}
@@ -664,27 +666,27 @@ function MotivationTab() {
       </div>
 
       {/* Weekly wins */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
         <div className="mb-3 flex items-center gap-2">
           <Trophy className="h-4 w-4 text-amber-400" />
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Weekly Wins
           </p>
         </div>
         <p className="mb-3 text-xs text-zinc-500">This week</p>
         <div className="flex flex-wrap gap-2">
           {[
-            { label: 'Completed a workout', icon: '💪' },
-            { label: 'Logged mood', icon: '😊' },
-            { label: 'Hit protein goal', icon: '🥩' },
-          ].map(({ label, icon }) => (
+            { label: 'Completed a workout' },
+            { label: 'Logged mood' },
+            { label: 'Hit protein goal' },
+          ].map(({ label }) => (
             <div
               key={label}
-              className="flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-3 py-1.5"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5"
             >
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-xs font-medium text-zinc-300">
-                {icon} {label}
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+              <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                {label}
               </span>
             </div>
           ))}
@@ -717,26 +719,27 @@ export default function MindPage() {
         </p>
       </header>
 
-      {/* Sticky tab bar */}
-      <div className="sticky top-0 z-10 -mx-4 mb-5 px-4 pb-3 pt-1 sm:-mx-6 sm:px-6 bg-zinc-950/80 backdrop-blur-md">
-        <div className="flex gap-1.5 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all sm:text-sm ${
-                activeTab === tab.id
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <span>{tab.emoji}</span>
-              <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">
-                {tab.label.split(' ')[0]}
-              </span>
-            </button>
-          ))}
+      {/* Sticky tab bar — -mx-3 matches layout's px-3 padding exactly */}
+      <div className="sticky top-0 z-10 -mx-3 mb-5 px-3 pb-3 pt-1 sm:-mx-6 sm:px-6 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md">
+        <div className="flex gap-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 p-1">
+          {TABS.map((tab) => {
+            const { Icon } = tab
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all sm:text-sm ${
+                  activeTab === tab.id
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
