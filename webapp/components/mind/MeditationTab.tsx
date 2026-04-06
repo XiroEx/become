@@ -230,36 +230,32 @@ function getRecommendedCategory(): Category {
   return CATEGORIES.find((c) => c.id === 'sleep')!
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
+// ─── Stat Card (matches dashboard quick-stats style) ─────────────────────────
 
 function StatCard({
   icon: Icon,
+  iconBg,
+  iconColor,
   value,
   label,
-  highlight,
 }: {
   icon: React.ElementType
+  iconBg: string
+  iconColor: string
   value: string | number
   label: string
-  highlight?: boolean
 }) {
   return (
-    <div
-      className={`flex flex-col gap-1 rounded-2xl border p-4 ${
-        highlight
-          ? 'border-orange-200 bg-orange-50 dark:border-orange-500/20 dark:bg-orange-500/10'
-          : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
-      }`}
-    >
-      <Icon
-        className={`h-4 w-4 ${highlight ? 'text-orange-500' : 'text-zinc-400 dark:text-zinc-500'}`}
-      />
-      <span
-        className={`text-2xl font-bold ${highlight ? 'text-orange-600 dark:text-orange-400' : 'text-zinc-900 dark:text-white'}`}
-      >
-        {value}
-      </span>
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
+    <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg} sm:h-10 sm:w-10`}>
+        <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${iconColor}`} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-lg font-bold leading-none text-zinc-900 dark:text-white sm:text-xl">
+          {value}
+        </p>
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+      </div>
     </div>
   )
 }
@@ -406,6 +402,43 @@ function SessionPicker({
   )
 }
 
+// ─── Audio + Haptic helpers ───────────────────────────────────────────────────
+
+// Soft chime on each phase transition — pentatonic pitches feel meditative
+const PHASE_FREQ: Record<string, number> = {
+  inhale: 392,    // G4 — warm, rising
+  'hold-in': 440, // A4 — steady
+  exhale: 294,    // D4 — descending, releasing
+  'hold-out': 247, // B3 — rest
+}
+
+function playPhaseChime(phase: string) {
+  if (typeof window === 'undefined') return
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(PHASE_FREQ[phase] ?? 440, ctx.currentTime)
+    gain.gain.setValueAtTime(0, ctx.currentTime)
+    gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.08)
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.45)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 0.5)
+    osc.onended = () => ctx.close()
+  } catch { /* audio not available */ }
+}
+
+function haptic(pattern: number | number[]) {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    navigator.vibrate(pattern)
+  }
+}
+
 // ─── Session Player ───────────────────────────────────────────────────────────
 
 const RADIUS = 86
@@ -431,6 +464,18 @@ function SessionPlayer({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const breathRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Play chime + haptic when a phase starts (phaseIdx changes)
+  const prevPhaseRef = useRef<number>(-1)
+  useEffect(() => {
+    if (isPaused) return
+    if (phaseIdx !== prevPhaseRef.current) {
+      prevPhaseRef.current = phaseIdx
+      const phase = cat.breathSteps[phaseIdx].phase
+      playPhaseChime(phase)
+      haptic(35)
+    }
+  }, [phaseIdx, isPaused, cat.breathSteps])
+
   // Countdown
   useEffect(() => {
     if (isPaused) return
@@ -438,6 +483,7 @@ function SessionPlayer({
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current!)
+          haptic([100, 60, 100]) // completion pattern
           onComplete()
           return 0
         }
@@ -770,24 +816,43 @@ export default function MeditationTab() {
   // Browse view
   return (
     <div className="space-y-5">
-      {/* Stats row */}
+      {/* Stats — 2×2 on mobile, 4 across on sm+ — matches dashboard style */}
       {!loading && stats && (
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           <StatCard
             icon={Flame}
+            iconBg={stats.streakDays > 0 ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-zinc-100 dark:bg-zinc-800'}
+            iconColor={stats.streakDays > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-zinc-400 dark:text-zinc-600'}
             value={stats.streakDays}
-            label="day streak"
-            highlight={stats.streakDays > 0}
+            label="Meditation Streak"
           />
-          <StatCard icon={Clock} value={formatMinutes(stats.totalMinutes)} label="total time" />
-          <StatCard icon={Calendar} value={stats.thisWeek} label="this week" />
-          <StatCard icon={TrendingUp} value={stats.totalSessions} label="sessions" />
+          <StatCard
+            icon={Clock}
+            iconBg="bg-blue-100 dark:bg-blue-900/30"
+            iconColor="text-blue-500 dark:text-blue-400"
+            value={formatMinutes(stats.totalMinutes)}
+            label="Mind Time"
+          />
+          <StatCard
+            icon={Calendar}
+            iconBg="bg-indigo-100 dark:bg-indigo-900/30"
+            iconColor="text-indigo-500 dark:text-indigo-400"
+            value={stats.thisWeek}
+            label="This Week"
+          />
+          <StatCard
+            icon={TrendingUp}
+            iconBg="bg-violet-100 dark:bg-violet-900/30"
+            iconColor="text-violet-500 dark:text-violet-400"
+            value={stats.totalSessions}
+            label="Sessions"
+          />
         </div>
       )}
       {loading && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-800" />
+            <div key={i} className="h-[60px] animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-800" />
           ))}
         </div>
       )}
