@@ -314,7 +314,7 @@ function SessionPicker({
   onBack,
 }: {
   cat: Category
-  onStart: (cat: Category, duration: number) => void
+  onStart: (cat: Category, duration: number, audioCtx: AudioContext | null) => void
   onBack: () => void
 }) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null)
@@ -387,7 +387,12 @@ function SessionPicker({
 
         {/* Start button */}
         <button
-          onClick={() => selectedDuration && onStart(cat, selectedDuration)}
+          onClick={() => {
+            if (!selectedDuration) return
+            // Create + unlock AudioContext during this tap — iOS requires it
+            const audioCtx = createUnlockedAudioContext()
+            onStart(cat, selectedDuration, audioCtx)
+          }}
           disabled={!selectedDuration}
           className={`mt-4 w-full rounded-xl py-3.5 text-sm font-bold transition-all ${
             selectedDuration
@@ -412,12 +417,13 @@ const PHASE_FREQ: Record<string, number> = {
   'hold-out': 247, // B3 — rest
 }
 
-function playPhaseChime(phase: string) {
-  if (typeof window === 'undefined') return
+// iOS requires AudioContext to be created AND resumed within a direct user
+// gesture. We create it in the "Begin Session" click handler and pass it here
+// so all subsequent chimes reuse the already-unlocked context.
+function playPhaseChime(phase: string, ctx: AudioContext) {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    if (!AudioCtx) return
-    const ctx = new AudioCtx()
+    // Re-resume if the browser suspended it (e.g. tab backgrounded)
+    if (ctx.state === 'suspended') ctx.resume()
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.connect(gain)
@@ -429,8 +435,22 @@ function playPhaseChime(phase: string) {
     gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.45)
     osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + 0.5)
-    osc.onended = () => ctx.close()
   } catch { /* audio not available */ }
+}
+
+// Create + immediately unlock an AudioContext — must be called inside a user
+// gesture handler (click/tap) so iOS will allow audio output.
+function createUnlockedAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtxClass) return null
+    const ctx = new AudioCtxClass()
+    ctx.resume() // kicks it to 'running' while we're inside the gesture
+    return ctx
+  } catch {
+    return null
+  }
 }
 
 function haptic(pattern: number | number[]) {
@@ -447,11 +467,13 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 function SessionPlayer({
   cat,
   durationMinutes,
+  audioCtx,
   onComplete,
   onAbandon,
 }: {
   cat: Category
   durationMinutes: number
+  audioCtx: AudioContext | null
   onComplete: () => void
   onAbandon: () => void
 }) {
@@ -471,10 +493,10 @@ function SessionPlayer({
     if (phaseIdx !== prevPhaseRef.current) {
       prevPhaseRef.current = phaseIdx
       const phase = cat.breathSteps[phaseIdx].phase
-      playPhaseChime(phase)
+      if (audioCtx) playPhaseChime(phase, audioCtx)
       haptic(35)
     }
-  }, [phaseIdx, isPaused, cat.breathSteps])
+  }, [phaseIdx, isPaused, cat.breathSteps, audioCtx])
 
   // Countdown
   useEffect(() => {
@@ -619,7 +641,11 @@ function SessionPlayer({
         style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom))' }}
       >
         <button
-          onClick={() => setIsPaused((p) => !p)}
+          onClick={() => {
+            // Resume AudioContext on any tap — handles browser auto-suspend
+            if (audioCtx?.state === 'suspended') audioCtx.resume()
+            setIsPaused((p) => !p)
+          }}
           className="flex h-16 w-16 items-center justify-center rounded-full border border-white/20 bg-white/15 hover:bg-white/25 transition-colors active:scale-95"
         >
           {isPaused ? (
@@ -723,6 +749,8 @@ export default function MeditationTab() {
   const [sessions, setSessions] = useState<MeditationSession[]>([])
   const [stats, setStats] = useState<MeditationStats | null>(null)
   const [loading, setLoading] = useState(true)
+  // AudioContext created during "Begin Session" tap (user gesture) so iOS allows audio
+  const audioCtxRef = useRef<AudioContext | null>(null)
 
   const fetchData = useCallback(async () => {
     const token = getToken()
@@ -779,6 +807,7 @@ export default function MeditationTab() {
       <SessionPlayer
         cat={selectedCat}
         durationMinutes={selectedDuration}
+        audioCtx={audioCtxRef.current}
         onComplete={handleSessionComplete}
         onAbandon={() => setView('browse')}
       />
@@ -803,7 +832,8 @@ export default function MeditationTab() {
     return (
       <SessionPicker
         cat={selectedCat}
-        onStart={(cat, duration) => {
+        onStart={(cat, duration, audioCtx) => {
+          audioCtxRef.current = audioCtx
           setSelectedCat(cat)
           setSelectedDuration(duration)
           setView('session')
