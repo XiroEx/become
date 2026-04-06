@@ -451,7 +451,9 @@ function Step3({
   const showTargetWeight =
     profile.fitnessGoal === 'lose_weight' || profile.fitnessGoal === 'gain_muscle'
 
-  // Imperial display state — derived from stored cm/kg values
+  const [useImperial, setUseImperial] = useState(true)
+
+  // Imperial display state
   const initialHeight = profile.heightCm ? cmToImperial(profile.heightCm) : { ft: '', inches: '' }
   const [heightFt, setHeightFt] = useState<string>(initialHeight.ft !== '' ? String(initialHeight.ft) : '')
   const [heightIn, setHeightIn] = useState<string>(initialHeight.inches !== '' ? String(initialHeight.inches) : '')
@@ -462,46 +464,111 @@ function Step3({
     profile.targetWeightKg ? String(kgToLbs(profile.targetWeightKg)) : ''
   )
 
+  // Metric display state
+  const [heightCmDisplay, setHeightCmDisplay] = useState<string>(
+    profile.heightCm ? String(profile.heightCm) : ''
+  )
+  const [currentKgDisplay, setCurrentKgDisplay] = useState<string>(
+    profile.currentWeightKg ? String(profile.currentWeightKg) : ''
+  )
+  const [targetKgDisplay, setTargetKgDisplay] = useState<string>(
+    profile.targetWeightKg ? String(profile.targetWeightKg) : ''
+  )
+
+  function switchUnits(toImperial: boolean) {
+    if (toImperial) {
+      // Sync metric → imperial display
+      if (profile.heightCm) {
+        const { ft, inches } = cmToImperial(profile.heightCm)
+        setHeightFt(String(ft))
+        setHeightIn(String(inches))
+      }
+      if (profile.currentWeightKg) setCurrentLbs(String(kgToLbs(profile.currentWeightKg)))
+      if (profile.targetWeightKg) setTargetLbs(String(kgToLbs(profile.targetWeightKg)))
+    } else {
+      // Sync imperial → metric display
+      if (profile.heightCm) setHeightCmDisplay(String(profile.heightCm))
+      if (profile.currentWeightKg) setCurrentKgDisplay(String(profile.currentWeightKg))
+      if (profile.targetWeightKg) setTargetKgDisplay(String(profile.targetWeightKg))
+    }
+    setUseImperial(toImperial)
+  }
+
   function handleHeightChange(ft: string, inches: string) {
-    setHeightFt(ft)
-    setHeightIn(inches)
+    setHeightFt(ft); setHeightIn(inches)
     const ftNum = parseInt(ft) || 0
     const inNum = parseInt(inches) || 0
-    if (ftNum > 0 || inNum > 0) {
-      onChange({ heightCm: imperialToCm(ftNum, inNum) })
+    onChange({ heightCm: (ftNum > 0 || inNum > 0) ? imperialToCm(ftNum, inNum) : undefined })
+  }
+
+  function handleHeightCmChange(cm: string) {
+    setHeightCmDisplay(cm)
+    onChange({ heightCm: cm ? Number(cm) : undefined })
+  }
+
+  function handleCurrentWeightChange(val: string) {
+    if (useImperial) {
+      setCurrentLbs(val)
+      onChange({ currentWeightKg: val ? lbsToKg(Number(val)) : undefined })
     } else {
-      onChange({ heightCm: undefined })
+      setCurrentKgDisplay(val)
+      onChange({ currentWeightKg: val ? Number(val) : undefined })
     }
   }
 
-  function handleCurrentWeightChange(lbs: string) {
-    setCurrentLbs(lbs)
-    onChange({ currentWeightKg: lbs ? lbsToKg(Number(lbs)) : undefined })
-  }
-
-  function handleTargetWeightChange(lbs: string) {
-    setTargetLbs(lbs)
-    onChange({ targetWeightKg: lbs ? lbsToKg(Number(lbs)) : undefined })
+  function handleTargetWeightChange(val: string) {
+    if (useImperial) {
+      setTargetLbs(val)
+      onChange({ targetWeightKg: val ? lbsToKg(Number(val)) : undefined })
+    } else {
+      setTargetKgDisplay(val)
+      onChange({ targetWeightKg: val ? Number(val) : undefined })
+    }
   }
 
   const inputCls = "w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
-        Body stats
-      </h1>
-      <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        All fields are optional — we use these to tailor recommendations.
-      </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
+            Body stats
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+            All fields are optional — we use these to tailor recommendations.
+          </p>
+        </div>
+        {/* Unit toggle */}
+        <div className="mt-1 flex shrink-0 rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+          <button
+            onClick={() => switchUnits(true)}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+              useImperial
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+            }`}
+          >
+            Imperial
+          </button>
+          <button
+            onClick={() => switchUnits(false)}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
+              !useImperial
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+            }`}
+          >
+            Metric
+          </button>
+        </div>
+      </div>
 
       <div className="mt-6 space-y-5">
-        {/* Age + sex side by side */}
+        {/* Age + Height */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-              Age
-            </label>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">Age</label>
             <input
               type="number"
               inputMode="numeric"
@@ -509,67 +576,52 @@ function Step3({
               max={100}
               placeholder="e.g. 28"
               value={profile.age ?? ''}
-              onChange={(e) =>
-                onChange({ age: e.target.value ? Number(e.target.value) : undefined })
-              }
+              onChange={(e) => onChange({ age: e.target.value ? Number(e.target.value) : undefined })}
               className={inputCls}
             />
           </div>
 
-          {/* Height — ft + in */}
           <div>
-            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-              Height
-            </label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={3}
-                  max={8}
-                  placeholder="5"
-                  value={heightFt}
-                  onChange={(e) => handleHeightChange(e.target.value, heightIn)}
-                  className={inputCls}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">ft</span>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">Height</label>
+            {useImperial ? (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input type="number" inputMode="numeric" min={3} max={8} placeholder="5"
+                    value={heightFt} onChange={(e) => handleHeightChange(e.target.value, heightIn)}
+                    className={inputCls} />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">ft</span>
+                </div>
+                <div className="relative flex-1">
+                  <input type="number" inputMode="numeric" min={0} max={11} placeholder="10"
+                    value={heightIn} onChange={(e) => handleHeightChange(heightFt, e.target.value)}
+                    className={inputCls} />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">in</span>
+                </div>
               </div>
-              <div className="relative flex-1">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={11}
-                  placeholder="10"
-                  value={heightIn}
-                  onChange={(e) => handleHeightChange(heightFt, e.target.value)}
-                  className={inputCls}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">in</span>
+            ) : (
+              <div className="relative">
+                <input type="number" inputMode="numeric" min={100} max={250} placeholder="e.g. 175"
+                  value={heightCmDisplay} onChange={(e) => handleHeightCmChange(e.target.value)}
+                  className={inputCls} />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">cm</span>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Biological sex */}
         <div>
-          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-            Biological sex
-          </label>
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">Biological sex</label>
           <div className="flex gap-2">
             {SEX_OPTIONS.map(({ value, label }) => {
               const selected = profile.biologicalSex === value
               return (
-                <button
-                  key={value}
-                  onClick={() => onChange({ biologicalSex: value })}
+                <button key={value} onClick={() => onChange({ biologicalSex: value })}
                   className={`flex-1 rounded-xl border-2 py-2.5 text-xs font-semibold transition-all duration-150 ${
                     selected
                       ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
                       : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
-                  }`}
-                >
+                  }`}>
                   {label}
                 </button>
               )
@@ -577,44 +629,38 @@ function Step3({
           </div>
         </div>
 
-        {/* Weight fields — lbs */}
+        {/* Weight fields */}
         <div className={`grid gap-4 ${showTargetWeight ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <div>
             <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-              Current weight (lbs)
+              Current weight ({useImperial ? 'lbs' : 'kg'})
             </label>
             <div className="relative">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="1"
-                min={0}
-                placeholder="e.g. 185"
-                value={currentLbs}
+              <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
+                placeholder={useImperial ? 'e.g. 185' : 'e.g. 84'}
+                value={useImperial ? currentLbs : currentKgDisplay}
                 onChange={(e) => handleCurrentWeightChange(e.target.value)}
-                className={inputCls}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">lbs</span>
+                className={inputCls} />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                {useImperial ? 'lbs' : 'kg'}
+              </span>
             </div>
           </div>
 
           {showTargetWeight && (
             <div>
               <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-                Target weight (lbs)
+                Target weight ({useImperial ? 'lbs' : 'kg'})
               </label>
               <div className="relative">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  step="1"
-                  min={0}
-                  placeholder="e.g. 165"
-                  value={targetLbs}
+                <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
+                  placeholder={useImperial ? 'e.g. 165' : 'e.g. 75'}
+                  value={useImperial ? targetLbs : targetKgDisplay}
                   onChange={(e) => handleTargetWeightChange(e.target.value)}
-                  className={inputCls}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">lbs</span>
+                  className={inputCls} />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                  {useImperial ? 'lbs' : 'kg'}
+                </span>
               </div>
             </div>
           )}
