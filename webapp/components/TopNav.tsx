@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { User, LogOut, MessageSquareText, Settings } from 'lucide-react'
+import { User, LogOut, MessageSquareText, Settings, ShieldCheck } from 'lucide-react'
 import FeedbackModal from './FeedbackModal'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
@@ -10,6 +10,7 @@ const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
 export default function TopNav() {
   const [isOpen, setIsOpen] = useState(false)
   const [userName, setUserName] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -20,6 +21,7 @@ export default function TopNav() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]))
         setUserName(payload.email?.split('@')[0] || 'User')
+        setIsAdmin(payload.role === 'admin')
       } catch {
         setUserName('User')
       }
@@ -65,6 +67,16 @@ export default function TopNav() {
                   <div className="border-b border-zinc-100 px-4 py-2 dark:border-zinc-700">
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
                   </div>
+                )}
+                {isAdmin && (
+                  <Link
+                    href="/dashboard/admin"
+                    onClick={() => setIsOpen(false)}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-violet-600 transition-colors hover:bg-zinc-50 dark:text-violet-400 dark:hover:bg-zinc-700"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Admin Panel
+                  </Link>
                 )}
                 <Link
                   href="/dashboard/profile"
