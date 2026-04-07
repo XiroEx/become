@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Wind,
   Target,
@@ -228,6 +228,88 @@ function getRecommendedCategory(): Category {
   if (hour >= 11 && hour < 17) return CATEGORIES.find((c) => c.id === 'box')!
   if (hour >= 17 && hour < 21) return CATEGORIES.find((c) => c.id === 'recovery')!
   return CATEGORIES.find((c) => c.id === 'sleep')!
+}
+
+// ─── Breath Animation Options ────────────────────────────────────────────────
+// A (Ripple): box + focus      — disciplined, geometric rings
+// B (Aurora): release + sleep  — dreamy floating embers
+// C (Blob):   recovery + morning — organic morphing shape
+
+const BREATH_ANIM: Record<string, 'ripple' | 'aurora' | 'blob'> = {
+  box: 'ripple',
+  focus: 'ripple',
+  release: 'aurora',
+  sleep: 'aurora',
+  recovery: 'blob',
+  morning: 'blob',
+}
+
+// Option A ─────────────────────────────────────────────────────────────────────
+interface RippleRing { id: number; delay: number }
+
+function RippleLayer({ phaseIdx, isPaused }: { phaseIdx: number; isPaused: boolean }) {
+  const [rings, setRings] = useState<RippleRing[]>([])
+
+  useEffect(() => {
+    if (isPaused) return
+    const now = Date.now()
+    const newRings: RippleRing[] = [0, 0.4, 0.8].map((delay, i) => ({ id: now + i, delay }))
+    setRings((prev) => [...prev, ...newRings])
+    const t = setTimeout(() => {
+      setRings((prev) => prev.filter((r) => !newRings.some((nr) => nr.id === r.id)))
+    }, 3200)
+    return () => clearTimeout(t)
+  }, [phaseIdx, isPaused])
+
+  return (
+    <>
+      {rings.map((ring) => (
+        <div
+          key={ring.id}
+          className="pointer-events-none absolute rounded-full border border-white/25"
+          style={{
+            animation: 'med-ripple 2.4s ease-out both',
+            animationDelay: `${ring.delay}s`,
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
+// Option B ─────────────────────────────────────────────────────────────────────
+function AuroraLayer({ orbScale }: { orbScale: number }) {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, i) => ({
+        id: i,
+        x: Math.sin(i * 2.3998) * 72,
+        size: 2 + (i % 3),
+        delay: (i * 0.22) % 3,
+        duration: 2.6 + (i % 4) * 0.45,
+        baseOpacity: 0.25 + (i % 3) * 0.15,
+      })),
+    []
+  )
+
+  return (
+    <>
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="pointer-events-none absolute rounded-full bg-white"
+          style={{
+            width: p.size,
+            height: p.size,
+            left: `calc(50% + ${p.x}px)`,
+            bottom: '42%',
+            opacity: p.baseOpacity * orbScale,
+            animation: `med-float-up ${p.duration}s ${p.delay}s ease-out infinite`,
+          }}
+        />
+      ))}
+    </>
+  )
 }
 
 // ─── Stat Card (matches dashboard quick-stats style) ─────────────────────────
@@ -548,6 +630,28 @@ function SessionPlayer({
   const overallProgress = 1 - timeLeft / totalSeconds
   const strokeDashoffset = CIRCUMFERENCE * (1 - overallProgress)
 
+  // Animation type for this category (Options A/B/C)
+  const animType = BREATH_ANIM[cat.id] ?? 'ripple'
+
+  // Option C: compute organic blob border-radius driven by phase + progress
+  let blobRadius = '50%'
+  if (animType === 'blob') {
+    const p = phaseProgress
+    if (currentStep.phase === 'inhale') {
+      const a = Math.round(60 - p * 10), b = Math.round(40 + p * 10)
+      const c = Math.round(65 - p * 15), d = Math.round(35 + p * 15)
+      blobRadius = `${a}% ${b}% ${c}% ${d}% / ${d}% ${c}% ${b}% ${a}%`
+    } else if (currentStep.phase === 'hold-in') {
+      blobRadius = '50% 50% 50% 50%'
+    } else if (currentStep.phase === 'exhale') {
+      const a = Math.round(50 + p * 10), b = Math.round(50 - p * 10)
+      const c = Math.round(50 + p * 15), d = Math.round(50 - p * 15)
+      blobRadius = `${a}% ${b}% ${c}% ${d}% / ${d}% ${c}% ${b}% ${a}%`
+    } else {
+      blobRadius = '60% 40% 65% 35% / 35% 65% 40% 60%'
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col"
@@ -601,21 +705,44 @@ function SessionPlayer({
             />
           </svg>
 
+          {/* Option A: Ripple rings (box + focus) */}
+          {animType === 'ripple' && <RippleLayer phaseIdx={phaseIdx} isPaused={isPaused} />}
+
+          {/* Option B: Aurora particles (release + sleep) */}
+          {animType === 'aurora' && <AuroraLayer orbScale={orbScale} />}
+
+          {/* Option C: Blob outer ring (recovery + morning) */}
+          {animType === 'blob' && (
+            <div
+              className="pointer-events-none absolute"
+              style={{
+                width: '160px',
+                height: '160px',
+                borderRadius: blobRadius,
+                border: '1px dashed rgba(255,255,255,0.2)',
+                animation: 'med-spin-slow 10s linear infinite',
+                transition: 'border-radius 120ms ease-in-out',
+              }}
+            />
+          )}
+
           {/* Ambient glow */}
           <div
-            className="absolute inset-8 rounded-full bg-white/20 blur-2xl"
+            className="absolute inset-8 bg-white/20 blur-2xl"
             style={{
+              borderRadius: animType === 'blob' ? blobRadius : '50%',
               transform: `scale(${orbScale})`,
-              transition: 'transform 50ms linear',
+              transition: 'transform 50ms linear, border-radius 120ms ease-in-out',
             }}
           />
 
           {/* Orb */}
           <div
-            className="relative flex h-32 w-32 flex-col items-center justify-center rounded-full border border-white/20 bg-white/10 backdrop-blur-sm"
+            className="relative flex h-32 w-32 flex-col items-center justify-center border border-white/20 bg-white/10 backdrop-blur-sm"
             style={{
+              borderRadius: animType === 'blob' ? blobRadius : '50%',
               transform: `scale(${orbScale})`,
-              transition: 'transform 50ms linear',
+              transition: 'transform 50ms linear, border-radius 120ms ease-in-out',
             }}
           >
             <span className="font-mono text-3xl font-bold text-white">
