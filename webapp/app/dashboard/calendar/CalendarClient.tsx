@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import WorkoutSummary from '@/components/WorkoutSummary'
 import {
     ChevronLeft,
     ChevronRight,
@@ -19,6 +20,7 @@ import {
     Play,
     ChevronsRight,
     CalendarDays,
+    BarChart2,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -168,6 +170,21 @@ export default function CalendarClient() {
   const [showShiftInput, setShowShiftInput] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [pickerMonth, setPickerMonth] = useState(() => new Date())
+  const [logSummary, setLogSummary] = useState<{
+    log: {
+      day: string
+      phase: number
+      completed: boolean
+      duration?: number
+      exercises: Array<{
+        name: string
+        sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }>
+      }>
+    }
+    workout: { day: string; title: string }
+    exerciseHistory: Record<string, { weight: number; reps: number; date: string }>
+  } | null>(null)
+  const [logSummaryLoading, setLogSummaryLoading] = useState(false)
 
   // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
@@ -219,6 +236,30 @@ export default function CalendarClient() {
   useEffect(() => {
     fetchSchedules()
   }, [fetchSchedules])
+
+  const fetchWorkoutLog = async (w: ScheduledWorkout & { programName: string; programId: string }) => {
+    setLogSummaryLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      const dateKey = typeof w.date === 'string' ? w.date.split('T')[0] : new Date(w.date).toISOString().split('T')[0]
+      const res = await fetch(`/api/workouts/log?programId=${w.programId}&date=${dateKey}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.log) {
+          setLogSummary({
+            log: data.log,
+            workout: { day: w.dayLabel, title: w.workoutTitle },
+            exerciseHistory: data.exerciseHistory ?? {},
+          })
+        }
+      }
+    } finally {
+      setLogSummaryLoading(false)
+    }
+  }
 
   // Build workout map — key by the date portion of the stored ISO string.
   // Workout dates are stored as UTC midnight and the YYYY-MM-DD portion represents
@@ -585,9 +626,19 @@ export default function CalendarClient() {
                                   </Link>
                                 )}
                                 {w.status === 'completed' && (
-                                  <span className="text-xs text-green-600 dark:text-green-400">
-                                    Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-                                  </span>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-xs text-green-600 dark:text-green-400">
+                                      Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+                                    </span>
+                                    <button
+                                      onClick={() => fetchWorkoutLog(w)}
+                                      disabled={logSummaryLoading}
+                                      className="flex items-center gap-1 rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-600 transition-colors hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20 disabled:opacity-50"
+                                    >
+                                      <BarChart2 className="h-3 w-3" />
+                                      View Summary
+                                    </button>
+                                  </div>
                                 )}
                               </>
                             )}
@@ -602,6 +653,37 @@ export default function CalendarClient() {
           </AnimatePresence>
         </>
       )}
+
+      {/* Workout Log Summary Overlay */}
+      <AnimatePresence>
+        {logSummary && (
+          <WorkoutSummary
+            programCompleted={false}
+            completedProgramName=""
+            workout={logSummary.workout}
+            elapsedTime={logSummary.log.duration ? logSummary.log.duration * 60 : 0}
+            exerciseData={logSummary.log.exercises.map((ex) =>
+              (ex.sets ?? []).map((s) => ({
+                reps: String(s.reps),
+                weight: String(s.weight),
+                completed: s.completed,
+              }))
+            )}
+            exercises={logSummary.log.exercises.map((ex) => ({ name: ex.name }))}
+            exerciseHistory={logSummary.exerciseHistory}
+            summaryStreak={null}
+            summaryGoal={null}
+            formatTime={(s) => {
+              const h = Math.floor(s / 3600)
+              const m = Math.floor((s % 3600) / 60)
+              const sec = s % 60
+              if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+              return `${m}:${String(sec).padStart(2, '0')}`
+            }}
+            onDone={() => setLogSummary(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Action Menu Modal */}
       <AnimatePresence>
