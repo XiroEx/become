@@ -138,10 +138,12 @@ export default function LiveWorkoutPage() {
   const tracking = currentExercise?.trackingType || "reps_weight";
   const showWeightInput = tracking === "reps_weight";
   const showRepsInput = ["reps_weight", "reps_bodyweight", "reps_only"].includes(tracking);
-  const showTimeInput = ["time", "time_distance"].includes(tracking);
+  const showTimeInput = ["time", "time_distance", "intervals"].includes(tracking);
+  const isIntervalExercise = tracking === "intervals";
 
   // Check if inputs are empty (for skip button text)
-  const isSkipping = showWeightInput ? !currentReps && !currentWeight : !currentReps;
+  // Interval exercises are always "complete" (no required input) — user marks done and moves on
+  const isSkipping = isIntervalExercise ? false : (showWeightInput ? !currentReps && !currentWeight : !currentReps);
 
   // Toggle fullscreen mode when tapping video
   const handleVideoTap = () => {
@@ -669,7 +671,8 @@ export default function LiveWorkoutPage() {
   }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId]);
 
   const handleCompleteOrSkipSet = () => {
-    if (isSkipping) {
+    // On the final step, empty inputs just finish the workout — don't prompt to skip
+    if (isSkipping && !isLastStep) {
       setShowSkipModal(true);
       return;
     }
@@ -1080,7 +1083,7 @@ export default function LiveWorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="flex gap-3 mb-4">
+                  <div className="relative flex gap-3 mb-6">
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
@@ -1109,10 +1112,12 @@ export default function LiveWorkoutPage() {
                         />
                       </div>
                     )}
-                    {/* Duration input — for time, time_distance */}
+                    {/* Duration input — for time, time_distance, intervals */}
                     {showTimeInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Duration (sec)</label>
+                        <label className="mb-1 block text-xs text-white/60">
+                          {isIntervalExercise ? 'Duration (sec) — optional' : 'Duration (sec)'}
+                        </label>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -1122,6 +1127,11 @@ export default function LiveWorkoutPage() {
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
                       </div>
+                    )}
+                    {isIntervalExercise && !currentReps && (
+                      <p className="absolute -bottom-5 left-0 right-0 text-center text-[10px] text-white/40">
+                        Log time or just tap Done to move on
+                      </p>
                     )}
                   </div>
 
@@ -1174,9 +1184,11 @@ export default function LiveWorkoutPage() {
                 }`}
               >
                 {isLastStep
-                  ? "Finish Workout 🎉"
+                  ? "Finish Workout"
                   : isSkipping
                   ? "Skip Set →"
+                  : isIntervalExercise
+                  ? "Done →"
                   : "Complete Set →"}
               </button>
             </div>
@@ -1184,11 +1196,15 @@ export default function LiveWorkoutPage() {
             {/* Previous set reference */}
             {currentSetIndex > 0 && exerciseData[currentExerciseIndex]?.[currentSetIndex - 1]?.completed && (
               <p className="mt-3 text-center text-sm text-white/50">
-                Last set: {showWeightInput
-                  ? `${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
+                {isIntervalExercise
+                  ? exerciseData[currentExerciseIndex][currentSetIndex - 1].reps
+                    ? `Round ${currentSetIndex}: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
+                    : `Round ${currentSetIndex}: done`
+                  : showWeightInput
+                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
                   : showTimeInput
-                  ? `${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
-                  : `${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
+                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
+                  : `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
               </p>
             )}
           </motion.div>

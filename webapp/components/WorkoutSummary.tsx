@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { Trophy, Award, Dumbbell, Flame, Rocket } from 'lucide-react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -155,7 +156,7 @@ export default function WorkoutSummary({
                 transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 18 }}
                 className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-yellow-500/20 ring-4 ring-yellow-500/30"
               >
-                <span className="text-5xl">🏆</span>
+                <Trophy className="h-12 w-12 text-yellow-400" strokeWidth={1.5} />
               </motion.div>
               <h1 className="text-4xl font-black text-yellow-400 tracking-tight">PROGRAM COMPLETE</h1>
               <p className="mt-2 text-zinc-300 font-semibold text-lg">{completedProgramName || workout?.title}</p>
@@ -169,15 +170,19 @@ export default function WorkoutSummary({
                 transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 18 }}
                 className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/20 ring-4 ring-emerald-500/30"
               >
-                <span className="text-5xl">{newPRs.length > 0 ? '🏅' : '💪'}</span>
+                {newPRs.length > 0
+                  ? <Award className="h-12 w-12 text-emerald-400" strokeWidth={1.5} />
+                  : <Dumbbell className="h-12 w-12 text-emerald-400" strokeWidth={1.5} />
+                }
               </motion.div>
               <h1 className="text-4xl font-black tracking-tight">
                 {newPRs.length > 0 ? 'YOU CRUSHED IT' : 'WORKOUT DONE'}
               </h1>
               <p className="mt-1.5 text-zinc-400 font-medium">{workout?.day} — {workout?.title}</p>
               {newPRs.length > 0 && (
-                <p className="mt-2 text-emerald-400 font-semibold text-sm">
-                  🏆 {newPRs.length} new personal record{newPRs.length > 1 ? 's' : ''} today
+                <p className="mt-2 flex items-center justify-center gap-1.5 text-emerald-400 font-semibold text-sm">
+                  <Trophy className="h-3.5 w-3.5" />
+                  {newPRs.length} new personal record{newPRs.length > 1 ? 's' : ''} today
                 </p>
               )}
             </>
@@ -215,7 +220,12 @@ export default function WorkoutSummary({
             className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4"
           >
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">🔥</span>
+              <motion.div
+                animate={{ scale: [1, 1.18, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Flame className="h-7 w-7 text-orange-500" strokeWidth={1.5} />
+              </motion.div>
               <div>
                 <p className="font-bold text-white text-lg leading-none">{summaryStreak.streakDays} day streak</p>
                 <p className="text-xs text-zinc-500 mt-0.5">
@@ -255,7 +265,9 @@ export default function WorkoutSummary({
             transition={{ delay: 0.5 }}
             className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4"
           >
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3">🏆 New Personal Records</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3">
+              <Trophy className="h-3.5 w-3.5" /> New Personal Records
+            </p>
             <div className="space-y-2">
               {newPRs.map((pr, i) => (
                 <div key={i} className="flex items-center justify-between">
@@ -296,7 +308,7 @@ export default function WorkoutSummary({
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5">
                       <h3 className="text-sm font-semibold text-white">{exercise.name}</h3>
-                      {isPR && <span className="text-xs text-yellow-400">🏆 PR</span>}
+                      {isPR && <span className="inline-flex items-center gap-0.5 text-xs text-yellow-400"><Trophy className="h-3 w-3" /> PR</span>}
                     </div>
                     <span className="text-xs text-zinc-600">
                       {activeSets.length}/{sets.length} sets{skipped > 0 ? ` (${skipped} skipped)` : ''}
@@ -344,7 +356,12 @@ export default function WorkoutSummary({
               : "bg-white shadow-white/10 hover:bg-zinc-100 text-zinc-950"
           }`}
         >
-          {programCompleted ? "Find My Next Challenge 🚀" : "I'll Be Back 💪"}
+          <span className="flex items-center justify-center gap-2">
+            {programCompleted
+              ? <><Rocket className="h-5 w-5" /> Find My Next Challenge</>
+              : <><Dumbbell className="h-5 w-5" /> I&apos;ll Be Back</>
+            }
+          </span>
         </button>
       </motion.div>
     </motion.div>
