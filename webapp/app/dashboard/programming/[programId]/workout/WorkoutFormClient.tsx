@@ -1204,7 +1204,10 @@ export default function WorkoutFormPage() {
               className="mt-6 sm:mt-8"
             >
               <button
-                onClick={() => setShowSummary(true)}
+                onClick={async () => {
+                  await autoSave(exerciseProgress);
+                  setShowSummary(true);
+                }}
                 className="w-full rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30"
               >
                 Complete Workout! 🎉
