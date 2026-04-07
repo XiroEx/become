@@ -50,27 +50,34 @@
 /* Option A: Ripple — rings expand outward from orb center on each phase change.
    Container is h-56 w-56 = 224px. Orb is 128px centered → inset 48px.
    Rings expand to 300px → inset -38px. */
+/* Option A: Ripple — rings blast outward on each phase change.
+   Container 224px, orb 128px → start inset 48px, end inset -112px (448px ring). */
 @keyframes med-ripple {
   from {
     top: 48px; right: 48px; bottom: 48px; left: 48px;
-    opacity: 0.3;
+    opacity: 0.7;
   }
   to {
-    top: -38px; right: -38px; bottom: -38px; left: -38px;
+    top: -112px; right: -112px; bottom: -112px; left: -112px;
     opacity: 0;
   }
 }
 
-/* Option B: Aurora — particles float up and fade like embers */
+/* Option B: Aurora — embers float up and dissolve */
 @keyframes med-float-up {
-  0%   { transform: translateY(0) scale(1); opacity: var(--p-opacity, 0.4); }
-  100% { transform: translateY(-160px) scale(0.2); opacity: 0; }
+  0%   { transform: translateY(0) scale(1);    opacity: 1; }
+  60%  { opacity: 0.6; }
+  100% { transform: translateY(-280px) scale(0.15); opacity: 0; }
 }
 
-/* Option C: Blob — slow rotation for the outer dashed ring */
+/* Option C: Blob — rotation for outer rings */
 @keyframes med-spin-slow {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+@keyframes med-spin-rev {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
 }
 
 html {

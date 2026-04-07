@@ -253,11 +253,12 @@ function RippleLayer({ phaseIdx, isPaused }: { phaseIdx: number; isPaused: boole
   useEffect(() => {
     if (isPaused) return
     const now = Date.now()
-    const newRings: RippleRing[] = [0, 0.4, 0.8].map((delay, i) => ({ id: now + i, delay }))
+    // 5 staggered rings per phase
+    const newRings: RippleRing[] = [0, 0.3, 0.6, 0.9, 1.2].map((delay, i) => ({ id: now + i, delay }))
     setRings((prev) => [...prev, ...newRings])
     const t = setTimeout(() => {
       setRings((prev) => prev.filter((r) => !newRings.some((nr) => nr.id === r.id)))
-    }, 3200)
+    }, 4800)
     return () => clearTimeout(t)
   }, [phaseIdx, isPaused])
 
@@ -266,9 +267,9 @@ function RippleLayer({ phaseIdx, isPaused }: { phaseIdx: number; isPaused: boole
       {rings.map((ring) => (
         <div
           key={ring.id}
-          className="pointer-events-none absolute rounded-full border border-white/25"
+          className="pointer-events-none absolute rounded-full border-2 border-white/50"
           style={{
-            animation: 'med-ripple 2.4s ease-out both',
+            animation: 'med-ripple 3.2s cubic-bezier(0.2, 0.8, 0.4, 1) both',
             animationDelay: `${ring.delay}s`,
           }}
         />
@@ -281,13 +282,14 @@ function RippleLayer({ phaseIdx, isPaused }: { phaseIdx: number; isPaused: boole
 function AuroraLayer({ orbScale }: { orbScale: number }) {
   const particles = useMemo(
     () =>
-      Array.from({ length: 14 }, (_, i) => ({
+      Array.from({ length: 32 }, (_, i) => ({
         id: i,
-        x: Math.sin(i * 2.3998) * 72,
-        size: 2 + (i % 3),
-        delay: (i * 0.22) % 3,
-        duration: 2.6 + (i % 4) * 0.45,
-        baseOpacity: 0.25 + (i % 3) * 0.15,
+        // spread particles in a wide arc around the orb
+        x: Math.sin(i * 1.963) * 110,
+        size: 3 + (i % 5) * 1.4,           // 3–8.6px
+        delay: (i * 0.19) % 3.8,
+        duration: 2.4 + (i % 5) * 0.5,     // 2.4–4.4s
+        opacity: 0.55 + (i % 4) * 0.12,    // 0.55–0.91, always bright
       })),
     []
   )
@@ -303,7 +305,7 @@ function AuroraLayer({ orbScale }: { orbScale: number }) {
             height: p.size,
             left: `calc(50% + ${p.x}px)`,
             bottom: '42%',
-            opacity: p.baseOpacity * orbScale,
+            opacity: p.opacity,
             animation: `med-float-up ${p.duration}s ${p.delay}s ease-out infinite`,
           }}
         />
@@ -638,17 +640,19 @@ function SessionPlayer({
   if (animType === 'blob') {
     const p = phaseProgress
     if (currentStep.phase === 'inhale') {
-      const a = Math.round(60 - p * 10), b = Math.round(40 + p * 10)
-      const c = Math.round(65 - p * 15), d = Math.round(35 + p * 15)
+      // Wild → Circle: asymmetric squeeze resolving into sphere
+      const a = Math.round(72 - p * 22), b = Math.round(28 + p * 22)
+      const c = Math.round(80 - p * 30), d = Math.round(20 + p * 30)
       blobRadius = `${a}% ${b}% ${c}% ${d}% / ${d}% ${c}% ${b}% ${a}%`
     } else if (currentStep.phase === 'hold-in') {
-      blobRadius = '50% 50% 50% 50%'
+      blobRadius = '50% 50% 50% 50%'  // perfect circle — full expansion
     } else if (currentStep.phase === 'exhale') {
-      const a = Math.round(50 + p * 10), b = Math.round(50 - p * 10)
-      const c = Math.round(50 + p * 15), d = Math.round(50 - p * 15)
+      // Circle → Wild: sphere relaxing into organic form
+      const a = Math.round(50 + p * 22), b = Math.round(50 - p * 22)
+      const c = Math.round(50 + p * 30), d = Math.round(50 - p * 30)
       blobRadius = `${a}% ${b}% ${c}% ${d}% / ${d}% ${c}% ${b}% ${a}%`
     } else {
-      blobRadius = '60% 40% 65% 35% / 35% 65% 40% 60%'
+      blobRadius = '72% 28% 80% 20% / 20% 80% 28% 72%'  // settled organic at minimum
     }
   }
 
@@ -657,6 +661,14 @@ function SessionPlayer({
       className="fixed inset-0 z-50 flex flex-col"
       style={{ background: cat.playerGradient }}
     >
+      {/* Full-screen radial glow that breathes with the orb */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: `radial-gradient(ellipse 90% 80% at 50% 44%, rgba(255,255,255,${(0.13 * orbScale).toFixed(3)}) 0%, transparent 65%)`,
+        }}
+      />
+
       {/* Top bar */}
       <div
         className="flex items-center justify-between px-5 py-4"
@@ -711,38 +723,49 @@ function SessionPlayer({
           {/* Option B: Aurora particles (release + sleep) */}
           {animType === 'aurora' && <AuroraLayer orbScale={orbScale} />}
 
-          {/* Option C: Blob outer ring (recovery + morning) */}
+          {/* Option C: Blob — two rings (one slow, one counter-rotating) */}
           {animType === 'blob' && (
-            <div
-              className="pointer-events-none absolute"
-              style={{
-                width: '160px',
-                height: '160px',
-                borderRadius: blobRadius,
-                border: '1px dashed rgba(255,255,255,0.2)',
-                animation: 'med-spin-slow 10s linear infinite',
-                transition: 'border-radius 120ms ease-in-out',
-              }}
-            />
+            <>
+              <div
+                className="pointer-events-none absolute"
+                style={{
+                  width: '188px', height: '188px',
+                  borderRadius: blobRadius,
+                  border: '1.5px dashed rgba(255,255,255,0.45)',
+                  animation: 'med-spin-slow 9s linear infinite',
+                  transition: 'border-radius 100ms ease-in-out',
+                }}
+              />
+              <div
+                className="pointer-events-none absolute"
+                style={{
+                  width: '152px', height: '152px',
+                  borderRadius: blobRadius,
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  animation: 'med-spin-rev 6s linear infinite',
+                  transition: 'border-radius 100ms ease-in-out',
+                }}
+              />
+            </>
           )}
 
-          {/* Ambient glow */}
+          {/* Ambient glow — much bigger and brighter */}
           <div
-            className="absolute inset-8 bg-white/20 blur-2xl"
+            className="absolute inset-4 bg-white/40 blur-3xl"
             style={{
               borderRadius: animType === 'blob' ? blobRadius : '50%',
               transform: `scale(${orbScale})`,
-              transition: 'transform 50ms linear, border-radius 120ms ease-in-out',
+              transition: 'transform 50ms linear, border-radius 100ms ease-in-out',
             }}
           />
 
           {/* Orb */}
           <div
-            className="relative flex h-32 w-32 flex-col items-center justify-center border border-white/20 bg-white/10 backdrop-blur-sm"
+            className="relative flex h-32 w-32 flex-col items-center justify-center border border-white/35 bg-white/20 backdrop-blur-md"
             style={{
               borderRadius: animType === 'blob' ? blobRadius : '50%',
               transform: `scale(${orbScale})`,
-              transition: 'transform 50ms linear, border-radius 120ms ease-in-out',
+              transition: 'transform 50ms linear, border-radius 100ms ease-in-out',
             }}
           >
             <span className="font-mono text-3xl font-bold text-white">
