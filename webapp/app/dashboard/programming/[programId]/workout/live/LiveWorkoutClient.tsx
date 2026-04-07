@@ -44,10 +44,15 @@ interface Exercise {
   sets?: number;
   reps?: string;
   rest?: string;
+  tempo?: string;
+  rpe?: number;
+  duration?: string;          // timed prescription: "30 sec", "60 sec"
   tip?: string;
   details?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  primaryMuscles?: string[];
+  difficulty?: string;
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -110,7 +115,7 @@ export default function LiveWorkoutPage() {
   const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
 
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
-  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
 
   // Stale incomplete workout detection
   const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
@@ -754,9 +759,14 @@ export default function LiveWorkoutPage() {
     );
   }
 
-  // Superset context label
+  // Superset context label — prefer groupLabel, fall back to group type + round number
   const supersetLabel = currentStep?.groupId
-    ? `Round ${currentStep.roundNumber + 1}`
+    ? (() => {
+        const label = currentExercise?.groupLabel
+        const gtype = currentExercise?.groupType?.toUpperCase() ?? 'ROUND'
+        const round = currentStep.roundNumber + 1
+        return label ? `${label} · ${round}` : `${gtype} ${round}`
+      })()
     : null;
 
   return (
@@ -1049,15 +1059,46 @@ export default function LiveWorkoutPage() {
                 </svg>
                 Swap Exercise
               </button>
-              <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
+              {/* Tip / cue */}
+              {currentExercise?.tip && (
+                <p className="mt-1 text-sm text-green-400">{currentExercise.tip}</p>
+              )}
+              {/* Coach details / tempo / duration prescription */}
+              {currentExercise?.details && (
+                <p className="mt-1 text-sm text-blue-300/80">{currentExercise.details}</p>
+              )}
+              {(currentExercise?.tempo || currentExercise?.rpe || currentExercise?.duration) && (
+                <p className="mt-0.5 text-xs text-amber-400/80">
+                  {[
+                    currentExercise.duration && currentExercise.duration,
+                    currentExercise.tempo && `Tempo ${currentExercise.tempo}`,
+                    currentExercise.rpe && `RPE ${currentExercise.rpe}`,
+                  ].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              {/* Primary muscles pills */}
+              {currentExercise?.primaryMuscles && currentExercise.primaryMuscles.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {currentExercise.primaryMuscles.slice(0, 3).map((m) => (
+                    <span key={m} className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white/50 capitalize">
+                      {m.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              )}
               {/* Exercise history from past workouts */}
               {currentExercise && exerciseHistory[currentExercise.name] && (
                 <p className="mt-1.5 text-sm text-white/50">
                   Last time:{" "}
                   <span className="font-medium text-white/70">
-                    {exerciseHistory[currentExercise.name].weight > 0
-                      ? `${exerciseHistory[currentExercise.name].weight} lbs × ${exerciseHistory[currentExercise.name].reps} reps`
-                      : `${exerciseHistory[currentExercise.name].reps} reps`}
+                    {(() => {
+                      const h = exerciseHistory[currentExercise.name]
+                      if (isIntervalExercise || showTimeInput) {
+                        return h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : "completed"
+                      }
+                      if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
+                      return h.reps > 0 ? `${h.reps} reps` : "completed"
+                    })()}
                   </span>
                 </p>
               )}
@@ -1123,7 +1164,21 @@ export default function LiveWorkoutPage() {
                           inputMode="numeric"
                           value={currentReps}
                           onChange={(e) => updateCurrentInput("reps", e.target.value)}
-                          placeholder={currentExercise?.reps || "30"}
+                          placeholder={currentExercise?.duration?.replace(/[^0-9]/g, "") || currentExercise?.reps || "30"}
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {/* Distance input — time_distance only */}
+                    {tracking === "time_distance" && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Distance (m)</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={currentWeight}
+                          onChange={(e) => updateCurrentInput("weight", e.target.value)}
+                          placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
                       </div>

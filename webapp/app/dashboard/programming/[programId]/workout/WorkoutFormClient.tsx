@@ -121,13 +121,19 @@ interface Exercise {
   exerciseSlug?: string;
   name: string;
   type?: string;
+  trackingType?: string;      // reps_weight | reps_bodyweight | reps_only | time | time_distance | intervals | none
   sets?: number;
   reps?: string;
   rest?: string;
+  tempo?: string;
+  rpe?: number;
+  duration?: string;
   details?: string;
+  tip?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
-  // Exercise grouping (supersets, circuits, etc.)
+  primaryMuscles?: string[];
+  difficulty?: string;
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -195,7 +201,7 @@ export default function WorkoutFormPage() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [summaryStreak, setSummaryStreak] = useState<{ streakDays: number; nextMilestone: number | null } | null>(null);
   const [summaryGoal, setSummaryGoal] = useState<string | null>(null);
-  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
 
   // Load the current workout from API
   useEffect(() => {
@@ -795,11 +801,18 @@ export default function WorkoutFormPage() {
                           </span>
                         )}
                       </div>
-                      <div className="mt-1 flex items-center gap-2">
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {exercise.sets} sets × {exercise.reps}
+                          {exercise.sets} sets
+                          {exercise.duration
+                            ? ` × ${exercise.duration}`
+                            : exercise.reps
+                            ? ` × ${exercise.reps}${["time","time_distance","intervals"].includes(exercise.trackingType||"") ? "s" : ""}`
+                            : ""}
                         </span>
-                        <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>
+                        {exercise.rest && <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>}
+                        {exercise.tempo && <span className="text-xs text-amber-600 dark:text-amber-400">Tempo {exercise.tempo}</span>}
+                        {exercise.difficulty && <span className="text-xs capitalize text-zinc-400 dark:text-zinc-500">{exercise.difficulty}</span>}
                       </div>
                     </div>
 
@@ -853,81 +866,161 @@ export default function WorkoutFormPage() {
                             <VideoPlayer exerciseName={exercise.name} />
                           </div>
 
-                          {/* Column headers */}
-                          <div className="mb-3 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                            <div className="col-span-2">Set</div>
-                            <div className="col-span-3">Weight</div>
-                            <div className="col-span-3">Reps</div>
-                            <div className="col-span-4 text-center">Actions</div>
-                          </div>
+                          {/* Prescription meta — details / tempo / muscles */}
+                          {(() => {
+                            const tracking = exercise.trackingType || "reps_weight"
+                            const showWeight = tracking === "reps_weight"
+                            const isTimeBased = ["time", "time_distance", "intervals"].includes(tracking)
+                            const isNone = tracking === "none"
+                            const prescription = [
+                              exercise.duration && `${exercise.duration}`,
+                              exercise.tempo && `Tempo ${exercise.tempo}`,
+                              exercise.rpe && `RPE ${exercise.rpe}`,
+                            ].filter(Boolean).join(" · ")
+                            return (
+                              <div className="mb-3 space-y-1.5">
+                                {(exercise.details || exercise.tip) && (
+                                  <p className="text-xs text-blue-600 dark:text-blue-400 leading-snug">
+                                    {exercise.details || exercise.tip}
+                                  </p>
+                                )}
+                                {prescription && (
+                                  <p className="text-xs text-amber-600 dark:text-amber-400">{prescription}</p>
+                                )}
+                                {exercise.primaryMuscles && exercise.primaryMuscles.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {exercise.primaryMuscles.slice(0, 4).map((m) => (
+                                      <span key={m} className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400">
+                                        {m.replace(/_/g, " ")}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Interval prescription hint */}
+                                {tracking === "intervals" && (
+                                  <p className="text-xs text-teal-600 dark:text-teal-400">
+                                    Log duration per interval — or just mark each Done ✓
+                                  </p>
+                                )}
+                                {isNone && (
+                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">No tracking needed — just mark complete.</p>
+                                )}
+                                {/* Column headers */}
+                                <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                  <div className="col-span-2">Set</div>
+                                  {showWeight && <div className="col-span-3">Weight</div>}
+                                  {!isNone && (
+                                    <div className={showWeight ? "col-span-3" : "col-span-6"}>
+                                      {isTimeBased ? (tracking === "time_distance" ? "Sec" : "Sec") : "Reps"}
+                                    </div>
+                                  )}
+                                  {tracking === "time_distance" && <div className="col-span-2">Dist (m)</div>}
+                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
+                                </div>
+                              </div>
+                            )
+                          })()}
 
                           {/* Set rows */}
-                          <div className="space-y-2">
-                            {progress.sets.map((set, setIndex) => (
-                              <motion.div
-                                key={setIndex}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: setIndex * 0.05 }}
-                                className={`grid grid-cols-12 items-center gap-2 rounded-lg p-2 transition-colors ${
-                                  set.completed
-                                    ? "bg-green-100 dark:bg-green-900/20"
-                                    : "bg-white dark:bg-zinc-800"
-                                }`}
-                              >
-                                <div className="col-span-2">
-                                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
-                                    {setIndex + 1}
-                                  </span>
-                                </div>
-                                <div className="col-span-3">
-                                  <input
-                                    type="number"
-                                    placeholder="0"
-                                    value={set.weight}
-                                    onChange={(e) => updateSet(exerciseIndex, setIndex, "weight", e.target.value)}
-                                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                  />
-                                </div>
-                                <div className="col-span-3">
-                                  <input
-                                    type="number"
-                                    placeholder={exercise.reps?.split("-")[0] || "0"}
-                                    value={set.reps}
-                                    onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
-                                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                  />
-                                </div>
-                                <div className="col-span-4 flex justify-center gap-1">
-                                  {!set.completed && !set.weight && !set.reps && (
-                                    <button
-                                      onClick={() => openSkipModal(exerciseIndex, setIndex)}
-                                      className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
-                                      title="Skip set"
-                                    >
-                                      <svg className="h-4 w-4 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                                      </svg>
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => toggleSetComplete(exerciseIndex, setIndex)}
-                                    className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all ${
+                          {(() => {
+                            const tracking = exercise.trackingType || "reps_weight"
+                            const showWeight = tracking === "reps_weight"
+                            const isTimeBased = ["time", "time_distance", "intervals"].includes(tracking)
+                            const isNone = tracking === "none"
+                            const repPlaceholder = isTimeBased
+                              ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
+                              : (exercise.reps?.split("-")[0] || "0")
+                            return (
+                              <div className="space-y-2">
+                                {progress.sets.map((set, setIndex) => (
+                                  <motion.div
+                                    key={setIndex}
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: setIndex * 0.05 }}
+                                    className={`grid grid-cols-12 items-center gap-2 rounded-lg p-2 transition-colors ${
                                       set.completed
-                                        ? "border-green-500 bg-green-500 text-white"
-                                        : "border-zinc-300 bg-white hover:border-green-400 dark:border-zinc-600 dark:bg-zinc-700"
+                                        ? "bg-green-100 dark:bg-green-900/20"
+                                        : "bg-white dark:bg-zinc-800"
                                     }`}
                                   >
-                                    {set.completed && (
-                                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                      </svg>
+                                    <div className="col-span-2">
+                                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
+                                        {setIndex + 1}
+                                      </span>
+                                    </div>
+                                    {/* Weight input — only for reps_weight */}
+                                    {showWeight && (
+                                      <div className="col-span-3">
+                                        <input
+                                          type="number"
+                                          inputMode="decimal"
+                                          placeholder="0"
+                                          value={set.weight}
+                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "weight", e.target.value)}
+                                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                        />
+                                      </div>
                                     )}
-                                  </button>
-                                </div>
-                              </motion.div>
-                            ))}
-                          </div>
+                                    {/* Reps / Duration input */}
+                                    {!isNone && (
+                                      <div className={showWeight ? "col-span-3" : "col-span-6"}>
+                                        <input
+                                          type="number"
+                                          inputMode="decimal"
+                                          placeholder={repPlaceholder}
+                                          value={set.reps}
+                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
+                                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                        />
+                                      </div>
+                                    )}
+                                    {/* Distance input — time_distance only */}
+                                    {tracking === "time_distance" && (
+                                      <div className="col-span-2">
+                                        <input
+                                          type="number"
+                                          inputMode="decimal"
+                                          placeholder="0"
+                                          value={set.weight}
+                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "weight", e.target.value)}
+                                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                        />
+                                      </div>
+                                    )}
+                                    {/* Actions */}
+                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
+                                      {!set.completed && !set.weight && !set.reps && !isNone && (
+                                        <button
+                                          onClick={() => openSkipModal(exerciseIndex, setIndex)}
+                                          className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
+                                          title="Skip set"
+                                        >
+                                          <svg className="h-4 w-4 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                          </svg>
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => toggleSetComplete(exerciseIndex, setIndex)}
+                                        className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all ${
+                                          set.completed
+                                            ? "border-green-500 bg-green-500 text-white"
+                                            : "border-zinc-300 bg-white hover:border-green-400 dark:border-zinc-600 dark:bg-zinc-700"
+                                        }`}
+                                      >
+                                        {set.completed && (
+                                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </motion.div>
+                                ))}
+                              </div>
+                            )
+                          })()}
                         </div>
                       </motion.div>
                     )}

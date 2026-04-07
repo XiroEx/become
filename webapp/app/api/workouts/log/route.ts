@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     ) ?? null
 
     // Build exercise history: best completed set per exercise from logs before this date
-    const exerciseHistory: Record<string, { weight: number; reps: number; date: string }> = {}
+    const exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {}
     const pastLogs = logs
       .filter((log) => log.programId === programId && log.completed && new Date(log.date) < dayStart)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -68,15 +68,22 @@ export async function GET(request: NextRequest) {
     for (const log of pastLogs) {
       for (const exercise of log.exercises ?? []) {
         if (exerciseHistory[exercise.name]) continue
-        const completedSets = (exercise.sets ?? []).filter((s) => s.completed && s.reps > 0)
-        if (completedSets.length === 0) continue
-        const bestSet = completedSets.reduce(
-          (best, s) => s.weight > best.weight || (s.weight === best.weight && s.reps > best.reps) ? s : best,
-          completedSets[0]
+        type AnySet = { completed: boolean; reps?: number; weight?: number; duration?: number }
+        const completedSets = (exercise.sets ?? []).filter(
+          (s: AnySet) => s.completed && ((s.reps ?? 0) > 0 || (s.duration ?? 0) > 0)
         )
+        if (completedSets.length === 0) continue
+        const bestSet = completedSets.reduce((best: AnySet, s: AnySet) => {
+          const bw = best.weight ?? 0, sw = s.weight ?? 0
+          if (sw > bw) return s
+          if (sw === bw && (s.reps ?? 0) > (best.reps ?? 0)) return s
+          if (sw === bw && (s.reps ?? 0) === (best.reps ?? 0) && (s.duration ?? 0) > (best.duration ?? 0)) return s
+          return best
+        }, completedSets[0])
         exerciseHistory[exercise.name] = {
-          weight: bestSet.weight,
-          reps: bestSet.reps,
+          weight: bestSet.weight ?? 0,
+          reps: bestSet.reps ?? 0,
+          duration: bestSet.duration,
           date: new Date(log.date).toISOString(),
         }
       }

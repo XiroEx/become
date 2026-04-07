@@ -182,7 +182,7 @@ export default function CalendarClient() {
       }>
     }
     workout: { day: string; title: string }
-    exerciseHistory: Record<string, { weight: number; reps: number; date: string }>
+    exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }>
   } | null>(null)
   const [logSummaryLoading, setLogSummaryLoading] = useState(false)
 

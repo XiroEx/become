@@ -9,8 +9,10 @@ import { recordStreakActivity } from '@/lib/streak'
 
 interface SetData {
   setNumber: number
-  reps: number
-  weight: number
+  reps?: number       // null for time-only exercises
+  weight?: number     // null for bodyweight/cardio
+  duration?: number   // seconds — for time / intervals / time_distance
+  distance?: number   // meters — for time_distance
   completed: boolean
 }
 
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build exercise history from past completed workouts (before today)
-    let exerciseHistory: Record<string, { weight: number; reps: number; date: string }> = {}
+    let exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {}
     if (includeHistory) {
       // Get all completed workout logs for this program, sorted newest first
       const pastLogs = userProgress.workoutLogs
@@ -89,24 +91,31 @@ export async function GET(request: NextRequest) {
         for (const exercise of (log.exercises || [])) {
           if (exerciseHistory[exercise.name]) continue // already have most recent
 
-          // Find the best completed set (highest weight, or most reps for bodyweight)
+          // Find the best completed set — weighted by type
+          type AnySet = { completed: boolean; reps?: number; weight?: number; duration?: number; distance?: number }
           const completedSets = (exercise.sets || []).filter(
-            (s: { completed: boolean; reps: number }) => s.completed && s.reps > 0
+            (s: AnySet) => s.completed && ((s.reps ?? 0) > 0 || (s.duration ?? 0) > 0)
           )
           if (completedSets.length === 0) continue
 
-          // Pick the set with highest weight (or most reps if no weight)
+          // Pick the set with highest weight (or most reps/duration if no weight)
           const bestSet = completedSets.reduce(
-            (best: { weight: number; reps: number }, s: { weight: number; reps: number }) =>
-              s.weight > best.weight || (s.weight === best.weight && s.reps > best.reps)
-                ? s
-                : best,
+            (best: AnySet, s: AnySet) => {
+              const bw = best.weight ?? 0, sw = s.weight ?? 0
+              const br = best.reps ?? 0, sr = s.reps ?? 0
+              const bd = best.duration ?? 0, sd = s.duration ?? 0
+              if (sw > bw) return s
+              if (sw === bw && sr > br) return s
+              if (sw === bw && sr === br && sd > bd) return s
+              return best
+            },
             completedSets[0]
           )
 
           exerciseHistory[exercise.name] = {
-            weight: bestSet.weight,
-            reps: bestSet.reps,
+            weight: bestSet.weight ?? 0,
+            reps: bestSet.reps ?? 0,
+            duration: bestSet.duration,
             date: new Date(log.date).toISOString()
           }
         }

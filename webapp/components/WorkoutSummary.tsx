@@ -43,7 +43,7 @@ export interface SummaryProps {
   elapsedTime: number
   exerciseData: { reps: string; weight: string; completed: boolean }[][]
   exercises: { name: string }[]
-  exerciseHistory: Record<string, { weight: number; reps: number; date: string }>
+  exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }>
   summaryStreak: { streakDays: number; nextMilestone: number | null } | null
   summaryGoal: string | null
   formatTime: (s: number) => string
