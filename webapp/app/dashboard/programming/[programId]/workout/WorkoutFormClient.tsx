@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
+import WorkoutSummary from "@/components/WorkoutSummary";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 
@@ -186,6 +187,16 @@ export default function WorkoutFormPage() {
   const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Summary state
+  const [showSummary, setShowSummary] = useState(false);
+  const [programCompleted, setProgramCompleted] = useState(false);
+  const [completedProgramName, setCompletedProgramName] = useState("");
+  const [workoutStartTime] = useState(() => Date.now());
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [summaryStreak, setSummaryStreak] = useState<{ streakDays: number; nextMilestone: number | null } | null>(null);
+  const [summaryGoal, setSummaryGoal] = useState<string | null>(null);
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
+
   // Load the current workout from API
   useEffect(() => {
     const loadWorkout = async () => {
@@ -234,13 +245,16 @@ export default function WorkoutFormPage() {
           }));
           setExerciseProgress(initialProgress);
 
-          // Now check for in-progress workout for today
-          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}`, {
+          // Now check for in-progress workout for today (also fetch exercise history)
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
           if (progressRes.ok) {
             const progressData = await progressRes.json();
+            if (progressData.exerciseHistory) {
+              setExerciseHistory(progressData.exerciseHistory);
+            }
             if (progressData.staleIncomplete && !progressData.isResume) {
               setStaleIncomplete(progressData.staleIncomplete);
             } else {
@@ -382,7 +396,7 @@ export default function WorkoutFormPage() {
         };
       });
 
-      await fetch("/api/workouts", {
+      const res = await fetch("/api/workouts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -396,6 +410,13 @@ export default function WorkoutFormPage() {
           completed: isComplete
         })
       });
+      if (isComplete && res.ok) {
+        const data = await res.json();
+        if (data.programCompleted) {
+          setProgramCompleted(true);
+          setCompletedProgramName(data.programName || "");
+        }
+      }
     } catch (error) {
       console.error("Error auto-saving:", error);
     }
@@ -419,6 +440,36 @@ export default function WorkoutFormPage() {
       }
     };
   }, []);
+
+  // Elapsed workout timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - workoutStartTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [workoutStartTime]);
+
+  // Fetch streak + goal when summary appears
+  useEffect(() => {
+    if (!showSummary) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    fetch('/api/streak', { headers })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSummaryStreak({ streakDays: d.streakDays, nextMilestone: d.nextMilestone ?? null }) })
+      .catch(() => {});
+    fetch('/api/profile', { headers })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.profile?.fitnessGoal) setSummaryGoal(d.profile.fitnessGoal) })
+      .catch(() => {});
+  }, [showSummary]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   const handleResolveIncomplete = (
     action: "continue" | "restart" | "count" | "skip",
@@ -1060,7 +1111,7 @@ export default function WorkoutFormPage() {
               className="mt-6 sm:mt-8"
             >
               <button
-                onClick={() => router.push("/dashboard/programming")}
+                onClick={() => setShowSummary(true)}
                 className="w-full rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30"
               >
                 Complete Workout! 🎉
@@ -1069,6 +1120,28 @@ export default function WorkoutFormPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Workout Summary Overlay */}
+      <AnimatePresence>
+        {showSummary && workout && (
+          <WorkoutSummary
+            programCompleted={programCompleted}
+            completedProgramName={completedProgramName}
+            workout={workout}
+            elapsedTime={elapsedTime}
+            exerciseData={workout.exercises.map((_, i) => {
+              const ep = exerciseProgress.find(p => p.exerciseIndex === i);
+              return ep?.sets ?? [];
+            })}
+            exercises={workout.exercises}
+            exerciseHistory={exerciseHistory}
+            summaryStreak={summaryStreak}
+            summaryGoal={summaryGoal}
+            formatTime={formatTime}
+            onDone={() => router.push("/dashboard/programming")}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Skip Confirmation Modal */}
       <AnimatePresence>
