@@ -146,6 +146,46 @@ interface Filters {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+// ─── Custom exercise create form state ──────────────────────────────────────
+
+interface CustomFormState {
+  name: string;
+  trackingType: string;
+  muscleGroup: string;
+  category: string;
+  defaultSets: string;
+  defaultReps: string;
+  submitting: boolean;
+  error: string | null;
+}
+
+const TRACKING_TYPE_OPTIONS = [
+  { value: "reps_weight",     label: "Sets × Reps + Weight",    hint: "e.g. Bench Press"       },
+  { value: "reps_bodyweight", label: "Sets × Reps (bodyweight)", hint: "e.g. Push-Ups"          },
+  { value: "reps_only",       label: "Reps Only",                hint: "e.g. Jumps"             },
+  { value: "time",            label: "Time / Duration",          hint: "e.g. Plank"             },
+  { value: "time_distance",   label: "Time + Distance",          hint: "e.g. Run, Row"          },
+  { value: "intervals",       label: "Intervals",                hint: "e.g. HIIT, EMOM"        },
+  { value: "none",            label: "No Tracking",              hint: "e.g. Rest, Cool-down"   },
+];
+
+const MUSCLE_GROUP_OPTIONS = [
+  { value: "chest",     label: "Chest"     },
+  { value: "back",      label: "Back"      },
+  { value: "shoulders", label: "Shoulders" },
+  { value: "arms",      label: "Arms"      },
+  { value: "core",      label: "Core"      },
+  { value: "legs",      label: "Legs"      },
+  { value: "full_body", label: "Full Body" },
+];
+
+const CATEGORY_OPTIONS = [
+  { value: "strength",     label: "Strength"     },
+  { value: "cardio",       label: "Cardio"       },
+  { value: "bodyweight",   label: "Bodyweight"   },
+  { value: "conditioning", label: "Conditioning" },
+];
+
 export default function ExerciseSwapModal({
   isOpen,
   onClose,
@@ -157,6 +197,13 @@ export default function ExerciseSwapModal({
 }: ExerciseSwapModalProps) {
   const [alternatives, setAlternatives] = useState<AlternativeExercise[]>([]);
   const [source, setSource] = useState<SourceExercise | null>(null);
+  const [customExercises, setCustomExercises] = useState<AlternativeExercise[]>([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [customForm, setCustomForm] = useState<CustomFormState>({
+    name: "", trackingType: "reps_weight", muscleGroup: "chest",
+    category: "strength", defaultSets: "3", defaultReps: "8-12",
+    submitting: false, error: null,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -249,9 +296,30 @@ export default function ExerciseSwapModal({
       setSelectedVariants({});
       setSourceVariations(null);
       setSelectedSourceVariant(null);
+      setShowCreateForm(false);
+      setCustomForm({ name: "", trackingType: "reps_weight", muscleGroup: "chest", category: "strength", defaultSets: "3", defaultReps: "8-12", submitting: false, error: null });
+
+      // Load user's custom exercises + source variations using the same token
+      const token = localStorage.getItem("token");
+      if (token) {
+        fetch("/api/exercises/custom", { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.exercises) {
+              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; }) => ({
+                slug: e.slug, name: e.name, score: 100, reasons: ["Your custom exercise"],
+                equipment: e.equipment || [], primaryMuscles: e.primaryMuscles || [],
+                movementPatterns: [], difficulty: "intermediate",
+                category: e.category, bodyRegion: e.bodyRegion,
+                role: "accessory", trackingType: e.trackingType,
+                isExplicitAlternative: true,
+              })));
+            }
+          })
+          .catch(() => {});
+      }
 
       // Fetch variations of the source exercise immediately
-      const token = localStorage.getItem("token");
       if (token && exerciseSlug) {
         fetch(`/api/exercises/variations?slug=${encodeURIComponent(exerciseSlug)}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -416,6 +484,40 @@ export default function ExerciseSwapModal({
       scope
     );
     onClose();
+  };
+
+  const handleCreateCustom = async () => {
+    const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = customForm;
+    if (!name.trim()) {
+      setCustomForm(p => ({ ...p, error: "Name is required" }));
+      return;
+    }
+    setCustomForm(p => ({ ...p, submitting: true, error: null }));
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/exercises/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name, trackingType, muscleGroup, category, defaultSets, defaultReps }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCustomForm(p => ({ ...p, submitting: false, error: data.error || "Failed to create" }));
+        return;
+      }
+      const ex = data.exercise;
+      onSwap({
+        slug: ex.slug, name: ex.name, score: 100, reasons: ["Custom exercise"],
+        equipment: ex.equipment || [], primaryMuscles: ex.primaryMuscles || [],
+        movementPatterns: [], difficulty: ex.difficulty,
+        category: ex.category, bodyRegion: ex.bodyRegion,
+        role: ex.role, trackingType: ex.trackingType,
+        isExplicitAlternative: true,
+      }, "session");
+      onClose();
+    } catch {
+      setCustomForm(p => ({ ...p, submitting: false, error: "Network error" }));
+    }
   };
 
   if (!isOpen) return null;
@@ -584,6 +686,134 @@ export default function ExerciseSwapModal({
             {/* Results list */}
             <div className="flex-1 overflow-y-auto overscroll-contain touch-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
 
+              {/* ── Create Custom Form ── */}
+              {showCreateForm && (
+                <div className="px-5 pt-4 pb-6 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowCreateForm(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <p className="text-sm font-semibold text-zinc-800 dark:text-white">Create Custom Exercise</p>
+                  </div>
+
+                  {/* Name */}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Cable Face Pull"
+                      value={customForm.name}
+                      onChange={e => setCustomForm(p => ({ ...p, name: e.target.value }))}
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                    />
+                  </div>
+
+                  {/* Tracking Type */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Tracking Type</label>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {TRACKING_TYPE_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setCustomForm(p => ({ ...p, trackingType: opt.value }))}
+                          className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                            customForm.trackingType === opt.value
+                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
+                              : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                          }`}
+                        >
+                          <span className="font-medium">{opt.label}</span>
+                          <span className="text-zinc-400 dark:text-zinc-500">{opt.hint}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Muscle Group */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Primary Muscles</label>
+                    <div className="flex flex-wrap gap-2">
+                      {MUSCLE_GROUP_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setCustomForm(p => ({ ...p, muscleGroup: opt.value }))}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            customForm.muscleGroup === opt.value
+                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
+                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Category</label>
+                    <div className="flex flex-wrap gap-2">
+                      {CATEGORY_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setCustomForm(p => ({ ...p, category: opt.value }))}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            customForm.category === opt.value
+                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
+                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sets + Reps/Duration */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default Sets</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        max="10"
+                        value={customForm.defaultSets}
+                        onChange={e => setCustomForm(p => ({ ...p, defaultSets: e.target.value }))}
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                        {["time", "time_distance", "intervals"].includes(customForm.trackingType) ? "Duration (e.g. 30s)" : "Reps (e.g. 8-12)"}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={["time", "time_distance", "intervals"].includes(customForm.trackingType) ? "30s" : "8-12"}
+                        value={customForm.defaultReps}
+                        onChange={e => setCustomForm(p => ({ ...p, defaultReps: e.target.value }))}
+                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {customForm.error && (
+                    <p className="text-xs text-red-500 dark:text-red-400">{customForm.error}</p>
+                  )}
+
+                  <button
+                    onClick={handleCreateCustom}
+                    disabled={customForm.submitting || !customForm.name.trim()}
+                    className="w-full rounded-xl bg-green-600 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
+                  >
+                    {customForm.submitting ? "Creating..." : "Create & Swap In"}
+                  </button>
+                </div>
+              )}
+
+              {/* ── Main alternatives list (hidden while create form is open) ── */}
+              {!showCreateForm && (<>
+
               {/* ── Source exercise variations ── */}
               {sourceVariations && sourceVariations.length > 1 && (
                 <div className="px-5 pt-4 pb-3">
@@ -633,8 +863,35 @@ export default function ExerciseSwapModal({
                 </div>
               )}
 
-              {/* Divider + section label */}
+              {/* Divider between variations and suggestions */}
               <div className={`border-t border-zinc-100 dark:border-zinc-800 ${sourceVariations && sourceVariations.length > 1 ? "mx-5" : "hidden"}`} />
+
+              {/* ── My Custom Exercises ── */}
+              {customExercises.length > 0 && (
+                <div className="px-5 pt-3 pb-2">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                    My Exercises
+                  </p>
+                  <div className="space-y-1.5">
+                    {customExercises.map(ex => (
+                      <div key={ex.slug} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/50">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500">{ex.trackingType.replace(/_/g, " ")} · {ex.primaryMuscles.slice(0, 2).map(m => m.replace(/_/g, " ")).join(", ")}</p>
+                        </div>
+                        <button
+                          onClick={() => handleSwap(ex, "session")}
+                          className="ml-3 shrink-0 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 active:bg-green-800 transition-colors"
+                        >
+                          Use
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top Suggestions label */}
               <div className="px-5 pt-3 pb-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
                   Top Suggestions
@@ -703,7 +960,23 @@ export default function ExerciseSwapModal({
                     )}
                   </div>
                 )}
+
+                {/* Create Custom button */}
+                {!loading && (
+                  <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                    <button
+                      onClick={() => setShowCreateForm(true)}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 py-3 text-sm font-medium text-zinc-500 transition-colors hover:border-green-400 hover:text-green-600 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-green-500 dark:hover:text-green-400"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Create Custom Exercise
+                    </button>
+                  </div>
+                )}
               </div>
+            </>)}
             </div>
           </motion.div>
         </motion.div>
