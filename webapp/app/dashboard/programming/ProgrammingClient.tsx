@@ -408,7 +408,7 @@ export default function ProgrammingClient() {
                           {program.progress}%
                         </span>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {program.completedWorkouts}/{program.totalWorkouts}
+                          {program.completedWorkouts}/{program.totalWorkouts} sessions
                         </p>
                       </div>
                       <div className="w-10" />

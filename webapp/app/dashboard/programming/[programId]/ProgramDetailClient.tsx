@@ -592,7 +592,7 @@ export default function ProgramDetailClient({ program }: Props) {
               </div>
 
               <div className="flex items-center justify-between text-sm text-zinc-300">
-                <span>Progress: {activeProgram.completedWorkouts}/{activeProgram.totalWorkouts} workouts</span>
+                <span>Progress: {activeProgram.completedWorkouts}/{activeProgram.totalWorkouts} sessions</span>
                 <span className="text-green-400 font-semibold">
                   {Math.round((activeProgram.completedWorkouts / activeProgram.totalWorkouts) * 100)}%
                 </span>
