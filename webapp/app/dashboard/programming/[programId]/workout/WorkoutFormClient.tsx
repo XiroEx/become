@@ -90,6 +90,8 @@ interface SetData {
   reps: string;
   weight: string;
   completed: boolean;
+  duration: string;
+  distance: string;
 }
 
 interface ExerciseProgress {
@@ -102,6 +104,8 @@ interface SavedSetData {
   reps: number;
   weight: number;
   completed: boolean;
+  duration?: number;
+  distance?: number;
 }
 
 interface SavedExercise {
@@ -218,6 +222,8 @@ export default function WorkoutFormPage() {
                 reps: "",
                 weight: "",
                 completed: false,
+                duration: "",
+                distance: "",
               })),
             }))
           );
@@ -247,6 +253,8 @@ export default function WorkoutFormPage() {
               reps: "",
               weight: "",
               completed: false,
+              duration: "",
+              distance: "",
             })),
           }));
           setExerciseProgress(initialProgress);
@@ -309,12 +317,16 @@ export default function WorkoutFormPage() {
                     ? savedEx.sets.map(s => ({
                         reps: s.reps > 0 ? s.reps.toString() : "",
                         weight: s.weight > 0 ? s.weight.toString() : "",
-                        completed: s.completed
+                        completed: s.completed,
+                        duration: s.duration != null && s.duration > 0 ? s.duration.toString() : "",
+                        distance: s.distance != null && s.distance > 0 ? s.distance.toString() : "",
                       }))
                     : Array.from({ length: ex.sets || 3 }, () => ({
                         reps: "",
                         weight: "",
                         completed: false,
+                        duration: "",
+                        distance: "",
                       }))
                 };
               });
@@ -341,6 +353,8 @@ export default function WorkoutFormPage() {
                 reps: "",
                 weight: "",
                 completed: false,
+                duration: "",
+                distance: "",
               })),
             }))
           );
@@ -356,6 +370,8 @@ export default function WorkoutFormPage() {
               reps: "",
               weight: "",
               completed: false,
+              duration: "",
+              distance: "",
             })),
           }))
         );
@@ -388,12 +404,17 @@ export default function WorkoutFormPage() {
         return {
           name: exercise.name,
           ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
-          sets: ep?.sets.map((set, setIndex) => ({
-            setNumber: setIndex + 1,
-            reps: parseInt(set.reps) || 0,
-            weight: parseFloat(set.weight) || 0,
-            completed: set.completed
-          })) || [],
+          sets: ep?.sets.map((set, setIndex) => {
+            const isTimeBased = ["time", "time_distance", "intervals"].includes(exercise.trackingType || "");
+            return {
+              setNumber: setIndex + 1,
+              reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
+              weight: parseFloat(set.weight) || 0,
+              completed: set.completed,
+              ...(set.duration && { duration: parseFloat(set.duration) }),
+              ...(set.distance && { distance: parseFloat(set.distance) }),
+            };
+          }) || [],
           // Pass through grouping metadata for analytics
           ...(exercise.groupId && { groupId: exercise.groupId }),
           ...(exercise.groupType && { groupType: exercise.groupType }),
@@ -538,7 +559,7 @@ export default function WorkoutFormPage() {
               ...ep,
               sets: ep.sets.map((set, si) =>
                 si === setIndex
-                  ? { reps: "0", weight: "0", completed: true }
+                  ? { reps: "0", weight: "0", completed: true, duration: "", distance: "" }
                   : set
               ),
             }
@@ -560,6 +581,8 @@ export default function WorkoutFormPage() {
                 reps: "0",
                 weight: "0",
                 completed: true,
+                duration: "",
+                distance: "",
               })),
             }
           : ep
@@ -632,6 +655,8 @@ export default function WorkoutFormPage() {
                 reps: "",
                 weight: "",
                 completed: false,
+                duration: "",
+                distance: "",
               })),
             }
           : ep
@@ -969,8 +994,8 @@ export default function WorkoutFormPage() {
                                           type="number"
                                           inputMode="decimal"
                                           placeholder={repPlaceholder}
-                                          value={set.reps}
-                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
+                                          value={isTimeBased ? set.duration : set.reps}
+                                          onChange={(e) => updateSet(exerciseIndex, setIndex, isTimeBased ? "duration" : "reps", e.target.value)}
                                           className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
                                         />
                                       </div>
@@ -982,15 +1007,15 @@ export default function WorkoutFormPage() {
                                           type="number"
                                           inputMode="decimal"
                                           placeholder="0"
-                                          value={set.weight}
-                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "weight", e.target.value)}
+                                          value={set.distance}
+                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "distance", e.target.value)}
                                           className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
                                         />
                                       </div>
                                     )}
                                     {/* Actions */}
                                     <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
-                                      {!set.completed && !set.weight && !set.reps && !isNone && (
+                                      {!set.completed && !set.weight && !set.reps && !isNone && showWeight && (
                                         <button
                                           onClick={() => openSkipModal(exerciseIndex, setIndex)}
                                           className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
