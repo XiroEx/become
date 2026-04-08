@@ -134,7 +134,17 @@ const exercises = [
     pri: ['quads'], sec: ['glutes'], stab: [],
     eq: ['belt_squat_machine'],
     sets: 3, reps: '10-12', rest: '2 min',
-    alts: ['leg-press', 'hack-squat'],
+    alts: ['pendulum-squat', 'leg-press', 'hack-squat'],
+    tags: ['squat', 'machine', 'spine_friendly'], region: 'lower_body',
+  }),
+
+  ex('Pendulum Squat', {
+    aliases: ['Pendulum Squat Machine'],
+    pat: ['squat'], role: 'secondary', mech: 'compound',
+    pri: ['quads'], sec: ['glutes'], stab: [],
+    eq: ['hack_squat'],
+    sets: 3, reps: '10-12', rest: '2 min',
+    alts: ['belt-squat', 'hack-squat', 'leg-press'],
     tags: ['squat', 'machine', 'spine_friendly'], region: 'lower_body',
   }),
 
