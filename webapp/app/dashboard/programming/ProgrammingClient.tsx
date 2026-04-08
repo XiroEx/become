@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { Dumbbell } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
@@ -335,12 +336,23 @@ export default function ProgrammingClient() {
     <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 sm:mb-8">
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-          Programs
-        </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Choose your training path and start building.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
+              Programs
+            </h1>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Choose your training path and start building.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/programming/library"
+            className="mt-1 flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          >
+            <Dumbbell className="h-3.5 w-3.5" />
+            My Exercises
+          </Link>
+        </div>
       </div>
 
       {/* Schedule / Calendar Widget */}
