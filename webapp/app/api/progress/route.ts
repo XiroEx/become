@@ -148,7 +148,11 @@ export async function GET(request: NextRequest) {
 
         // currentWeek: derive from schedule + workout logs (reconciles historical completions).
         // Greedy chronological matching handles repeating day labels in multi-week programs.
-        const daysPerWeek = schedule.settings?.trainingDays?.length || 4
+        // Use program's designed days-per-week so "Week X of Y" reflects program cycles,
+        // not calendar training frequency (they diverge when e.g. a 4-day split is run 5x/week)
+        const daysPerWeek = (programDetails as { training_days_per_week?: number } | null)?.training_days_per_week
+          || schedule.settings?.trainingDays?.length
+          || 4
         type ProgressLog = { programId: string; day: string; completed: boolean }
         const wLogs = (progress.workoutLogs || []) as ProgressLog[]
         const sessions = (schedule.scheduledWorkouts || []).filter(
