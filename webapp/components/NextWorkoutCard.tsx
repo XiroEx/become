@@ -15,6 +15,7 @@ interface ScheduledWorkout {
 interface ScheduleData {
   programId: string
   programName: string
+  programStatus: string
   scheduledWorkouts: ScheduledWorkout[]
 }
 
