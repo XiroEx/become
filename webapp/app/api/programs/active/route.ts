@@ -57,13 +57,18 @@ export async function GET(request: NextRequest) {
         (p.status === 'in-progress' || p.status === 'active' || p.status === 'paused' || p.status === 'completed')
     )
 
-    // Load schedule documents to derive accurate counts from status fields
+    // Load schedule documents to derive accurate counts from status fields + dayLabel for log reconciliation
     const candidateIds = inProgressPrograms.map((p: { programId: string }) => p.programId)
     const schedules = await Schedule.find(
       { userId: payload.userId, programId: { $in: candidateIds } },
-      { programId: 1, 'scheduledWorkouts.status': 1 }
-    ).lean<{ programId: string; scheduledWorkouts: { status: string }[] }[]>()
+      { programId: 1, 'scheduledWorkouts.status': 1, 'scheduledWorkouts.dayLabel': 1 }
+    ).lean<{ programId: string; scheduledWorkouts: { status: string; dayLabel: string }[] }[]>()
     const scheduleMap = new Map(schedules.map((s) => [s.programId, s]))
+
+    // Workout logs for cross-referencing historical completions (sessions done before schedule-sync fix
+    // may still show status='scheduled' in the DB even though they were completed via workout logs)
+    type WorkoutLog = { programId: string; day: string; completed: boolean }
+    const workoutLogs = (userProgress.workoutLogs || []) as WorkoutLog[]
 
     type CandidateProgram = {
       programId: string
@@ -86,12 +91,23 @@ export async function GET(request: NextRequest) {
 
       const schedule = scheduleMap.get(program.programId)
       if (schedule?.scheduledWorkouts?.length) {
+        // All non-rest sessions (skipped still counts toward total — it's a planned session not done)
         const sessions = schedule.scheduledWorkouts.filter((w) => w.status !== 'rest')
-        completedWorkouts = sessions.filter((w) => w.status === 'completed').length
         totalWorkouts = sessions.length
 
+        // Completed = schedule says completed OR a matching workout log exists
+        // (covers historical sessions done before the schedule-sync fix was deployed)
+        completedWorkouts = sessions.filter((w) => {
+          if (w.status === 'completed') return true
+          if (w.status === 'skipped') return false // skipped ≠ completed
+          return workoutLogs.some(
+            (log) => log.programId === program.programId && log.day === w.dayLabel && log.completed
+          )
+        }).length
+
         // Self-heal: program was incorrectly auto-completed but schedule has remaining sessions
-        if (program.status === 'completed' && completedWorkouts < totalWorkouts) {
+        const remaining = totalWorkouts - completedWorkouts
+        if (program.status === 'completed' && remaining > 0) {
           UserProgress.updateOne(
             { userId: payload.userId, 'activePrograms.programId': program.programId },
             { $set: { 'activePrograms.$.status': 'in-progress' } }

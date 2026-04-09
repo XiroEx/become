@@ -146,10 +146,21 @@ export async function GET(request: NextRequest) {
           nextWorkout = `${nextScheduled.dayLabel} - ${nextScheduled.workoutTitle}`
         }
 
-        // currentWeek: use actual training-days-per-week from schedule settings
+        // currentWeek: derive from schedule + workout logs (reconciles historical completions)
         const daysPerWeek = schedule.settings?.trainingDays?.length || 4
-        const completed = activeProgram.completedWorkouts || 0
-        scheduleCurrentWeek = Math.max(1, Math.ceil(completed / daysPerWeek))
+        type ProgressLog = { programId: string; day: string; completed: boolean }
+        const wLogs = (progress.workoutLogs || []) as ProgressLog[]
+        const sessions = (schedule.scheduledWorkouts || []).filter(
+          (w: { status: string }) => w.status !== 'rest'
+        )
+        const reconciledCompleted = sessions.filter((w: { status: string; dayLabel: string }) => {
+          if (w.status === 'completed') return true
+          if (w.status === 'skipped') return false
+          return wLogs.some(
+            (log) => log.programId === activeProgram.programId && log.day === w.dayLabel && log.completed
+          )
+        }).length
+        scheduleCurrentWeek = Math.max(1, Math.ceil(reconciledCompleted / daysPerWeek))
       }
 
       // totalWeeks from the real program data

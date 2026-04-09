@@ -138,10 +138,33 @@ export async function GET(request: NextRequest) {
     const currentPhase = activeProgram.currentPhase || 1
     const phases = (program.phases || []) as Phase[]
 
+    // Always fetch schedule — used for effective-day lookup and accurate count computation
+    const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean()
+
+    // Compute accurate completedWorkouts/totalWorkouts from schedule + workout logs.
+    // Historical sessions done before the schedule-sync fix may still show status='scheduled'
+    // in the DB, but are confirmed via workout logs.
+    type WorkoutLog = { programId: string; day: string; completed: boolean }
+    const workoutLogs = (userProgress.workoutLogs || []) as WorkoutLog[]
+    let computedCompleted = 0
+    let computedTotal = 0
+    if (schedule?.scheduledWorkouts?.length) {
+      const sessions = (schedule.scheduledWorkouts as Array<{ status: string; dayLabel: string }>).filter(
+        (w) => w.status !== 'rest'
+      )
+      computedTotal = sessions.length
+      computedCompleted = sessions.filter((w) => {
+        if (w.status === 'completed') return true
+        if (w.status === 'skipped') return false
+        return workoutLogs.some(
+          (log) => log.programId === programId && log.day === w.dayLabel && log.completed
+        )
+      }).length
+    }
+
     // Determine effective day: if no ?day= param, prefer the next scheduled workout from Schedule
     let effectiveDay: string
     if (!requestedDay) {
-      const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean()
       let scheduledDay: string | null = null
       if (schedule?.scheduledWorkouts?.length) {
         const now = new Date()
@@ -198,8 +221,8 @@ export async function GET(request: NextRequest) {
             focus: preferredPhase?.focus,
             weeks: preferredPhase?.weeks
           },
-          completedWorkouts: activeProgram.completedWorkouts || 0,
-          totalWorkouts: activeProgram.totalWorkouts || 0
+          completedWorkouts: computedCompleted,
+          totalWorkouts: computedTotal
         })
       }
 
