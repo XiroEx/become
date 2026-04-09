@@ -50,8 +50,10 @@ export async function PUT(request: NextRequest) {
     schedule.scheduledWorkouts = result.allWorkouts
     schedule.settings.trainingDays = trainingDays
 
+    const completedCount = result.allWorkouts.filter((w) => w.status === 'completed').length
     const syncUpdate: Record<string, unknown> = {
       'activePrograms.$.totalWorkouts': result.allWorkouts.length,
+      'activePrograms.$.completedWorkouts': completedCount,
     }
     if (startDate) {
       schedule.settings.startDate = new Date(startDate)
