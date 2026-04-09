@@ -215,13 +215,10 @@ export default function ExerciseSwapModal({
   });
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [visibleCount, setVisibleCount] = useState(3);
+  const [visibleCount, setVisibleCount] = useState(8);
   // Variations: cache per alternative slug, and which variant is selected
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
-  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
-  // Source exercise variations (shown at top of modal)
-  const [sourceVariations, setSourceVariations] = useState<ExerciseVariation[] | null>(null);
-  const [selectedSourceVariant, setSelectedSourceVariant] = useState<string | null>(null);
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({})
   const searchRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -294,12 +291,10 @@ export default function ExerciseSwapModal({
       setFilters({ equipment: null, bodyRegion: null, difficulty: null, category: null });
       setVariationsCache({});
       setSelectedVariants({});
-      setSourceVariations(null);
-      setSelectedSourceVariant(null);
       setShowCreateForm(false);
       setCustomForm({ name: "", trackingType: "reps_weight", muscleGroup: "chest", category: "strength", defaultSets: "3", defaultReps: "8-12", submitting: false, error: null });
 
-      // Load user's custom exercises + source variations using the same token
+      // Load user's custom exercises
       const token = localStorage.getItem("token");
       if (token) {
         fetch("/api/exercises/custom", { headers: { Authorization: `Bearer ${token}` } })
@@ -314,20 +309,6 @@ export default function ExerciseSwapModal({
                 role: "accessory", trackingType: e.trackingType,
                 isExplicitAlternative: true,
               })));
-            }
-          })
-          .catch(() => {});
-      }
-
-      // Fetch variations of the source exercise immediately
-      if (token && exerciseSlug) {
-        fetch(`/api/exercises/variations?slug=${encodeURIComponent(exerciseSlug)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((r) => r.ok ? r.json() : null)
-          .then((data) => {
-            if (data?.variations?.length > 1) {
-              setSourceVariations(data.variations);
             }
           })
           .catch(() => {});
@@ -367,9 +348,11 @@ export default function ExerciseSwapModal({
     }
   }, [isOpen, loading]);
 
-  // Reset visible count when search/filters change
+  // Reset visible count when user actively searches or filters
   useEffect(() => {
-    setVisibleCount(3);
+    if (searchQuery || Object.values(filters).some(Boolean)) {
+      setVisibleCount(8);
+    }
   }, [searchQuery, filters]);
 
   // Filter & search
@@ -459,32 +442,6 @@ export default function ExerciseSwapModal({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [hasMore]);
-
-  // Swap to a specific variation of the source exercise
-  const handleSourceVariantSwap = (scope: SwapScope) => {
-    if (!selectedSourceVariant || !sourceVariations) return;
-    const variation = sourceVariations.find((v) => v.slug === selectedSourceVariant);
-    if (!variation) return;
-    onSwap(
-      {
-        slug: variation.slug,
-        name: variation.name,
-        score: 100,
-        reasons: ["Variation of original exercise"],
-        equipment: variation.equipment,
-        primaryMuscles: source?.primaryMuscles ?? [],
-        movementPatterns: source?.movementPatterns ?? [],
-        difficulty: variation.difficulty,
-        category: source?.category ?? "",
-        bodyRegion: source?.bodyRegion ?? "",
-        role: source?.role ?? "",
-        trackingType: "",
-        isExplicitAlternative: false,
-      },
-      scope
-    );
-    onClose();
-  };
 
   const handleCreateCustom = async () => {
     const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = customForm;
@@ -813,58 +770,6 @@ export default function ExerciseSwapModal({
 
               {/* ── Main alternatives list (hidden while create form is open) ── */}
               {!showCreateForm && (<>
-
-              {/* ── Source exercise variations ── */}
-              {sourceVariations && sourceVariations.length > 1 && (
-                <div className="px-5 pt-4 pb-3">
-                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                    Variations of {exerciseName}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {sourceVariations.map((v) => {
-                      const isActive = (selectedSourceVariant ?? exerciseSlug) === v.slug;
-                      const eqLabel = v.equipment.slice(0, 2).map(formatEquipment).join(" / ");
-                      return (
-                        <button
-                          key={v.slug}
-                          onClick={() => setSelectedSourceVariant(v.slug === exerciseSlug && !selectedSourceVariant ? null : v.slug)}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                            isActive
-                              ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-950/30 dark:text-blue-300"
-                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                          }`}
-                        >
-                          {v.name}
-                          {eqLabel && (
-                            <span className="ml-1 opacity-60">· {eqLabel}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Swap actions for selected source variation */}
-                  {selectedSourceVariant && selectedSourceVariant !== exerciseSlug && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => handleSourceVariantSwap("session")}
-                        className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
-                      >
-                        Just This Session
-                      </button>
-                      <button
-                        onClick={() => handleSourceVariantSwap("program")}
-                        className="flex-1 rounded-lg border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-950/20 transition-colors"
-                      >
-                        All Future Workouts
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Divider between variations and suggestions */}
-              <div className={`border-t border-zinc-100 dark:border-zinc-800 ${sourceVariations && sourceVariations.length > 1 ? "mx-5" : "hidden"}`} />
 
               {/* ── My Custom Exercises ── */}
               {customExercises.length > 0 && (
