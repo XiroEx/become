@@ -135,11 +135,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the current day's workout
-    const currentPhase = activeProgram.currentPhase || 1
     const phases = (program.phases || []) as Phase[]
 
-    // Always fetch schedule — used for effective-day lookup and accurate count computation
+    // Always fetch schedule — used for phase derivation, effective-day lookup, and count computation
     const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean()
+
+    // Derive currentPhase from schedule (next upcoming session carries the correct phase number).
+    // Falls back to stale UserProgress counter only if no schedule exists.
+    const nextUpcoming = schedule?.scheduledWorkouts?.find(
+      (w: { status: string }) => w.status === 'scheduled'
+    )
+    const currentPhase = (nextUpcoming as { phase?: number } | undefined)?.phase ?? activeProgram.currentPhase ?? 1
 
     // Compute accurate completedWorkouts/totalWorkouts from schedule + workout logs.
     // Historical sessions done before the schedule-sync fix may still show status='scheduled'
