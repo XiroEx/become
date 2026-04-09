@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
     const candidateIds = inProgressPrograms.map((p: { programId: string }) => p.programId)
     const schedules = await Schedule.find(
       { userId: payload.userId, programId: { $in: candidateIds } },
-      { programId: 1, 'scheduledWorkouts.status': 1, 'scheduledWorkouts.dayLabel': 1 }
-    ).lean<{ programId: string; scheduledWorkouts: { status: string; dayLabel: string }[] }[]>()
+      { programId: 1, 'scheduledWorkouts.status': 1, 'scheduledWorkouts.dayLabel': 1, 'scheduledWorkouts.date': 1 }
+    ).lean<{ programId: string; scheduledWorkouts: { status: string; dayLabel: string; date: Date }[] }[]>()
     const scheduleMap = new Map(schedules.map((s) => [s.programId, s]))
 
     // Workout logs for cross-referencing historical completions (sessions done before schedule-sync fix
@@ -95,15 +95,25 @@ export async function GET(request: NextRequest) {
         const sessions = schedule.scheduledWorkouts.filter((w) => w.status !== 'rest')
         totalWorkouts = sessions.length
 
-        // Completed = schedule says completed OR a matching workout log exists
-        // (covers historical sessions done before the schedule-sync fix was deployed)
-        completedWorkouts = sessions.filter((w) => {
-          if (w.status === 'completed') return true
-          if (w.status === 'skipped') return false // skipped ≠ completed
-          return workoutLogs.some(
-            (log) => log.programId === program.programId && log.day === w.dayLabel && log.completed
-          )
-        }).length
+        // Completed = schedule says completed OR matched by a workout log.
+        // Uses greedy chronological matching to handle repeating dayLabels
+        // (e.g. "Day 1" appears 5× in a 5-week program — one log entry of "Day 1"
+        // should only count as one completion, not five).
+        const availableLogs = new Map<string, number>()
+        for (const log of workoutLogs) {
+          if (log.programId === program.programId && log.completed) {
+            availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
+          }
+        }
+        completedWorkouts = [...sessions]
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .filter((w) => {
+            if (w.status === 'completed') return true
+            if (w.status === 'skipped') return false
+            const n = availableLogs.get(w.dayLabel) || 0
+            if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
+            return false
+          }).length
 
         // Self-heal: program was incorrectly auto-completed but schedule has remaining sessions
         const remaining = totalWorkouts - completedWorkouts

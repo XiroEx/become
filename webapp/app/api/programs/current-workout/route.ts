@@ -149,17 +149,27 @@ export async function GET(request: NextRequest) {
     let computedCompleted = 0
     let computedTotal = 0
     if (schedule?.scheduledWorkouts?.length) {
-      const sessions = (schedule.scheduledWorkouts as Array<{ status: string; dayLabel: string }>).filter(
+      const sessions = (schedule.scheduledWorkouts as Array<{ status: string; dayLabel: string; date: Date }>).filter(
         (w) => w.status !== 'rest'
       )
       computedTotal = sessions.length
-      computedCompleted = sessions.filter((w) => {
-        if (w.status === 'completed') return true
-        if (w.status === 'skipped') return false
-        return workoutLogs.some(
-          (log) => log.programId === programId && log.day === w.dayLabel && log.completed
-        )
-      }).length
+      // Greedy chronological matching: one log entry of "Day 1" counts for exactly
+      // one schedule occurrence of "Day 1" (handles repeating day labels in multi-week programs)
+      const availableLogs = new Map<string, number>()
+      for (const log of workoutLogs) {
+        if (log.programId === programId && log.completed) {
+          availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
+        }
+      }
+      computedCompleted = [...sessions]
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .filter((w) => {
+          if (w.status === 'completed') return true
+          if (w.status === 'skipped') return false
+          const n = availableLogs.get(w.dayLabel) || 0
+          if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
+          return false
+        }).length
     }
 
     // Determine effective day: if no ?day= param, prefer the next scheduled workout from Schedule

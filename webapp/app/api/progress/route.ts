@@ -146,20 +146,29 @@ export async function GET(request: NextRequest) {
           nextWorkout = `${nextScheduled.dayLabel} - ${nextScheduled.workoutTitle}`
         }
 
-        // currentWeek: derive from schedule + workout logs (reconciles historical completions)
+        // currentWeek: derive from schedule + workout logs (reconciles historical completions).
+        // Greedy chronological matching handles repeating day labels in multi-week programs.
         const daysPerWeek = schedule.settings?.trainingDays?.length || 4
         type ProgressLog = { programId: string; day: string; completed: boolean }
         const wLogs = (progress.workoutLogs || []) as ProgressLog[]
         const sessions = (schedule.scheduledWorkouts || []).filter(
           (w: { status: string }) => w.status !== 'rest'
-        )
-        const reconciledCompleted = sessions.filter((w: { status: string; dayLabel: string }) => {
-          if (w.status === 'completed') return true
-          if (w.status === 'skipped') return false
-          return wLogs.some(
-            (log) => log.programId === activeProgram.programId && log.day === w.dayLabel && log.completed
-          )
-        }).length
+        ) as Array<{ status: string; dayLabel: string; date: Date }>
+        const availableLogs = new Map<string, number>()
+        for (const log of wLogs) {
+          if (log.programId === activeProgram.programId && log.completed) {
+            availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
+          }
+        }
+        const reconciledCompleted = [...sessions]
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .filter((w) => {
+            if (w.status === 'completed') return true
+            if (w.status === 'skipped') return false
+            const n = availableLogs.get(w.dayLabel) || 0
+            if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
+            return false
+          }).length
         scheduleCurrentWeek = Math.max(1, Math.ceil(reconciledCompleted / daysPerWeek))
       }
 
