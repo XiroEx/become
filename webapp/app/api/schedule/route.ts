@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
         _id: schedule._id,
         programId: schedule.programId,
         programName: schedule.programName,
-        programStatus: programStatusMap.get(schedule.programId) || 'in-progress',
+        programStatus: programStatusMap.get(schedule.programId) || 'unknown',
         settings: schedule.settings,
         scheduledWorkouts: updatedWorkouts,
       }

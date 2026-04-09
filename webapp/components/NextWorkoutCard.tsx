@@ -44,6 +44,8 @@ export default function NextWorkoutCard() {
           let earliest: (ScheduledWorkout & { programName: string }) | null = null
           let earliestKey = ''
           for (const schedule of schedules) {
+            // Only show upcoming workouts for actively in-progress programs
+            if (schedule.programStatus !== 'in-progress' && schedule.programStatus !== 'active') continue
             for (const w of schedule.scheduledWorkouts) {
               if (w.status !== 'scheduled') continue
               // Extract UTC date portion from ISO string

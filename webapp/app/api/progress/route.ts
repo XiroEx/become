@@ -92,6 +92,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Self-heal: if no in-progress program found, check for 'completed' programs that still have
+    // remaining scheduled sessions (indicates they were incorrectly auto-completed)
+    if (!activeProgram && progress.activePrograms) {
+      const completedPrograms = (progress.activePrograms as Array<{ programId: string; programName: string; status: string; startDate: Date; currentPhase?: number; currentDay?: string; completedWorkouts?: number; totalWorkouts?: number; lastWorkoutDate?: Date }>).filter(p => p.status === 'completed')
+      for (const cp of completedPrograms) {
+        const sched = await Schedule.findOne(
+          { userId: authResult.userId, programId: cp.programId },
+          { 'scheduledWorkouts.status': 1 }
+        ).lean<{ scheduledWorkouts: { status: string }[] }>()
+        if (!sched) continue
+        const remaining = sched.scheduledWorkouts.filter(w => w.status === 'scheduled').length
+        if (remaining > 0) {
+          // Reactivate: update DB status back to in-progress
+          UserProgress.updateOne(
+            { userId: authResult.userId, 'activePrograms.programId': cp.programId },
+            { $set: { 'activePrograms.$.status': 'in-progress' } }
+          ).catch(() => {})
+          activeProgram = { ...cp, status: 'in-progress' }
+          programName = cp.programName
+          programDetails = await ProgramModel.findOne({ program_id: cp.programId }).lean()
+          break
+        }
+      }
+    }
+
     // Enrich with Schedule data so Current Program card and NextWorkoutCard use the same source
     let scheduleNextWorkoutDay: string | undefined
     let scheduleTotalWeeks: number | undefined
