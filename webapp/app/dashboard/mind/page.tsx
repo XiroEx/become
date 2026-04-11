@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import MindHub from '@/components/mind/MindHub'
+import MindHub, { type SectionId } from '@/components/mind/MindHub'
 import StateShiftTab from '@/components/mind/StateShiftTab'
 import SelfImageTab from '@/components/mind/SelfImageTab'
 import MissionTab from '@/components/mind/MissionTab'
@@ -14,15 +14,6 @@ import SocialTab from '@/components/mind/SocialTab'
 // ---------------------------------------------------------------------------
 // Sections
 // ---------------------------------------------------------------------------
-
-export type SectionId =
-  | 'home'
-  | 'state-shift'
-  | 'self-image'
-  | 'mission'
-  | 'discipline'
-  | 'anti-sabotage'
-  | 'social'
 
 const SECTION_LABELS: Record<SectionId, string> = {
   'home': 'Mindset',

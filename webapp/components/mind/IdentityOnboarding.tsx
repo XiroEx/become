@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
-import type { StartingPoint, PrimaryObstacle } from '@/models/IdentityProfile'
+
+type StartingPoint = 'lost' | 'stuck' | 'building' | 'leveling_up'
+type PrimaryObstacle = 'clarity' | 'discipline' | 'motivation' | 'environment'
 
 interface Props {
   onComplete: () => void

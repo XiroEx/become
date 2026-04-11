@@ -7,7 +7,15 @@ import {
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
-import type { SectionId } from '@/app/dashboard/mind/page'
+
+export type SectionId =
+  | 'home'
+  | 'state-shift'
+  | 'self-image'
+  | 'mission'
+  | 'discipline'
+  | 'anti-sabotage'
+  | 'social'
 
 // ─── Section config ────────────────────────────────────────────────────────────
 
