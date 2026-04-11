@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Wind, Timer, Play, Pause, RotateCcw, CheckCircle2 } from 'lucide-react'
+import { Wind, Timer, Play, Pause, RotateCcw, CheckCircle2, Zap } from 'lucide-react'
+import { getPiecesBySection } from '@/lib/mindContent'
 
 // ─── Breathing protocols ───────────────────────────────────────────────────────
 
@@ -323,8 +324,11 @@ function BreathSession({ protocol, onClose }: BreathSessionProps) {
 
 // ─── Main tab ──────────────────────────────────────────────────────────────────
 
+const QUICK_PROTOCOLS = getPiecesBySection('state-shift')
+
 export default function StateShiftTab() {
   const [activeSession, setActiveSession] = useState<Protocol | null>(null)
+  const [expandedProtocol, setExpandedProtocol] = useState<string | null>(null)
 
   if (activeSession) {
     return <BreathSession protocol={activeSession} onClose={() => setActiveSession(null)} />
@@ -332,16 +336,53 @@ export default function StateShiftTab() {
 
   return (
     <div className="space-y-5">
-      {/* Quick reset */}
+      {/* Named protocols from content library */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Zap className="h-4 w-4 text-zinc-500" />
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+            Protocols
+          </p>
+        </div>
+        <p className="mb-4 text-sm text-zinc-500">
+          Named resets — each one has a mantra and exact instruction. Use when you need to shift fast.
+        </p>
+        <div className="space-y-2">
+          {QUICK_PROTOCOLS.map((p) => (
+            <div key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+              <button
+                onClick={() => setExpandedProtocol(expandedProtocol === p.id ? null : p.id)}
+                className="flex w-full items-center justify-between p-4 text-left"
+              >
+                <div>
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white">{p.title}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{p.source}</p>
+                </div>
+                <span className="text-zinc-400 text-lg ml-2 shrink-0">{expandedProtocol === p.id ? '−' : '+'}</span>
+              </button>
+              {expandedProtocol === p.id && (
+                <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 bg-zinc-50 dark:bg-zinc-800/30">
+                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 italic mb-3">
+                    &ldquo;{p.mantra}&rdquo;
+                  </p>
+                  <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Breathwork */}
       <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
         <div className="mb-4 flex items-center gap-2">
           <Wind className="h-4 w-4 text-zinc-500" />
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-            Quick Reset
+            Breathwork
           </p>
         </div>
-        <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-500">
-          Breathwork is the fastest way to shift your state. Pick a protocol.
+        <p className="mb-4 text-sm text-zinc-500">
+          Guided breath sessions. The fastest physiological reset available to you.
         </p>
         <div className="space-y-3">
           {PROTOCOLS.map((p) => (

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
+import { getDailyPiece, type ContentPiece } from '@/lib/mindContent'
 
 export type SectionId =
   | 'home'
@@ -49,12 +50,6 @@ const MIND_STATES: {
   { id: 'locked_in',  label: 'Locked In',  emoji: '🔒', color: 'text-emerald-500', border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', section: 'discipline' },
 ]
 
-const STATE_RECS: Record<MindState, string> = {
-  stressed:   'Breathe first. A 4-7-8 cycle resets your nervous system in 90 seconds.',
-  distracted: 'Lock in. Focus Mode will anchor you to one thing.',
-  low_energy: "Low energy is often a signal you've drifted from purpose. Read your mission.",
-  locked_in:  "Don't waste it. Train, or attack your most important task right now.",
-}
 
 // ─── Data types ────────────────────────────────────────────────────────────────
 
@@ -93,6 +88,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
   const [showOnboarding, setShowOnboarding] = useState(false)
 
   const [checkedIn, setCheckedIn] = useState<MindState | null>(null)
+  const [contentPiece, setContentPiece] = useState<ContentPiece | null>(null)
   const [logging, setLogging] = useState(false)
   const [dailyAction, setDailyAction] = useState<string | null>(null)
   const [challengeCompleted, setChallengeCompleted] = useState(false)
@@ -134,6 +130,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
 
   async function checkIn(state: MindState) {
     setCheckedIn(state)
+    setContentPiece(getDailyPiece(state))
     setLogging(true)
     try {
       const token = getToken()
@@ -298,29 +295,32 @@ export default function MindHub({ onNavigate, streak }: Props) {
               ))}
             </div>
           </>
-        ) : (
+        ) : contentPiece ? (
           <>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <span className="text-lg">{checkedInState?.emoji}</span>
               <span className={`text-sm font-bold ${checkedInState?.color}`}>{checkedInState?.label}</span>
-              <button onClick={() => setCheckedIn(null)} className="ml-auto text-xs text-zinc-400 hover:text-zinc-600">
+              <button onClick={() => { setCheckedIn(null); setContentPiece(null) }} className="ml-auto text-xs text-zinc-400 hover:text-zinc-600">
                 change
               </button>
             </div>
-            <p className="mb-4 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-              {STATE_RECS[checkedIn]}
-            </p>
-            {checkedInState && checkedInState.section !== 'home' && (
-              <button
-                onClick={() => onNavigate(checkedInState.section)}
-                className="flex items-center gap-2 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900"
-              >
-                Go to {SECTIONS.find(s => s.id === checkedInState.section)?.label}
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
+            {/* Content piece */}
+            <div className="rounded-xl bg-zinc-900 dark:bg-zinc-800 p-4 mb-3">
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">
+                Protocol · {contentPiece.source}
+              </p>
+              <p className="text-base font-bold text-white mb-2">{contentPiece.title}</p>
+              <p className="text-sm font-medium text-zinc-300 italic mb-3">&ldquo;{contentPiece.mantra}&rdquo;</p>
+              <p className="text-sm leading-relaxed text-zinc-400">{contentPiece.instruction}</p>
+            </div>
+            <button
+              onClick={() => onNavigate(contentPiece.section as SectionId)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-white dark:bg-zinc-100 px-4 py-2.5 text-sm font-bold text-zinc-900"
+            >
+              {contentPiece.cta} <ChevronRight className="h-4 w-4" />
+            </button>
           </>
-        )}
+        ) : null}
       </div>
 
       {/* Mission + discipline quick glance */}

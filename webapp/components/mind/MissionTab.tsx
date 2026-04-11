@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { BookOpen, Edit2, CheckCircle2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { getPiecesBySection } from '@/lib/mindContent'
 
 interface Mission {
   purpose: string
@@ -185,6 +186,47 @@ export default function MissionTab() {
           </div>
         </div>
       )}
+
+      {/* Mission protocols */}
+      <MissionProtocols />
+    </div>
+  )
+}
+
+const MISSION_PROTOCOLS = getPiecesBySection('mission')
+
+function MissionProtocols() {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  return (
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+        Mission Protocols
+      </p>
+      <p className="mb-4 text-sm text-zinc-500">Clarity exercises. Use when you feel scattered or lost.</p>
+      <div className="space-y-2">
+        {MISSION_PROTOCOLS.map((p) => (
+          <div key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <button
+              onClick={() => setExpanded(expanded === p.id ? null : p.id)}
+              className="flex w-full items-center justify-between p-4 text-left"
+            >
+              <div>
+                <p className="text-sm font-bold text-zinc-900 dark:text-white">{p.title}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{p.source}</p>
+              </div>
+              <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === p.id ? '−' : '+'}</span>
+            </button>
+            {expanded === p.id && (
+              <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 bg-zinc-50 dark:bg-zinc-800/30">
+                <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-3">
+                  &ldquo;{p.mantra}&rdquo;
+                </p>
+                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
