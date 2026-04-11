@@ -1,53 +1,45 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import HomeTab from '@/components/mind/HomeTab'
+import MindHub from '@/components/mind/MindHub'
 import StateShiftTab from '@/components/mind/StateShiftTab'
 import SelfImageTab from '@/components/mind/SelfImageTab'
 import MissionTab from '@/components/mind/MissionTab'
 import DisciplineTab from '@/components/mind/DisciplineTab'
 import AntiSabotageTab from '@/components/mind/AntiSabotageTab'
 import SocialTab from '@/components/mind/SocialTab'
-import {
-  Zap,
-  Wind,
-  Eye,
-  BookOpen,
-  Sword,
-  Shield,
-  Users,
-} from 'lucide-react'
 
 // ---------------------------------------------------------------------------
-// Tabs
+// Sections
 // ---------------------------------------------------------------------------
 
-type TabId = 'home' | 'state-shift' | 'self-image' | 'mission' | 'discipline' | 'anti-sabotage' | 'social'
+export type SectionId =
+  | 'home'
+  | 'state-shift'
+  | 'self-image'
+  | 'mission'
+  | 'discipline'
+  | 'anti-sabotage'
+  | 'social'
 
-interface Tab {
-  id: TabId
-  label: string
-  shortLabel: string
-  Icon: React.ElementType
+const SECTION_LABELS: Record<SectionId, string> = {
+  'home': 'Mindset',
+  'state-shift': 'State Shift',
+  'self-image': 'Self-Image',
+  'mission': 'Mission',
+  'discipline': 'Discipline',
+  'anti-sabotage': 'Anti-Sabotage',
+  'social': 'Social',
 }
 
-const TABS: Tab[] = [
-  { id: 'home',          label: 'Home',         shortLabel: 'Home',    Icon: Zap },
-  { id: 'state-shift',   label: 'State Shift',  shortLabel: 'State',   Icon: Wind },
-  { id: 'self-image',    label: 'Self-Image',   shortLabel: 'Self',    Icon: Eye },
-  { id: 'mission',       label: 'Mission',      shortLabel: 'Mission', Icon: BookOpen },
-  { id: 'discipline',    label: 'Discipline',   shortLabel: 'Grind',   Icon: Sword },
-  { id: 'anti-sabotage', label: 'Anti-Sabotage',shortLabel: 'Shield',  Icon: Shield },
-  { id: 'social',        label: 'Social',       shortLabel: 'Social',  Icon: Users },
-]
-
 // ---------------------------------------------------------------------------
-// MAIN PAGE
+// Page
 // ---------------------------------------------------------------------------
 
 export default function MindPage() {
-  const [activeTab, setActiveTab] = useState<TabId>('home')
+  const [section, setSection] = useState<SectionId>('home')
   const [streak, setStreak] = useState(0)
 
   useEffect(() => {
@@ -59,48 +51,45 @@ export default function MindPage() {
       .catch(() => {})
   }, [])
 
+  const isHome = section === 'home'
+
   return (
     <PageTransition className="flex flex-col">
-      {/* Page header */}
-      <header className="mb-4 sm:mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Mindset</h1>
-        <p className="text-zinc-500 dark:text-zinc-400">Your mental edge. Build it daily.</p>
+      {/* Header — collapses when inside a section */}
+      <header className="mb-5">
+        {isHome ? (
+          <>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Mindset</h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              The mind is the muscle. Train it like one.
+            </p>
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSection('home')}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-white">
+              {SECTION_LABELS[section]}
+            </h1>
+          </div>
+        )}
       </header>
 
-      {/* Scrollable tab bar */}
-      <div className="sticky top-0 z-10 -mx-3 mb-5 px-3 pb-3 pt-1 sm:-mx-6 sm:px-6 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md">
-        <div className="flex gap-1 overflow-x-auto rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 p-1 scrollbar-hide">
-          {TABS.map((tab) => {
-            const { Icon } = tab
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all sm:text-sm ${
-                  activeTab === tab.id
-                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
-                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-                <span>{tab.shortLabel}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Tab content */}
+      {/* Content */}
       <div className="min-h-0 flex-1">
-        {activeTab === 'home' && (
-          <HomeTab onNavigateTab={(tab) => setActiveTab(tab as TabId)} streak={streak} />
+        {section === 'home' && (
+          <MindHub onNavigate={setSection} streak={streak} />
         )}
-        {activeTab === 'state-shift' && <StateShiftTab />}
-        {activeTab === 'self-image' && <SelfImageTab streak={streak} />}
-        {activeTab === 'mission' && <MissionTab />}
-        {activeTab === 'discipline' && <DisciplineTab />}
-        {activeTab === 'anti-sabotage' && <AntiSabotageTab />}
-        {activeTab === 'social' && <SocialTab />}
+        {section === 'state-shift' && <StateShiftTab />}
+        {section === 'self-image' && <SelfImageTab streak={streak} />}
+        {section === 'mission' && <MissionTab />}
+        {section === 'discipline' && <DisciplineTab />}
+        {section === 'anti-sabotage' && <AntiSabotageTab />}
+        {section === 'social' && <SocialTab />}
       </div>
     </PageTransition>
   )
