@@ -156,6 +156,18 @@ export default function OnboardingPage() {
         },
         body: JSON.stringify({ profile: payload, onboardingCompleted: true }),
       })
+
+      // Seed the first weight log entry from the body stats step
+      if (payload.currentWeightKg) {
+        fetch('/api/weight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ weight: payload.currentWeightKg }),
+        }).catch(() => {}) // fire-and-forget
+      }
+
+      // Reset program nudge so dashboard shows it immediately for new users
+      try { localStorage.removeItem('become_program_nudge') } catch {}
     } catch {
       // Still navigate on error — don't block the user
     } finally {

@@ -7,7 +7,13 @@ import ProgressChart, { MetricData } from '@/components/ProgressChart'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import MoodCard from '@/components/MoodCard'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
-import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed } from 'lucide-react'
+import ProgramNudgeModal, {
+  NUDGE_KEY,
+  type NudgeState,
+  shouldShowNudge,
+  recordNudgeDismiss,
+} from '@/components/ProgramNudgeModal'
+import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
@@ -76,6 +82,7 @@ export default function DashboardClient() {
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
+  const [showNudge, setShowNudge] = useState(false)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -212,14 +219,47 @@ export default function DashboardClient() {
       }
     }
 
+    // Check whether to show the program nudge modal
+    function checkProgramNudge(hasProgram: boolean) {
+      if (hasProgram) return // already enrolled — never show
+      try {
+        const raw = localStorage.getItem(NUDGE_KEY)
+        const state: NudgeState | null = raw ? JSON.parse(raw) : null
+        if (shouldShowNudge(state)) setShowNudge(true)
+      } catch {
+        setShowNudge(true) // on parse error, just show it
+      }
+    }
+
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
       await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
+      // Run nudge check after progress loaded — reads currentProgram from updated state
+      // We read directly from the API response so we don't depend on stale state
+      try {
+        const token = localStorage.getItem('token')
+        if (token) {
+          const r = await fetch('/api/progress', { headers: { Authorization: `Bearer ${token}` } })
+          if (r.ok) {
+            const d = await r.json()
+            checkProgramNudge(!!d.currentProgram)
+          }
+        }
+      } catch { /* non-critical */ }
     }
 
     init()
   }, [])
+
+  function handleNudgeDismiss() {
+    setShowNudge(false)
+    try {
+      const raw = localStorage.getItem(NUDGE_KEY)
+      const current: NudgeState | null = raw ? JSON.parse(raw) : null
+      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismiss(current)))
+    } catch {}
+  }
 
   const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
     setShowCheckInModal(false)
@@ -314,6 +354,12 @@ export default function DashboardClient() {
         streakDays={streakData?.streakDays ?? data.stats.streakDays}
         onClose={() => setMilestoneCelebration(null)}
       />
+
+      <ProgramNudgeModal
+        open={showNudge}
+        fitnessGoal={fitnessGoal ?? null}
+        onExplore={handleNudgeDismiss}
+      />
       
       <PageTransition className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -407,6 +453,30 @@ export default function DashboardClient() {
           fats={nutritionData.fats}
           water={nutritionData.water}
         />
+      )}
+
+      {/* First-time empty state — no program, no workouts yet */}
+      {!loading && !data.currentProgram && data.stats.totalWorkouts === 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+              <Dumbbell className="h-6 w-6 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-zinc-900 dark:text-white">No program yet</h3>
+              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                Browse programs and enroll when you&apos;re ready.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/programming"
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Browse
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       )}
 
       {/* Current Program & Mindset - side by side on desktop, stacked on mobile */}
