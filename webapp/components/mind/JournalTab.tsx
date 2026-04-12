@@ -223,6 +223,44 @@ function PastEntryCard({ entry }: { entry: JournalEntry }) {
   )
 }
 
+// ─── Draft autosave ───────────────────────────────────────────────────────────
+
+const DRAFT_KEY = 'become_journal_draft'
+
+function todayDateStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+interface JournalDraft {
+  date: string
+  content: string
+  mood?: 1 | 2 | 3 | 4 | 5
+}
+
+function loadDraft(): JournalDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const draft: JournalDraft = JSON.parse(raw)
+    // Only valid if it's from today
+    return draft.date === todayDateStr() ? draft : null
+  } catch {
+    return null
+  }
+}
+
+function saveDraft(content: string, mood?: 1 | 2 | 3 | 4 | 5) {
+  try {
+    const draft: JournalDraft = { date: todayDateStr(), content, mood }
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+  } catch {}
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY) } catch {}
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function JournalTab() {
@@ -232,6 +270,7 @@ export default function JournalTab() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [draftRestored, setDraftRestored] = useState(false)
 
   // Form state
   const [content, setContent] = useState('')
@@ -239,6 +278,9 @@ export default function JournalTab() {
 
   // Pagination
   const [showAll, setShowAll] = useState(false)
+
+  // Autosave timer ref
+  const autosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const todayPrompt = getTodayPrompt()
   const today = new Date()
@@ -262,6 +304,16 @@ export default function JournalTab() {
         setTodayEntry(data.todayEntry)
         setContent(data.todayEntry.content)
         setSelectedMood(data.todayEntry.mood)
+        // Entry already saved — clear any stale draft
+        clearDraft()
+      } else {
+        // No saved entry yet — check for a draft from today
+        const draft = loadDraft()
+        if (draft && draft.content.trim()) {
+          setContent(draft.content)
+          if (draft.mood) setSelectedMood(draft.mood)
+          setDraftRestored(true)
+        }
       }
     } catch {
       setError('Could not load journal entries.')
@@ -273,6 +325,20 @@ export default function JournalTab() {
   useEffect(() => {
     fetchEntries()
   }, [fetchEntries])
+
+  // ── Autosave draft to localStorage (debounced 1.5s) ──────────────────────────
+
+  useEffect(() => {
+    // Don't autosave if entry is already persisted to DB
+    if (todayEntry) return
+    if (autosaveRef.current) clearTimeout(autosaveRef.current)
+    autosaveRef.current = setTimeout(() => {
+      if (content.trim()) saveDraft(content, selectedMood)
+    }, 1500)
+    return () => {
+      if (autosaveRef.current) clearTimeout(autosaveRef.current)
+    }
+  }, [content, selectedMood, todayEntry])
 
   // ── Save ─────────────────────────────────────────────────────────────────────
 
@@ -308,6 +374,8 @@ export default function JournalTab() {
 
       const data = await res.json()
       setTodayEntry(data.entry)
+      clearDraft()
+      setDraftRestored(false)
 
       // Refresh the entry list, re-inserting today's entry if it's new
       setEntries((prev) => {
@@ -345,6 +413,22 @@ export default function JournalTab() {
 
   return (
     <div className="space-y-6">
+      {/* Draft restored banner */}
+      {draftRestored && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+            Draft restored — you were writing earlier
+          </p>
+          <button
+            type="button"
+            onClick={() => { setContent(''); setSelectedMood(undefined); clearDraft(); setDraftRestored(false) }}
+            className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+          >
+            Discard
+          </button>
+        </div>
+      )}
+
       {/* Writing streak pill */}
       {writingStreak > 0 && (
         <div className="flex">

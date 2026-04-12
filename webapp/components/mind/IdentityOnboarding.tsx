@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 
@@ -65,6 +65,26 @@ const OBSTACLES: { id: PrimaryObstacle; headline: string; sub: string }[] = [
   },
 ]
 
+// ─── Draft helpers ─────────────────────────────────────────────────────────────
+
+const ONBOARDING_DRAFT_KEY = 'become_identity_onboarding_draft'
+
+interface OnboardingDraft {
+  step: number
+  startingPoint: StartingPoint | null
+  futureSelf: string
+  obstacle: PrimaryObstacle | null
+}
+
+function loadOnboardingDraft(): OnboardingDraft | null {
+  try {
+    const raw = localStorage.getItem(ONBOARDING_DRAFT_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function IdentityOnboarding({ onComplete }: Props) {
@@ -73,6 +93,27 @@ export default function IdentityOnboarding({ onComplete }: Props) {
   const [futureSelf, setFutureSelf] = useState('')
   const [obstacle, setObstacle] = useState<PrimaryObstacle | null>(null)
   const [saving, setSaving] = useState(false)
+  const [resumedFromDraft, setResumedFromDraft] = useState(false)
+
+  // Restore draft on mount
+  useEffect(() => {
+    const draft = loadOnboardingDraft()
+    if (draft && (draft.startingPoint || draft.futureSelf || draft.obstacle)) {
+      setStep(draft.step ?? 1)
+      setStartingPoint(draft.startingPoint)
+      setFutureSelf(draft.futureSelf ?? '')
+      setObstacle(draft.obstacle)
+      setResumedFromDraft(true)
+    }
+  }, [])
+
+  // Persist draft on every state change
+  useEffect(() => {
+    try {
+      const draft: OnboardingDraft = { step, startingPoint, futureSelf, obstacle }
+      localStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify(draft))
+    } catch {}
+  }, [step, startingPoint, futureSelf, obstacle])
 
   // Derive currentSelf from startingPoint for the API
   const currentSelfMap: Record<StartingPoint, string> = {
@@ -97,7 +138,10 @@ export default function IdentityOnboarding({ onComplete }: Props) {
           startingPoint,
         }),
       })
-      if (res.ok) onComplete()
+      if (res.ok) {
+        try { localStorage.removeItem(ONBOARDING_DRAFT_KEY) } catch {}
+        onComplete()
+      }
     } finally {
       setSaving(false)
     }
@@ -105,6 +149,15 @@ export default function IdentityOnboarding({ onComplete }: Props) {
 
   return (
     <div className="flex flex-col min-h-[60vh]">
+
+      {/* Resume banner */}
+      {resumedFromDraft && (
+        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/40 dark:bg-blue-950/20">
+          <p className="text-sm font-medium text-blue-800 dark:text-blue-400">
+            Picking up where you left off — step {step} of 3
+          </p>
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="mb-8 flex gap-1.5">
