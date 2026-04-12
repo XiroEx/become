@@ -4,64 +4,14 @@
  * Navigates through the live workout UI for the Jon Don Split and BECOME programs,
  * completing full workouts step-by-step and verifying the summary screen appears.
  *
- * Auth: Uses a fresh JWT for george8794@gmail.com (valid ~7 days from issue)
+ * Auth: Permanent JWT generated at runtime from JWT_SECRET (no expiry — never needs updating).
+ * Requires webapp/.env.local with JWT_SECRET set.
  *
  * Run: cd /home/alpha/code/become && node_modules/.bin/playwright test webapp/tests/e2e/live-workout-completability.spec.ts --headed=false
  */
 
 import { test, expect, Page, BrowserContext } from '@playwright/test';
-
-const BASE_URL = 'https://become.redbtn.io';
-
-// Fresh JWT for george8794@gmail.com — issued 2026-04-07, expires 2026-04-14
-const AUTH_TOKEN =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTNhZGNhOTA3Mzk3OGVjODEyYjYwMWEiLCJlbWFpbCI6Imdlb3JnZTg3OTRAZ21haWwuY29tIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3NzU1ODk1MjYsImV4cCI6MTc3NjE5NDMyNn0.S-cX5DXHWV-JEd95IN8h9s6daswLbXO4MuGYqab1exQ';
-
-// ─── Auth helper ─────────────────────────────────────────────────────────────
-
-async function authenticate(page: Page, context: BrowserContext) {
-  await context.addCookies([{
-    name: 'auth_token',
-    value: AUTH_TOKEN,
-    domain: 'become.redbtn.io',
-    path: '/',
-    httpOnly: false,
-    secure: true,
-    sameSite: 'Lax',
-  }]);
-  await page.goto(`${BASE_URL}/login`);
-  await page.evaluate((t) => localStorage.setItem('token', t), AUTH_TOKEN);
-  await page.goto(`${BASE_URL}/dashboard`);
-  await page.waitForLoadState('domcontentloaded');
-
-  // If redirected to onboarding, complete it via API and navigate back
-  if (page.url().includes('/onboarding')) {
-    console.log('[auth] Redirected to onboarding — completing via API');
-    await page.evaluate(async (args) => {
-      const { token, baseUrl } = args;
-      await fetch(`${baseUrl}/api/profile`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ onboardingCompleted: true, profile: { fitnessGoal: 'build_muscle', experienceLevel: 'intermediate', age: 30 } }),
-      });
-    }, { token: AUTH_TOKEN, baseUrl: BASE_URL });
-    await page.goto(`${BASE_URL}/dashboard`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
-  }
-
-  // Dismiss daily check-in if present
-  const skipBtn = page.locator('button:has-text("Skip for Today")');
-  if (await skipBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await skipBtn.click({ force: true });
-    await page.waitForTimeout(400);
-    const continueAnyway = page.locator('button:has-text("Continue Anyway")');
-    if (await continueAnyway.isVisible({ timeout: 1_500 }).catch(() => false)) {
-      await continueAnyway.click({ force: true });
-      await page.waitForTimeout(300);
-    }
-  }
-}
+import { authenticate, BASE_URL, AUTH_TOKEN } from './test-auth';
 
 // ─── Enrollment helper ───────────────────────────────────────────────────────
 
@@ -406,6 +356,9 @@ test.describe('Live Workout Completability', () => {
   test.beforeEach(async ({ page, context }) => {
     await authenticate(page, context);
   });
+
+  // ─── Auth token for inline API calls ─────────────────────────────────────
+  // AUTH_TOKEN is imported from test-auth and is permanent (no expiry)
 
   // ── Jon Don Split: Day 1 ──────────────────────────────────────────────────
   test('Jon Don Split — Day 1 (Chest, Shoulders, Biceps) completes to summary', async ({ page, context }) => {

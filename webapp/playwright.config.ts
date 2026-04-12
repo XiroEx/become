@@ -17,12 +17,11 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'swap-debug',
+      name: 'swap-mobile',
       testMatch: '**/swap-debug.spec.ts',
       timeout: 120_000,
       use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 800 },
+        ...devices['Pixel 7'],
         video: 'off',
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',

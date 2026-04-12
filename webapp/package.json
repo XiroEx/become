@@ -7,7 +7,9 @@
     "dev:db": "docker compose -f ../db/compose.yml up -d",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "gen-test-token": "node scripts/gen-test-token.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

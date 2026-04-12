@@ -10,6 +10,7 @@ export interface IIdentityProfile extends Document {
   primaryObstacle: PrimaryObstacle
   startingPoint: StartingPoint
   onboardingCompleted: boolean
+  evolutionScore: number    // 0–100, persisted on each GET so history is trackable
   updatedAt: Date
   createdAt: Date
 }
@@ -30,6 +31,7 @@ const IdentityProfileSchema = new Schema<IIdentityProfile>(
       required: true,
     },
     onboardingCompleted: { type: Boolean, default: false },
+    evolutionScore: { type: Number, default: 0, min: 0, max: 100 },
   },
   { timestamps: true }
 )

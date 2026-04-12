@@ -63,10 +63,13 @@ export async function GET(request: NextRequest) {
       (missionSet ? 15 : 0)
     )
 
+    // Persist score so it's queryable over time (fire-and-forget, don't block response)
+    IdentityProfile.updateOne({ userId: auth.userId }, { evolutionScore: score }).catch(() => {})
+
     const guidance = GUIDANCE[profile.primaryObstacle]
 
     return NextResponse.json({
-      profile,
+      profile: { ...profile, evolutionScore: score },
       evolution: {
         score,
         challengesCompleted,
