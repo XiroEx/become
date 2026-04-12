@@ -1,14 +1,42 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Flame, Dumbbell, TrendingUp, Trophy, Clock, ChevronRight } from 'lucide-react'
+import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import ProgressChart, { type MetricData } from '@/components/ProgressChart'
 import Link from 'next/link'
 import { getToken } from '@/lib/clientAuth'
 import type { FitnessGoal } from '@/models/User'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, CartesianGrid, ReferenceLine,
+} from 'recharts'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface ExerciseDetail {
+  name: string
+  slug?: string
+  bestSet: { weight: number; reps: number } | null
+  volume: number
+  isPR: boolean
+}
+
+interface DetailedWorkout {
+  date: string
+  rawDate: string
+  programId: string
+  day: string
+  duration?: number
+  totalVolume: number
+  exercises: ExerciseDetail[]
+}
+
+interface WeekVolume {
+  week: string
+  volume: number
+  workouts: number
+}
 
 interface PB {
   name: string
@@ -17,18 +45,8 @@ interface PB {
   date: string
 }
 
-interface RecentWorkout {
-  date: string
-  programId: string
-  day: string
-  duration?: number
-  exerciseCount: number
-}
-
 interface ProgressData {
-  weightData: MetricData[]
-  bmiData: MetricData[]
-  moodData: MetricData[]
+  weightData: Array<{ date: string; value: number }>
   stats: {
     streakDays: number
     totalWorkouts: number
@@ -37,7 +55,9 @@ interface ProgressData {
   }
   longestStreak: number
   pbs: PB[]
-  recentWorkouts: RecentWorkout[]
+  detailedWorkouts: DetailedWorkout[]
+  weeklyVolume: WeekVolume[]
+  totalVolumeLbs: number
   targetWeightLbs: number | null
   weeklyAvailability: number | null
   fitnessGoal?: FitnessGoal
@@ -45,29 +65,32 @@ interface ProgressData {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, icon }: {
-  label: string
-  value: string | number
-  sub?: string
-  icon: React.ReactNode
-}) {
+function fmt(lbs: number): string {
+  if (lbs >= 1_000_000) return `${(lbs / 1_000_000).toFixed(1)}M`
+  if (lbs >= 1_000) return `${(lbs / 1_000).toFixed(1)}K`
+  return lbs.toLocaleString()
+}
+
+// ── Volume Chart Tooltip ───────────────────────────────────────────────────────
+
+function VolumeTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: WeekVolume }>; label?: string }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center gap-2">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-          {icon}
-        </div>
-        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
-      </div>
-      <p className="text-2xl font-bold text-zinc-900 dark:text-white leading-none">{value}</p>
-      {sub && <p className="text-xs text-zinc-400 dark:text-zinc-500">{sub}</p>}
+    <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+      <p className="font-semibold text-zinc-900 dark:text-white">Week of {label}</p>
+      {d.volume > 0
+        ? <p className="text-zinc-500 dark:text-zinc-400">{fmt(d.volume)} lbs lifted</p>
+        : <p className="text-zinc-500 dark:text-zinc-400">No tracked weight</p>
+      }
+      <p className="text-zinc-500 dark:text-zinc-400">{d.workouts} {d.workouts === 1 ? 'workout' : 'workouts'}</p>
     </div>
   )
 }
 
-// ── Log Weight Inline ──────────────────────────────────────────────────────────
+// ── Weight Log Form ────────────────────────────────────────────────────────────
 
-function LogWeightForm({ onLogged }: { onLogged: (weight: number) => void }) {
+function LogWeightForm({ onLogged }: { onLogged: (w: number) => void }) {
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -84,48 +107,111 @@ function LogWeightForm({ onLogged }: { onLogged: (weight: number) => void }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ weight: w }),
       })
-      if (res.ok) {
-        setSaved(true)
-        setValue('')
-        onLogged(w)
-        setTimeout(() => setSaved(false), 3000)
-      }
-    } finally {
-      setSaving(false)
-    }
+      if (res.ok) { setSaved(true); setValue(''); onLogged(w); setTimeout(() => setSaved(false), 3000) }
+    } finally { setSaving(false) }
   }
 
-  if (saved) {
-    return (
-      <p className="mt-3 text-sm font-medium text-green-600 dark:text-green-400">
-        Weight logged ✓
-      </p>
-    )
-  }
+  if (saved) return <p className="text-sm font-medium text-green-600 dark:text-green-400">Weight logged ✓</p>
 
   return (
-    <form onSubmit={submit} className="mt-3 flex gap-2">
-      <div className="relative flex-1 max-w-[160px]">
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.1"
-          min="50"
-          max="700"
-          placeholder="lbs"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-        />
-      </div>
+    <form onSubmit={submit} className="flex gap-2">
+      <input
+        type="number" inputMode="decimal" step="0.1" min="50" max="700"
+        placeholder="lbs" value={value} onChange={(e) => setValue(e.target.value)}
+        className="w-28 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+      />
       <button
-        type="submit"
-        disabled={saving || !value}
-        className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+        type="submit" disabled={saving || !value}
+        className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
       >
         {saving ? '…' : 'Log'}
       </button>
     </form>
+  )
+}
+
+// ── Workout Row (expandable) ───────────────────────────────────────────────────
+
+function WorkoutRow({ workout, isExpanded, onToggle }: {
+  workout: DetailedWorkout
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  const hasPR = workout.exercises.some((e) => e.isPR)
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+      >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+          <Dumbbell className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{workout.day}</p>
+            {hasPR && (
+              <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-bold text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                <Star className="h-2.5 w-2.5" /> PR
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-400 dark:text-zinc-500">{workout.date}</p>
+        </div>
+        <div className="shrink-0 text-right mr-1">
+          {workout.totalVolume > 0 && (
+            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{fmt(workout.totalVolume)} lbs</p>
+          )}
+          {workout.duration && (
+            <div className="flex items-center justify-end gap-0.5 text-xs text-zinc-400">
+              <Clock className="h-3 w-3" />{workout.duration}m
+            </div>
+          )}
+        </div>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-zinc-100 dark:border-zinc-800">
+              {workout.exercises.length > 0 ? workout.exercises.map((ex, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-4 py-2.5 odd:bg-zinc-50/60 dark:odd:bg-zinc-800/40"
+                >
+                  <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300 truncate">{ex.name}</p>
+                    {ex.isPR && (
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-yellow-500">PR</span>
+                    )}
+                  </div>
+                  {ex.bestSet ? (
+                    <p className="shrink-0 text-sm font-medium text-zinc-900 dark:text-white tabular-nums">
+                      {ex.bestSet.weight} × {ex.bestSet.reps}
+                    </p>
+                  ) : (
+                    <p className="shrink-0 text-xs text-zinc-400">bodyweight</p>
+                  )}
+                </div>
+              )) : (
+                <p className="px-4 py-3 text-xs text-zinc-400">No tracked sets recorded</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 
@@ -134,6 +220,7 @@ function LogWeightForm({ onLogged }: { onLogged: (weight: number) => void }) {
 export default function ProgressClient() {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
 
   const fetchData = useCallback(async () => {
     const token = getToken()
@@ -151,14 +238,11 @@ export default function ProgressClient() {
         }
         setData(d)
       }
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // When a weight is logged inline, prepend it to the chart data
   function handleWeightLogged(weight: number) {
     if (!data) return
     const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -179,91 +263,113 @@ export default function ProgressClient() {
     )
   }
 
-  const stats = data?.stats
+  const hasWorkouts = (data?.detailedWorkouts?.length ?? 0) > 0
+  const hasVolume = (data?.weeklyVolume ?? []).some(w => w.volume > 0)
   const weeklyGoal = data?.weeklyAvailability ?? 4
 
   return (
     <PageTransition className="space-y-6">
+
+      {/* ── Header ── */}
       <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Progress</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Your numbers over time</p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Training Log</h1>
+        {data && data.stats.totalWorkouts > 0 ? (
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            {data.stats.totalWorkouts} workouts
+            {data.totalVolumeLbs > 0 && <> · {fmt(data.totalVolumeLbs)} lbs lifted all-time</>}
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Your full training history</p>
+        )}
       </header>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          label="Current Streak"
-          value={stats?.streakDays ?? 0}
-          sub="days"
-          icon={<Flame className={`h-5 w-5 ${(stats?.streakDays ?? 0) > 0 ? 'text-orange-500' : 'text-zinc-400'}`} />}
-        />
-        <StatCard
-          label="Longest Streak"
-          value={data?.longestStreak ?? 0}
-          sub="days"
-          icon={<Trophy className="h-5 w-5 text-yellow-500" />}
-        />
-        <StatCard
-          label="Total Workouts"
-          value={stats?.totalWorkouts ?? 0}
-          icon={<Dumbbell className="h-5 w-5 text-blue-500" />}
-        />
-        <StatCard
-          label="This Week"
-          value={`${stats?.thisWeekWorkouts ?? 0}/${weeklyGoal}`}
-          icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
-        />
-      </div>
+      {/* ── Weekly Volume / Activity Chart ── */}
+      {(data?.weeklyVolume?.length ?? 0) > 0 && (
+        <div id="volume">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+              <BarChart2 className="h-4 w-4 text-zinc-400" />
+              {hasVolume ? 'Weekly Volume' : 'Weekly Activity'}
+            </h2>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">last 12 weeks</span>
+          </div>
+          <div className="rounded-xl border border-zinc-200 bg-white px-2 pb-2 pt-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <ResponsiveContainer width="100%" height={140}>
+              <BarChart data={data?.weeklyVolume ?? []} barSize={20} margin={{ left: -20, right: 8 }}>
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 10, fill: 'currentColor' }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval="preserveStartEnd"
+                  className="text-zinc-400 dark:text-zinc-600"
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: 'currentColor' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => hasVolume ? (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)) : String(v)}
+                  className="text-zinc-400 dark:text-zinc-600"
+                />
+                <Tooltip content={<VolumeTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                <Bar
+                  dataKey={hasVolume ? 'volume' : 'workouts'}
+                  radius={[4, 4, 0, 0]}
+                  fill="#18181b"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
-      {/* Weight chart */}
-      <div>
+      {/* ── Workout History ── */}
+      <div id="workouts">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Weight</h2>
-          {data?.targetWeightLbs && (
-            <span className="text-xs font-medium text-green-600 dark:text-green-400">
-              Goal: {data.targetWeightLbs} lbs
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Workout History</h2>
+          {data?.stats.thisWeekWorkouts !== undefined && (
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              {data.stats.thisWeekWorkouts}/{weeklyGoal} this week
             </span>
           )}
         </div>
-        {(data?.weightData?.length ?? 0) > 0 ? (
-          <>
-            <ProgressChart
-              weightData={data?.weightData ?? []}
-              bmiData={data?.bmiData ?? []}
-              moodData={[]}
-              fitnessGoal={data?.fitnessGoal}
-              targetWeight={data?.targetWeightLbs ?? undefined}
-              defaultChart="weight"
-            />
-            <LogWeightForm onLogged={handleWeightLogged} />
-          </>
+
+        {hasWorkouts ? (
+          <div className="space-y-2">
+            {(data?.detailedWorkouts ?? []).map((w, i) => (
+              <WorkoutRow
+                key={w.rawDate + i}
+                workout={w}
+                isExpanded={expandedIdx === i}
+                onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
+              />
+            ))}
+          </div>
         ) : (
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-6 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">No weight entries yet</p>
-            <LogWeightForm onLogged={handleWeightLogged} />
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
+            <Dumbbell className="mx-auto mb-3 h-10 w-10 text-zinc-300 dark:text-zinc-600" />
+            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-4">
+              No workouts logged yet. Start a program to build your history.
+            </p>
+            <Link
+              href="/dashboard/programming"
+              className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Browse Programs
+            </Link>
           </div>
         )}
       </div>
 
-      {/* Mood chart */}
-      {(data?.moodData?.length ?? 0) > 0 && (
-        <div>
-          <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-white">Mood</h2>
-          <ProgressChart
-            weightData={[]}
-            bmiData={[]}
-            moodData={data?.moodData ?? []}
-            defaultChart="mood"
-          />
-        </div>
-      )}
-
-      {/* Personal Records */}
+      {/* ── Personal Records ── */}
       {(data?.pbs?.length ?? 0) > 0 && (
-        <div>
-          <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-white">Personal Records</h2>
+        <div id="records">
+          <div className="mb-3 flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Personal Records</h2>
+          </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {(data?.pbs ?? []).slice(0, 10).map((pb) => (
+            {(data?.pbs ?? []).slice(0, 12).map((pb) => (
               <div
                 key={pb.name}
                 className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900"
@@ -273,12 +379,8 @@ export default function ProgressClient() {
                   <p className="text-xs text-zinc-400 dark:text-zinc-500">{pb.date}</p>
                 </div>
                 <div className="ml-3 shrink-0 text-right">
-                  <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                    {pb.weight} lbs
-                  </p>
-                  {pb.reps > 0 && (
-                    <p className="text-xs text-zinc-400">× {pb.reps} reps</p>
-                  )}
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white">{pb.weight} lbs</p>
+                  {pb.reps > 0 && <p className="text-xs text-zinc-400">× {pb.reps} reps</p>}
                 </div>
               </div>
             ))}
@@ -286,63 +388,77 @@ export default function ProgressClient() {
         </div>
       )}
 
-      {/* Recent Workouts */}
-      {(data?.recentWorkouts?.length ?? 0) > 0 && (
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Recent Workouts</h2>
-            <Link
-              href="/dashboard/calendar"
-              className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400"
-            >
-              Calendar <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {(data?.recentWorkouts ?? []).map((w, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                  <Dumbbell className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">{w.day}</p>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{w.date}</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  {w.duration && (
-                    <div className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      <Clock className="h-3 w-3" />
-                      {w.duration}m
-                    </div>
-                  )}
-                  {w.exerciseCount > 0 && (
-                    <p className="text-xs text-zinc-400">{w.exerciseCount} exercises</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* ── Body Weight ── */}
+      <div id="body">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-zinc-400" />
+            Body Weight
+          </h2>
+          {data?.targetWeightLbs && (
+            <span className="text-xs font-medium text-green-600 dark:text-green-400">
+              Goal: {data.targetWeightLbs} lbs
+            </span>
+          )}
         </div>
-      )}
 
-      {/* Empty state — no data at all */}
-      {!loading && !data?.stats?.totalWorkouts && (data?.weightData?.length ?? 0) === 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
-          <Dumbbell className="mx-auto mb-3 h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            Your progress will show up here as you train and log weight.
-          </p>
-          <Link
-            href="/dashboard/programming"
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-          >
-            Find a Program <ChevronRight className="h-4 w-4" />
-          </Link>
-        </div>
-      )}
+        {(data?.weightData?.length ?? 0) > 0 ? (
+          <div className="rounded-xl border border-zinc-200 bg-white px-2 pb-4 pt-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <ResponsiveContainer width="100%" height={160}>
+              <AreaChart data={data?.weightData ?? []} margin={{ left: -20, right: 8 }}>
+                <defs>
+                  <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#18181b" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#18181b" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: 'currentColor' }}
+                  tickLine={false} axisLine={false}
+                  interval="preserveStartEnd"
+                  className="text-zinc-400 dark:text-zinc-600"
+                />
+                <YAxis
+                  domain={['auto', 'auto']}
+                  tick={{ fontSize: 10, fill: 'currentColor' }}
+                  tickLine={false} axisLine={false}
+                  className="text-zinc-400 dark:text-zinc-600"
+                />
+                <Tooltip
+                  formatter={(v) => [`${v} lbs`, 'Weight']}
+                  contentStyle={{ fontSize: 12, borderRadius: 12 }}
+                />
+                {data?.targetWeightLbs && (
+                  <ReferenceLine
+                    y={data.targetWeightLbs}
+                    stroke="#22c55e"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{ value: `Goal ${data.targetWeightLbs}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                  />
+                )}
+                <Area
+                  type="monotone" dataKey="value"
+                  stroke="#18181b" strokeWidth={2}
+                  fill="url(#weightGrad)"
+                  dot={false} activeDot={{ r: 4 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="mt-2 px-2">
+              <LogWeightForm onLogged={handleWeightLogged} />
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">No weight logged yet</p>
+            <LogWeightForm onLogged={handleWeightLogged} />
+          </div>
+        )}
+      </div>
+
     </PageTransition>
   )
 }

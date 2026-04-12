@@ -375,7 +375,7 @@ export default function DashboardClient() {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         {/* Streak card */}
-        <div className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
+        <Link href="/dashboard/progress" className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30 sm:h-10 sm:w-10">
               <Flame className={`h-4 w-4 sm:h-5 sm:w-5 ${streakData?.activityToday ? 'text-orange-500 dark:text-orange-400' : 'text-zinc-400 dark:text-zinc-600'}`} />
@@ -407,8 +407,8 @@ export default function DashboardClient() {
               </div>
             )
           })()}
-        </div>
-        
+        </Link>
+
         {/* Today's Mood Card - replaces Workouts */}
         <MoodCard 
           currentMood={todaysMood} 
@@ -416,7 +416,7 @@ export default function DashboardClient() {
           isUpdating={isMoodUpdating}
         />
         
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
+        <Link href="/dashboard/progress#workouts" className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 sm:h-10 sm:w-10">
             <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
           </div>
@@ -424,7 +424,7 @@ export default function DashboardClient() {
             <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.thisWeekWorkouts}/{weeklyAvailability}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">This Week</p>
           </div>
-        </div>
+        </Link>
         
         <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30 sm:h-10 sm:w-10">
@@ -508,7 +508,7 @@ export default function DashboardClient() {
             {/* Progress Bar */}
             <div className="mb-3 sm:mb-4">
               <div className="mb-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>Progress</span>
+                <Link href="/dashboard/progress#records" className="hover:text-zinc-700 dark:hover:text-zinc-200">Progress</Link>
                 <span>{Math.round((data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100)}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">

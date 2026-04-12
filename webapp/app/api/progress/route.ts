@@ -233,9 +233,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Recent workouts — last 7 completed, newest first
-    type RawLog = { completed: boolean; date: Date; programId: string; day: string; duration?: number; exercises?: unknown[] }
-    const recentWorkouts = ((progress.workoutLogs || []) as RawLog[])
+    // Typed workout log for detailed processing
+    type RawLogDetailed = {
+      completed: boolean; date: Date; programId: string; day: string; duration?: number
+      exercises?: Array<{ name: string; exerciseSlug?: string; sets?: Array<{ completed: boolean; weight?: number; reps?: number }> }>
+    }
+    const allLogs = (progress.workoutLogs || []) as RawLogDetailed[]
+
+    // Recent workouts — last 7 completed, newest first (kept for backward compat)
+    const recentWorkouts = allLogs
       .filter((l) => l.completed)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 7)
@@ -246,6 +252,70 @@ export async function GET(request: NextRequest) {
         duration: l.duration,
         exerciseCount: l.exercises?.length ?? 0,
       }))
+
+    // Detailed workouts — last 20 with full exercise data (for Training Log view)
+    const detailedWorkouts = allLogs
+      .filter((l) => l.completed)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 20)
+      .map((l) => {
+        let totalVol = 0
+        const exercises = (l.exercises || []).map((ex) => {
+          let exVol = 0
+          let bestSet: { weight: number; reps: number } | null = null
+          for (const set of (ex.sets || [])) {
+            if (!set.completed || !set.weight || !set.reps) continue
+            exVol += set.weight * set.reps
+            totalVol += set.weight * set.reps
+            if (!bestSet || set.weight > bestSet.weight || (set.weight === bestSet.weight && set.reps > bestSet.reps)) {
+              bestSet = { weight: set.weight, reps: set.reps }
+            }
+          }
+          const key = ex.exerciseSlug || ex.name
+          const pb = pbs[key]
+          const isPR = !!(pb && bestSet && (bestSet as { weight: number; reps: number }).weight >= pb.weight)
+          return { name: ex.name, slug: ex.exerciseSlug, bestSet, volume: Math.round(exVol), isPR }
+        }).filter((ex) => ex.volume > 0 || ex.bestSet !== null)
+        return {
+          date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          rawDate: (l.date as Date).toISOString(),
+          programId: l.programId,
+          day: l.day,
+          duration: l.duration,
+          totalVolume: Math.round(totalVol),
+          exercises,
+        }
+      })
+
+    // Weekly volume — last 12 weeks (for bar chart)
+    let totalVolumeLbs = 0
+    const weekMap = new Map<string, { volume: number; workouts: number; display: string }>()
+    for (const l of allLogs) {
+      if (!l.completed) continue
+      const d = new Date(l.date)
+      const dow = d.getDay()
+      const monday = new Date(d)
+      monday.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1))
+      monday.setHours(0, 0, 0, 0)
+      const key = monday.toISOString().split('T')[0]
+      const display = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      let vol = 0
+      for (const ex of (l.exercises || [])) {
+        for (const set of (ex.sets || [])) {
+          if (set.completed && set.weight && set.reps) {
+            vol += set.weight * set.reps
+            totalVolumeLbs += set.weight * set.reps
+          }
+        }
+      }
+      const existing = weekMap.get(key)
+      weekMap.set(key, { volume: (existing?.volume || 0) + Math.round(vol), workouts: (existing?.workouts || 0) + 1, display })
+    }
+    const weeklyVolume = Array.from(weekMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([, data]) => ({ week: data.display, volume: data.volume, workouts: data.workouts }))
+    totalVolumeLbs = Math.round(totalVolumeLbs)
 
     // Profile — target weight and weekly availability
     const UserModel = (await import('@/models/User')).default
@@ -259,6 +329,9 @@ export async function GET(request: NextRequest) {
       longestStreak: (progress.longestStreak as number) || 0,
       pbs: Object.values(pbs).sort((a, b) => b.weight - a.weight),
       recentWorkouts,
+      detailedWorkouts,
+      weeklyVolume,
+      totalVolumeLbs,
       targetWeightLbs,
       weeklyAvailability,
     })

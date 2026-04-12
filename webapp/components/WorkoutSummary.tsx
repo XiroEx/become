@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Trophy, Award, Dumbbell, Flame, Rocket } from 'lucide-react'
+import { Trophy, Award, Dumbbell, Flame, Rocket, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -363,6 +364,12 @@ export default function WorkoutSummary({
             }
           </span>
         </button>
+        <Link
+          href="/dashboard/progress#workouts"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 py-3.5 text-sm font-semibold text-white/70 transition-all hover:text-white hover:border-white/40"
+        >
+          <TrendingUp className="h-4 w-4" /> View Training Log
+        </Link>
       </motion.div>
     </motion.div>
   )
