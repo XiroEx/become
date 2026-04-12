@@ -617,13 +617,44 @@ export default function CalendarClient() {
                                   </>
                                 )}
                                 {w.status === 'missed' && (
-                                  <Link
-                                    href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
-                                    className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                                  >
-                                    <Dumbbell className="h-3 w-3" />
-                                    Do It Now
-                                  </Link>
+                                  <>
+                                    <Link
+                                      href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                    >
+                                      <Dumbbell className="h-3 w-3" />
+                                      Do It Now
+                                    </Link>
+                                    <button
+                                      onClick={async () => {
+                                        const token = localStorage.getItem('token')
+                                        if (!token) return
+                                        setActionLoading(true)
+                                        try {
+                                          await fetch('/api/schedule', {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date }),
+                                          })
+                                          fetchSchedules()
+                                        } finally {
+                                          setActionLoading(false)
+                                        }
+                                      }}
+                                      disabled={actionLoading}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <SkipForward className="h-3 w-3" />
+                                      Skip It
+                                    </button>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Reschedule
+                                    </button>
+                                  </>
                                 )}
                                 {w.status === 'completed' && (
                                   <div className="flex flex-wrap items-center gap-2">

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
-import { getDailyPiece, type ContentPiece } from '@/lib/mindContent'
+import { getDailyPiece, CONTENT_PIECES, type ContentPiece } from '@/lib/mindContent'
 
 export type SectionId =
   | 'home'
@@ -89,6 +89,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
 
   const [checkedIn, setCheckedIn] = useState<MindState | null>(null)
   const [contentPiece, setContentPiece] = useState<ContentPiece | null>(null)
+  const [contentDone, setContentDone] = useState(false)
   const [logging, setLogging] = useState(false)
   const [dailyAction, setDailyAction] = useState<string | null>(null)
   const [challengeCompleted, setChallengeCompleted] = useState(false)
@@ -99,16 +100,18 @@ export default function MindHub({ onNavigate, streak }: Props) {
     if (!token) { setLoading(false); return }
     const h = { Authorization: `Bearer ${token}` }
 
-    const [identityRes, missionRes, disciplineRes] = await Promise.all([
+    const [identityRes, missionRes, disciplineRes, contentRes] = await Promise.all([
       fetch('/api/mind/identity', { headers: h }),
       fetch('/api/mind/mission', { headers: h }),
       fetch('/api/mind/discipline', { headers: h }),
+      fetch('/api/mind/content/daily', { headers: h }),
     ])
 
-    const [identityData, missionData, disciplineData] = await Promise.all([
+    const [identityData, missionData, disciplineData, contentData] = await Promise.all([
       identityRes.ok ? identityRes.json() : null,
       missionRes.ok ? missionRes.json() : null,
       disciplineRes.ok ? disciplineRes.json() : null,
+      contentRes.ok ? contentRes.json() : null,
     ])
 
     if (identityData?.profile?.onboardingCompleted) {
@@ -123,25 +126,58 @@ export default function MindHub({ onNavigate, streak }: Props) {
       setChallengeCompleted(disciplineData.challenge.completed)
       setChallengeText(disciplineData.challenge.challenge)
     }
+
+    // Restore today's check-in state if it was already done
+    if (contentData?.log) {
+      const log = contentData.log as { state: string; contentId: string; ctaClicked: boolean }
+      const piece = CONTENT_PIECES.find((p) => p.id === log.contentId) ?? null
+      if (piece) {
+        setCheckedIn(log.state as MindState)
+        setContentPiece(piece)
+        setContentDone(log.ctaClicked)
+      }
+    }
+
     setLoading(false)
   }
 
   useEffect(() => { loadIdentity() }, [])
 
   async function checkIn(state: MindState) {
+    const piece = getDailyPiece(state)
     setCheckedIn(state)
-    setContentPiece(getDailyPiece(state))
+    setContentPiece(piece)
+    setContentDone(false)
     setLogging(true)
     try {
       const token = getToken()
-      await fetch('/api/mind/state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ state }),
-      })
+      await Promise.all([
+        fetch('/api/mind/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ state }),
+        }),
+        fetch('/api/mind/content/daily', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ state, contentId: piece.id }),
+        }),
+      ])
     } finally {
       setLogging(false)
     }
+  }
+
+  async function markCtaDone(section: SectionId) {
+    const token = getToken()
+    setContentDone(true)
+    // Fire-and-forget — don't block navigation
+    fetch('/api/mind/content/daily', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ctaClicked: true }),
+    }).catch(() => {})
+    onNavigate(section)
   }
 
   function onboardingComplete() {
@@ -300,7 +336,15 @@ export default function MindHub({ onNavigate, streak }: Props) {
             <div className="flex items-center gap-2 mb-4">
               <span className="text-lg">{checkedInState?.emoji}</span>
               <span className={`text-sm font-bold ${checkedInState?.color}`}>{checkedInState?.label}</span>
-              <button onClick={() => { setCheckedIn(null); setContentPiece(null) }} className="ml-auto text-xs text-zinc-400 hover:text-zinc-600">
+              {contentDone && (
+                <span className="ml-1 flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
+                  ✓ Done today
+                </span>
+              )}
+              <button
+                onClick={() => { setCheckedIn(null); setContentPiece(null); setContentDone(false) }}
+                className="ml-auto text-xs text-zinc-400 hover:text-zinc-600"
+              >
                 change
               </button>
             </div>
@@ -313,12 +357,18 @@ export default function MindHub({ onNavigate, streak }: Props) {
               <p className="text-sm font-medium text-zinc-300 italic mb-3">&ldquo;{contentPiece.mantra}&rdquo;</p>
               <p className="text-sm leading-relaxed text-zinc-400">{contentPiece.instruction}</p>
             </div>
-            <button
-              onClick={() => onNavigate(contentPiece.section as SectionId)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-white dark:bg-zinc-100 px-4 py-2.5 text-sm font-bold text-zinc-900"
-            >
-              {contentPiece.cta} <ChevronRight className="h-4 w-4" />
-            </button>
+            {contentDone ? (
+              <div className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
+                <span className="text-sm font-semibold text-emerald-500">Protocol complete — come back tomorrow</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => markCtaDone(contentPiece.section as SectionId)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-white dark:bg-zinc-100 px-4 py-2.5 text-sm font-bold text-zinc-900"
+              >
+                {contentPiece.cta} <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
           </>
         ) : null}
       </div>
