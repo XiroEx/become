@@ -206,7 +206,62 @@ export async function GET(request: NextRequest) {
       { totalWeeks: scheduleTotalWeeks, nextWorkoutDay: scheduleNextWorkoutDay }
     )
 
-    return NextResponse.json(formattedData)
+    const detailed = request.nextUrl.searchParams.get('detailed') === '1'
+    if (!detailed) return NextResponse.json(formattedData)
+
+    // ── Detailed extras: PBs, recent workouts, profile data ──────────────────
+    // Personal bests — max weight per exercise across all completed sets
+    const pbs: Record<string, { name: string; weight: number; reps: number; date: string }> = {}
+    for (const log of (progress.workoutLogs || [])) {
+      if (!log.completed) continue
+      for (const exercise of (log.exercises || [])) {
+        const key = (exercise.exerciseSlug || exercise.name) as string
+        for (const set of (exercise.sets || [])) {
+          if (!set.completed || !(set.weight) || (set.weight as number) <= 0) continue
+          const w = set.weight as number
+          const r = (set.reps as number) || 0
+          const existing = pbs[key]
+          if (!existing || w > existing.weight || (w === existing.weight && r > existing.reps)) {
+            pbs[key] = {
+              name: exercise.name as string,
+              weight: w,
+              reps: r,
+              date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            }
+          }
+        }
+      }
+    }
+
+    // Recent workouts — last 7 completed, newest first
+    type RawLog = { completed: boolean; date: Date; programId: string; day: string; duration?: number; exercises?: unknown[] }
+    const recentWorkouts = ((progress.workoutLogs || []) as RawLog[])
+      .filter((l) => l.completed)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 7)
+      .map((l) => ({
+        date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        programId: l.programId,
+        day: l.day,
+        duration: l.duration,
+        exerciseCount: l.exercises?.length ?? 0,
+      }))
+
+    // Profile — target weight and weekly availability
+    const UserModel = (await import('@/models/User')).default
+    const user = await UserModel.findById(authResult.userId, 'profile').lean() as { profile?: { targetWeightKg?: number; weeklyAvailability?: number } } | null
+    const targetWeightKg = user?.profile?.targetWeightKg
+    const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
+    const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
+
+    return NextResponse.json({
+      ...formattedData,
+      longestStreak: (progress.longestStreak as number) || 0,
+      pbs: Object.values(pbs).sort((a, b) => b.weight - a.weight),
+      recentWorkouts,
+      targetWeightLbs,
+      weeklyAvailability,
+    })
   } catch (error) {
     console.error('Error fetching progress:', error)
     return NextResponse.json({

@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -13,7 +11,8 @@ import {
   Area,
   BarChart,
   Bar,
-  Cell
+  Cell,
+  ReferenceLine,
 } from 'recharts'
 import type { FitnessGoal } from '@/models/User'
 
@@ -28,6 +27,8 @@ interface ProgressChartProps {
   bmiData: MetricData[]
   moodData: MetricData[]
   fitnessGoal?: FitnessGoal
+  targetWeight?: number   // optional goal line on weight chart (lbs)
+  defaultChart?: ChartType
 }
 
 type ChartType = 'weight' | 'bmi' | 'mood'
@@ -64,8 +65,8 @@ function weightTrendSentiment(trend: 'up' | 'down' | 'neutral', goal?: FitnessGo
   return 'neutral'
 }
 
-export default function ProgressChart({ weightData, bmiData, moodData, fitnessGoal }: ProgressChartProps) {
-  const [activeChart, setActiveChart] = useState<ChartType>('weight')
+export default function ProgressChart({ weightData, bmiData, moodData, fitnessGoal, targetWeight, defaultChart }: ProgressChartProps) {
+  const [activeChart, setActiveChart] = useState<ChartType>(defaultChart ?? 'weight')
 
   const getData = () => {
     switch (activeChart) {
@@ -233,6 +234,15 @@ export default function ProgressChart({ weightData, bmiData, moodData, fitnessGo
                 labelStyle={{ color: '#a1a1aa' }}
                 itemStyle={{ color: '#fff' }}
               />
+              {activeChart === 'weight' && targetWeight && (
+                <ReferenceLine
+                  y={targetWeight}
+                  stroke="#22c55e"
+                  strokeDasharray="4 4"
+                  strokeWidth={1.5}
+                  label={{ value: `Goal ${targetWeight} lbs`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                />
+              )}
               <Area
                 type="monotone"
                 dataKey="value"

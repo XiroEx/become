@@ -82,6 +82,7 @@ export default function DashboardClient() {
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
+  const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
   const [showNudge, setShowNudge] = useState(false)
 
   useEffect(() => {
@@ -212,6 +213,9 @@ export default function DashboardClient() {
           const profileData = await res.json()
           if (profileData.profile?.fitnessGoal) {
             setFitnessGoal(profileData.profile.fitnessGoal as FitnessGoal)
+          }
+          if (profileData.profile?.weeklyAvailability) {
+            setWeeklyAvailability(profileData.profile.weeklyAvailability)
           }
         }
       } catch {
@@ -417,7 +421,7 @@ export default function DashboardClient() {
             <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.thisWeekWorkouts}/4</p>
+            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.thisWeekWorkouts}/{weeklyAvailability}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">This Week</p>
           </div>
         </div>
