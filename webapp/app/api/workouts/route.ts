@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
 
     // Build exercise history from past completed workouts (before today)
     let exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {}
+    let exercisePRs: Record<string, { weight: number; reps: number }> = {}
     if (includeHistory) {
       // Get all completed workout logs for this program, sorted newest first
       const pastLogs = userProgress.workoutLogs
@@ -87,13 +88,11 @@ export async function GET(request: NextRequest) {
           new Date(b.date).getTime() - new Date(a.date).getTime()
         )
 
-      // For each exercise, find the most recent completed set with data
+      type AnySet = { completed: boolean; reps?: number; weight?: number; duration?: number; distance?: number }
+
+      // For each exercise, find the most recent completed set and all-time best
       for (const log of pastLogs) {
         for (const exercise of (log.exercises || [])) {
-          if (exerciseHistory[exercise.name]) continue // already have most recent
-
-          // Find the best completed set — weighted by type
-          type AnySet = { completed: boolean; reps?: number; weight?: number; duration?: number; distance?: number }
           const completedSets = (exercise.sets || []).filter(
             (s: AnySet) => s.completed && ((s.reps ?? 0) > 0 || (s.duration ?? 0) > 0)
           )
@@ -113,11 +112,22 @@ export async function GET(request: NextRequest) {
             completedSets[0]
           )
 
-          exerciseHistory[exercise.name] = {
-            weight: bestSet.weight ?? 0,
-            reps: bestSet.reps ?? 0,
-            duration: bestSet.duration,
-            date: new Date(log.date).toISOString()
+          // Most recent session (first occurrence since logs are newest-first)
+          if (!exerciseHistory[exercise.name]) {
+            exerciseHistory[exercise.name] = {
+              weight: bestSet.weight ?? 0,
+              reps: bestSet.reps ?? 0,
+              duration: bestSet.duration,
+              date: new Date(log.date).toISOString()
+            }
+          }
+
+          // All-time best (highest weight across all sessions)
+          const pr = exercisePRs[exercise.name]
+          const sw = bestSet.weight ?? 0
+          const sr = bestSet.reps ?? 0
+          if (!pr || sw > pr.weight || (sw === pr.weight && sr > pr.reps)) {
+            exercisePRs[exercise.name] = { weight: sw, reps: sr }
           }
         }
       }
@@ -177,12 +187,13 @@ export async function GET(request: NextRequest) {
         workout: todayWorkout,
         isResume: !todayWorkout.completed,
         exerciseHistory,
+        exercisePRs,
         staleIncomplete
       })
     }
 
     // No log found for today — return empty so the workout starts fresh
-    return NextResponse.json({ workout: null, isResume: false, exerciseHistory, staleIncomplete })
+    return NextResponse.json({ workout: null, isResume: false, exerciseHistory, exercisePRs, staleIncomplete })
 
   } catch (error) {
     console.error('Error fetching workout:', error)

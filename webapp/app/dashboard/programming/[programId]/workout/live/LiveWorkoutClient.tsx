@@ -116,6 +116,8 @@ export default function LiveWorkoutPage() {
 
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
+  // All-time best per exercise — used for "Beat your PR" display
+  const [exercisePRs, setExercisePRs] = useState<Record<string, { weight: number; reps: number }>>({});
 
   // Stale incomplete workout detection
   const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
@@ -213,6 +215,9 @@ export default function LiveWorkoutPage() {
             const progressData = await progressRes.json();
             if (progressData.exerciseHistory) {
               setExerciseHistory(progressData.exerciseHistory);
+            }
+            if (progressData.exercisePRs) {
+              setExercisePRs(progressData.exercisePRs);
             }
             // Show incomplete workout prompt if there's a stale session from a previous day
             if (progressData.staleIncomplete && !progressData.isResume) {
@@ -1086,21 +1091,31 @@ export default function LiveWorkoutPage() {
                   ))}
                 </div>
               )}
-              {/* Exercise history from past workouts */}
-              {currentExercise && exerciseHistory[currentExercise.name] && (
-                <p className="mt-1.5 text-sm text-white/50">
-                  Last time:{" "}
-                  <span className="font-medium text-white/70">
-                    {(() => {
-                      const h = exerciseHistory[currentExercise.name]
-                      if (isIntervalExercise || showTimeInput) {
-                        return h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : "completed"
-                      }
-                      if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
-                      return h.reps > 0 ? `${h.reps} reps` : "completed"
-                    })()}
-                  </span>
-                </p>
+              {/* Exercise history + PR row */}
+              {currentExercise && (exerciseHistory[currentExercise.name] || exercisePRs[currentExercise.name]) && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {exerciseHistory[currentExercise.name] && (
+                    <p className="text-sm text-white/50">
+                      Last:{" "}
+                      <span className="font-medium text-white/70">
+                        {(() => {
+                          const h = exerciseHistory[currentExercise.name]
+                          if (isIntervalExercise || showTimeInput) {
+                            return h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : "completed"
+                          }
+                          if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
+                          return h.reps > 0 ? `${h.reps} reps` : "completed"
+                        })()}
+                      </span>
+                    </p>
+                  )}
+                  {exercisePRs[currentExercise.name] && exercisePRs[currentExercise.name].weight > 0 && (
+                    <p className="flex items-center gap-1 text-sm text-amber-400/80">
+                      <span>🏆</span>
+                      <span className="font-semibold">PR: {exercisePRs[currentExercise.name].weight} lbs</span>
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1128,7 +1143,14 @@ export default function LiveWorkoutPage() {
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Weight (lbs)</label>
+                        <div className="mb-1 flex items-center justify-between">
+                          <label className="text-xs text-white/60">Weight (lbs)</label>
+                          {currentExercise && exercisePRs[currentExercise.name] &&
+                            exercisePRs[currentExercise.name].weight > 0 &&
+                            Number(currentWeight) > exercisePRs[currentExercise.name].weight && (
+                            <span className="text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
+                          )}
+                        </div>
                         <input
                           type="number"
                           inputMode="numeric"
