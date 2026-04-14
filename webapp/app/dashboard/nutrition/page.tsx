@@ -9,6 +9,7 @@ import MealSection from '@/components/nutrition/MealSection'
 import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
+import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import { Plus, BookOpen, Target } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 
@@ -86,6 +87,7 @@ export default function NutritionPage() {
   const [foodSearchOpen, setFoodSearchOpen] = useState(false)
   const [foodSearchMealType, setFoodSearchMealType] = useState<MealType>('breakfast')
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [editFood, setEditFood] = useState<{ food: IFoodEntry; mealId: string } | null>(null)
 
   const dateParam = formatDateParam(selectedDate)
   const isToday = isSameDay(selectedDate, new Date())
@@ -310,7 +312,10 @@ export default function NutritionPage() {
               mealType={type}
               foods={foods}
               onAddFood={() => openFoodSearch(type)}
-              onEditFood={() => {}}
+              onEditFood={(foodEntryId) => {
+                const food = foods.find(f => f.id === foodEntryId)
+                if (food && mealId) setEditFood({ food, mealId })
+              }}
               onDeleteFood={(_, foodEntryId) => handleDeleteFood(mealId || '', foodEntryId)}
               mealId={mealId}
             />
@@ -371,6 +376,16 @@ export default function NutritionPage() {
         isOpen={quickAddOpen}
         onClose={() => setQuickAddOpen(false)}
         onSubmit={handleQuickAdd}
+      />
+
+      {/* Edit Food Modal */}
+      <EditFoodModal
+        isOpen={editFood !== null}
+        food={editFood?.food ?? null}
+        mealId={editFood?.mealId ?? ''}
+        date={dateParam}
+        onClose={() => setEditFood(null)}
+        onSaved={fetchLog}
       />
     </>
   )
