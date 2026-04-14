@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
@@ -764,6 +765,14 @@ export default function WorkoutFormPage() {
                 animate={{ width: `${getTotalCompletion()}%` }}
                 transition={{ duration: 0.3 }}
               />
+            </div>
+            <div className="mt-2 flex justify-end">
+              <Link
+                href="/dashboard/progress#records"
+                className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+              >
+                View PRs →
+              </Link>
             </div>
           </div>
         </div>

@@ -13,6 +13,8 @@ export interface ISavedProgram {
   order: number;
 }
 
+export type WeightUnit = 'lbs' | 'kg';
+
 export interface IUserProfile {
   fitnessGoal?: FitnessGoal;
   experienceLevel?: ExperienceLevel;
@@ -24,6 +26,7 @@ export interface IUserProfile {
   equipmentAccess?: EquipmentType[];
   injuryNotes?: string;
   weeklyAvailability?: number;
+  weightUnit?: WeightUnit;
 }
 
 export interface IUser {
@@ -63,6 +66,7 @@ const UserProfileSchema = new Schema({
   equipmentAccess: [{ type: String, enum: ['none', 'dumbbells', 'barbell', 'cables', 'full_gym'] }],
   injuryNotes: { type: String },
   weeklyAvailability: { type: Number, min: 1, max: 7 },
+  weightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
 }, { _id: false });
 
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({

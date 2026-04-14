@@ -75,6 +75,54 @@ const slideVariants = {
   exit:  (dir: number) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
 }
 
+// ── TDEE-based nutrition goal seeding ─────────────────────────────────────────
+
+function computeNutritionGoals(p: ProfileData): { calories: number; protein: number; carbs: number; fats: number; goalType: string } | null {
+  if (!p.currentWeightKg || !p.fitnessGoal) return null
+
+  const weightKg = p.currentWeightKg
+  const weightLbs = weightKg * 2.20462
+
+  // BMR — full Mifflin-St Jeor when height/age/sex available, else weight-only estimate
+  let bmr: number
+  if (p.heightCm && p.age && p.biologicalSex && p.biologicalSex !== 'prefer_not_to_say') {
+    bmr = p.biologicalSex === 'male'
+      ? 10 * weightKg + 6.25 * p.heightCm - 5 * p.age + 5
+      : 10 * weightKg + 6.25 * p.heightCm - 5 * p.age - 161
+  } else {
+    bmr = 25 * weightKg // rough estimate when data is sparse
+  }
+
+  // Activity multiplier based on weekly training days
+  const days = p.weeklyAvailability ?? 3
+  const activityMult = days >= 5 ? 1.725 : days >= 3 ? 1.55 : 1.375
+  const tdee = bmr * activityMult
+
+  // Calorie target by goal
+  const calMap: Record<FitnessGoal, number> = {
+    lose_weight: tdee - 500,
+    gain_muscle: tdee + 300,
+    maintain: tdee,
+    improve_performance: tdee + 100,
+    general_health: tdee,
+  }
+  const calories = Math.max(1200, Math.round(calMap[p.fitnessGoal]))
+
+  // Protein targets (g/lb bodyweight)
+  const proteinPerLb: Record<FitnessGoal, number> = {
+    lose_weight: 1.0,
+    gain_muscle: 0.9,
+    maintain: 0.75,
+    improve_performance: 0.85,
+    general_health: 0.75,
+  }
+  const protein = Math.round(weightLbs * proteinPerLb[p.fitnessGoal])
+  const fats = Math.round((calories * 0.25) / 9)
+  const carbs = Math.max(50, Math.round((calories - protein * 4 - fats * 9) / 4))
+
+  return { calories, protein, carbs, fats, goalType: p.fitnessGoal }
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
@@ -163,6 +211,16 @@ export default function OnboardingPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ weight: payload.currentWeightKg }),
+        }).catch(() => {}) // fire-and-forget
+      }
+
+      // Seed TDEE-based nutrition goals if we have enough data
+      const seedGoals = computeNutritionGoals(payload)
+      if (seedGoals) {
+        fetch('/api/nutrition/goals?onboarding=1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(seedGoals),
         }).catch(() => {}) // fire-and-forget
       }
 

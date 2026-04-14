@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageTransition from '@/components/PageTransition'
 import { getToken } from '@/lib/clientAuth'
-import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, IUserProfile } from '@/models/User'
+import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile } from '@/models/User'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,7 @@ export default function ProfilePage() {
   const [targetWeightKg, setTargetWeightKg] = useState<string>('')
   const [equipmentAccess, setEquipmentAccess] = useState<EquipmentType[]>([])
   const [injuryNotes, setInjuryNotes] = useState<string>('')
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs')
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -92,6 +93,7 @@ export default function ProfilePage() {
       setTargetWeightKg(p.targetWeightKg !== undefined ? String(p.targetWeightKg) : '')
       setEquipmentAccess(p.equipmentAccess ?? [])
       setInjuryNotes(p.injuryNotes ?? '')
+      setWeightUnit(p.weightUnit ?? 'lbs')
     } catch {
       // ignore
     } finally {
@@ -125,6 +127,7 @@ export default function ProfilePage() {
         ...(targetWeightKg !== '' && { targetWeightKg: Number(targetWeightKg) }),
         equipmentAccess,
         injuryNotes,
+        weightUnit,
       }
       const res = await fetch('/api/profile', {
         method: 'PATCH',
@@ -293,7 +296,24 @@ export default function ProfilePage() {
 
       {/* Body Stats */}
       <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>
+          <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+            {(['lbs', 'kg'] as WeightUnit[]).map(unit => (
+              <button
+                key={unit}
+                onClick={() => setWeightUnit(unit)}
+                className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
+                  weightUnit === unit
+                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                }`}
+              >
+                {unit}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           {/* Age */}
           <div>
@@ -345,7 +365,7 @@ export default function ProfilePage() {
 
           {/* Current Weight */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Current Weight (kg)</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Current Weight ({weightUnit})</label>
             <input
               type="number"
               value={currentWeightKg}
@@ -360,7 +380,7 @@ export default function ProfilePage() {
 
           {/* Target Weight */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Target Weight (kg)</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Target Weight ({weightUnit})</label>
             <input
               type="number"
               value={targetWeightKg}
