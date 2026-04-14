@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2 } from 'lucide-react'
+import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import Link from 'next/link'
 import { getToken } from '@/lib/clientAuth'
@@ -9,6 +9,7 @@ import type { FitnessGoal } from '@/models/User'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, ReferenceLine,
+  LineChart, Line,
 } from 'recharts'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -28,6 +29,7 @@ interface DetailedWorkout {
   programId: string
   day: string
   duration?: number
+  notes?: string
   totalVolume: number
   exercises: ExerciseDetail[]
 }
@@ -185,6 +187,11 @@ function WorkoutRow({ workout, isExpanded, onToggle }: {
             className="overflow-hidden"
           >
             <div className="border-t border-zinc-100 dark:border-zinc-800">
+              {workout.notes && (
+                <div className="px-4 py-2.5 text-xs italic text-zinc-500 dark:text-zinc-400 border-b border-zinc-100 dark:border-zinc-800">
+                  &ldquo;{workout.notes}&rdquo;
+                </div>
+              )}
               {workout.exercises.length > 0 ? workout.exercises.map((ex, i) => (
                 <div
                   key={i}
@@ -215,12 +222,137 @@ function WorkoutRow({ workout, isExpanded, onToggle }: {
   )
 }
 
+// ── PR Chart Modal ─────────────────────────────────────────────────────────────
+
+function PRChartModal({ name, points, onClose }: {
+  name: string
+  points: { date: string; weight: number; reps: number }[]
+  onClose: () => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+        className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white truncate">{name}</h3>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">{points.length} logged sessions</p>
+          </div>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {points.length < 2 ? (
+          <p className="py-8 text-center text-sm text-zinc-400">Need at least 2 sessions to show a trend.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={points} margin={{ left: -20, right: 8 }}>
+              <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
+              <YAxis tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} className="text-zinc-400 dark:text-zinc-600" />
+              <Tooltip
+                formatter={(v, n) => [`${v} lbs`, 'Best weight']}
+                contentStyle={{ fontSize: 11, borderRadius: 10 }}
+              />
+              <Line type="monotone" dataKey="weight" stroke="#18181b" strokeWidth={2} dot={{ r: 3, fill: '#18181b' }} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+        {points.length > 0 && (
+          <div className="mt-3 flex justify-between rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
+            <div className="text-center">
+              <p className="text-xs text-zinc-400">First</p>
+              <p className="text-sm font-bold text-zinc-900 dark:text-white">{points[0].weight} lbs</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-zinc-400">Best</p>
+              <p className="text-sm font-bold text-green-600 dark:text-green-400">{Math.max(...points.map(p => p.weight))} lbs</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-zinc-400">Sessions</p>
+              <p className="text-sm font-bold text-zinc-900 dark:text-white">{points.length}</p>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Activity Calendar ──────────────────────────────────────────────────────────
+
+function ActivityCalendar({ workouts }: { workouts: DetailedWorkout[] }) {
+  const workoutDays = new Set(workouts.map(w => w.rawDate.slice(0, 10)))
+
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = today.getMonth()
+  const firstDay = new Date(year, month, 1).getDay() // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const monthLabel = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-semibold text-zinc-900 dark:text-white">{monthLabel}</p>
+        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+          {workouts.filter(w => w.rawDate.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`).length} workouts this month
+        </p>
+      </div>
+      <div className="mb-1.5 grid grid-cols-7 text-center">
+        {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
+          <span key={d} className="text-[10px] font-medium text-zinc-400 dark:text-zinc-600">{d}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-1 text-center">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          const isToday = day === today.getDate()
+          const hasWorkout = workoutDays.has(dateStr)
+          return (
+            <div
+              key={i}
+              className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                hasWorkout
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                  : isToday
+                  ? 'border border-zinc-300 text-zinc-700 dark:border-zinc-600 dark:text-zinc-300'
+                  : 'text-zinc-400 dark:text-zinc-600'
+              }`}
+            >
+              {day}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function ProgressClient() {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+  const [selectedPR, setSelectedPR] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     const token = getToken()
@@ -267,7 +399,20 @@ export default function ProgressClient() {
   const hasVolume = (data?.weeklyVolume ?? []).some(w => w.volume > 0)
   const weeklyGoal = data?.weeklyAvailability ?? 4
 
+  // Build per-exercise history from detailedWorkouts for PR chart
+  function getPRHistory(exerciseName: string) {
+    if (!data?.detailedWorkouts) return []
+    return data.detailedWorkouts
+      .flatMap(w => {
+        const ex = w.exercises.find(e => e.name === exerciseName)
+        if (!ex?.bestSet) return []
+        return [{ date: w.date.slice(0, 6), weight: ex.bestSet.weight, reps: ex.bestSet.reps }]
+      })
+      .reverse()
+  }
+
   return (
+    <>
     <PageTransition className="space-y-6">
 
       {/* ── Header ── */}
@@ -370,21 +515,30 @@ export default function ProgressClient() {
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(data?.pbs ?? []).slice(0, 12).map((pb) => (
-              <div
+              <button
                 key={pb.name}
-                className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900"
+                onClick={() => setSelectedPR(pb.name)}
+                className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{pb.name}</p>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{pb.date}</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{pb.date} · tap for history</p>
                 </div>
                 <div className="ml-3 shrink-0 text-right">
                   <p className="text-sm font-bold text-zinc-900 dark:text-white">{pb.weight} lbs</p>
                   {pb.reps > 0 && <p className="text-xs text-zinc-400">× {pb.reps} reps</p>}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Activity Calendar ── */}
+      {hasWorkouts && (
+        <div>
+          <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-white">This Month</h2>
+          <ActivityCalendar workouts={data?.detailedWorkouts ?? []} />
         </div>
       )}
 
@@ -460,5 +614,17 @@ export default function ProgressClient() {
       </div>
 
     </PageTransition>
+
+      {/* ── PR History Modal ── */}
+      <AnimatePresence>
+        {selectedPR && (
+          <PRChartModal
+            name={selectedPR}
+            points={getPRHistory(selectedPR)}
+            onClose={() => setSelectedPR(null)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   )
 }

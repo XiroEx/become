@@ -235,7 +235,7 @@ export async function GET(request: NextRequest) {
 
     // Typed workout log for detailed processing
     type RawLogDetailed = {
-      completed: boolean; date: Date; programId: string; day: string; duration?: number
+      completed: boolean; date: Date; programId: string; day: string; duration?: number; notes?: string
       exercises?: Array<{ name: string; exerciseSlug?: string; sets?: Array<{ completed: boolean; weight?: number; reps?: number }> }>
     }
     const allLogs = (progress.workoutLogs || []) as RawLogDetailed[]
@@ -282,6 +282,7 @@ export async function GET(request: NextRequest) {
           programId: l.programId,
           day: l.day,
           duration: l.duration,
+          notes: l.notes,
           totalVolume: Math.round(totalVol),
           exercises,
         }
