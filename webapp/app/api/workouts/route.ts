@@ -31,6 +31,7 @@ interface WorkoutSaveRequest {
   exercises: ExerciseData[]
   completed: boolean
   duration?: number
+  notes?: string
 }
 
 // GET: Fetch today's workout progress for a program
@@ -203,7 +204,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: WorkoutSaveRequest = await request.json()
-    const { programId, phase, day, exercises, completed, duration } = body
+    const { programId, phase, day, exercises, completed, duration, notes } = body
 
     if (!programId || phase === undefined || !day) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -222,6 +223,7 @@ export async function POST(request: NextRequest) {
       day,
       completed,
       duration,
+      ...(notes && { notes }),
       exercises
     }
 

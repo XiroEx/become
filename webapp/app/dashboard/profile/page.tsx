@@ -297,7 +297,21 @@ export default function ProfilePage() {
       {/* Body Stats */}
       <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>
+            {currentWeightKg !== '' && heightCm !== '' && (() => {
+              const bmi = Number(currentWeightKg) / Math.pow(Number(heightCm) / 100, 2)
+              const cat = bmi < 18.5 ? { label: 'Underweight', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' }
+                : bmi < 25 ? { label: 'Normal', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' }
+                : bmi < 30 ? { label: 'Overweight', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }
+                : { label: 'Obese', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
+              return (
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cat.cls}`}>
+                  BMI {bmi.toFixed(1)} · {cat.label}
+                </span>
+              )
+            })()}
+          </div>
           <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
             {(['lbs', 'kg'] as WeightUnit[]).map(unit => (
               <button

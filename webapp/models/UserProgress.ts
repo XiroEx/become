@@ -46,6 +46,7 @@ export interface IWorkoutLog {
   day: string
   completed: boolean
   duration?: number // in minutes
+  notes?: string
   exercises: IExerciseLog[]
 }
 
@@ -145,6 +146,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   day: { type: String, required: true },
   completed: { type: Boolean, default: false },
   duration: { type: Number },
+  notes: { type: String },
   exercises: [ExerciseLogSchema]
 }, { _id: false })
 

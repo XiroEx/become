@@ -201,6 +201,7 @@ export default function WorkoutFormPage() {
   // Summary state
   const [showSummary, setShowSummary] = useState(false);
   const [programCompleted, setProgramCompleted] = useState(false);
+  const [workoutNotes, setWorkoutNotes] = useState("");
   const [completedProgramName, setCompletedProgramName] = useState("");
   const [workoutStartTime] = useState(() => Date.now());
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -435,7 +436,8 @@ export default function WorkoutFormPage() {
           phase: currentPhase,
           day: workout.day,
           exercises,
-          completed: isComplete
+          completed: isComplete,
+          ...(workoutNotes.trim() && { notes: workoutNotes.trim() })
         })
       });
       if (isComplete && res.ok) {
@@ -939,6 +941,19 @@ export default function WorkoutFormPage() {
                                 {isNone && (
                                   <p className="text-xs text-zinc-500 dark:text-zinc-400">No tracking needed — just mark complete.</p>
                                 )}
+                                {/* Exercise history hint */}
+                                {exerciseHistory[exercise.name] && (() => {
+                                  const h = exerciseHistory[exercise.name]
+                                  const label = isTimeBased
+                                    ? (h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : 'completed')
+                                    : h.weight > 0 ? `${h.weight} lbs × ${h.reps} reps`
+                                    : h.reps > 0 ? `${h.reps} reps` : null
+                                  return label ? (
+                                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                                      Last session: <span className="font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
+                                    </p>
+                                  ) : null
+                                })()}
                                 {/* Column headers */}
                                 <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                                   <div className="col-span-2">Set</div>
@@ -1228,6 +1243,22 @@ export default function WorkoutFormPage() {
           })}
         </div>
 
+        {/* Workout notes — appears once any set is completed */}
+        {getTotalCompletion() > 0 && (
+          <div className="mt-6">
+            <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Session Notes <span className="font-normal text-zinc-400">(optional)</span>
+            </label>
+            <textarea
+              value={workoutNotes}
+              onChange={e => setWorkoutNotes(e.target.value)}
+              rows={2}
+              placeholder="How did it feel? Any PRs, adjustments, or reminders..."
+              className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+            />
+          </div>
+        )}
+
         {/* Complete Workout button - only shows when 100% complete */}
         <AnimatePresence>
           {getTotalCompletion() === 100 && (
@@ -1235,7 +1266,7 @@ export default function WorkoutFormPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="mt-6 sm:mt-8"
+              className="mt-4 sm:mt-6"
             >
               <button
                 onClick={async () => {
