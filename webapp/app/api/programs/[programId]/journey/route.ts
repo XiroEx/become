@@ -88,9 +88,9 @@ export async function GET(
 
     let weightChange: { startLbs: number; endLbs: number; change: number } | null = null
     if (weightHistory.length >= 2) {
-      // First entry at or before program start
+      // First entry at or before program start; last entry at or after program end
       const beforeStart = weightHistory.filter((w: WeightEntry) => new Date(w.date) <= startDate)
-      const afterEnd = weightHistory.filter((w: WeightEntry) => new Date(w.date) >= startDate)
+      const afterEnd = weightHistory.filter((w: WeightEntry) => new Date(w.date) >= endDate)
       const startEntry = beforeStart[beforeStart.length - 1] || weightHistory[0]
       const endEntry = afterEnd[afterEnd.length - 1] || weightHistory[weightHistory.length - 1]
 

@@ -11,8 +11,8 @@ interface MacroBarProps {
 }
 
 export default function MacroBar({ label, current, goal, color, unit = 'g' }: MacroBarProps) {
-  const percentage = Math.min((current / goal) * 100, 100)
-  const isOver = current > goal
+  const percentage = goal > 0 ? Math.min((current / goal) * 100, 100) : 0
+  const isOver = goal > 0 && current > goal
   const remaining = Math.max(0, goal - current)
 
   return (
