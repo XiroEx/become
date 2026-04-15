@@ -147,7 +147,7 @@ function StatusBadge({ status }: { status: string }) {
       )
     case 'makeup':
       return (
-        <span className="flex items-center gap-0.5 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+        <span className="flex items-center gap-0.5 rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
           <CalendarDays className="h-2.5 w-2.5" /> Made Up
         </span>
       )
@@ -538,7 +538,7 @@ export default function CalendarClient() {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
                           const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
                             isMakeupWorkout(w.date, w.completedAt)
-                          const statusColor = isMakeupDot ? 'bg-teal-500' :
+                          const statusColor = isMakeupDot ? 'bg-orange-500' :
                             w.status === 'completed' ? 'bg-green-500' :
                             w.status === 'missed' ? 'bg-red-400' :
                             w.status === 'skipped' ? 'bg-amber-400' :
@@ -574,7 +574,7 @@ export default function CalendarClient() {
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Completed</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-teal-500" />
+              <div className="h-2 w-2 rounded-full bg-orange-500" />
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Made Up</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -709,7 +709,7 @@ export default function CalendarClient() {
                                 {w.status === 'completed' && (
                                   <div className="flex flex-wrap items-center gap-2">
                                     {isMakeup ? (
-                                      <span className="text-xs text-teal-600 dark:text-teal-400">
+                                      <span className="text-xs text-orange-600 dark:text-orange-400">
                                         Made up on {new Date(w.completedAt!).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                                       </span>
                                     ) : (
@@ -722,7 +722,7 @@ export default function CalendarClient() {
                                       disabled={logSummaryLoading}
                                       className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                                         isMakeup
-                                          ? 'border-teal-200 text-teal-600 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-400 dark:hover:bg-teal-900/20'
+                                          ? 'border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20'
                                           : 'border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20'
                                       }`}
                                     >
