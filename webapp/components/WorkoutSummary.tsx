@@ -40,6 +40,7 @@ export function getDayOfYear(): number {
 export interface SummaryProps {
   programCompleted: boolean
   completedProgramName: string
+  programId?: string
   workout: { day: string; title: string } | null
   elapsedTime: number
   exerciseData: { reps: string; weight: string; completed: boolean }[][]
@@ -95,7 +96,7 @@ export function ConfettiBurst() {
 // ─── WorkoutSummary ───────────────────────────────────────────────────────────
 
 export default function WorkoutSummary({
-  programCompleted, completedProgramName, workout,
+  programCompleted, completedProgramName, programId, workout,
   elapsedTime, exerciseData, exercises, exerciseHistory,
   summaryStreak, summaryGoal, formatTime, onDone,
 }: SummaryProps) {
@@ -364,12 +365,21 @@ export default function WorkoutSummary({
             }
           </span>
         </button>
-        <Link
-          href="/dashboard/progress#workouts"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 py-3.5 text-sm font-semibold text-white/70 transition-all hover:text-white hover:border-white/40"
-        >
-          <TrendingUp className="h-4 w-4" /> View Training Log
-        </Link>
+        {programCompleted && programId ? (
+          <Link
+            href={`/dashboard/programming/${programId}/journey`}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-yellow-500/40 py-3.5 text-sm font-semibold text-yellow-400 transition-all hover:border-yellow-500/70 hover:text-yellow-300"
+          >
+            <Trophy className="h-4 w-4" /> See Your Full Journey
+          </Link>
+        ) : (
+          <Link
+            href="/dashboard/progress#workouts"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 py-3.5 text-sm font-semibold text-white/70 transition-all hover:text-white hover:border-white/40"
+          >
+            <TrendingUp className="h-4 w-4" /> View Training Log
+          </Link>
+        )}
       </motion.div>
     </motion.div>
   )

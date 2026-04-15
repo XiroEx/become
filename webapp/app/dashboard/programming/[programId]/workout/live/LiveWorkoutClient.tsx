@@ -1507,6 +1507,7 @@ export default function LiveWorkoutPage() {
           <WorkoutSummary
             programCompleted={programCompleted}
             completedProgramName={completedProgramName}
+            programId={programId}
             workout={workout}
             elapsedTime={elapsedTime}
             exerciseData={exerciseData}
