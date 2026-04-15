@@ -73,6 +73,19 @@ function isSameDay(d1: Date, d2: Date): boolean {
     d1.getDate() === d2.getDate()
 }
 
+/**
+ * The server stores scheduled dates as UTC midnight where the YYYY-MM-DD
+ * portion represents the intended LOCAL calendar date. Parse it that way
+ * (not as UTC) and compare against the local date of completedAt.
+ */
+function isMakeupWorkout(scheduledDateStr: string, completedAtStr: string): boolean {
+  const parts = scheduledDateStr.split('T')[0].split('-').map(Number)
+  const scheduledLocal = new Date(parts[0], parts[1] - 1, parts[2])
+  const c = new Date(completedAtStr)
+  const completedLocal = new Date(c.getFullYear(), c.getMonth(), c.getDate())
+  return scheduledLocal.getTime() !== completedLocal.getTime()
+}
+
 // Format a local Date as YYYY-MM-DD using local time components
 function toDateKey(d: Date): string {
   const y = d.getFullYear()
@@ -524,7 +537,7 @@ export default function CalendarClient() {
                         {dayWorkouts.map((w, i) => {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
                           const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
-                            w.date.split('T')[0] !== new Date(w.completedAt).toISOString().split('T')[0]
+                            isMakeupWorkout(w.date, w.completedAt)
                           const statusColor = isMakeupDot ? 'bg-teal-500' :
                             w.status === 'completed' ? 'bg-green-500' :
                             w.status === 'missed' ? 'bg-red-400' :
@@ -600,7 +613,7 @@ export default function CalendarClient() {
                       const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
                       const isProgramPaused = pausedProgramIds.has(w.programId)
                       const isMakeup = w.status === 'completed' && !!w.completedAt &&
-                        w.date.split('T')[0] !== new Date(w.completedAt).toISOString().split('T')[0]
+                        isMakeupWorkout(w.date, w.completedAt)
                       return (
                         <div key={idx} className={`rounded-lg border border-zinc-100 p-3 dark:border-zinc-800 ${isProgramPaused ? 'opacity-60' : ''}`}>
                           <div className="flex items-start justify-between gap-2">
