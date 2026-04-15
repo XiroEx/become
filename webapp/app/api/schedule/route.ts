@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
         const used = usedLogCount[logKey] || 0
         const logs = completedLogsByKey[logKey] || []
 
-        if (used < logs.length) {
+        if (used < logs.length && wDate <= now) {
           usedLogCount[logKey] = used + 1
           statusByDate[dateKey] = { status: 'completed', completedAt: logs[used].date }
           continue
