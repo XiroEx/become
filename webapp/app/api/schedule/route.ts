@@ -71,44 +71,84 @@ export async function GET(request: NextRequest) {
       programStatusMap.set(p.programId, p.status)
     }
 
-    // Process schedules: filter by date range and update statuses
-    const processedSchedules = schedules.map((schedule) => {
-      let workouts = schedule.scheduledWorkouts || []
+    // Build a lookup of completed logs grouped by programId+dayLabel, sorted oldest-first.
+    // This powers positional matching: the N-th completed log for a given dayLabel
+    // is assigned to the N-th scheduled slot for that dayLabel — regardless of which
+    // calendar day the workout was actually done (handles makeup / catch-up sessions).
+    type RawLog = { programId: string; day: string; date: Date; completed: boolean }
+    const completedLogsByKey: Record<string, RawLog[]> = {}
+    for (const log of (workoutLogs as RawLog[])) {
+      if (!log.completed) continue
+      const k = `${log.programId}||${log.day}`
+      if (!completedLogsByKey[k]) completedLogsByKey[k] = []
+      completedLogsByKey[k].push(log)
+    }
+    for (const k of Object.keys(completedLogsByKey)) {
+      completedLogsByKey[k].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    }
 
-      // Filter by date range if specified
+    // Process schedules: compute statuses across the FULL schedule first,
+    // then filter to the requested date range for the response.
+    const processedSchedules = schedules.map((schedule) => {
+      type SW = { date: Date; programId: string; dayLabel: string; status: string; phase: number; workoutTitle: string; completedAt?: Date; notes?: string }
+      const allWorkouts: SW[] = schedule.scheduledWorkouts || []
+
+      // Assign statuses positionally across the full schedule (oldest → newest).
+      // This ensures makeup workouts (done on a different day) still count for
+      // their original scheduled slot without requiring an exact date match.
+      const usedLogCount: Record<string, number> = {}
+      const statusByDate: Record<string, { status: string; completedAt?: Date }> = {}
+
+      const chronological = [...allWorkouts].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      for (const w of chronological) {
+        const wDate = new Date(w.date)
+        wDate.setHours(0, 0, 0, 0)
+        const dateKey = wDate.getTime().toString()
+
+        // Trust the DB if the sync already marked it completed or skipped
+        if (w.status === 'completed' || w.status === 'skipped') {
+          statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
+          // Still consume a log slot so positional counts stay accurate
+          const logKey = `${w.programId}||${w.dayLabel}`
+          usedLogCount[logKey] = (usedLogCount[logKey] || 0) + 1
+          continue
+        }
+
+        // Positional log match: assign N-th completed log to N-th scheduled slot
+        const logKey = `${w.programId}||${w.dayLabel}`
+        const used = usedLogCount[logKey] || 0
+        const logs = completedLogsByKey[logKey] || []
+
+        if (used < logs.length) {
+          usedLogCount[logKey] = used + 1
+          statusByDate[dateKey] = { status: 'completed', completedAt: logs[used].date }
+          continue
+        }
+
+        // Nothing matched — mark missed if past and still scheduled
+        if (wDate < now && w.status === 'scheduled') {
+          statusByDate[dateKey] = { status: 'missed' }
+        } else {
+          statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
+        }
+      }
+
+      // Apply computed statuses and filter to the requested date range
+      let updatedWorkouts = allWorkouts.map((w) => {
+        const wDate = new Date(w.date)
+        wDate.setHours(0, 0, 0, 0)
+        const result = statusByDate[wDate.getTime().toString()]
+        if (!result) return w
+        return { ...w, status: result.status, ...(result.completedAt ? { completedAt: result.completedAt } : {}) }
+      })
+
       if (fromDate && toDate) {
-        workouts = workouts.filter((w: { date: Date }) => {
+        updatedWorkouts = updatedWorkouts.filter((w) => {
           const d = new Date(w.date)
           return d >= fromDate! && d < toDate!
         })
       }
-
-      // Update statuses based on workout logs
-      const updatedWorkouts = workouts.map((w: { date: Date; programId: string; dayLabel: string; status: string; phase: number; workoutTitle: string; completedAt?: Date; notes?: string }) => {
-        const wDate = new Date(w.date)
-        wDate.setHours(0, 0, 0, 0)
-
-        // Check if completed in workout logs
-        const matchingLog = workoutLogs.find((log: { programId: string; day: string; date: Date; completed: boolean }) => {
-          const logDate = new Date(log.date)
-          logDate.setHours(0, 0, 0, 0)
-          return log.programId === w.programId &&
-                 log.day === w.dayLabel &&
-                 logDate.getTime() === wDate.getTime() &&
-                 log.completed
-        })
-
-        if (matchingLog) {
-          return { ...w, status: 'completed', completedAt: matchingLog.date }
-        }
-
-        // Mark as missed if in the past and not completed/skipped
-        if (wDate < now && w.status === 'scheduled') {
-          return { ...w, status: 'missed' }
-        }
-
-        return w
-      })
 
       return {
         _id: schedule._id,
