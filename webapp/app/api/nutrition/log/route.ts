@@ -194,7 +194,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Calculate proportional nutrition changes
-    const oldServings = foodEntry.servings
+    const oldServings = foodEntry.servings > 0 ? foodEntry.servings : 1
     const oldServingSize = foodEntry.servingSize
     const baseNutrition = {
       calories: foodEntry.nutrition.calories / oldServings,
