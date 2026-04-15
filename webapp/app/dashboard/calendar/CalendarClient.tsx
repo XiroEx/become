@@ -153,7 +153,7 @@ function StatusBadge({ status }: { status: string }) {
       )
     case 'missed':
       return (
-        <span className="flex items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+        <span className="flex items-center gap-0.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white dark:bg-red-600 dark:text-white">
           <X className="h-2.5 w-2.5" /> Missed
         </span>
       )
@@ -540,7 +540,7 @@ export default function CalendarClient() {
                             isMakeupWorkout(w.date, w.completedAt)
                           const statusColor = isMakeupDot ? 'bg-orange-500' :
                             w.status === 'completed' ? 'bg-green-500' :
-                            w.status === 'missed' ? 'bg-red-400' :
+                            w.status === 'missed' ? 'bg-red-600' :
                             w.status === 'skipped' ? 'bg-amber-400' :
                             colors.dot
                           return <div key={i} className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
@@ -582,7 +582,7 @@ export default function CalendarClient() {
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Scheduled</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="h-2 w-2 rounded-full bg-red-400" />
+              <div className="h-2 w-2 rounded-full bg-red-600" />
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Missed</span>
             </div>
             <div className="flex items-center gap-1.5">
