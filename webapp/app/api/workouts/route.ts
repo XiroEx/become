@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
         }>()
         if (schedule?.scheduledWorkouts?.length) {
           const match = schedule.scheduledWorkouts
-            .filter((w) => w.dayLabel === day && w.status !== 'completed')
+            .filter((w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed'))
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
 
           if (match) {
@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
                   {
                     'elem.date': match.date,
                     'elem.dayLabel': day,
-                    'elem.status': { $ne: 'completed' },
+                    'elem.status': { $in: ['scheduled', 'missed'] },
                   },
                 ],
               }
