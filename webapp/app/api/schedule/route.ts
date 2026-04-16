@@ -62,74 +62,39 @@ export async function GET(request: NextRequest) {
       toDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     }
 
-    // Get workout logs and active program statuses
-    const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
-    const workoutLogs = userProgress?.workoutLogs || []
+    // Get active program statuses for display
+    const userProgress = await UserProgress.findOne({ userId: payload.userId }, { activePrograms: 1 }).lean()
     const activePrograms = userProgress?.activePrograms || []
     const programStatusMap = new Map<string, string>()
     for (const p of activePrograms as Array<{ programId: string; status: string }>) {
       programStatusMap.set(p.programId, p.status)
     }
 
-    // Build a lookup of completed logs grouped by programId+dayLabel, sorted oldest-first.
-    // This powers positional matching: the N-th completed log for a given dayLabel
-    // is assigned to the N-th scheduled slot for that dayLabel — regardless of which
-    // calendar day the workout was actually done (handles makeup / catch-up sessions).
-    type RawLog = { programId: string; day: string; date: Date; completed: boolean }
-    const completedLogsByKey: Record<string, RawLog[]> = {}
-    for (const log of (workoutLogs as RawLog[])) {
-      if (!log.completed) continue
-      const k = `${log.programId}||${log.day}`
-      if (!completedLogsByKey[k]) completedLogsByKey[k] = []
-      completedLogsByKey[k].push(log)
-    }
-    for (const k of Object.keys(completedLogsByKey)) {
-      completedLogsByKey[k].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    }
-
     // Process schedules: compute statuses across the FULL schedule first,
     // then filter to the requested date range for the response.
+    //
+    // The workout POST handler keeps schedule slot statuses accurate when workouts
+    // are logged via the app. We trust the DB directly — no positional log matching —
+    // to avoid orphan pre-schedule logs bleeding into future/missed slots.
     const processedSchedules = schedules.map((schedule) => {
       type SW = { date: Date; programId: string; dayLabel: string; status: string; phase: number; workoutTitle: string; completedAt?: Date; notes?: string }
       const allWorkouts: SW[] = schedule.scheduledWorkouts || []
 
-      // Assign statuses positionally across the full schedule (oldest → newest).
-      // This ensures makeup workouts (done on a different day) still count for
-      // their original scheduled slot without requiring an exact date match.
-      const usedLogCount: Record<string, number> = {}
       const statusByDate: Record<string, { status: string; completedAt?: Date }> = {}
 
-      const chronological = [...allWorkouts].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
-      for (const w of chronological) {
+      for (const w of allWorkouts) {
         const wDate = new Date(w.date)
         wDate.setHours(0, 0, 0, 0)
         const dateKey = wDate.getTime().toString()
 
-        // Trust the DB if the sync already marked it completed or skipped
-        if (w.status === 'completed' || w.status === 'skipped') {
+        if (w.status === 'completed' || w.status === 'skipped' || w.status === 'missed') {
+          // Trust the DB — these were set by the workout handler or admin correction
           statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
-          // Still consume a log slot so positional counts stay accurate
-          const logKey = `${w.programId}||${w.dayLabel}`
-          usedLogCount[logKey] = (usedLogCount[logKey] || 0) + 1
-          continue
-        }
-
-        // Positional log match: assign N-th completed log to N-th scheduled slot
-        const logKey = `${w.programId}||${w.dayLabel}`
-        const used = usedLogCount[logKey] || 0
-        const logs = completedLogsByKey[logKey] || []
-
-        if (used < logs.length && wDate <= now) {
-          usedLogCount[logKey] = used + 1
-          statusByDate[dateKey] = { status: 'completed', completedAt: logs[used].date }
-          continue
-        }
-
-        // Nothing matched — mark missed if past and still scheduled
-        if (wDate < now && w.status === 'scheduled') {
+        } else if (wDate < now && w.status === 'scheduled') {
+          // Past scheduled slot that was never completed — it's missed
           statusByDate[dateKey] = { status: 'missed' }
         } else {
+          // Future scheduled, rest, or any other status — keep as-is
           statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
         }
       }
