@@ -80,6 +80,9 @@ export default function ProgrammingClient() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  // Saved programs shown count
+  const [savedShown, setSavedShown] = useState(5);
+
   // User profile for recommendations
   const [userFitnessGoal, setUserFitnessGoal] = useState<FitnessGoal | undefined>(undefined);
   const [userExperienceLevel, setUserExperienceLevel] = useState<ExperienceLevel | undefined>(undefined);
@@ -478,7 +481,7 @@ export default function ProgrammingClient() {
             </span>
           </div>
           <div className="space-y-2">
-            {savedPrograms.map((program, index) => (
+            {savedPrograms.slice(0, savedShown).map((program, index) => (
               <div
                 key={program.program_id}
                 draggable
@@ -545,6 +548,14 @@ export default function ProgrammingClient() {
                 </button>
               </div>
             ))}
+            {savedPrograms.length > savedShown && (
+              <button
+                onClick={() => setSavedShown(n => n + 5)}
+                className="mt-1 w-full rounded-xl border border-amber-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-amber-50 dark:border-amber-800/30 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-amber-900/10"
+              >
+                Show more ({savedPrograms.length - savedShown} remaining)
+              </button>
+            )}
           </div>
         </div>
       )}

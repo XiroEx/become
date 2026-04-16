@@ -348,11 +348,16 @@ function ActivityCalendar({ workouts }: { workouts: DetailedWorkout[] }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+const WORKOUTS_PAGE = 5
+const PRS_PAGE = 6
+
 export default function ProgressClient() {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const [selectedPR, setSelectedPR] = useState<string | null>(null)
+  const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE)
+  const [pbsShown, setPbsShown] = useState(PRS_PAGE)
 
   const fetchData = useCallback(async () => {
     const token = getToken()
@@ -481,7 +486,7 @@ export default function ProgressClient() {
 
         {hasWorkouts ? (
           <div className="space-y-2">
-            {(data?.detailedWorkouts ?? []).map((w, i) => (
+            {(data?.detailedWorkouts ?? []).slice(0, workoutsShown).map((w, i) => (
               <WorkoutRow
                 key={w.rawDate + i}
                 workout={w}
@@ -489,6 +494,14 @@ export default function ProgressClient() {
                 onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
               />
             ))}
+            {(data?.detailedWorkouts?.length ?? 0) > workoutsShown && (
+              <button
+                onClick={() => setWorkoutsShown(n => n + WORKOUTS_PAGE)}
+                className="mt-1 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              >
+                Show more ({(data?.detailedWorkouts?.length ?? 0) - workoutsShown} remaining)
+              </button>
+            )}
           </div>
         ) : (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -514,7 +527,7 @@ export default function ProgressClient() {
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Personal Records</h2>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {(data?.pbs ?? []).slice(0, 12).map((pb) => (
+            {(data?.pbs ?? []).slice(0, pbsShown).map((pb) => (
               <button
                 key={pb.name}
                 onClick={() => setSelectedPR(pb.name)}
@@ -531,6 +544,14 @@ export default function ProgressClient() {
               </button>
             ))}
           </div>
+          {(data?.pbs?.length ?? 0) > pbsShown && (
+            <button
+              onClick={() => setPbsShown(n => n + PRS_PAGE)}
+              className="mt-2 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Show more ({(data?.pbs?.length ?? 0) - pbsShown} remaining)
+            </button>
+          )}
         </div>
       )}
 
