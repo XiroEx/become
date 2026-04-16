@@ -457,12 +457,14 @@ export default function ExerciseLibraryClient() {
               </button>
             </motion.div>
           ))}
-          {filteredExercises.length > shown && (
+          {filteredExercises.length > EXERCISES_PAGE && (
             <button
-              onClick={() => setShown(n => n + EXERCISES_PAGE)}
+              onClick={() => setShown(n => n > EXERCISES_PAGE ? EXERCISES_PAGE : n + EXERCISES_PAGE)}
               className="mt-1 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
-              Show more ({filteredExercises.length - shown} remaining)
+              {shown >= filteredExercises.length
+                ? 'Show less'
+                : `Show more (${filteredExercises.length - shown} remaining)`}
             </button>
           )}
         </div>

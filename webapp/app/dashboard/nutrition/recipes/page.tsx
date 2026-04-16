@@ -239,12 +239,14 @@ export default function RecipesPage() {
               </div>
             </button>
           ))}
-          {recipes.length > shown && (
+          {recipes.length > RECIPES_PAGE && (
             <button
-              onClick={() => setShown(n => n + RECIPES_PAGE)}
+              onClick={() => setShown(n => n > RECIPES_PAGE ? RECIPES_PAGE : n + RECIPES_PAGE)}
               className="mt-1 w-full rounded-lg border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
-              Show more ({recipes.length - shown} remaining)
+              {shown >= recipes.length
+                ? 'Show less'
+                : `Show more (${recipes.length - shown} remaining)`}
             </button>
           )}
         </div>

@@ -548,12 +548,14 @@ export default function ProgrammingClient() {
                 </button>
               </div>
             ))}
-            {savedPrograms.length > savedShown && (
+            {savedPrograms.length > 5 && (
               <button
-                onClick={() => setSavedShown(n => n + 5)}
+                onClick={() => setSavedShown(n => n > 5 ? 5 : n + 5)}
                 className="mt-1 w-full rounded-xl border border-amber-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-amber-50 dark:border-amber-800/30 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-amber-900/10"
               >
-                Show more ({savedPrograms.length - savedShown} remaining)
+                {savedShown >= savedPrograms.length
+                  ? 'Show less'
+                  : `Show more (${savedPrograms.length - savedShown} remaining)`}
               </button>
             )}
           </div>

@@ -494,12 +494,14 @@ export default function ProgressClient() {
                 onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
               />
             ))}
-            {(data?.detailedWorkouts?.length ?? 0) > workoutsShown && (
+            {(data?.detailedWorkouts?.length ?? 0) > WORKOUTS_PAGE && (
               <button
-                onClick={() => setWorkoutsShown(n => n + WORKOUTS_PAGE)}
+                onClick={() => setWorkoutsShown(n => n > WORKOUTS_PAGE ? WORKOUTS_PAGE : n + WORKOUTS_PAGE)}
                 className="mt-1 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
-                Show more ({(data?.detailedWorkouts?.length ?? 0) - workoutsShown} remaining)
+                {workoutsShown >= (data?.detailedWorkouts?.length ?? 0)
+                  ? 'Show less'
+                  : `Show more (${(data?.detailedWorkouts?.length ?? 0) - workoutsShown} remaining)`}
               </button>
             )}
           </div>
@@ -544,12 +546,14 @@ export default function ProgressClient() {
               </button>
             ))}
           </div>
-          {(data?.pbs?.length ?? 0) > pbsShown && (
+          {(data?.pbs?.length ?? 0) > PRS_PAGE && (
             <button
-              onClick={() => setPbsShown(n => n + PRS_PAGE)}
+              onClick={() => setPbsShown(n => n > PRS_PAGE ? PRS_PAGE : n + PRS_PAGE)}
               className="mt-2 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
-              Show more ({(data?.pbs?.length ?? 0) - pbsShown} remaining)
+              {pbsShown >= (data?.pbs?.length ?? 0)
+                ? 'Show less'
+                : `Show more (${(data?.pbs?.length ?? 0) - pbsShown} remaining)`}
             </button>
           )}
         </div>

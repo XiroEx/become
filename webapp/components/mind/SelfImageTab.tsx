@@ -106,12 +106,12 @@ function WinsList({ wins }: { wins: Array<{ win: string }> }) {
           <p className="text-sm text-zinc-700 dark:text-zinc-300">{w.win}</p>
         </div>
       ))}
-      {wins.length > shown && (
+      {wins.length > 5 && (
         <button
-          onClick={() => setShown(n => n + 5)}
+          onClick={() => setShown(n => n > 5 ? 5 : n + 5)}
           className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
-          Show more ({wins.length - shown} remaining)
+          {shown >= wins.length ? 'Show less' : `Show more (${wins.length - shown} remaining)`}
         </button>
       )}
     </div>
