@@ -201,14 +201,14 @@ export default function MindHub({ onNavigate, streak }: Props) {
   if (showOnboarding) {
     return (
       <div>
-        <div className="mb-6 rounded-2xl bg-zinc-900 p-5">
+        <div className="mb-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">
             Before anything else
           </p>
-          <p className="text-lg font-bold text-white leading-snug">
+          <p className="text-lg font-bold text-zinc-900 dark:text-white leading-snug">
             You are not your current circumstances.
           </p>
-          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
             You are who you&apos;re choosing to become. This takes 60 seconds. Answer honestly — the system calibrates to you.
           </p>
         </div>
@@ -230,7 +230,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
     <div className="space-y-4">
 
       {/* Identity card */}
-      <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+      <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-5 pb-4">
           <div className="flex-1 min-w-0 pr-4">
@@ -243,13 +243,13 @@ export default function MindHub({ onNavigate, streak }: Props) {
                 <span className="text-xs font-bold text-orange-400">{streak}d</span>
               </div>
             </div>
-            <p className="text-base font-bold text-white leading-snug line-clamp-3">
+            <p className="text-base font-bold text-zinc-900 dark:text-white leading-snug line-clamp-3">
               {profile?.futureSelf}
             </p>
           </div>
           <button
             onClick={() => setShowOnboarding(true)}
-            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
           >
             <Edit2 className="h-3.5 w-3.5" />
           </button>
@@ -264,11 +264,11 @@ export default function MindHub({ onNavigate, streak }: Props) {
                 Evolution
               </span>
             </div>
-            <span className="text-xs font-bold text-zinc-400">{score} pts</span>
+            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">{score} pts</span>
           </div>
-          <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-zinc-500 to-white transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-zinc-400 to-zinc-900 dark:from-zinc-500 dark:to-white transition-all duration-700"
               style={{ width: `${Math.max(progressPct, 2)}%` }}
             />
           </div>
@@ -279,8 +279,8 @@ export default function MindHub({ onNavigate, streak }: Props) {
               { label: 'Mission', value: evolution?.hasMission ? '✓' : '—' },
             ].map((s) => (
               <div key={s.label} className="text-center">
-                <p className="text-sm font-bold text-zinc-300">{s.value}</p>
-                <p className="text-xs text-zinc-600">{s.label}</p>
+                <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{s.value}</p>
+                <p className="text-xs text-zinc-500">{s.label}</p>
               </div>
             ))}
           </div>
@@ -291,7 +291,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
       {guidance && guidanceSection && (
         <button
           onClick={() => onNavigate(guidance.section as SectionId)}
-          className="flex w-full items-start gap-4 rounded-2xl border border-zinc-700 bg-zinc-900 p-4 text-left hover:border-zinc-600 transition-all"
+          className="flex w-full items-start gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-600 transition-all"
         >
           <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${guidanceSection.iconBg}`}>
             <guidanceSection.Icon className={`h-4 w-4 ${guidanceSection.accent}`} />
@@ -300,10 +300,10 @@ export default function MindHub({ onNavigate, streak }: Props) {
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-0.5">
               Start Here
             </p>
-            <p className="text-sm font-bold text-white leading-tight mb-1">{guidanceSection.label}</p>
-            <p className="text-xs leading-snug text-zinc-400">{guidance.startWith}</p>
+            <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight mb-1">{guidanceSection.label}</p>
+            <p className="text-xs leading-snug text-zinc-500 dark:text-zinc-400">{guidance.startWith}</p>
           </div>
-          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-zinc-600" />
+          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-600" />
         </button>
       )}
 
@@ -349,13 +349,13 @@ export default function MindHub({ onNavigate, streak }: Props) {
               </button>
             </div>
             {/* Content piece */}
-            <div className="rounded-xl bg-zinc-900 dark:bg-zinc-800 p-4 mb-3">
+            <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800 p-4 mb-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">
                 Protocol · {contentPiece.source}
               </p>
-              <p className="text-base font-bold text-white mb-2">{contentPiece.title}</p>
-              <p className="text-sm font-medium text-zinc-300 italic mb-3">&ldquo;{contentPiece.mantra}&rdquo;</p>
-              <p className="text-sm leading-relaxed text-zinc-400">{contentPiece.instruction}</p>
+              <p className="text-base font-bold text-zinc-900 dark:text-white mb-2">{contentPiece.title}</p>
+              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300 italic mb-3">&ldquo;{contentPiece.mantra}&rdquo;</p>
+              <p className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{contentPiece.instruction}</p>
             </div>
             {contentDone ? (
               <div className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
