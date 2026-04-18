@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import StateLog, { MindState } from '@/models/StateLog'
+import MindProgress from '@/models/MindProgress'
 
 const RECOMMENDATIONS: Record<MindState, { action: string; tab: string; message: string }> = {
   stressed: {
@@ -61,6 +62,13 @@ export async function POST(request: NextRequest) {
     await dbConnect()
 
     const log = await StateLog.create({ userId: auth.userId, state })
+
+    // Grant XP — fire and forget
+    MindProgress.findOneAndUpdate(
+      { userId: auth.userId },
+      { $inc: { xp: 10 } },
+      { upsert: true, setDefaultsOnInsert: true }
+    ).catch(() => {})
 
     return NextResponse.json({ log, recommendation: RECOMMENDATIONS[state] })
   } catch (err) {

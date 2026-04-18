@@ -10,6 +10,7 @@ import MissionTab from '@/components/mind/MissionTab'
 import DisciplineTab from '@/components/mind/DisciplineTab'
 import AntiSabotageTab from '@/components/mind/AntiSabotageTab'
 import SocialTab from '@/components/mind/SocialTab'
+import VisionTab from '@/components/mind/VisionTab'
 
 const SECTION_LABELS: Record<string, string> = {
   'state-shift': 'State Shift',
@@ -18,6 +19,7 @@ const SECTION_LABELS: Record<string, string> = {
   'discipline': 'Discipline',
   'anti-sabotage': 'Anti-Sabotage',
   'social': 'Social',
+  'vision': 'Vision',
 }
 
 const VALID_SECTIONS = new Set(Object.keys(SECTION_LABELS))
@@ -64,6 +66,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
         {section === 'discipline'    && <DisciplineTab />}
         {section === 'anti-sabotage' && <AntiSabotageTab />}
         {section === 'social'        && <SocialTab />}
+        {section === 'vision'        && <VisionTab streak={streak} />}
       </div>
     </PageTransition>
   )

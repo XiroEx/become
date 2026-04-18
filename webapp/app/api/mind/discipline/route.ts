@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import DisciplineChallenge from '@/models/DisciplineChallenge'
+import MindProgress from '@/models/MindProgress'
 
 const CHALLENGES = [
   'No complaining — not once — for the next 24 hours.',
@@ -94,6 +95,14 @@ export async function POST(request: NextRequest) {
         { completed: true, completedAt: new Date() },
         { new: true }
       ).lean()
+
+      // Grant XP — fire and forget
+      MindProgress.findOneAndUpdate(
+        { userId: auth.userId },
+        { $inc: { xp: 20 } },
+        { upsert: true, setDefaultsOnInsert: true }
+      ).catch(() => {})
+
       return NextResponse.json({ challenge: doc })
     }
 

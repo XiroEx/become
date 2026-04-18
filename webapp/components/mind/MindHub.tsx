@@ -2,41 +2,29 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Wind, Eye, BookOpen, Sword, Shield, Users,
-  Flame, ChevronRight, Loader2, Edit2, TrendingUp
+  Wind, Eye, BookOpen, Sword, Shield, Users, Sparkles,
+  Flame, ChevronRight, Loader2, Edit2, TrendingUp, Lock
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { getToken } from '@/lib/clientAuth'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
+import MindLevelUpModal from '@/components/mind/MindLevelUpModal'
 import { getDailyPiece, CONTENT_PIECES, type ContentPiece } from '@/lib/mindContent'
+import {
+  CHAPTERS, SYSTEM_INFO, getXpToNextChapter, isReadyToLevelUp, getUnlockedSystems,
+} from '@/lib/mindXP'
 
 export type SectionId =
-  | 'home'
-  | 'state-shift'
-  | 'self-image'
-  | 'mission'
-  | 'discipline'
-  | 'anti-sabotage'
-  | 'social'
+  | 'home' | 'state-shift' | 'self-image' | 'mission'
+  | 'discipline' | 'anti-sabotage' | 'social' | 'vision'
 
-// ─── Section config ────────────────────────────────────────────────────────────
+// ─── Icon map ──────────────────────────────────────────────────────────────────
 
-interface SectionCard {
-  id: SectionId
-  label: string
-  hook: string
-  Icon: React.ElementType
-  accent: string
-  iconBg: string
+const ICON_MAP: Record<string, React.ElementType> = {
+  Wind, Eye, BookOpen, Sword, Shield, Users, Sparkles,
 }
 
-const SECTIONS: SectionCard[] = [
-  { id: 'state-shift',   label: 'State Shift',    hook: 'Reset in under 3 minutes',                  Icon: Wind,    accent: 'text-blue-400',    iconBg: 'bg-blue-500/10' },
-  { id: 'self-image',    label: 'Self-Image',     hook: 'Reinforce who you\'re becoming',             Icon: Eye,     accent: 'text-violet-400',  iconBg: 'bg-violet-500/10' },
-  { id: 'mission',       label: 'Mission',        hook: 'The reason behind everything',               Icon: BookOpen,accent: 'text-amber-400',   iconBg: 'bg-amber-500/10' },
-  { id: 'discipline',    label: 'Discipline',     hook: 'Today\'s non-negotiable',                    Icon: Sword,   accent: 'text-red-400',     iconBg: 'bg-red-500/10' },
-  { id: 'anti-sabotage', label: 'Anti-Sabotage',  hook: 'Kill the pattern before it kills progress',  Icon: Shield,  accent: 'text-orange-400',  iconBg: 'bg-orange-500/10' },
-  { id: 'social',        label: 'Social',         hook: 'Your environment is your destiny',           Icon: Users,   accent: 'text-emerald-400', iconBg: 'bg-emerald-500/10' },
-]
+// ─── Mind state types ──────────────────────────────────────────────────────────
 
 type MindState = 'stressed' | 'distracted' | 'low_energy' | 'locked_in'
 
@@ -50,30 +38,24 @@ const MIND_STATES: {
   { id: 'locked_in',  label: 'Locked In',  emoji: '🔒', color: 'text-emerald-500', border: 'border-emerald-500/40', bg: 'bg-emerald-500/10', section: 'discipline' },
 ]
 
-
 // ─── Data types ────────────────────────────────────────────────────────────────
-
-interface Evolution {
-  score: number
-  challengesCompleted: number
-  statesLogged: number
-  hasMission: boolean
-  startingLabel: string
-}
-
-interface Guidance {
-  section: string
-  reason: string
-  startWith: string
-}
 
 interface IdentityData {
   profile: { futureSelf: string; currentSelf: string; primaryObstacle: string; startingPoint: string; onboardingCompleted: boolean } | null
-  evolution: Evolution | null
-  guidance: Guidance | null
+  evolution: { score: number; challengesCompleted: number; statesLogged: number; hasMission: boolean; startingLabel: string } | null
+  guidance: { section: string; reason: string; startWith: string } | null
 }
 
-// ─── Props ─────────────────────────────────────────────────────────────────────
+interface ProgressData {
+  chapter: number
+  xp: number
+  xpProgress: { needed: number; current: number; pct: number } | null
+  readyToLevelUp: boolean
+  unlockedSystems: string[]
+  currentChapter: typeof CHAPTERS[0]
+  nextChapter: typeof CHAPTERS[0] | null
+  vision: { identityStatement?: string; completedAt?: string } | null
+}
 
 interface Props {
   onNavigate: (section: SectionId) => void
@@ -84,33 +66,30 @@ interface Props {
 
 export default function MindHub({ onNavigate, streak }: Props) {
   const [identity, setIdentity] = useState<IdentityData>({ profile: null, evolution: null, guidance: null })
+  const [progress, setProgress] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showLevelUp, setShowLevelUp] = useState(false)
 
   const [checkedIn, setCheckedIn] = useState<MindState | null>(null)
   const [contentPiece, setContentPiece] = useState<ContentPiece | null>(null)
   const [contentDone, setContentDone] = useState(false)
   const [logging, setLogging] = useState(false)
-  const [dailyAction, setDailyAction] = useState<string | null>(null)
-  const [challengeCompleted, setChallengeCompleted] = useState(false)
-  const [challengeText, setChallengeText] = useState<string | null>(null)
 
-  async function loadIdentity() {
+  async function loadAll() {
     const token = getToken()
     if (!token) { setLoading(false); return }
     const h = { Authorization: `Bearer ${token}` }
 
-    const [identityRes, missionRes, disciplineRes, contentRes] = await Promise.all([
+    const [identityRes, progressRes, contentRes] = await Promise.all([
       fetch('/api/mind/identity', { headers: h }),
-      fetch('/api/mind/mission', { headers: h }),
-      fetch('/api/mind/discipline', { headers: h }),
+      fetch('/api/mind/progress', { headers: h }),
       fetch('/api/mind/content/daily', { headers: h }),
     ])
 
-    const [identityData, missionData, disciplineData, contentData] = await Promise.all([
+    const [identityData, progressData, contentData] = await Promise.all([
       identityRes.ok ? identityRes.json() : null,
-      missionRes.ok ? missionRes.json() : null,
-      disciplineRes.ok ? disciplineRes.json() : null,
+      progressRes.ok ? progressRes.json() : null,
       contentRes.ok ? contentRes.json() : null,
     ])
 
@@ -121,13 +100,8 @@ export default function MindHub({ onNavigate, streak }: Props) {
       setShowOnboarding(true)
     }
 
-    if (missionData?.mission?.dailyAction) setDailyAction(missionData.mission.dailyAction)
-    if (disciplineData?.challenge) {
-      setChallengeCompleted(disciplineData.challenge.completed)
-      setChallengeText(disciplineData.challenge.challenge)
-    }
+    if (progressData) setProgress(progressData)
 
-    // Restore today's check-in state if it was already done
     if (contentData?.log) {
       const log = contentData.log as { state: string; contentId: string; ctaClicked: boolean }
       const piece = CONTENT_PIECES.find((p) => p.id === log.contentId) ?? null
@@ -141,7 +115,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
     setLoading(false)
   }
 
-  useEffect(() => { loadIdentity() }, [])
+  useEffect(() => { loadAll() }, [])
 
   async function checkIn(state: MindState) {
     const piece = getDailyPiece(state)
@@ -163,6 +137,9 @@ export default function MindHub({ onNavigate, streak }: Props) {
           body: JSON.stringify({ state, contentId: piece.id }),
         }),
       ])
+      // Refresh XP
+      const p = await fetch('/api/mind/progress', { headers: { Authorization: `Bearer ${token}` } })
+      if (p.ok) setProgress(await p.json())
     } finally {
       setLogging(false)
     }
@@ -171,7 +148,6 @@ export default function MindHub({ onNavigate, streak }: Props) {
   async function markCtaDone(section: SectionId) {
     const token = getToken()
     setContentDone(true)
-    // Fire-and-forget — don't block navigation
     fetch('/api/mind/content/daily', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -183,10 +159,16 @@ export default function MindHub({ onNavigate, streak }: Props) {
   function onboardingComplete() {
     setShowOnboarding(false)
     setLoading(true)
-    loadIdentity()
+    loadAll()
   }
 
-  // ─── Loading ─────────────────────────────────────────────────────────────────
+  function handleLevelUp(newChapter: number) {
+    setShowLevelUp(false)
+    setProgress(prev => prev ? { ...prev, chapter: newChapter } : prev)
+    loadAll()
+  }
+
+  // ─── Loading ────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -196,15 +178,13 @@ export default function MindHub({ onNavigate, streak }: Props) {
     )
   }
 
-  // ─── Onboarding ───────────────────────────────────────────────────────────────
+  // ─── Onboarding ─────────────────────────────────────────────────────────────
 
   if (showOnboarding) {
     return (
       <div>
         <div className="mb-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
-          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">
-            Before anything else
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">Before anything else</p>
           <p className="text-lg font-bold text-zinc-900 dark:text-white leading-snug">
             You are not your current circumstances.
           </p>
@@ -217,227 +197,300 @@ export default function MindHub({ onNavigate, streak }: Props) {
     )
   }
 
-  // ─── Hub ─────────────────────────────────────────────────────────────────────
+  // ─── Hub ────────────────────────────────────────────────────────────────────
 
-  const { profile, evolution, guidance } = identity
-  const score = evolution?.score ?? 0
-  const progressPct = Math.min(score, 100)
-
+  const { profile, evolution } = identity
+  const chapter = progress?.chapter ?? 1
+  const xp = progress?.xp ?? 0
+  const xpProgress = progress?.xpProgress ?? null
+  const readyToLevelUp = progress?.readyToLevelUp ?? false
+  const unlockedSystems = progress?.unlockedSystems ?? getUnlockedSystems(chapter)
+  const currentChapterData = progress?.currentChapter ?? CHAPTERS[chapter - 1]
+  const nextChapterData = progress?.nextChapter ?? null
+  const visionSet = !!progress?.vision?.completedAt
   const checkedInState = checkedIn ? MIND_STATES.find((s) => s.id === checkedIn) : null
-  const guidanceSection = SECTIONS.find((s) => s.id === guidance?.section)
+
+  // Systems not yet unlocked
+  const allSystems = Object.keys(SYSTEM_INFO)
+  const lockedSystems = allSystems.filter(s => !unlockedSystems.includes(s))
 
   return (
-    <div className="space-y-4">
-
-      {/* Identity card */}
-      <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-start justify-between p-5 pb-4">
-          <div className="flex-1 min-w-0 pr-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                {evolution?.startingLabel ?? 'Your Identity'}
-              </span>
-              <div className="flex items-center gap-1">
-                <Flame className="h-3.5 w-3.5 text-orange-400" />
-                <span className="text-xs font-bold text-orange-400">{streak}d</span>
-              </div>
-            </div>
-            <p className="text-base font-bold text-zinc-900 dark:text-white leading-snug line-clamp-3">
-              {profile?.futureSelf}
-            </p>
-          </div>
-          <button
-            onClick={() => setShowOnboarding(true)}
-            className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {/* Evolution bar */}
-        <div className="px-5 pb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <TrendingUp className="h-3.5 w-3.5 text-zinc-500" />
-              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
-                Evolution
-              </span>
-            </div>
-            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400">{score} pts</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-zinc-400 to-zinc-900 dark:from-zinc-500 dark:to-white transition-all duration-700"
-              style={{ width: `${Math.max(progressPct, 2)}%` }}
-            />
-          </div>
-          <div className="mt-2 flex gap-3">
-            {[
-              { label: 'Challenges', value: evolution?.challengesCompleted ?? 0 },
-              { label: 'Check-ins', value: evolution?.statesLogged ?? 0 },
-              { label: 'Mission', value: evolution?.hasMission ? '✓' : '—' },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{s.value}</p>
-                <p className="text-xs text-zinc-500">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Guidance — where to start */}
-      {guidance && guidanceSection && (
-        <button
-          onClick={() => onNavigate(guidance.section as SectionId)}
-          className="flex w-full items-start gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-600 transition-all"
-        >
-          <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${guidanceSection.iconBg}`}>
-            <guidanceSection.Icon className={`h-4 w-4 ${guidanceSection.accent}`} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-0.5">
-              Start Here
-            </p>
-            <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight mb-1">{guidanceSection.label}</p>
-            <p className="text-xs leading-snug text-zinc-500 dark:text-zinc-400">{guidance.startWith}</p>
-          </div>
-          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-600" />
-        </button>
+    <>
+      {showLevelUp && (
+        <MindLevelUpModal
+          currentChapter={chapter}
+          xp={xp}
+          readyToLevelUp={readyToLevelUp}
+          onLevelUp={handleLevelUp}
+          onClose={() => setShowLevelUp(false)}
+        />
       )}
 
-      {/* State check-in */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-        {!checkedIn ? (
-          <>
-            <p className="mb-1 text-sm font-bold text-zinc-900 dark:text-white">
-              Where&apos;s your head right now?
-            </p>
-            <p className="mb-4 text-xs text-zinc-500">
-              Be honest. Your next move depends on it.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {MIND_STATES.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => checkIn(s.id)}
-                  disabled={logging}
-                  className="flex items-center gap-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-3 text-left hover:border-zinc-300 dark:hover:border-zinc-700 transition-all disabled:opacity-50"
-                >
-                  <span className="text-lg leading-none">{s.emoji}</span>
-                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{s.label}</span>
-                </button>
-              ))}
+      <div className="space-y-4">
+
+        {/* ── Chapter progression card ──────────────────────────────────── */}
+        <div className={`rounded-2xl border ${currentChapterData.border} ${currentChapterData.bg} p-4`}>
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className={`text-xs font-bold uppercase tracking-widest ${currentChapterData.color} mb-0.5`}>
+                Chapter {chapter} of 5
+              </p>
+              <p className="text-base font-bold text-zinc-900 dark:text-white">{currentChapterData.name}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 italic">&ldquo;{currentChapterData.theme}&rdquo;</p>
             </div>
-          </>
-        ) : contentPiece ? (
-          <>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-lg">{checkedInState?.emoji}</span>
-              <span className={`text-sm font-bold ${checkedInState?.color}`}>{checkedInState?.label}</span>
-              {contentDone && (
-                <span className="ml-1 flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
-                  ✓ Done today
-                </span>
+            <div className="flex items-center gap-2">
+              {streak > 0 && (
+                <div className="flex items-center gap-1">
+                  <Flame className="h-3.5 w-3.5 text-orange-400" />
+                  <span className="text-xs font-bold text-orange-400">{streak}d</span>
+                </div>
               )}
               <button
-                onClick={() => { setCheckedIn(null); setContentPiece(null); setContentDone(false) }}
-                className="ml-auto text-xs text-zinc-400 hover:text-zinc-600"
+                onClick={() => setShowOnboarding(true)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/50 dark:bg-zinc-800/50 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
               >
-                change
+                <Edit2 className="h-3.5 w-3.5" />
               </button>
             </div>
-            {/* Content piece */}
-            <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800 p-4 mb-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">
-                Protocol · {contentPiece.source}
-              </p>
-              <p className="text-base font-bold text-zinc-900 dark:text-white mb-2">{contentPiece.title}</p>
-              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300 italic mb-3">&ldquo;{contentPiece.mantra}&rdquo;</p>
-              <p className="text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{contentPiece.instruction}</p>
-            </div>
-            {contentDone ? (
-              <div className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5">
-                <span className="text-sm font-semibold text-emerald-500">Protocol complete — come back tomorrow</span>
+          </div>
+
+          {/* XP bar */}
+          {xpProgress && chapter < 5 ? (
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-zinc-500">{xp} XP total</p>
+                <p className={`text-xs font-semibold ${currentChapterData.color}`}>
+                  {xpProgress.current}/{xpProgress.needed} → {nextChapterData?.name}
+                </p>
               </div>
-            ) : (
-              <button
-                onClick={() => markCtaDone(contentPiece.section as SectionId)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-white dark:bg-zinc-100 px-4 py-2.5 text-sm font-bold text-zinc-900"
-              >
-                {contentPiece.cta} <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-          </>
-        ) : null}
-      </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/30 dark:bg-zinc-900/30">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${xpProgress.pct}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                  className={`h-full rounded-full bg-gradient-to-r ${
+                    chapter === 1 ? 'from-blue-400 to-blue-600' :
+                    chapter === 2 ? 'from-amber-400 to-amber-600' :
+                    chapter === 3 ? 'from-red-400 to-red-600' :
+                    chapter === 4 ? 'from-orange-400 to-orange-600' :
+                    'from-emerald-400 to-emerald-600'
+                  }`}
+                />
+              </div>
+            </div>
+          ) : chapter === 5 ? (
+            <p className={`mt-2 text-xs font-semibold ${currentChapterData.color}`}>All systems unlocked — you&apos;re building.</p>
+          ) : null}
 
-      {/* Mission + discipline quick glance */}
-      <div className="grid grid-cols-2 gap-3">
-        {dailyAction && (
-          <button
-            onClick={() => onNavigate('mission')}
-            className="flex flex-col gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10">
-              <BookOpen className="h-4 w-4 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-0.5">Today&apos;s Action</p>
-              <p className="text-xs font-semibold text-zinc-900 dark:text-white line-clamp-2 leading-snug">{dailyAction}</p>
-            </div>
-          </button>
-        )}
-        {challengeText && (
-          <button
-            onClick={() => onNavigate('discipline')}
-            className={`flex flex-col gap-2 rounded-2xl border p-4 text-left transition-all ${
-              challengeCompleted
-                ? 'border-emerald-500/30 bg-emerald-500/5'
-                : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700'
-            }`}
-          >
-            <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${challengeCompleted ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
-              <Sword className={`h-4 w-4 ${challengeCompleted ? 'text-emerald-400' : 'text-red-400'}`} />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-0.5">
-                Challenge · {challengeCompleted ? '✓' : 'Pending'}
-              </p>
-              <p className="text-xs font-semibold text-zinc-900 dark:text-white line-clamp-2 leading-snug">{challengeText}</p>
-            </div>
-          </button>
-        )}
-      </div>
-
-      {/* The System */}
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
-          The System
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          {SECTIONS.map((s) => {
-            const { Icon } = s
-            return (
-              <button
-                key={s.id}
-                onClick={() => onNavigate(s.id)}
-                className="flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 active:scale-[0.98] transition-all"
-              >
-                <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.iconBg}`}>
-                  <Icon className={`h-4 w-4 ${s.accent}`} />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">{s.label}</p>
-                  <p className="mt-1 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{s.hook}</p>
-                </div>
-              </button>
-            )
-          })}
+          {/* Ready to level up */}
+          {chapter < 5 && (
+            <button
+              onClick={() => setShowLevelUp(true)}
+              className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-all ${
+                readyToLevelUp
+                  ? `${currentChapterData.bg} ${currentChapterData.color} border ${currentChapterData.border} animate-pulse`
+                  : 'bg-white/30 dark:bg-zinc-800/30 text-zinc-400 border border-transparent'
+              }`}
+            >
+              {readyToLevelUp ? (
+                <>✦ Ready to advance — Enter {nextChapterData?.name}</>
+              ) : (
+                <>I&apos;m ready for more <ChevronRight className="h-3 w-3" /></>
+              )}
+            </button>
+          )}
         </div>
-      </div>
 
-    </div>
+        {/* ── Identity/Vision card ────────────────────────────────────────── */}
+        {profile && (
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                  {visionSet ? 'Your Vision' : 'Your Identity'}
+                </p>
+                <span className="text-xs text-zinc-400">{evolution?.startingLabel}</span>
+              </div>
+              {visionSet && progress?.vision?.identityStatement ? (
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug">
+                  I am the kind of person who {progress.vision.identityStatement}
+                </p>
+              ) : (
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug line-clamp-2">
+                  {profile.futureSelf}
+                </p>
+              )}
+              {unlockedSystems.includes('vision') && !visionSet && (
+                <button
+                  onClick={() => onNavigate('vision')}
+                  className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs font-bold text-amber-500"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Build your vision — 75 XP
+                </button>
+              )}
+              {visionSet && (
+                <button
+                  onClick={() => onNavigate('vision')}
+                  className="mt-2 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                >
+                  View full vision <ChevronRight className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Evolution bar */}
+            {evolution && (
+              <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <TrendingUp className="h-3.5 w-3.5 text-zinc-400" />
+                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Evolution</span>
+                  </div>
+                  <span className="text-xs font-bold text-zinc-500">{evolution.score} pts</span>
+                </div>
+                <div className="h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-zinc-400 to-zinc-900 dark:from-zinc-500 dark:to-white transition-all duration-700"
+                    style={{ width: `${Math.max(evolution.score, 2)}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex gap-4">
+                  {[
+                    { label: 'Check-ins', value: evolution.statesLogged },
+                    { label: 'Challenges', value: evolution.challengesCompleted },
+                    { label: 'Mission', value: evolution.hasMission ? '✓' : '—' },
+                  ].map((s) => (
+                    <div key={s.label} className="text-center">
+                      <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{s.value}</p>
+                      <p className="text-xs text-zinc-500">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── State check-in ─────────────────────────────────────────────── */}
+        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+          {!checkedIn ? (
+            <>
+              <p className="mb-1 text-sm font-bold text-zinc-900 dark:text-white">Where&apos;s your head right now?</p>
+              <p className="mb-3 text-xs text-zinc-500">Be honest. Your next move depends on it.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {MIND_STATES.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => checkIn(s.id)}
+                    disabled={logging}
+                    className="flex items-center gap-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-3 text-left hover:border-zinc-300 dark:hover:border-zinc-700 transition-all disabled:opacity-50"
+                  >
+                    <span className="text-lg leading-none">{s.emoji}</span>
+                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : contentPiece ? (
+            <>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">{checkedInState?.emoji}</span>
+                <span className={`text-sm font-bold ${checkedInState?.color}`}>{checkedInState?.label}</span>
+                {contentDone && (
+                  <span className="ml-1 flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500">
+                    ✓ Done
+                  </span>
+                )}
+                <button
+                  onClick={() => { setCheckedIn(null); setContentPiece(null); setContentDone(false) }}
+                  className="ml-auto text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  change
+                </button>
+              </div>
+              <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800 p-3 mb-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">{contentPiece.source}</p>
+                <p className="text-sm font-bold text-zinc-900 dark:text-white mb-1">{contentPiece.title}</p>
+                <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 italic">&ldquo;{contentPiece.mantra}&rdquo;</p>
+              </div>
+              {!contentDone && (
+                <button
+                  onClick={() => markCtaDone(contentPiece.section as SectionId)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-xs font-bold text-white dark:text-zinc-900"
+                >
+                  {contentPiece.cta} <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </>
+          ) : null}
+        </div>
+
+        {/* ── Unlocked systems ───────────────────────────────────────────── */}
+        <div>
+          <p className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+            Your Tools
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {unlockedSystems.map((sysId) => {
+              const info = SYSTEM_INFO[sysId]
+              const Icon = ICON_MAP[info.iconName] ?? ChevronRight
+              return (
+                <motion.button
+                  key={sysId}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  onClick={() => onNavigate(sysId as SectionId)}
+                  className="flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 active:scale-[0.98] transition-all"
+                >
+                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${info.iconBg}`}>
+                    <Icon className={`h-4 w-4 ${info.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">{info.label}</p>
+                    <p className="mt-0.5 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{info.hook}</p>
+                  </div>
+                </motion.button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Locked systems preview ─────────────────────────────────────── */}
+        {lockedSystems.length > 0 && nextChapterData && (
+          <div>
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-600">
+              Coming in {nextChapterData.name}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {lockedSystems
+                .filter(sysId => SYSTEM_INFO[sysId].chapter === chapter + 1)
+                .map((sysId) => {
+                  const info = SYSTEM_INFO[sysId]
+                  const Icon = ICON_MAP[info.iconName] ?? ChevronRight
+                  return (
+                    <div
+                      key={sysId}
+                      className="flex flex-col gap-3 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 bg-zinc-50 dark:bg-zinc-900/50 p-4 opacity-60"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${info.iconBg} opacity-50`}>
+                          <Icon className={`h-4 w-4 ${info.color}`} />
+                        </div>
+                        <Lock className="h-3.5 w-3.5 text-zinc-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-zinc-400 dark:text-zinc-600 leading-tight">{info.label}</p>
+                        <p className="mt-0.5 text-xs leading-snug text-zinc-400 dark:text-zinc-600">{info.hook}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </>
   )
 }
