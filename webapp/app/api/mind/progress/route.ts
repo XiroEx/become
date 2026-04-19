@@ -39,6 +39,19 @@ export async function GET(request: NextRequest) {
       ).lean()
     }
 
+    // One-time XP seeding: if user has evolution activity but zero XP, seed from evolutionScore
+    if (progress && progress.xp === 0) {
+      const evolutionScore = (identity as Record<string, unknown> | null)?.evolutionScore as number | undefined
+      if (evolutionScore && evolutionScore > 0) {
+        const seedXp = Math.min(evolutionScore, 100)
+        progress = await MindProgress.findOneAndUpdate(
+          { userId: auth.userId },
+          { $inc: { xp: seedXp } },
+          { new: true }
+        ).lean()
+      }
+    }
+
     const chapter = (progress?.chapter as number) ?? 1
     const xp = progress?.xp ?? 0
     const selfDeclaredChapters = (progress?.selfDeclaredChapters as number[]) ?? []

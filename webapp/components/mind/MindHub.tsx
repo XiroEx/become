@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Wind, Eye, BookOpen, Sword, Shield, Users, Sparkles,
-  Flame, ChevronRight, Loader2, Edit2, TrendingUp, Lock
+  Flame, ChevronRight, Loader2, Edit2, Lock
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { getToken } from '@/lib/clientAuth'
@@ -236,15 +236,16 @@ export default function MindHub({ onNavigate, streak }: Props) {
 
       <div className="space-y-4">
 
-        {/* ── Chapter progression card ──────────────────────────────────── */}
+        {/* ── Hero card: Chapter + Identity + XP (unified) ─────────────── */}
         <div className={`rounded-2xl border ${currentChapterData.border} ${currentChapterData.bg} p-4`}>
-          <div className="flex items-start justify-between mb-2">
+
+          {/* Header: chapter + streak + edit */}
+          <div className="flex items-start justify-between mb-3">
             <div>
               <p className={`text-xs font-bold uppercase tracking-widest ${currentChapterData.color} mb-0.5`}>
-                Chapter {chapter} of 5
+                Ch.{chapter} · {currentChapterData.name}
               </p>
-              <p className="text-base font-bold text-zinc-900 dark:text-white">{currentChapterData.name}</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 italic">&ldquo;{currentChapterData.theme}&rdquo;</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 italic">&ldquo;{currentChapterData.theme}&rdquo;</p>
             </div>
             <div className="flex items-center gap-2">
               {streak > 0 && (
@@ -262,11 +263,47 @@ export default function MindHub({ onNavigate, streak }: Props) {
             </div>
           </div>
 
+          {/* Divider */}
+          <div className="mb-3 h-px bg-zinc-900/10 dark:bg-white/10" />
+
+          {/* Identity / Vision statement */}
+          {visionSet && progress?.vision?.identityStatement ? (
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug mb-2">
+              I am the kind of person who {progress.vision.identityStatement}
+            </p>
+          ) : profile ? (
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug line-clamp-2 mb-2">
+              {profile.futureSelf}
+            </p>
+          ) : null}
+
+          {/* Vision CTA or link */}
+          {unlockedSystems.includes('vision') && !visionSet && (
+            <button
+              onClick={() => onNavigate('vision')}
+              className="mb-1 flex items-center gap-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs font-bold text-amber-500"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Build your vision — 75 XP
+            </button>
+          )}
+          {visionSet && (
+            <button
+              onClick={() => onNavigate('vision')}
+              className="mb-1 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+            >
+              View full vision <ChevronRight className="h-3 w-3" />
+            </button>
+          )}
+
+          {/* Divider */}
+          <div className="mt-3 mb-3 h-px bg-zinc-900/10 dark:bg-white/10" />
+
           {/* XP bar — chapter progression */}
           {xpProgress && chapter < 5 ? (
-            <div className="mt-3">
+            <div>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-zinc-500">{xp} XP total</p>
+                <p className="text-xs text-zinc-500">{xp} XP</p>
                 <p className={`text-xs font-semibold ${currentChapterData.color}`}>
                   {xpProgress.current}/{xpProgress.needed} → {nextChapterData?.name}
                 </p>
@@ -287,15 +324,15 @@ export default function MindHub({ onNavigate, streak }: Props) {
               </div>
             </div>
           ) : chapter === 5 ? (
-            /* Post-chapter-5: milestone mode — XP never stops */
-            <div className="mt-3">
+            /* Post-chapter-5: milestone mode */
+            <div>
               <div className="flex items-center justify-between mb-1">
                 <p className={`text-xs font-bold ${currentChapterData.color}`}>
                   {currentMilestone ? currentMilestone.label : 'Building'}
                 </p>
                 <p className="text-xs text-zinc-500">{xp} XP</p>
               </div>
-              {nextMilestone && (
+              {nextMilestone ? (
                 <>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/30 dark:bg-zinc-900/30">
                     <motion.div
@@ -307,14 +344,13 @@ export default function MindHub({ onNavigate, streak }: Props) {
                   </div>
                   <p className="mt-1 text-xs text-zinc-500 text-right">{nextMilestone.xp - xp} XP to {nextMilestone.label}</p>
                 </>
-              )}
-              {!nextMilestone && (
+              ) : (
                 <p className={`text-xs font-semibold ${currentChapterData.color}`}>No ceiling. Keep going.</p>
               )}
             </div>
           ) : null}
 
-          {/* Ready to level up — blocked if self-declare already used and under threshold */}
+          {/* Advance button */}
           {chapter < 5 && (
             <button
               onClick={() => setShowLevelUp(true)}
@@ -336,77 +372,6 @@ export default function MindHub({ onNavigate, streak }: Props) {
             </button>
           )}
         </div>
-
-        {/* ── Identity/Vision card ────────────────────────────────────────── */}
-        {profile && (
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                  {visionSet ? 'Your Vision' : 'Your Identity'}
-                </p>
-                <span className="text-xs text-zinc-400">{evolution?.startingLabel}</span>
-              </div>
-              {visionSet && progress?.vision?.identityStatement ? (
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug">
-                  I am the kind of person who {progress.vision.identityStatement}
-                </p>
-              ) : (
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white leading-snug line-clamp-2">
-                  {profile.futureSelf}
-                </p>
-              )}
-              {unlockedSystems.includes('vision') && !visionSet && (
-                <button
-                  onClick={() => onNavigate('vision')}
-                  className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs font-bold text-amber-500"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Build your vision — 75 XP
-                </button>
-              )}
-              {visionSet && (
-                <button
-                  onClick={() => onNavigate('vision')}
-                  className="mt-2 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
-                >
-                  View full vision <ChevronRight className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-
-            {/* Evolution bar */}
-            {evolution && (
-              <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <TrendingUp className="h-3.5 w-3.5 text-zinc-400" />
-                    <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Evolution</span>
-                  </div>
-                  <span className="text-xs font-bold text-zinc-500">{evolution.score} pts</span>
-                </div>
-                <div className="h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-zinc-400 to-zinc-900 dark:from-zinc-500 dark:to-white transition-all duration-700"
-                    style={{ width: `${Math.max(evolution.score, 2)}%` }}
-                  />
-                </div>
-                <div className="mt-2 flex gap-4">
-                  {[
-                    { label: 'Check-ins', value: evolution.statesLogged },
-                    { label: 'Challenges', value: evolution.challengesCompleted },
-                    { label: 'Mission', value: evolution.hasMission ? '✓' : '—' },
-                  ].map((s) => (
-                    <div key={s.label} className="text-center">
-                      <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{s.value}</p>
-                      <p className="text-xs text-zinc-500">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── State check-in ─────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import Mission from '@/models/Mission'
+import MindProgress from '@/models/MindProgress'
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,11 +37,18 @@ export async function PUT(request: NextRequest) {
 
     await dbConnect()
 
+    const existing = await Mission.findOne({ userId: auth.userId }).lean()
+
     const mission = await Mission.findOneAndUpdate(
       { userId: auth.userId },
       { purpose, whyItMatters, dailyAction },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean()
+
+    // Grant XP on first mission set (fire-and-forget)
+    if (!existing) {
+      MindProgress.updateOne({ userId: auth.userId }, { $inc: { xp: 25 } }).catch(() => {})
+    }
 
     return NextResponse.json({ mission })
   } catch (err) {
