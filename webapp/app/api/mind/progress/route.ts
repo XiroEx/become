@@ -3,7 +3,10 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindProgress from '@/models/MindProgress'
 import IdentityProfile from '@/models/IdentityProfile'
-import { startingChapterForPoint, getXpToNextChapter, isReadyToLevelUp, getUnlockedSystems, CHAPTERS } from '@/lib/mindXP'
+import {
+  startingChapterForPoint, getXpToNextChapter, isReadyToLevelUp,
+  getUnlockedSystems, CHAPTERS, getCurrentMilestone, getNextMilestone,
+} from '@/lib/mindXP'
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,10 +15,8 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
-    // Get identity to determine starting chapter for new users
     const identity = await IdentityProfile.findOne({ userId: auth.userId }).lean()
 
-    // Get or create MindProgress
     let progress = await MindProgress.findOne({ userId: auth.userId }).lean()
 
     if (!progress) {
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
             chapter: startChapter,
             xp: 0,
             chapterHistory: [{ chapter: startChapter, unlockedAt: new Date() }],
+            selfDeclaredChapters: [],
           },
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -39,22 +41,32 @@ export async function GET(request: NextRequest) {
 
     const chapter = (progress?.chapter as number) ?? 1
     const xp = progress?.xp ?? 0
+    const selfDeclaredChapters = (progress?.selfDeclaredChapters as number[]) ?? []
     const xpProgress = getXpToNextChapter(chapter, xp)
     const readyToLevelUp = isReadyToLevelUp(chapter, xp)
+    const canSelfDeclare = chapter < 5 && !readyToLevelUp && !selfDeclaredChapters.includes(chapter)
     const unlockedSystems = getUnlockedSystems(chapter)
     const currentChapterData = CHAPTERS[chapter - 1]
     const nextChapterData = chapter < 5 ? CHAPTERS[chapter] : null
+
+    // Post-chapter-5 milestone data
+    const currentMilestone = chapter >= 5 ? getCurrentMilestone(xp) : null
+    const nextMilestone = chapter >= 5 ? getNextMilestone(xp) : null
 
     return NextResponse.json({
       chapter,
       xp,
       xpProgress,
       readyToLevelUp,
+      canSelfDeclare,
+      selfDeclaredChapters,
       unlockedSystems,
       currentChapter: currentChapterData,
       nextChapter: nextChapterData,
       vision: progress?.vision ?? null,
       chapterHistory: progress?.chapterHistory ?? [],
+      currentMilestone,
+      nextMilestone,
     })
   } catch (err) {
     console.error('GET /api/mind/progress error:', err)

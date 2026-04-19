@@ -12,6 +12,7 @@ import MindLevelUpModal from '@/components/mind/MindLevelUpModal'
 import { getDailyPiece, CONTENT_PIECES, type ContentPiece } from '@/lib/mindContent'
 import {
   CHAPTERS, SYSTEM_INFO, getXpToNextChapter, isReadyToLevelUp, getUnlockedSystems,
+  type XpMilestone,
 } from '@/lib/mindXP'
 
 export type SectionId =
@@ -51,10 +52,13 @@ interface ProgressData {
   xp: number
   xpProgress: { needed: number; current: number; pct: number } | null
   readyToLevelUp: boolean
+  canSelfDeclare: boolean
   unlockedSystems: string[]
   currentChapter: typeof CHAPTERS[0]
   nextChapter: typeof CHAPTERS[0] | null
   vision: { identityStatement?: string; completedAt?: string } | null
+  currentMilestone: XpMilestone | null
+  nextMilestone: XpMilestone | null
 }
 
 interface Props {
@@ -204,11 +208,14 @@ export default function MindHub({ onNavigate, streak }: Props) {
   const xp = progress?.xp ?? 0
   const xpProgress = progress?.xpProgress ?? null
   const readyToLevelUp = progress?.readyToLevelUp ?? false
+  const canSelfDeclare = progress?.canSelfDeclare ?? false
   const unlockedSystems = progress?.unlockedSystems ?? getUnlockedSystems(chapter)
   const currentChapterData = progress?.currentChapter ?? CHAPTERS[chapter - 1]
   const nextChapterData = progress?.nextChapter ?? null
   const visionSet = !!progress?.vision?.completedAt
   const checkedInState = checkedIn ? MIND_STATES.find((s) => s.id === checkedIn) : null
+  const currentMilestone = progress?.currentMilestone ?? null
+  const nextMilestone = progress?.nextMilestone ?? null
 
   // Systems not yet unlocked
   const allSystems = Object.keys(SYSTEM_INFO)
@@ -221,6 +228,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
           currentChapter={chapter}
           xp={xp}
           readyToLevelUp={readyToLevelUp}
+          canSelfDeclare={canSelfDeclare}
           onLevelUp={handleLevelUp}
           onClose={() => setShowLevelUp(false)}
         />
@@ -254,7 +262,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
             </div>
           </div>
 
-          {/* XP bar */}
+          {/* XP bar — chapter progression */}
           {xpProgress && chapter < 5 ? (
             <div className="mt-3">
               <div className="flex items-center justify-between mb-1">
@@ -279,23 +287,51 @@ export default function MindHub({ onNavigate, streak }: Props) {
               </div>
             </div>
           ) : chapter === 5 ? (
-            <p className={`mt-2 text-xs font-semibold ${currentChapterData.color}`}>All systems unlocked — you&apos;re building.</p>
+            /* Post-chapter-5: milestone mode — XP never stops */
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className={`text-xs font-bold ${currentChapterData.color}`}>
+                  {currentMilestone ? currentMilestone.label : 'Building'}
+                </p>
+                <p className="text-xs text-zinc-500">{xp} XP</p>
+              </div>
+              {nextMilestone && (
+                <>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/30 dark:bg-zinc-900/30">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, Math.round(((xp - (currentMilestone?.xp ?? 500)) / (nextMilestone.xp - (currentMilestone?.xp ?? 500))) * 100))}%` }}
+                      transition={{ duration: 0.8, ease: 'easeOut' }}
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 text-right">{nextMilestone.xp - xp} XP to {nextMilestone.label}</p>
+                </>
+              )}
+              {!nextMilestone && (
+                <p className={`text-xs font-semibold ${currentChapterData.color}`}>No ceiling. Keep going.</p>
+              )}
+            </div>
           ) : null}
 
-          {/* Ready to level up */}
+          {/* Ready to level up — blocked if self-declare already used and under threshold */}
           {chapter < 5 && (
             <button
               onClick={() => setShowLevelUp(true)}
               className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-all ${
                 readyToLevelUp
                   ? `${currentChapterData.bg} ${currentChapterData.color} border ${currentChapterData.border} animate-pulse`
-                  : 'bg-white/30 dark:bg-zinc-800/30 text-zinc-400 border border-transparent'
+                  : canSelfDeclare
+                  ? 'bg-white/30 dark:bg-zinc-800/30 text-zinc-400 border border-transparent hover:text-zinc-600 dark:hover:text-zinc-300'
+                  : 'bg-white/10 dark:bg-zinc-900/20 text-zinc-300 dark:text-zinc-600 border border-transparent cursor-not-allowed'
               }`}
             >
               {readyToLevelUp ? (
                 <>✦ Ready to advance — Enter {nextChapterData?.name}</>
-              ) : (
+              ) : canSelfDeclare ? (
                 <>I&apos;m ready for more <ChevronRight className="h-3 w-3" /></>
+              ) : (
+                <>Earn the XP to advance <ChevronRight className="h-3 w-3" /></>
               )}
             </button>
           )}

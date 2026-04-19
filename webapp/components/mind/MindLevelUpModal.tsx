@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ChevronRight, Sparkles } from 'lucide-react'
+import { X, ChevronRight, Sparkles, Lock } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 
@@ -10,16 +10,19 @@ interface Props {
   currentChapter: number
   xp: number
   readyToLevelUp: boolean
+  canSelfDeclare: boolean
   onLevelUp: (newChapter: number) => void
   onClose: () => void
 }
 
-export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, onLevelUp, onClose }: Props) {
+export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, canSelfDeclare, onLevelUp, onClose }: Props) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const nextChapter = CHAPTERS[currentChapter] // CHAPTERS is 0-indexed, so index = currentChapter
 
   async function handleLevelUp() {
     setLoading(true)
+    setError(null)
     try {
       const token = getToken()
       const res = await fetch('/api/mind/progress/levelup', {
@@ -29,6 +32,13 @@ export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, o
       if (res.ok) {
         const data = await res.json()
         onLevelUp(data.chapter)
+      } else {
+        const data = await res.json()
+        if (data.error === 'self_declare_used') {
+          setError('You already claimed early readiness. Earn the XP to advance.')
+        } else {
+          setError('Something went wrong. Try again.')
+        }
       }
     } finally {
       setLoading(false)
@@ -36,6 +46,8 @@ export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, o
   }
 
   if (!nextChapter) return null
+
+  const blocked = !readyToLevelUp && !canSelfDeclare
 
   return (
     <AnimatePresence>
@@ -94,20 +106,37 @@ export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, o
             </div>
           </div>
 
-          {/* XP status */}
-          {!readyToLevelUp && (
+          {/* Status messages */}
+          {error && (
+            <p className="mb-4 text-center text-xs font-semibold text-red-500">{error}</p>
+          )}
+          {!error && !readyToLevelUp && canSelfDeclare && (
             <p className="mb-4 text-center text-xs text-zinc-400">
-              You&apos;re declaring readiness before hitting the XP threshold — that&apos;s fine. Own it.
+              You&apos;re declaring readiness before hitting the XP threshold. You can only do this once per chapter — own it.
+            </p>
+          )}
+          {!error && blocked && (
+            <p className="mb-4 text-center text-xs text-zinc-400">
+              You already claimed early readiness for this chapter. Keep going — earn the XP.
             </p>
           )}
 
           <button
-            onClick={handleLevelUp}
+            onClick={blocked ? onClose : handleLevelUp}
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 dark:bg-white py-3.5 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-50 transition-opacity"
+            className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold disabled:opacity-50 transition-opacity ${
+              blocked
+                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
+                : 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
+            }`}
           >
-            {loading ? 'Advancing...' : `Enter ${nextChapter.name}`}
-            <ChevronRight className="h-4 w-4" />
+            {blocked ? (
+              <><Lock className="h-4 w-4" /> Keep Earning</>
+            ) : loading ? (
+              'Advancing...'
+            ) : (
+              <>{`Enter ${nextChapter.name}`}<ChevronRight className="h-4 w-4" /></>
+            )}
           </button>
         </motion.div>
       </div>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindProgress from '@/models/MindProgress'
-import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
+import { CHAPTERS, CHAPTER_XP_THRESHOLDS, getUnlockedSystems } from '@/lib/mindXP'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,15 +19,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Already at max chapter' }, { status: 400 })
     }
 
-    const nextChapter = currentChapter + 1
+    const xp = progress.xp as number
+    const threshold = CHAPTER_XP_THRESHOLDS[currentChapter] // threshold to reach next chapter
+    const hasEnoughXp = xp >= threshold
+    const alreadySelfDeclared = (progress.selfDeclaredChapters as number[]).includes(currentChapter)
 
-    await MindProgress.updateOne(
-      { userId: auth.userId },
-      {
-        chapter: nextChapter,
-        $push: { chapterHistory: { chapter: nextChapter, unlockedAt: new Date() } },
-      }
-    )
+    if (!hasEnoughXp && alreadySelfDeclared) {
+      return NextResponse.json(
+        { error: 'self_declare_used', message: 'You already claimed early readiness for this chapter. Earn the XP to advance.' },
+        { status: 403 }
+      )
+    }
+
+    const nextChapter = currentChapter + 1
+    const updateFields: Record<string, unknown> = {
+      chapter: nextChapter,
+      $push: { chapterHistory: { chapter: nextChapter, unlockedAt: new Date() } },
+    }
+
+    // Track self-declare usage
+    if (!hasEnoughXp) {
+      updateFields['$addToSet'] = { selfDeclaredChapters: currentChapter }
+    }
+
+    await MindProgress.updateOne({ userId: auth.userId }, updateFields)
 
     const newlyUnlocked = CHAPTERS[nextChapter - 1].systems
     const allUnlocked = getUnlockedSystems(nextChapter)
@@ -35,6 +50,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       chapter: nextChapter,
+      selfDeclared: !hasEnoughXp,
       newlyUnlocked,
       allUnlocked,
       currentChapter: nextChapterData,

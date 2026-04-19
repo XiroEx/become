@@ -23,6 +23,7 @@ export interface IMindProgress extends Document {
   xp: number
   vision?: IVision
   chapterHistory: { chapter: number; unlockedAt: Date }[]
+  selfDeclaredChapters: number[]  // chapters where user self-declared readiness (one per chapter)
   createdAt: Date
   updatedAt: Date
 }
@@ -61,6 +62,7 @@ const MindProgressSchema = new Schema<IMindProgress>(
       default: [],
       _id: false,
     },
+    selfDeclaredChapters: { type: [Number], default: [] },
   },
   { timestamps: true }
 )

@@ -102,3 +102,29 @@ export function startingChapterForPoint(startingPoint: string): number {
   if (startingPoint === 'leveling_up') return 3
   return 1
 }
+
+// ─── Post-chapter-5 milestone system ───────────────────────────────────────
+
+export interface XpMilestone {
+  xp: number
+  label: string
+  message: string
+}
+
+export const XP_MILESTONES: XpMilestone[] = [
+  { xp: 600,  label: 'Still Building',  message: 'Most people quit long before now.' },
+  { xp: 750,  label: 'In the Zone',     message: 'You\'re consistent. That\'s rare.' },
+  { xp: 1000, label: 'Forged',          message: 'A thousand XP. You didn\'t stop.' },
+  { xp: 1500, label: 'Elite',           message: 'You\'re not becoming. You are.' },
+  { xp: 2000, label: 'Architect',       message: 'Rare air. Keep building.' },
+  { xp: 3000, label: 'Unstoppable',     message: 'No ceiling. No stopping.' },
+]
+
+export function getCurrentMilestone(xp: number): XpMilestone | null {
+  const earned = XP_MILESTONES.filter(m => xp >= m.xp)
+  return earned.length > 0 ? earned[earned.length - 1] : null
+}
+
+export function getNextMilestone(xp: number): XpMilestone | null {
+  return XP_MILESTONES.find(m => xp < m.xp) ?? null
+}
