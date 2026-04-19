@@ -68,6 +68,15 @@ interface UserProgress {
   lastActivityDate?: string | null
 }
 
+interface MindData {
+  chapter: number
+  xp: number
+  selfDeclaredCount: number
+  visionCompleted: boolean
+  identityStatement: string | null
+  chaptersUnlocked: number
+}
+
 const MOOD_EMOJI: Record<number, string> = {
   1: '😞',
   2: '😕',
@@ -102,6 +111,7 @@ export default function AdminUserDetailPage() {
 
   const [user, setUser] = useState<UserDetail | null>(null)
   const [progress, setProgress] = useState<UserProgress | null>(null)
+  const [mind, setMind] = useState<MindData | null>(null)
   const [loading, setLoading] = useState(true)
   const [isDark, setIsDark] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -128,9 +138,10 @@ export default function AdminUserDetailPage() {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.ok) {
-          const data = await res.json() as { user: UserDetail; progress: UserProgress | null }
+          const data = await res.json() as { user: UserDetail; progress: UserProgress | null; mind: MindData | null }
           setUser(data.user)
           setProgress(data.progress)
+          setMind(data.mind)
         }
       } finally {
         setLoading(false)
@@ -482,6 +493,38 @@ export default function AdminUserDetailPage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Mind Progression */}
+      {mind && (
+        <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Mind Progression</h2>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {[
+              { label: 'Chapter', value: `${mind.chapter} of 5` },
+              { label: 'XP', value: mind.xp },
+              { label: 'Vision', value: mind.visionCompleted ? '✓ Built' : 'Not yet' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl bg-zinc-50 dark:bg-zinc-800 p-2.5 text-center">
+                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">{s.value}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          {mind.identityStatement && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2.5">
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-0.5">Identity Statement</p>
+              <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-snug">
+                I am the kind of person who {mind.identityStatement}
+              </p>
+            </div>
+          )}
+          {mind.selfDeclaredCount > 0 && (
+            <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+              Self-declared early readiness {mind.selfDeclaredCount}× across their journey
+            </p>
+          )}
         </div>
       )}
 

@@ -12,6 +12,15 @@ import {
 } from 'recharts'
 import PageTransition from '@/components/PageTransition'
 
+interface MindStats {
+  totalWithMind: number
+  avgChapter: number
+  avgXp: number
+  engaged: number
+  visionCompleted: number
+  chapterDistribution: Array<{ chapter: number; label: string; count: number }>
+}
+
 interface AdminStats {
   users: {
     total: number
@@ -29,6 +38,7 @@ interface AdminStats {
   }
   workoutsByDay: Array<{ date: string; count: number }>
   moodAvg: number | null
+  mind: MindStats | null
 }
 
 const MOOD_EMOJI: Record<number, string> = {
@@ -256,7 +266,7 @@ export default function AdminAnalyticsPage() {
       </div>
 
       {/* Engagement funnel */}
-      <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           Engagement Funnel
         </h2>
@@ -283,6 +293,88 @@ export default function AdminAnalyticsPage() {
           />
         </div>
       </div>
+
+      {/* Mind Progression */}
+      {stats.mind && (
+        <>
+          <div className="mb-2 mt-2">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Mind Progression</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Chapter advancement, XP, and Vision adoption</p>
+          </div>
+
+          {/* Mind stat cards */}
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            <StatCard label="Avg Chapter" value={stats.mind.avgChapter} />
+            <StatCard label="Avg XP" value={stats.mind.avgXp} />
+            <StatCard label="Engaged (XP > 0)" value={stats.mind.engaged} />
+            <StatCard label="Vision Built" value={stats.mind.visionCompleted} />
+          </div>
+
+          {/* Chapter distribution */}
+          <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Chapter Distribution
+            </h3>
+            <div className="flex flex-col gap-3">
+              {stats.mind.chapterDistribution.map((ch) => {
+                const chPct = stats.mind!.totalWithMind > 0
+                  ? (ch.count / stats.mind!.totalWithMind) * 100
+                  : 0
+                const colors = [
+                  'bg-blue-500', 'bg-amber-500', 'bg-red-500', 'bg-orange-500', 'bg-emerald-500',
+                ]
+                return (
+                  <div key={ch.chapter}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                        Ch.{ch.chapter} · {ch.label}
+                      </span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {ch.count} ({pct(ch.count, stats.mind!.totalWithMind)})
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div
+                        className={`h-2 rounded-full transition-all ${colors[ch.chapter - 1]}`}
+                        style={{ width: `${chPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Mind funnel */}
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h3 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Mind Adoption Funnel
+            </h3>
+            <div className="flex items-center justify-between gap-2">
+              <FunnelStep
+                label="Onboarded"
+                value={stats.users.onboardingCompleted}
+                pctLabel="100%"
+                width="100%"
+              />
+              <span className="shrink-0 text-zinc-300 dark:text-zinc-600">→</span>
+              <FunnelStep
+                label="Mind Active"
+                value={stats.mind.engaged}
+                pctLabel={pct(stats.mind.engaged, stats.users.onboardingCompleted)}
+                width={pct(stats.mind.engaged, stats.users.onboardingCompleted)}
+              />
+              <span className="shrink-0 text-zinc-300 dark:text-zinc-600">→</span>
+              <FunnelStep
+                label="Vision Built"
+                value={stats.mind.visionCompleted}
+                pctLabel={pct(stats.mind.visionCompleted, stats.users.onboardingCompleted)}
+                width={pct(stats.mind.visionCompleted, stats.users.onboardingCompleted)}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </PageTransition>
   )
 }

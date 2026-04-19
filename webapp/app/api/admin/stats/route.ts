@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
+import MindProgress from '@/models/MindProgress'
 import { verifyAdmin } from '@/lib/adminAuth'
 
 export async function GET(request: NextRequest) {
@@ -127,6 +128,44 @@ export async function GET(request: NextRequest) {
         ? Math.round(moodAggResult[0].avgMood * 100) / 100
         : null
 
+    // --- Mind progression stats ---
+    const [mindAgg] = await MindProgress.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalWithMind: { $sum: 1 },
+          avgChapter: { $avg: '$chapter' },
+          avgXp: { $avg: '$xp' },
+          engaged: { $sum: { $cond: [{ $gt: ['$xp', 0] }, 1, 0] } },
+          visionCompleted: {
+            $sum: { $cond: [{ $ifNull: ['$vision.completedAt', false] }, 1, 0] },
+          },
+          ch1: { $sum: { $cond: [{ $eq: ['$chapter', 1] }, 1, 0] } },
+          ch2: { $sum: { $cond: [{ $eq: ['$chapter', 2] }, 1, 0] } },
+          ch3: { $sum: { $cond: [{ $eq: ['$chapter', 3] }, 1, 0] } },
+          ch4: { $sum: { $cond: [{ $eq: ['$chapter', 4] }, 1, 0] } },
+          ch5: { $sum: { $cond: [{ $eq: ['$chapter', 5] }, 1, 0] } },
+        },
+      },
+    ])
+
+    const mind = mindAgg
+      ? {
+          totalWithMind: mindAgg.totalWithMind as number,
+          avgChapter: Math.round((mindAgg.avgChapter as number) * 10) / 10,
+          avgXp: Math.round(mindAgg.avgXp as number),
+          engaged: mindAgg.engaged as number,
+          visionCompleted: mindAgg.visionCompleted as number,
+          chapterDistribution: [
+            { chapter: 1, label: 'Reset',     count: mindAgg.ch1 as number },
+            { chapter: 2, label: 'Foundation', count: mindAgg.ch2 as number },
+            { chapter: 3, label: 'Edge',       count: mindAgg.ch3 as number },
+            { chapter: 4, label: 'Defense',    count: mindAgg.ch4 as number },
+            { chapter: 5, label: 'Architect',  count: mindAgg.ch5 as number },
+          ],
+        }
+      : null
+
     return NextResponse.json({
       users: {
         total: totalUsers,
@@ -147,6 +186,7 @@ export async function GET(request: NextRequest) {
       },
       workoutsByDay: workoutsByDayResult as Array<{ date: string; count: number }>,
       moodAvg,
+      mind,
     })
   } catch (error) {
     console.error('Admin stats error:', error)

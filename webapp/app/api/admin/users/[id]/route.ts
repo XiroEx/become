@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import UserProgress, { IWorkoutLog } from '@/models/UserProgress'
+import MindProgress from '@/models/MindProgress'
 import { verifyAdmin } from '@/lib/adminAuth'
 
 // GET /api/admin/users/[id]
@@ -32,19 +33,25 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const progress = await UserProgress.findOne(
-      { userId: new mongoose.Types.ObjectId(id) },
-      {
-        weightHistory: { $slice: -10 },
-        moodHistory: { $slice: -10 },
-        workoutLogs: { $slice: -5 },
-        activePrograms: 1,
-        streakDays: 1,
-        longestStreak: 1,
-        totalWorkouts: 1,
-        lastActivityDate: 1,
-      }
-    ).lean()
+    const [progress, mindProgress] = await Promise.all([
+      UserProgress.findOne(
+        { userId: new mongoose.Types.ObjectId(id) },
+        {
+          weightHistory: { $slice: -10 },
+          moodHistory: { $slice: -10 },
+          workoutLogs: { $slice: -5 },
+          activePrograms: 1,
+          streakDays: 1,
+          longestStreak: 1,
+          totalWorkouts: 1,
+          lastActivityDate: 1,
+        }
+      ).lean(),
+      MindProgress.findOne(
+        { userId: new mongoose.Types.ObjectId(id) },
+        { chapter: 1, xp: 1, selfDeclaredChapters: 1, 'vision.completedAt': 1, 'vision.identityStatement': 1, chapterHistory: 1 }
+      ).lean(),
+    ])
 
     // Shape workoutLogs to summary fields only
     const workoutLogsSummary = progress?.workoutLogs?.map((log: IWorkoutLog) => ({
@@ -66,6 +73,16 @@ export async function GET(
             longestStreak: progress.longestStreak ?? 0,
             totalWorkouts: progress.totalWorkouts ?? 0,
             lastActivityDate: progress.lastActivityDate ?? null,
+          }
+        : null,
+      mind: mindProgress
+        ? {
+            chapter: mindProgress.chapter,
+            xp: mindProgress.xp,
+            selfDeclaredCount: (mindProgress.selfDeclaredChapters as number[])?.length ?? 0,
+            visionCompleted: !!mindProgress.vision?.completedAt,
+            identityStatement: mindProgress.vision?.identityStatement ?? null,
+            chaptersUnlocked: (mindProgress.chapterHistory as { chapter: number }[])?.length ?? 1,
           }
         : null,
     })
