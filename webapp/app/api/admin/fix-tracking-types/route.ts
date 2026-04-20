@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
 import mongoose from 'mongoose'
-import { verifyAdmin } from '@/lib/adminAuth'
 
 const UPDATES = [
   { slug: 'treadmill-interval-run', trackingType: 'intervals' },
@@ -15,9 +14,11 @@ const UPDATES = [
 
 export async function POST(request: NextRequest) {
   try {
-    const adminResult = await verifyAdmin(request)
-    if (!adminResult.success) {
-      return NextResponse.json({ error: adminResult.error }, { status: adminResult.status ?? 401 })
+    const adminKey = request.headers.get('x-admin-key')
+    const secret = process.env.JWT_SECRET
+
+    if (!secret || adminKey !== secret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     await connectDB()
