@@ -24,6 +24,7 @@ export interface ISetLog {
   weight?: number     // null for bodyweight / cardio exercises
   duration?: number   // seconds — for time / time_distance / intervals tracking types
   distance?: number   // meters — for time_distance tracking type
+  speed?: number      // mph — for time_distance / intervals tracking types
   completed: boolean
 }
 
@@ -126,6 +127,7 @@ const SetLogSchema = new Schema<ISetLog>({
   weight:   { type: Number, default: null },    // null for bodyweight/cardio
   duration: { type: Number, default: null },    // seconds (time / intervals / time_distance)
   distance: { type: Number, default: null },    // meters (time_distance)
+  speed:    { type: Number, default: null },    // mph (time_distance / intervals)
   completed: { type: Boolean, default: false }
 }, { _id: false })
 

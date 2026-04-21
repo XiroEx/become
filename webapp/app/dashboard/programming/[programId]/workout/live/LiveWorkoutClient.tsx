@@ -13,6 +13,7 @@ import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfY
 interface SetData {
   reps: string;
   weight: string;
+  speed: string;
   completed: boolean;
 }
 
@@ -20,6 +21,7 @@ interface SavedSetData {
   setNumber: number;
   reps: number;
   weight: number;
+  speed?: number;
   completed: boolean;
 }
 
@@ -104,6 +106,7 @@ export default function LiveWorkoutPage() {
   const [exerciseData, setExerciseData] = useState<SetData[][]>([]);
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
+  const [currentSpeed, setCurrentSpeed] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
@@ -147,6 +150,7 @@ export default function LiveWorkoutPage() {
   const showRepsInput = ["reps_weight", "reps_bodyweight", "reps_only"].includes(tracking);
   const showTimeInput = ["time", "time_distance", "intervals"].includes(tracking);
   const isIntervalExercise = tracking === "intervals";
+  const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
 
   // Check if inputs are empty (for skip button text)
   // Interval exercises are always "complete" (no required input) — user marks done and moves on
@@ -165,6 +169,7 @@ export default function LiveWorkoutPage() {
       Array.from({ length: ex.sets || 3 }, () => ({
         reps: "",
         weight: "",
+        speed: "",
         completed: false,
       }))
     );
@@ -268,12 +273,14 @@ export default function LiveWorkoutPage() {
                   return savedEx.sets.map(s => ({
                     reps: s.reps > 0 ? s.reps.toString() : "",
                     weight: s.weight > 0 ? s.weight.toString() : "",
+                    speed: s.speed && s.speed > 0 ? s.speed.toString() : "",
                     completed: s.completed
                   }));
                 }
                 return Array.from({ length: ex.sets || 3 }, () => ({
                   reps: "",
                   weight: "",
+                  speed: "",
                   completed: false,
                 }));
               });
@@ -293,6 +300,7 @@ export default function LiveWorkoutPage() {
                 if (setData) {
                   setCurrentReps(setData.reps);
                   setCurrentWeight(setData.weight);
+                  setCurrentSpeed(setData.speed ?? "");
                 }
               }
 
@@ -435,6 +443,7 @@ export default function LiveWorkoutPage() {
             setNumber: setIndex + 1,
             reps: parseInt(set.reps) || 0,
             weight: parseFloat(set.weight) || 0,
+            ...(set.speed && parseFloat(set.speed) > 0 && { speed: parseFloat(set.speed) }),
             completed: set.completed
           })) || [],
           ...(exercise.groupId && { groupId: exercise.groupId }),
@@ -462,9 +471,10 @@ export default function LiveWorkoutPage() {
   }, [programId, workout, exercises, currentPhase, swappedExercises]);
 
   // Auto-save: update exerciseData on input change + debounced save
-  const updateCurrentInput = useCallback((field: "reps" | "weight", value: string) => {
+  const updateCurrentInput = useCallback((field: "reps" | "weight" | "speed", value: string) => {
     if (field === "reps") setCurrentReps(value);
     if (field === "weight") setCurrentWeight(value);
+    if (field === "speed") setCurrentSpeed(value);
 
     if (!currentStep) return;
 
@@ -521,6 +531,7 @@ export default function LiveWorkoutPage() {
 
     setCurrentReps("");
     setCurrentWeight("");
+    setCurrentSpeed("");
 
     if (restDuration > 0) {
       setIsResting(true);
@@ -538,7 +549,7 @@ export default function LiveWorkoutPage() {
       exIdx === currentStep.exerciseIndex
         ? sets.map((set, sIdx) =>
             sIdx === currentStep.setIndex
-              ? { reps: currentReps, weight: currentWeight, completed: true }
+              ? { reps: currentReps, weight: currentWeight, speed: currentSpeed, completed: true }
               : set
           )
         : sets
@@ -565,7 +576,7 @@ export default function LiveWorkoutPage() {
       exIdx === currentStep.exerciseIndex
         ? sets.map((set, sIdx) =>
             sIdx === currentStep.setIndex
-              ? { reps: "0", weight: "0", completed: true }
+              ? { reps: "0", weight: "0", speed: "", completed: true }
               : set
           )
         : sets
@@ -586,7 +597,7 @@ export default function LiveWorkoutPage() {
     // Mark all sets for the current exercise as skipped
     const updatedData = exerciseData.map((sets, exIdx) =>
       exIdx === currentStep.exerciseIndex
-        ? sets.map(() => ({ reps: "0", weight: "0", completed: true }))
+        ? sets.map(() => ({ reps: "0", weight: "0", speed: "", completed: true }))
         : sets
     );
 
@@ -670,6 +681,7 @@ export default function LiveWorkoutPage() {
         ? Array.from({ length: oldExercise.sets || 3 }, () => ({
             reps: "",
             weight: "",
+            speed: "",
             completed: false,
           }))
         : sets
@@ -1235,6 +1247,20 @@ export default function LiveWorkoutPage() {
                           value={currentWeight}
                           onChange={(e) => updateCurrentInput("weight", e.target.value)}
                           placeholder="0"
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {/* Speed input — time_distance and intervals */}
+                    {showSpeedInput && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Speed (mph)</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={currentSpeed}
+                          onChange={(e) => updateCurrentInput("speed", e.target.value)}
+                          placeholder="0.0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
                       </div>

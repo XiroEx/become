@@ -13,6 +13,7 @@ interface SetData {
   weight?: number     // null for bodyweight/cardio
   duration?: number   // seconds — for time / intervals / time_distance
   distance?: number   // meters — for time_distance
+  speed?: number      // mph — for time_distance / intervals
   completed: boolean
 }
 
