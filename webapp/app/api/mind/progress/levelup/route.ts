@@ -32,17 +32,16 @@ export async function POST(request: NextRequest) {
     }
 
     const nextChapter = currentChapter + 1
-    const updateFields: Record<string, unknown> = {
-      chapter: nextChapter,
+    const update: Record<string, unknown> = {
+      $set: { chapter: nextChapter },
       $push: { chapterHistory: { chapter: nextChapter, unlockedAt: new Date() } },
     }
 
-    // Track self-declare usage
     if (!hasEnoughXp) {
-      updateFields['$addToSet'] = { selfDeclaredChapters: currentChapter }
+      update['$addToSet'] = { selfDeclaredChapters: currentChapter }
     }
 
-    await MindProgress.updateOne({ userId: auth.userId }, updateFields)
+    await MindProgress.updateOne({ userId: auth.userId }, update)
 
     const newlyUnlocked = CHAPTERS[nextChapter - 1].systems
     const allUnlocked = getUnlockedSystems(nextChapter)

@@ -622,6 +622,7 @@ export default function LiveWorkoutPage() {
 
     setCurrentReps("");
     setCurrentWeight("");
+    setCurrentSpeed("");
 
     const restDuration = getRestDuration(currentStep);
     if (restDuration > 0) {
@@ -695,6 +696,7 @@ export default function LiveWorkoutPage() {
     // Clear current inputs
     setCurrentReps("");
     setCurrentWeight("");
+    setCurrentSpeed("");
 
     // Auto-save the swap
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
@@ -739,6 +741,7 @@ export default function LiveWorkoutPage() {
         if (setData) {
           setCurrentReps(setData.reps);
           setCurrentWeight(setData.weight);
+          setCurrentSpeed(setData.speed ?? "");
         }
       }
     }
