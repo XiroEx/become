@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Send, MessageCircle } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
+import FeatureGuard from "@/components/FeatureGuard";
 
 interface Participant {
   _id: string;
@@ -422,6 +423,11 @@ export default function ChatPage() {
   const isOtherTrainer = otherParticipant?.role === "trainer";
 
   return (
+    <FeatureGuard
+      feature="Chat"
+      description="A direct line to your coach. Real conversations, real accountability. Coming soon."
+      icon={<MessageCircle className="h-10 w-10" />}
+    >
     <div className="fixed inset-0 z-40 flex flex-col bg-zinc-50 dark:bg-zinc-950">
       {/* Header */}
       <div className="shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
@@ -571,5 +577,6 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+    </FeatureGuard>
   );
 }

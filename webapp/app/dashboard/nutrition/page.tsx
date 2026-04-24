@@ -10,8 +10,9 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
+import FeatureGuard from '@/components/FeatureGuard'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -276,7 +277,11 @@ export default function NutritionPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <>
+    <FeatureGuard
+      feature="Nutrition"
+      description="Precision nutrition tracking and meal planning, built around your goals. Launching soon."
+      icon={<UtensilsCrossed className="h-10 w-10" />}
+    >
       <PageTransition className="space-y-4 pb-6 sm:space-y-6">
         {/* Header */}
         <header className="mb-2 sm:mb-4">
@@ -387,6 +392,6 @@ export default function NutritionPage() {
         onClose={() => setEditFood(null)}
         onSaved={fetchLog}
       />
-    </>
+    </FeatureGuard>
   )
 }
