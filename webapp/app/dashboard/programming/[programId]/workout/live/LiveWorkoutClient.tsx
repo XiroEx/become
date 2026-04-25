@@ -133,6 +133,8 @@ export default function LiveWorkoutPage() {
 
   // Auto-save ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Stable ref for exerciseData — used in visibilitychange handler to avoid stale closure
+  const exerciseDataRef = useRef<SetData[][]>([]);
 
   // Derive current position from the flow
   const currentStep = workoutFlow[currentStepIndex];
@@ -305,6 +307,35 @@ export default function LiveWorkoutPage() {
               }
 
               setTimeout(() => setShowResumeIndicator(false), 3000);
+            } else {
+              // No API resume data — check localStorage draft (covers iOS fetch-cancel on app switch)
+              const draftKey = `live_draft_${programId}_${workoutData.day}`;
+              try {
+                const raw = localStorage.getItem(draftKey);
+                if (raw) {
+                  const draft = JSON.parse(raw) as { savedAt: number; exerciseData: SetData[][]; stepIndex: number };
+                  const age = Date.now() - draft.savedAt;
+                  // Use draft only if it's < 24h old and has actual progress
+                  const hasProgress = draft.exerciseData?.some(sets => sets.some(s => s.completed || s.reps || s.weight));
+                  if (age < 86_400_000 && hasProgress && draft.exerciseData?.length === initialData.length) {
+                    setExerciseData(draft.exerciseData);
+                    setIsResuming(true);
+                    setShowResumeIndicator(true);
+                    const resumeIdx = Math.min(draft.stepIndex, flow.length - 1);
+                    setCurrentStepIndex(resumeIdx);
+                    const step = flow[resumeIdx];
+                    if (step) {
+                      const setData = draft.exerciseData[step.exerciseIndex]?.[step.setIndex];
+                      if (setData) {
+                        setCurrentReps(setData.reps);
+                        setCurrentWeight(setData.weight);
+                        setCurrentSpeed(setData.speed ?? "");
+                      }
+                    }
+                    setTimeout(() => setShowResumeIndicator(false), 3000);
+                  }
+                }
+              } catch { /* corrupt draft — ignore */ }
             }
           }
         } else {
@@ -420,6 +451,13 @@ export default function LiveWorkoutPage() {
     };
   }, []);
 
+  // Keep stable refs in sync so the visibility handler always sees current data
+  const currentStepIndexRef = useRef(currentStepIndex);
+  useEffect(() => {
+    exerciseDataRef.current = exerciseData;
+    currentStepIndexRef.current = currentStepIndex;
+  }, [exerciseData, currentStepIndex]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -462,6 +500,8 @@ export default function LiveWorkoutPage() {
           setProgramCompleted(true);
           setCompletedProgramName(data.programName || "");
         }
+        // Clear the draft — workout is done, no need to resume
+        try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
       }
     } catch (error) {
       console.error("Error saving workout:", error);
@@ -469,6 +509,35 @@ export default function LiveWorkoutPage() {
       setSaving(false);
     }
   }, [programId, workout, exercises, currentPhase, swappedExercises]);
+
+  // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
+  // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension
+  // so localStorage is the primary backup; the API save is best-effort.
+  useEffect(() => {
+    if (!workout) return;
+    const draftKey = `live_draft_${programId}_${workout.day}`;
+
+    const flush = () => {
+      if (exerciseDataRef.current.length === 0) return;
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          savedAt: Date.now(),
+          exerciseData: exerciseDataRef.current,
+          stepIndex: currentStepIndexRef.current,
+        }));
+      } catch { /* storage full — ignore */ }
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      saveWorkout(exerciseDataRef.current, false);
+    };
+
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('pagehide', flush);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workout, programId, saveWorkout]);
 
   // Auto-save: update exerciseData on input change + debounced save
   const updateCurrentInput = useCallback((field: "reps" | "weight" | "speed", value: string) => {
