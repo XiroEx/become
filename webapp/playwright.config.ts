@@ -39,5 +39,17 @@ export default defineConfig({
         screenshot: 'only-on-failure',
       },
     },
+    {
+      name: 'new-user-journey',
+      testMatch: '**/new-user-journey.spec.ts',
+      timeout: 300_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
   ],
 });

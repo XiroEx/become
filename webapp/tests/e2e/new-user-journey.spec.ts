@@ -59,7 +59,7 @@ test.describe('New User Journey', () => {
 
   test('signup → onboard → enroll → schedule → complete first workout', async ({ page, context }) => {
 
-    // ── 0. Wire up route mocks (before any navigation) ──────────────────────
+    // ── 0. Wire up route mocks + inject auth cookie (before any navigation) ─
     // Mock send-link: return a fake sessionId (no real email sent)
     await page.route(`${BASE_URL}/api/auth/send-link`, (route) => {
       route.fulfill({
@@ -78,6 +78,19 @@ test.describe('New User Journey', () => {
       })
     })
 
+    // Inject auth cookie so Next.js middleware (/dashboard/:path*) passes.
+    // The middleware checks cookie only — we set it upfront since we have the
+    // production-signed token from beforeAll.
+    await context.addCookies([{
+      name: 'auth_token',
+      value: e2eToken,
+      domain: new URL(BASE_URL).hostname,
+      path: '/',
+      httpOnly: false,
+      secure: true,
+      sameSite: 'Lax',
+    }])
+
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 1: Register
     // ─────────────────────────────────────────────────────────────────────────
@@ -85,7 +98,9 @@ test.describe('New User Journey', () => {
     console.log('\n=== PHASE 1: Register ===')
     await page.goto(`${BASE_URL}/register`)
     await page.waitForLoadState('domcontentloaded')
-    await page.waitForTimeout(500)
+    // Seed localStorage token so client-side API calls (AuthGuard → /api/auth/me) work
+    await page.evaluate((t) => localStorage.setItem('token', t), e2eToken)
+    await page.waitForTimeout(300)
 
     await screenshot(page, '01-register-page')
 
