@@ -385,20 +385,6 @@ export async function POST(request: NextRequest) {
       case 'workout':
         progress.workoutLogs.push(data)
         progress.totalWorkouts += 1
-        // Update streak
-        const lastWorkout = progress.workoutLogs[progress.workoutLogs.length - 2]
-        if (lastWorkout) {
-          const daysDiff = Math.floor(
-            (new Date().getTime() - new Date(lastWorkout.date).getTime()) / (1000 * 60 * 60 * 24)
-          )
-          if (daysDiff <= 1) {
-            progress.streakDays += 1
-          } else {
-            progress.streakDays = 1
-          }
-        } else {
-          progress.streakDays = 1
-        }
         break
 
       case 'program':

@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth'
+import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import Schedule from '@/models/Schedule'
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const body = await request.json()
     const { programId } = body
@@ -44,14 +39,9 @@ export async function POST(request: NextRequest) {
 
     // Remove the program from active programs
     userProgress.activePrograms.splice(programIndex, 1)
-    
-    // Remove all workout logs for this program
-    if (userProgress.workoutLogs && userProgress.workoutLogs.length > 0) {
-      userProgress.workoutLogs = userProgress.workoutLogs.filter(
-        (log: { programId: string }) => log.programId !== programId
-      )
-    }
-    
+
+    // Workout logs are preserved for historical tracking — only enrollment is removed
+
     // Clear currentProgram if it matches
     if (userProgress.currentProgram?.programId === programId) {
       userProgress.currentProgram = undefined
@@ -59,12 +49,8 @@ export async function POST(request: NextRequest) {
     
     await userProgress.save()
 
-    // Delete associated schedule and clear hasSchedule flag
+    // Delete associated schedule
     await Schedule.deleteOne({ userId: payload.userId, programId })
-    await UserProgress.updateOne(
-      { userId: payload.userId, 'activePrograms.programId': programId },
-      { $set: { 'activePrograms.$.hasSchedule': false } }
-    )
 
     return NextResponse.json({ 
       success: true,

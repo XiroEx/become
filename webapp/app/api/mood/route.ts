@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
         return entryDate.getTime() === today.getTime()
       }) ?? -1
 
-      let previousMood: 1 | 2 | 3 | null = null
+      let previousMood: 1 | 2 | 3 | 4 | 5 | null = null
 
       if (existingIndex >= 0) {
         // Get previous mood before updating

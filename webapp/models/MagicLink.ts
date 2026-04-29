@@ -138,7 +138,13 @@ export async function checkSession(sessionId: string): Promise<{ status: 'pendin
   if (magicLink.used && magicLink.authToken) {
     return { status: 'verified', authToken: magicLink.authToken }
   }
-  
+
+  // Link was consumed (used=true) but authToken never stored — it was either
+  // replaced by a new request or failed mid-verification. Treat as expired.
+  if (magicLink.used && !magicLink.authToken) {
+    return { status: 'expired' }
+  }
+
   return { status: 'pending' }
 }
 

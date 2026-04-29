@@ -95,16 +95,11 @@ export async function GET(
       const endEntry = afterEnd[afterEnd.length - 1] || weightHistory[weightHistory.length - 1]
 
       if (startEntry && endEntry && startEntry !== endEntry) {
-        // Convert to lbs (entries stored in kg if unit is kg, else assume lbs)
-        const toKg = (w: WeightEntry) => {
-          if (w.unit === 'kg') return w.weight
-          // Default assumption: kg stored in DB (UserProgress stores kg)
-          return w.weight
-        }
-        const startKg = toKg(startEntry)
-        const endKg = toKg(endEntry)
-        const startLbs = Math.round(startKg * 2.20462 * 10) / 10
-        const endLbs = Math.round(endKg * 2.20462 * 10) / 10
+        // UserProgress stores weight in lbs (see IWeightEntry comment in models/UserProgress.ts).
+        // The unit field is not stored in the schema; treat absent/unknown unit as lbs.
+        const toLbs = (w: WeightEntry) => w.unit === 'kg' ? w.weight * 2.20462 : w.weight
+        const startLbs = Math.round(toLbs(startEntry) * 10) / 10
+        const endLbs = Math.round(toLbs(endEntry) * 10) / 10
         weightChange = { startLbs, endLbs, change: Math.round((endLbs - startLbs) * 10) / 10 }
       }
     }

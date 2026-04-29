@@ -50,10 +50,11 @@ export async function POST(request: NextRequest) {
       { $set: { activePrograms: [], workoutLogs: [] } }
     )
 
-    // Sign permanent JWT (no expiry — onboarding checks payload.exp which will be undefined → NaN → passes)
+    // 24-hour JWT for e2e test sessions
     const authToken = jwt.sign(
       { userId, email: E2E_EMAIL, role: 'user' },
-      secret
+      secret,
+      { expiresIn: '24h' }
     )
 
     return NextResponse.json({ userId, email: E2E_EMAIL, token: authToken })

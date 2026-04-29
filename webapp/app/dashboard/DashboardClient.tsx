@@ -83,6 +83,7 @@ export default function DashboardClient() {
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
+  const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
 
   useEffect(() => {
@@ -130,23 +131,25 @@ export default function DashboardClient() {
       }
     }
 
-    // Fetch user progress data
-    async function fetchProgress() {
+    // Fetch user progress data — returns raw response for reuse in nudge check
+    async function fetchProgress(): Promise<UserProgressData | null> {
       try {
         const token = localStorage.getItem('token')
         const headers: HeadersInit = {}
         if (token) {
           headers['Authorization'] = `Bearer ${token}`
         }
-        
+
         const res = await fetch('/api/progress', { headers })
         if (res.ok) {
           const progressData = await res.json()
           setData(progressData)
+          return progressData
         }
+        return null
       } catch (error) {
         console.error('Failed to fetch progress:', error)
-        // Keep mock data on error
+        return null
       } finally {
         setLoading(false)
       }
@@ -217,6 +220,9 @@ export default function DashboardClient() {
           if (profileData.profile?.weeklyAvailability) {
             setWeeklyAvailability(profileData.profile.weeklyAvailability)
           }
+          if (profileData.profile?.weightUnit === 'kg' || profileData.profile?.weightUnit === 'lbs') {
+            setWeightUnit(profileData.profile.weightUnit)
+          }
         }
       } catch {
         // non-critical
@@ -238,19 +244,8 @@ export default function DashboardClient() {
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
-      await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
-      // Run nudge check after progress loaded — reads currentProgram from updated state
-      // We read directly from the API response so we don't depend on stale state
-      try {
-        const token = localStorage.getItem('token')
-        if (token) {
-          const r = await fetch('/api/progress', { headers: { Authorization: `Bearer ${token}` } })
-          if (r.ok) {
-            const d = await r.json()
-            checkProgramNudge(!!d.currentProgram)
-          }
-        }
-      } catch { /* non-critical */ }
+      const [progressData] = await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
+      checkProgramNudge(!!progressData?.currentProgram)
     }
 
     init()
@@ -351,6 +346,7 @@ export default function DashboardClient() {
         daysSinceMood={checkInInfo.daysSinceMood}
         daysSinceWeight={checkInInfo.daysSinceWeight}
         lastWeight={checkInInfo.lastWeight}
+        weightUnit={weightUnit}
       />
 
       <StreakMilestoneModal

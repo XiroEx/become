@@ -5,8 +5,13 @@ import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises';
 import { verifyAuth } from '@/lib/auth';
 
 // GET all programs
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await dbConnect();
     const programs = await ProgramModel.find({}).lean();
     const hydrated = await hydratePrograms(programs);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth'
+import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
@@ -38,16 +38,11 @@ interface WorkoutSaveRequest {
 // GET: Fetch today's workout progress for a program
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const { searchParams } = new URL(request.url)
     const programId = searchParams.get('programId')
@@ -204,16 +199,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const body: WorkoutSaveRequest = await request.json()
     const { programId, phase, day, exercises, completed, duration, notes } = body
@@ -245,57 +235,47 @@ export async function POST(request: NextRequest) {
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    // Check if workout already logged today for this program/day
-    const existingProgress = await UserProgress.findOne({
-      userId: payload.userId,
-      'workoutLogs': {
-        $elemMatch: {
-          programId,
-          day,
-          date: { $gte: today, $lt: tomorrow }
+    // Atomic update-if-exists: returns the document state BEFORE this update
+    // so we can read wasAlreadyComplete without a separate findOne round-trip.
+    type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean }> }
+    const docBefore = await UserProgress.findOneAndUpdate(
+      {
+        userId: payload.userId,
+        workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lt: tomorrow } } }
+      },
+      {
+        $set: {
+          'workoutLogs.$[elem].exercises': exercises,
+          'workoutLogs.$[elem].completed': completed,
+          'workoutLogs.$[elem].duration': duration,
+          updatedAt: new Date()
         }
+      },
+      {
+        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.date': { $gte: today, $lt: tomorrow } }],
+        returnDocument: 'before',
+        lean: true
       }
-    })
+    ) as ProgressDoc | null
 
     let wasAlreadyComplete = false
 
-    if (existingProgress) {
-      // Check if this workout was already marked complete today
-      const existingLog = existingProgress.workoutLogs?.find(
-        (log: { programId: string; day: string; date: Date; completed: boolean }) =>
-          log.programId === programId &&
-          log.day === day &&
-          log.date >= today &&
-          log.date < tomorrow
+    if (docBefore) {
+      const oldLog = docBefore.workoutLogs?.find(
+        (log) => log.programId === programId && log.day === day && log.date >= today && log.date < tomorrow
       )
-      wasAlreadyComplete = existingLog?.completed === true
-
-      // Update existing workout log for today
+      wasAlreadyComplete = oldLog?.completed === true
+    } else {
+      // No entry for today — insert only if still absent (guards against concurrent double-tap)
       await UserProgress.updateOne(
         {
           userId: payload.userId,
-          'workoutLogs.programId': programId,
-          'workoutLogs.day': day,
-          'workoutLogs.date': { $gte: today, $lt: tomorrow }
+          workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lt: tomorrow } } } }
         },
         {
-          $set: {
-            'workoutLogs.$.exercises': exercises,
-            'workoutLogs.$.completed': completed,
-            'workoutLogs.$.duration': duration,
-            updatedAt: new Date()
-          }
-        }
-      )
-    } else {
-      // Build update operations
-      const updateOps: Record<string, unknown> = {
-        $push: { workoutLogs: workoutLog },
-        $set: { updatedAt: new Date() }
-      }
-      await UserProgress.updateOne(
-        { userId: payload.userId },
-        updateOps,
+          $push: { workoutLogs: workoutLog },
+          $set: { updatedAt: new Date() }
+        },
         { upsert: true }
       )
     }
