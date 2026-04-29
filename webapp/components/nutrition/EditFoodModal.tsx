@@ -15,49 +15,67 @@ interface EditFoodModalProps {
   onSaved: () => void   // refetch after save
 }
 
+type InputMode = 'servings' | 'grams'
+
+function servingSizeInGrams(food: IFoodEntry): number {
+  return food.servingUnit === 'oz' ? food.servingSize * 28.3495 : food.servingSize
+}
+
 export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onSaved }: EditFoodModalProps) {
   const [servings, setServings] = useState('')
+  const [customGrams, setCustomGrams] = useState('')
+  const [inputMode, setInputMode] = useState<InputMode>('servings')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  const isWeightBased = food?.servingUnit === 'g' || food?.servingUnit === 'oz'
+
   useLockScroll(isOpen)
 
-  // Sync fields when the target food changes
   useEffect(() => {
     if (food) {
       setServings(String(food.servings))
+      setCustomGrams(String(Math.round(food.servings * servingSizeInGrams(food))))
+      setInputMode('servings')
       setError('')
     }
   }, [food])
 
-  // Per-serving base macros (nutrition stored as total = base × servings)
+  // nutrition is stored per-serving
   const base = useMemo(() => {
     if (!food) return null
-    const s = food.servings || 1
     return {
-      calories: food.nutrition.calories / s,
-      protein:  food.nutrition.protein  / s,
-      carbs:    food.nutrition.carbs    / s,
-      fats:     food.nutrition.fats     / s,
+      calories: food.nutrition.calories,
+      protein:  food.nutrition.protein,
+      carbs:    food.nutrition.carbs,
+      fats:     food.nutrition.fats,
     }
   }, [food])
 
+  const effectiveServings = useMemo(() => {
+    if (!food) return 0
+    if (inputMode === 'grams') {
+      const grams = parseFloat(customGrams) || 0
+      return grams / servingSizeInGrams(food)
+    }
+    return parseFloat(servings) || 0
+  }, [inputMode, servings, customGrams, food])
+
   const preview = useMemo(() => {
     if (!base) return null
-    const s = parseFloat(servings) || 0
+    const s = effectiveServings
     return {
       calories: Math.round(base.calories * s),
       protein:  Math.round(base.protein  * s * 10) / 10,
       carbs:    Math.round(base.carbs    * s * 10) / 10,
       fats:     Math.round(base.fats     * s * 10) / 10,
     }
-  }, [base, servings])
+  }, [base, effectiveServings])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!food) return
-    const s = parseFloat(servings)
-    if (!s || s <= 0) { setError('Servings must be greater than 0'); return }
+    if (effectiveServings <= 0) { setError('Amount must be greater than 0'); return }
 
     setSaving(true)
     setError('')
@@ -69,7 +87,7 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ mealId, foodEntryId: food.id, updates: { servings: s }, date }),
+        body: JSON.stringify({ mealId, foodEntryId: food.id, updates: { servings: effectiveServings }, date }),
       })
       if (res.ok) {
         onSaved()
@@ -131,45 +149,109 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Servings input */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Servings
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.25"
-                    min="0.25"
-                    value={servings}
-                    onChange={(e) => setServings(e.target.value)}
-                    className="w-28 rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
-                    autoFocus
-                  />
-                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    × {food.servingSize}{food.servingUnit}
-                  </span>
+              {/* Mode toggle for weight-based foods */}
+              {isWeightBased && (
+                <div className="flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+                  <button
+                    type="button"
+                    onClick={() => setInputMode('servings')}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
+                      inputMode === 'servings'
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                    }`}
+                  >
+                    Servings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInputMode('grams')}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
+                      inputMode === 'grams'
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                    }`}
+                  >
+                    Custom weight (g)
+                  </button>
                 </div>
+              )}
 
-                {/* Quick-select buttons */}
-                <div className="mt-2 flex gap-2">
-                  {[0.5, 1, 1.5, 2].map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setServings(String(v))}
-                      className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
-                        parseFloat(servings) === v
-                          ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                      }`}
-                    >
-                      {v}×
-                    </button>
-                  ))}
+              {inputMode === 'servings' ? (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Servings
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.25"
+                      min="0.25"
+                      value={servings}
+                      onChange={(e) => setServings(e.target.value)}
+                      className="w-28 rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
+                      autoFocus
+                    />
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                      × {food.servingSize}{food.servingUnit}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex gap-2">
+                    {[0.5, 1, 1.5, 2].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setServings(String(v))}
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
+                          parseFloat(servings) === v
+                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                        }`}
+                      >
+                        {v}×
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Amount (grams)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="1"
+                      min="1"
+                      value={customGrams}
+                      onChange={(e) => setCustomGrams(e.target.value)}
+                      className="w-28 rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
+                      autoFocus
+                    />
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">g</span>
+                  </div>
+
+                  <div className="mt-2 flex gap-2">
+                    {[50, 100, 150, 200].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setCustomGrams(String(v))}
+                        className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
+                          parseFloat(customGrams) === v
+                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                        }`}
+                      >
+                        {v}g
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Macro preview */}
               {preview && (
@@ -212,7 +294,7 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !servings || parseFloat(servings) <= 0}
+                  disabled={saving || effectiveServings <= 0}
                   className="flex-1 rounded-xl bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                 >
                   {saving ? 'Saving…' : 'Save'}

@@ -62,6 +62,8 @@ export default function FoodSearchModal({
   const [servings, setServings] = useState('1')
   // Index into serving options: 0 = default serving, 1+ = alternate servings
   const [selectedServingIdx, setSelectedServingIdx] = useState(0)
+  const [inputMode, setInputMode] = useState<'servings' | 'grams'>('servings')
+  const [customGrams, setCustomGrams] = useState('100')
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
@@ -78,6 +80,8 @@ export default function FoodSearchModal({
       setSelectedFood(null)
       setServings('1')
       setSelectedServingIdx(0)
+      setInputMode('servings')
+      setCustomGrams('100')
       setActiveTab('all')
     }
   }, [isOpen])
@@ -172,43 +176,71 @@ export default function FoodSearchModal({
   const currentServing = servingOptions[selectedServingIdx] || servingOptions[0]
   const servingMultiplier = currentServing?.multiplier ?? 1
 
+  const isWeightBased = selectedFood?.servingUnit === 'g' || selectedFood?.servingUnit === 'oz'
+  const servingSizeInGrams = selectedFood
+    ? selectedFood.servingUnit === 'oz'
+      ? selectedFood.servingSize * 28.3495
+      : selectedFood.servingSize
+    : 1
+
+  // Effective multiplier and servings count for the preview
+  const effectiveServings = inputMode === 'grams'
+    ? (Number(customGrams) || 0) / servingSizeInGrams
+    : (Number(servings) || 1) * servingMultiplier
+
   const handleAddFood = () => {
     if (!selectedFood || !currentServing) return
 
-    const numServings = Number(servings) || 1
-    const mult = servingMultiplier
+    let entry: IFoodEntry
 
-    // Scale nutrition by the serving option multiplier
-    const scaledNutrition = {
-      calories: Math.round(selectedFood.nutrition.calories * mult * 10) / 10,
-      protein: Math.round(selectedFood.nutrition.protein * mult * 10) / 10,
-      carbs: Math.round(selectedFood.nutrition.carbs * mult * 10) / 10,
-      fats: Math.round(selectedFood.nutrition.fats * mult * 10) / 10,
-      fiber: selectedFood.nutrition.fiber != null
-        ? Math.round(selectedFood.nutrition.fiber * mult * 10) / 10
-        : undefined,
-      sugar: selectedFood.nutrition.sugar != null
-        ? Math.round(selectedFood.nutrition.sugar * mult * 10) / 10
-        : undefined,
-      sodium: selectedFood.nutrition.sodium != null
-        ? Math.round(selectedFood.nutrition.sodium * mult * 10000) / 10000
-        : undefined,
-    }
-
-    const entry: IFoodEntry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: selectedFood.name,
-      brand: selectedFood.brand,
-      servingSize: currentServing.servingSize,
-      servingUnit: currentServing.servingUnit,
-      servings: numServings,
-      nutrition: scaledNutrition,
+    if (inputMode === 'grams' && isWeightBased) {
+      const gramsServings = (Number(customGrams) || 1) / servingSizeInGrams
+      // Store per-serving nutrition (unscaled) with fractional servings count
+      entry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: selectedFood.name,
+        brand: selectedFood.brand,
+        servingSize: selectedFood.servingSize,
+        servingUnit: selectedFood.servingUnit,
+        servings: gramsServings,
+        nutrition: {
+          calories: Math.round(selectedFood.nutrition.calories * 10) / 10,
+          protein:  Math.round(selectedFood.nutrition.protein  * 10) / 10,
+          carbs:    Math.round(selectedFood.nutrition.carbs    * 10) / 10,
+          fats:     Math.round(selectedFood.nutrition.fats     * 10) / 10,
+          fiber:  selectedFood.nutrition.fiber  != null ? Math.round(selectedFood.nutrition.fiber  * 10) / 10 : undefined,
+          sugar:  selectedFood.nutrition.sugar  != null ? Math.round(selectedFood.nutrition.sugar  * 10) / 10 : undefined,
+          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * 10) / 10 : undefined,
+        },
+      }
+    } else {
+      const mult = servingMultiplier
+      // Scale nutrition by the serving option multiplier (alt serving sizes)
+      entry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: selectedFood.name,
+        brand: selectedFood.brand,
+        servingSize: currentServing.servingSize,
+        servingUnit: currentServing.servingUnit,
+        servings: Number(servings) || 1,
+        nutrition: {
+          calories: Math.round(selectedFood.nutrition.calories * mult * 10) / 10,
+          protein:  Math.round(selectedFood.nutrition.protein  * mult * 10) / 10,
+          carbs:    Math.round(selectedFood.nutrition.carbs    * mult * 10) / 10,
+          fats:     Math.round(selectedFood.nutrition.fats     * mult * 10) / 10,
+          fiber:  selectedFood.nutrition.fiber  != null ? Math.round(selectedFood.nutrition.fiber  * mult * 10) / 10 : undefined,
+          sugar:  selectedFood.nutrition.sugar  != null ? Math.round(selectedFood.nutrition.sugar  * mult * 10) / 10 : undefined,
+          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * mult * 10000) / 10000 : undefined,
+        },
+      }
     }
 
     onSelectFood(entry)
     setSelectedFood(null)
     setServings('1')
     setSelectedServingIdx(0)
+    setInputMode('servings')
+    setCustomGrams('100')
   }
 
   const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1)
@@ -317,6 +349,8 @@ export default function FoodSearchModal({
                             setSelectedFood(food)
                             setServings('1')
                             setSelectedServingIdx(0)
+                            setInputMode('servings')
+                            setCustomGrams('100')
                           }
                         }}
                         className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
@@ -359,8 +393,34 @@ export default function FoodSearchModal({
                             className="overflow-hidden"
                           >
                             <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-                              {/* Serving option selector (shown when alternate servings exist) */}
-                              {servingOptions.length > 1 && (
+                              {/* Servings / Grams toggle for weight-based foods */}
+                              {(food.servingUnit === 'g' || food.servingUnit === 'oz') && (
+                                <div className="mb-2.5 flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+                                  <button
+                                    onClick={() => setInputMode('servings')}
+                                    className={`flex-1 rounded-md py-1 text-xs font-semibold transition-colors ${
+                                      inputMode === 'servings'
+                                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                                    }`}
+                                  >
+                                    Servings
+                                  </button>
+                                  <button
+                                    onClick={() => setInputMode('grams')}
+                                    className={`flex-1 rounded-md py-1 text-xs font-semibold transition-colors ${
+                                      inputMode === 'grams'
+                                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                                    }`}
+                                  >
+                                    Custom weight (g)
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Serving option selector (shown in servings mode when alternate servings exist) */}
+                              {inputMode === 'servings' && servingOptions.length > 1 && (
                                 <div className="mb-2.5 flex flex-wrap gap-1.5">
                                   {servingOptions.map((opt, idx) => (
                                     <button
@@ -379,29 +439,43 @@ export default function FoodSearchModal({
                               )}
 
                               <div className="flex items-center gap-3">
-                                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                                  Servings
-                                </label>
-                                <input
-                                  type="number"
-                                  min="0.25"
-                                  step="0.25"
-                                  value={servings}
-                                  onChange={(e) => setServings(e.target.value)}
-                                  className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:focus:border-blue-400"
-                                />
+                                {inputMode === 'grams' ? (
+                                  <>
+                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Grams</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      value={customGrams}
+                                      onChange={(e) => setCustomGrams(e.target.value)}
+                                      className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:focus:border-blue-400"
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Servings</label>
+                                    <input
+                                      type="number"
+                                      min="0.25"
+                                      step="0.25"
+                                      value={servings}
+                                      onChange={(e) => setServings(e.target.value)}
+                                      className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:focus:border-blue-400"
+                                    />
+                                  </>
+                                )}
                                 <div className="flex-1 text-right">
                                   <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
                                     <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {Math.round(food.nutrition.calories * servingMultiplier * (Number(servings) || 1))} cal
+                                      {Math.round(food.nutrition.calories * effectiveServings)} cal
                                     </span>
                                   </p>
                                   <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                    P: {Math.round(food.nutrition.protein * servingMultiplier * (Number(servings) || 1))}g
+                                    P: {Math.round(food.nutrition.protein * effectiveServings)}g
                                     {' '}&middot;{' '}
-                                    C: {Math.round(food.nutrition.carbs * servingMultiplier * (Number(servings) || 1))}g
+                                    C: {Math.round(food.nutrition.carbs * effectiveServings)}g
                                     {' '}&middot;{' '}
-                                    F: {Math.round(food.nutrition.fats * servingMultiplier * (Number(servings) || 1))}g
+                                    F: {Math.round(food.nutrition.fats * effectiveServings)}g
                                   </p>
                                 </div>
                               </div>

@@ -56,8 +56,6 @@ const MACRO_PRESETS: { key: MacroPreset; label: string; protein: number; carbs: 
   { key: 'custom', label: 'Custom', protein: 0, carbs: 0, fats: 0 }
 ]
 
-const DEFAULT_AGE = 25
-
 export default function NutritionGoalsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -75,13 +73,21 @@ export default function NutritionGoalsPage() {
   })
 
   const [macroPreset, setMacroPreset] = useState<MacroPreset>('balanced')
-  const [userWeight, setUserWeight] = useState<number | null>(null)
-  const [userHeight, setUserHeight] = useState<number | null>(null)
+  const [userWeight, setUserWeight] = useState<number | null>(null)   // lbs
+  const [userHeightCm, setUserHeightCm] = useState<number | null>(null)
+  const [userAge, setUserAge] = useState<number | null>(null)
+  const [userSex, setUserSex] = useState<'male' | 'female' | null>(null)
+  // Manual overrides shown when profile data is missing
+  const [manualAge, setManualAge] = useState('')
+  const [manualSex, setManualSex] = useState<'male' | 'female' | ''>('')
+  const [manualHeightFt, setManualHeightFt] = useState('')
+  const [manualHeightIn, setManualHeightIn] = useState('')
   const [tdee, setTdee] = useState<number | null>(null)
 
-  const calculateTDEE = useCallback((weightKg: number, heightCm: number, activity: ActivityLevel): number => {
-    // Mifflin-St Jeor (using default for "male" path — the formula given uses -161 which is actually female)
-    const bmr = 10 * weightKg + 6.25 * heightCm - 5 * DEFAULT_AGE - 161
+  const calculateTDEE = useCallback((weightKg: number, heightCm: number, age: number, sex: 'male' | 'female', activity: ActivityLevel): number => {
+    // Mifflin-St Jeor: male +5, female -161
+    const sexAdjust = sex === 'male' ? 5 : -161
+    const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexAdjust
     return Math.round(bmr * ACTIVITY_MULTIPLIERS[activity])
   }, [])
 
@@ -121,9 +127,10 @@ export default function NutritionGoalsPage() {
 
         const headers: HeadersInit = { 'Authorization': `Bearer ${token}` }
 
-        const [goalsRes, progressRes] = await Promise.all([
+        const [goalsRes, progressRes, profileRes] = await Promise.all([
           fetch('/api/nutrition/goals', { headers }),
-          fetch('/api/progress', { headers })
+          fetch('/api/progress', { headers }),
+          fetch('/api/profile', { headers }),
         ])
 
         if (goalsRes.ok) {
@@ -141,17 +148,19 @@ export default function NutritionGoalsPage() {
 
         if (progressRes.ok) {
           const progressData: ProgressData = await progressRes.json()
-          // Get the most recent weight from weightData
           if (progressData.weightData && progressData.weightData.length > 0) {
             const latestWeight = progressData.weightData[progressData.weightData.length - 1].value
-            // Weight is in lbs from progress API — convert to kg for TDEE
             setUserWeight(latestWeight)
           }
-          // Height is sometimes available from bmiData context or user profile
-          // We look for height in progress data
-          const raw = progressData as ProgressData & { height?: number }
-          if (raw.height) {
-            setUserHeight(raw.height)
+        }
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json()
+          const profile = profileData.profile || {}
+          if (profile.age) setUserAge(profile.age)
+          if (profile.heightCm) setUserHeightCm(profile.heightCm)
+          if (profile.biologicalSex === 'male' || profile.biologicalSex === 'female') {
+            setUserSex(profile.biologicalSex)
           }
         }
       } catch (error) {
@@ -164,15 +173,24 @@ export default function NutritionGoalsPage() {
     fetchData()
   }, [router])
 
-  // Recalculate TDEE whenever weight, height, or activity level changes
+  // Recalculate TDEE whenever any body metric or activity level changes
   useEffect(() => {
-    if (userWeight && userHeight) {
+    const effectiveAge = userAge ?? (manualAge ? parseInt(manualAge) : null)
+    const effectiveSex = userSex ?? (manualSex || null) as 'male' | 'female' | null
+    const effectiveHeightCm = userHeightCm ?? (
+      manualHeightFt
+        ? (parseInt(manualHeightFt) * 12 + parseInt(manualHeightIn || '0')) * 2.54
+        : null
+    )
+
+    if (userWeight && effectiveHeightCm && effectiveAge && effectiveSex) {
       const weightKg = userWeight * 0.453592
-      const heightCm = userHeight * 2.54
-      const calculatedTdee = calculateTDEE(weightKg, heightCm, goals.activityLevel)
+      const calculatedTdee = calculateTDEE(weightKg, effectiveHeightCm, effectiveAge, effectiveSex, goals.activityLevel)
       setTdee(calculatedTdee)
+    } else {
+      setTdee(null)
     }
-  }, [userWeight, userHeight, goals.activityLevel, calculateTDEE])
+  }, [userWeight, userHeightCm, userAge, userSex, manualAge, manualSex, manualHeightFt, manualHeightIn, goals.activityLevel, calculateTDEE])
 
   const handleGoalTypeChange = (goalType: GoalType) => {
     setGoals(prev => ({ ...prev, goalType }))
@@ -285,33 +303,99 @@ export default function NutritionGoalsPage() {
       </div>
 
       {/* User Stats */}
-      {(userWeight || userHeight) && (
-        <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
-          <div className="flex gap-6">
-            {userWeight && (
-              <div>
-                <p className="text-2xl font-bold text-zinc-900 dark:text-white">{userWeight}<span className="text-sm font-normal text-zinc-500"> lbs</span></p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">Current Weight</p>
-              </div>
-            )}
-            {userHeight && (
-              <div>
-                <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                  {Math.floor(userHeight / 12)}&apos;{userHeight % 12}&quot;
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">Height</p>
-              </div>
-            )}
-            {tdee && (
-              <div>
-                <p className="text-2xl font-bold text-zinc-900 dark:text-white">{tdee}<span className="text-sm font-normal text-zinc-500"> cal</span></p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">Estimated TDEE</p>
-              </div>
-            )}
-          </div>
+      <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
+        <div className="flex flex-wrap gap-6">
+          {userWeight && (
+            <div>
+              <p className="text-2xl font-bold text-zinc-900 dark:text-white">{userWeight}<span className="text-sm font-normal text-zinc-500"> lbs</span></p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Current Weight</p>
+            </div>
+          )}
+          {userHeightCm && (
+            <div>
+              <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+                {Math.floor(userHeightCm / 30.48)}&apos;{Math.round((userHeightCm % 30.48) / 2.54)}&quot;
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Height</p>
+            </div>
+          )}
+          {tdee && (
+            <div>
+              <p className="text-2xl font-bold text-zinc-900 dark:text-white">{tdee}<span className="text-sm font-normal text-zinc-500"> cal</span></p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Estimated TDEE</p>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Manual override inputs when profile is missing height / age / sex */}
+        {(!userHeightCm || !userAge || !userSex) && (
+          <div className="mt-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
+            <p className="mb-3 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Fill in missing info for TDEE calculation{' '}
+              <a href="/dashboard/profile" className="text-blue-600 underline dark:text-blue-400">or update your profile</a>
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {!userAge && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Age</label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="100"
+                    value={manualAge}
+                    onChange={(e) => setManualAge(e.target.value)}
+                    placeholder="25"
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                </div>
+              )}
+              {!userSex && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Sex</label>
+                  <select
+                    value={manualSex}
+                    onChange={(e) => setManualSex(e.target.value as 'male' | 'female' | '')}
+                    className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  >
+                    <option value="">Select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+              )}
+              {!userHeightCm && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Height (ft)</label>
+                    <input
+                      type="number"
+                      min="3"
+                      max="8"
+                      value={manualHeightFt}
+                      onChange={(e) => setManualHeightFt(e.target.value)}
+                      placeholder="5"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Height (in)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="11"
+                      value={manualHeightIn}
+                      onChange={(e) => setManualHeightIn(e.target.value)}
+                      placeholder="10"
+                      className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Goal Type */}
       <div className="mb-4 sm:mb-6">

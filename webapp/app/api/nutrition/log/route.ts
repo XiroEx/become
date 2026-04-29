@@ -193,44 +193,22 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Food entry not found' }, { status: 404 })
     }
 
-    // Calculate proportional nutrition changes
-    const oldServings = foodEntry.servings > 0 ? foodEntry.servings : 1
-    const oldServingSize = foodEntry.servingSize
-    const baseNutrition = {
-      calories: foodEntry.nutrition.calories / oldServings,
-      protein: foodEntry.nutrition.protein / oldServings,
-      carbs: foodEntry.nutrition.carbs / oldServings,
-      fats: foodEntry.nutrition.fats / oldServings,
-      fiber: (foodEntry.nutrition.fiber || 0) / oldServings,
-      sugar: (foodEntry.nutrition.sugar || 0) / oldServings,
-      sodium: (foodEntry.nutrition.sodium || 0) / oldServings,
+    // nutrition is stored per-serving; only rescale it when the serving SIZE changes
+    if (updates.servingSize !== undefined && updates.servingSize !== foodEntry.servingSize) {
+      const sizeRatio = updates.servingSize / foodEntry.servingSize
+      foodEntry.servingSize = updates.servingSize
+      foodEntry.nutrition.calories = Math.round(foodEntry.nutrition.calories * sizeRatio * 10) / 10
+      foodEntry.nutrition.protein  = Math.round(foodEntry.nutrition.protein  * sizeRatio * 10) / 10
+      foodEntry.nutrition.carbs    = Math.round(foodEntry.nutrition.carbs    * sizeRatio * 10) / 10
+      foodEntry.nutrition.fats     = Math.round(foodEntry.nutrition.fats     * sizeRatio * 10) / 10
+      if (foodEntry.nutrition.fiber  != null) foodEntry.nutrition.fiber  = Math.round(foodEntry.nutrition.fiber  * sizeRatio * 10) / 10
+      if (foodEntry.nutrition.sugar  != null) foodEntry.nutrition.sugar  = Math.round(foodEntry.nutrition.sugar  * sizeRatio * 10) / 10
+      if (foodEntry.nutrition.sodium != null) foodEntry.nutrition.sodium = Math.round(foodEntry.nutrition.sodium * sizeRatio * 10) / 10
     }
 
     if (updates.servings !== undefined) {
       foodEntry.servings = updates.servings
     }
-
-    if (updates.servingSize !== undefined) {
-      const sizeRatio = updates.servingSize / oldServingSize
-      foodEntry.servingSize = updates.servingSize
-      // Adjust base nutrition proportionally to serving size change
-      baseNutrition.calories *= sizeRatio
-      baseNutrition.protein *= sizeRatio
-      baseNutrition.carbs *= sizeRatio
-      baseNutrition.fats *= sizeRatio
-      baseNutrition.fiber *= sizeRatio
-      baseNutrition.sugar *= sizeRatio
-      baseNutrition.sodium *= sizeRatio
-    }
-
-    // Recalculate this food's nutrition based on new values
-    foodEntry.nutrition.calories = Math.round(baseNutrition.calories * foodEntry.servings * 10) / 10
-    foodEntry.nutrition.protein = Math.round(baseNutrition.protein * foodEntry.servings * 10) / 10
-    foodEntry.nutrition.carbs = Math.round(baseNutrition.carbs * foodEntry.servings * 10) / 10
-    foodEntry.nutrition.fats = Math.round(baseNutrition.fats * foodEntry.servings * 10) / 10
-    foodEntry.nutrition.fiber = Math.round(baseNutrition.fiber * foodEntry.servings * 10) / 10
-    foodEntry.nutrition.sugar = Math.round(baseNutrition.sugar * foodEntry.servings * 10) / 10
-    foodEntry.nutrition.sodium = Math.round(baseNutrition.sodium * foodEntry.servings * 10) / 10
 
     // Recalculate daily totals
     log.recalculateTotals()
