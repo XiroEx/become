@@ -16,11 +16,12 @@ interface SendEmailOptions {
   to: string
   subject: string
   html: string
+  from?: string
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, from }: SendEmailOptions) {
   const mailOptions = {
-    from: `"${appName}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+    from: from ?? `"${appName}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
     to,
     subject,
     html,

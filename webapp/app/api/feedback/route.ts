@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
     const typeLabel = feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)
     sendEmail({
       to: 'george@redbtn.io',
+      from: '"BECOME" <agent@redbtn.io>',
       subject: `[${appName}] New ${typeLabel} Feedback from ${auth.email}`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
