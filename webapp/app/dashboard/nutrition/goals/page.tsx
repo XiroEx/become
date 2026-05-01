@@ -192,6 +192,21 @@ export default function NutritionGoalsPage() {
     }
   }, [userWeight, userHeightCm, userAge, userSex, manualAge, manualSex, manualHeightFt, manualHeightIn, goals.activityLevel, calculateTDEE])
 
+  // Auto-apply TDEE on first load if calories is still the generic default
+  useEffect(() => {
+    if (!tdee || loading) return
+    const isDefaultCalories = goals.calories === 2000
+    if (isDefaultCalories) {
+      const adjustedCals = applyGoalAdjustment(tdee, goals.goalType)
+      if (macroPreset !== 'custom') {
+        applyMacroPreset(macroPreset, adjustedCals)
+      } else {
+        setGoals(prev => ({ ...prev, calories: adjustedCals }))
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tdee])
+
   const handleGoalTypeChange = (goalType: GoalType) => {
     setGoals(prev => ({ ...prev, goalType }))
 

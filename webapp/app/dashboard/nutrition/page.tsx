@@ -228,6 +228,19 @@ export default function NutritionPage() {
     setQuickAddOpen(false)
   }
 
+  const handleGoalChange = async (calories: number) => {
+    try {
+      const res = await fetch('/api/nutrition/goals', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ calories }),
+      })
+      if (res.ok) await fetchGoals()
+    } catch (err) {
+      console.error('Failed to update calorie goal:', err)
+    }
+  }
+
   const openFoodSearch = (mealType: MealType) => {
     setFoodSearchMealType(mealType)
     setFoodSearchOpen(true)
@@ -304,6 +317,7 @@ export default function NutritionPage() {
           protein={{ current: log.dailyTotals.protein, goal: goals.protein }}
           carbs={{ current: log.dailyTotals.carbs, goal: goals.carbs }}
           fats={{ current: log.dailyTotals.fats, goal: goals.fats }}
+          onGoalChange={handleGoalChange}
         />
 
         {/* Meal Sections */}
