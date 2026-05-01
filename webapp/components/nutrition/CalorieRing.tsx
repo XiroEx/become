@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Settings2 } from 'lucide-react'
 import MacroBar from './MacroBar'
@@ -19,6 +20,7 @@ interface CalorieRingProps {
 }
 
 export default function CalorieRing({ consumed, goal, protein, carbs, fats }: CalorieRingProps) {
+  const router = useRouter()
   const remaining = goal - consumed
   const isOver = consumed > goal
   const percentage = Math.min(consumed / goal, 1)
@@ -31,7 +33,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-      {/* Card header with edit goals button */}
+      {/* Card header */}
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Daily Calories</p>
         <Link
@@ -43,10 +45,15 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
         </Link>
       </div>
 
-      {/* Ring — tappable, goes to goals */}
+      {/* Ring — button wrapper handles tap reliably on mobile */}
       <div className="flex flex-col items-center">
-        <Link href="/dashboard/nutrition/goals" className="relative block" style={{ width: size, height: size }}>
-          <svg width={size} height={size} className="-rotate-90">
+        <button
+          onClick={() => router.push('/dashboard/nutrition/goals')}
+          className="relative cursor-pointer rounded-full focus:outline-none active:opacity-70"
+          style={{ width: size, height: size }}
+          aria-label="Edit calorie goals"
+        >
+          <svg width={size} height={size} className="-rotate-90" style={{ pointerEvents: 'none' }}>
             <defs>
               <linearGradient id="calorie-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#10b981" />
@@ -77,8 +84,8 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
             />
           </svg>
 
-          {/* Center text */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {/* Center text — pointer-events none so button receives the tap */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ pointerEvents: 'none' }}>
             <motion.span
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -89,15 +96,11 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
             >
               {Math.abs(remaining)}
             </motion.span>
-            <span
-              className={`text-xs font-medium ${
-                isOver ? 'text-red-400' : 'text-zinc-500 dark:text-zinc-400'
-              }`}
-            >
+            <span className={`text-xs font-medium ${isOver ? 'text-red-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
               {isOver ? 'over' : 'remaining'}
             </span>
           </div>
-        </Link>
+        </button>
 
         {/* Goal breakdown */}
         <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
