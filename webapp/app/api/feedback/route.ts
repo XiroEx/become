@@ -6,6 +6,11 @@ import { sendEmail } from '@/lib/email'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Become'
 
+interface ImagePayload {
+  name: string
+  dataUrl: string // "data:image/png;base64,..."
+}
+
 export async function POST(request: NextRequest) {
   const auth = await verifyAuth(request)
   if (!auth.success) {
@@ -13,7 +18,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { type, message } = await request.json()
+    const { type, message, images } = await request.json() as {
+      type?: string
+      message?: string
+      images?: ImagePayload[]
+    }
 
     if (!message?.trim()) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
@@ -31,12 +40,40 @@ export async function POST(request: NextRequest) {
       message: trimmedMessage,
     })
 
-    // Email notification (fire-and-forget)
+    // Build nodemailer CID attachments from base64 data URLs
+    const validImages = (images ?? []).slice(0, 3).filter(
+      (img) => typeof img.dataUrl === 'string' && img.dataUrl.startsWith('data:image/')
+    )
+
+    const attachments = validImages.map((img, i) => {
+      const [meta, b64] = img.dataUrl.split(',')
+      const mimeMatch = meta.match(/data:([^;]+);/)
+      const contentType = mimeMatch?.[1] ?? 'image/png'
+      const ext = contentType.split('/')[1] ?? 'png'
+      return {
+        filename: img.name || `screenshot-${i + 1}.${ext}`,
+        content: Buffer.from(b64, 'base64'),
+        contentType,
+        cid: `feedback-image-${i}`,
+      }
+    })
+
+    const inlineImagesHtml = attachments.length
+      ? `<div style="margin-top:16px;">${attachments
+          .map(
+            (a) =>
+              `<img src="cid:${a.cid}" alt="${a.filename}" style="max-width:100%;max-height:400px;border-radius:8px;margin-bottom:8px;display:block;" />`
+          )
+          .join('')}</div>`
+      : ''
+
     const typeLabel = feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)
+
     sendEmail({
       to: 'george@redbtn.io',
       from: '"BECOME" <agent@redbtn.io>',
       subject: `[${appName}] New ${typeLabel} Feedback from ${auth.email}`,
+      attachments,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: #18181b; padding: 24px; border-radius: 12px 12px 0 0;">
@@ -50,6 +87,7 @@ export async function POST(request: NextRequest) {
               <strong>From:</strong> ${auth.email}
             </p>
             <div style="background: #f4f4f5; padding: 16px; border-radius: 8px; font-size: 14px; color: #27272a; white-space: pre-wrap;">${trimmedMessage}</div>
+            ${inlineImagesHtml}
           </div>
         </div>
       `,

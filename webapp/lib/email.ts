@@ -12,19 +12,28 @@ const transporter = nodemailer.createTransport({
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || 'BECOME'
 
+interface EmailAttachment {
+  filename: string
+  content: Buffer
+  contentType: string
+  cid: string
+}
+
 interface SendEmailOptions {
   to: string
   subject: string
   html: string
   from?: string
+  attachments?: EmailAttachment[]
 }
 
-export async function sendEmail({ to, subject, html, from }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, from, attachments }: SendEmailOptions) {
   const mailOptions = {
     from: from ?? `"${appName}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
     to,
     subject,
     html,
+    ...(attachments?.length ? { attachments } : {}),
   }
 
   return transporter.sendMail(mailOptions)
