@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Pencil, Check, X } from 'lucide-react'
+import Link from 'next/link'
+import { Settings2 } from 'lucide-react'
 import MacroBar from './MacroBar'
 
 interface MacroValues {
@@ -16,22 +16,9 @@ interface CalorieRingProps {
   protein: MacroValues
   carbs: MacroValues
   fats: MacroValues
-  onGoalChange?: (calories: number) => Promise<void>
 }
 
-export default function CalorieRing({
-  consumed,
-  goal,
-  protein,
-  carbs,
-  fats,
-  onGoalChange,
-}: CalorieRingProps) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(String(goal))
-  const [saving, setSaving] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
+export default function CalorieRing({ consumed, goal, protein, carbs, fats }: CalorieRingProps) {
   const remaining = goal - consumed
   const isOver = consumed > goal
   const percentage = Math.min(consumed / goal, 1)
@@ -42,35 +29,23 @@ export default function CalorieRing({
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - percentage * circumference
 
-  useEffect(() => {
-    if (editing) {
-      setDraft(String(goal))
-      setTimeout(() => inputRef.current?.select(), 50)
-    }
-  }, [editing, goal])
-
-  const handleSave = async () => {
-    const val = parseInt(draft)
-    if (!val || val < 500 || val > 10000 || !onGoalChange) {
-      setEditing(false)
-      return
-    }
-    setSaving(true)
-    await onGoalChange(val)
-    setSaving(false)
-    setEditing(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSave()
-    if (e.key === 'Escape') setEditing(false)
-  }
-
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-      {/* Ring */}
+      {/* Card header with edit goals button */}
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Daily Calories</p>
+        <Link
+          href="/dashboard/nutrition/goals"
+          className="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          Edit Goals
+        </Link>
+      </div>
+
+      {/* Ring — tappable, goes to goals */}
       <div className="flex flex-col items-center">
-        <div className="relative" style={{ width: size, height: size }}>
+        <Link href="/dashboard/nutrition/goals" className="relative block" style={{ width: size, height: size }}>
           <svg width={size} height={size} className="-rotate-90">
             <defs>
               <linearGradient id="calorie-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -122,59 +97,18 @@ export default function CalorieRing({
               {isOver ? 'over' : 'remaining'}
             </span>
           </div>
-        </div>
+        </Link>
 
-        {/* Goal breakdown / inline edit */}
-        {editing ? (
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">Goal</span>
-            <input
-              ref={inputRef}
-              type="number"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={handleKeyDown}
-              min={500}
-              max={10000}
-              className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-center text-sm font-bold text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-            />
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">kcal</span>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="mt-3 flex items-center gap-1.5">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">Goal {goal}</span>
-              {' '}&minus;{' '}
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">Food {consumed}</span>
-              {' '}={' '}
-              <span className={`font-semibold ${isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {remaining} {isOver ? 'over' : 'remaining'}
-              </span>
-            </p>
-            {onGoalChange && (
-              <button
-                onClick={() => setEditing(true)}
-                className="flex h-5 w-5 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                aria-label="Edit calorie goal"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        )}
+        {/* Goal breakdown */}
+        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">Goal {goal}</span>
+          {' '}&minus;{' '}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">Food {consumed}</span>
+          {' '}={' '}
+          <span className={`font-semibold ${isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+            {remaining} {isOver ? 'over' : 'remaining'}
+          </span>
+        </p>
       </div>
 
       {/* Macro bars */}
