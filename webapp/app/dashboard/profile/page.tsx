@@ -44,6 +44,25 @@ const EQUIPMENT_OPTIONS: { value: EquipmentType; label: string }[] = [
   { value: 'full_gym', label: 'Full Gym' },
 ]
 
+// ─── Unit conversion helpers ──────────────────────────────────────────────────
+
+function cmToFtIn(cm: number): { ft: number; inches: number } {
+  const totalInches = cm / 2.54
+  return { ft: Math.floor(totalInches / 12), inches: Math.round(totalInches % 12) }
+}
+
+function ftInToCm(ft: number, inches: number): number {
+  return Math.round((ft * 12 + inches) * 2.54)
+}
+
+function kgToLbs(kg: number): number {
+  return Math.round(kg * 2.20462)
+}
+
+function lbsToKg(lbs: number): number {
+  return Math.round((lbs / 2.20462) * 10) / 10
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
@@ -59,12 +78,21 @@ export default function ProfilePage() {
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(3)
   const [age, setAge] = useState<string>('')
   const [biologicalSex, setBiologicalSex] = useState<BiologicalSex | undefined>(undefined)
+
+  // Height — separate imperial (ft/in) and metric (cm) state
+  const [heightFt, setHeightFt] = useState<string>('')
+  const [heightIn, setHeightIn] = useState<string>('')
   const [heightCm, setHeightCm] = useState<string>('')
-  const [currentWeightKg, setCurrentWeightKg] = useState<string>('')
-  const [targetWeightKg, setTargetWeightKg] = useState<string>('')
+
+  // Weight — display values in current unit
+  const [weightDisplay, setWeightDisplay] = useState<string>('')
+  const [targetWeightDisplay, setTargetWeightDisplay] = useState<string>('')
+
   const [equipmentAccess, setEquipmentAccess] = useState<EquipmentType[]>([])
   const [injuryNotes, setInjuryNotes] = useState<string>('')
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs')
+
+  const isImperial = weightUnit === 'lbs'
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -88,12 +116,27 @@ export default function ProfilePage() {
       setWeeklyAvailability(p.weeklyAvailability ?? 3)
       setAge(p.age !== undefined ? String(p.age) : '')
       setBiologicalSex(p.biologicalSex)
-      setHeightCm(p.heightCm !== undefined ? String(p.heightCm) : '')
-      setCurrentWeightKg(p.currentWeightKg !== undefined ? String(p.currentWeightKg) : '')
-      setTargetWeightKg(p.targetWeightKg !== undefined ? String(p.targetWeightKg) : '')
       setEquipmentAccess(p.equipmentAccess ?? [])
       setInjuryNotes(p.injuryNotes ?? '')
-      setWeightUnit(p.weightUnit ?? 'lbs')
+
+      const unit: WeightUnit = p.weightUnit ?? 'lbs'
+      setWeightUnit(unit)
+
+      if (unit === 'lbs') {
+        // Convert stored cm → ft/in
+        if (p.heightCm !== undefined) {
+          const { ft, inches } = cmToFtIn(p.heightCm)
+          setHeightFt(String(ft))
+          setHeightIn(String(inches))
+        }
+        // Convert stored kg → lbs
+        setWeightDisplay(p.currentWeightKg !== undefined ? String(kgToLbs(p.currentWeightKg)) : '')
+        setTargetWeightDisplay(p.targetWeightKg !== undefined ? String(kgToLbs(p.targetWeightKg)) : '')
+      } else {
+        setHeightCm(p.heightCm !== undefined ? String(p.heightCm) : '')
+        setWeightDisplay(p.currentWeightKg !== undefined ? String(p.currentWeightKg) : '')
+        setTargetWeightDisplay(p.targetWeightKg !== undefined ? String(p.targetWeightKg) : '')
+      }
     } catch {
       // ignore
     } finally {
@@ -105,10 +148,57 @@ export default function ProfilePage() {
     fetchProfile()
   }, [fetchProfile])
 
+  // Convert existing values when the user switches units
+  const handleUnitToggle = (newUnit: WeightUnit) => {
+    if (newUnit === weightUnit) return
+
+    if (newUnit === 'lbs') {
+      // metric → imperial
+      if (heightCm !== '') {
+        const { ft, inches } = cmToFtIn(Number(heightCm))
+        setHeightFt(String(ft))
+        setHeightIn(String(inches))
+        setHeightCm('')
+      }
+      if (weightDisplay !== '') setWeightDisplay(String(kgToLbs(Number(weightDisplay))))
+      if (targetWeightDisplay !== '') setTargetWeightDisplay(String(kgToLbs(Number(targetWeightDisplay))))
+    } else {
+      // imperial → metric
+      if (heightFt !== '' || heightIn !== '') {
+        setHeightCm(String(ftInToCm(Number(heightFt) || 0, Number(heightIn) || 0)))
+        setHeightFt('')
+        setHeightIn('')
+      }
+      if (weightDisplay !== '') setWeightDisplay(String(lbsToKg(Number(weightDisplay))))
+      if (targetWeightDisplay !== '') setTargetWeightDisplay(String(lbsToKg(Number(targetWeightDisplay))))
+    }
+
+    setWeightUnit(newUnit)
+  }
+
   const toggleEquipment = (eq: EquipmentType) => {
     setEquipmentAccess(prev =>
       prev.includes(eq) ? prev.filter(e => e !== eq) : [...prev, eq]
     )
+  }
+
+  // Derive the storage values (always cm/kg) from display state
+  const getStorageValues = () => {
+    const storedHeightCm = isImperial
+      ? (heightFt !== '' || heightIn !== '')
+        ? ftInToCm(Number(heightFt) || 0, Number(heightIn) || 0)
+        : undefined
+      : heightCm !== '' ? Number(heightCm) : undefined
+
+    const storedWeightKg = weightDisplay !== ''
+      ? isImperial ? lbsToKg(Number(weightDisplay)) : Number(weightDisplay)
+      : undefined
+
+    const storedTargetKg = targetWeightDisplay !== ''
+      ? isImperial ? lbsToKg(Number(targetWeightDisplay)) : Number(targetWeightDisplay)
+      : undefined
+
+    return { storedHeightCm, storedWeightKg, storedTargetKg }
   }
 
   const handleSave = async () => {
@@ -116,15 +206,17 @@ export default function ProfilePage() {
     if (!token) return
     setSaving(true)
     try {
+      const { storedHeightCm, storedWeightKg, storedTargetKg } = getStorageValues()
+
       const profile: Partial<IUserProfile> = {
         ...(fitnessGoal !== undefined && { fitnessGoal }),
         ...(experienceLevel !== undefined && { experienceLevel }),
         weeklyAvailability,
         ...(age !== '' && { age: Number(age) }),
         ...(biologicalSex !== undefined && { biologicalSex }),
-        ...(heightCm !== '' && { heightCm: Number(heightCm) }),
-        ...(currentWeightKg !== '' && { currentWeightKg: Number(currentWeightKg) }),
-        ...(targetWeightKg !== '' && { targetWeightKg: Number(targetWeightKg) }),
+        ...(storedHeightCm !== undefined && { heightCm: storedHeightCm }),
+        ...(storedWeightKg !== undefined && { currentWeightKg: storedWeightKg }),
+        ...(storedTargetKg !== undefined && { targetWeightKg: storedTargetKg }),
         equipmentAccess,
         injuryNotes,
         weightUnit,
@@ -149,6 +241,12 @@ export default function ProfilePage() {
     }
   }
 
+  // BMI uses raw cm/kg regardless of display unit
+  const getBmiValues = () => {
+    const { storedHeightCm, storedWeightKg } = getStorageValues()
+    return { bmiCm: storedHeightCm, bmiKg: storedWeightKg }
+  }
+
   if (loading) {
     return (
       <PageTransition className="space-y-6">
@@ -159,6 +257,8 @@ export default function ProfilePage() {
       </PageTransition>
     )
   }
+
+  const { bmiCm, bmiKg } = getBmiValues()
 
   return (
     <PageTransition className="pb-10 space-y-6">
@@ -299,8 +399,8 @@ export default function ProfilePage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>
-            {currentWeightKg !== '' && heightCm !== '' && (() => {
-              const bmi = Number(currentWeightKg) / Math.pow(Number(heightCm) / 100, 2)
+            {bmiCm && bmiKg && (() => {
+              const bmi = bmiKg / Math.pow(bmiCm / 100, 2)
               const cat = bmi < 18.5 ? { label: 'Underweight', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' }
                 : bmi < 25 ? { label: 'Normal', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' }
                 : bmi < 30 ? { label: 'Overweight', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }
@@ -312,18 +412,19 @@ export default function ProfilePage() {
               )
             })()}
           </div>
+          {/* Unit toggle — controls both height and weight units */}
           <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
             {(['lbs', 'kg'] as WeightUnit[]).map(unit => (
               <button
                 key={unit}
-                onClick={() => setWeightUnit(unit)}
+                onClick={() => handleUnitToggle(unit)}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
                   weightUnit === unit
                     ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
                     : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
               >
-                {unit}
+                {unit === 'lbs' ? 'Imperial' : 'Metric'}
               </button>
             ))}
           </div>
@@ -364,29 +465,62 @@ export default function ProfilePage() {
           </div>
 
           {/* Height */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Height (cm)</label>
-            <input
-              type="number"
-              value={heightCm}
-              onChange={e => setHeightCm(e.target.value)}
-              min={50}
-              max={300}
-              placeholder="—"
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
+          <div className="col-span-2">
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Height {isImperial ? '(ft / in)' : '(cm)'}
+            </label>
+            {isImperial ? (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    value={heightFt}
+                    onChange={e => setHeightFt(e.target.value)}
+                    min={1}
+                    max={9}
+                    placeholder="5"
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 pr-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">ft</span>
+                </div>
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    value={heightIn}
+                    onChange={e => setHeightIn(e.target.value)}
+                    min={0}
+                    max={11}
+                    placeholder="10"
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 pr-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">in</span>
+                </div>
+              </div>
+            ) : (
+              <input
+                type="number"
+                value={heightCm}
+                onChange={e => setHeightCm(e.target.value)}
+                min={50}
+                max={300}
+                placeholder="—"
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+              />
+            )}
           </div>
 
           {/* Current Weight */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Current Weight ({weightUnit})</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Current Weight ({isImperial ? 'lbs' : 'kg'})
+            </label>
             <input
               type="number"
-              value={currentWeightKg}
-              onChange={e => setCurrentWeightKg(e.target.value)}
-              min={20}
-              max={500}
-              step={0.1}
+              value={weightDisplay}
+              onChange={e => setWeightDisplay(e.target.value)}
+              min={isImperial ? 44 : 20}
+              max={isImperial ? 1100 : 500}
+              step={isImperial ? 1 : 0.1}
               placeholder="—"
               className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
             />
@@ -394,14 +528,16 @@ export default function ProfilePage() {
 
           {/* Target Weight */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Target Weight ({weightUnit})</label>
+            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Target Weight ({isImperial ? 'lbs' : 'kg'})
+            </label>
             <input
               type="number"
-              value={targetWeightKg}
-              onChange={e => setTargetWeightKg(e.target.value)}
-              min={20}
-              max={500}
-              step={0.1}
+              value={targetWeightDisplay}
+              onChange={e => setTargetWeightDisplay(e.target.value)}
+              min={isImperial ? 44 : 20}
+              max={isImperial ? 1100 : 500}
+              step={isImperial ? 1 : 0.1}
               placeholder="—"
               className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
             />
