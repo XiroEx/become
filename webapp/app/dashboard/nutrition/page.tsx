@@ -10,7 +10,7 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2 } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import FeatureGuard from '@/components/FeatureGuard'
 
@@ -63,7 +63,7 @@ function isSameDay(a: Date, b: Date): boolean {
 const defaultLog: NutritionLog = {
   date: formatDateParam(new Date()),
   meals: [],
-  water: { current: 0, goal: 8 },
+  water: { current: 0, goal: 96 },
   quickAdds: [],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 },
 }
@@ -73,7 +73,7 @@ const defaultGoals: NutritionGoals = {
   protein: 180,
   carbs: 250,
   fats: 60,
-  waterGoal: 8,
+  waterGoal: 96,
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -228,6 +228,21 @@ export default function NutritionPage() {
     setQuickAddOpen(false)
   }
 
+  const handleDeleteQuickAdd = async (quickAddId: string) => {
+    try {
+      const res = await fetch('/api/nutrition/quick-add', {
+        method: 'DELETE',
+        headers: getHeaders(),
+        body: JSON.stringify({ quickAddId, date: dateParam }),
+      })
+      if (res.ok) {
+        await fetchLog()
+      }
+    } catch (err) {
+      console.error('Failed to delete quick add:', err)
+    }
+  }
+
   const openFoodSearch = (mealType: MealType) => {
     setFoodSearchMealType(mealType)
     setFoodSearchOpen(true)
@@ -326,6 +341,47 @@ export default function NutritionPage() {
             />
           )
         })}
+
+        {/* Quick Adds (visible entries with delete) */}
+        {log.quickAdds.length > 0 && (
+          <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                <Zap className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <span className="text-sm font-semibold text-zinc-900 dark:text-white">Quick Adds</span>
+              <span className="ml-auto text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+                {log.quickAdds.reduce((s, qa) => s + qa.calories, 0)} cal
+              </span>
+            </div>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {log.quickAdds.map((qa) => (
+                <div key={qa.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="flex-1 min-w-0">
+                    {qa.note && (
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">{qa.note}</p>
+                    )}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
+                      {qa.calories} cal
+                      {(qa.protein > 0 || qa.carbs > 0 || qa.fats > 0) && (
+                        <span className="ml-1.5">
+                          · P {qa.protein}g · C {qa.carbs}g · F {qa.fats}g
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteQuickAdd(qa.id)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    aria-label="Delete quick add"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Water Tracker */}
         <WaterTracker

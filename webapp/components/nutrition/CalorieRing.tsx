@@ -109,7 +109,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Food {consumed}</span>
           {' '}={' '}
           <span className={`font-semibold ${isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            {remaining} {isOver ? 'over' : 'remaining'}
+            {Math.abs(remaining)} {isOver ? 'over' : 'remaining'}
           </span>
         </p>
       </div>

@@ -66,3 +66,43 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to add quick add' }, { status: 500 })
   }
 }
+
+// DELETE: Remove a quick add entry
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { quickAddId, date: dateStr } = body
+
+    if (!quickAddId) {
+      return NextResponse.json({ error: 'Missing required field: quickAddId' }, { status: 400 })
+    }
+
+    await dbConnect()
+
+    const date = getDateStart(dateStr)
+    const log = await NutritionLog.findOne({ userId: authResult.userId, date })
+
+    if (!log) {
+      return NextResponse.json({ error: 'No nutrition log found for this date' }, { status: 404 })
+    }
+
+    const idx = log.quickAdds.findIndex((qa: { id: string }) => qa.id === quickAddId)
+    if (idx === -1) {
+      return NextResponse.json({ error: 'Quick add entry not found' }, { status: 404 })
+    }
+
+    log.quickAdds.splice(idx, 1)
+    log.recalculateTotals()
+    await log.save()
+
+    return NextResponse.json({ success: true, log })
+  } catch (error) {
+    console.error('Error deleting quick add:', error)
+    return NextResponse.json({ error: 'Failed to delete quick add' }, { status: 500 })
+  }
+}
