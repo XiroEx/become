@@ -11,12 +11,21 @@ interface FoodEntryRowProps {
   onDelete: () => void
 }
 
+// Variant names that are essentially "no preparation" — don't display them.
+const HIDDEN_VARIANT_NAMES = new Set(['default', 'raw'])
+
+function shouldShowVariantName(name: string | undefined): name is string {
+  if (!name) return false
+  return !HIDDEN_VARIANT_NAMES.has(name.trim().toLowerCase())
+}
+
 export default function FoodEntryRow({ food, onEdit, onDelete }: FoodEntryRowProps) {
   const [expanded, setExpanded] = useState(false)
 
   const totalCalories = Math.round(food.nutrition.calories * food.servings)
   const servingDisplay = `${food.servings !== 1 ? `${food.servings} servings` : '1 serving'}`
   const sizeDisplay = `${food.servingSize} ${food.servingUnit}`
+  const showVariant = shouldShowVariantName(food.variantName)
 
   return (
     <div className="group">
@@ -27,6 +36,11 @@ export default function FoodEntryRow({ food, onEdit, onDelete }: FoodEntryRowPro
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
             {food.name}
+            {showVariant && (
+              <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                {' '}&middot; {food.variantName}
+              </span>
+            )}
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
             {food.brand && (

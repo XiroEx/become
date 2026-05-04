@@ -21,6 +21,14 @@ function servingSizeInGrams(food: IFoodEntry): number {
   return food.servingUnit === 'oz' ? food.servingSize * 28.3495 : food.servingSize
 }
 
+// Variant names that are essentially "no preparation" — don't display them.
+const HIDDEN_VARIANT_NAMES = new Set(['default', 'raw'])
+
+function shouldShowVariantName(name: string | undefined): name is string {
+  if (!name) return false
+  return !HIDDEN_VARIANT_NAMES.has(name.trim().toLowerCase())
+}
+
 export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onSaved }: EditFoodModalProps) {
   const [servings, setServings] = useState('')
   const [customGrams, setCustomGrams] = useState('')
@@ -134,7 +142,14 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
                   <Pencil className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-bold text-zinc-900 dark:text-white truncate">{food.name}</h2>
+                  <h2 className="text-base font-bold text-zinc-900 dark:text-white truncate">
+                    {food.name}
+                    {shouldShowVariantName(food.variantName) && (
+                      <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                        {' '}&middot; {food.variantName}
+                      </span>
+                    )}
+                  </h2>
                   {food.brand && (
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{food.brand}</p>
                   )}

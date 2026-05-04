@@ -22,6 +22,26 @@ interface AlternateServing {
   multiplier: number
 }
 
+interface FoodNutrition {
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+  fiber?: number
+  sugar?: number
+  sodium?: number
+}
+
+interface FoodVariant {
+  _id?: string
+  name: string
+  isDefault?: boolean
+  servingSize: number
+  servingUnit: string
+  alternateServings?: AlternateServing[]
+  nutrition: FoodNutrition
+}
+
 interface FoodResult {
   _id: string
   name: string
@@ -29,18 +49,24 @@ interface FoodResult {
   servingSize: number
   servingUnit: string
   alternateServings?: AlternateServing[]
-  nutrition: {
-    calories: number
-    protein: number
-    carbs: number
-    fats: number
-    fiber?: number
-    sugar?: number
-    sodium?: number
-  }
-  source?: 'custom' | 'openfoodfacts' | 'usda'
+  nutrition: FoodNutrition
+  source?: 'custom' | 'manual' | 'openfoodfacts' | 'usda'
   image_url?: string
   nutriscore_grade?: string
+  variants?: FoodVariant[]
+}
+
+// 24-char hex ObjectId — anything else is a synthetic external id (usda-/off-/etc.)
+const OBJECT_ID_RE = /^[a-f0-9]{24}$/i
+
+function isObjectIdString(id: string): boolean {
+  return OBJECT_ID_RE.test(id)
+}
+
+function pickDefaultVariantIdx(variants: FoodVariant[] | undefined): number {
+  if (!variants || variants.length === 0) return 0
+  const idx = variants.findIndex(v => v.isDefault)
+  return idx >= 0 ? idx : 0
 }
 
 type TabId = 'all' | 'recent' | 'frequent' | 'custom'
@@ -72,14 +98,35 @@ export default function FoodSearchModal({
   const [selectedServingIdx, setSelectedServingIdx] = useState(0)
   const [inputMode, setInputMode] = useState<'servings' | 'grams'>('servings')
   const [customGrams, setCustomGrams] = useState('100')
+  // Index into selectedFood.variants — defaults to the variant marked isDefault.
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
+  // Loading state for the import-on-pick network call.
+  const [adding, setAdding] = useState(false)
+
+  // Resolve the active variant for a food + variant index.
+  const getActiveVariant = (food: FoodResult, variantIdx: number): FoodVariant => {
+    if (food.variants && food.variants.length > 0) {
+      return food.variants[variantIdx] ?? food.variants[0]
+    }
+    // Synthesize a single-variant view from the flat shape (external results).
+    return {
+      name: 'Default',
+      isDefault: true,
+      servingSize: food.servingSize,
+      servingUnit: food.servingUnit,
+      alternateServings: food.alternateServings,
+      nutrition: food.nutrition,
+    }
+  }
 
   // Returns the gram amount of the first alternate (label) serving, or the base serving size.
   // Used to pre-fill the custom weight input with the actual label serving rather than 100g.
-  const getLabelServingGrams = (food: FoodResult): string => {
-    if (food.alternateServings && food.alternateServings.length > 0) {
-      return String(Math.round(food.alternateServings[0].multiplier * food.servingSize))
+  const getLabelServingGrams = (food: FoodResult, variantIdx = 0): string => {
+    const v = getActiveVariant(food, variantIdx)
+    if (v.alternateServings && v.alternateServings.length > 0) {
+      return String(Math.round(v.alternateServings[0].multiplier * v.servingSize))
     }
-    return String(food.servingSize)
+    return String(v.servingSize)
   }
 
   // Barcode scanner state
@@ -106,11 +153,13 @@ export default function FoodSearchModal({
       setSelectedFood(null)
       setServings('1')
       setSelectedServingIdx(0)
+      setSelectedVariantIdx(0)
       setInputMode('servings')
       setCustomGrams('100')
       setActiveTab('all')
       setScannerOpen(false)
       setBarcodeError(null)
+      setAdding(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -127,11 +176,14 @@ export default function FoodSearchModal({
       if (res.ok) {
         const data = await res.json()
         if (data.food) {
+          const variantIdx = pickDefaultVariantIdx(data.food.variants)
+          const activeVariant = getActiveVariant(data.food, variantIdx)
           setSelectedFood(data.food)
+          setSelectedVariantIdx(variantIdx)
           setServings('1')
-          setSelectedServingIdx(data.food.alternateServings?.length ? 1 : 0)
+          setSelectedServingIdx(activeVariant.alternateServings?.length ? 1 : 0)
           setInputMode('servings')
-          setCustomGrams(getLabelServingGrams(data.food))
+          setCustomGrams(getLabelServingGrams(data.food, variantIdx))
           setResults([data.food])
         } else {
           setBarcodeError(`No food found for barcode ${code}. Try searching by name.`)
@@ -144,6 +196,7 @@ export default function FoodSearchModal({
     } finally {
       setBarcodeLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchResults = useCallback(
@@ -205,42 +258,48 @@ export default function FoodSearchModal({
     }
   }, [query, activeTab, isOpen, fetchResults])
 
-  // Build serving options for the selected food
+  // Active variant for the currently selected food (or null)
+  const activeVariant = useMemo<FoodVariant | null>(() => {
+    if (!selectedFood) return null
+    return getActiveVariant(selectedFood, selectedVariantIdx)
+  }, [selectedFood, selectedVariantIdx])
+
+  // Build serving options for the active variant
   const servingOptions = useMemo(() => {
-    if (!selectedFood) return []
+    if (!activeVariant) return []
 
     const options: { label: string; multiplier: number; servingSize: number; servingUnit: string }[] = [
       {
-        label: `${selectedFood.servingSize} ${selectedFood.servingUnit}`,
+        label: `${activeVariant.servingSize} ${activeVariant.servingUnit}`,
         multiplier: 1,
-        servingSize: selectedFood.servingSize,
-        servingUnit: selectedFood.servingUnit,
+        servingSize: activeVariant.servingSize,
+        servingUnit: activeVariant.servingUnit,
       },
     ]
 
-    if (selectedFood.alternateServings) {
-      for (const alt of selectedFood.alternateServings) {
+    if (activeVariant.alternateServings) {
+      for (const alt of activeVariant.alternateServings) {
         options.push({
           label: alt.label,
           multiplier: alt.multiplier,
-          servingSize: Math.round(selectedFood.servingSize * alt.multiplier * 10) / 10,
-          servingUnit: selectedFood.servingUnit,
+          servingSize: Math.round(activeVariant.servingSize * alt.multiplier * 10) / 10,
+          servingUnit: activeVariant.servingUnit,
         })
       }
     }
 
     return options
-  }, [selectedFood])
+  }, [activeVariant])
 
   // Current serving option
   const currentServing = servingOptions[selectedServingIdx] || servingOptions[0]
   const servingMultiplier = currentServing?.multiplier ?? 1
 
-  const isWeightBased = selectedFood?.servingUnit === 'g' || selectedFood?.servingUnit === 'oz'
-  const servingSizeInGrams = selectedFood
-    ? selectedFood.servingUnit === 'oz'
-      ? selectedFood.servingSize * 28.3495
-      : selectedFood.servingSize
+  const isWeightBased = activeVariant?.servingUnit === 'g' || activeVariant?.servingUnit === 'oz'
+  const servingSizeInGrams = activeVariant
+    ? activeVariant.servingUnit === 'oz'
+      ? activeVariant.servingSize * 28.3495
+      : activeVariant.servingSize
     : 1
 
   // Effective multiplier and servings count for the preview
@@ -248,59 +307,140 @@ export default function FoodSearchModal({
     ? (Number(customGrams) || 0) / servingSizeInGrams
     : (Number(servings) || 1) * servingMultiplier
 
-  const handleAddFood = () => {
-    if (!selectedFood || !currentServing) return
+  // Copy-on-pick: external (usda-/off-) results get persisted to our Food
+  // collection before being logged. Returns the resolved foodId + variants.
+  const importExternalIfNeeded = async (
+    food: FoodResult,
+  ): Promise<{ foodId: string; variants?: FoodVariant[] }> => {
+    const id = String(food._id || '')
 
-    let entry: IFoodEntry
-
-    if (inputMode === 'grams' && isWeightBased) {
-      const gramsServings = (Number(customGrams) || 1) / servingSizeInGrams
-      // Store per-serving nutrition (unscaled) with fractional servings count
-      entry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: selectedFood.name,
-        brand: selectedFood.brand,
-        servingSize: selectedFood.servingSize,
-        servingUnit: selectedFood.servingUnit,
-        servings: gramsServings,
-        nutrition: {
-          calories: Math.round(selectedFood.nutrition.calories * 10) / 10,
-          protein:  Math.round(selectedFood.nutrition.protein  * 10) / 10,
-          carbs:    Math.round(selectedFood.nutrition.carbs    * 10) / 10,
-          fats:     Math.round(selectedFood.nutrition.fats     * 10) / 10,
-          fiber:  selectedFood.nutrition.fiber  != null ? Math.round(selectedFood.nutrition.fiber  * 10) / 10 : undefined,
-          sugar:  selectedFood.nutrition.sugar  != null ? Math.round(selectedFood.nutrition.sugar  * 10) / 10 : undefined,
-          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * 1000) / 1000 : undefined,
-        },
-      }
-    } else {
-      const mult = servingMultiplier
-      // Scale nutrition by the serving option multiplier (alt serving sizes)
-      entry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: selectedFood.name,
-        brand: selectedFood.brand,
-        servingSize: currentServing.servingSize,
-        servingUnit: currentServing.servingUnit,
-        servings: Number(servings) || 1,
-        nutrition: {
-          calories: Math.round(selectedFood.nutrition.calories * mult * 10) / 10,
-          protein:  Math.round(selectedFood.nutrition.protein  * mult * 10) / 10,
-          carbs:    Math.round(selectedFood.nutrition.carbs    * mult * 10) / 10,
-          fats:     Math.round(selectedFood.nutrition.fats     * mult * 10) / 10,
-          fiber:  selectedFood.nutrition.fiber  != null ? Math.round(selectedFood.nutrition.fiber  * mult * 10) / 10 : undefined,
-          sugar:  selectedFood.nutrition.sugar  != null ? Math.round(selectedFood.nutrition.sugar  * mult * 10) / 10 : undefined,
-          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * mult * 1000) / 1000 : undefined,
-        },
-      }
+    // Already a real Food doc — no work to do.
+    if (isObjectIdString(id)) {
+      return { foodId: id, variants: food.variants }
     }
 
-    onSelectFood(entry, currentMealType)
-    setSelectedFood(null)
-    setServings('1')
-    setSelectedServingIdx(0)
-    setInputMode('servings')
-    setCustomGrams('100')
+    // Determine source + externalId from synthetic prefix
+    let source: 'usda' | 'openfoodfacts' | null = null
+    let externalId = ''
+    if (id.startsWith('usda-')) {
+      source = 'usda'
+      externalId = id.slice('usda-'.length)
+    } else if (id.startsWith('off-')) {
+      source = 'openfoodfacts'
+      externalId = id.slice('off-'.length)
+    }
+
+    if (!source || !externalId) {
+      // Unrecognized id shape — return as-is (graceful degradation)
+      return { foodId: id, variants: food.variants }
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch('/api/nutrition/foods/import', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ source, externalId }),
+      })
+      if (!res.ok) {
+        console.warn(`[FoodSearchModal] Import failed (${res.status}) for ${id} — proceeding without persisted Food`)
+        return { foodId: id, variants: food.variants }
+      }
+      const data = await res.json()
+      const importedFood = data?.food
+      if (importedFood?._id) {
+        return {
+          foodId: String(importedFood._id),
+          variants: importedFood.variants ?? food.variants,
+        }
+      }
+      return { foodId: id, variants: food.variants }
+    } catch (err) {
+      console.warn('[FoodSearchModal] Import network error — proceeding without persisted Food', err)
+      return { foodId: id, variants: food.variants }
+    }
+  }
+
+  const handleAddFood = async () => {
+    if (!selectedFood || !currentServing || !activeVariant || adding) return
+
+    setAdding(true)
+    try {
+      const { foodId, variants: importedVariants } = await importExternalIfNeeded(selectedFood)
+
+      // After import the imported food's variants[] is authoritative — match by name
+      // to find the equivalent variantId (single-variant external foods just take [0]).
+      let resolvedVariantId: string | undefined
+      let resolvedVariantName: string | undefined = activeVariant.name
+      if (importedVariants && importedVariants.length > 0) {
+        const match = importedVariants.find(v => v.name === activeVariant.name) ?? importedVariants[0]
+        resolvedVariantId = match._id ? String(match._id) : undefined
+        resolvedVariantName = match.name
+      } else if (activeVariant._id) {
+        resolvedVariantId = String(activeVariant._id)
+      }
+
+      const baseEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        foodId: isObjectIdString(foodId) ? foodId : undefined,
+        variantId: resolvedVariantId,
+        variantName: resolvedVariantName,
+        name: selectedFood.name,
+        brand: selectedFood.brand,
+      }
+
+      let entry: IFoodEntry
+
+      if (inputMode === 'grams' && isWeightBased) {
+        const gramsServings = (Number(customGrams) || 1) / servingSizeInGrams
+        // Store per-serving nutrition (unscaled) with fractional servings count
+        entry = {
+          ...baseEntry,
+          servingSize: activeVariant.servingSize,
+          servingUnit: activeVariant.servingUnit,
+          servings: gramsServings,
+          nutrition: {
+            calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
+            protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
+            carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
+            fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
+            fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
+            sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
+            sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
+          },
+        }
+      } else {
+        const mult = servingMultiplier
+        // Scale nutrition by the serving option multiplier (alt serving sizes)
+        entry = {
+          ...baseEntry,
+          servingSize: currentServing.servingSize,
+          servingUnit: currentServing.servingUnit,
+          servings: Number(servings) || 1,
+          nutrition: {
+            calories: Math.round(activeVariant.nutrition.calories * mult * 10) / 10,
+            protein:  Math.round(activeVariant.nutrition.protein  * mult * 10) / 10,
+            carbs:    Math.round(activeVariant.nutrition.carbs    * mult * 10) / 10,
+            fats:     Math.round(activeVariant.nutrition.fats     * mult * 10) / 10,
+            fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * mult * 10) / 10 : undefined,
+            sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * mult * 10) / 10 : undefined,
+            sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * mult * 1000) / 1000 : undefined,
+          },
+        }
+      }
+
+      onSelectFood(entry, currentMealType)
+      setSelectedFood(null)
+      setServings('1')
+      setSelectedServingIdx(0)
+      setSelectedVariantIdx(0)
+      setInputMode('servings')
+      setCustomGrams('100')
+    } finally {
+      setAdding(false)
+    }
   }
 
   const mealLabel = currentMealType.charAt(0).toUpperCase() + currentMealType.slice(1)
@@ -456,13 +596,16 @@ export default function FoodSearchModal({
                           if (selectedFood?._id === food._id) {
                             setSelectedFood(null)
                           } else {
+                            const variantIdx = pickDefaultVariantIdx(food.variants)
+                            const av = getActiveVariant(food, variantIdx)
                             setSelectedFood(food)
+                            setSelectedVariantIdx(variantIdx)
                             setServings('1')
                             // Pre-select the label serving (index 1) when available,
                             // so the default shown is what's on the nutrition label, not 100g.
-                            setSelectedServingIdx(food.alternateServings?.length ? 1 : 0)
+                            setSelectedServingIdx(av.alternateServings?.length ? 1 : 0)
                             setInputMode('servings')
-                            setCustomGrams(getLabelServingGrams(food))
+                            setCustomGrams(getLabelServingGrams(food, variantIdx))
                           }
                         }}
                         className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
@@ -518,8 +661,45 @@ export default function FoodSearchModal({
                             className="overflow-hidden"
                           >
                             <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                              {/* Variant picker — only shown when a food has >1 variant */}
+                              {selectedFood?._id === food._id && food.variants && food.variants.length > 1 && (
+                                <div className="mb-2.5">
+                                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                    Preparation
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {food.variants.map((variant, vIdx) => {
+                                      const isActive = selectedVariantIdx === vIdx
+                                      return (
+                                        <button
+                                          key={variant._id ?? vIdx}
+                                          onClick={() => {
+                                            setSelectedVariantIdx(vIdx)
+                                            setServings('1')
+                                            setSelectedServingIdx(variant.alternateServings?.length ? 1 : 0)
+                                            setCustomGrams(getLabelServingGrams(food, vIdx))
+                                          }}
+                                          className={`flex flex-col items-start gap-0.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
+                                            isActive
+                                              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                              : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
+                                          }`}
+                                        >
+                                          <span className="font-semibold">{variant.name}</span>
+                                          <span className={`text-[10px] tabular-nums ${isActive ? 'opacity-80' : 'opacity-70'}`}>
+                                            {Math.round(variant.nutrition.calories)} cal
+                                            {' · '}
+                                            {Math.round(variant.nutrition.protein * 10) / 10}g protein
+                                          </span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Servings / Grams toggle for weight-based foods */}
-                              {(food.servingUnit === 'g' || food.servingUnit === 'oz') && (
+                              {selectedFood?._id === food._id && (activeVariant?.servingUnit === 'g' || activeVariant?.servingUnit === 'oz') && (
                                 <div className="mb-2.5 flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
                                   <button
                                     onClick={() => setInputMode('servings')}
@@ -592,24 +772,34 @@ export default function FoodSearchModal({
                                 <div className="flex-1 text-right">
                                   <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
                                     <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {Math.round(food.nutrition.calories * effectiveServings)} cal
+                                      {Math.round((activeVariant?.nutrition.calories ?? 0) * effectiveServings)} cal
                                     </span>
                                   </p>
                                   <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                    P: {Math.round(food.nutrition.protein * effectiveServings)}g
+                                    P: {Math.round((activeVariant?.nutrition.protein ?? 0) * effectiveServings)}g
                                     {' '}&middot;{' '}
-                                    C: {Math.round(food.nutrition.carbs * effectiveServings)}g
+                                    C: {Math.round((activeVariant?.nutrition.carbs ?? 0) * effectiveServings)}g
                                     {' '}&middot;{' '}
-                                    F: {Math.round(food.nutrition.fats * effectiveServings)}g
+                                    F: {Math.round((activeVariant?.nutrition.fats ?? 0) * effectiveServings)}g
                                   </p>
                                 </div>
                               </div>
                               <button
                                 onClick={handleAddFood}
-                                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                disabled={adding}
+                                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                               >
-                                <Plus className="h-4 w-4" />
-                                Add to {mealLabel}
+                                {adding ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Adding…
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="h-4 w-4" />
+                                    Add to {mealLabel}
+                                  </>
+                                )}
                               </button>
                             </div>
                           </motion.div>
