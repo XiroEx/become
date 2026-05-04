@@ -139,25 +139,48 @@ export async function GET(request: NextRequest) {
       // OFF collection might not exist — fail gracefully
     }
 
-    // Combine: custom → USDA (Foundation/SR Legacy first) → OFF
-    // Within each source tier, sort so shorter/exact names rank above complex ones,
-    // e.g. "Banana" beats "Banana Greek Yogurt, banana" for query "banana".
+    // Combine: custom → USDA → OFF
+    // Ranking: word coverage wins first (how many query words match the food name),
+    // then name simplicity (shorter = simpler food), then whole-food type as tiebreaker.
+    // e.g. "blueberries" → "Blueberries, raw" beats "Blueberry Pancakes"
+    //      "blueberries pancakes" → "Blueberry Pancakes" beats "Blueberries, raw"
     const qLower = q.toLowerCase().trim()
-    function nameScore(name: string): number {
+    const qWords = qLower.split(/\s+/)
+
+    // Stem match: share a common prefix of up to 5 chars (handles plurals, conjugations)
+    function stemMatch(qw: string, nw: string): boolean {
+      const len = Math.min(qw.length, nw.length, 5)
+      if (len < 3) return qw === nw
+      return qw.slice(0, len) === nw.slice(0, len)
+    }
+
+    // Whole-food data types get a small bonus — tiebreaker, not overriding coverage
+    const USDA_TYPE_BONUS: Record<string, number> = {
+      'Foundation': -10,
+      'SR Legacy': -5,
+      'Survey (FNDDS)': 0,
+      'Branded': 0,
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function relevanceScore(name: string, dataType?: string): number {
       const n = name.toLowerCase()
-      if (n === qLower) return 0                          // exact match
-      if (n.startsWith(qLower + ',') || n.startsWith(qLower + ' ') || n === qLower) return 1
-      return 2 + n.split(/\s+/).length                    // longer names rank lower
+      if (n === qLower) return -1000  // exact match always wins
+      const nWords = n.split(/[\s,]+/).filter(Boolean)
+      const covered = qWords.filter(qw => nWords.some(nw => stemMatch(qw, nw))).length
+      const coverageScore = (qWords.length - covered) * 100  // missing words are a heavy penalty
+      const lengthScore = nWords.length                       // shorter names rank above longer ones
+      const typeScore = USDA_TYPE_BONUS[dataType ?? ''] ?? 0
+      return coverageScore + lengthScore + typeScore
     }
 
     const combined = [...customFoods, ...usdaResults, ...offFoods]
     combined.sort((a, b) => {
-      // Preserve source priority: custom (0) > usda (1) > off (2)
+      // Source priority: custom (0) > usda (1) > off (2)
       const srcA = a.source === 'custom' ? 0 : a.source === 'usda' ? 1 : 2
       const srcB = b.source === 'custom' ? 0 : b.source === 'usda' ? 1 : 2
       if (srcA !== srcB) return srcA - srcB
-      // Within same source, prefer simpler / more exact names
-      return nameScore(a.name) - nameScore(b.name)
+      return relevanceScore(a.name, a.dataType) - relevanceScore(b.name, b.dataType)
     })
 
     const paged = combined.slice(offset, offset + limit)
