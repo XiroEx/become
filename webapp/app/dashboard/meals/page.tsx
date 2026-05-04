@@ -1,0 +1,308 @@
+"use client"
+
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
+import { motion } from 'framer-motion'
+import PageTransition from '@/components/PageTransition'
+import MealCard from '@/components/meals/MealCard'
+import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle } from 'lucide-react'
+
+interface MealLite {
+  _id: string
+  name: string
+  description?: string
+  imageUrl?: string
+  tags: string[]
+  items: { _id?: string }[]
+  totalNutrition?: {
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+  }
+  createdBy?: string
+  isVerified?: boolean
+}
+
+interface MeResponse {
+  user?: { _id?: string; id?: string; userId?: string }
+  _id?: string
+  id?: string
+  userId?: string
+}
+
+function titleCaseTag(tag: string): string {
+  return tag
+    .split(/[-_\s]+/)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('-')
+}
+
+export default function MealsPage() {
+  const [meals, setMeals] = useState<MealLite[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
+    defaults: [], userTags: [],
+  })
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [applying, setApplying] = useState<string | null>(null)
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
+  const [errorToast, setErrorToast] = useState<string | null>(null)
+
+  const getHeaders = useCallback((): HeadersInit => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    return headers
+  }, [])
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const fetchMe = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { headers: getHeaders() })
+      if (res.ok) {
+        const data: MeResponse = await res.json()
+        const id = data.user?._id || data.user?.id || data.user?.userId || data._id || data.id || data.userId || null
+        setCurrentUserId(id ? String(id) : null)
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }, [getHeaders])
+
+  const fetchTags = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tags', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setTagsResp({
+          defaults: Array.isArray(data.defaults) ? data.defaults : [],
+          userTags: Array.isArray(data.userTags) ? data.userTags : [],
+        })
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }, [getHeaders])
+
+  const fetchMeals = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (debouncedSearch) params.set('q', debouncedSearch)
+      if (selectedTag) params.set('tag', selectedTag)
+      params.set('limit', '50')
+      const res = await fetch(`/api/meals?${params.toString()}`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setMeals(Array.isArray(data.meals) ? data.meals : [])
+      } else {
+        setMeals([])
+      }
+    } catch {
+      setMeals([])
+    } finally {
+      setLoading(false)
+    }
+  }, [debouncedSearch, selectedTag, getHeaders])
+
+  useEffect(() => {
+    fetchMe()
+    fetchTags()
+  }, [fetchMe, fetchTags])
+
+  useEffect(() => {
+    fetchMeals()
+  }, [fetchMeals])
+
+  const allTags = useMemo<string[]>(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const t of [...tagsResp.defaults, ...tagsResp.userTags]) {
+      const norm = String(t).toLowerCase()
+      if (!seen.has(norm)) {
+        seen.add(norm)
+        out.push(norm)
+      }
+    }
+    return out
+  }, [tagsResp])
+
+  const handleApply = async (mealId: string) => {
+    if (applying) return
+    setApplying(mealId)
+    try {
+      const res = await fetch(`/api/meals/${mealId}/log`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+      })
+      if (res.ok) {
+        setAppliedIds(prev => {
+          const next = new Set(prev)
+          next.add(mealId)
+          return next
+        })
+        // Auto-clear the "Logged!" indicator after a moment
+        setTimeout(() => {
+          setAppliedIds(prev => {
+            const next = new Set(prev)
+            next.delete(mealId)
+            return next
+          })
+        }, 2200)
+      } else {
+        setErrorToast('Failed to log meal. Please try again.')
+        setTimeout(() => setErrorToast(null), 3500)
+      }
+    } catch {
+      setErrorToast('Network error.')
+      setTimeout(() => setErrorToast(null), 3500)
+    } finally {
+      setApplying(null)
+    }
+  }
+
+  return (
+    <PageTransition className="space-y-4 pb-24 sm:space-y-6">
+      <header className="mb-2 sm:mb-4">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Meals</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
+          Save the meals you eat often. Tap to log.
+        </p>
+      </header>
+
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search your meals…"
+          className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Tag filter chips */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setSelectedTag(null)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              selectedTag === null
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+          >
+            All
+          </button>
+          {allTags.map(tag => (
+            <button
+              key={tag}
+              onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                selectedTag === tag
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {titleCaseTag(tag)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Meal list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+        </div>
+      ) : meals.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <ChefHat className="h-7 w-7 text-zinc-400" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-zinc-900 dark:text-white">
+              {debouncedSearch || selectedTag ? 'No meals match' : 'No saved meals yet'}
+            </p>
+            <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+              {debouncedSearch || selectedTag
+                ? 'Try a different search or clear the filter.'
+                : 'Save your go-to meals as templates and log them with one tap.'}
+            </p>
+          </div>
+          {!debouncedSearch && !selectedTag && (
+            <Link
+              href="/dashboard/meals/new"
+              className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              <Plus className="h-4 w-4" />
+              Create your first meal
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3">
+          {meals.map(meal => (
+            <MealCard
+              key={meal._id}
+              id={String(meal._id)}
+              name={meal.name}
+              description={meal.description}
+              imageUrl={meal.imageUrl}
+              tags={meal.tags || []}
+              totalNutrition={meal.totalNutrition}
+              itemCount={meal.items?.length ?? 0}
+              isOwner={Boolean(currentUserId && meal.createdBy && String(meal.createdBy) === currentUserId)}
+              isVerified={meal.isVerified}
+              applying={applying === meal._id}
+              applied={appliedIds.has(meal._id)}
+              onApply={() => handleApply(meal._id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Floating + New Meal button */}
+      <Link
+        href="/dashboard/meals/new"
+        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+        aria-label="Create new meal"
+      >
+        <Plus className="h-6 w-6" />
+      </Link>
+
+      {/* Error toast */}
+      {errorToast && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-lg"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {errorToast}
+        </motion.div>
+      )}
+      {/* Hidden TagIcon import keeps it available if we extend the empty state later */}
+      <span className="hidden"><TagIcon className="h-0 w-0" /></span>
+    </PageTransition>
+  )
+}

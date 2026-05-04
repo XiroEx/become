@@ -2,18 +2,23 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe, ScanBarcode } from 'lucide-react'
+import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import BarcodeScanner from './BarcodeScanner'
 
-type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
-
 interface FoodSearchModalProps {
   isOpen: boolean
-  mealType: MealType
+  // Current tag the food will be added under. When omitted, the modal hides
+  // the tag picker entirely (used in "meal building" mode).
+  currentTag?: string
+  // Available tags for the picker. Defaults + user tags are passed by the page.
+  availableTags?: { defaults: string[]; userTags: string[] }
+  // Whether to show the tag picker. Default true when currentTag is provided.
+  showTagPicker?: boolean
   onClose: () => void
-  onSelectFood: (food: IFoodEntry, mealType: MealType) => void
+  // Tag is optional — meal-building flow ignores it.
+  onSelectFood: (food: IFoodEntry, tag?: string) => void
   autoScan?: boolean
 }
 
@@ -69,6 +74,13 @@ function pickDefaultVariantIdx(variants: FoodVariant[] | undefined): number {
   return idx >= 0 ? idx : 0
 }
 
+function titleCaseTag(tag: string): string {
+  return tag
+    .split(/[-_\s]+/)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('-')
+}
+
 type TabId = 'all' | 'recent' | 'frequent' | 'custom'
 
 const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
@@ -78,16 +90,20 @@ const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'custom', label: 'Custom', Icon: ChefHat },
 ]
 
-const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
-
 export default function FoodSearchModal({
   isOpen,
-  mealType,
+  currentTag,
+  availableTags,
+  showTagPicker,
   onClose,
   onSelectFood,
   autoScan = false,
 }: FoodSearchModalProps) {
-  const [currentMealType, setCurrentMealType] = useState<MealType>(mealType)
+  const tagPickerEnabled = showTagPicker ?? Boolean(currentTag)
+  const [activeTag, setActiveTag] = useState<string>(currentTag ?? 'snack')
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
+  const [customTagInput, setCustomTagInput] = useState('')
+
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [results, setResults] = useState<FoodResult[]>([])
@@ -142,7 +158,7 @@ export default function FoodSearchModal({
   // Sync state on open/close
   useEffect(() => {
     if (isOpen) {
-      setCurrentMealType(mealType)
+      setActiveTag(currentTag ?? 'snack')
       setTimeout(() => inputRef.current?.focus(), 100)
       if (autoScan) {
         setTimeout(() => { setBarcodeError(null); setScannerOpen(true) }, 350)
@@ -160,6 +176,8 @@ export default function FoodSearchModal({
       setScannerOpen(false)
       setBarcodeError(null)
       setAdding(false)
+      setTagDropdownOpen(false)
+      setCustomTagInput('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
@@ -431,7 +449,7 @@ export default function FoodSearchModal({
         }
       }
 
-      onSelectFood(entry, currentMealType)
+      onSelectFood(entry, tagPickerEnabled ? activeTag : undefined)
       setSelectedFood(null)
       setServings('1')
       setSelectedServingIdx(0)
@@ -443,7 +461,30 @@ export default function FoodSearchModal({
     }
   }
 
-  const mealLabel = currentMealType.charAt(0).toUpperCase() + currentMealType.slice(1)
+  const tagLabel = tagPickerEnabled ? titleCaseTag(activeTag) : ''
+
+  // Build the unified tag list for the dropdown (defaults first, then user tags)
+  const allTagOptions = useMemo<string[]>(() => {
+    const defaults = availableTags?.defaults ?? ['breakfast', 'lunch', 'dinner', 'snack', 'pre-workout', 'post-workout']
+    const userTags = availableTags?.userTags ?? []
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const t of [...defaults, ...userTags]) {
+      const norm = t.trim().toLowerCase()
+      if (!norm || seen.has(norm)) continue
+      seen.add(norm)
+      out.push(norm)
+    }
+    return out
+  }, [availableTags])
+
+  const handleAddCustomTag = () => {
+    const norm = customTagInput.trim().toLowerCase().replace(/\s+/g, '-')
+    if (!norm) return
+    setActiveTag(norm)
+    setCustomTagInput('')
+    setTagDropdownOpen(false)
+  }
 
   return (
     <AnimatePresence>
@@ -490,22 +531,75 @@ export default function FoodSearchModal({
                 </div>
               </div>
 
-              {/* Meal type picker */}
-              <div className="mb-3 flex gap-1.5">
-                {MEAL_TYPES.map(type => (
+              {/* Tag picker */}
+              {tagPickerEnabled && (
+                <div className="mb-3 relative">
                   <button
-                    key={type}
-                    onClick={() => setCurrentMealType(type)}
-                    className={`flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition-colors ${
-                      currentMealType === type
-                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                    }`}
+                    type="button"
+                    onClick={() => setTagDropdownOpen(v => !v)}
+                    className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                   >
-                    {type}
+                    <TagIcon className="h-3.5 w-3.5 text-zinc-400" />
+                    <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Adding to</span>
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
+                    <ChevronDown className={`ml-auto h-4 w-4 text-zinc-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
-                ))}
-              </div>
+
+                  <AnimatePresence>
+                    {tagDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-800"
+                      >
+                        <div className="grid grid-cols-2 gap-1">
+                          {allTagOptions.map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => { setActiveTag(t); setTagDropdownOpen(false) }}
+                              className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
+                                activeTag === t
+                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600'
+                              }`}
+                            >
+                              <span className="truncate">{titleCaseTag(t)}</span>
+                              {activeTag === t && <Check className="h-3 w-3 shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                          <p className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                            New tag
+                          </p>
+                          <div className="flex gap-1">
+                            <input
+                              type="text"
+                              value={customTagInput}
+                              onChange={(e) => setCustomTagInput(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomTag() } }}
+                              placeholder="e.g. brunch"
+                              className="flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400/30 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:placeholder-zinc-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAddCustomTag}
+                              disabled={!customTagInput.trim()}
+                              className="rounded-md bg-zinc-900 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Search input */}
               <div className="relative">
@@ -797,7 +891,7 @@ export default function FoodSearchModal({
                                 ) : (
                                   <>
                                     <Plus className="h-4 w-4" />
-                                    Add to {mealLabel}
+                                    {tagPickerEnabled ? `Add to ${tagLabel}` : 'Add'}
                                   </>
                                 )}
                               </button>

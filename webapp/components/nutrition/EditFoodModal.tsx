@@ -4,21 +4,22 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
-import type { IFoodEntry } from '@/models/NutritionLog'
+import type { IMealItem } from '@/models/Meal'
 
 interface EditFoodModalProps {
   isOpen: boolean
-  food: IFoodEntry | null
-  mealId: string
-  date: string          // "YYYY-MM-DD"
+  // The item to edit. Must include _id for the PATCH route to work.
+  item: (IMealItem & { _id?: string }) | null
+  // The MealLog id this item belongs to.
+  logId: string
   onClose: () => void
   onSaved: () => void   // refetch after save
 }
 
 type InputMode = 'servings' | 'grams'
 
-function servingSizeInGrams(food: IFoodEntry): number {
-  return food.servingUnit === 'oz' ? food.servingSize * 28.3495 : food.servingSize
+function servingSizeInGrams(item: IMealItem): number {
+  return item.servingUnit === 'oz' ? item.servingSize * 28.3495 : item.servingSize
 }
 
 // Variant names that are essentially "no preparation" — don't display them.
@@ -29,45 +30,45 @@ function shouldShowVariantName(name: string | undefined): name is string {
   return !HIDDEN_VARIANT_NAMES.has(name.trim().toLowerCase())
 }
 
-export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onSaved }: EditFoodModalProps) {
+export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }: EditFoodModalProps) {
   const [servings, setServings] = useState('')
   const [customGrams, setCustomGrams] = useState('')
   const [inputMode, setInputMode] = useState<InputMode>('servings')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const isWeightBased = food?.servingUnit === 'g' || food?.servingUnit === 'oz'
+  const isWeightBased = item?.servingUnit === 'g' || item?.servingUnit === 'oz'
 
   useLockScroll(isOpen)
 
   useEffect(() => {
-    if (food) {
-      setServings(String(food.servings))
-      setCustomGrams(String(Math.round(food.servings * servingSizeInGrams(food))))
+    if (item) {
+      setServings(String(item.servings))
+      setCustomGrams(String(Math.round(item.servings * servingSizeInGrams(item))))
       setInputMode('servings')
       setError('')
     }
-  }, [food])
+  }, [item])
 
   // nutrition is stored per-serving
   const base = useMemo(() => {
-    if (!food) return null
+    if (!item) return null
     return {
-      calories: food.nutrition.calories,
-      protein:  food.nutrition.protein,
-      carbs:    food.nutrition.carbs,
-      fats:     food.nutrition.fats,
+      calories: item.nutrition.calories,
+      protein:  item.nutrition.protein,
+      carbs:    item.nutrition.carbs,
+      fats:     item.nutrition.fats,
     }
-  }, [food])
+  }, [item])
 
   const effectiveServings = useMemo(() => {
-    if (!food) return 0
+    if (!item) return 0
     if (inputMode === 'grams') {
       const grams = parseFloat(customGrams) || 0
-      return grams / servingSizeInGrams(food)
+      return grams / servingSizeInGrams(item)
     }
     return parseFloat(servings) || 0
-  }, [inputMode, servings, customGrams, food])
+  }, [inputMode, servings, customGrams, item])
 
   const preview = useMemo(() => {
     if (!base) return null
@@ -82,20 +83,20 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!food) return
+    if (!item || !item._id || !logId) return
     if (effectiveServings <= 0) { setError('Amount must be greater than 0'); return }
 
     setSaving(true)
     setError('')
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/nutrition/log', {
-        method: 'PUT',
+      const res = await fetch(`/api/meal-logs/${logId}/items/${item._id}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ mealId, foodEntryId: food.id, updates: { servings: effectiveServings }, date }),
+        body: JSON.stringify({ servings: effectiveServings }),
       })
       if (res.ok) {
         onSaved()
@@ -119,7 +120,7 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
 
   return (
     <AnimatePresence>
-      {isOpen && food && (
+      {isOpen && item && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -143,15 +144,15 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base font-bold text-zinc-900 dark:text-white truncate">
-                    {food.name}
-                    {shouldShowVariantName(food.variantName) && (
+                    {item.name}
+                    {shouldShowVariantName(item.variantName) && (
                       <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                        {' '}&middot; {food.variantName}
+                        {' '}&middot; {item.variantName}
                       </span>
                     )}
                   </h2>
-                  {food.brand && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{food.brand}</p>
+                  {item.brand && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{item.brand}</p>
                   )}
                 </div>
               </div>
@@ -209,7 +210,7 @@ export default function EditFoodModal({ isOpen, food, mealId, date, onClose, onS
                       autoFocus
                     />
                     <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                      × {food.servingSize}{food.servingUnit}
+                      × {item.servingSize}{item.servingUnit}
                     </span>
                   </div>
 

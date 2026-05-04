@@ -1,36 +1,29 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import DateNav from '@/components/nutrition/DateNav'
 import CalorieRing from '@/components/nutrition/CalorieRing'
-import MealSection from '@/components/nutrition/MealSection'
+import TagSection, { type MealLogLite } from '@/components/nutrition/TagSection'
 import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
+import type { IMealItem } from '@/models/Meal'
 import FeatureGuard from '@/components/FeatureGuard'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type FoodEntry = IFoodEntry
-
-interface Meal {
+interface QuickAddRow {
   id: string
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack'
-  foods: FoodEntry[]
-  loggedAt: string
-}
-
-interface NutritionLog {
-  date: string
-  meals: Meal[]
-  water: { current: number; goal: number }
-  quickAdds: { id: string; calories: number; protein: number; carbs: number; fats: number; note?: string }[]
-  dailyTotals: { calories: number; protein: number; carbs: number; fats: number; fiber: number }
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+  note?: string
 }
 
 interface NutritionGoals {
@@ -41,7 +34,7 @@ interface NutritionGoals {
   waterGoal: number
 }
 
-type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+const DEFAULT_TAGS = ['breakfast', 'lunch', 'dinner', 'snack']
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -52,21 +45,15 @@ function formatDateParam(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function isSameDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+function getDefaultTagForNow(): string {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 11) return 'breakfast'
+  if (h >= 11 && h < 14) return 'lunch'
+  if (h >= 17 && h < 21) return 'dinner'
+  return 'snack'
 }
 
 // ── Defaults ───────────────────────────────────────────────────────────────────
-
-const defaultLog: NutritionLog = {
-  date: formatDateParam(new Date()),
-  meals: [],
-  water: { current: 0, goal: 96 },
-  quickAdds: [],
-  dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 },
-}
 
 const defaultGoals: NutritionGoals = {
   calories: 2000,
@@ -80,20 +67,30 @@ const defaultGoals: NutritionGoals = {
 
 export default function NutritionPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [log, setLog] = useState<NutritionLog>(defaultLog)
+  const [logs, setLogs] = useState<MealLogLite[]>([])
+  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+  const [water, setWater] = useState({ current: 0, goal: 96 })
+  const [quickAdds, setQuickAdds] = useState<QuickAddRow[]>([])
   const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
+  const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
+    defaults: DEFAULT_TAGS, userTags: [],
+  })
+  // Tags added via the "+ Add tag" button this session (empty until food gets added).
+  const [sessionTags, setSessionTags] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
   // Modal state
   const [foodSearchOpen, setFoodSearchOpen] = useState(false)
-  const [foodSearchMealType, setFoodSearchMealType] = useState<MealType>('breakfast')
+  const [foodSearchTag, setFoodSearchTag] = useState<string>('snack')
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
-  const [editFood, setEditFood] = useState<{ food: IFoodEntry; mealId: string } | null>(null)
+  const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
   const [errorToast, setErrorToast] = useState<string | null>(null)
+  // "+ Add tag" inline input state
+  const [showAddTagInput, setShowAddTagInput] = useState(false)
+  const [newTagInput, setNewTagInput] = useState('')
 
   const dateParam = formatDateParam(selectedDate)
-  const isToday = isSameDay(selectedDate, new Date())
 
   // ── Auth helper ────────────────────────────────────────────────────────────
 
@@ -106,24 +103,52 @@ export default function NutritionPage() {
     return headers
   }, [])
 
-  // ── Fetch nutrition log ────────────────────────────────────────────────────
+  // ── Fetchers ───────────────────────────────────────────────────────────────
 
-  const fetchLog = useCallback(async () => {
+  const fetchMealLogs = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/meal-logs?date=${dateParam}`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setLogs((data.logs || []).map((l: MealLogLite) => ({ ...l, _id: String(l._id) })))
+        setDailyTotals({
+          calories: Math.round(data.dailyTotals?.calories ?? 0),
+          protein: Math.round(data.dailyTotals?.protein ?? 0),
+          carbs: Math.round(data.dailyTotals?.carbs ?? 0),
+          fats: Math.round(data.dailyTotals?.fats ?? 0),
+        })
+      } else {
+        setLogs([])
+        setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+      }
+    } catch (err) {
+      console.error('Failed to fetch meal logs:', err)
+      setLogs([])
+      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+    }
+  }, [dateParam, getHeaders])
+
+  // Water + quickAdds still live on the legacy NutritionLog. We hit the legacy
+  // endpoint just to read those side-tables (its meal/dailyTotals fields are
+  // ignored — we use /api/meal-logs for those).
+  const fetchSideTables = useCallback(async () => {
     try {
       const res = await fetch(`/api/nutrition/log?date=${dateParam}`, { headers: getHeaders() })
       if (res.ok) {
         const data = await res.json()
-        setLog(data)
+        setWater({
+          current: data.water?.current ?? 0,
+          goal: data.water?.goal ?? 96,
+        })
+        setQuickAdds(Array.isArray(data.quickAdds) ? data.quickAdds : [])
       } else {
-        setLog({ ...defaultLog, date: dateParam })
+        setWater({ current: 0, goal: goals.waterGoal })
+        setQuickAdds([])
       }
     } catch (err) {
-      console.error('Failed to fetch nutrition log:', err)
-      setLog({ ...defaultLog, date: dateParam })
+      console.error('Failed to fetch side tables:', err)
     }
-  }, [dateParam, getHeaders])
-
-  // ── Fetch goals ────────────────────────────────────────────────────────────
+  }, [dateParam, getHeaders, goals.waterGoal])
 
   const fetchGoals = useCallback(async () => {
     try {
@@ -137,36 +162,67 @@ export default function NutritionPage() {
     }
   }, [getHeaders])
 
+  const fetchTags = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tags', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setTagsResp({
+          defaults: Array.isArray(data.defaults) ? data.defaults : DEFAULT_TAGS,
+          userTags: Array.isArray(data.userTags) ? data.userTags : [],
+        })
+      }
+    } catch (err) {
+      console.error('Failed to fetch tags:', err)
+    }
+  }, [getHeaders])
+
   // ── Init ───────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function init() {
       setLoading(true)
-      await Promise.all([fetchLog(), fetchGoals()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags()])
       setLoading(false)
     }
     init()
-  }, [fetchLog, fetchGoals])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags])
+
+  // ── Visible tags (defaults always; custom tags w/ content; session-added tags) ─
+
+  const visibleTags = useMemo<string[]>(() => {
+    const customTagsToday = new Set<string>()
+    for (const log of logs) {
+      for (const t of log.tags ?? []) {
+        const norm = String(t).toLowerCase()
+        if (!DEFAULT_TAGS.includes(norm)) customTagsToday.add(norm)
+      }
+    }
+    // Defaults first, then sorted custom tags-with-content, then session tags.
+    const out: string[] = [...DEFAULT_TAGS]
+    const customSorted = Array.from(customTagsToday).sort()
+    for (const t of customSorted) if (!out.includes(t)) out.push(t)
+    for (const t of sessionTags) if (!out.includes(t)) out.push(t)
+    return out
+  }, [logs, sessionTags])
+
+  // Map tag -> logs that include this tag.
+  const logsByTag = useMemo<Record<string, MealLogLite[]>>(() => {
+    const map: Record<string, MealLogLite[]> = {}
+    for (const t of visibleTags) map[t] = []
+    for (const log of logs) {
+      const tags = (log.tags || []).map(t => String(t).toLowerCase())
+      // If the log has no tags at all, treat it as a "snack" so it stays visible.
+      const effective = tags.length === 0 ? ['snack'] : tags
+      for (const t of effective) {
+        if (!map[t]) map[t] = []
+        map[t].push(log)
+      }
+    }
+    return map
+  }, [visibleTags, logs])
 
   // ── Date navigation ───────────────────────────────────────────────────────
-
-  const handlePrevDay = () => {
-    setSelectedDate(prev => {
-      const d = new Date(prev)
-      d.setDate(d.getDate() - 1)
-      return d
-    })
-  }
-
-  const handleNextDay = () => {
-    setSelectedDate(prev => {
-      const d = new Date(prev)
-      d.setDate(d.getDate() + 1)
-      // Don't allow navigating past today
-      const today = new Date()
-      return d > today ? prev : d
-    })
-  }
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
@@ -175,17 +231,68 @@ export default function NutritionPage() {
     setTimeout(() => setErrorToast(null), 4000)
   }
 
-  const handleAddFood = async (food: FoodEntry, mealType: MealType) => {
+  // Find an existing MealLog today whose primary tag === tag.
+  // "Primary tag" = first matching default tag in the log's tags array, else the
+  // first tag, else "snack".
+  const findLogForTag = useCallback((tag: string): MealLogLite | undefined => {
+    const norm = tag.toLowerCase()
+    return logs.find(log => {
+      const tags = (log.tags || []).map(t => String(t).toLowerCase())
+      if (tags.length === 0) return norm === 'snack'
+      // If the chosen tag is in the log's tags, count it as a candidate.
+      if (!tags.includes(norm)) return false
+      // Determine the log's primary tag.
+      const primary = tags.find(t => DEFAULT_TAGS.includes(t)) ?? tags[0]
+      return primary === norm
+    })
+  }, [logs])
+
+  const handleAddFood = async (food: IFoodEntry, tag?: string) => {
+    const useTag = (tag || foodSearchTag || 'snack').toLowerCase()
     try {
-      const res = await fetch('/api/nutrition/log', {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ mealType, food, date: dateParam }),
-      })
+      // Build a MealItemInput from the legacy IFoodEntry shape.
+      const itemPayload = {
+        foodId: food.foodId,
+        variantId: food.variantId,
+        variantName: food.variantName,
+        name: food.name,
+        brand: food.brand,
+        servingSize: food.servingSize,
+        servingUnit: food.servingUnit,
+        servings: food.servings,
+        nutrition: food.nutrition,
+      }
+
+      const existing = findLogForTag(useTag)
+      let res: Response
+      if (existing) {
+        res = await fetch(`/api/meal-logs/${existing._id}/items`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify(itemPayload),
+        })
+      } else {
+        // Pin loggedAt to the selected day (if it's not today, default to noon UTC).
+        const now = new Date()
+        const isToday = formatDateParam(now) === dateParam
+        const loggedAt = isToday ? now.toISOString() : `${dateParam}T12:00:00.000Z`
+        res = await fetch(`/api/meal-logs`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({
+            items: [itemPayload],
+            tags: [useTag],
+            loggedAt,
+          }),
+        })
+      }
+
       if (res.ok) {
-        await fetchLog()
+        await Promise.all([fetchMealLogs(), fetchTags()])
         setFoodSearchOpen(false)
         setFoodSearchAutoScan(false)
+        // Once a session-added tag has content, it'll appear via logsByTag — drop it.
+        setSessionTags(prev => prev.filter(t => t !== useTag))
       } else {
         showErrorToast('Failed to add food. Please try again.')
       }
@@ -195,18 +302,19 @@ export default function NutritionPage() {
     }
   }
 
-  const handleDeleteFood = async (mealId: string, foodEntryId: string) => {
+  const handleRemoveEntry = async (logId: string, itemId: string) => {
     try {
-      const res = await fetch('/api/nutrition/log', {
+      const res = await fetch(`/api/meal-logs/${logId}/items/${itemId}`, {
         method: 'DELETE',
         headers: getHeaders(),
-        body: JSON.stringify({ mealId, foodEntryId, date: dateParam }),
       })
       if (res.ok) {
-        await fetchLog()
+        await fetchMealLogs()
+      } else {
+        showErrorToast('Failed to delete entry.')
       }
     } catch (err) {
-      console.error('Failed to delete food:', err)
+      console.error('Failed to delete entry:', err)
     }
   }
 
@@ -218,7 +326,7 @@ export default function NutritionPage() {
         body: JSON.stringify({ amount, date: dateParam }),
       })
       if (res.ok) {
-        await fetchLog()
+        await fetchSideTables()
       }
     } catch (err) {
       console.error('Failed to add water:', err)
@@ -233,7 +341,7 @@ export default function NutritionPage() {
         body: JSON.stringify({ ...data, date: dateParam }),
       })
       if (res.ok) {
-        await fetchLog()
+        await fetchSideTables()
       }
     } catch (err) {
       console.error('Failed to quick add:', err)
@@ -249,32 +357,40 @@ export default function NutritionPage() {
         body: JSON.stringify({ quickAddId, date: dateParam }),
       })
       if (res.ok) {
-        await fetchLog()
+        await fetchSideTables()
       }
     } catch (err) {
       console.error('Failed to delete quick add:', err)
     }
   }
 
-  const getDefaultMealType = (): MealType => {
-    const h = new Date().getHours()
-    if (h >= 5 && h < 11) return 'breakfast'
-    if (h >= 11 && h < 14) return 'lunch'
-    if (h >= 17 && h < 21) return 'dinner'
-    return 'snack'
-  }
-
-  const openFoodSearch = (mealType: MealType, autoScan = false) => {
-    setFoodSearchMealType(mealType)
+  const openFoodSearch = (tag: string, autoScan = false) => {
+    setFoodSearchTag(tag.toLowerCase())
     setFoodSearchAutoScan(autoScan)
     setFoodSearchOpen(true)
   }
 
-  // ── Meal helpers ──────────────────────────────────────────────────────────
-
-  const getMealsForType = (type: MealType): Meal[] => {
-    return log.meals.filter(m => m.mealType === type)
+  const handleAddSessionTag = () => {
+    const norm = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
+    if (!norm) return
+    if (!visibleTags.includes(norm)) {
+      setSessionTags(prev => [...prev, norm])
+    }
+    setNewTagInput('')
+    setShowAddTagInput(false)
   }
+
+  const handleRemoveSessionTag = (tag: string) => {
+    setSessionTags(prev => prev.filter(t => t !== tag))
+  }
+
+  // Quick-add total calories
+  const quickAddCalories = quickAdds.reduce((s, qa) => s + (qa.calories || 0), 0)
+  // The CalorieRing shows MealLog daily totals + quick-add calories.
+  const totalConsumedCalories = dailyTotals.calories + quickAddCalories
+  const totalProtein = dailyTotals.protein + quickAdds.reduce((s, qa) => s + (qa.protein || 0), 0)
+  const totalCarbs = dailyTotals.carbs + quickAdds.reduce((s, qa) => s + (qa.carbs || 0), 0)
+  const totalFats = dailyTotals.fats + quickAdds.reduce((s, qa) => s + (qa.fats || 0), 0)
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
@@ -303,7 +419,7 @@ export default function NutritionPage() {
           </div>
         </div>
 
-        {/* Meal sections skeleton */}
+        {/* Tag sections skeleton */}
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-800" />
         ))}
@@ -331,14 +447,14 @@ export default function NutritionPage() {
         {/* Global search bar */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => openFoodSearch(getDefaultMealType())}
+            onClick={() => openFoodSearch(getDefaultTagForNow())}
             className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <Search className="h-4 w-4 shrink-0 text-zinc-400" />
             <span className="text-sm text-zinc-400 dark:text-zinc-500">Search foods…</span>
           </button>
           <button
-            onClick={() => openFoodSearch(getDefaultMealType(), true)}
+            onClick={() => openFoodSearch(getDefaultTagForNow(), true)}
             aria-label="Scan barcode"
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
           >
@@ -354,36 +470,66 @@ export default function NutritionPage() {
 
         {/* Calorie Ring + Macro Summary */}
         <CalorieRing
-          consumed={log.dailyTotals.calories}
+          consumed={totalConsumedCalories}
           goal={goals.calories}
-          protein={{ current: log.dailyTotals.protein, goal: goals.protein }}
-          carbs={{ current: log.dailyTotals.carbs, goal: goals.carbs }}
-          fats={{ current: log.dailyTotals.fats, goal: goals.fats }}
+          protein={{ current: totalProtein, goal: goals.protein }}
+          carbs={{ current: totalCarbs, goal: goals.carbs }}
+          fats={{ current: totalFats, goal: goals.fats }}
         />
 
-        {/* Meal Sections */}
-        {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map(type => {
-          const meals = getMealsForType(type)
-          const foods = meals.flatMap(m => m.foods)
-          const mealId = meals[0]?.id
-          return (
-            <MealSection
-              key={type}
-              mealType={type}
-              foods={foods}
-              onAddFood={() => openFoodSearch(type, false)}
-              onEditFood={(foodEntryId) => {
-                const food = foods.find(f => f.id === foodEntryId)
-                if (food && mealId) setEditFood({ food, mealId })
-              }}
-              onDeleteFood={(_, foodEntryId) => handleDeleteFood(mealId || '', foodEntryId)}
-              mealId={mealId}
+        {/* Tag Sections */}
+        {visibleTags.map(tag => (
+          <TagSection
+            key={tag}
+            tag={tag}
+            logs={logsByTag[tag] || []}
+            onAddFood={(t) => openFoodSearch(t, false)}
+            onEditEntry={(logId, item) => setEditEntry({ logId, item })}
+            onRemoveEntry={handleRemoveEntry}
+            onRemoveTag={handleRemoveSessionTag}
+            removable={sessionTags.includes(tag) && (logsByTag[tag] || []).length === 0}
+          />
+        ))}
+
+        {/* + Add tag */}
+        {showAddTagInput ? (
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <TagIcon className="h-4 w-4 text-zinc-400" />
+            <input
+              type="text"
+              value={newTagInput}
+              onChange={(e) => setNewTagInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSessionTag() } }}
+              placeholder="e.g. brunch"
+              autoFocus
+              className="flex-1 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
             />
-          )
-        })}
+            <button
+              onClick={handleAddSessionTag}
+              disabled={!newTagInput.trim()}
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              Add
+            </button>
+            <button
+              onClick={() => { setShowAddTagInput(false); setNewTagInput('') }}
+              className="rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAddTagInput(true)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 bg-transparent px-4 py-3 text-sm font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+          >
+            <Plus className="h-4 w-4" />
+            Add tag
+          </button>
+        )}
 
         {/* Quick Adds (visible entries with delete) */}
-        {log.quickAdds.length > 0 && (
+        {quickAdds.length > 0 && (
           <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
@@ -391,11 +537,11 @@ export default function NutritionPage() {
               </div>
               <span className="text-sm font-semibold text-zinc-900 dark:text-white">Quick Adds</span>
               <span className="ml-auto text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
-                {log.quickAdds.reduce((s, qa) => s + qa.calories, 0)} cal
+                {quickAddCalories} cal
               </span>
             </div>
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-              {log.quickAdds.map((qa) => (
+              {quickAdds.map((qa) => (
                 <div key={qa.id} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="flex-1 min-w-0">
                     {qa.note && (
@@ -425,7 +571,7 @@ export default function NutritionPage() {
 
         {/* Water Tracker */}
         <WaterTracker
-          current={log.water.current}
+          current={water.current}
           goal={goals.waterGoal}
           onAddWater={handleAddWater}
         />
@@ -443,13 +589,13 @@ export default function NutritionPage() {
           </button>
 
           <Link
-            href="/dashboard/nutrition/recipes"
+            href="/dashboard/meals"
             className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30">
               <BookOpen className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Recipes</span>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Meals</span>
           </Link>
 
           <Link
@@ -467,7 +613,8 @@ export default function NutritionPage() {
       {/* Food Search Modal */}
       <FoodSearchModal
         isOpen={foodSearchOpen}
-        mealType={foodSearchMealType}
+        currentTag={foodSearchTag}
+        availableTags={tagsResp}
         autoScan={foodSearchAutoScan}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false) }}
         onSelectFood={handleAddFood}
@@ -482,12 +629,11 @@ export default function NutritionPage() {
 
       {/* Edit Food Modal */}
       <EditFoodModal
-        isOpen={editFood !== null}
-        food={editFood?.food ?? null}
-        mealId={editFood?.mealId ?? ''}
-        date={dateParam}
-        onClose={() => setEditFood(null)}
-        onSaved={fetchLog}
+        isOpen={editEntry !== null}
+        item={editEntry?.item ?? null}
+        logId={editEntry?.logId ?? ''}
+        onClose={() => setEditEntry(null)}
+        onSaved={fetchMealLogs}
       />
 
       {/* Error toast */}
