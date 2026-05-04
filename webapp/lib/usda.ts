@@ -88,6 +88,80 @@ export interface MappedFoodResult {
   dataType?: string
 }
 
+export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResult | null> {
+  const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
+
+  try {
+    // USDA Branded foods are indexed by gtinUpc — searching the barcode as a
+    // query term returns the exact product when the UPC matches.
+    const params = new URLSearchParams({
+      query: code,
+      api_key: apiKey,
+      pageSize: '5',
+      dataType: 'Branded',
+    })
+
+    const res = await fetch(`${API_BASE}/foods/search?${params}`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return null
+
+    const data: USDASearchResponse = await res.json()
+    if (!data.foods?.length) return null
+
+    // Pick the first result whose gtinUpc matches any candidate code
+    const mapped = data.foods
+      .map((food): MappedFoodResult | null => {
+        const cal = getNutrient(food.foodNutrients, NUTRIENT_IDS.calories)
+        if (cal == null || cal <= 0) return null
+
+        const servingSize = food.servingSize || 100
+        const servingUnit = (food.servingSizeUnit || 'g').toLowerCase()
+        const scale = servingSize / 100
+
+        const nutrition = {
+          calories: Math.round(cal * scale),
+          protein: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.protein) ?? 0)) * scale * 10) / 10,
+          carbs: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs) ?? 0)) * scale * 10) / 10,
+          fats: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.fat) ?? 0)) * scale * 10) / 10,
+          fiber: getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber) != null
+            ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)!) * scale * 10) / 10
+            : undefined,
+          sugar: getNutrient(food.foodNutrients, NUTRIENT_IDS.sugar) != null
+            ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.sugar)!) * scale * 10) / 10
+            : undefined,
+          sodium: getNutrient(food.foodNutrients, NUTRIENT_IDS.sodium) != null
+            ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.sodium)!) * scale / 1000 * 10000) / 10000
+            : undefined,
+          saturatedFat: getNutrient(food.foodNutrients, NUTRIENT_IDS.saturatedFat) != null
+            ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.saturatedFat)!) * scale * 10) / 10
+            : undefined,
+        }
+
+        const alternateServings: { label: string; multiplier: number }[] = []
+        if (servingSize !== 100) alternateServings.push({ label: '100 g', multiplier: 100 / servingSize })
+
+        return {
+          _id: `usda-${food.fdcId}`,
+          name: food.description,
+          brand: food.brandOwner || food.brandName || undefined,
+          category: mapCategory(food.foodCategory),
+          servingSize,
+          servingUnit: servingUnit === 'ml' ? 'ml' : 'g',
+          alternateServings: alternateServings.length > 0 ? alternateServings : undefined,
+          nutrition,
+          source: 'usda',
+          dataType: food.dataType,
+        }
+      })
+      .filter((f): f is MappedFoodResult => f !== null)
+
+    return mapped[0] ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function searchUSDA(query: string, limit: number = 15): Promise<MappedFoodResult[]> {
   const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
 

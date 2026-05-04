@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import FoodItem from '@/models/FoodItem'
 import OpenFoodFact from '@/models/OpenFoodFact'
 import { verifyAuth } from '@/lib/auth'
+import { lookupUSDAByBarcode } from '@/lib/usda'
 
 // ---------------------------------------------------------------------------
 // Shared mapper — same shape as the foods search endpoint
@@ -82,13 +83,63 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 2. OpenFoodFacts collection — try all candidate codes
+    // 2. OpenFoodFacts local collection — try all candidate codes
     const offFood = await OpenFoodFact.findOne({ code: { $in: [...candidates] } }).lean()
     if (offFood) {
       return NextResponse.json({ food: mapOffToFoodResult(offFood as Parameters<typeof mapOffToFoodResult>[0]) })
     }
 
-    // Nothing found
+    // 3. USDA FoodData Central — searches by UPC among Branded foods
+    const usdaFood = await lookupUSDAByBarcode(code)
+    if (usdaFood) {
+      return NextResponse.json({ food: usdaFood })
+    }
+
+    // 4. Live OpenFoodFacts API — catches anything not in the local snapshot
+    for (const candidate of candidates) {
+      try {
+        const offRes = await fetch(
+          `https://world.openfoodfacts.org/api/v0/product/${candidate}.json`,
+          { signal: AbortSignal.timeout(5000) }
+        )
+        if (offRes.ok) {
+          const offData = await offRes.json()
+          if (offData.status === 1 && offData.product) {
+            const p = offData.product
+            const n = p.nutriments || {}
+            const food = {
+              _id:    candidate,
+              name:   p.product_name || p.product_name_en || 'Unknown Product',
+              brand:  p.brands || undefined,
+              category: p.categories_tags?.[0]?.replace(/^en:/, '') || 'Other',
+              servingSize: 100,
+              servingUnit: 'g' as const,
+              alternateServings: (p.serving_quantity && p.serving_quantity > 0 && p.serving_quantity !== 100)
+                ? [{ label: p.serving_size || `${p.serving_quantity}g`, multiplier: p.serving_quantity / 100 }]
+                : [],
+              nutrition: {
+                calories: Math.round(n['energy-kcal_100g'] ?? n.energy_kcal_100g ?? 0),
+                protein:  Math.round((n.proteins_100g     ?? 0) * 10) / 10,
+                carbs:    Math.round((n.carbohydrates_100g ?? 0) * 10) / 10,
+                fats:     Math.round((n.fat_100g          ?? 0) * 10) / 10,
+                fiber:    n.fiber_100g   != null ? Math.round(n.fiber_100g   * 10) / 10 : undefined,
+                sugar:    n.sugars_100g  != null ? Math.round(n.sugars_100g  * 10) / 10 : undefined,
+                sodium:   n.sodium_100g  != null ? Math.round(n.sodium_100g  * 1000) / 1000 : undefined,
+              },
+              barcode:          candidate,
+              source:           'openfoodfacts' as const,
+              image_url:        p.image_url || undefined,
+              nutriscore_grade: p.nutriscore_grade || undefined,
+            }
+            return NextResponse.json({ food })
+          }
+        }
+      } catch {
+        // Live OFF API unreachable — continue
+      }
+    }
+
+    // Nothing found in any source
     return NextResponse.json({ food: null })
   } catch (error) {
     console.error('Error looking up barcode:', error)
