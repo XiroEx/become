@@ -178,7 +178,16 @@ export async function GET(request: NextRequest) {
 
     function relevanceScore(name: string, brand?: string, dataType?: string): number {
       const nameLower = name.toLowerCase()
-      if (nameLower === qLower) return -1000  // exact name match always wins
+      const strippedLower = stripQualifiers(nameLower).toLowerCase()
+
+      // Exact match against the stripped name ("Apples, raw" → "apples" matches "apples"),
+      // BUT only for non-Branded sources. Otherwise junk Branded entries like "KIWI"
+      // or "APPLES" with no real product info would beat Foundation whole foods.
+      // Tiebreak with full word count so "Bananas, raw" beats "Bananas, overripe, raw".
+      if (dataType !== 'Branded' && strippedLower === qLower) {
+        const fullWordCount = nameLower.split(/[\s,]+/).filter(Boolean).length
+        return -1000 + (USDA_TYPE_BONUS[dataType ?? ''] ?? 0) + fullWordCount
+      }
 
       // Coverage searches name + brand combined so "jimmy dean" matches Jimmy Dean
       // products even when "Jimmy Dean" only appears in the brand field.
@@ -190,7 +199,7 @@ export async function GET(request: NextRequest) {
 
       // Length is computed on stripped name only (qualifiers removed) so
       // "Bananas, raw" doesn't get penalized for the ", raw" suffix.
-      const lengthScore = stripQualifiers(nameLower).split(/[\s,]+/).filter(Boolean).length
+      const lengthScore = strippedLower.split(/[\s,]+/).filter(Boolean).length
 
       const typeScore = USDA_TYPE_BONUS[dataType ?? ''] ?? 0
       return coverageScore + lengthScore + typeScore
