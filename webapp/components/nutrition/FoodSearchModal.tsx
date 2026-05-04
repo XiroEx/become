@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe } from 'lucide-react'
+import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe, ScanBarcode } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
+import BarcodeScanner from './BarcodeScanner'
 
 interface FoodSearchModalProps {
   isOpen: boolean
@@ -65,6 +66,11 @@ export default function FoodSearchModal({
   const [inputMode, setInputMode] = useState<'servings' | 'grams'>('servings')
   const [customGrams, setCustomGrams] = useState('100')
 
+  // Barcode scanner state
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [barcodeLoading, setBarcodeLoading] = useState(false)
+  const [barcodeError, setBarcodeError] = useState<string | null>(null)
+
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
 
@@ -83,8 +89,41 @@ export default function FoodSearchModal({
       setInputMode('servings')
       setCustomGrams('100')
       setActiveTab('all')
+      setScannerOpen(false)
+      setBarcodeError(null)
     }
   }, [isOpen])
+
+  const handleBarcodeDetected = useCallback(async (code: string) => {
+    setScannerOpen(false)
+    setBarcodeLoading(true)
+    setBarcodeError(null)
+    try {
+      const token = localStorage.getItem('token')
+      const headers: HeadersInit = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/nutrition/foods/barcode?code=${encodeURIComponent(code)}`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.food) {
+          setSelectedFood(data.food)
+          setServings('1')
+          setSelectedServingIdx(0)
+          setInputMode('servings')
+          setCustomGrams('100')
+          setResults([data.food])
+        } else {
+          setBarcodeError(`No food found for barcode ${code}. Try searching by name.`)
+        }
+      } else {
+        setBarcodeError('Barcode lookup failed. Try searching by name.')
+      }
+    } catch {
+      setBarcodeError('Barcode lookup failed. Try searching by name.')
+    } finally {
+      setBarcodeLoading(false)
+    }
+  }, [])
 
   const fetchResults = useCallback(
     async (searchQuery: string, tab: TabId) => {
@@ -271,12 +310,23 @@ export default function FoodSearchModal({
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
                   Add to {mealLabel}
                 </h2>
-                <button
-                  onClick={onClose}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                >
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
+                    data-testid="barcode-scan-btn"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                    aria-label="Scan barcode"
+                  >
+                    <ScanBarcode className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={onClose}
+                    data-testid="food-search-close"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Search input */}
@@ -299,6 +349,28 @@ export default function FoodSearchModal({
                   </button>
                 )}
               </div>
+
+              {/* Barcode loading / error feedback */}
+              {barcodeLoading && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-800">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-500" />
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">Looking up barcode…</span>
+                </div>
+              )}
+              {barcodeError && !barcodeLoading && (
+                <div
+                  data-testid="barcode-error"
+                  className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-red-50 px-3 py-2 dark:bg-red-900/20"
+                >
+                  <span className="text-xs text-red-600 dark:text-red-400">{barcodeError}</span>
+                  <button
+                    onClick={() => setBarcodeError(null)}
+                    className="shrink-0 text-red-400 hover:text-red-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* Tabs */}
               <div className="mt-3 flex gap-1">
@@ -497,6 +569,14 @@ export default function FoodSearchModal({
             </div>
           </motion.div>
         </motion.div>
+      )}
+
+      {/* Barcode scanner overlay — rendered outside the modal so it covers the full screen */}
+      {scannerOpen && (
+        <BarcodeScanner
+          onClose={() => setScannerOpen(false)}
+          onDetected={handleBarcodeDetected}
+        />
       )}
     </AnimatePresence>
   )

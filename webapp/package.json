@@ -16,6 +16,8 @@
     "@redbtn/redstyle": "^0.4.11",
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",

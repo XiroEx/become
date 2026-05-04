@@ -63,5 +63,17 @@ export default defineConfig({
         screenshot: 'only-on-failure',
       },
     },
+    {
+      name: 'barcode',
+      testMatch: '**/barcode.spec.ts',
+      timeout: 180_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
   ],
 });
