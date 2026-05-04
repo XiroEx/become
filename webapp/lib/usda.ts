@@ -275,7 +275,39 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
 /**
  * Fetch a single USDA food by its fdcId.
  * https://fdc.nal.usda.gov/api-guide
+ *
+ * The detail endpoint returns nutrients in a wrapped shape:
+ *   foodNutrients: [{ nutrient: { id, name, unitName }, amount, ... }]
+ * while the search endpoint returns the flat shape used elsewhere in this file:
+ *   foodNutrients: [{ nutrientId, value, unitName, nutrientName }]
+ * We normalize to the flat shape so mapUSDAFood / getNutrient work.
  */
+interface USDADetailNutrient {
+  nutrient?: { id?: number; name?: string; unitName?: string }
+  amount?: number
+  nutrientId?: number
+  value?: number
+  unitName?: string
+  nutrientName?: string
+}
+
+function normalizeNutrients(raw: USDADetailNutrient[] | undefined): USDANutrient[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((n): USDANutrient | null => {
+      const id = n.nutrient?.id ?? n.nutrientId
+      const value = n.amount ?? n.value
+      if (typeof id !== 'number' || typeof value !== 'number') return null
+      return {
+        nutrientId: id,
+        value,
+        unitName: n.nutrient?.unitName ?? n.unitName ?? '',
+        nutrientName: n.nutrient?.name ?? n.nutrientName ?? '',
+      }
+    })
+    .filter((n): n is USDANutrient => n !== null)
+}
+
 export async function fetchUSDAById(fdcId: string): Promise<USDAFood | null> {
   const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
   const id = encodeURIComponent(fdcId)
@@ -291,9 +323,12 @@ export async function fetchUSDAById(fdcId: string): Promise<USDAFood | null> {
       return null
     }
 
-    const data = await res.json() as USDAFood
+    const data = await res.json()
     if (!data || typeof data.fdcId !== 'number') return null
-    return data
+    return {
+      ...data,
+      foodNutrients: normalizeNutrients(data.foodNutrients),
+    } as USDAFood
   } catch (err) {
     console.warn(`USDA fetch by id error: ${err instanceof Error ? err.message : String(err)} (fdcId=${fdcId})`)
     return null
