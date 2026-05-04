@@ -103,6 +103,7 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
 
     const res = await fetch(`${API_BASE}/foods/search?${params}`, {
       signal: AbortSignal.timeout(12000),
+      cache: 'no-store',  // Next.js 16 caches fetch by default — opt out so live rate limits don't get stuck
     })
     if (!res.ok) {
       console.warn(`USDA barcode lookup failed: ${res.status} ${res.statusText} (key=${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'set'})`)
@@ -241,6 +242,7 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
 
     const res = await fetch(`${API_BASE}/foods/search?${params}`, {
       signal: AbortSignal.timeout(12000),
+      cache: 'no-store',  // Next.js 16 caches fetch by default — opt out so empty/rate-limited responses don't stick
     })
 
     if (!res.ok) {
