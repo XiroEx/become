@@ -34,7 +34,8 @@ export default function BarcodeScanner({ onClose, onDetected }: BarcodeScannerPr
     async function startScanner() {
       try {
         // Dynamic import keeps ZXing out of the initial bundle
-        const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } = await import('@zxing/browser')
+        const { BrowserMultiFormatReader, BarcodeFormat } = await import('@zxing/browser')
+        const { DecodeHintType } = await import('@zxing/library')
 
         if (cancelled) return
 
