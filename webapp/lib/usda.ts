@@ -102,9 +102,12 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
     })
 
     const res = await fetch(`${API_BASE}/foods/search?${params}`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(12000),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.warn(`USDA barcode lookup failed: ${res.status} ${res.statusText} (key=${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'set'})`)
+      return null
+    }
 
     const data: USDASearchResponse = await res.json()
     if (!data.foods?.length) return null
@@ -157,7 +160,8 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
       .filter((f): f is MappedFoodResult => f !== null)
 
     return mapped[0] ?? null
-  } catch {
+  } catch (err) {
+    console.warn(`USDA barcode lookup error: ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
 }
@@ -236,10 +240,13 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
     })
 
     const res = await fetch(`${API_BASE}/foods/search?${params}`, {
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(12000),
     })
 
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.warn(`USDA search failed: ${res.status} ${res.statusText} (key=${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'set'}, query=${query.slice(0, 40)})`)
+      return []
+    }
 
     const data: USDASearchResponse = await res.json()
     if (!data.foods?.length) return []
@@ -257,8 +264,8 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
     })
 
     return mapped.slice(0, limit)
-  } catch {
-    // USDA API down or timeout — fail silently
+  } catch (err) {
+    console.warn(`USDA search error: ${err instanceof Error ? err.message : String(err)} (query=${query.slice(0, 40)})`)
     return []
   }
 }
