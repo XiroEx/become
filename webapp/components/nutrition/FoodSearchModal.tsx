@@ -73,6 +73,15 @@ export default function FoodSearchModal({
   const [inputMode, setInputMode] = useState<'servings' | 'grams'>('servings')
   const [customGrams, setCustomGrams] = useState('100')
 
+  // Returns the gram amount of the first alternate (label) serving, or the base serving size.
+  // Used to pre-fill the custom weight input with the actual label serving rather than 100g.
+  const getLabelServingGrams = (food: FoodResult): string => {
+    if (food.alternateServings && food.alternateServings.length > 0) {
+      return String(Math.round(food.alternateServings[0].multiplier * food.servingSize))
+    }
+    return String(food.servingSize)
+  }
+
   // Barcode scanner state
   const [scannerOpen, setScannerOpen] = useState(false)
   const [barcodeLoading, setBarcodeLoading] = useState(false)
@@ -120,9 +129,9 @@ export default function FoodSearchModal({
         if (data.food) {
           setSelectedFood(data.food)
           setServings('1')
-          setSelectedServingIdx(0)
+          setSelectedServingIdx(data.food.alternateServings?.length ? 1 : 0)
           setInputMode('servings')
-          setCustomGrams('100')
+          setCustomGrams(getLabelServingGrams(data.food))
           setResults([data.food])
         } else {
           setBarcodeError(`No food found for barcode ${code}. Try searching by name.`)
@@ -449,9 +458,11 @@ export default function FoodSearchModal({
                           } else {
                             setSelectedFood(food)
                             setServings('1')
-                            setSelectedServingIdx(0)
+                            // Pre-select the label serving (index 1) when available,
+                            // so the default shown is what's on the nutrition label, not 100g.
+                            setSelectedServingIdx(food.alternateServings?.length ? 1 : 0)
                             setInputMode('servings')
-                            setCustomGrams('100')
+                            setCustomGrams(getLabelServingGrams(food))
                           }
                         }}
                         className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
