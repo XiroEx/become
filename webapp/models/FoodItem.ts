@@ -67,7 +67,7 @@ const FoodItemSchema = new Schema<IFoodItem>({
 })
 
 // Indexes
-FoodItemSchema.index({ name: 'text' })
+FoodItemSchema.index({ name: 'text', brand: 'text' })
 FoodItemSchema.index({ barcode: 1 }, { unique: true, sparse: true })
 FoodItemSchema.index({ category: 1 })
 FoodItemSchema.index({ createdBy: 1 })

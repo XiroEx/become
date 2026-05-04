@@ -91,7 +91,13 @@ export async function GET(request: NextRequest) {
       .limit(customLimit)
       .lean()
 
-    const regexFilter = { ...baseFilter, name: { $regex: q, $options: 'i' } }
+    const regexFilter = {
+      ...baseFilter,
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { brand: { $regex: q, $options: 'i' } },
+      ],
+    }
     const regexResults = await FoodItem.find(regexFilter)
       .sort({ usageCount: -1 })
       .limit(customLimit)
@@ -140,10 +146,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Combine: custom → USDA → OFF
-    // Ranking: word coverage wins first (how many query words match the food name),
-    // then name simplicity (shorter = simpler food), then whole-food type as tiebreaker.
-    // e.g. "blueberries" → "Blueberries, raw" beats "Blueberry Pancakes"
-    //      "blueberries pancakes" → "Blueberry Pancakes" beats "Blueberries, raw"
+    // Ranking: word coverage (across name + brand) wins first, then name simplicity,
+    // then whole-food type as tiebreaker.
+    //   "blueberries"        → "Blueberries, raw" beats "Blueberry Pancakes"
+    //   "blueberries pancakes" → "Blueberry Pancakes" beats "Blueberries, raw"
+    //   "jimmy dean english muffin" → coverage matches across name+brand so it surfaces
     const qLower = q.toLowerCase().trim()
     const qWords = qLower.split(/\s+/)
 
@@ -154,6 +161,13 @@ export async function GET(request: NextRequest) {
       return qw.slice(0, len) === nw.slice(0, len)
     }
 
+    // Strip trailing prep/state qualifiers ("Bananas, raw" → "Bananas") for length scoring.
+    // Display name is unaffected — this only counts words for ranking.
+    const QUALIFIER_PATTERN = /,\s*(raw|cooked|boiled|roasted|baked|grilled|fried|steamed|sauteed|shelled|peeled|whole|fresh|dried|canned|frozen|with skin|without skin|with salt|without salt|unsweetened|sweetened|enriched|unenriched|fortified)\b.*$/i
+    function stripQualifiers(name: string): string {
+      return name.replace(QUALIFIER_PATTERN, '').trim()
+    }
+
     // Whole-food data types get a small bonus — tiebreaker, not overriding coverage
     const USDA_TYPE_BONUS: Record<string, number> = {
       'Foundation': -10,
@@ -162,14 +176,22 @@ export async function GET(request: NextRequest) {
       'Branded': 0,
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function relevanceScore(name: string, dataType?: string): number {
-      const n = name.toLowerCase()
-      if (n === qLower) return -1000  // exact match always wins
-      const nWords = n.split(/[\s,]+/).filter(Boolean)
-      const covered = qWords.filter(qw => nWords.some(nw => stemMatch(qw, nw))).length
-      const coverageScore = (qWords.length - covered) * 100  // missing words are a heavy penalty
-      const lengthScore = nWords.length                       // shorter names rank above longer ones
+    function relevanceScore(name: string, brand?: string, dataType?: string): number {
+      const nameLower = name.toLowerCase()
+      if (nameLower === qLower) return -1000  // exact name match always wins
+
+      // Coverage searches name + brand combined so "jimmy dean" matches Jimmy Dean
+      // products even when "Jimmy Dean" only appears in the brand field.
+      const searchableWords = (nameLower + ' ' + (brand ?? '').toLowerCase())
+        .split(/[\s,]+/)
+        .filter(Boolean)
+      const covered = qWords.filter(qw => searchableWords.some(sw => stemMatch(qw, sw))).length
+      const coverageScore = (qWords.length - covered) * 100
+
+      // Length is computed on stripped name only (qualifiers removed) so
+      // "Bananas, raw" doesn't get penalized for the ", raw" suffix.
+      const lengthScore = stripQualifiers(nameLower).split(/[\s,]+/).filter(Boolean).length
+
       const typeScore = USDA_TYPE_BONUS[dataType ?? ''] ?? 0
       return coverageScore + lengthScore + typeScore
     }
@@ -180,7 +202,7 @@ export async function GET(request: NextRequest) {
       const srcA = a.source === 'custom' ? 0 : a.source === 'usda' ? 1 : 2
       const srcB = b.source === 'custom' ? 0 : b.source === 'usda' ? 1 : 2
       if (srcA !== srcB) return srcA - srcB
-      return relevanceScore(a.name, a.dataType) - relevanceScore(b.name, b.dataType)
+      return relevanceScore(a.name, a.brand, a.dataType) - relevanceScore(b.name, b.brand, b.dataType)
     })
 
     const paged = combined.slice(offset, offset + limit)
