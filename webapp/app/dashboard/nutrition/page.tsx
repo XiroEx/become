@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import DateNav from '@/components/nutrition/DateNav'
 import CalorieRing from '@/components/nutrition/CalorieRing'
@@ -10,7 +11,7 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import FeatureGuard from '@/components/FeatureGuard'
@@ -66,7 +67,23 @@ const defaultGoals: NutritionGoals = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function NutritionPage() {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
+  return (
+    <Suspense fallback={null}>
+      <NutritionPageInner />
+    </Suspense>
+  )
+}
+
+function parseDateParam(s: string | null | undefined): Date {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date()
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+function NutritionPageInner() {
+  const searchParams = useSearchParams()
+  const initialDate = useMemo(() => parseDateParam(searchParams?.get('date')), [searchParams])
+  const [selectedDate, setSelectedDate] = useState<Date>(initialDate)
   const [logs, setLogs] = useState<MealLogLite[]>([])
   const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 })
   const [water, setWater] = useState({ current: 0, goal: 96 })
@@ -437,11 +454,21 @@ export default function NutritionPage() {
     >
       <PageTransition className="space-y-4 pb-6 sm:space-y-6">
         {/* Header */}
-        <header className="mb-2 sm:mb-4">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-            Track your meals, macros, and hydration
-          </p>
+        <header className="mb-2 flex items-start justify-between gap-3 sm:mb-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
+              Track your meals, macros, and hydration
+            </p>
+          </div>
+          <Link
+            href={`/dashboard/timeline?date=${dateParam}`}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
+            aria-label="Switch to timeline view"
+            title="Timeline view"
+          >
+            <Clock className="h-5 w-5" />
+          </Link>
         </header>
 
         {/* Global search bar */}
