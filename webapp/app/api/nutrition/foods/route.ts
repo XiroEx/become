@@ -188,11 +188,12 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    const isAdmin = authResult.role === 'admin'
     const foodItem = await FoodItem.create({
       ...body,
       createdBy: authResult.userId,
-      isVerified: false,
-      usageCount: 0
+      isVerified: isAdmin ? (body.isVerified ?? false) : false,
+      usageCount: isAdmin ? (body.usageCount ?? 0) : 0,
     })
 
     return NextResponse.json({ success: true, food: foodItem }, { status: 201 })
