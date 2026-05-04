@@ -7,11 +7,14 @@ import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import BarcodeScanner from './BarcodeScanner'
 
+type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
 interface FoodSearchModalProps {
   isOpen: boolean
-  mealType: string
+  mealType: MealType
   onClose: () => void
-  onSelectFood: (food: IFoodEntry) => void
+  onSelectFood: (food: IFoodEntry, mealType: MealType) => void
+  autoScan?: boolean
 }
 
 interface AlternateServing {
@@ -49,12 +52,16 @@ const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'custom', label: 'Custom', Icon: ChefHat },
 ]
 
+const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
+
 export default function FoodSearchModal({
   isOpen,
   mealType,
   onClose,
   onSelectFood,
+  autoScan = false,
 }: FoodSearchModalProps) {
+  const [currentMealType, setCurrentMealType] = useState<MealType>(mealType)
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [results, setResults] = useState<FoodResult[]>([])
@@ -76,10 +83,14 @@ export default function FoodSearchModal({
 
   useLockScroll(isOpen)
 
-  // Focus input on open
+  // Sync state on open/close
   useEffect(() => {
     if (isOpen) {
+      setCurrentMealType(mealType)
       setTimeout(() => inputRef.current?.focus(), 100)
+      if (autoScan) {
+        setTimeout(() => { setBarcodeError(null); setScannerOpen(true) }, 350)
+      }
     } else {
       setQuery('')
       setResults([])
@@ -92,6 +103,7 @@ export default function FoodSearchModal({
       setScannerOpen(false)
       setBarcodeError(null)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
   const handleBarcodeDetected = useCallback(async (code: string) => {
@@ -274,7 +286,7 @@ export default function FoodSearchModal({
       }
     }
 
-    onSelectFood(entry)
+    onSelectFood(entry, currentMealType)
     setSelectedFood(null)
     setServings('1')
     setSelectedServingIdx(0)
@@ -282,7 +294,7 @@ export default function FoodSearchModal({
     setCustomGrams('100')
   }
 
-  const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1)
+  const mealLabel = currentMealType.charAt(0).toUpperCase() + currentMealType.slice(1)
 
   return (
     <AnimatePresence>
@@ -308,7 +320,7 @@ export default function FoodSearchModal({
             <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-800">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-                  Add to {mealLabel}
+                  Add Food
                 </h2>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -327,6 +339,23 @@ export default function FoodSearchModal({
                     <X className="h-5 w-5" />
                   </button>
                 </div>
+              </div>
+
+              {/* Meal type picker */}
+              <div className="mb-3 flex gap-1.5">
+                {MEAL_TYPES.map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setCurrentMealType(type)}
+                    className={`flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition-colors ${
+                      currentMealType === type
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
               </div>
 
               {/* Search input */}

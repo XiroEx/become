@@ -10,7 +10,7 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2 } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import FeatureGuard from '@/components/FeatureGuard'
 
@@ -87,6 +87,7 @@ export default function NutritionPage() {
   // Modal state
   const [foodSearchOpen, setFoodSearchOpen] = useState(false)
   const [foodSearchMealType, setFoodSearchMealType] = useState<MealType>('breakfast')
+  const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editFood, setEditFood] = useState<{ food: IFoodEntry; mealId: string } | null>(null)
 
@@ -166,7 +167,7 @@ export default function NutritionPage() {
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
-  const handleAddFood = async (mealType: MealType, food: FoodEntry) => {
+  const handleAddFood = async (food: FoodEntry, mealType: MealType) => {
     try {
       const res = await fetch('/api/nutrition/log', {
         method: 'POST',
@@ -180,6 +181,7 @@ export default function NutritionPage() {
       console.error('Failed to add food:', err)
     }
     setFoodSearchOpen(false)
+    setFoodSearchAutoScan(false)
   }
 
   const handleDeleteFood = async (mealId: string, foodEntryId: string) => {
@@ -243,8 +245,17 @@ export default function NutritionPage() {
     }
   }
 
-  const openFoodSearch = (mealType: MealType) => {
+  const getDefaultMealType = (): MealType => {
+    const h = new Date().getHours()
+    if (h >= 5 && h < 11) return 'breakfast'
+    if (h >= 11 && h < 14) return 'lunch'
+    if (h >= 17 && h < 21) return 'dinner'
+    return 'snack'
+  }
+
+  const openFoodSearch = (mealType: MealType, autoScan = false) => {
     setFoodSearchMealType(mealType)
+    setFoodSearchAutoScan(autoScan)
     setFoodSearchOpen(true)
   }
 
@@ -306,6 +317,24 @@ export default function NutritionPage() {
           </p>
         </header>
 
+        {/* Global search bar */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openFoodSearch(getDefaultMealType())}
+            className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            <Search className="h-4 w-4 shrink-0 text-zinc-400" />
+            <span className="text-sm text-zinc-400 dark:text-zinc-500">Search foods…</span>
+          </button>
+          <button
+            onClick={() => openFoodSearch(getDefaultMealType(), true)}
+            aria-label="Scan barcode"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
+          >
+            <ScanBarcode className="h-5 w-5" />
+          </button>
+        </div>
+
         {/* Date Navigation */}
         <DateNav
           date={selectedDate}
@@ -331,7 +360,7 @@ export default function NutritionPage() {
               key={type}
               mealType={type}
               foods={foods}
-              onAddFood={() => openFoodSearch(type)}
+              onAddFood={() => openFoodSearch(type, false)}
               onEditFood={(foodEntryId) => {
                 const food = foods.find(f => f.id === foodEntryId)
                 if (food && mealId) setEditFood({ food, mealId })
@@ -428,8 +457,9 @@ export default function NutritionPage() {
       <FoodSearchModal
         isOpen={foodSearchOpen}
         mealType={foodSearchMealType}
-        onClose={() => setFoodSearchOpen(false)}
-        onSelectFood={(food: FoodEntry) => handleAddFood(foodSearchMealType, food)}
+        autoScan={foodSearchAutoScan}
+        onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false) }}
+        onSelectFood={handleAddFood}
       />
 
       {/* Quick Add Modal */}
