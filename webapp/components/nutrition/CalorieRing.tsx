@@ -23,7 +23,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
   const router = useRouter()
   const remaining = goal - consumed
   const isOver = consumed > goal
-  const percentage = Math.min(consumed / goal, 1)
+  const percentage = goal > 0 ? Math.min(consumed / goal, 1) : 0
 
   const size = 180
   const strokeWidth = 14

@@ -72,6 +72,7 @@ export default function NutritionGoalsPage() {
     activityLevel: 'moderate'
   })
 
+  const [goalsAreDefault, setGoalsAreDefault] = useState(false)
   const [macroPreset, setMacroPreset] = useState<MacroPreset>('balanced')
   const [userWeight, setUserWeight] = useState<number | null>(null)   // lbs
   const [userHeightCm, setUserHeightCm] = useState<number | null>(null)
@@ -135,6 +136,7 @@ export default function NutritionGoalsPage() {
 
         if (goalsRes.ok) {
           const goalsData = await goalsRes.json()
+          setGoalsAreDefault(!!goalsData._isDefault)
           setGoals({
             calories: goalsData.calories || 2000,
             protein: goalsData.protein || 150,
@@ -192,11 +194,10 @@ export default function NutritionGoalsPage() {
     }
   }, [userWeight, userHeightCm, userAge, userSex, manualAge, manualSex, manualHeightFt, manualHeightIn, goals.activityLevel, calculateTDEE])
 
-  // Auto-apply TDEE on first load if calories is still the generic default
+  // Auto-apply TDEE on first load if user has never saved goals
   useEffect(() => {
     if (!tdee || loading) return
-    const isDefaultCalories = goals.calories === 2000
-    if (isDefaultCalories) {
+    if (goalsAreDefault) {
       const adjustedCals = applyGoalAdjustment(tdee, goals.goalType)
       if (macroPreset !== 'custom') {
         applyMacroPreset(macroPreset, adjustedCals)

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const goals = await NutritionGoal.findOne({ userId: authResult.userId }).lean()
 
     if (!goals) {
-      return NextResponse.json(DEFAULT_GOALS)
+      return NextResponse.json({ ...DEFAULT_GOALS, _isDefault: true })
     }
 
     return NextResponse.json(goals)

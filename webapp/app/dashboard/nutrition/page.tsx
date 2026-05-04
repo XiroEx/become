@@ -10,7 +10,7 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import FeatureGuard from '@/components/FeatureGuard'
 
@@ -69,10 +69,10 @@ const defaultLog: NutritionLog = {
 }
 
 const defaultGoals: NutritionGoals = {
-  calories: 2300,
-  protein: 180,
-  carbs: 250,
-  fats: 60,
+  calories: 2000,
+  protein: 150,
+  carbs: 200,
+  fats: 65,
   waterGoal: 96,
 }
 
@@ -90,6 +90,7 @@ export default function NutritionPage() {
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editFood, setEditFood] = useState<{ food: IFoodEntry; mealId: string } | null>(null)
+  const [errorToast, setErrorToast] = useState<string | null>(null)
 
   const dateParam = formatDateParam(selectedDate)
   const isToday = isSameDay(selectedDate, new Date())
@@ -161,11 +162,18 @@ export default function NutritionPage() {
     setSelectedDate(prev => {
       const d = new Date(prev)
       d.setDate(d.getDate() + 1)
-      return d
+      // Don't allow navigating past today
+      const today = new Date()
+      return d > today ? prev : d
     })
   }
 
   // ── Event handlers ────────────────────────────────────────────────────────
+
+  const showErrorToast = (msg: string) => {
+    setErrorToast(msg)
+    setTimeout(() => setErrorToast(null), 4000)
+  }
 
   const handleAddFood = async (food: FoodEntry, mealType: MealType) => {
     try {
@@ -176,12 +184,15 @@ export default function NutritionPage() {
       })
       if (res.ok) {
         await fetchLog()
+        setFoodSearchOpen(false)
+        setFoodSearchAutoScan(false)
+      } else {
+        showErrorToast('Failed to add food. Please try again.')
       }
     } catch (err) {
       console.error('Failed to add food:', err)
+      showErrorToast('Failed to add food. Check your connection.')
     }
-    setFoodSearchOpen(false)
-    setFoodSearchAutoScan(false)
   }
 
   const handleDeleteFood = async (mealId: string, foodEntryId: string) => {
@@ -478,6 +489,14 @@ export default function NutritionPage() {
         onClose={() => setEditFood(null)}
         onSaved={fetchLog}
       />
+
+      {/* Error toast */}
+      {errorToast && (
+        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {errorToast}
+        </div>
+      )}
     </FeatureGuard>
   )
 }

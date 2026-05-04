@@ -261,7 +261,7 @@ export default function FoodSearchModal({
           fats:     Math.round(selectedFood.nutrition.fats     * 10) / 10,
           fiber:  selectedFood.nutrition.fiber  != null ? Math.round(selectedFood.nutrition.fiber  * 10) / 10 : undefined,
           sugar:  selectedFood.nutrition.sugar  != null ? Math.round(selectedFood.nutrition.sugar  * 10) / 10 : undefined,
-          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * 10) / 10 : undefined,
+          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * 1000) / 1000 : undefined,
         },
       }
     } else {
@@ -281,7 +281,7 @@ export default function FoodSearchModal({
           fats:     Math.round(selectedFood.nutrition.fats     * mult * 10) / 10,
           fiber:  selectedFood.nutrition.fiber  != null ? Math.round(selectedFood.nutrition.fiber  * mult * 10) / 10 : undefined,
           sugar:  selectedFood.nutrition.sugar  != null ? Math.round(selectedFood.nutrition.sugar  * mult * 10) / 10 : undefined,
-          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * mult * 10000) / 10000 : undefined,
+          sodium: selectedFood.nutrition.sodium != null ? Math.round(selectedFood.nutrition.sodium * mult * 1000) / 1000 : undefined,
         },
       }
     }
