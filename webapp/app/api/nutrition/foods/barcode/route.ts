@@ -63,16 +63,27 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
+    // Build candidate codes to try:
+    // UPC-A (12 digits) and EAN-13 (13 digits with leading zero) are the same
+    // barcode in different representations. ZXing typically returns UPC-A as
+    // 12 digits while OpenFoodFacts stores them as 13-digit EAN-13.
+    const candidates = new Set<string>([code])
+    if (/^\d{12}$/.test(code)) {
+      candidates.add('0' + code)           // UPC-A → EAN-13
+    } else if (/^\d{13}$/.test(code) && code.startsWith('0')) {
+      candidates.add(code.slice(1))        // EAN-13 → UPC-A
+    }
+
     // 1. Custom FoodItem (user-created or admin-seeded) by barcode field
-    const customFood = await FoodItem.findOne({ barcode: code }).lean()
+    const customFood = await FoodItem.findOne({ barcode: { $in: [...candidates] } }).lean()
     if (customFood) {
       return NextResponse.json({
         food: { ...customFood, _id: String(customFood._id), source: 'custom' },
       })
     }
 
-    // 2. OpenFoodFacts collection by code field
-    const offFood = await OpenFoodFact.findOne({ code }).lean()
+    // 2. OpenFoodFacts collection — try all candidate codes
+    const offFood = await OpenFoodFact.findOne({ code: { $in: [...candidates] } }).lean()
     if (offFood) {
       return NextResponse.json({ food: mapOffToFoodResult(offFood as Parameters<typeof mapOffToFoodResult>[0]) })
     }
