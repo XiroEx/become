@@ -476,8 +476,21 @@ export default function FoodSearchModal({
                             <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                               {food.name}
                             </p>
-                            {(food.source === 'openfoodfacts' || food.source === 'usda') && (
-                              <Globe className="h-3 w-3 shrink-0 text-emerald-500" />
+                            {food.source === 'usda' && (
+                              <span title="USDA FoodData Central" className="shrink-0">
+                                <Globe
+                                  className="h-3 w-3 text-green-500"
+                                  aria-label="USDA FoodData Central"
+                                />
+                              </span>
+                            )}
+                            {food.source === 'openfoodfacts' && (
+                              <span title="Open Food Facts" className="shrink-0">
+                                <Globe
+                                  className="h-3 w-3 text-blue-500"
+                                  aria-label="Open Food Facts"
+                                />
+                              </span>
                             )}
                           </div>
                           <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
