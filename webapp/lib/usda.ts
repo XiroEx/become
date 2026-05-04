@@ -51,9 +51,13 @@ function getNutrient(nutrients: USDANutrient[], id: number): number | undefined 
   return n?.value
 }
 
-export function mapCategory(usdaCategory: string | undefined): string {
-  if (!usdaCategory) return 'Other'
-  const c = usdaCategory.toLowerCase()
+export function mapCategory(usdaCategory: string | { description?: string } | undefined): string {
+  // The detail endpoint returns foodCategory as { id, code, description } instead of a string
+  const raw = typeof usdaCategory === 'string'
+    ? usdaCategory
+    : usdaCategory?.description
+  if (!raw || typeof raw !== 'string') return 'Other'
+  const c = raw.toLowerCase()
   if (c.includes('meat') || c.includes('poultry') || c.includes('fish') || c.includes('seafood') || c.includes('egg')) return 'Protein'
   if (c.includes('grain') || c.includes('bread') || c.includes('cereal') || c.includes('pasta') || c.includes('rice') || c.includes('baked')) return 'Grain'
   if (c.includes('fruit')) return 'Fruit'
@@ -120,7 +124,7 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
         if (cal == null || cal <= 0) return null
 
         const servingSize = food.servingSize || 100
-        const servingUnit = (food.servingSizeUnit || 'g').toLowerCase()
+        const servingUnit = (typeof food.servingSizeUnit === 'string' ? food.servingSizeUnit : 'g').toLowerCase()
         const scale = servingSize / 100
 
         const nutrition = {
