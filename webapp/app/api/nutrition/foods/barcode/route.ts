@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
-import FoodItem from '@/models/FoodItem'
+import Food from '@/models/Food'
 import OpenFoodFact from '@/models/OpenFoodFact'
 import { verifyAuth } from '@/lib/auth'
 import { lookupUSDAByBarcode } from '@/lib/usda'
+import { flattenFoodForResponse } from '@/lib/foodImport'
 
 // ---------------------------------------------------------------------------
-// Shared mapper — same shape as the foods search endpoint
+// Map an OFF doc to the response shape
 // ---------------------------------------------------------------------------
 
 function mapOffToFoodResult(off: InstanceType<typeof OpenFoodFact> & { _id: unknown }) {
@@ -29,7 +30,7 @@ function mapOffToFoodResult(off: InstanceType<typeof OpenFoodFact> & { _id: unkn
   }
 
   return {
-    _id:              String(off._id),
+    _id:              `off-${off.code}`,
     name:             off.product_name,
     brand:            off.brands || undefined,
     category:         off.category || 'Other',
@@ -64,10 +65,9 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
-    // Build candidate codes to try:
+    // Build candidate codes to try.
     // UPC-A (12 digits) and EAN-13 (13 digits with leading zero) are the same
-    // barcode in different representations. ZXing typically returns UPC-A as
-    // 12 digits while OpenFoodFacts stores them as 13-digit EAN-13.
+    // barcode in different representations.
     const candidates = new Set<string>([code])
     if (/^\d{12}$/.test(code)) {
       candidates.add('0' + code)           // UPC-A → EAN-13
@@ -75,11 +75,11 @@ export async function GET(request: NextRequest) {
       candidates.add(code.slice(1))        // EAN-13 → UPC-A
     }
 
-    // 1. Custom FoodItem (user-created or admin-seeded) by barcode field
-    const customFood = await FoodItem.findOne({ barcode: { $in: [...candidates] } }).lean()
-    if (customFood) {
+    // 1. Our DB (Food) by barcode field
+    const localFood = await Food.findOne({ barcode: { $in: [...candidates] } }).lean<(import('@/models/Food').IFood & { _id: import('mongoose').Types.ObjectId }) | null>()
+    if (localFood) {
       return NextResponse.json({
-        food: { ...customFood, _id: String(customFood._id), source: 'custom' },
+        food: { ...flattenFoodForResponse(localFood), source: localFood.source || 'manual' },
       })
     }
 
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
             const p = offData.product
             const n = p.nutriments || {}
             const food = {
-              _id:    candidate,
+              _id:    `off-${candidate}`,
               name:   p.product_name || p.product_name_en || 'Unknown Product',
               brand:  p.brands || undefined,
               category: p.categories_tags?.[0]?.replace(/^en:/, '') || 'Other',

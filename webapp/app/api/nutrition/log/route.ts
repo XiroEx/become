@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import NutritionLog from '@/models/NutritionLog'
 import NutritionGoal from '@/models/NutritionGoal'
-import FoodItem from '@/models/FoodItem'
+import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
 
@@ -90,15 +90,47 @@ export async function POST(request: NextRequest) {
     const date = getDateStart(dateStr)
     const foodEntryId = crypto.randomUUID()
 
+    // Resolve variant: if foodId is supplied, optionally pick a variant by id;
+    // when none given, fall back to the default variant. We snapshot the variant's
+    // nutrition into the entry so historical totals stay stable even if the Food
+    // document is later edited.
+    let resolvedNutrition = food.nutrition
+    let resolvedServingSize = food.servingSize
+    let resolvedServingUnit = food.servingUnit
+    let resolvedVariantId: string | undefined = food.variantId
+    let resolvedVariantName: string | undefined = food.variantName
+
+    if (food.foodId) {
+      const foodDoc = await Food.findById(food.foodId).lean<(import('@/models/Food').IFood & { _id: import('mongoose').Types.ObjectId }) | null>()
+      if (foodDoc) {
+        const variant = food.variantId
+          ? foodDoc.variants.find(v => v._id?.toString() === String(food.variantId))
+          : undefined
+        const chosen = variant ?? foodDoc.variants.find(v => v.isDefault) ?? foodDoc.variants[0]
+        if (chosen) {
+          // Only override when the client didn't already send full nutrition data
+          if (!food.nutrition) {
+            resolvedNutrition = chosen.nutrition
+            resolvedServingSize = chosen.servingSize
+            resolvedServingUnit = chosen.servingUnit
+          }
+          resolvedVariantId = chosen._id?.toString()
+          resolvedVariantName = chosen.name
+        }
+      }
+    }
+
     const foodEntry = {
       id: foodEntryId,
       foodId: food.foodId || undefined,
+      variantId: resolvedVariantId || undefined,
+      variantName: resolvedVariantName || undefined,
       name: food.name,
       brand: food.brand || undefined,
-      servingSize: food.servingSize,
-      servingUnit: food.servingUnit,
+      servingSize: resolvedServingSize,
+      servingUnit: resolvedServingUnit,
       servings: food.servings ?? 1,
-      nutrition: food.nutrition
+      nutrition: resolvedNutrition
     }
 
     // Find or create the day's log
@@ -117,7 +149,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find existing meal of this type or create new one
-    let meal = log.meals.find((m: { mealType: string }) => m.mealType === mealType)
+    const meal = log.meals.find((m: { mealType: string }) => m.mealType === mealType)
 
     if (meal) {
       meal.foods.push(foodEntry)
@@ -134,9 +166,9 @@ export async function POST(request: NextRequest) {
     log.recalculateTotals()
     await log.save()
 
-    // Increment usageCount on FoodItem if foodId provided
+    // Increment usageCount on Food if foodId provided
     if (food.foodId) {
-      await FoodItem.updateOne({ _id: food.foodId }, { $inc: { usageCount: 1 } })
+      await Food.updateOne({ _id: food.foodId }, { $inc: { usageCount: 1 } })
     }
 
     // Record streak activity for logging food

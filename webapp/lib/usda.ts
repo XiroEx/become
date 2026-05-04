@@ -4,7 +4,7 @@
  * Free API — get a key at https://fdc.nal.usda.gov/api-key-signup
  * Set USDA_API_KEY env var (falls back to DEMO_KEY with low rate limits).
  *
- * Searches Branded + Survey (FNDDS) foods and maps to our FoodItem shape.
+ * Searches Branded + Survey (FNDDS) foods and maps to a Food-search-result shape.
  */
 
 const API_BASE = 'https://api.nal.usda.gov/fdc/v1'
@@ -21,14 +21,14 @@ const NUTRIENT_IDS = {
   saturatedFat: 1258 // Fatty acids, total saturated (g)
 } as const
 
-interface USDANutrient {
+export interface USDANutrient {
   nutrientId: number
   nutrientName: string
   value: number
   unitName: string
 }
 
-interface USDAFood {
+export interface USDAFood {
   fdcId: number
   description: string
   brandName?: string
@@ -51,7 +51,7 @@ function getNutrient(nutrients: USDANutrient[], id: number): number | undefined 
   return n?.value
 }
 
-function mapCategory(usdaCategory: string | undefined): string {
+export function mapCategory(usdaCategory: string | undefined): string {
   if (!usdaCategory) return 'Other'
   const c = usdaCategory.toLowerCase()
   if (c.includes('meat') || c.includes('poultry') || c.includes('fish') || c.includes('seafood') || c.includes('egg')) return 'Protein'
@@ -175,7 +175,7 @@ const DATA_TYPE_RANK: Record<string, number> = {
   'Branded': 3,
 }
 
-function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
+export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
   const cal = getNutrient(food.foodNutrients, NUTRIENT_IDS.calories)
   if (cal == null || cal <= 0) return null
 
@@ -271,3 +271,32 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
     return []
   }
 }
+
+/**
+ * Fetch a single USDA food by its fdcId.
+ * https://fdc.nal.usda.gov/api-guide
+ */
+export async function fetchUSDAById(fdcId: string): Promise<USDAFood | null> {
+  const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
+  const id = encodeURIComponent(fdcId)
+
+  try {
+    const res = await fetch(`${API_BASE}/food/${id}?api_key=${apiKey}`, {
+      signal: AbortSignal.timeout(12000),
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      console.warn(`USDA fetch by id failed: ${res.status} ${res.statusText} (key=${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'set'}, fdcId=${fdcId})`)
+      return null
+    }
+
+    const data = await res.json() as USDAFood
+    if (!data || typeof data.fdcId !== 'number') return null
+    return data
+  } catch (err) {
+    console.warn(`USDA fetch by id error: ${err instanceof Error ? err.message : String(err)} (fdcId=${fdcId})`)
+    return null
+  }
+}
+

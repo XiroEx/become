@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import NutritionLog from '@/models/NutritionLog'
-import FoodItem from '@/models/FoodItem'
+import Food, { IFood } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { flattenFoodForResponse } from '@/lib/foodImport'
 
 // GET: Get user's most frequently logged foods
 export async function GET(request: NextRequest) {
@@ -38,32 +40,33 @@ export async function GET(request: NextRequest) {
 
     const results = await NutritionLog.aggregate(pipeline)
 
-    // Fetch full FoodItem docs for those with foodIds
+    // Fetch full Food docs for those with foodIds
     const foodIds = results
       .filter(r => r._id.foodId)
       .map(r => r._id.foodId)
 
-    const foodItems = foodIds.length > 0
-      ? await FoodItem.find({ _id: { $in: foodIds } }).lean()
+    const foodDocs = foodIds.length > 0
+      ? await Food.find({ _id: { $in: foodIds } }).lean<(IFood & { _id: mongoose.Types.ObjectId })[]>()
       : []
 
-    const foodItemMap = new Map(foodItems.map(fi => [fi._id.toString(), fi]))
+    const foodMap = new Map(foodDocs.map(fi => [fi._id.toString(), fi]))
 
     // Build response
     const foods = results.map(r => {
       const foodId = r._id.foodId?.toString()
-      const foodItem = foodId ? foodItemMap.get(foodId) : null
+      const foodDoc = foodId ? foodMap.get(foodId) : null
+      const flat = foodDoc ? flattenFoodForResponse(foodDoc) : null
 
       return {
         name: r._id.name,
         foodId: foodId || null,
         count: r.count,
-        nutrition: foodItem?.nutrition || r.lastNutrition,
-        servingSize: foodItem?.servingSize || r.lastServingSize,
-        servingUnit: foodItem?.servingUnit || r.lastServingUnit,
-        brand: foodItem?.brand || r.lastBrand,
-        category: foodItem?.category || null,
-        foodItem: foodItem || null
+        nutrition: flat?.nutrition || r.lastNutrition,
+        servingSize: flat?.servingSize || r.lastServingSize,
+        servingUnit: flat?.servingUnit || r.lastServingUnit,
+        brand: flat?.brand || r.lastBrand,
+        category: flat?.category || null,
+        foodItem: flat || null,
       }
     })
 

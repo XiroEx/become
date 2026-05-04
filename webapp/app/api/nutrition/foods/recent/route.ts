@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import NutritionLog from '@/models/NutritionLog'
-import FoodItem from '@/models/FoodItem'
+import Food, { IFood } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { flattenFoodForResponse } from '@/lib/foodImport'
 
 // GET: Get user's recently logged foods (last 14 days)
 export async function GET(request: NextRequest) {
@@ -51,21 +53,21 @@ export async function GET(request: NextRequest) {
     // Convert to array and limit to 20
     const recentFoods = Array.from(seenFoods.values()).slice(0, 20)
 
-    // Fetch full FoodItem docs for those with foodIds
+    // Fetch full Food docs for those with foodIds
     const foodIds = recentFoods
       .filter(f => f.foodId)
       .map(f => f.foodId)
 
-    const foodItems = foodIds.length > 0
-      ? await FoodItem.find({ _id: { $in: foodIds } }).lean()
+    const foodDocs = foodIds.length > 0
+      ? await Food.find({ _id: { $in: foodIds } }).lean<(IFood & { _id: mongoose.Types.ObjectId })[]>()
       : []
 
-    const foodItemMap = new Map(foodItems.map(fi => [fi._id.toString(), fi]))
+    const foodMap = new Map(foodDocs.map(fi => [fi._id.toString(), fi]))
 
-    // Enrich with FoodItem data where available
+    // Enrich with Food data where available
     const enriched = recentFoods.map(food => {
-      if (food.foodId && foodItemMap.has(food.foodId)) {
-        return { ...foodItemMap.get(food.foodId), lastLoggedAt: food.loggedAt }
+      if (food.foodId && foodMap.has(food.foodId)) {
+        return { ...flattenFoodForResponse(foodMap.get(food.foodId)!), lastLoggedAt: food.loggedAt }
       }
       return food
     })

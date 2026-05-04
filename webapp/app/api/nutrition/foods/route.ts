@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
-import FoodItem from '@/models/FoodItem'
+import Food, { IFood } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { searchUSDA } from '@/lib/usda'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
+import { flattenFoodForResponse, importManualFood } from '@/lib/foodImport'
 
 // ---------------------------------------------------------------------------
-// Map an OpenFoodFact document to the same shape as a FoodItem
+// Map an OpenFoodFact document to the same shape as a flattened Food
 // ---------------------------------------------------------------------------
 
 function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId }) {
@@ -32,7 +33,7 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
   }
 
   return {
-    _id: off._id,
+    _id: `off-${off.code}`,
     name: off.product_name,
     brand: off.brands || undefined,
     category: off.category || 'Other',
@@ -47,8 +48,10 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
   }
 }
 
+type FoodLean = IFood & { _id: mongoose.Types.ObjectId }
+
 // ---------------------------------------------------------------------------
-// GET: Search foods — custom first, then USDA (primary), OFF (fallback)
+// GET: Search foods — our DB first, then USDA + OFF (external sources)
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
@@ -71,37 +74,43 @@ export async function GET(request: NextRequest) {
     if (category) baseFilter.category = category
 
     if (!q) {
-      const foods = await FoodItem.find(baseFilter)
-        .sort({ usageCount: -1 })
+      const foods = await Food.find(baseFilter)
+        .sort({ isFirstClass: -1, usageCount: -1 })
         .skip(offset)
         .limit(limit)
-        .lean()
+        .lean<FoodLean[]>()
 
-      const total = await FoodItem.countDocuments(baseFilter)
-      return NextResponse.json({ foods: foods.map(f => ({ ...f, source: 'custom' })), total, offset, limit })
+      const total = await Food.countDocuments(baseFilter)
+      return NextResponse.json({
+        foods: foods.map(f => ({ ...flattenFoodForResponse(f), source: f.source || 'manual' })),
+        total,
+        offset,
+        limit,
+      })
     }
 
-    // --- 1. Custom foods (always first) ---
+    // --- 1. Our DB foods (always first) ---
 
     const customLimit = 5
 
     const textFilter = { ...baseFilter, $text: { $search: q } }
-    const textResults = await FoodItem.find(textFilter, { score: { $meta: 'textScore' } })
-      .sort({ score: { $meta: 'textScore' }, usageCount: -1 })
+    const textResults = await Food.find(textFilter, { score: { $meta: 'textScore' } })
+      .sort({ score: { $meta: 'textScore' }, isFirstClass: -1, usageCount: -1 })
       .limit(customLimit)
-      .lean()
+      .lean<FoodLean[]>()
 
     const regexFilter = {
       ...baseFilter,
       $or: [
         { name: { $regex: q, $options: 'i' } },
         { brand: { $regex: q, $options: 'i' } },
+        { aliases: { $regex: q, $options: 'i' } },
       ],
     }
-    const regexResults = await FoodItem.find(regexFilter)
-      .sort({ usageCount: -1 })
+    const regexResults = await Food.find(regexFilter)
+      .sort({ isFirstClass: -1, usageCount: -1 })
       .limit(customLimit)
-      .lean()
+      .lean<FoodLean[]>()
 
     const seenIds = new Set<string>()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,11 +118,17 @@ export async function GET(request: NextRequest) {
 
     for (const item of textResults) {
       const id = item._id.toString()
-      if (!seenIds.has(id)) { seenIds.add(id); customFoods.push({ ...item, source: 'custom' }) }
+      if (!seenIds.has(id)) {
+        seenIds.add(id)
+        customFoods.push({ ...flattenFoodForResponse(item), source: item.source || 'manual' })
+      }
     }
     for (const item of regexResults) {
       const id = item._id.toString()
-      if (!seenIds.has(id) && customFoods.length < customLimit) { seenIds.add(id); customFoods.push({ ...item, source: 'custom' }) }
+      if (!seenIds.has(id) && customFoods.length < customLimit) {
+        seenIds.add(id)
+        customFoods.push({ ...flattenFoodForResponse(item), source: item.source || 'manual' })
+      }
     }
 
     if (customOnly) {
@@ -127,8 +142,6 @@ export async function GET(request: NextRequest) {
     // --- 3. Open Food Facts (supplemental for packaged goods) ---
 
     let offFoods: ReturnType<typeof mapOffToFoodResult>[] = []
-    // Always query OFF — USDA covers whole foods well when its API key is set,
-    // but OFF is our main fallback and covers packaged/international products.
     try {
       const offCollection = mongoose.connection.db!.collection('openfoodfacts')
       const offFilter: Record<string, unknown> = { $text: { $search: q } }
@@ -145,7 +158,7 @@ export async function GET(request: NextRequest) {
       // OFF collection might not exist — fail gracefully
     }
 
-    // Combine: custom → USDA → OFF
+    // Combine: our DB → USDA → OFF
     // Ranking: word coverage (across name + brand) wins first, then name simplicity,
     // then whole-food type as tiebreaker.
     //   "blueberries"        → "Blueberries, raw" beats "Blueberry Pancakes"
@@ -207,9 +220,18 @@ export async function GET(request: NextRequest) {
 
     const combined = [...customFoods, ...usdaResults, ...offFoods]
     combined.sort((a, b) => {
-      // Source priority: custom (0) > usda (1) > off (2)
-      const srcA = a.source === 'custom' ? 0 : a.source === 'usda' ? 1 : 2
-      const srcB = b.source === 'custom' ? 0 : b.source === 'usda' ? 1 : 2
+      // Source priority: our DB (0) > usda (1) > off (2)
+      // Anything sourced from our Food collection (manual/usda/off-imported) ranks first.
+      const aFromOurDb = a.source !== 'usda' && a.source !== 'openfoodfacts'
+        ? true
+        // Imported foods that came from our DB will have an ObjectId _id (not "usda-..." / "off-...")
+        : typeof a._id !== 'string' || (!a._id.startsWith?.('usda-') && !a._id.startsWith?.('off-'))
+      const bFromOurDb = b.source !== 'usda' && b.source !== 'openfoodfacts'
+        ? true
+        : typeof b._id !== 'string' || (!b._id.startsWith?.('usda-') && !b._id.startsWith?.('off-'))
+
+      const srcA = aFromOurDb ? 0 : a.source === 'usda' ? 1 : 2
+      const srcB = bFromOurDb ? 0 : b.source === 'usda' ? 1 : 2
       if (srcA !== srcB) return srcA - srcB
       return relevanceScore(a.name, a.brand, a.dataType) - relevanceScore(b.name, b.brand, b.dataType)
     })
@@ -224,7 +246,7 @@ export async function GET(request: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// POST: Create a custom food item
+// POST: Create a custom food in our DB
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -236,23 +258,30 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    if (!body.name || !body.category || !body.nutrition) {
-      return NextResponse.json({ error: 'Missing required fields: name, category, nutrition' }, { status: 400 })
+    if (!body.name || !body.category) {
+      return NextResponse.json({ error: 'Missing required fields: name, category' }, { status: 400 })
     }
 
     await dbConnect()
 
-    const isAdmin = authResult.role === 'admin'
-    const foodItem = await FoodItem.create({
-      ...body,
-      createdBy: authResult.userId,
-      isVerified: isAdmin ? (body.isVerified ?? false) : false,
-      usageCount: isAdmin ? (body.usageCount ?? 0) : 0,
-    })
+    const { food, created } = await importManualFood(body, authResult.userId)
 
-    return NextResponse.json({ success: true, food: foodItem }, { status: 201 })
+    // Admins may upgrade isVerified / isFirstClass / usageCount
+    const isAdmin = authResult.role === 'admin'
+    if (isAdmin) {
+      const updates: Record<string, unknown> = {}
+      if (typeof body.isVerified === 'boolean') updates.isVerified = body.isVerified
+      if (typeof body.isFirstClass === 'boolean') updates.isFirstClass = body.isFirstClass
+      if (typeof body.usageCount === 'number') updates.usageCount = body.usageCount
+      if (Object.keys(updates).length > 0) {
+        await Food.updateOne({ _id: food._id }, { $set: updates })
+      }
+    }
+
+    return NextResponse.json({ success: true, food, created }, { status: created ? 201 : 200 })
   } catch (error) {
     console.error('Error creating food item:', error)
-    return NextResponse.json({ error: 'Failed to create food item' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : 'Failed to create food'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

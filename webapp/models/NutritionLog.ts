@@ -3,6 +3,8 @@ import mongoose, { Schema, Types } from 'mongoose'
 export interface IFoodEntry {
   id: string
   foodId?: Types.ObjectId | string
+  variantId?: Types.ObjectId | string
+  variantName?: string
   name: string
   brand?: string
   servingSize: number
@@ -70,7 +72,9 @@ const FoodEntryNutritionSchema = new Schema({
 
 const FoodEntrySchema = new Schema<IFoodEntry>({
   id: { type: String, required: true },
-  foodId: { type: Schema.Types.ObjectId, ref: 'FoodItem' },
+  foodId: { type: Schema.Types.ObjectId, ref: 'Food' },
+  variantId: { type: Schema.Types.ObjectId },
+  variantName: { type: String },
   name: { type: String, required: true },
   brand: { type: String },
   servingSize: { type: Number, required: true },

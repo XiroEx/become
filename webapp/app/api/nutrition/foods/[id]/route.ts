@@ -1,11 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
-import FoodItem from '@/models/FoodItem'
+import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { flattenFoodForResponse } from '@/lib/foodImport'
 
 // ---------------------------------------------------------------------------
-// DELETE: Remove a custom food item (only by creator or admin)
+// GET: Fetch a single Food by id (or slug). Returns full doc + variants.
+// ---------------------------------------------------------------------------
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+    await dbConnect()
+
+    const filter = mongoose.Types.ObjectId.isValid(id)
+      ? { _id: id }
+      : { slug: id }
+
+    const food = await Food.findOne(filter).lean<(import('@/models/Food').IFood & { _id: mongoose.Types.ObjectId }) | null>()
+    if (!food) {
+      return NextResponse.json({ error: 'Food not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ food: flattenFoodForResponse(food) })
+  } catch (error) {
+    console.error('Error fetching food:', error)
+    return NextResponse.json({ error: 'Failed to fetch food' }, { status: 500 })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DELETE: Remove a Food (only by creator or admin)
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
@@ -25,7 +59,7 @@ export async function DELETE(
 
     await dbConnect()
 
-    const food = await FoodItem.findById(id)
+    const food = await Food.findById(id)
     if (!food) {
       return NextResponse.json({ error: 'Food not found' }, { status: 404 })
     }
@@ -37,16 +71,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await FoodItem.deleteOne({ _id: id })
+    await Food.deleteOne({ _id: id })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting food item:', error)
-    return NextResponse.json({ error: 'Failed to delete food item' }, { status: 500 })
+    console.error('Error deleting food:', error)
+    return NextResponse.json({ error: 'Failed to delete food' }, { status: 500 })
   }
 }
 
 // ---------------------------------------------------------------------------
-// PATCH: Update a custom food item (only by creator or admin)
+// PATCH: Update a Food (only by creator or admin)
 // ---------------------------------------------------------------------------
 
 export async function PATCH(
@@ -66,7 +100,7 @@ export async function PATCH(
 
     await dbConnect()
 
-    const food = await FoodItem.findById(id)
+    const food = await Food.findById(id)
     if (!food) {
       return NextResponse.json({ error: 'Food not found' }, { status: 404 })
     }
@@ -80,17 +114,22 @@ export async function PATCH(
 
     const body = await request.json()
 
-    // Admins can set isVerified and usageCount; regular users cannot
+    // Admins can set verification/usage flags; regular users cannot
     if (!isAdmin) {
       delete body.isVerified
+      delete body.isFirstClass
       delete body.usageCount
       delete body.createdBy
+      delete body.source
+      delete body.externalId
+      delete body.externalDataType
+      delete body.slug
     }
 
-    const updated = await FoodItem.findByIdAndUpdate(id, { $set: body }, { new: true })
+    const updated = await Food.findByIdAndUpdate(id, { $set: body }, { new: true })
     return NextResponse.json({ success: true, food: updated })
   } catch (error) {
-    console.error('Error updating food item:', error)
-    return NextResponse.json({ error: 'Failed to update food item' }, { status: 500 })
+    console.error('Error updating food:', error)
+    return NextResponse.json({ error: 'Failed to update food' }, { status: 500 })
   }
 }
