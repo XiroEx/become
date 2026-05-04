@@ -121,27 +121,45 @@ export async function GET(request: NextRequest) {
     // --- 3. Open Food Facts (supplemental for packaged goods) ---
 
     let offFoods: ReturnType<typeof mapOffToFoodResult>[] = []
-    // Only query OFF if USDA returned few results
-    if (usdaResults.length < 10) {
-      try {
-        const offCollection = mongoose.connection.db!.collection('openfoodfacts')
-        const offFilter: Record<string, unknown> = { $text: { $search: q } }
-        if (category) offFilter.category = category
+    // Always query OFF — USDA covers whole foods well when its API key is set,
+    // but OFF is our main fallback and covers packaged/international products.
+    try {
+      const offCollection = mongoose.connection.db!.collection('openfoodfacts')
+      const offFilter: Record<string, unknown> = { $text: { $search: q } }
+      if (category) offFilter.category = category
 
-        const offResults = await offCollection
-          .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
-          .sort({ score: { $meta: 'textScore' } })
-          .limit(10)
-          .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
+      const offResults = await offCollection
+        .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
+        .sort({ score: { $meta: 'textScore' } })
+        .limit(15)
+        .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
 
-        offFoods = offResults.map(mapOffToFoodResult)
-      } catch {
-        // OFF collection might not exist — fail gracefully
-      }
+      offFoods = offResults.map(mapOffToFoodResult)
+    } catch {
+      // OFF collection might not exist — fail gracefully
     }
 
-    // Combine: custom → USDA → OFF
+    // Combine: custom → USDA (Foundation/SR Legacy first) → OFF
+    // Within each source tier, sort so shorter/exact names rank above complex ones,
+    // e.g. "Banana" beats "Banana Greek Yogurt, banana" for query "banana".
+    const qLower = q.toLowerCase().trim()
+    function nameScore(name: string): number {
+      const n = name.toLowerCase()
+      if (n === qLower) return 0                          // exact match
+      if (n.startsWith(qLower + ',') || n.startsWith(qLower + ' ') || n === qLower) return 1
+      return 2 + n.split(/\s+/).length                    // longer names rank lower
+    }
+
     const combined = [...customFoods, ...usdaResults, ...offFoods]
+    combined.sort((a, b) => {
+      // Preserve source priority: custom (0) > usda (1) > off (2)
+      const srcA = a.source === 'custom' ? 0 : a.source === 'usda' ? 1 : 2
+      const srcB = b.source === 'custom' ? 0 : b.source === 'usda' ? 1 : 2
+      if (srcA !== srcB) return srcA - srcB
+      // Within same source, prefer simpler / more exact names
+      return nameScore(a.name) - nameScore(b.name)
+    })
+
     const paged = combined.slice(offset, offset + limit)
 
     return NextResponse.json({ foods: paged, total: combined.length, offset, limit })
