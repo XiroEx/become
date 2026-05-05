@@ -205,18 +205,28 @@ function NutritionPageInner() {
     init()
   }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags])
 
-  // ── Visible tags (defaults always; custom tags w/ content; session-added tags) ─
+  // ── Visible tags ──────────────────────────────────────────────────────────────
+  // Only show tags that have content today, plus any session-added empty tags.
+  // Empty default sections (breakfast/lunch/etc with no entries) are hidden so
+  // the page isn't dominated by stub headers — the empty-state CTA invites the
+  // first log instead.
 
   const visibleTags = useMemo<string[]>(() => {
+    const defaultsWithContent: string[] = []
     const customTagsToday = new Set<string>()
     for (const log of logs) {
-      for (const t of log.tags ?? []) {
-        const norm = String(t).toLowerCase()
-        if (!DEFAULT_TAGS.includes(norm)) customTagsToday.add(norm)
+      const tags = (log.tags ?? []).map(t => String(t).toLowerCase())
+      const effective = tags.length === 0 ? ['snack'] : tags
+      for (const t of effective) {
+        if (DEFAULT_TAGS.includes(t)) {
+          if (!defaultsWithContent.includes(t)) defaultsWithContent.push(t)
+        } else {
+          customTagsToday.add(t)
+        }
       }
     }
-    // Defaults first, then sorted custom tags-with-content, then session tags.
-    const out: string[] = [...DEFAULT_TAGS]
+    // Defaults preserved in canonical order, then custom-with-content sorted, then session-added.
+    const out: string[] = DEFAULT_TAGS.filter(t => defaultsWithContent.includes(t))
     const customSorted = Array.from(customTagsToday).sort()
     for (const t of customSorted) if (!out.includes(t)) out.push(t)
     for (const t of sessionTags) if (!out.includes(t)) out.push(t)
@@ -513,6 +523,37 @@ function NutritionPageInner() {
           carbs={{ current: totalCarbs, goal: goals.carbs }}
           fats={{ current: totalFats, goal: goals.fats }}
         />
+
+        {/* Empty state — nothing logged today yet */}
+        {visibleTags.length === 0 && quickAdds.length === 0 && (
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <UtensilsCrossed className="h-6 w-6 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-900 dark:text-white">Nothing logged yet</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Add your first food of the day to start tracking.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                onClick={() => openFoodSearch('breakfast', false)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                <Plus className="h-4 w-4" />
+                Add food
+              </button>
+              <Link
+                href="/dashboard/meals"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                <ChefHat className="h-4 w-4" />
+                Browse meals
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Tag Sections */}
         {visibleTags.map(tag => (
