@@ -161,9 +161,15 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
   const candidateGrams = parsedGrams ?? off.serving_quantity
   const actualGrams = candidateGrams && candidateGrams >= 5 ? candidateGrams : null
 
+  // Preserve the source unit when it's clearly liquid. ml ≠ g for non-water liquids
+  // (oils ~0.92 g/ml, honey ~1.4 g/ml). For water-like liquids the diff is <5%, but
+  // labeling alternates correctly avoids misleading users.
+  const isLiquid = off.serving_unit === 'ml' || /\bml\b|millilitre/i.test(off.serving_size || '')
+  const unit: ServingUnit = isLiquid ? 'ml' : 'g'
+
   const alternateServings: { label: string; multiplier: number }[] = []
   if (actualGrams && actualGrams !== 100) {
-    const label = off.serving_size || `${Math.round(actualGrams)}${off.serving_unit || 'g'}`
+    const label = off.serving_size || `${Math.round(actualGrams)} ${unit}`
     alternateServings.push({ label, multiplier: actualGrams / 100 })
   }
 
@@ -171,7 +177,7 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
     name: 'Default',
     isDefault: true,
     servingSize: 100,
-    servingUnit: 'g',
+    servingUnit: unit,
     displayLabel: actualGrams ? off.serving_size || undefined : undefined,
     alternateServings,
     nutrition,

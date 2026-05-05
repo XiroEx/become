@@ -147,8 +147,9 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
             : undefined,
         }
 
+        const unitLabel = servingUnit === 'ml' ? 'ml' : 'g'
         const alternateServings: { label: string; multiplier: number }[] = []
-        if (servingSize !== 100) alternateServings.push({ label: '100 g', multiplier: 100 / servingSize })
+        if (servingSize !== 100) alternateServings.push({ label: `100 ${unitLabel}`, multiplier: 100 / servingSize })
 
         return {
           _id: `usda-${food.fdcId}`,
@@ -213,9 +214,10 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
   // householdServingFullText is the human label for the DEFAULT serving (e.g. "1 cup"),
   // so it goes on displayLabel — NOT into alternateServings (where it would inherit
   // the wrong multiplier and silently compute the wrong macros).
+  const unitLabel = servingUnit === 'ml' ? 'ml' : 'g'
   const alternateServings: { label: string; multiplier: number }[] = []
   if (servingSize !== 100) {
-    alternateServings.push({ label: '100 g', multiplier: 100 / servingSize })
+    alternateServings.push({ label: `100 ${unitLabel}`, multiplier: 100 / servingSize })
   }
 
   return {

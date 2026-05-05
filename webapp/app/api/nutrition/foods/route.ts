@@ -45,9 +45,13 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
   const candidateGrams = parsedGrams ?? off.serving_quantity
   const actualGrams = candidateGrams && candidateGrams >= 5 ? candidateGrams : null
 
+  // Preserve the source unit when liquid — ml ≠ g (oils ~0.92, honey ~1.4).
+  const isLiquid = off.serving_unit === 'ml' || /\bml\b|millilitre/i.test(off.serving_size || '')
+  const unit: 'g' | 'ml' = isLiquid ? 'ml' : 'g'
+
   const alternateServings: { label: string; multiplier: number }[] = []
   if (actualGrams && actualGrams !== 100) {
-    const label = off.serving_size || `${Math.round(actualGrams)}${off.serving_unit || 'g'}`
+    const label = off.serving_size || `${Math.round(actualGrams)} ${unit}`
     alternateServings.push({ label, multiplier: actualGrams / 100 })
   }
 
@@ -57,7 +61,7 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
     brand: off.brands || undefined,
     category: off.category || 'Other',
     servingSize: 100,
-    servingUnit: 'g' as const,
+    servingUnit: unit,
     displayLabel: actualGrams ? off.serving_size || undefined : undefined,
     alternateServings,
     nutrition,

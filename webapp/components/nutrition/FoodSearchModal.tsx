@@ -98,33 +98,54 @@ const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'frequent', label: 'Frequent', Icon: Star },
 ]
 
-// ── Time picker helpers ──────────────────────────────────────────────────────
+// ── Date+time picker helpers ─────────────────────────────────────────────────
 
-// Format a Date to "HH:mm" in the user's local timezone — matches the value
-// shape <input type="time"> emits.
-function dateToTimeInputValue(d: Date): string {
-  const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
-  return `${h}:${m}`
+// Format a Date to "yyyy-MM-ddTHH:mm" in local timezone — matches the value
+// shape <input type="datetime-local"> emits.
+function dateToDateTimeInputValue(d: Date): string {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
 }
 
-// Render "HH:mm" as a friendly "h:mm AM/PM".
-function formatTimeDisplay(timeStr: string): string {
-  const [hStr, mStr] = timeStr.split(':')
-  const h = Number(hStr)
-  const m = Number(mStr)
-  if (Number.isNaN(h) || Number.isNaN(m)) return timeStr
+// Combine a viewed-day Date with an "HH:mm" string — used as the default
+// datetime when the user first opens the picker.
+function combineDateAndTime(base: Date, timeOnly: { hours: number; minutes: number }): Date {
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), timeOnly.hours, timeOnly.minutes, 0, 0)
+}
+
+// Render datetime-local "yyyy-MM-ddTHH:mm" as a friendly label.
+// Same day → "11:30 PM". Yesterday/tomorrow → "Yesterday 11:30 PM". Else → "May 2, 11:30 PM".
+function formatDateTimeDisplay(value: string): string {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!m) return value
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]))
+  const h = Number(m[4])
+  const mi = Number(m[5])
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 === 0 ? 12 : h % 12
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+  const time = `${h12}:${String(mi).padStart(2, '0')} ${ampm}`
+
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.round((startOfDate.getTime() - startOfToday.getTime()) / 86_400_000)
+
+  if (diffDays === 0) return time
+  if (diffDays === -1) return `Yesterday ${time}`
+  if (diffDays === 1) return `Tomorrow ${time}`
+  const monthName = date.toLocaleString('en-US', { month: 'short' })
+  return `${monthName} ${date.getDate()}, ${time}`
 }
 
-// Combine a base date (year/month/day) + "HH:mm" into an ISO string in local TZ.
-function buildLocalIsoFromTime(base: Date, timeStr: string): string {
-  const [hStr, mStr] = timeStr.split(':')
-  const h = Number(hStr)
-  const m = Number(mStr)
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m, 0, 0)
+// Convert a "yyyy-MM-ddTHH:mm" datetime-local string to a UTC ISO string in local TZ.
+function buildLocalIsoFromDateTime(value: string): string {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!m) return new Date().toISOString()
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), 0, 0)
   return d.toISOString()
 }
 
@@ -157,10 +178,10 @@ export default function FoodSearchModal({
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
-  // Custom logged-at time in "HH:mm" — null means "Now". The picker only sets
-  // the time-of-day; the date comes from `viewedDate` (or today).
+  // Custom logged-at as "yyyy-MM-ddTHH:mm" (datetime-local input shape) — null
+  // means "Now". Lets users backdate to any day, including yesterday / earlier.
   const [customTime, setCustomTime] = useState<string | null>(null)
-  // When true, render the inline <input type="time"> instead of just the pill.
+  // When true, render the inline <input type="datetime-local"> instead of just the pill.
   const [timeEditOpen, setTimeEditOpen] = useState(false)
 
   // Resolve the active variant for a food + variant index.
@@ -660,14 +681,12 @@ export default function FoodSearchModal({
         }
       }
 
-      // Compute custom loggedAt only when the user explicitly picked a time.
-      // The date portion comes from viewedDate (the day they're looking at);
-      // the time portion is what they set in the picker. When customTime is
-      // null we pass undefined so the server defaults to "now".
+      // Compute custom loggedAt only when the user explicitly picked a date+time.
+      // customTime is now a full "yyyy-MM-ddTHH:mm" string so the user can backdate
+      // to yesterday or any earlier day. When null, the server defaults to "now".
       let loggedAtIso: string | undefined
       if (customTime) {
-        const baseDate = viewedDate ?? new Date()
-        loggedAtIso = buildLocalIsoFromTime(baseDate, customTime)
+        loggedAtIso = buildLocalIsoFromDateTime(customTime)
       }
 
       onSelectFood(
@@ -1202,16 +1221,21 @@ export default function FoodSearchModal({
                                   </p>
                                 </div>
                               </div>
-                              {/* Time picker — defaults to "Now"; tap to set a custom time. */}
+                              {/* When picker — defaults to "Now"; tap to set a custom date+time
+                                  (lets users backdate to yesterday or any prior day). */}
                               <div className="mt-2.5 flex items-center gap-1.5">
                                 {!timeEditOpen ? (
                                   <button
                                     type="button"
                                     onClick={() => {
                                       setTimeEditOpen(true)
-                                      // Pre-fill the input with current local time the first time the user opens it.
+                                      // Default the picker to the viewed day at the current local time.
+                                      // If the user is on "today", this is just now. If they're viewing a
+                                      // past date, it pre-fills to that date at the current clock time.
                                       if (!customTime) {
-                                        setCustomTime(dateToTimeInputValue(new Date()))
+                                        const now = new Date()
+                                        const base = viewedDate ?? now
+                                        setCustomTime(dateToDateTimeInputValue(combineDateAndTime(base, { hours: now.getHours(), minutes: now.getMinutes() })))
                                       }
                                     }}
                                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
@@ -1219,11 +1243,11 @@ export default function FoodSearchModal({
                                         ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
                                         : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
                                     }`}
-                                    aria-label={customTime ? `Logged time ${formatTimeDisplay(customTime)}, tap to change` : 'Logged time: now, tap to set a custom time'}
+                                    aria-label={customTime ? `Logged at ${formatDateTimeDisplay(customTime)}, tap to change` : 'Logged time: now, tap to set a custom date and time'}
                                   >
                                     <Clock className="h-3 w-3" />
                                     <span className="tabular-nums">
-                                      {customTime ? formatTimeDisplay(customTime) : 'Now'}
+                                      {customTime ? formatDateTimeDisplay(customTime) : 'Now'}
                                     </span>
                                     {customTime && (
                                       <span
@@ -1253,10 +1277,11 @@ export default function FoodSearchModal({
                                   <div className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 dark:bg-blue-900/40">
                                     <Clock className="h-3 w-3 text-blue-700 dark:text-blue-200" />
                                     <input
-                                      type="time"
-                                      value={customTime ?? dateToTimeInputValue(new Date())}
+                                      type="datetime-local"
+                                      value={customTime ?? dateToDateTimeInputValue(new Date())}
                                       onChange={(e) => setCustomTime(e.target.value || null)}
                                       onBlur={() => setTimeEditOpen(false)}
+                                      max={dateToDateTimeInputValue(new Date())}
                                       autoFocus
                                       className="bg-transparent text-[11px] font-semibold text-blue-700 tabular-nums focus:outline-none dark:text-blue-200"
                                     />
