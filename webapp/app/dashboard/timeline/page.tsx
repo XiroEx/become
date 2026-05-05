@@ -1274,7 +1274,7 @@ function TimelineLogCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.22 }}
-      className={`overflow-hidden rounded-xl border border-l-[6px] border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${tagBorderClass(accent)} ${compact ? 'shadow-none' : ''}`}
+      className={`overflow-hidden rounded-xl border-y border-r border-l-[6px] border-t-zinc-200 border-r-zinc-200 border-b-zinc-200 bg-white shadow-sm dark:border-t-zinc-800 dark:border-r-zinc-800 dark:border-b-zinc-800 dark:bg-zinc-900 ${tagBorderClass(accent)} ${compact ? 'shadow-none' : ''}`}
     >
       {/* Header row — clickable to expand/collapse */}
       <button
