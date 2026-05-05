@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, X, Save, ArrowLeft, ChevronDown, AlertCircle, Loader2, ChefHat } from 'lucide-react'
+import { Plus, Trash2, X, Save, ArrowLeft, ChevronDown, AlertCircle, Loader2, ChefHat, ImagePlus, ImageIcon } from 'lucide-react'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import { resizeImageToBlob } from '@/lib/imageResize'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem, IMealRecipe } from '@/models/Meal'
 
@@ -35,6 +36,16 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
 
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
+  const [imageUrl, setImageUrl] = useState<string | undefined>(initial?.imageUrl)
+  // Local preview (objectURL) shown while the user is picking a new image
+  // before we POST it to the server. Cleared once the upload succeeds.
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  // Pending File object held until the meal is saved (only relevant in CREATE
+  // mode — we need a mealId before we can upload).
+  const [pendingImageBlob, setPendingImageBlob] = useState<Blob | null>(null)
+  const [imageBusy, setImageBusy] = useState(false)
+  const [imageError, setImageError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
   const [items, setItems] = useState<(IMealItem & { _id?: string })[]>(initial?.items ?? [])
   const [hasRecipe, setHasRecipe] = useState<boolean>(!!initial?.recipe)
@@ -62,6 +73,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
     if (initial) {
       setName(initial.name)
       setDescription(initial.description ?? '')
+      setImageUrl(initial.imageUrl)
       setTags(initial.tags ?? [])
       setItems(initial.items ?? [])
       setHasRecipe(!!initial.recipe)
@@ -71,6 +83,13 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       setRecipeServings(initial.recipe?.servings != null ? String(initial.recipe.servings) : '1')
     }
   }, [initial])
+
+  // Free objectURL previews on unmount / when replaced.
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview)
+    }
+  }, [imagePreview])
 
   const totalCalories = useMemo(() => {
     return Math.round(items.reduce((s, it) => s + (it.nutrition?.calories ?? 0) * (it.servings ?? 1), 0))
@@ -141,6 +160,97 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
     setItems(prev => prev.filter((_, i) => i !== idx))
   }
 
+  // ---------------------------------------------------------------------------
+  // Image handling
+  //
+  // EDIT mode: pick → resize → POST immediately to /api/meals/[id]/image →
+  //            update imageUrl from response.
+  // CREATE mode: pick → resize → hold the resized blob until the meal exists
+  //              (we need a mealId to upload). The blob is uploaded right after
+  //              the create succeeds, then we navigate.
+  // ---------------------------------------------------------------------------
+
+  const uploadImageBlob = async (mealIdToUpload: string, blob: Blob): Promise<string | null> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const headers: HeadersInit = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const fd = new FormData()
+    fd.append('image', blob, 'meal.jpg')
+    const res = await fetch(`/api/meals/${mealIdToUpload}/image`, {
+      method: 'POST',
+      headers,
+      body: fd,
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      throw new Error(d?.error || 'Failed to upload image')
+    }
+    const data = await res.json()
+    return typeof data?.imageUrl === 'string' ? data.imageUrl : null
+  }
+
+  const handlePickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking the same file
+    if (!file) return
+    setImageError(null)
+    setImageBusy(true)
+    try {
+      const blob = await resizeImageToBlob(file, { maxDim: 1600, quality: 0.82 })
+      // Build a local preview immediately for UX feedback
+      if (imagePreview) URL.revokeObjectURL(imagePreview)
+      const previewUrl = URL.createObjectURL(blob)
+      setImagePreview(previewUrl)
+
+      if (mealId) {
+        // Edit mode — upload right away.
+        const newUrl = await uploadImageBlob(mealId, blob)
+        if (newUrl) {
+          setImageUrl(newUrl)
+          // Now that the server has the image, drop the local preview.
+          URL.revokeObjectURL(previewUrl)
+          setImagePreview(null)
+        }
+      } else {
+        // Create mode — hold the blob until create completes.
+        setPendingImageBlob(blob)
+      }
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Failed to process image')
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
+  const handleRemoveImage = async () => {
+    setImageError(null)
+    if (mealId && imageUrl) {
+      // Delete on the server.
+      setImageBusy(true)
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+        const headers: HeadersInit = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch(`/api/meals/${mealId}/image`, { method: 'DELETE', headers })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          throw new Error(d?.error || 'Failed to remove image')
+        }
+        setImageUrl(undefined)
+      } catch (err) {
+        setImageError(err instanceof Error ? err.message : 'Failed to remove image')
+      } finally {
+        setImageBusy(false)
+      }
+    }
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview)
+      setImagePreview(null)
+    }
+    setPendingImageBlob(null)
+    if (!mealId) setImageUrl(undefined)
+  }
+
   const handleSave = async () => {
     setError(null)
     if (!name.trim()) {
@@ -192,6 +302,17 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       if (res.ok) {
         const data = await res.json()
         const id = data?.meal?._id ? String(data.meal._id) : mealId
+
+        // If we have a pending image (CREATE flow), upload it now that we
+        // have a mealId. Errors here are non-fatal — the meal saved fine.
+        if (id && pendingImageBlob) {
+          try {
+            await uploadImageBlob(id, pendingImageBlob)
+          } catch (err) {
+            console.warn('[MealForm] image upload after create failed', err)
+          }
+        }
+
         if (id) {
           router.push(`/dashboard/meals/${id}`)
         } else {
@@ -224,6 +345,76 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             {mealId ? 'Edit Meal' : 'New Meal'}
           </h1>
           <div className="w-16" /> {/* spacer */}
+        </div>
+
+        {/* Image uploader */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Photo <span className="text-zinc-400">(optional)</span>
+          </label>
+          <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+            {(imagePreview || imageUrl) ? (
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imagePreview ?? imageUrl}
+                  alt="Meal preview"
+                  className="h-40 w-full object-cover sm:h-48"
+                />
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-gradient-to-t from-black/60 to-transparent p-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={imageBusy}
+                    className="rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-zinc-900 shadow-sm hover:bg-white disabled:opacity-50"
+                  >
+                    {imageBusy ? 'Uploading…' : 'Replace'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    disabled={imageBusy}
+                    className="rounded-md bg-red-600/90 px-2 py-1 text-xs font-semibold text-white shadow-sm hover:bg-red-600 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={imageBusy}
+                className="flex h-32 w-full flex-col items-center justify-center gap-1 text-zinc-400 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-500 dark:hover:bg-zinc-800 sm:h-40"
+              >
+                {imageBusy ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  <ImagePlus className="h-6 w-6" />
+                )}
+                <span className="text-xs font-medium">
+                  {imageBusy ? 'Processing…' : 'Tap to add a photo'}
+                </span>
+                <span className="text-[10px] text-zinc-400">
+                  <ImageIcon className="mr-0.5 inline h-2.5 w-2.5" />
+                  Camera or library
+                </span>
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePickImage}
+              className="hidden"
+            />
+          </div>
+          {imageError && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+              <AlertCircle className="h-3 w-3" />
+              {imageError}
+            </p>
+          )}
         </div>
 
         {/* Name */}

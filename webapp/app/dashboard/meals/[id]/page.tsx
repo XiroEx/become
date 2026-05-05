@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
+import MealApplySheet from '@/components/meals/MealApplySheet'
 import {
   ArrowLeft,
   Pencil,
@@ -17,6 +18,14 @@ import {
   Users,
 } from 'lucide-react'
 import type { IMeal, IMealItem, IMealRecipe } from '@/models/Meal'
+
+function getDefaultTagForNow(): string {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 11) return 'breakfast'
+  if (h >= 11 && h < 14) return 'lunch'
+  if (h >= 17 && h < 21) return 'dinner'
+  return 'snack'
+}
 
 interface MealResponse extends Omit<IMeal, '_id' | 'createdBy'> {
   _id: string
@@ -46,12 +55,14 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
   const [meal, setMeal] = useState<MealResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [applying, setApplying] = useState(false)
-  const [applied, setApplied] = useState(false)
+  const [applySheetOpen, setApplySheetOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
+    defaults: [], userTags: [],
+  })
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -93,39 +104,26 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [getHeaders])
 
+  const fetchTags = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tags', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setTagsResp({
+          defaults: Array.isArray(data.defaults) ? data.defaults : [],
+          userTags: Array.isArray(data.userTags) ? data.userTags : [],
+        })
+      }
+    } catch { /* non-fatal */ }
+  }, [getHeaders])
+
   useEffect(() => {
     fetchMeal()
     fetchMe()
-  }, [fetchMeal, fetchMe])
+    fetchTags()
+  }, [fetchMeal, fetchMe, fetchTags])
 
   const isOwner = Boolean(currentUserId && meal?.createdBy && String(meal.createdBy) === currentUserId)
-
-  const handleApply = async () => {
-    if (!meal || applying) return
-    setApplying(true)
-    try {
-      const res = await fetch(`/api/meals/${meal._id}/log`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
-      })
-      if (res.ok) {
-        setApplied(true)
-        setToast('Logged to today')
-        setTimeout(() => {
-          router.push('/dashboard/nutrition')
-        }, 700)
-      } else {
-        setToast('Failed to log meal.')
-        setTimeout(() => setToast(null), 3000)
-      }
-    } catch {
-      setToast('Network error.')
-      setTimeout(() => setToast(null), 3000)
-    } finally {
-      setApplying(false)
-    }
-  }
 
   const handleDelete = async () => {
     if (!meal) return
@@ -218,7 +216,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           // eslint-disable-next-line @next/next/no-img-element
           <img src={meal.imageUrl} alt={meal.name} className="h-40 w-full object-cover" />
         ) : (
-          <div className="flex h-32 w-full items-center justify-center bg-zinc-100 text-zinc-300 dark:bg-zinc-800 dark:text-zinc-600">
+          <div className="flex h-32 w-full items-center justify-center bg-gradient-to-br from-amber-100 via-orange-100 to-rose-100 text-amber-600/70 dark:from-amber-900/30 dark:via-orange-900/30 dark:to-rose-900/30 dark:text-amber-200/60">
             <ChefHat className="h-10 w-10" />
           </div>
         )}
@@ -321,25 +319,34 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
       {/* Apply button */}
       <div className="sticky bottom-2 left-0 right-0 z-10 rounded-xl border border-zinc-200 bg-white/90 p-2 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
         <button
-          onClick={handleApply}
-          disabled={applying || applied}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          onClick={() => setApplySheetOpen(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
-          {applying ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Logging…
-            </>
-          ) : applied ? (
-            <>
-              <Check className="h-4 w-4" />
-              Logged!
-            </>
-          ) : (
-            'Apply to today'
-          )}
+          Apply to log
         </button>
       </div>
+
+      {/* Apply sheet — portion + tag + time */}
+      <MealApplySheet
+        isOpen={applySheetOpen}
+        meal={meal ? {
+          _id: meal._id,
+          name: meal.name,
+          imageUrl: meal.imageUrl,
+          totalNutrition: meal.totalNutrition,
+          recipe: meal.recipe ? { servings: meal.recipe.servings } : undefined,
+          tags: meal.tags,
+        } : null}
+        defaultTag={getDefaultTagForNow()}
+        availableTags={tagsResp}
+        onClose={() => setApplySheetOpen(false)}
+        onApplied={() => {
+          setToast('Logged to your day')
+          setTimeout(() => {
+            router.push('/dashboard/nutrition')
+          }, 600)
+        }}
+      />
 
       {/* Delete confirm overlay */}
       {confirmDelete && (

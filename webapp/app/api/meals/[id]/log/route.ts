@@ -6,13 +6,21 @@ import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
 
 // POST: apply this meal as a MealLog for the current user.
-// Body: { loggedAt?, tags?, notes? }
+// Body: { loggedAt?, tags?, notes?, portion? }
 //
 // Tag-merge policy: client-supplied `tags` are MERGED with the meal's own
 // tags (deduped). Pass an explicit empty array `[]` to omit the meal's tags
 // — but the meal's tags are still appended unless `replaceTags: true` is set.
 // We default to merge because users typically want both context (meal name's
 // tags) and the time-of-day tag they're logging it as.
+//
+// Portion: a numeric multiplier applied to every item's `servings` before the
+// log is created. Defaults to 1. Sanity-clamped to [0.05, 20] — the lower
+// bound prevents accidental zero-calorie entries; the upper bound is well
+// beyond any realistic recipe scaling.
+//   - Recipe with `recipe.servings = 4`, user wants "1 of 4" → portion=0.25.
+//   - Standalone meal, user wants "double it" → portion=2.
+// MealLog's pre-save hook recomputes totalNutrition from the scaled servings.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -48,7 +56,21 @@ export async function POST(
     const mealTags: string[] = Array.isArray(meal.tags) ? meal.tags : []
     const mergedTags = replaceTags ? clientTags : Array.from(new Set([...mealTags, ...clientTags]))
 
-    // Snapshot items — clone without _id so each log gets its own item ids.
+    // Resolve portion multiplier. Defaults to 1. Clamp to a sane range so a
+    // typo (e.g. portion=0 or portion=1000) can't ghost-log nothing or scale
+    // calories absurdly.
+    let portion = 1
+    if (body.portion != null) {
+      const n = Number(body.portion)
+      if (!Number.isFinite(n) || n <= 0) {
+        return NextResponse.json({ error: 'Invalid portion' }, { status: 400 })
+      }
+      portion = Math.min(20, Math.max(0.05, n))
+    }
+
+    // Snapshot items — clone without _id so each log gets its own item ids,
+    // and scale servings by the portion multiplier. The MealLog's pre-save
+    // hook will recompute totalNutrition from these scaled servings.
     const sourceItems: IMealItem[] = (meal.items as IMealItem[] | undefined) || []
     const items = sourceItems.map(item => ({
       foodId: item.foodId,
@@ -58,7 +80,7 @@ export async function POST(
       brand: item.brand,
       servingSize: item.servingSize,
       servingUnit: item.servingUnit,
-      servings: item.servings,
+      servings: (item.servings ?? 1) * portion,
       nutrition: item.nutrition,
     }))
 

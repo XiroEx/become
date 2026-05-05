@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
 import MealCard from '@/components/meals/MealCard'
+import MealApplySheet from '@/components/meals/MealApplySheet'
 import SavedFoodCard from '@/components/meals/SavedFoodCard'
 import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle, Bookmark } from 'lucide-react'
 
@@ -21,6 +22,7 @@ interface MealLite {
     carbs: number
     fats: number
   }
+  recipe?: { servings?: number }
   createdBy?: string
   isVerified?: boolean
 }
@@ -81,7 +83,7 @@ export default function MealsPage() {
     defaults: [], userTags: [],
   })
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [applying, setApplying] = useState<string | null>(null)
+  const [applyTargetMeal, setApplyTargetMeal] = useState<MealLite | null>(null)
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
   const [loggingFoodId, setLoggingFoodId] = useState<string | null>(null)
   const [loggedFoodIds, setLoggedFoodIds] = useState<Set<string>>(new Set())
@@ -270,39 +272,25 @@ export default function MealsPage() {
     )
   }, [savedFoods, debouncedSearch])
 
-  const handleApply = async (mealId: string) => {
-    if (applying) return
-    setApplying(mealId)
-    try {
-      const res = await fetch(`/api/meals/${mealId}/log`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+  // Open the Apply sheet for a given meal. The sheet handles the actual POST.
+  const handleApplyOpen = (mealId: string) => {
+    const m = meals.find(x => x._id === mealId)
+    if (m) setApplyTargetMeal(m)
+  }
+
+  const handleApplied = (mealId: string) => {
+    setAppliedIds(prev => {
+      const next = new Set(prev)
+      next.add(mealId)
+      return next
+    })
+    setTimeout(() => {
+      setAppliedIds(prev => {
+        const next = new Set(prev)
+        next.delete(mealId)
+        return next
       })
-      if (res.ok) {
-        setAppliedIds(prev => {
-          const next = new Set(prev)
-          next.add(mealId)
-          return next
-        })
-        // Auto-clear the "Logged!" indicator after a moment
-        setTimeout(() => {
-          setAppliedIds(prev => {
-            const next = new Set(prev)
-            next.delete(mealId)
-            return next
-          })
-        }, 2200)
-      } else {
-        setErrorToast('Failed to log meal. Please try again.')
-        setTimeout(() => setErrorToast(null), 3500)
-      }
-    } catch {
-      setErrorToast('Network error.')
-      setTimeout(() => setErrorToast(null), 3500)
-    } finally {
-      setApplying(null)
-    }
+    }, 2200)
   }
 
   return (
@@ -361,6 +349,19 @@ export default function MealsPage() {
           </button>
         )}
       </div>
+
+      {/* New custom food button — My Foods tab */}
+      {tab === 'foods' && (
+        <div className="flex justify-end">
+          <Link
+            href="/dashboard/foods/new"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New custom food
+          </Link>
+        </div>
+      )}
 
       {/* Tag filter chips — Meals tab only */}
       {tab === 'meals' && allTags.length > 0 && (
@@ -435,9 +436,9 @@ export default function MealsPage() {
               itemCount={meal.items?.length ?? 0}
               isOwner={Boolean(currentUserId && meal.createdBy && String(meal.createdBy) === currentUserId)}
               isVerified={meal.isVerified}
-              applying={applying === meal._id}
+              applying={false}
               applied={appliedIds.has(meal._id)}
-              onApply={() => handleApply(meal._id)}
+              onApply={() => handleApplyOpen(meal._id)}
             />
           ))}
         </div>
@@ -514,6 +515,25 @@ export default function MealsPage() {
           {errorToast}
         </motion.div>
       )}
+      {/* Apply sheet — portion + tag + time */}
+      <MealApplySheet
+        isOpen={!!applyTargetMeal}
+        meal={applyTargetMeal ? {
+          _id: applyTargetMeal._id,
+          name: applyTargetMeal.name,
+          imageUrl: applyTargetMeal.imageUrl,
+          totalNutrition: applyTargetMeal.totalNutrition,
+          recipe: applyTargetMeal.recipe ? { servings: applyTargetMeal.recipe.servings } : undefined,
+          tags: applyTargetMeal.tags,
+        } : null}
+        defaultTag={getDefaultTagForNow()}
+        availableTags={tagsResp}
+        onClose={() => setApplyTargetMeal(null)}
+        onApplied={() => {
+          if (applyTargetMeal) handleApplied(applyTargetMeal._id)
+        }}
+      />
+
       {/* Hidden TagIcon import keeps it available if we extend the empty state later */}
       <span className="hidden"><TagIcon className="h-0 w-0" /></span>
     </PageTransition>

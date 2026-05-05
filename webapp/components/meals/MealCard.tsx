@@ -65,12 +65,12 @@ export default function MealCard({
     >
       <div className="flex">
         {/* Thumbnail / icon */}
-        <div className="relative h-24 w-24 shrink-0 bg-zinc-100 dark:bg-zinc-800 sm:h-28 sm:w-28">
+        <div className="relative h-24 w-24 shrink-0 sm:h-28 sm:w-28">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-zinc-400 dark:text-zinc-600">
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-100 via-orange-100 to-rose-100 text-amber-600/70 dark:from-amber-900/30 dark:via-orange-900/30 dark:to-rose-900/30 dark:text-amber-200/60">
               <ChefHat className="h-8 w-8" />
             </div>
           )}

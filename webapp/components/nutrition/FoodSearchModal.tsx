@@ -1,12 +1,14 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Clock, Star, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2 } from 'lucide-react'
+import { Search, X, Plus, Clock, Star, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import { getToken } from '@/lib/clientAuth'
 import BarcodeScanner from './BarcodeScanner'
+import MealApplySheet from '@/components/meals/MealApplySheet'
 
 interface FoodSearchModalProps {
   isOpen: boolean
@@ -67,6 +69,23 @@ interface FoodResult {
   nutriscore_grade?: string
   variants?: FoodVariant[]
   isSaved?: boolean
+}
+
+interface MealResult {
+  _id: string
+  name: string
+  description?: string
+  imageUrl?: string
+  tags?: string[]
+  items?: { _id?: string }[]
+  totalNutrition?: {
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+  }
+  recipe?: { servings?: number }
+  isVerified?: boolean
 }
 
 // 24-char hex ObjectId — anything else is a synthetic external id (usda-/off-/etc.)
@@ -167,6 +186,11 @@ export default function FoodSearchModal({
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
   const [results, setResults] = useState<FoodResult[]>([])
+  const [mealResults, setMealResults] = useState<MealResult[]>([])
+  const [mealsLoading, setMealsLoading] = useState(false)
+  const [mealsExpanded, setMealsExpanded] = useState(true)
+  const [foodsExpanded, setFoodsExpanded] = useState(true)
+  const [applyMeal, setApplyMeal] = useState<MealResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedFood, setSelectedFood] = useState<FoodResult | null>(null)
   const [servings, setServings] = useState('1')
@@ -240,6 +264,10 @@ export default function FoodSearchModal({
     } else {
       setQuery('')
       setResults([])
+      setMealResults([])
+      setMealsExpanded(true)
+      setFoodsExpanded(true)
+      setApplyMeal(null)
       setSelectedFood(null)
       setServings('1')
       setSelectedServingIdx(0)
@@ -326,6 +354,30 @@ export default function FoodSearchModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const fetchMeals = useCallback(async (searchQuery: string) => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setMealResults([])
+      return
+    }
+    setMealsLoading(true)
+    try {
+      const token = getToken()
+      const headers: HeadersInit = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/meals?q=${encodeURIComponent(searchQuery)}&limit=10`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        setMealResults(Array.isArray(data.meals) ? data.meals : [])
+      } else {
+        setMealResults([])
+      }
+    } catch {
+      setMealResults([])
+    } finally {
+      setMealsLoading(false)
+    }
+  }, [])
+
   const fetchResults = useCallback(
     async (searchQuery: string, tab: TabId) => {
       setLoading(true)
@@ -362,11 +414,14 @@ export default function FoodSearchModal({
   )
 
   // Debounced search for the "all" tab. Tabs that don't take a query fire once.
+  // Meals are searched in parallel only on the "all" tab and only when the
+  // user has typed something — they don't make sense for "Recent" food picks.
   useEffect(() => {
     if (!isOpen) return
 
     if (activeTab === 'recent' || activeTab === 'frequent' || activeTab === 'mine') {
       fetchResults('', activeTab)
+      setMealResults([])
       return
     }
 
@@ -378,18 +433,20 @@ export default function FoodSearchModal({
       } else {
         setResults([])
       }
+      setMealResults([])
       return
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       fetchResults(query, activeTab)
+      if (activeTab === 'all') fetchMeals(query)
     }, 300)
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [query, activeTab, isOpen, fetchResults])
+  }, [query, activeTab, isOpen, fetchResults, fetchMeals])
 
   // Active variant for the currently selected food (or null)
   const activeVariant = useMemo<FoodVariant | null>(() => {
@@ -855,7 +912,7 @@ export default function FoodSearchModal({
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search foods..."
+                  placeholder="Search foods and meals…"
                   className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800"
                 />
                 {query && (
@@ -911,7 +968,103 @@ export default function FoodSearchModal({
 
             {/* Results */}
             <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {loading ? (
+              {/* Meals section — only on "all" tab + query (≥2 chars). Sticky-style header
+                  matches the "My Foods" header pattern; chevron toggles collapse. */}
+              {activeTab === 'all' && query.trim().length >= 2 && (mealsLoading || mealResults.length > 0) && (
+                <div className="border-b border-zinc-100 dark:border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setMealsExpanded(v => !v)}
+                    className="flex w-full items-center gap-1.5 bg-emerald-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-800 transition-colors hover:bg-emerald-100/95 dark:bg-emerald-900/30 dark:text-emerald-200 dark:hover:bg-emerald-900/50"
+                  >
+                    <ChefHat className="h-3 w-3" />
+                    Meals
+                    <span className="text-[10px] font-normal opacity-70">
+                      {mealsLoading ? '…' : `(${mealResults.length})`}
+                    </span>
+                    <ChevronDown
+                      className={`ml-auto h-3 w-3 transition-transform ${mealsExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {mealsExpanded && (
+                      <motion.div
+                        initial={{ height: 0 }}
+                        animate={{ height: 'auto' }}
+                        exit={{ height: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="overflow-hidden"
+                      >
+                        {mealsLoading && mealResults.length === 0 ? (
+                          <div className="flex items-center gap-2 px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Searching meals…
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            {mealResults.map(meal => {
+                              const cal = Math.round(meal.totalNutrition?.calories ?? 0)
+                              return (
+                                <button
+                                  key={meal._id}
+                                  type="button"
+                                  onClick={() => setApplyMeal(meal)}
+                                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                                >
+                                  <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-amber-100 via-orange-100 to-rose-100 dark:from-amber-900/30 dark:via-orange-900/30 dark:to-rose-900/30">
+                                    {meal.imageUrl ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={meal.imageUrl} alt={meal.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-amber-600/70 dark:text-amber-200/60">
+                                        <ChefHat className="h-4 w-4" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                                      {meal.name}
+                                      {meal.isVerified && (
+                                        <span className="ml-1 inline-flex items-center rounded-md bg-emerald-100 px-1 text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </p>
+                                    <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+                                      {meal.items?.length ?? 0} {meal.items?.length === 1 ? 'item' : 'items'}
+                                      {meal.recipe?.servings ? ` · yields ${meal.recipe.servings}` : ''}
+                                    </p>
+                                  </div>
+                                  <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+                                    {cal} cal
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* Foods header — only when meals are also visible, so users see the boundary. */}
+              {activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFoodsExpanded(v => !v)}
+                  className="flex w-full items-center gap-1.5 border-b border-zinc-100 bg-zinc-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-300 dark:hover:bg-zinc-800/70"
+                >
+                  <Search className="h-3 w-3" />
+                  Foods
+                  <span className="text-[10px] font-normal opacity-70">({results.length})</span>
+                  <ChevronDown className={`ml-auto h-3 w-3 transition-transform ${foodsExpanded ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+
+              {!foodsExpanded && activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 ? null :
+              loading ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -938,6 +1091,23 @@ export default function FoodSearchModal({
                           ? 'Type at least 2 characters to search'
                           : 'No foods found'}
                       </p>
+                      {/* Create custom food CTA — only when search returned nothing for both
+                          foods and meals. Stays out of the way for normal "show recents" empty state. */}
+                      {activeTab === 'all' && query.trim().length >= 2 && mealResults.length === 0 && !mealsLoading && (
+                        <>
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center max-w-xs">
+                            Can&apos;t find it?
+                          </p>
+                          <Link
+                            href="/dashboard/foods/new"
+                            onClick={onClose}
+                            className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Create custom food
+                          </Link>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -1355,6 +1525,21 @@ export default function FoodSearchModal({
           onDetected={handleBarcodeDetected}
         />
       )}
+
+      {/* Meal Apply sheet — opened when a meal result is tapped. Closes the food
+          search modal on success so the user lands back on their day. */}
+      <MealApplySheet
+        isOpen={!!applyMeal}
+        meal={applyMeal}
+        defaultTag={tagPickerEnabled ? activeTag : 'snack'}
+        availableTags={availableTags}
+        viewedDate={viewedDate}
+        onClose={() => setApplyMeal(null)}
+        onApplied={() => {
+          setApplyMeal(null)
+          onClose()
+        }}
+      />
     </AnimatePresence>
   )
 }
