@@ -15,6 +15,7 @@ import {
   Trash2,
   AlertCircle,
   ChevronDown,
+  ChefHat,
   Tag as TagIcon,
   Check,
   X,
@@ -169,23 +170,41 @@ function tagClass(tag: string): string {
   return tagAccent[tag.toLowerCase()] ?? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
 }
 
-// Subtle left-border accent per tag. Used to give cards a faint chronological
-// "rail" feel without claiming a full gutter column.
+// Per-tag left-border accent. Saturated enough to be readable at a glance
+// even on small screens — this is the user's primary chronological cue.
 const tagBorderAccent: Record<string, string> = {
-  breakfast: 'border-l-amber-400 dark:border-l-amber-500',
-  lunch: 'border-l-orange-400 dark:border-l-orange-500',
-  dinner: 'border-l-indigo-400 dark:border-l-indigo-500',
-  snack: 'border-l-emerald-400 dark:border-l-emerald-500',
-  'pre-workout': 'border-l-purple-400 dark:border-l-purple-500',
-  'post-workout': 'border-l-rose-400 dark:border-l-rose-500',
-  brunch: 'border-l-yellow-400 dark:border-l-yellow-500',
-  dessert: 'border-l-pink-400 dark:border-l-pink-500',
-  'late-night': 'border-l-slate-400 dark:border-l-slate-500',
+  breakfast: 'border-l-amber-500 dark:border-l-amber-400',
+  lunch: 'border-l-orange-500 dark:border-l-orange-400',
+  dinner: 'border-l-indigo-500 dark:border-l-indigo-400',
+  snack: 'border-l-emerald-500 dark:border-l-emerald-400',
+  'pre-workout': 'border-l-purple-500 dark:border-l-purple-400',
+  'post-workout': 'border-l-rose-500 dark:border-l-rose-400',
+  brunch: 'border-l-yellow-500 dark:border-l-yellow-400',
+  dessert: 'border-l-pink-500 dark:border-l-pink-400',
+  'late-night': 'border-l-slate-500 dark:border-l-slate-400',
+}
+
+// Stable color hash for unrecognized custom tags so users still see a per-tag
+// stripe even when they invent their own labels (e.g. "brunch", "midnight").
+const fallbackPalette = [
+  'border-l-cyan-500 dark:border-l-cyan-400',
+  'border-l-teal-500 dark:border-l-teal-400',
+  'border-l-violet-500 dark:border-l-violet-400',
+  'border-l-fuchsia-500 dark:border-l-fuchsia-400',
+  'border-l-lime-500 dark:border-l-lime-400',
+  'border-l-sky-500 dark:border-l-sky-400',
+]
+
+function hashTag(tag: string): number {
+  let h = 0
+  for (let i = 0; i < tag.length; i++) h = ((h << 5) - h + tag.charCodeAt(i)) | 0
+  return Math.abs(h)
 }
 
 function tagBorderClass(tag: string | undefined): string {
   if (!tag) return 'border-l-zinc-300 dark:border-l-zinc-700'
-  return tagBorderAccent[tag.toLowerCase()] ?? 'border-l-zinc-300 dark:border-l-zinc-700'
+  const lower = tag.toLowerCase()
+  return tagBorderAccent[lower] ?? fallbackPalette[hashTag(lower) % fallbackPalette.length]
 }
 
 // Choose a "primary" tag from a log's tags array for color accents.
@@ -1255,7 +1274,7 @@ function TimelineLogCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.22 }}
-      className={`overflow-hidden rounded-xl border border-l-4 border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${tagBorderClass(accent)} ${compact ? 'shadow-none' : ''}`}
+      className={`overflow-hidden rounded-xl border border-l-[6px] border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${tagBorderClass(accent)} ${compact ? 'shadow-none' : ''}`}
     >
       {/* Header row — clickable to expand/collapse */}
       <button
@@ -1373,8 +1392,14 @@ function TimelineLogCard({
       {(log.mealName || log.notes) && (
         <div className={`-mt-1 flex flex-wrap items-center gap-1.5 ${compact ? 'px-3 pb-2' : 'px-3 pb-2 sm:px-4'}`}>
           {log.mealName && (
-            <span className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
-              From: {log.mealName}
+            <span
+              className="inline-flex items-center gap-1 rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+              title="Logged from a saved meal"
+            >
+              <ChefHat className="h-3 w-3" />
+              <span className="text-[10px] uppercase tracking-wider opacity-70">Meal</span>
+              <span>·</span>
+              <span className="normal-case tracking-normal">{log.mealName}</span>
             </span>
           )}
           {log.notes && (
