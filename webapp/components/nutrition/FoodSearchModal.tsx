@@ -834,18 +834,27 @@ export default function FoodSearchModal({
                 </div>
               </div>
 
-              {/* Tag picker */}
+              {/* Tag picker + Custom Food shortcut */}
               {tagPickerEnabled && (
-                <div className="mb-3 relative">
+                <div className="mb-3 relative flex items-center gap-2">
+                  <Link
+                    href="/dashboard/foods/new"
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    title="Create a custom food"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Custom Food</span>
+                    <span className="sm:hidden">Custom</span>
+                  </Link>
                   <button
                     type="button"
                     onClick={() => setTagDropdownOpen(v => !v)}
-                    className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                    className="flex flex-1 min-w-0 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                   >
-                    <TagIcon className="h-3.5 w-3.5 text-zinc-400" />
+                    <TagIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                     <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Adding to</span>
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
-                    <ChevronDown className={`ml-auto h-4 w-4 text-zinc-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
+                    <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
+                    <ChevronDown className={`ml-auto h-4 w-4 shrink-0 text-zinc-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   <AnimatePresence>

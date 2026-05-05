@@ -22,8 +22,10 @@ import {
 import PageTransition from '@/components/PageTransition'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
+import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
+import type { IFoodEntry } from '@/models/NutritionLog'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -266,6 +268,9 @@ function TimelineClient() {
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ logId: string; mealName?: string } | null>(null)
   const [filterChipsOpen, setFilterChipsOpen] = useState(false)
+  // Inline add-food: keeps the user on the timeline page instead of redirecting.
+  // viewedDate determines which day the new MealLog gets attached to.
+  const [addFoodFor, setAddFoodFor] = useState<{ date: Date; tag: string } | null>(null)
 
   // ── Auth helper ──────────────────────────────────────────────────────────
 
@@ -458,6 +463,63 @@ function TimelineClient() {
       showErrorToast('Failed to delete entry. Check your connection.')
     } finally {
       setConfirmDelete(null)
+    }
+  }
+
+  // Default tag derived from the time of day — matches the nutrition page's helper.
+  const defaultTagForNow = (): string => {
+    const h = new Date().getHours()
+    if (h >= 5 && h < 11) return 'breakfast'
+    if (h >= 11 && h < 14) return 'lunch'
+    if (h >= 17 && h < 21) return 'dinner'
+    return 'snack'
+  }
+
+  // Adds a food directly to a specific day's timeline. Mirrors the nutrition
+  // page's append-or-create logic so behavior is consistent across views.
+  // entry is the IFoodEntry shape from FoodSearchModal; tag + loggedAtIso are
+  // optional overrides.
+  const handleAddFood = async (
+    entry: IFoodEntry & { foodId?: string; variantId?: string; variantName?: string },
+    tag?: string,
+    loggedAtIso?: string,
+  ) => {
+    if (!addFoodFor) return
+    const useTag = tag || addFoodFor.tag
+    // If user didn't pick a custom time, use the viewed day at "now"-ish (current
+    // local time-of-day, but on the viewed day so the entry lands on that date).
+    let iso = loggedAtIso
+    if (!iso) {
+      const now = new Date()
+      const d = new Date(addFoodFor.date.getFullYear(), addFoodFor.date.getMonth(), addFoodFor.date.getDate(), now.getHours(), now.getMinutes(), 0, 0)
+      iso = d.toISOString()
+    }
+    const item = {
+      foodId: entry.foodId,
+      variantId: entry.variantId,
+      variantName: entry.variantName,
+      name: entry.name,
+      brand: entry.brand,
+      servingSize: entry.servingSize,
+      servingUnit: entry.servingUnit,
+      servings: entry.servings,
+      nutrition: entry.nutrition,
+    }
+    try {
+      const res = await fetch('/api/meal-logs', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ items: [item], tags: [useTag], loggedAt: iso }),
+      })
+      if (!res.ok) {
+        showErrorToast('Failed to log food.')
+        return
+      }
+      setAddFoodFor(null)
+      await fetchData()
+    } catch (err) {
+      console.error('Failed to log food:', err)
+      showErrorToast('Failed to log food. Check your connection.')
     }
   }
 
@@ -694,6 +756,7 @@ function TimelineClient() {
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
             onUpdateTime={handleUpdateLogTime}
             onToggleFilter={toggleFilter}
+            onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
@@ -705,11 +768,35 @@ function TimelineClient() {
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
             onUpdateTime={handleUpdateLogTime}
             onToggleFilter={toggleFilter}
+            onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
         )}
       </PageTransition>
+
+      {/* Floating + Add Food (Day view only — Week view has per-day buttons) */}
+      {viewMode === 'day' && (
+        <button
+          type="button"
+          onClick={() => setAddFoodFor({ date: selectedDate, tag: defaultTagForNow() })}
+          aria-label="Add food to this day"
+          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Inline Food Search Modal — pre-filled with the day the user tapped */}
+      <FoodSearchModal
+        isOpen={addFoodFor !== null}
+        currentTag={addFoodFor?.tag ?? 'snack'}
+        availableTags={tagsResp}
+        showTagPicker={true}
+        viewedDate={addFoodFor?.date}
+        onClose={() => setAddFoodFor(null)}
+        onSelectFood={(entry, tag, loggedAt) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt)}
+      />
 
       {/* Edit Food Modal */}
       <EditFoodModal
@@ -793,15 +880,15 @@ interface DayViewProps {
   onDeleteLog: (logId: string, mealName?: string) => void
   onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
+  onAddFood: (date: Date) => void
   activeFilters: Set<string>
   isFilterActive: boolean
 }
 
 function DayView({
   date, day, goals, dayTotals, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, activeFilters, isFilterActive,
+  onUpdateTime, onToggleFilter, onAddFood, activeFilters, isFilterActive,
 }: DayViewProps) {
-  const dateStr = formatDateParam(date)
   const logs = day?.logs ?? []
 
   return (
@@ -828,11 +915,11 @@ function DayView({
       {/* Timeline — chronologically ordered, full-width cards. */}
       {logs.length === 0 ? (
         <EmptyState
-          dateStr={dateStr}
           message={isFilterActive
             ? 'No entries match the active tag filter.'
             : 'No food logged for this day.'
           }
+          onAddFood={() => onAddFood(date)}
         />
       ) : (
         <motion.ol layout className="space-y-3">
@@ -865,13 +952,14 @@ interface WeekViewProps {
   onDeleteLog: (logId: string, mealName?: string) => void
   onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
+  onAddFood: (date: Date) => void
   activeFilters: Set<string>
   isFilterActive: boolean
 }
 
 function WeekView({
   days, summary, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, activeFilters, isFilterActive,
+  onUpdateTime, onToggleFilter, onAddFood, activeFilters, isFilterActive,
 }: WeekViewProps) {
   // Order newest-first so the most recent days are at the top.
   const ordered = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days])
@@ -931,11 +1019,11 @@ function WeekView({
       {/* Day groups */}
       {allEmpty ? (
         <EmptyState
-          dateStr={formatDateParam(new Date())}
           message={isFilterActive
             ? 'No entries match the active tag filter for this week.'
             : 'No food logged for this week.'
           }
+          onAddFood={() => onAddFood(new Date())}
         />
       ) : (
         <div className="space-y-3">
@@ -947,6 +1035,7 @@ function WeekView({
               onDeleteLog={onDeleteLog}
               onUpdateTime={onUpdateTime}
               onToggleFilter={onToggleFilter}
+              onAddFood={onAddFood}
               activeFilters={activeFilters}
             />
           ))}
@@ -974,12 +1063,13 @@ interface WeekDayGroupProps {
   onDeleteLog: (logId: string, mealName?: string) => void
   onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
+  onAddFood: (date: Date) => void
   activeFilters: Set<string>
 }
 
 function WeekDayGroup({
   day, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, activeFilters,
+  onUpdateTime, onToggleFilter, onAddFood, activeFilters,
 }: WeekDayGroupProps) {
   const dt = parseDateParam(day.date)
   const isToday = isSameLocalDay(dt, new Date())
@@ -988,44 +1078,55 @@ function WeekDayGroup({
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex w-full items-center gap-3 p-3 sm:p-4"
-      >
-        <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            {dt.toLocaleDateString('en-US', { weekday: 'short' })}
-          </span>
-          <span className="text-base font-bold leading-none text-zinc-900 dark:text-white">
-            {dt.getDate()}
-          </span>
-        </div>
-        <div className="flex-1 min-w-0 text-left">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white">
-            {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            {isToday && (
-              <span className="ml-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                Today
-              </span>
-            )}
-          </p>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            {day.logs.length === 0
-              ? 'No entries'
-              : `${day.logs.length} ${day.logs.length === 1 ? 'entry' : 'entries'}`
-            }
-          </p>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-base font-bold tabular-nums text-zinc-900 dark:text-white">
-            {calories.toLocaleString()}
-          </p>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">cal</p>
-        </div>
-        <ChevronDown
-          className={`h-4 w-4 text-zinc-400 transition-transform ${expanded ? '' : '-rotate-90'}`}
-        />
-      </button>
+      <div className="flex items-center gap-2 p-3 sm:p-4">
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="flex flex-1 items-center gap-3 text-left"
+        >
+          <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              {dt.toLocaleDateString('en-US', { weekday: 'short' })}
+            </span>
+            <span className="text-base font-bold leading-none text-zinc-900 dark:text-white">
+              {dt.getDate()}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+              {dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {isToday && (
+                <span className="ml-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  Today
+                </span>
+              )}
+            </p>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              {day.logs.length === 0
+                ? 'No entries'
+                : `${day.logs.length} ${day.logs.length === 1 ? 'entry' : 'entries'}`
+              }
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-base font-bold tabular-nums text-zinc-900 dark:text-white">
+              {calories.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">cal</p>
+          </div>
+          <ChevronDown
+            className={`h-4 w-4 text-zinc-400 transition-transform ${expanded ? '' : '-rotate-90'}`}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onAddFood(dt) }}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          aria-label={`Add food for ${dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+          title="Add food to this day"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {expanded && (
@@ -1038,13 +1139,14 @@ function WeekDayGroup({
           >
             <div className="border-t border-zinc-100 px-3 py-3 dark:border-zinc-800 sm:px-4">
               {day.logs.length === 0 ? (
-                <Link
-                  href={`/dashboard/nutrition?date=${day.date}`}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2.5 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-200"
+                <button
+                  type="button"
+                  onClick={() => onAddFood(dt)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2.5 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50 dark:hover:text-zinc-200"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add food
-                </Link>
+                </button>
               ) : (
                 <motion.ol layout className="space-y-2">
                   <AnimatePresence initial={false}>
@@ -1375,20 +1477,21 @@ function ItemRow({
 
 // ── Empty state ────────────────────────────────────────────────────────────────
 
-function EmptyState({ dateStr, message }: { dateStr: string; message: string }) {
+function EmptyState({ message, onAddFood }: { message: string; onAddFood: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-white px-4 py-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
         <UtensilsCrossed className="h-5 w-5 text-zinc-400" />
       </div>
       <p className="text-sm text-zinc-500 dark:text-zinc-400">{message}</p>
-      <Link
-        href={`/dashboard/nutrition?date=${dateStr}`}
+      <button
+        type="button"
+        onClick={onAddFood}
         className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
       >
         <Plus className="h-3.5 w-3.5" />
         Add food
-      </Link>
+      </button>
     </div>
   )
 }
