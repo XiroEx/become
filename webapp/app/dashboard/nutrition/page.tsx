@@ -274,7 +274,7 @@ function NutritionPageInner() {
     })
   }, [logs])
 
-  const handleAddFood = async (food: IFoodEntry, tag?: string) => {
+  const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string) => {
     const useTag = (tag || foodSearchTag || 'snack').toLowerCase()
     try {
       // Build a MealItemInput from the legacy IFoodEntry shape.
@@ -290,7 +290,11 @@ function NutritionPageInner() {
         nutrition: food.nutrition,
       }
 
-      const existing = findLogForTag(useTag)
+      // When the user explicitly picked a custom time we ALWAYS create a new
+      // MealLog (so their intent — a separate entry at that exact time — is
+      // preserved). Otherwise we fall back to the smart "append to existing
+      // log of this tag" behavior.
+      const existing = loggedAtOverride ? undefined : findLogForTag(useTag)
       let res: Response
       if (existing) {
         res = await fetch(`/api/meal-logs/${existing._id}/items`, {
@@ -299,10 +303,16 @@ function NutritionPageInner() {
           body: JSON.stringify(itemPayload),
         })
       } else {
-        // Pin loggedAt to the selected day (if it's not today, default to noon UTC).
-        const now = new Date()
-        const isToday = formatDateParam(now) === dateParam
-        const loggedAt = isToday ? now.toISOString() : `${dateParam}T12:00:00.000Z`
+        // Pin loggedAt: prefer the user's explicit time, otherwise the current
+        // moment for today, or noon UTC for non-today dates.
+        let loggedAt: string
+        if (loggedAtOverride) {
+          loggedAt = loggedAtOverride
+        } else {
+          const now = new Date()
+          const isToday = formatDateParam(now) === dateParam
+          loggedAt = isToday ? now.toISOString() : `${dateParam}T12:00:00.000Z`
+        }
         res = await fetch(`/api/meal-logs`, {
           method: 'POST',
           headers: getHeaders(),
@@ -693,6 +703,7 @@ function NutritionPageInner() {
         isOpen={foodSearchOpen}
         currentTag={foodSearchTag}
         availableTags={tagsResp}
+        viewedDate={selectedDate}
         autoScan={foodSearchAutoScan}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false) }}
         onSelectFood={handleAddFood}

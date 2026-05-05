@@ -16,6 +16,8 @@ import {
   AlertCircle,
   ChevronDown,
   Tag as TagIcon,
+  Check,
+  X,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import CalorieRing from '@/components/nutrition/CalorieRing'
@@ -163,6 +165,53 @@ const tagAccent: Record<string, string> = {
 
 function tagClass(tag: string): string {
   return tagAccent[tag.toLowerCase()] ?? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+}
+
+// Subtle left-border accent per tag. Used to give cards a faint chronological
+// "rail" feel without claiming a full gutter column.
+const tagBorderAccent: Record<string, string> = {
+  breakfast: 'border-l-amber-400 dark:border-l-amber-500',
+  lunch: 'border-l-orange-400 dark:border-l-orange-500',
+  dinner: 'border-l-indigo-400 dark:border-l-indigo-500',
+  snack: 'border-l-emerald-400 dark:border-l-emerald-500',
+  'pre-workout': 'border-l-purple-400 dark:border-l-purple-500',
+  'post-workout': 'border-l-rose-400 dark:border-l-rose-500',
+  brunch: 'border-l-yellow-400 dark:border-l-yellow-500',
+  dessert: 'border-l-pink-400 dark:border-l-pink-500',
+  'late-night': 'border-l-slate-400 dark:border-l-slate-500',
+}
+
+function tagBorderClass(tag: string | undefined): string {
+  if (!tag) return 'border-l-zinc-300 dark:border-l-zinc-700'
+  return tagBorderAccent[tag.toLowerCase()] ?? 'border-l-zinc-300 dark:border-l-zinc-700'
+}
+
+// Choose a "primary" tag from a log's tags array for color accents.
+function primaryTag(tags: string[] | undefined): string | undefined {
+  if (!tags || tags.length === 0) return undefined
+  const lower = tags.map(t => t.toLowerCase())
+  const def = lower.find(t => DEFAULT_TAGS.includes(t))
+  return def ?? lower[0]
+}
+
+// Format a Date to "HH:mm" in the user's local TZ (matches <input type="time"> shape).
+function dateToTimeInputValue(d: Date): string {
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+// Combine an existing loggedAt's date portion (local) with a new "HH:mm" time
+// and return an ISO string. Used when the user re-times a logged entry.
+function rebuildIsoWithTime(currentIso: string, timeStr: string): string | null {
+  const [hStr, mStr] = timeStr.split(':')
+  const h = Number(hStr)
+  const m = Number(mStr)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  const cur = new Date(currentIso)
+  if (Number.isNaN(cur.getTime())) return null
+  const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), h, m, 0, 0)
+  return next.toISOString()
 }
 
 // ── Defaults ───────────────────────────────────────────────────────────────────
@@ -412,6 +461,28 @@ function TimelineClient() {
     }
   }
 
+  // Update a log's loggedAt — used by the inline time editor on each card.
+  // Refetches the day so the chronological ordering is correct after the edit.
+  const handleUpdateLogTime = async (logId: string, isoString: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/meal-logs/${logId}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ loggedAt: isoString }),
+      })
+      if (!res.ok) {
+        showErrorToast('Failed to update time.')
+        return false
+      }
+      await fetchData()
+      return true
+    } catch (err) {
+      console.error('Failed to update log time:', err)
+      showErrorToast('Failed to update time. Check your connection.')
+      return false
+    }
+  }
+
   // ── Day-mode totals (for CalorieRing) ────────────────────────────────────
 
   const dayTotals = useMemo(() => {
@@ -621,6 +692,9 @@ function TimelineClient() {
             dayTotals={dayTotals}
             onEditItem={(logId, item) => setEditEntry({ logId, item })}
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
+            onUpdateTime={handleUpdateLogTime}
+            onToggleFilter={toggleFilter}
+            activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
         ) : (
@@ -629,6 +703,9 @@ function TimelineClient() {
             summary={weekSummary}
             onEditItem={(logId, item) => setEditEntry({ logId, item })}
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
+            onUpdateTime={handleUpdateLogTime}
+            onToggleFilter={toggleFilter}
+            activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
         )}
@@ -714,10 +791,16 @@ interface DayViewProps {
   dayTotals: { calories: number; protein: number; carbs: number; fats: number }
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
+  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
+  onToggleFilter: (tag: string) => void
+  activeFilters: Set<string>
   isFilterActive: boolean
 }
 
-function DayView({ date, day, goals, dayTotals, onEditItem, onDeleteLog, isFilterActive }: DayViewProps) {
+function DayView({
+  date, day, goals, dayTotals, onEditItem, onDeleteLog,
+  onUpdateTime, onToggleFilter, activeFilters, isFilterActive,
+}: DayViewProps) {
   const dateStr = formatDateParam(date)
   const logs = day?.logs ?? []
 
@@ -742,7 +825,7 @@ function DayView({ date, day, goals, dayTotals, onEditItem, onDeleteLog, isFilte
         fats={{ current: dayTotals.fats, goal: goals.fats }}
       />
 
-      {/* Timeline */}
+      {/* Timeline — chronologically ordered, full-width cards. */}
       {logs.length === 0 ? (
         <EmptyState
           dateStr={dateStr}
@@ -752,20 +835,22 @@ function DayView({ date, day, goals, dayTotals, onEditItem, onDeleteLog, isFilte
           }
         />
       ) : (
-        <div className="relative">
-          {/* Vertical rail */}
-          <div className="absolute left-[52px] top-2 bottom-2 w-px bg-zinc-200 dark:bg-zinc-800 sm:left-[60px]" aria-hidden />
-          <ol className="space-y-3">
-            {logs.map((log) => (
+        <motion.ol layout className="space-y-3">
+          <AnimatePresence initial={false}>
+            {logs.map((log, idx) => (
               <TimelineLogCard
                 key={log._id}
                 log={log}
+                defaultExpanded={idx === 0}
                 onEditItem={onEditItem}
                 onDeleteLog={onDeleteLog}
+                onUpdateTime={onUpdateTime}
+                onToggleFilter={onToggleFilter}
+                activeFilters={activeFilters}
               />
             ))}
-          </ol>
-        </div>
+          </AnimatePresence>
+        </motion.ol>
       )}
     </div>
   )
@@ -778,10 +863,16 @@ interface WeekViewProps {
   summary: { total: number; avg: number; max: number; daysLogged: number }
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
+  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
+  onToggleFilter: (tag: string) => void
+  activeFilters: Set<string>
   isFilterActive: boolean
 }
 
-function WeekView({ days, summary, onEditItem, onDeleteLog, isFilterActive }: WeekViewProps) {
+function WeekView({
+  days, summary, onEditItem, onDeleteLog,
+  onUpdateTime, onToggleFilter, activeFilters, isFilterActive,
+}: WeekViewProps) {
   // Order newest-first so the most recent days are at the top.
   const ordered = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days])
   const allEmpty = days.every(d => d.logs.length === 0)
@@ -854,6 +945,9 @@ function WeekView({ days, summary, onEditItem, onDeleteLog, isFilterActive }: We
               day={d}
               onEditItem={onEditItem}
               onDeleteLog={onDeleteLog}
+              onUpdateTime={onUpdateTime}
+              onToggleFilter={onToggleFilter}
+              activeFilters={activeFilters}
             />
           ))}
         </div>
@@ -878,9 +972,15 @@ interface WeekDayGroupProps {
   day: DayBucket
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
+  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
+  onToggleFilter: (tag: string) => void
+  activeFilters: Set<string>
 }
 
-function WeekDayGroup({ day, onEditItem, onDeleteLog }: WeekDayGroupProps) {
+function WeekDayGroup({
+  day, onEditItem, onDeleteLog,
+  onUpdateTime, onToggleFilter, activeFilters,
+}: WeekDayGroupProps) {
   const dt = parseDateParam(day.date)
   const isToday = isSameLocalDay(dt, new Date())
   const calories = Math.round(day.dailyTotals.calories || 0)
@@ -946,16 +1046,23 @@ function WeekDayGroup({ day, onEditItem, onDeleteLog }: WeekDayGroupProps) {
                   Add food
                 </Link>
               ) : (
-                <ul className="space-y-2">
-                  {day.logs.map(log => (
-                    <CompactLogRow
-                      key={log._id}
-                      log={log}
-                      onEditItem={onEditItem}
-                      onDeleteLog={onDeleteLog}
-                    />
-                  ))}
-                </ul>
+                <motion.ol layout className="space-y-2">
+                  <AnimatePresence initial={false}>
+                    {day.logs.map((log, idx) => (
+                      <TimelineLogCard
+                        key={log._id}
+                        log={log}
+                        defaultExpanded={idx === 0}
+                        compact
+                        onEditItem={onEditItem}
+                        onDeleteLog={onDeleteLog}
+                        onUpdateTime={onUpdateTime}
+                        onToggleFilter={onToggleFilter}
+                        activeFilters={activeFilters}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </motion.ol>
               )}
             </div>
           </motion.div>
@@ -965,234 +1072,278 @@ function WeekDayGroup({ day, onEditItem, onDeleteLog }: WeekDayGroupProps) {
   )
 }
 
-// ── Compact log row (used in week view) ────────────────────────────────────────
+// ── Unified timeline log card (used in both Day and Week views) ──────────────
+//
+// The card carries:
+//   • Header row — clock + time pill (left), tag chips (left, after time), and
+//     the day-total calorie chip (right). Time and cal never truncate; tags
+//     truncate first if there's no horizontal room.
+//   • Optional "From: <mealName>" badge below the header row.
+//   • Expandable item list. The first card in each list defaults expanded so
+//     users see items without an extra tap; subsequent cards stay collapsed.
+//   • Footer with macros + Delete.
+//   • Inline time editor: tapping the time pill opens an <input type="time">.
+//     On save, the parent PATCHes /api/meal-logs/[id] then refetches the day,
+//     and Framer Motion's `layout` smoothly animates the card to its new
+//     chronological slot.
+//   • Tag chips are buttons; tapping toggles them in the parent's filter set.
 
-interface CompactLogRowProps {
+interface TimelineLogCardProps {
   log: MealLog
+  defaultExpanded?: boolean
+  // When true, the card uses tighter padding/typography (used inside the week
+  // view's per-day group). The visual structure is otherwise identical.
+  compact?: boolean
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
+  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
+  onToggleFilter: (tag: string) => void
+  activeFilters: Set<string>
 }
 
-function CompactLogRow({ log, onEditItem, onDeleteLog }: CompactLogRowProps) {
-  const [expanded, setExpanded] = useState(false)
+function TimelineLogCard({
+  log,
+  defaultExpanded = false,
+  compact = false,
+  onEditItem,
+  onDeleteLog,
+  onUpdateTime,
+  onToggleFilter,
+  activeFilters,
+}: TimelineLogCardProps) {
   const totals = logTotals(log)
   const time = formatTime(log.loggedAt)
+  const accent = primaryTag(log.tags)
+
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  // Inline time editor state. `pendingTime` is a "HH:mm" string while the
+  // user is editing; null when the editor is closed.
+  const [pendingTime, setPendingTime] = useState<string | null>(null)
+  const [savingTime, setSavingTime] = useState(false)
+
+  const editorOpen = pendingTime !== null
+
+  const openEditor = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation()
+    setPendingTime(dateToTimeInputValue(new Date(log.loggedAt)))
+  }
+
+  const cancelEditor = () => {
+    setPendingTime(null)
+    setSavingTime(false)
+  }
+
+  const saveEditor = async () => {
+    if (!pendingTime || savingTime) return
+    const iso = rebuildIsoWithTime(log.loggedAt, pendingTime)
+    if (!iso) {
+      cancelEditor()
+      return
+    }
+    setSavingTime(true)
+    const ok = await onUpdateTime(log._id, iso)
+    setSavingTime(false)
+    if (ok) setPendingTime(null)
+  }
 
   return (
-    <li className="overflow-hidden rounded-lg bg-zinc-50 dark:bg-zinc-800/40">
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.22 }}
+      className={`overflow-hidden rounded-xl border border-l-4 border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${tagBorderClass(accent)} ${compact ? 'shadow-none' : ''}`}
+    >
+      {/* Header row — clickable to expand/collapse */}
       <button
+        type="button"
         onClick={() => setExpanded(e => !e)}
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
+        className={`flex w-full items-center gap-2 text-left ${compact ? 'px-3 py-2' : 'px-3 py-2.5 sm:px-4 sm:py-3'}`}
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Collapse entry' : 'Expand entry'}
       >
-        <span className="w-14 shrink-0 text-[11px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400">
-          {time}
-        </span>
-        <div className="flex-1 min-w-0">
-          <p className="truncate text-xs font-medium text-zinc-900 dark:text-white">
-            {log.mealName ?? log.items[0]?.name ?? 'Food entry'}
-            {!log.mealName && log.items.length > 1 && (
-              <span className="ml-1 text-zinc-500 dark:text-zinc-400">
-                +{log.items.length - 1}
-              </span>
-            )}
-          </p>
+        {/* Time pill — first child, never truncates. Tap to edit. */}
+        {editorOpen ? (
+          <div
+            className="flex shrink-0 items-center gap-1 rounded-full bg-blue-100 px-2 py-1 dark:bg-blue-900/40"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Clock className="h-3 w-3 text-blue-700 dark:text-blue-200" />
+            <input
+              type="time"
+              value={pendingTime ?? ''}
+              onChange={(e) => setPendingTime(e.target.value)}
+              autoFocus
+              disabled={savingTime}
+              className="bg-transparent text-[11px] font-semibold text-blue-700 tabular-nums focus:outline-none disabled:opacity-60 dark:text-blue-200"
+            />
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); saveEditor() }}
+              disabled={savingTime || !pendingTime}
+              aria-label="Save time"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 disabled:opacity-50 dark:text-blue-200 dark:hover:bg-blue-900/60"
+            >
+              <Check className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); cancelEditor() }}
+              disabled={savingTime}
+              aria-label="Cancel time edit"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 disabled:opacity-50 dark:text-blue-200 dark:hover:bg-blue-900/60"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={openEditor}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                openEditor(e)
+              }
+            }}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold tabular-nums text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+            aria-label={`Logged at ${time}, tap to change time`}
+            title="Tap to change time"
+          >
+            <Clock className="h-3 w-3" />
+            {time}
+          </span>
+        )}
+
+        {/* Tag chips — second-priority. They truncate (the inner div carries
+            min-w-0 so flexbox can shrink the chip row instead of the time/cal). */}
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
           {log.tags.length > 0 && (
-            <div className="mt-0.5 flex flex-wrap gap-1">
-              {log.tags.slice(0, 3).map(t => (
-                <span
-                  key={t}
-                  className={`rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wider ${tagClass(t)}`}
-                >
-                  {titleCaseTag(t)}
-                </span>
-              ))}
-            </div>
+            <>
+              <span className="shrink-0 text-zinc-300 dark:text-zinc-600">·</span>
+              <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+                {log.tags.map(t => {
+                  const isActive = activeFilters.has(t.toLowerCase())
+                  return (
+                    <span
+                      key={t}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); onToggleFilter(t) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onToggleFilter(t)
+                        }
+                      }}
+                      className={`shrink truncate rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer ${
+                        isActive
+                          ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                          : `${tagClass(t)} hover:opacity-80`
+                      }`}
+                      aria-pressed={isActive}
+                      aria-label={`Filter by ${t}`}
+                      title={`Filter by ${titleCaseTag(t)}`}
+                    >
+                      {titleCaseTag(t)}
+                    </span>
+                  )
+                })}
+              </div>
+            </>
           )}
         </div>
-        <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-          {totals.calories}
+
+        {/* Calorie chip — never truncates. */}
+        <span className="shrink-0 rounded-md bg-zinc-100 px-2 py-1 text-xs font-semibold tabular-nums text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
+          {totals.calories} cal
         </span>
+
         <ChevronDown
-          className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${expanded ? '' : '-rotate-90'}`}
+          className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${expanded ? '' : '-rotate-90'}`}
         />
       </button>
 
+      {/* Optional sub-header: meal-template badge + notes */}
+      {(log.mealName || log.notes) && (
+        <div className={`-mt-1 flex flex-wrap items-center gap-1.5 ${compact ? 'px-3 pb-2' : 'px-3 pb-2 sm:px-4'}`}>
+          {log.mealName && (
+            <span className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+              From: {log.mealName}
+            </span>
+          )}
+          {log.notes && (
+            <span className="text-[11px] italic text-zinc-500 dark:text-zinc-400 truncate">
+              {log.notes}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Body — items + footer */}
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-200 px-3 py-2 dark:border-zinc-700">
-              <ul className="divide-y divide-zinc-200 dark:divide-zinc-700/60">
-                {log.items.map((item, i) => (
-                  <CompactItemRow
-                    key={`${log._id}-${item._id ?? i}`}
-                    logId={log._id}
-                    item={item}
-                    onEdit={() => onEditItem(log._id, item)}
-                  />
-                ))}
-              </ul>
-              <div className="mt-2 flex items-center justify-between border-t border-zinc-200 pt-2 dark:border-zinc-700">
-                <div className="flex gap-2 text-[10px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                  <span>P {totals.protein}g</span>
-                  <span>C {totals.carbs}g</span>
-                  <span>F {totals.fats}g</span>
-                </div>
-                <button
-                  onClick={() => onDeleteLog(log._id, log.mealName)}
-                  className="flex items-center gap-1 rounded text-[11px] font-semibold text-red-500 transition-colors hover:text-red-600 dark:text-red-400"
-                  aria-label="Delete log"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  Delete
-                </button>
+            <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
+              {log.items.map((item, i) => (
+                <ItemRow
+                  key={`${log._id}-${item._id ?? i}`}
+                  item={item}
+                  compact={compact}
+                  onEdit={() => onEditItem(log._id, item)}
+                />
+              ))}
+            </ul>
+            <div className={`flex items-center justify-between border-t border-zinc-100 dark:border-zinc-800 ${compact ? 'px-3 py-2' : 'px-3 py-2.5 sm:px-4'}`}>
+              <div className="flex gap-2.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400 sm:gap-3">
+                <span>P: {totals.protein}g</span>
+                <span>C: {totals.carbs}g</span>
+                <span>F: {totals.fats}g</span>
               </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDeleteLog(log._id, log.mealName) }}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-zinc-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                aria-label="Delete entire log"
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </li>
+    </motion.li>
   )
 }
 
-function CompactItemRow({ item, onEdit }: { logId: string; item: IMealItem & { _id?: string }; onEdit: () => void }) {
-  const cal = Math.round((item.nutrition?.calories ?? 0) * (item.servings ?? 1))
-  const showVariant = shouldShowVariantName(item.variantName)
-  return (
-    <li className="flex items-center gap-2 py-1.5">
-      <div className="flex-1 min-w-0">
-        <p className="truncate text-[11px] font-medium text-zinc-900 dark:text-white">
-          {item.name}
-          {showVariant && (
-            <span className="font-normal text-zinc-500 dark:text-zinc-400"> &middot; {item.variantName}</span>
-          )}
-        </p>
-        <p className="truncate text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">
-          {item.servings}× {item.servingSize}{item.servingUnit}
-        </p>
-      </div>
-      <span className="shrink-0 text-[11px] font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-        {cal} cal
-      </span>
-      <button
-        onClick={onEdit}
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-        aria-label="Edit item"
-      >
-        <Pencil className="h-3 w-3" />
-      </button>
-    </li>
-  )
-}
-
-// ── Day-mode timeline log card ─────────────────────────────────────────────────
-
-interface TimelineLogCardProps {
-  log: MealLog
-  onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
-  onDeleteLog: (logId: string, mealName?: string) => void
-}
-
-function TimelineLogCard({ log, onEditItem, onDeleteLog }: TimelineLogCardProps) {
-  const totals = logTotals(log)
-  const time = formatTime(log.loggedAt)
-
-  return (
-    <li className="relative pl-[68px] sm:pl-[78px]">
-      {/* Time gutter */}
-      <div className="absolute left-0 top-2 w-[52px] sm:w-[60px] text-right">
-        <p className="text-xs font-semibold tabular-nums text-zinc-900 dark:text-white">
-          {time}
-        </p>
-      </div>
-      {/* Rail dot */}
-      <div className="absolute left-[48px] top-4 h-2 w-2 rounded-full bg-zinc-400 ring-4 ring-zinc-50 dark:bg-zinc-500 dark:ring-zinc-950 sm:left-[56px]" aria-hidden />
-
-      <motion.div
-        initial={{ opacity: 0, x: -8 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.25 }}
-        className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-      >
-        {/* Header */}
-        <div className="flex items-start gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
-          <div className="flex-1 min-w-0">
-            {log.mealName && (
-              <div className="mb-1 inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
-                <span>From: {log.mealName}</span>
-              </div>
-            )}
-            {log.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {log.tags.map(t => (
-                  <span
-                    key={t}
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${tagClass(t)}`}
-                  >
-                    {titleCaseTag(t)}
-                  </span>
-                ))}
-              </div>
-            )}
-            {log.notes && (
-              <p className="mt-1 text-xs italic text-zinc-500 dark:text-zinc-400">{log.notes}</p>
-            )}
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-base font-bold tabular-nums text-zinc-900 dark:text-white">
-              {totals.calories}
-            </p>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">cal</p>
-          </div>
-        </div>
-
-        {/* Items */}
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {log.items.map((item, i) => (
-            <FullItemRow
-              key={`${log._id}-${item._id ?? i}`}
-              item={item}
-              onEdit={() => onEditItem(log._id, item)}
-            />
-          ))}
-        </ul>
-
-        {/* Footer macros + delete */}
-        <div className="flex items-center justify-between border-t border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-          <div className="flex gap-3 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-            <span>P: {totals.protein}g</span>
-            <span>C: {totals.carbs}g</span>
-            <span>F: {totals.fats}g</span>
-          </div>
-          <button
-            onClick={() => onDeleteLog(log._id, log.mealName)}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-zinc-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-            aria-label="Delete entire log"
-          >
-            <Trash2 className="h-3 w-3" />
-            Delete
-          </button>
-        </div>
-      </motion.div>
-    </li>
-  )
-}
-
-function FullItemRow({ item, onEdit }: { item: IMealItem & { _id?: string }; onEdit: () => void }) {
+function ItemRow({
+  item,
+  compact = false,
+  onEdit,
+}: {
+  item: IMealItem & { _id?: string }
+  compact?: boolean
+  onEdit: () => void
+}) {
   const cal = Math.round((item.nutrition?.calories ?? 0) * (item.servings ?? 1))
   const showVariant = shouldShowVariantName(item.variantName)
   const servingDisplay = `${item.servings !== 1 ? `${item.servings} servings` : '1 serving'}`
   const sizeDisplay = `${item.servingSize} ${item.servingUnit}`
 
   return (
-    <li className="flex items-center gap-3 px-4 py-2.5">
+    <li className={`flex items-center gap-3 ${compact ? 'px-3 py-2' : 'px-3 py-2.5 sm:px-4'}`}>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
+        <p className={`truncate font-medium text-zinc-900 dark:text-white ${compact ? 'text-xs' : 'text-sm'}`}>
           {item.name}
           {showVariant && (
             <span className="font-normal text-zinc-500 dark:text-zinc-400">
@@ -1200,22 +1351,23 @@ function FullItemRow({ item, onEdit }: { item: IMealItem & { _id?: string }; onE
             </span>
           )}
         </p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+        <p className={`truncate text-zinc-500 dark:text-zinc-400 ${compact ? 'text-[10px]' : 'text-xs'}`}>
           {item.brand && (
             <span className="text-zinc-400 dark:text-zinc-500">{item.brand} &middot; </span>
           )}
           {servingDisplay} &middot; {sizeDisplay}
         </p>
       </div>
-      <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+      <span className={`shrink-0 font-semibold tabular-nums text-zinc-700 dark:text-zinc-300 ${compact ? 'text-[11px]' : 'text-sm'}`}>
         {cal}
       </span>
       <button
+        type="button"
         onClick={onEdit}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        className={`flex shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 ${compact ? 'h-6 w-6' : 'h-7 w-7'}`}
         aria-label="Edit item"
       >
-        <Pencil className="h-3.5 w-3.5" />
+        <Pencil className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
       </button>
     </li>
   )

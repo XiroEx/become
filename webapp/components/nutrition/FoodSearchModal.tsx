@@ -17,9 +17,14 @@ interface FoodSearchModalProps {
   availableTags?: { defaults: string[]; userTags: string[] }
   // Whether to show the tag picker. Default true when currentTag is provided.
   showTagPicker?: boolean
+  // The date the user is currently viewing in the nutrition page. The custom
+  // time picker uses this date as its "day" — the picker only sets the time.
+  // Defaults to today when omitted.
+  viewedDate?: Date
   onClose: () => void
   // Tag is optional — meal-building flow ignores it.
-  onSelectFood: (food: IFoodEntry, tag?: string) => void
+  // loggedAt (ISO string) is optional — passed when user explicitly picks a custom time.
+  onSelectFood: (food: IFoodEntry, tag?: string, loggedAt?: string) => void
   autoScan?: boolean
 }
 
@@ -92,11 +97,42 @@ const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'frequent', label: 'Frequent', Icon: Star },
 ]
 
+// ── Time picker helpers ──────────────────────────────────────────────────────
+
+// Format a Date to "HH:mm" in the user's local timezone — matches the value
+// shape <input type="time"> emits.
+function dateToTimeInputValue(d: Date): string {
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+// Render "HH:mm" as a friendly "h:mm AM/PM".
+function formatTimeDisplay(timeStr: string): string {
+  const [hStr, mStr] = timeStr.split(':')
+  const h = Number(hStr)
+  const m = Number(mStr)
+  if (Number.isNaN(h) || Number.isNaN(m)) return timeStr
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+// Combine a base date (year/month/day) + "HH:mm" into an ISO string in local TZ.
+function buildLocalIsoFromTime(base: Date, timeStr: string): string {
+  const [hStr, mStr] = timeStr.split(':')
+  const h = Number(hStr)
+  const m = Number(mStr)
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, m, 0, 0)
+  return d.toISOString()
+}
+
 export default function FoodSearchModal({
   isOpen,
   currentTag,
   availableTags,
   showTagPicker,
+  viewedDate,
   onClose,
   onSelectFood,
   autoScan = false,
@@ -120,6 +156,11 @@ export default function FoodSearchModal({
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
+  // Custom logged-at time in "HH:mm" — null means "Now". The picker only sets
+  // the time-of-day; the date comes from `viewedDate` (or today).
+  const [customTime, setCustomTime] = useState<string | null>(null)
+  // When true, render the inline <input type="time"> instead of just the pill.
+  const [timeEditOpen, setTimeEditOpen] = useState(false)
 
   // Resolve the active variant for a food + variant index.
   const getActiveVariant = (food: FoodResult, variantIdx: number): FoodVariant => {
@@ -190,6 +231,8 @@ export default function FoodSearchModal({
       setTagDropdownOpen(false)
       setCustomTagInput('')
       setSaveToast(null)
+      setCustomTime(null)
+      setTimeEditOpen(false)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -614,13 +657,29 @@ export default function FoodSearchModal({
         }
       }
 
-      onSelectFood(entry, tagPickerEnabled ? activeTag : undefined)
+      // Compute custom loggedAt only when the user explicitly picked a time.
+      // The date portion comes from viewedDate (the day they're looking at);
+      // the time portion is what they set in the picker. When customTime is
+      // null we pass undefined so the server defaults to "now".
+      let loggedAtIso: string | undefined
+      if (customTime) {
+        const baseDate = viewedDate ?? new Date()
+        loggedAtIso = buildLocalIsoFromTime(baseDate, customTime)
+      }
+
+      onSelectFood(
+        entry,
+        tagPickerEnabled ? activeTag : undefined,
+        loggedAtIso,
+      )
       setSelectedFood(null)
       setServings('1')
       setSelectedServingIdx(0)
       setSelectedVariantIdx(0)
       setInputMode('servings')
       setCustomGrams('100')
+      setCustomTime(null)
+      setTimeEditOpen(false)
     } finally {
       setAdding(false)
     }
@@ -1140,10 +1199,85 @@ export default function FoodSearchModal({
                                   </p>
                                 </div>
                               </div>
+                              {/* Time picker — defaults to "Now"; tap to set a custom time. */}
+                              <div className="mt-2.5 flex items-center gap-1.5">
+                                {!timeEditOpen ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTimeEditOpen(true)
+                                      // Pre-fill the input with current local time the first time the user opens it.
+                                      if (!customTime) {
+                                        setCustomTime(dateToTimeInputValue(new Date()))
+                                      }
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                      customTime
+                                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
+                                        : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
+                                    }`}
+                                    aria-label={customTime ? `Logged time ${formatTimeDisplay(customTime)}, tap to change` : 'Logged time: now, tap to set a custom time'}
+                                  >
+                                    <Clock className="h-3 w-3" />
+                                    <span className="tabular-nums">
+                                      {customTime ? formatTimeDisplay(customTime) : 'Now'}
+                                    </span>
+                                    {customTime && (
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setCustomTime(null)
+                                          setTimeEditOpen(false)
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            setCustomTime(null)
+                                            setTimeEditOpen(false)
+                                          }
+                                        }}
+                                        className="-mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-blue-200/60 dark:hover:bg-blue-900/60"
+                                        aria-label="Clear custom time"
+                                      >
+                                        <X className="h-2.5 w-2.5" />
+                                      </span>
+                                    )}
+                                  </button>
+                                ) : (
+                                  <div className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 dark:bg-blue-900/40">
+                                    <Clock className="h-3 w-3 text-blue-700 dark:text-blue-200" />
+                                    <input
+                                      type="time"
+                                      value={customTime ?? dateToTimeInputValue(new Date())}
+                                      onChange={(e) => setCustomTime(e.target.value || null)}
+                                      onBlur={() => setTimeEditOpen(false)}
+                                      autoFocus
+                                      className="bg-transparent text-[11px] font-semibold text-blue-700 tabular-nums focus:outline-none dark:text-blue-200"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCustomTime(null)
+                                        setTimeEditOpen(false)
+                                      }}
+                                      className="-mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                      aria-label="Clear custom time"
+                                    >
+                                      <X className="h-2.5 w-2.5" />
+                                    </button>
+                                  </div>
+                                )}
+                                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                  {customTime ? 'Logged at custom time' : 'Logged now'}
+                                </span>
+                              </div>
                               <button
                                 onClick={handleAddFood}
                                 disabled={adding}
-                                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                               >
                                 {adding ? (
                                   <>
