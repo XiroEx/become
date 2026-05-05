@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
 import MealCard from '@/components/meals/MealCard'
-import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle } from 'lucide-react'
+import SavedFoodCard from '@/components/meals/SavedFoodCard'
+import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle, Bookmark } from 'lucide-react'
 
 interface MealLite {
   _id: string
@@ -31,6 +32,33 @@ interface MeResponse {
   userId?: string
 }
 
+interface SavedFoodLite {
+  _id: string
+  name: string
+  brand?: string
+  servingSize: number
+  servingUnit: string
+  displayLabel?: string
+  isVerified?: boolean
+  nutrition: { calories: number; protein: number; carbs: number; fats: number }
+  variants?: Array<{
+    _id?: string
+    name: string
+    isDefault?: boolean
+    servingSize: number
+    servingUnit: string
+    nutrition: { calories: number; protein: number; carbs: number; fats: number }
+  }>
+}
+
+function getDefaultTagForNow(): string {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 11) return 'breakfast'
+  if (h >= 11 && h < 14) return 'lunch'
+  if (h >= 17 && h < 21) return 'dinner'
+  return 'snack'
+}
+
 function titleCaseTag(tag: string): string {
   return tag
     .split(/[-_\s]+/)
@@ -38,9 +66,14 @@ function titleCaseTag(tag: string): string {
     .join('-')
 }
 
+type Tab = 'meals' | 'foods'
+
 export default function MealsPage() {
+  const [tab, setTab] = useState<Tab>('meals')
   const [meals, setMeals] = useState<MealLite[]>([])
+  const [savedFoods, setSavedFoods] = useState<SavedFoodLite[]>([])
   const [loading, setLoading] = useState(true)
+  const [foodsLoading, setFoodsLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
@@ -50,6 +83,9 @@ export default function MealsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [applying, setApplying] = useState<string | null>(null)
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
+  const [loggingFoodId, setLoggingFoodId] = useState<string | null>(null)
+  const [loggedFoodIds, setLoggedFoodIds] = useState<Set<string>>(new Set())
+  const [removingFoodId, setRemovingFoodId] = useState<string | null>(null)
   const [errorToast, setErrorToast] = useState<string | null>(null)
 
   const getHeaders = useCallback((): HeadersInit => {
@@ -114,14 +150,32 @@ export default function MealsPage() {
     }
   }, [debouncedSearch, selectedTag, getHeaders])
 
+  const fetchSavedFoods = useCallback(async () => {
+    setFoodsLoading(true)
+    try {
+      const res = await fetch('/api/me/foods', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setSavedFoods(Array.isArray(data.foods) ? data.foods : [])
+      } else {
+        setSavedFoods([])
+      }
+    } catch {
+      setSavedFoods([])
+    } finally {
+      setFoodsLoading(false)
+    }
+  }, [getHeaders])
+
   useEffect(() => {
     fetchMe()
     fetchTags()
   }, [fetchMe, fetchTags])
 
   useEffect(() => {
-    fetchMeals()
-  }, [fetchMeals])
+    if (tab === 'meals') fetchMeals()
+    else fetchSavedFoods()
+  }, [tab, fetchMeals, fetchSavedFoods])
 
   const allTags = useMemo<string[]>(() => {
     const seen = new Set<string>()
@@ -135,6 +189,86 @@ export default function MealsPage() {
     }
     return out
   }, [tagsResp])
+
+  const handleLogFood = async (food: SavedFoodLite) => {
+    if (loggingFoodId) return
+    setLoggingFoodId(food._id)
+    try {
+      const variant = food.variants?.find(v => v.isDefault) || food.variants?.[0]
+      const item = {
+        foodId: food._id,
+        variantId: variant?._id,
+        variantName: variant?.name,
+        name: food.name,
+        brand: food.brand,
+        servingSize: food.servingSize,
+        servingUnit: food.servingUnit,
+        servings: 1,
+        nutrition: food.nutrition,
+      }
+      const res = await fetch('/api/meal-logs', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          items: [item],
+          tags: [getDefaultTagForNow()],
+          loggedAt: new Date().toISOString(),
+        }),
+      })
+      if (res.ok) {
+        setLoggedFoodIds(prev => {
+          const next = new Set(prev)
+          next.add(food._id)
+          return next
+        })
+        setTimeout(() => {
+          setLoggedFoodIds(prev => {
+            const next = new Set(prev)
+            next.delete(food._id)
+            return next
+          })
+        }, 2200)
+      } else {
+        setErrorToast('Failed to log food. Please try again.')
+        setTimeout(() => setErrorToast(null), 3500)
+      }
+    } catch {
+      setErrorToast('Network error.')
+      setTimeout(() => setErrorToast(null), 3500)
+    } finally {
+      setLoggingFoodId(null)
+    }
+  }
+
+  const handleRemoveFood = async (foodId: string) => {
+    if (removingFoodId) return
+    setRemovingFoodId(foodId)
+    try {
+      const res = await fetch(`/api/me/foods/${foodId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      })
+      if (res.ok) {
+        setSavedFoods(prev => prev.filter(f => f._id !== foodId))
+      } else {
+        setErrorToast('Failed to remove food.')
+        setTimeout(() => setErrorToast(null), 3500)
+      }
+    } catch {
+      setErrorToast('Network error.')
+      setTimeout(() => setErrorToast(null), 3500)
+    } finally {
+      setRemovingFoodId(null)
+    }
+  }
+
+  const filteredFoods = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase()
+    if (!q) return savedFoods
+    return savedFoods.filter(f =>
+      f.name.toLowerCase().includes(q) || (f.brand?.toLowerCase().includes(q) ?? false)
+    )
+  }, [savedFoods, debouncedSearch])
 
   const handleApply = async (mealId: string) => {
     if (applying) return
@@ -176,9 +310,37 @@ export default function MealsPage() {
       <header className="mb-2 sm:mb-4">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Meals</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-          Save the meals you eat often. Tap to log.
+          {tab === 'meals'
+            ? 'Save the meals you eat often. Tap to log.'
+            : 'Foods you bookmarked. Tap to log to today.'}
         </p>
       </header>
+
+      {/* Tab strip — Meals | My Foods */}
+      <div className="inline-flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+        <button
+          onClick={() => setTab('meals')}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
+            tab === 'meals'
+              ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white'
+              : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+          }`}
+        >
+          <ChefHat className="h-3.5 w-3.5" />
+          Meals
+        </button>
+        <button
+          onClick={() => setTab('foods')}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
+            tab === 'foods'
+              ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white'
+              : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+          }`}
+        >
+          <Bookmark className="h-3.5 w-3.5" />
+          My Foods
+        </button>
+      </div>
 
       {/* Search bar */}
       <div className="relative">
@@ -187,7 +349,7 @@ export default function MealsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search your meals…"
+          placeholder={tab === 'meals' ? 'Search your meals…' : 'Search your foods…'}
           className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600"
         />
         {search && (
@@ -200,8 +362,8 @@ export default function MealsPage() {
         )}
       </div>
 
-      {/* Tag filter chips */}
-      {allTags.length > 0 && (
+      {/* Tag filter chips — Meals tab only */}
+      {tab === 'meals' && allTags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setSelectedTag(null)}
@@ -229,8 +391,8 @@ export default function MealsPage() {
         </div>
       )}
 
-      {/* Meal list */}
-      {loading ? (
+      {/* Meal list (Meals tab only) */}
+      {tab === 'meals' && (loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
         </div>
@@ -279,16 +441,67 @@ export default function MealsPage() {
             />
           ))}
         </div>
-      )}
+      ))}
 
-      {/* Floating + New Meal button */}
-      <Link
-        href="/dashboard/meals/new"
-        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
-        aria-label="Create new meal"
-      >
-        <Plus className="h-6 w-6" />
-      </Link>
+      {/* My Foods list (Foods tab only) */}
+      {tab === 'foods' && (foodsLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+        </div>
+      ) : filteredFoods.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+            <Bookmark className="h-7 w-7 fill-current text-amber-500" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-zinc-900 dark:text-white">
+              {debouncedSearch ? 'No foods match' : 'No saved foods yet'}
+            </p>
+            <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+              {debouncedSearch
+                ? 'Try a different search.'
+                : 'Tap the bookmark on any food in the search modal to add it here.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3">
+          <AnimatePresence initial={false}>
+            {filteredFoods.map(food => (
+              <SavedFoodCard
+                key={food._id}
+                id={food._id}
+                name={food.name}
+                brand={food.brand}
+                servingSize={food.servingSize}
+                servingUnit={food.servingUnit}
+                displayLabel={food.displayLabel}
+                isVerified={food.isVerified}
+                calories={Math.round(food.nutrition.calories)}
+                protein={Math.round(food.nutrition.protein)}
+                carbs={Math.round(food.nutrition.carbs)}
+                fats={Math.round(food.nutrition.fats)}
+                logging={loggingFoodId === food._id}
+                logged={loggedFoodIds.has(food._id)}
+                removing={removingFoodId === food._id}
+                onLog={() => handleLogFood(food)}
+                onRemove={() => handleRemoveFood(food._id)}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+      ))}
+
+      {/* Floating + New Meal button (Meals tab only — foods are added via search modal) */}
+      {tab === 'meals' && (
+        <Link
+          href="/dashboard/meals/new"
+          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+          aria-label="Create new meal"
+        >
+          <Plus className="h-6 w-6" />
+        </Link>
+      )}
 
       {/* Error toast */}
       {errorToast && (
