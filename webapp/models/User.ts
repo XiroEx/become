@@ -13,6 +13,11 @@ export interface ISavedProgram {
   order: number;
 }
 
+export interface ISavedFood {
+  foodId: mongoose.Types.ObjectId;
+  savedAt: Date;
+}
+
 export type WeightUnit = 'lbs' | 'kg';
 
 export interface IUserProfile {
@@ -37,6 +42,7 @@ export interface IUser {
   role: UserRole
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
+  savedFoods?: ISavedFood[];
   profile?: IUserProfile;
   onboardingCompleted?: boolean;
   createdAt?: Date
@@ -53,6 +59,11 @@ const SavedProgramSchema = new Schema({
   programId: { type: String, required: true },
   savedAt: { type: Date, default: Date.now },
   order: { type: Number, default: 0 },
+}, { _id: false });
+
+const SavedFoodSchema = new Schema({
+  foodId: { type: Schema.Types.ObjectId, ref: 'Food', required: true },
+  savedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
 const UserProfileSchema = new Schema({
@@ -90,11 +101,15 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
+  savedFoods: [SavedFoodSchema],
   profile: { type: UserProfileSchema, default: {} },
   onboardingCompleted: { type: Boolean, default: false },
 }, {
   timestamps: true,
 })
+
+// Index to support fast lookups of users by saved food (and basic membership tests)
+UserSchema.index({ 'savedFoods.foodId': 1 })
 
 // Hash password before saving
 UserSchema.pre('save', async function() {

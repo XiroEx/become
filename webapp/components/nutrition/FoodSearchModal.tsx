@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check } from 'lucide-react'
+import { Search, X, Plus, Clock, Star, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2 } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
+import { getToken } from '@/lib/clientAuth'
 import BarcodeScanner from './BarcodeScanner'
 
 interface FoodSearchModalProps {
@@ -59,6 +60,7 @@ interface FoodResult {
   image_url?: string
   nutriscore_grade?: string
   variants?: FoodVariant[]
+  isSaved?: boolean
 }
 
 // 24-char hex ObjectId — anything else is a synthetic external id (usda-/off-/etc.)
@@ -81,13 +83,13 @@ function titleCaseTag(tag: string): string {
     .join('-')
 }
 
-type TabId = 'all' | 'recent' | 'frequent' | 'custom'
+type TabId = 'all' | 'mine' | 'recent' | 'frequent'
 
 const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'all', label: 'All', Icon: Search },
+  { id: 'mine', label: 'My Foods', Icon: Bookmark },
   { id: 'recent', label: 'Recent', Icon: Clock },
   { id: 'frequent', label: 'Frequent', Icon: Star },
-  { id: 'custom', label: 'Custom', Icon: ChefHat },
 ]
 
 export default function FoodSearchModal({
@@ -150,6 +152,15 @@ export default function FoodSearchModal({
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [barcodeError, setBarcodeError] = useState<string | null>(null)
 
+  // Set of foodIds (real ObjectId strings) the user has saved.
+  // Source of truth for the bookmark icon — independently of fetched results.
+  const [savedFoodIds, setSavedFoodIds] = useState<Set<string>>(new Set())
+  // Result-row id (food._id from the result, may be synthetic) currently being toggled
+  const [savingRowId, setSavingRowId] = useState<string | null>(null)
+  // Transient toast for save/unsave feedback
+  const [saveToast, setSaveToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<NodeJS.Timeout>(undefined)
+
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
 
@@ -178,9 +189,42 @@ export default function FoodSearchModal({
       setAdding(false)
       setTagDropdownOpen(false)
       setCustomTagInput('')
+      setSaveToast(null)
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
+
+  // Fetch the user's saved-food id set on open so we know which results to flag,
+  // even before the first server response carries `isSaved`.
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = getToken()
+        const headers: HeadersInit = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch('/api/me/foods', { headers })
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        const ids = new Set<string>(
+          (data.foods || []).map((f: { _id: string }) => String(f._id)).filter(Boolean)
+        )
+        setSavedFoodIds(ids)
+      } catch {
+        // best-effort
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isOpen])
+
+  const showToast = useCallback((msg: string) => {
+    setSaveToast(msg)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setSaveToast(null), 1800)
+  }, [])
 
   const handleBarcodeDetected = useCallback(async (code: string) => {
     setScannerOpen(false)
@@ -221,7 +265,7 @@ export default function FoodSearchModal({
     async (searchQuery: string, tab: TabId) => {
       setLoading(true)
       try {
-        const token = localStorage.getItem('token')
+        const token = getToken()
         const headers: HeadersInit = {}
         if (token) headers['Authorization'] = `Bearer ${token}`
 
@@ -230,8 +274,8 @@ export default function FoodSearchModal({
           url = '/api/nutrition/foods/recent'
         } else if (tab === 'frequent') {
           url = '/api/nutrition/foods/frequent'
-        } else if (tab === 'custom') {
-          url = `/api/nutrition/foods?q=${encodeURIComponent(searchQuery)}&custom=true`
+        } else if (tab === 'mine') {
+          url = '/api/me/foods'
         } else {
           url = `/api/nutrition/foods?q=${encodeURIComponent(searchQuery)}`
         }
@@ -252,17 +296,23 @@ export default function FoodSearchModal({
     []
   )
 
-  // Debounced search for "all" and "custom" tabs
+  // Debounced search for the "all" tab. Tabs that don't take a query fire once.
   useEffect(() => {
     if (!isOpen) return
 
-    if (activeTab === 'recent' || activeTab === 'frequent') {
+    if (activeTab === 'recent' || activeTab === 'frequent' || activeTab === 'mine') {
       fetchResults('', activeTab)
       return
     }
 
+    // "all" tab with an empty query: show the user's saved foods as the landing
+    // view. Falls back to the standard "type 2 chars" empty state if they have none.
     if (query.trim().length < 2) {
-      setResults([])
+      if (activeTab === 'all') {
+        fetchResults('', 'mine')
+      } else {
+        setResults([])
+      }
       return
     }
 
@@ -378,6 +428,121 @@ export default function FoodSearchModal({
     } catch (err) {
       console.warn('[FoodSearchModal] Import network error — proceeding without persisted Food', err)
       return { foodId: id, variants: food.variants }
+    }
+  }
+
+  // Save a food (by real foodId) to /api/me/foods. Returns the new isSaved state.
+  const saveFoodIdToServer = async (foodId: string): Promise<boolean> => {
+    try {
+      const token = getToken()
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch('/api/me/foods', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ foodId }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
+  const removeFoodIdFromServer = async (foodId: string): Promise<boolean> => {
+    try {
+      const token = getToken()
+      const headers: HeadersInit = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/me/foods/${foodId}`, {
+        method: 'DELETE',
+        headers,
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
+  // Toggle save on an arbitrary result row. For external results (usda-/off-),
+  // this triggers an import-then-save chain so the persisted Food becomes the
+  // canonical reference in the user's saved list.
+  const handleToggleSave = async (food: FoodResult, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rowId = String(food._id)
+    if (savingRowId === rowId) return
+    setSavingRowId(rowId)
+
+    try {
+      let foodId = rowId
+      let isExternal = !isObjectIdString(rowId)
+      const currentlySaved = !isExternal && savedFoodIds.has(foodId)
+
+      if (currentlySaved) {
+        // Optimistic remove
+        setSavedFoodIds(prev => {
+          const next = new Set(prev)
+          next.delete(foodId)
+          return next
+        })
+        // Reflect on the visible result row
+        setResults(prev => prev.map(r => (String(r._id) === rowId ? { ...r, isSaved: false } : r)))
+
+        const ok = await removeFoodIdFromServer(foodId)
+        if (!ok) {
+          // Revert
+          setSavedFoodIds(prev => {
+            const next = new Set(prev)
+            next.add(foodId)
+            return next
+          })
+          setResults(prev => prev.map(r => (String(r._id) === rowId ? { ...r, isSaved: true } : r)))
+          showToast('Could not remove')
+        } else {
+          showToast('Removed from My Foods')
+          // If we're on the My Foods tab, drop the row from the list
+          if (activeTab === 'mine') {
+            setResults(prev => prev.filter(r => String(r._id) !== rowId))
+          }
+        }
+        return
+      }
+
+      // SAVE (potentially with import for external results)
+      let resolvedVariants: FoodVariant[] | undefined = food.variants
+
+      if (isExternal) {
+        const imported = await importExternalIfNeeded(food)
+        foodId = imported.foodId
+        resolvedVariants = imported.variants
+        isExternal = !isObjectIdString(foodId)
+        if (isExternal) {
+          showToast('Could not save (import failed)')
+          return
+        }
+      }
+
+      // Optimistic add
+      setSavedFoodIds(prev => {
+        const next = new Set(prev)
+        next.add(foodId)
+        return next
+      })
+      setResults(prev => prev.map(r => (String(r._id) === rowId ? { ...r, _id: foodId, isSaved: true, variants: resolvedVariants ?? r.variants } : r)))
+
+      const ok = await saveFoodIdToServer(foodId)
+      if (!ok) {
+        setSavedFoodIds(prev => {
+          const next = new Set(prev)
+          next.delete(foodId)
+          return next
+        })
+        setResults(prev => prev.map(r => (String(r._id) === foodId ? { ...r, isSaved: false } : r)))
+        showToast('Could not save')
+      } else {
+        showToast('Saved to My Foods')
+      }
+    } finally {
+      setSavingRowId(null)
     }
   }
 
@@ -504,7 +669,7 @@ export default function FoodSearchModal({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="flex h-full w-full flex-col sm:h-[85vh] sm:max-h-[700px] sm:max-w-lg sm:rounded-2xl sm:bg-white sm:shadow-2xl sm:dark:bg-zinc-900"
+            className="relative flex h-full w-full flex-col sm:h-[85vh] sm:max-h-[700px] sm:max-w-lg sm:rounded-2xl sm:bg-white sm:shadow-2xl sm:dark:bg-zinc-900"
           >
             {/* Header */}
             <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-800">
@@ -674,18 +839,65 @@ export default function FoodSearchModal({
                 </div>
               ) : results.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 px-4">
-                  <Search className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">
-                    {(activeTab === 'all' || activeTab === 'custom') && query.length < 2
-                      ? 'Type at least 2 characters to search'
-                      : 'No foods found'}
-                  </p>
+                  {activeTab === 'mine' ? (
+                    <>
+                      <Bookmark className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">
+                        No saved foods yet.
+                      </p>
+                      <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center max-w-xs">
+                        Tap the bookmark on any search result to add it here.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">
+                        {activeTab === 'all' && query.length < 2
+                          ? 'Type at least 2 characters to search'
+                          : 'No foods found'}
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {results.map((food) => (
-                    <div key={food._id}>
-                      <button
+                  {/* Empty-state hint at the top of the All tab when the user has no saved foods. */}
+                  {activeTab === 'all' && query.trim().length < 2 && savedFoodIds.size === 0 && (
+                    <div className="flex items-start gap-2 bg-zinc-50 px-4 py-3 dark:bg-zinc-800/50">
+                      <Bookmark className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        Save foods you eat often — tap the bookmark on any result to add it here.
+                      </p>
+                    </div>
+                  )}
+                  {results.map((food, idx) => {
+                    const prev = idx > 0 ? results[idx - 1] : null
+                    const showMyFoodsHeader =
+                      activeTab !== 'mine' &&
+                      food.isSaved === true &&
+                      (idx === 0 || prev?.isSaved !== true)
+                    const showOtherResultsHeader =
+                      activeTab === 'all' &&
+                      query.trim().length >= 2 &&
+                      food.isSaved !== true &&
+                      prev?.isSaved === true
+                    return (
+                  <div key={food._id}>
+                    {showMyFoodsHeader && (
+                      <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-amber-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 backdrop-blur dark:bg-amber-900/30 dark:text-amber-200">
+                        <Bookmark className="h-3 w-3 fill-current" />
+                        My Foods
+                      </div>
+                    )}
+                    {showOtherResultsHeader && (
+                      <div className="bg-zinc-50 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800/40 dark:text-zinc-400">
+                        Other Results
+                      </div>
+                    )}
+                      <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => {
                           if (selectedFood?._id === food._id) {
                             setSelectedFood(null)
@@ -702,7 +914,13 @@ export default function FoodSearchModal({
                             setCustomGrams(getLabelServingGrams(food, variantIdx))
                           }
                         }}
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            ;(e.currentTarget as HTMLDivElement).click()
+                          }
+                        }}
+                        className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors ${
                           selectedFood?._id === food._id
                             ? 'bg-blue-50 dark:bg-blue-900/20'
                             : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
@@ -742,7 +960,51 @@ export default function FoodSearchModal({
                         <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
                           {food.nutrition.calories} cal
                         </span>
-                      </button>
+                        {/* Save / unsave bookmark (or remove on My Foods tab) */}
+                        {(() => {
+                          const rowIdStr = String(food._id)
+                          const isSavedNow =
+                            food.isSaved === true ||
+                            (isObjectIdString(rowIdStr) && savedFoodIds.has(rowIdStr))
+                          const isBusy = savingRowId === rowIdStr
+                          if (activeTab === 'mine') {
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleSave(food, e)}
+                                disabled={isBusy}
+                                aria-label="Remove from My Foods"
+                                className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/30"
+                              >
+                                {isBusy ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            )
+                          }
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => handleToggleSave(food, e)}
+                              disabled={isBusy}
+                              aria-label={isSavedNow ? 'Remove from My Foods' : 'Save to My Foods'}
+                              className={`ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
+                                isSavedNow
+                                  ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/30'
+                                  : 'text-zinc-300 hover:bg-zinc-100 hover:text-amber-500 dark:text-zinc-600 dark:hover:bg-zinc-800'
+                              }`}
+                            >
+                              {isBusy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Bookmark className={`h-4 w-4 transition-all ${isSavedNow ? 'fill-current' : ''}`} />
+                              )}
+                            </button>
+                          )
+                        })()}
+                      </div>
 
                       {/* Serving size picker (inline) */}
                       <AnimatePresence>
@@ -899,11 +1161,27 @@ export default function FoodSearchModal({
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-                  ))}
+                  </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
+
+            {/* Save toast */}
+            <AnimatePresence>
+              {saveToast && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.15 }}
+                  className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-lg dark:bg-white/95 dark:text-black"
+                >
+                  {saveToast}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         </motion.div>
       )}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import Food, { IFood } from '@/models/Food'
+import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { searchUSDA } from '@/lib/usda'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
@@ -73,6 +74,20 @@ export async function GET(request: NextRequest) {
     const baseFilter: Record<string, unknown> = {}
     if (category) baseFilter.category = category
 
+    // Fetch the user's saved-food id set once per request — used to flag results
+    // and to bump them above other "from our DB" foods in the combined ranking.
+    const savedFoodIdSet = new Set<string>()
+    try {
+      const userDoc = await User.findById(authResult.userId)
+        .select('savedFoods')
+        .lean<{ savedFoods?: { foodId: mongoose.Types.ObjectId; savedAt: Date }[] } | null>()
+      for (const s of userDoc?.savedFoods ?? []) {
+        if (s?.foodId) savedFoodIdSet.add(s.foodId.toString())
+      }
+    } catch {
+      // Saved-food lookup is best-effort — search still works without it.
+    }
+
     if (!q) {
       const foods = await Food.find(baseFilter)
         .sort({ isFirstClass: -1, usageCount: -1 })
@@ -82,7 +97,11 @@ export async function GET(request: NextRequest) {
 
       const total = await Food.countDocuments(baseFilter)
       return NextResponse.json({
-        foods: foods.map(f => ({ ...flattenFoodForResponse(f), source: f.source || 'manual' })),
+        foods: foods.map(f => ({
+          ...flattenFoodForResponse(f),
+          source: f.source || 'manual',
+          isSaved: savedFoodIdSet.has(f._id.toString()),
+        })),
         total,
         offset,
         limit,
@@ -120,14 +139,49 @@ export async function GET(request: NextRequest) {
       const id = item._id.toString()
       if (!seenIds.has(id)) {
         seenIds.add(id)
-        customFoods.push({ ...flattenFoodForResponse(item), source: item.source || 'manual' })
+        customFoods.push({
+          ...flattenFoodForResponse(item),
+          source: item.source || 'manual',
+          isSaved: savedFoodIdSet.has(id),
+        })
       }
     }
     for (const item of regexResults) {
       const id = item._id.toString()
       if (!seenIds.has(id) && customFoods.length < customLimit) {
         seenIds.add(id)
-        customFoods.push({ ...flattenFoodForResponse(item), source: item.source || 'manual' })
+        customFoods.push({
+          ...flattenFoodForResponse(item),
+          source: item.source || 'manual',
+          isSaved: savedFoodIdSet.has(id),
+        })
+      }
+    }
+
+    // Pull in any of the user's saved foods that match the query but didn't
+    // surface in the top-N text/regex results. Saved foods always belong above
+    // the fold for relevance — we splice them in even outside the customLimit.
+    if (savedFoodIdSet.size > 0) {
+      const savedFilter: Record<string, unknown> = {
+        ...baseFilter,
+        _id: { $in: Array.from(savedFoodIdSet).map(s => new mongoose.Types.ObjectId(s)) },
+        $or: [
+          { name: { $regex: q, $options: 'i' } },
+          { brand: { $regex: q, $options: 'i' } },
+          { aliases: { $regex: q, $options: 'i' } },
+        ],
+      }
+      const savedMatches = await Food.find(savedFilter).lean<FoodLean[]>()
+      for (const item of savedMatches) {
+        const id = item._id.toString()
+        if (!seenIds.has(id)) {
+          seenIds.add(id)
+          customFoods.push({
+            ...flattenFoodForResponse(item),
+            source: item.source || 'manual',
+            isSaved: true,
+          })
+        }
       }
     }
 
@@ -218,9 +272,15 @@ export async function GET(request: NextRequest) {
       return coverageScore + lengthScore + typeScore
     }
 
-    const combined = [...customFoods, ...usdaResults, ...offFoods]
+    // Tag external sources as never-saved so the frontend can render the bookmark
+    // state uniformly. (Saved external foods would have been imported into our DB
+    // and surface via customFoods above with isSaved:true.)
+    const usdaWithFlag = usdaResults.map(r => ({ ...r, isSaved: false }))
+    const offWithFlag = offFoods.map(r => ({ ...r, isSaved: false }))
+
+    const combined = [...customFoods, ...usdaWithFlag, ...offWithFlag]
     combined.sort((a, b) => {
-      // Source priority: our DB (0) > usda (1) > off (2)
+      // Source priority: saved (-1) > our DB (0) > usda (1) > off (2)
       // Anything sourced from our Food collection (manual/usda/off-imported) ranks first.
       const aFromOurDb = a.source !== 'usda' && a.source !== 'openfoodfacts'
         ? true
@@ -230,8 +290,8 @@ export async function GET(request: NextRequest) {
         ? true
         : typeof b._id !== 'string' || (!b._id.startsWith?.('usda-') && !b._id.startsWith?.('off-'))
 
-      const srcA = aFromOurDb ? 0 : a.source === 'usda' ? 1 : 2
-      const srcB = bFromOurDb ? 0 : b.source === 'usda' ? 1 : 2
+      const srcA = a.isSaved ? -1 : aFromOurDb ? 0 : a.source === 'usda' ? 1 : 2
+      const srcB = b.isSaved ? -1 : bFromOurDb ? 0 : b.source === 'usda' ? 1 : 2
       if (srcA !== srcB) return srcA - srcB
       return relevanceScore(a.name, a.brand, a.dataType) - relevanceScore(b.name, b.brand, b.dataType)
     })
