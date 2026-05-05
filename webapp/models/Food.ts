@@ -56,6 +56,13 @@ export interface IFoodVariant {
   isDefault: boolean
   servingSize: number
   servingUnit: ServingUnit
+  /**
+   * Optional human-friendly label for the default serving (e.g. "1 cup",
+   * "1 medium banana"). The picker uses this in place of "240 g" / "118 g".
+   * Pulled from USDA householdServingFullText or OpenFoodFacts serving_size.
+   * The math always uses servingSize+servingUnit; displayLabel is presentation-only.
+   */
+  displayLabel?: string
   alternateServings: IAlternateServing[]
   nutrition: IFoodNutrition
 }
@@ -116,6 +123,7 @@ const VariantSchema = new Schema<IFoodVariant>({
     required: true,
     enum: ['g', 'oz', 'cup', 'each', 'ml', 'tbsp', 'tsp', 'slice', 'scoop'],
   },
+  displayLabel: { type: String },
   alternateServings: { type: [AlternateServingSchema], default: [] },
   nutrition: { type: NutritionSchema, required: true },
 }, { _id: true })

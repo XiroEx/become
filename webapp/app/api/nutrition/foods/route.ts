@@ -12,6 +12,19 @@ import { flattenFoodForResponse, importManualFood } from '@/lib/foodImport'
 // Map an OpenFoodFact document to the same shape as a flattened Food
 // ---------------------------------------------------------------------------
 
+function extractGramsFromOffServing(text?: string): number | null {
+  if (!text) return null
+  const paren = text.match(/\((\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\)/i)
+  if (paren) return parseFloat(paren[1])
+  const direct = text.match(/(\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\b/i)
+  if (direct) {
+    const n = parseFloat(direct[1])
+    if (/oz|ounces?/i.test(direct[0])) return n * 28.3495
+    return n
+  }
+  return null
+}
+
 function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId }) {
   const n = off.nutriments
 
@@ -26,11 +39,16 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
     saturatedFat: n.saturated_fat_100g != null ? Math.round(n.saturated_fat_100g * 10) / 10 : undefined
   }
 
-  const alternateServings: { label: string; multiplier: number }[] = []
+  // OFF's serving_quantity is unreliable — often parses "1" from "1 cup (240 ml)".
+  // Prefer extracting actual grams from the serving_size text.
+  const parsedGrams = extractGramsFromOffServing(off.serving_size)
+  const candidateGrams = parsedGrams ?? off.serving_quantity
+  const actualGrams = candidateGrams && candidateGrams >= 5 ? candidateGrams : null
 
-  if (off.serving_quantity && off.serving_quantity > 0 && off.serving_quantity !== 100) {
-    const label = off.serving_size || `${off.serving_quantity}${off.serving_unit || 'g'}`
-    alternateServings.push({ label, multiplier: off.serving_quantity / 100 })
+  const alternateServings: { label: string; multiplier: number }[] = []
+  if (actualGrams && actualGrams !== 100) {
+    const label = off.serving_size || `${Math.round(actualGrams)}${off.serving_unit || 'g'}`
+    alternateServings.push({ label, multiplier: actualGrams / 100 })
   }
 
   return {
@@ -40,6 +58,7 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
     category: off.category || 'Other',
     servingSize: 100,
     servingUnit: 'g' as const,
+    displayLabel: actualGrams ? off.serving_size || undefined : undefined,
     alternateServings,
     nutrition,
     barcode: off.code,

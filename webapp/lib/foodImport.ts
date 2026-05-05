@@ -44,6 +44,7 @@ function buildVariantFromMapped(
     isDefault: true,
     servingSize: mapped.servingSize,
     servingUnit: coerceServingUnit(mapped.servingUnit),
+    displayLabel: mapped.displayLabel,
     alternateServings: mapped.alternateServings ?? [],
     nutrition: mapped.nutrition,
   }
@@ -119,6 +120,28 @@ export async function importFromUSDA(
 // OpenFoodFacts → Food
 // ---------------------------------------------------------------------------
 
+/**
+ * OpenFoodFacts `serving_quantity` is supposed to be the actual serving size
+ * in grams/ml, but it's frequently parsed as the leading number from the text
+ * (e.g. "1 cup (240 ml)" → 1 instead of 240). When that happens our multiplier
+ * comes out 100x too small. Fall back to extracting grams from `serving_size`.
+ */
+function extractGramsFromServingSize(text?: string): number | null {
+  if (!text) return null
+  // Parenthesized: "1 cup (240 g)" → 240
+  const paren = text.match(/\((\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\)/i)
+  if (paren) return parseFloat(paren[1])
+  // Direct: "240 g", "240ml", "8 oz"
+  const direct = text.match(/(\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\b/i)
+  if (direct) {
+    const n = parseFloat(direct[1])
+    // Convert oz to grams (28.35 g/oz) so multipliers stay consistent
+    if (/oz|ounces?/i.test(direct[0])) return n * 28.3495
+    return n
+  }
+  return null
+}
+
 function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
   const n = off.nutriments
   const nutrition = {
@@ -132,10 +155,16 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
     saturatedFat: n.saturated_fat_100g != null ? Math.round(n.saturated_fat_100g * 10) / 10 : undefined,
   }
 
+  // Prefer parsed grams from the serving_size text (handles "1 cup (240 g)")
+  // over serving_quantity, which OFF often sets to the leading "1" not 240.
+  const parsedGrams = extractGramsFromServingSize(off.serving_size)
+  const candidateGrams = parsedGrams ?? off.serving_quantity
+  const actualGrams = candidateGrams && candidateGrams >= 5 ? candidateGrams : null
+
   const alternateServings: { label: string; multiplier: number }[] = []
-  if (off.serving_quantity && off.serving_quantity > 0 && off.serving_quantity !== 100) {
-    const label = off.serving_size || `${off.serving_quantity}${off.serving_unit || 'g'}`
-    alternateServings.push({ label, multiplier: off.serving_quantity / 100 })
+  if (actualGrams && actualGrams !== 100) {
+    const label = off.serving_size || `${Math.round(actualGrams)}${off.serving_unit || 'g'}`
+    alternateServings.push({ label, multiplier: actualGrams / 100 })
   }
 
   return {
@@ -143,6 +172,7 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
     isDefault: true,
     servingSize: 100,
     servingUnit: 'g',
+    displayLabel: actualGrams ? off.serving_size || undefined : undefined,
     alternateServings,
     nutrition,
   }
@@ -320,6 +350,7 @@ export function flattenFoodForResponse(food: IFood & { _id: mongoose.Types.Objec
     category: food.category,
     servingSize: v.servingSize,
     servingUnit: v.servingUnit,
+    displayLabel: v.displayLabel,
     alternateServings: v.alternateServings,
     nutrition: v.nutrition,
     barcode: food.barcode,

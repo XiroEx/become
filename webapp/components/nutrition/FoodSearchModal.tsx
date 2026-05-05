@@ -49,6 +49,7 @@ interface FoodVariant {
   isDefault?: boolean
   servingSize: number
   servingUnit: string
+  displayLabel?: string
   alternateServings?: AlternateServing[]
   nutrition: FoodNutrition
 }
@@ -381,7 +382,9 @@ export default function FoodSearchModal({
 
     const options: { label: string; multiplier: number; servingSize: number; servingUnit: string }[] = [
       {
-        label: `${activeVariant.servingSize} ${activeVariant.servingUnit}`,
+        // Prefer human-friendly displayLabel ("1 cup", "1 medium banana") when set;
+        // fall back to the bare "240 g" form. Math is unaffected — multiplier is 1.
+        label: activeVariant.displayLabel || `${activeVariant.servingSize} ${activeVariant.servingUnit}`,
         multiplier: 1,
         servingSize: activeVariant.servingSize,
         servingUnit: activeVariant.servingUnit,
