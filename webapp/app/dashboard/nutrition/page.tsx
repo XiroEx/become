@@ -11,7 +11,7 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock, ChefHat } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import FeatureGuard from '@/components/FeatureGuard'
@@ -461,14 +461,24 @@ function NutritionPageInner() {
               Track your meals, macros, and hydration
             </p>
           </div>
-          <Link
-            href={`/dashboard/timeline?date=${dateParam}`}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
-            aria-label="Switch to timeline view"
-            title="Timeline view"
-          >
-            <Clock className="h-5 w-5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard/meals"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
+              aria-label="Saved meals"
+              title="Saved meals"
+            >
+              <ChefHat className="h-5 w-5" />
+            </Link>
+            <Link
+              href={`/dashboard/timeline?date=${dateParam}`}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
+              aria-label="Switch to timeline view"
+              title="Timeline view"
+            >
+              <Clock className="h-5 w-5" />
+            </Link>
+          </div>
         </header>
 
         {/* Global search bar */}
