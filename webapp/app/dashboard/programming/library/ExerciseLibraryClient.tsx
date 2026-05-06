@@ -214,7 +214,7 @@ export default function ExerciseLibraryClient() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.18 }}
-            className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+            className="mb-6 sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-5 sm:shadow-sm dark:sm:border-zinc-700 dark:sm:bg-zinc-900"
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-white">New Custom Exercise</h2>

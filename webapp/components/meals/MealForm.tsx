@@ -492,7 +492,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
+                <div className="border-b border-zinc-200 py-3 dark:border-zinc-800 sm:rounded-lg sm:border sm:border-zinc-200 sm:bg-white sm:p-3 sm:py-3 dark:sm:border-zinc-700 dark:sm:bg-zinc-900">
                   <div className="grid grid-cols-2 gap-1">
                     {allTagOptions.map(tag => {
                       const active = tags.includes(tag)
@@ -556,7 +556,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
 
           <div className="space-y-1.5">
             {items.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-900">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-white/0 p-6 text-center dark:border-zinc-700 sm:bg-white sm:p-8 dark:sm:bg-zinc-900">
                 <ChefHat className="h-7 w-7 text-zinc-300 dark:text-zinc-600" />
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   No items yet. Add foods to build your meal.
@@ -567,7 +567,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             {items.map((it, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900"
+                className="flex items-center gap-3 border-b border-zinc-200 py-2.5 dark:border-zinc-800 sm:rounded-lg sm:border sm:border-zinc-200 sm:bg-white sm:px-3 dark:sm:border-zinc-800 dark:sm:bg-zinc-900"
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
@@ -603,7 +603,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
 
         {/* Recipe toggle */}
         <div>
-          <label className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <label className="flex items-center justify-between gap-3 py-2 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-3 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
             <div>
               <p className="text-sm font-medium text-zinc-900 dark:text-white">Cooking instructions</p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Add a recipe with prep / cook time.</p>
@@ -632,7 +632,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="mt-2 space-y-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mt-2 space-y-3 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-3 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
