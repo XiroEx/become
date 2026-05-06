@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
@@ -35,4 +35,31 @@ export async function verifyAdmin(request: NextRequest): Promise<AdminAuthResult
     console.error('verifyAdmin error:', error)
     return { success: false, error: 'Internal server error', status: 500 }
   }
+}
+
+/**
+ * Convenience helper for admin-gated API routes.
+ *
+ * Usage in a route handler:
+ *
+ *   const gate = await requireAdmin(request)
+ *   if (!gate.ok) return gate.response
+ *   const { userId } = gate
+ */
+export type RequireAdminResult =
+  | { ok: true; userId: string; email?: string }
+  | { ok: false; response: NextResponse }
+
+export async function requireAdmin(request: NextRequest): Promise<RequireAdminResult> {
+  const result = await verifyAdmin(request)
+  if (!result.success || !result.userId) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: result.error ?? 'Unauthorized' },
+        { status: result.status ?? 401 }
+      ),
+    }
+  }
+  return { ok: true, userId: result.userId, email: result.email }
 }

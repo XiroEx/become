@@ -13,9 +13,13 @@ export async function getUserRole(userId: string): Promise<{ role: UserRole; tra
 }
 
 export function canAccessRoute(role: UserRole, route: string): boolean {
-  // Program creation is trainer/admin only
+  // All admin pages are admin-only
+  if (route.startsWith('/dashboard/admin')) {
+    return role === 'admin';
+  }
+  // Legacy program-create path now redirects into admin
   if (route.startsWith('/dashboard/programming/create')) {
-    return role === 'trainer' || role === 'admin';
+    return role === 'admin';
   }
   return true;
 }

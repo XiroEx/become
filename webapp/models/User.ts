@@ -2,6 +2,7 @@ import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 
 export type UserRole = 'user' | 'trainer' | 'admin';
+export type Tier = 'free' | 'plus' | 'premium' | 'pro';
 export type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_performance' | 'general_health';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type BiologicalSex = 'male' | 'female' | 'prefer_not_to_say';
@@ -40,6 +41,7 @@ export interface IUser {
   password: string
   name: string
   role: UserRole
+  tier: Tier
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
   savedFoods?: ISavedFood[];
@@ -99,6 +101,7 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
     trim: true,
   },
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
+  tier: { type: String, enum: ['free', 'plus', 'premium', 'pro'], default: 'pro' },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
   savedFoods: [SavedFoodSchema],
