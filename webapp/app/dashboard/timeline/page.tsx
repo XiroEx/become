@@ -172,27 +172,32 @@ function tagClass(tag: string): string {
 
 // Per-tag left-border accent. Saturated enough to be readable at a glance
 // even on small screens — this is the user's primary chronological cue.
+//
+// `!important` is required because @redbtn/redstyle/base.css ships an
+// unlayered `* { border-color: var(--border) }` reset, which wins over any
+// Tailwind utility (utilities live in @layer utilities; unlayered always
+// beats layered regardless of specificity).
 const tagBorderAccent: Record<string, string> = {
-  breakfast: 'border-l-amber-500 dark:border-l-amber-400',
-  lunch: 'border-l-orange-500 dark:border-l-orange-400',
-  dinner: 'border-l-indigo-500 dark:border-l-indigo-400',
-  snack: 'border-l-emerald-500 dark:border-l-emerald-400',
-  'pre-workout': 'border-l-purple-500 dark:border-l-purple-400',
-  'post-workout': 'border-l-rose-500 dark:border-l-rose-400',
-  brunch: 'border-l-yellow-500 dark:border-l-yellow-400',
-  dessert: 'border-l-pink-500 dark:border-l-pink-400',
-  'late-night': 'border-l-slate-500 dark:border-l-slate-400',
+  breakfast: '!border-l-amber-500 dark:!border-l-amber-400',
+  lunch: '!border-l-orange-500 dark:!border-l-orange-400',
+  dinner: '!border-l-indigo-500 dark:!border-l-indigo-400',
+  snack: '!border-l-emerald-500 dark:!border-l-emerald-400',
+  'pre-workout': '!border-l-purple-500 dark:!border-l-purple-400',
+  'post-workout': '!border-l-rose-500 dark:!border-l-rose-400',
+  brunch: '!border-l-yellow-500 dark:!border-l-yellow-400',
+  dessert: '!border-l-pink-500 dark:!border-l-pink-400',
+  'late-night': '!border-l-slate-500 dark:!border-l-slate-400',
 }
 
 // Stable color hash for unrecognized custom tags so users still see a per-tag
 // stripe even when they invent their own labels (e.g. "brunch", "midnight").
 const fallbackPalette = [
-  'border-l-cyan-500 dark:border-l-cyan-400',
-  'border-l-teal-500 dark:border-l-teal-400',
-  'border-l-violet-500 dark:border-l-violet-400',
-  'border-l-fuchsia-500 dark:border-l-fuchsia-400',
-  'border-l-lime-500 dark:border-l-lime-400',
-  'border-l-sky-500 dark:border-l-sky-400',
+  '!border-l-cyan-500 dark:!border-l-cyan-400',
+  '!border-l-teal-500 dark:!border-l-teal-400',
+  '!border-l-violet-500 dark:!border-l-violet-400',
+  '!border-l-fuchsia-500 dark:!border-l-fuchsia-400',
+  '!border-l-lime-500 dark:!border-l-lime-400',
+  '!border-l-sky-500 dark:!border-l-sky-400',
 ]
 
 function hashTag(tag: string): number {
@@ -202,7 +207,7 @@ function hashTag(tag: string): number {
 }
 
 function tagBorderClass(tag: string | undefined): string {
-  if (!tag) return 'border-l-zinc-300 dark:border-l-zinc-700'
+  if (!tag) return '!border-l-zinc-300 dark:!border-l-zinc-700'
   const lower = tag.toLowerCase()
   return tagBorderAccent[lower] ?? fallbackPalette[hashTag(lower) % fallbackPalette.length]
 }
