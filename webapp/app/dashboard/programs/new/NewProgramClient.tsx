@@ -72,7 +72,7 @@ export default function NewProgramClient() {
     return (
       <PageTransition className="pb-6">
         <div className="mx-auto max-w-2xl px-0 py-12 sm:px-6">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-8">
+          <div className="text-center sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-8 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white">
               <Sparkles className="h-8 w-8" />
             </div>
