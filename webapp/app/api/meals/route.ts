@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
+import { requireFeature } from '@/lib/entitlements'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 
 // GET: list user's own meals + public/verified meals.
@@ -87,10 +88,9 @@ export async function GET(request: NextRequest) {
 // POST: create a meal template
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const gate = await requireFeature(request, 'custom-meals')
+    if (!gate.ok) return gate.response
+    const authResult = { success: true as const, userId: gate.userId, role: gate.role }
 
     const body = await request.json()
     if (!body.name || typeof body.name !== 'string') {

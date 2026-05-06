@@ -28,6 +28,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Program not found' }, { status: 404 })
     }
 
+    // Custom programs may only be enrolled in by their creator.
+    if (program.isCustom && program.createdBy?.toString() !== payload.userId) {
+      return NextResponse.json({ error: 'Program not found' }, { status: 404 })
+    }
+
     // Calculate total workouts in the program (workouts per phase × weeks per phase)
     let totalWorkouts = 0
     if (program.phases) {

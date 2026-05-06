@@ -4,14 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
-import PhaseEditor from "./PhaseEditor";
 // PhaseEditor & WorkoutEditor & ExerciseEditor live in this folder.
-import { 
+import PhaseEditor from "./PhaseEditor";
+import {
   TargetUserLevel,
   Exercise,
   Workout,
   Phase,
 } from "@/lib/data/programs";
+
+export type ProgramCreatorMode = 'create' | 'edit' | 'user-create' | 'user-edit';
 
 // Equipment options
 const EQUIPMENT_OPTIONS = [
@@ -32,8 +34,6 @@ const EQUIPMENT_OPTIONS = [
   "Foam Roller",
   "Bodyweight Only",
 ];
-
-const DRAFT_KEY = "become_program_creator_draft";
 
 const TARGET_USER_OPTIONS: TargetUserLevel[] = [
   "Beginner",
@@ -56,10 +56,17 @@ interface ProgramFormData {
 }
 
 export interface ProgramCreatorProps {
-  mode?: "create" | "edit";
-  programId?: string;          // required when mode === "edit"
+  mode?: ProgramCreatorMode;
+  programId?: string;                       // required for any edit mode
   initialProgram?: Partial<ProgramFormData>;
 }
+
+const DRAFT_KEY_BY_MODE: Record<ProgramCreatorMode, string> = {
+  'create': 'become_program_creator_draft',
+  'edit': 'become_program_creator_draft_edit',
+  'user-create': 'become_user_program_creator_draft',
+  'user-edit': 'become_user_program_creator_draft_edit',
+};
 
 const createEmptyExercise = (): Exercise => ({
   name: "",
@@ -84,12 +91,14 @@ const createEmptyPhase = (phaseNumber: number, daysPerWeek: number): Phase => ({
 });
 
 export default function ProgramCreator({
-  mode = "create",
+  mode = 'create',
   programId,
   initialProgram,
 }: ProgramCreatorProps = {}) {
   const router = useRouter();
-  const isEdit = mode === "edit";
+  const isEdit = mode === 'edit' || mode === 'user-edit';
+  const isUserMode = mode === 'user-create' || mode === 'user-edit';
+  const draftKey = DRAFT_KEY_BY_MODE[mode];
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,11 +117,12 @@ export default function ProgramCreator({
         : [createEmptyPhase(1, initialProgram?.training_days_per_week ?? 4)],
   });
 
-  // Restore draft from localStorage on mount — ONLY in create mode
+  // Restore draft from localStorage on mount — only in create modes (edit modes
+  // use initialProgram as the source of truth).
   useEffect(() => {
     if (isEdit) return;
     try {
-      const saved = localStorage.getItem(DRAFT_KEY);
+      const saved = localStorage.getItem(draftKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === "object" && Array.isArray(parsed.phases)) {
@@ -122,17 +132,17 @@ export default function ProgramCreator({
     } catch {
       // Ignore malformed draft
     }
-  }, [isEdit]);
+  }, [draftKey, isEdit]);
 
-  // Auto-save draft to localStorage whenever formData changes (create mode only)
+  // Auto-save draft to localStorage whenever formData changes (create modes only)
   useEffect(() => {
     if (isEdit) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+      localStorage.setItem(draftKey, JSON.stringify(formData));
     } catch {
       // Ignore storage errors (e.g. private browsing quota)
     }
-  }, [formData, isEdit]);
+  }, [formData, draftKey, isEdit]);
 
   const steps = [
     { id: "basics", title: "Program Basics", icon: "📋" },
@@ -220,15 +230,34 @@ export default function ProgramCreator({
     try {
       const token =
         typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const url = isEdit ? `/api/programs/${programId}` : "/api/programs";
-      const method = isEdit ? "PUT" : "POST";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
-      const response = await fetch(url, {
+      let endpoint: string;
+      let method: 'POST' | 'PUT';
+      switch (mode) {
+        case 'user-create':
+          endpoint = '/api/programs/custom';
+          method = 'POST';
+          break;
+        case 'user-edit':
+          endpoint = `/api/programs/custom/${programId}`;
+          method = 'PUT';
+          break;
+        case 'edit':
+          endpoint = `/api/programs/${programId}`;
+          method = 'PUT';
+          break;
+        case 'create':
+        default:
+          endpoint = '/api/programs';
+          method = 'POST';
+          break;
+      }
+
+      const response = await fetch(endpoint, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers,
         body: JSON.stringify(formData),
       });
 
@@ -237,10 +266,23 @@ export default function ProgramCreator({
         throw new Error(data.error || "Failed to save program");
       }
 
+      const saved = await response.json().catch(() => null);
+
       if (!isEdit) {
-        localStorage.removeItem(DRAFT_KEY);
+        try { localStorage.removeItem(draftKey); } catch {}
       }
-      router.push("/dashboard/admin/programs");
+
+      // Where to send the user after save.
+      if (isUserMode) {
+        const newId = saved?.program_id || programId;
+        if (newId) {
+          router.push(`/dashboard/programming/${newId}`);
+        } else {
+          router.push('/dashboard/programs/mine');
+        }
+      } else {
+        router.push("/dashboard/admin/programs");
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save program");

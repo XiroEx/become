@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/auth";
+import { requireFeature } from "@/lib/entitlements";
 import connectDB from "@/lib/mongodb";
 import Exercise, { IExerciseDefinition } from "@/models/Exercise";
 
@@ -47,8 +48,9 @@ export async function GET(req: NextRequest) {
 // ─── POST /api/exercises/custom ───────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const auth = await verifyAuth(req);
-  if (!auth?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireFeature(req, "custom-exercises");
+  if (!gate.ok) return gate.response;
+  const auth = { userId: gate.userId };
 
   const body = await req.json();
   const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = body;
@@ -122,8 +124,9 @@ export async function POST(req: NextRequest) {
 // ─── DELETE /api/exercises/custom?slug=xxx ────────────────────────────────────
 
 export async function DELETE(req: NextRequest) {
-  const auth = await verifyAuth(req);
-  if (!auth?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireFeature(req, "custom-exercises");
+  if (!gate.ok) return gate.response;
+  const auth = { userId: gate.userId };
 
   const { searchParams } = new URL(req.url);
   const slug = searchParams.get("slug");

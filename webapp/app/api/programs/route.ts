@@ -14,7 +14,14 @@ export async function GET(request: NextRequest) {
     }
 
     await dbConnect();
-    const programs = await ProgramModel.find({}).lean();
+    // Filter customs OUT for everyone except the creator (don't leak users'
+    // custom programs to other users via the catalog list).
+    const programs = await ProgramModel.find({
+      $or: [
+        { isCustom: { $ne: true } },
+        { createdBy: authResult.userId },
+      ],
+    }).lean();
     const hydrated = await hydratePrograms(programs);
     return NextResponse.json(hydrated);
   } catch (error) {

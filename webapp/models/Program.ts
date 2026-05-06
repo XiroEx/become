@@ -65,6 +65,8 @@ export interface IProgram extends Document {
   equipment?: string[];
   tags?: string[];
   phases: IPhase[];
+  isCustom?: boolean;
+  createdBy?: mongoose.Types.ObjectId | string;
 }
 
 const ProgramExerciseSchema = new Schema<IProgramExercise>({
@@ -125,6 +127,8 @@ const ProgramSchema = new Schema<IProgram>({
   equipment: [{ type: String }],
   tags: [{ type: String, index: true }],
   phases: [PhaseSchema],
+  isCustom: { type: Boolean, default: false, index: true },
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User', sparse: true, index: true },
 });
 
 // Create text index for search

@@ -2,10 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Program from '@/models/Program';
 import { hydratePrograms } from '@/lib/hydrateExercises';
+import { verifyAuth } from '@/lib/auth';
+
+// hydratePrograms imported for parity with the rest of the API surface
+// even though this route only returns projected summaries.
+void hydratePrograms;
 
 // GET programs with search, filtering, and pagination
 export async function GET(request: NextRequest) {
   try {
+    // Best-effort auth so we can include the user's own customs in results
+    // (catalog lists hide other users' customs).
+    const authResult = await verifyAuth(request);
+    const authUserId = authResult.success ? authResult.userId : null;
+
     await dbConnect();
 
     const searchParams = request.nextUrl.searchParams;
@@ -23,17 +33,30 @@ export async function GET(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filter: any = {};
 
+    // Hide customs created by other users from the catalog. Anonymous viewers
+    // see only non-custom programs.
+    const visibilityClause = authUserId
+      ? { $or: [{ isCustom: { $ne: true } }, { createdBy: authUserId }] }
+      : { isCustom: { $ne: true } };
+
     // Text search with priority scoring
     if (query) {
       // Use $or with regex for priority-based searching
       // This gives us more control than text search for ordering
       const searchRegex = new RegExp(query, 'i');
-      filter.$or = [
-        { name: searchRegex },
-        { tags: searchRegex },
-        { description: searchRegex },
-        { goal: searchRegex }
+      filter.$and = [
+        visibilityClause,
+        {
+          $or: [
+            { name: searchRegex },
+            { tags: searchRegex },
+            { description: searchRegex },
+            { goal: searchRegex },
+          ],
+        },
       ];
+    } else {
+      Object.assign(filter, visibilityClause);
     }
 
     // Tag filtering (match any of the provided tags)
