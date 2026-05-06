@@ -5,12 +5,29 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import PhaseEditor from "./PhaseEditor";
-import { 
+import {
   TargetUserLevel,
   Exercise,
   Workout,
   Phase,
 } from "@/lib/data/programs";
+
+export type ProgramCreatorMode = 'create' | 'edit' | 'user-create' | 'user-edit';
+
+interface ProgramCreatorProps {
+  mode?: ProgramCreatorMode;
+  programId?: string;       // required for edit/user-edit
+  initialData?: Partial<{
+    name: string;
+    description: string;
+    duration_weeks: number;
+    training_days_per_week: number;
+    goal: string;
+    target_user: TargetUserLevel;
+    equipment: string[];
+    phases: Phase[];
+  }>;
+}
 
 // Equipment options
 const EQUIPMENT_OPTIONS = [
@@ -32,7 +49,12 @@ const EQUIPMENT_OPTIONS = [
   "Bodyweight Only",
 ];
 
-const DRAFT_KEY = "become_program_creator_draft";
+const DRAFT_KEY_BY_MODE: Record<ProgramCreatorMode, string> = {
+  'create': 'become_program_creator_draft',
+  'edit': 'become_program_creator_draft_edit',
+  'user-create': 'become_user_program_creator_draft',
+  'user-edit': 'become_user_program_creator_draft_edit',
+};
 
 const TARGET_USER_OPTIONS: TargetUserLevel[] = [
   "Beginner",
@@ -76,27 +98,36 @@ const createEmptyPhase = (phaseNumber: number, daysPerWeek: number): Phase => ({
   workouts: Array.from({ length: daysPerWeek }, (_, i) => createEmptyWorkout(i + 1)),
 });
 
-export default function ProgramCreator() {
+export default function ProgramCreator({
+  mode = 'create',
+  programId,
+  initialData,
+}: ProgramCreatorProps = {}) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
+  const isEdit = mode === 'edit' || mode === 'user-edit';
+  const isUserMode = mode === 'user-create' || mode === 'user-edit';
+  const draftKey = DRAFT_KEY_BY_MODE[mode];
+
   const [formData, setFormData] = useState<ProgramFormData>({
-    name: "",
-    description: "",
-    duration_weeks: 4,
-    training_days_per_week: 4,
-    goal: "",
-    target_user: "Intermediate",
-    equipment: [],
-    phases: [createEmptyPhase(1, 4)],
+    name: initialData?.name ?? "",
+    description: initialData?.description ?? "",
+    duration_weeks: initialData?.duration_weeks ?? 4,
+    training_days_per_week: initialData?.training_days_per_week ?? 4,
+    goal: initialData?.goal ?? "",
+    target_user: initialData?.target_user ?? "Intermediate",
+    equipment: initialData?.equipment ?? [],
+    phases: initialData?.phases?.length ? initialData.phases : [createEmptyPhase(1, 4)],
   });
 
-  // Restore draft from localStorage on mount
+  // Restore draft from localStorage on mount (skip in edit modes — initialData is the source of truth)
   useEffect(() => {
+    if (isEdit) return;
     try {
-      const saved = localStorage.getItem(DRAFT_KEY);
+      const saved = localStorage.getItem(draftKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === "object" && Array.isArray(parsed.phases)) {
@@ -106,16 +137,17 @@ export default function ProgramCreator() {
     } catch {
       // Ignore malformed draft
     }
-  }, []);
+  }, [draftKey, isEdit]);
 
-  // Auto-save draft to localStorage whenever formData changes
+  // Auto-save draft to localStorage whenever formData changes (skip in edit modes)
   useEffect(() => {
+    if (isEdit) return;
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+      localStorage.setItem(draftKey, JSON.stringify(formData));
     } catch {
       // Ignore storage errors (e.g. private browsing quota)
     }
-  }, [formData]);
+  }, [formData, draftKey, isEdit]);
 
   const steps = [
     { id: "basics", title: "Program Basics", icon: "📋" },
@@ -199,21 +231,62 @@ export default function ProgramCreator() {
   const saveProgram = async () => {
     setIsSaving(true);
     setError(null);
-    
+
     try {
-      const response = await fetch("/api/programs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      let endpoint: string;
+      let method: 'POST' | 'PUT';
+      switch (mode) {
+        case 'user-create':
+          endpoint = '/api/programs/custom';
+          method = 'POST';
+          break;
+        case 'user-edit':
+          endpoint = `/api/programs/custom/${programId}`;
+          method = 'PUT';
+          break;
+        case 'edit':
+          endpoint = `/api/programs/${programId}`;
+          method = 'PUT';
+          break;
+        case 'create':
+        default:
+          endpoint = '/api/programs';
+          method = 'POST';
+          break;
+      }
+
+      const response = await fetch(endpoint, {
+        method,
+        headers,
         body: JSON.stringify(formData),
       });
-      
+
       if (!response.ok) {
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.error || "Failed to save program");
       }
-      
-      localStorage.removeItem(DRAFT_KEY);
-      router.push("/dashboard/programming");
+
+      const saved = await response.json().catch(() => null);
+
+      if (!isEdit) {
+        try { localStorage.removeItem(draftKey); } catch {}
+      }
+
+      // Where to send the user after save.
+      if (isUserMode) {
+        const newId = saved?.program_id || programId;
+        if (newId) {
+          router.push(`/dashboard/programming/${newId}`);
+        } else {
+          router.push('/dashboard/programs/mine');
+        }
+      } else {
+        router.push("/dashboard/programming");
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save program");

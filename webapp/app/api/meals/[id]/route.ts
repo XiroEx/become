@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Meal from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
+import { requireFeature } from '@/lib/entitlements'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 
 // GET: single meal with full items + recipe
@@ -43,10 +44,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const gate = await requireFeature(request, 'custom-meals')
+    if (!gate.ok) return gate.response
+    const authResult = { success: true as const, userId: gate.userId, role: gate.role }
 
     await dbConnect()
 

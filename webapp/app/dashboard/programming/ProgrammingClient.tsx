@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Dumbbell } from "lucide-react";
+import { Dumbbell, Plus, Sparkles } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
@@ -348,13 +348,29 @@ export default function ProgrammingClient() {
               Choose your training path and start building.
             </p>
           </div>
-          <Link
-            href="/dashboard/programming/library"
-            className="mt-1 flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            <Dumbbell className="h-3.5 w-3.5" />
-            My Exercises
-          </Link>
+          <div className="mt-1 flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Link
+              href="/dashboard/programming/library"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              <Dumbbell className="h-3.5 w-3.5" />
+              My Exercises
+            </Link>
+            <Link
+              href="/dashboard/programs/mine"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              My Programs
+            </Link>
+            <Link
+              href="/dashboard/programs/new"
+              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:from-purple-700 hover:to-indigo-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create your own
+            </Link>
+          </div>
         </div>
       </div>
 

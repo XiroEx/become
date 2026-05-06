@@ -13,16 +13,29 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { programId } = await params;
     await dbConnect();
-    
+
     const program = await ProgramModel.findOne({ program_id: programId }).lean();
-    
+
     if (!program) {
       return NextResponse.json(
         { error: 'Program not found' },
         { status: 404 }
       );
     }
-    
+
+    // Custom programs are owner-private. Deny enumeration by other users.
+    if (program.isCustom) {
+      const authResult = await verifyAuth(request);
+      const authUserId = authResult.success ? authResult.userId : null;
+      const ownerId = program.createdBy?.toString();
+      if (!authUserId || ownerId !== authUserId) {
+        return NextResponse.json(
+          { error: 'Program not found' },
+          { status: 404 }
+        );
+      }
+    }
+
     const hydrated = await hydrateProgram(program);
     return NextResponse.json(hydrated);
   } catch (error) {
