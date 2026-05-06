@@ -119,8 +119,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get all unique tags for filter options
-    const allTags = await Program.distinct('tags');
+    // Get all unique tags for filter options — scoped to programs the caller
+    // can actually see, otherwise other users' custom-program tags leak into
+    // the public filter dropdown and yield zero hits when selected.
+    const allTags = await Program.distinct('tags', visibilityClause);
 
     return NextResponse.json({
       programs,

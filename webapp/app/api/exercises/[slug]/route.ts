@@ -20,8 +20,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { slug } = await params;
     await connectDB();
 
-    const exercise = await Exercise.findOne({ slug }).lean();
+    const exercise = await Exercise.findOne({ slug }).lean<{
+      isCustom?: boolean
+      createdBy?: string
+    } & Record<string, unknown> | null>();
     if (!exercise) {
+      return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    }
+
+    // Custom exercises are owner-private. Hide other users' customs (slugs are
+    // partially guessable: custom-<userIdSuffix>-<name>-<ts>).
+    if (exercise.isCustom && exercise.createdBy?.toString() !== auth.userId) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
     }
 
@@ -89,8 +98,10 @@ async function applyUpdate(request: NextRequest, slug: string) {
     if (key in body) update[key] = body[key];
   }
 
+  // Custom exercises are owner-managed via /api/exercises/custom — admins must
+  // NOT mutate them through this admin endpoint.
   const exercise = await Exercise.findOneAndUpdate(
-    { slug },
+    { slug, isCustom: { $ne: true } },
     { $set: update },
     { new: true, runValidators: true }
   );
@@ -142,7 +153,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { slug } = await params;
     await connectDB();
 
-    const result = await Exercise.findOneAndDelete({ slug });
+    // Custom exercises are owner-managed via /api/exercises/custom.
+    const result = await Exercise.findOneAndDelete({ slug, isCustom: { $ne: true } });
     if (!result) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
     }
