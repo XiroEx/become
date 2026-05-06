@@ -320,7 +320,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         }
       } else {
         const d = await res.json().catch(() => ({}))
-        setError(d.error || 'Failed to save meal.')
+        setError(d.error || 'Failed to save recipe.')
       }
     } catch {
       setError('Network error. Please try again.')
@@ -342,7 +342,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             Back
           </button>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">
-            {mealId ? 'Edit Meal' : 'New Meal'}
+            {mealId ? 'Edit Recipe' : 'New Recipe'}
           </h1>
           <div className="w-16" /> {/* spacer */}
         </div>
@@ -712,7 +712,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving…' : mealId ? 'Save changes' : 'Create meal'}
+            {saving ? 'Saving…' : mealId ? 'Save changes' : 'Create recipe'}
           </button>
         </div>
       </div>

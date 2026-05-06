@@ -98,7 +98,7 @@ export default function MealCard({
               <Link
                 href={`/dashboard/meals/${id}/edit`}
                 className="shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                aria-label="Edit meal"
+                aria-label="Edit recipe"
               >
                 <Pencil className="h-3.5 w-3.5" />
               </Link>

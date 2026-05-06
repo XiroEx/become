@@ -161,7 +161,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         router.push('/dashboard/meals')
       } else {
-        setToast('Failed to delete meal.')
+        setToast('Failed to delete recipe.')
         setTimeout(() => setToast(null), 3000)
         setDeleting(false)
       }
@@ -213,7 +213,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
         >
           <ArrowLeft className="h-4 w-4" />
-          Meals
+          Recipes
         </Link>
         {isOwner && (
           <div className="flex items-center gap-1">
@@ -397,9 +397,9 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
             className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-bold text-zinc-900 dark:text-white">Delete this meal?</h3>
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">Delete this recipe?</h3>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              This won&rsquo;t affect any meal logs you&rsquo;ve already made from it.
+              This won&rsquo;t affect any logs you&rsquo;ve already made from it.
             </p>
             <div className="mt-4 flex gap-2">
               <button

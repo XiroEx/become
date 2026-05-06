@@ -121,7 +121,7 @@ export default function RecipesPage() {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Recipes</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Browse and create meal ideas</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Browse and create recipe ideas</p>
           </div>
         </div>
 

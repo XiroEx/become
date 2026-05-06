@@ -1399,10 +1399,10 @@ function TimelineLogCard({
           {log.mealName && (
             <span
               className="inline-flex items-center gap-1 rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
-              title="Logged from a saved meal"
+              title="Logged from a saved recipe"
             >
               <ChefHat className="h-3 w-3" />
-              <span className="text-[10px] uppercase tracking-wider opacity-70">Meal</span>
+              <span className="text-[10px] uppercase tracking-wider opacity-70">Recipe</span>
               <span>·</span>
               <span className="normal-case tracking-normal">{log.mealName}</span>
             </span>
