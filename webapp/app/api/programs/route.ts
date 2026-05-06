@@ -42,6 +42,11 @@ export async function POST(request: NextRequest) {
     await dbConnect();
     const body = await request.json();
 
+    // Strip ownership/custom flags so an admin can't plant a program into
+    // another user's "My Programs" list by stuffing the request body.
+    delete body.isCustom;
+    delete body.createdBy;
+
     // Convert exercise names to slugs for DB storage
     const dehydrated = await dehydrateProgram(body);
 

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const user = new User({ name, email, password: 'dummy-password-not-used' })
     await user.save()
 
-    const token = signToken({ userId: String(user._id), email: user.email })
+    const token = signToken({ userId: String(user._id), email: user.email, role: user.role })
 
     return new Response(JSON.stringify({ token, user: { id: user._id, name: user.name, email: user.email } }), { status: 201 })
   } catch (err: any) {
