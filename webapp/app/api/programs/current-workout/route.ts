@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth'
+import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
@@ -90,16 +90,11 @@ export function calculateNextDay(
 // GET: Get the current workout for a user's active program
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const { searchParams } = new URL(request.url)
     const programId = searchParams.get('programId')
@@ -135,13 +130,52 @@ export async function GET(request: NextRequest) {
     }
 
     // Get the current day's workout
-    const currentPhase = activeProgram.currentPhase || 1
     const phases = (program.phases || []) as Phase[]
+
+    // Always fetch schedule — used for phase derivation, effective-day lookup, and count computation
+    const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean()
+
+    // Derive currentPhase from schedule (next upcoming session carries the correct phase number).
+    // Falls back to stale UserProgress counter only if no schedule exists.
+    const nextUpcoming = schedule?.scheduledWorkouts?.find(
+      (w: { status: string }) => w.status === 'scheduled'
+    )
+    const currentPhase = (nextUpcoming as { phase?: number } | undefined)?.phase ?? activeProgram.currentPhase ?? 1
+
+    // Compute accurate completedWorkouts/totalWorkouts from schedule + workout logs.
+    // Historical sessions done before the schedule-sync fix may still show status='scheduled'
+    // in the DB, but are confirmed via workout logs.
+    type WorkoutLog = { programId: string; day: string; completed: boolean }
+    const workoutLogs = (userProgress.workoutLogs || []) as WorkoutLog[]
+    let computedCompleted = 0
+    let computedTotal = 0
+    if (schedule?.scheduledWorkouts?.length) {
+      const sessions = (schedule.scheduledWorkouts as Array<{ status: string; dayLabel: string; date: Date }>).filter(
+        (w) => w.status !== 'rest'
+      )
+      computedTotal = sessions.length
+      // Greedy chronological matching: one log entry of "Day 1" counts for exactly
+      // one schedule occurrence of "Day 1" (handles repeating day labels in multi-week programs)
+      const availableLogs = new Map<string, number>()
+      for (const log of workoutLogs) {
+        if (log.programId === programId && log.completed) {
+          availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
+        }
+      }
+      computedCompleted = [...sessions]
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .filter((w) => {
+          if (w.status === 'completed') return true
+          if (w.status === 'skipped') return false
+          const n = availableLogs.get(w.dayLabel) || 0
+          if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
+          return false
+        }).length
+    }
 
     // Determine effective day: if no ?day= param, prefer the next scheduled workout from Schedule
     let effectiveDay: string
     if (!requestedDay) {
-      const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean()
       let scheduledDay: string | null = null
       if (schedule?.scheduledWorkouts?.length) {
         const now = new Date()
@@ -198,8 +232,8 @@ export async function GET(request: NextRequest) {
             focus: preferredPhase?.focus,
             weeks: preferredPhase?.weeks
           },
-          completedWorkouts: activeProgram.completedWorkouts || 0,
-          totalWorkouts: activeProgram.totalWorkouts || 0
+          completedWorkouts: computedCompleted,
+          totalWorkouts: computedTotal
         })
       }
 

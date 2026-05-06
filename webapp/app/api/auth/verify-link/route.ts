@@ -1,6 +1,6 @@
 import dbConnect from '@/lib/mongodb'
 import User from '@/models/User'
-import { verifyMagicLink, storeAuthToken } from '@/models/MagicLink'
+import MagicLink, { verifyMagicLink, storeAuthToken } from '@/models/MagicLink'
 import { signToken } from '@/lib/auth'
 
 export async function POST(req: Request) {
@@ -27,54 +27,59 @@ export async function POST(req: Request) {
 
     let user = await User.findOne({ email })
 
-    if (mode === 'register') {
-      if (user) {
-        // User already exists, just log them in
-        const jwtToken = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
-        // Store the JWT for the polling session
-        await storeAuthToken(token, jwtToken)
-        return new Response(JSON.stringify({
-          token: jwtToken,
-          user: { id: user._id, name: user.name, email: user.email }
-        }), { status: 200 })
-      }
+    try {
+      if (mode === 'register') {
+        if (user) {
+          // User already exists, just log them in
+          const jwtToken = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
+          await storeAuthToken(token, jwtToken)
+          return new Response(JSON.stringify({
+            token: jwtToken,
+            user: { id: user._id, name: user.name, email: user.email }
+          }), { status: 200 })
+        }
 
-      // Create new user
-      user = new User({ 
-        name: name || email.split('@')[0], 
-        email, 
-        password: 'magic-link-auth-no-password' 
-      })
-      await user.save()
-    } else {
-      // Login mode
-      if (!user) {
-        // Create user if they don't exist (passwordless signup via login)
-        user = await User.create({
-          name: email.split('@')[0],
+        // Create new user
+        user = new User({
+          name: name || email.split('@')[0],
           email,
           password: 'magic-link-auth-no-password'
         })
+        await user.save()
+      } else {
+        // Login mode
+        if (!user) {
+          // Create user if they don't exist (passwordless signup via login)
+          user = await User.create({
+            name: email.split('@')[0],
+            email,
+            password: 'magic-link-auth-no-password'
+          })
+        }
       }
+
+      const jwtToken = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
+
+      // Store the JWT for the polling session
+      await storeAuthToken(token, jwtToken)
+
+      // Set HTTP-only cookie for persistent auth (7 days)
+      const cookieMaxAge = 7 * 24 * 60 * 60
+
+      return new Response(JSON.stringify({
+        token: jwtToken,
+        user: { id: user._id, name: user.name, email: user.email }
+      }), {
+        status: 200,
+        headers: {
+          'Set-Cookie': `auth_token=${jwtToken}; HttpOnly; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; ${process.env.NODE_ENV === 'production' ? 'Secure;' : ''}`
+        }
+      })
+    } catch (saveErr) {
+      // Rollback: un-consume the magic link so the user can try again
+      await MagicLink.updateOne({ token }, { $set: { used: false } })
+      throw saveErr
     }
-
-    const jwtToken = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
-    
-    // Store the JWT for the polling session
-    await storeAuthToken(token, jwtToken)
-
-    // Set HTTP-only cookie for persistent auth (7 days)
-    const cookieMaxAge = 7 * 24 * 60 * 60 // 7 days in seconds
-    
-    return new Response(JSON.stringify({ 
-      token: jwtToken, 
-      user: { id: user._id, name: user.name, email: user.email } 
-    }), { 
-      status: 200,
-      headers: {
-        'Set-Cookie': `auth_token=${jwtToken}; HttpOnly; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; ${process.env.NODE_ENV === 'production' ? 'Secure;' : ''}`
-      }
-    })
 
   } catch (err: unknown) {
     console.error('verify-link error', err)

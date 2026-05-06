@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth'
+import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import Schedule from '@/models/Schedule'
 import UserProgress from '@/models/UserProgress'
@@ -9,16 +9,11 @@ import { generateScheduledWorkouts, regenerateSchedule, type PhaseData } from '@
 // GET: Fetch schedule(s) for a user
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const { searchParams } = new URL(request.url)
     const programId = searchParams.get('programId')
@@ -62,59 +57,64 @@ export async function GET(request: NextRequest) {
       toDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
     }
 
-    // Get workout logs and active program statuses
-    const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
-    const workoutLogs = userProgress?.workoutLogs || []
+    // Get active program statuses for display
+    const userProgress = await UserProgress.findOne({ userId: payload.userId }, { activePrograms: 1 }).lean()
     const activePrograms = userProgress?.activePrograms || []
     const programStatusMap = new Map<string, string>()
     for (const p of activePrograms as Array<{ programId: string; status: string }>) {
       programStatusMap.set(p.programId, p.status)
     }
 
-    // Process schedules: filter by date range and update statuses
+    // Process schedules: compute statuses across the FULL schedule first,
+    // then filter to the requested date range for the response.
+    //
+    // The workout POST handler keeps schedule slot statuses accurate when workouts
+    // are logged via the app. We trust the DB directly — no positional log matching —
+    // to avoid orphan pre-schedule logs bleeding into future/missed slots.
     const processedSchedules = schedules.map((schedule) => {
-      let workouts = schedule.scheduledWorkouts || []
+      type SW = { date: Date; programId: string; dayLabel: string; status: string; phase: number; workoutTitle: string; completedAt?: Date; notes?: string }
+      const allWorkouts: SW[] = schedule.scheduledWorkouts || []
 
-      // Filter by date range if specified
+      const statusByDate: Record<string, { status: string; completedAt?: Date }> = {}
+
+      for (const w of allWorkouts) {
+        const wDate = new Date(w.date)
+        wDate.setHours(0, 0, 0, 0)
+        const dateKey = wDate.getTime().toString()
+
+        if (w.status === 'completed' || w.status === 'skipped' || w.status === 'missed') {
+          // Trust the DB — these were set by the workout handler or admin correction
+          statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
+        } else if (wDate < now && w.status === 'scheduled') {
+          // Past scheduled slot that was never completed — it's missed
+          statusByDate[dateKey] = { status: 'missed' }
+        } else {
+          // Future scheduled, rest, or any other status — keep as-is
+          statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
+        }
+      }
+
+      // Apply computed statuses and filter to the requested date range
+      let updatedWorkouts = allWorkouts.map((w) => {
+        const wDate = new Date(w.date)
+        wDate.setHours(0, 0, 0, 0)
+        const result = statusByDate[wDate.getTime().toString()]
+        if (!result) return w
+        return { ...w, status: result.status, ...(result.completedAt ? { completedAt: result.completedAt } : {}) }
+      })
+
       if (fromDate && toDate) {
-        workouts = workouts.filter((w: { date: Date }) => {
+        updatedWorkouts = updatedWorkouts.filter((w) => {
           const d = new Date(w.date)
           return d >= fromDate! && d < toDate!
         })
       }
 
-      // Update statuses based on workout logs
-      const updatedWorkouts = workouts.map((w: { date: Date; programId: string; dayLabel: string; status: string; phase: number; workoutTitle: string; completedAt?: Date; notes?: string }) => {
-        const wDate = new Date(w.date)
-        wDate.setHours(0, 0, 0, 0)
-
-        // Check if completed in workout logs
-        const matchingLog = workoutLogs.find((log: { programId: string; day: string; date: Date; completed: boolean }) => {
-          const logDate = new Date(log.date)
-          logDate.setHours(0, 0, 0, 0)
-          return log.programId === w.programId &&
-                 log.day === w.dayLabel &&
-                 logDate.getTime() === wDate.getTime() &&
-                 log.completed
-        })
-
-        if (matchingLog) {
-          return { ...w, status: 'completed', completedAt: matchingLog.date }
-        }
-
-        // Mark as missed if in the past and not completed/skipped
-        if (wDate < now && w.status === 'scheduled') {
-          return { ...w, status: 'missed' }
-        }
-
-        return w
-      })
-
       return {
         _id: schedule._id,
         programId: schedule.programId,
         programName: schedule.programName,
-        programStatus: programStatusMap.get(schedule.programId) || 'in-progress',
+        programStatus: programStatusMap.get(schedule.programId) || 'unknown',
         settings: schedule.settings,
         scheduledWorkouts: updatedWorkouts,
       }
@@ -130,16 +130,11 @@ export async function GET(request: NextRequest) {
 // POST: Create a schedule for an enrolled program
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const { programId, trainingDays, startDate } = await request.json()
 
@@ -237,16 +232,11 @@ export async function POST(request: NextRequest) {
 // PATCH: Modify schedule entries (reschedule, swap, skip) or program-level actions (shift, pause, resume)
 export async function PATCH(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const { programId, action, workoutDate, newDate, swapWithDate, days, resumeDate } = await request.json()
 

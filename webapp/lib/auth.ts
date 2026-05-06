@@ -13,6 +13,7 @@ export interface AuthResult {
   success: boolean
   userId?: string
   email?: string
+  role?: string
   error?: string
 }
 
@@ -45,7 +46,8 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
     return {
       success: true,
       userId: payload.userId,
-      email: payload.email
+      email: payload.email,
+      role: payload.role
     }
   } catch {
     return { success: false, error: 'Invalid token' }

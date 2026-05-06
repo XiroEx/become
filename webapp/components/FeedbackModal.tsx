@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Bug, Lightbulb, MessageSquare, Check } from 'lucide-react'
+import { X, Send, Bug, Lightbulb, MessageSquare, Check, ImagePlus } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 
 interface FeedbackModalProps {
@@ -18,22 +18,59 @@ const typeOptions: { id: FeedbackType; label: string; Icon: typeof Bug }[] = [
   { id: 'general', label: 'General', Icon: MessageSquare },
 ]
 
+interface AttachedImage {
+  name: string
+  dataUrl: string
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
   const [type, setType] = useState<FeedbackType>('general')
   const [message, setMessage] = useState('')
+  const [images, setImages] = useState<AttachedImage[]>([])
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useLockScroll(isOpen)
 
-  // Delay focus until modal animation completes to prevent keyboard from covering modal
   useEffect(() => {
     if (isOpen) {
       const t = setTimeout(() => textareaRef.current?.focus(), 500)
       return () => clearTimeout(t)
     }
   }, [isOpen])
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (!files.length) return
+
+    const remaining = 3 - images.length
+    const toAdd = files.slice(0, remaining)
+
+    const newImages = await Promise.all(
+      toAdd.map(async (file) => ({
+        name: file.name,
+        dataUrl: await fileToDataUrl(file),
+      }))
+    )
+
+    setImages((prev) => [...prev, ...newImages])
+    e.target.value = ''
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleSubmit = async () => {
     if (!message.trim() || sending) return
@@ -47,14 +84,12 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ type, message }),
+        body: JSON.stringify({ type, message, images }),
       })
 
       if (res.ok) {
         setSent(true)
-        setTimeout(() => {
-          handleClose()
-        }, 1500)
+        setTimeout(() => handleClose(), 1500)
       }
     } catch {
       // silently fail
@@ -68,6 +103,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     setTimeout(() => {
       setType('general')
       setMessage('')
+      setImages([])
       setSent(false)
     }, 200)
   }
@@ -138,8 +174,54 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                   ref={textareaRef}
                 />
 
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-xs text-zinc-400">{message.length}/2000</span>
+                {/* Image thumbnails */}
+                {images.length > 0 && (
+                  <div className="mt-2 flex gap-2">
+                    {images.map((img, i) => (
+                      <div key={i} className="relative h-16 w-16 shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.dataUrl}
+                          alt={img.name}
+                          className="h-full w-full rounded-lg object-cover border border-zinc-200 dark:border-zinc-700"
+                        />
+                        <button
+                          onClick={() => removeImage(i)}
+                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-white shadow-sm hover:bg-black dark:bg-zinc-600 dark:hover:bg-zinc-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-400">{message.length}/2000</span>
+                    {images.length < 3 && (
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={handleFileChange}
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                        >
+                          <ImagePlus className="h-3.5 w-3.5" />
+                          {images.length === 0 ? 'Add photo' : `${images.length}/3`}
+                        </button>
+                      </>
+                    )}
+                    {images.length >= 3 && (
+                      <span className="text-xs text-zinc-400">{images.length}/3 photos</span>
+                    )}
+                  </div>
                   <button
                     onClick={handleSubmit}
                     disabled={!message.trim() || sending}

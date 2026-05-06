@@ -96,9 +96,9 @@ export async function GET(request: NextRequest) {
       const lastPrompt = new Date(tracking.lastPromptDate)
       lastPrompt.setHours(0, 0, 0, 0)
       const daysSinceLastPrompt = Math.floor((today.getTime() - lastPrompt.getTime()) / (1000 * 60 * 60 * 24))
-      
+
       if (daysSinceLastPrompt >= 1) {
-        consecutiveSkips = (tracking.consecutiveSkips || 0) + daysSinceLastPrompt
+        consecutiveSkips = (tracking.consecutiveSkips || 0) + 1
       }
     }
 

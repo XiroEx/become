@@ -2,6 +2,8 @@ import mongoose, { Schema, Types } from 'mongoose'
 
 export interface IRecipeIngredient {
   foodId?: Types.ObjectId
+  variantId?: Types.ObjectId
+  variantName?: string
   name: string
   amount: number
   unit: string
@@ -47,7 +49,9 @@ const IngredientNutritionSchema = new Schema({
 }, { _id: false })
 
 const RecipeIngredientSchema = new Schema<IRecipeIngredient>({
-  foodId: { type: Schema.Types.ObjectId, ref: 'FoodItem' },
+  foodId: { type: Schema.Types.ObjectId, ref: 'Food' },
+  variantId: { type: Schema.Types.ObjectId },
+  variantName: { type: String },
   name: { type: String, required: true },
   amount: { type: Number, required: true },
   unit: { type: String, required: true },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dumbbell } from "lucide-react";
@@ -8,10 +8,12 @@ import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
+import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 
 interface SetData {
   reps: string;
   weight: string;
+  speed: string;
   completed: boolean;
 }
 
@@ -19,6 +21,7 @@ interface SavedSetData {
   setNumber: number;
   reps: number;
   weight: number;
+  speed?: number;
   completed: boolean;
 }
 
@@ -43,10 +46,15 @@ interface Exercise {
   sets?: number;
   reps?: string;
   rest?: string;
+  tempo?: string;
+  rpe?: number;
+  duration?: string;          // timed prescription: "30 sec", "60 sec"
   tip?: string;
   details?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  primaryMuscles?: string[];
+  difficulty?: string;
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -98,6 +106,7 @@ export default function LiveWorkoutPage() {
   const [exerciseData, setExerciseData] = useState<SetData[][]>([]);
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
+  const [currentSpeed, setCurrentSpeed] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
@@ -109,7 +118,9 @@ export default function LiveWorkoutPage() {
   const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
 
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
-  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; date: string }>>({});
+  const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
+  // All-time best per exercise — used for "Beat your PR" display
+  const [exercisePRs, setExercisePRs] = useState<Record<string, { weight: number; reps: number }>>({});
 
   // Stale incomplete workout detection
   const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
@@ -122,6 +133,8 @@ export default function LiveWorkoutPage() {
 
   // Auto-save ref
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Stable ref for exerciseData — used in visibilitychange handler to avoid stale closure
+  const exerciseDataRef = useRef<SetData[][]>([]);
 
   // Derive current position from the flow
   const currentStep = workoutFlow[currentStepIndex];
@@ -137,10 +150,13 @@ export default function LiveWorkoutPage() {
   const tracking = currentExercise?.trackingType || "reps_weight";
   const showWeightInput = tracking === "reps_weight";
   const showRepsInput = ["reps_weight", "reps_bodyweight", "reps_only"].includes(tracking);
-  const showTimeInput = ["time", "time_distance"].includes(tracking);
+  const showTimeInput = ["time", "time_distance", "intervals"].includes(tracking);
+  const isIntervalExercise = tracking === "intervals";
+  const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
 
   // Check if inputs are empty (for skip button text)
-  const isSkipping = showWeightInput ? !currentReps && !currentWeight : !currentReps;
+  // Interval exercises are always "complete" (no required input) — user marks done and moves on
+  const isSkipping = isIntervalExercise ? false : (showWeightInput ? !currentReps && !currentWeight : !currentReps);
 
   // Toggle fullscreen mode when tapping video
   const handleVideoTap = () => {
@@ -155,6 +171,7 @@ export default function LiveWorkoutPage() {
       Array.from({ length: ex.sets || 3 }, () => ({
         reps: "",
         weight: "",
+        speed: "",
         completed: false,
       }))
     );
@@ -206,6 +223,9 @@ export default function LiveWorkoutPage() {
             if (progressData.exerciseHistory) {
               setExerciseHistory(progressData.exerciseHistory);
             }
+            if (progressData.exercisePRs) {
+              setExercisePRs(progressData.exercisePRs);
+            }
             // Show incomplete workout prompt if there's a stale session from a previous day
             if (progressData.staleIncomplete && !progressData.isResume) {
               setStaleIncomplete(progressData.staleIncomplete);
@@ -255,12 +275,14 @@ export default function LiveWorkoutPage() {
                   return savedEx.sets.map(s => ({
                     reps: s.reps > 0 ? s.reps.toString() : "",
                     weight: s.weight > 0 ? s.weight.toString() : "",
+                    speed: s.speed && s.speed > 0 ? s.speed.toString() : "",
                     completed: s.completed
                   }));
                 }
                 return Array.from({ length: ex.sets || 3 }, () => ({
                   reps: "",
                   weight: "",
+                  speed: "",
                   completed: false,
                 }));
               });
@@ -280,10 +302,40 @@ export default function LiveWorkoutPage() {
                 if (setData) {
                   setCurrentReps(setData.reps);
                   setCurrentWeight(setData.weight);
+                  setCurrentSpeed(setData.speed ?? "");
                 }
               }
 
               setTimeout(() => setShowResumeIndicator(false), 3000);
+            } else {
+              // No API resume data — check localStorage draft (covers iOS fetch-cancel on app switch)
+              const draftKey = `live_draft_${programId}_${workoutData.day}`;
+              try {
+                const raw = localStorage.getItem(draftKey);
+                if (raw) {
+                  const draft = JSON.parse(raw) as { savedAt: number; exerciseData: SetData[][]; stepIndex: number };
+                  const age = Date.now() - draft.savedAt;
+                  // Use draft only if it's < 24h old and has actual progress
+                  const hasProgress = draft.exerciseData?.some(sets => sets.some(s => s.completed || s.reps || s.weight));
+                  if (age < 86_400_000 && hasProgress && draft.exerciseData?.length === initialData.length) {
+                    setExerciseData(draft.exerciseData);
+                    setIsResuming(true);
+                    setShowResumeIndicator(true);
+                    const resumeIdx = Math.min(draft.stepIndex, flow.length - 1);
+                    setCurrentStepIndex(resumeIdx);
+                    const step = flow[resumeIdx];
+                    if (step) {
+                      const setData = draft.exerciseData[step.exerciseIndex]?.[step.setIndex];
+                      if (setData) {
+                        setCurrentReps(setData.reps);
+                        setCurrentWeight(setData.weight);
+                        setCurrentSpeed(setData.speed ?? "");
+                      }
+                    }
+                    setTimeout(() => setShowResumeIndicator(false), 3000);
+                  }
+                }
+              } catch { /* corrupt draft — ignore */ }
             }
           }
         } else {
@@ -375,6 +427,10 @@ export default function LiveWorkoutPage() {
         setRestTimeRemaining((prev) => prev - 1);
       }, 1000);
     } else if (isResting && restTimeRemaining === 0) {
+      // Vibrate on completion if supported
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate([100, 50, 100]);
+      }
       setIsResting(false);
     }
     return () => clearInterval(interval);
@@ -394,6 +450,13 @@ export default function LiveWorkoutPage() {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     };
   }, []);
+
+  // Keep stable refs in sync so the visibility handler always sees current data
+  const currentStepIndexRef = useRef(currentStepIndex);
+  useEffect(() => {
+    exerciseDataRef.current = exerciseData;
+    currentStepIndexRef.current = currentStepIndex;
+  }, [exerciseData, currentStepIndex]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -418,6 +481,7 @@ export default function LiveWorkoutPage() {
             setNumber: setIndex + 1,
             reps: parseInt(set.reps) || 0,
             weight: parseFloat(set.weight) || 0,
+            ...(set.speed && parseFloat(set.speed) > 0 && { speed: parseFloat(set.speed) }),
             completed: set.completed
           })) || [],
           ...(exercise.groupId && { groupId: exercise.groupId }),
@@ -436,6 +500,8 @@ export default function LiveWorkoutPage() {
           setProgramCompleted(true);
           setCompletedProgramName(data.programName || "");
         }
+        // Clear the draft — workout is done, no need to resume
+        try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
       }
     } catch (error) {
       console.error("Error saving workout:", error);
@@ -444,10 +510,40 @@ export default function LiveWorkoutPage() {
     }
   }, [programId, workout, exercises, currentPhase, swappedExercises]);
 
+  // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
+  // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension
+  // so localStorage is the primary backup; the API save is best-effort.
+  useEffect(() => {
+    if (!workout) return;
+    const draftKey = `live_draft_${programId}_${workout.day}`;
+
+    const flush = () => {
+      if (exerciseDataRef.current.length === 0) return;
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          savedAt: Date.now(),
+          exerciseData: exerciseDataRef.current,
+          stepIndex: currentStepIndexRef.current,
+        }));
+      } catch { /* storage full — ignore */ }
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      saveWorkout(exerciseDataRef.current, false);
+    };
+
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('pagehide', flush);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workout, programId, saveWorkout]);
+
   // Auto-save: update exerciseData on input change + debounced save
-  const updateCurrentInput = useCallback((field: "reps" | "weight", value: string) => {
+  const updateCurrentInput = useCallback((field: "reps" | "weight" | "speed", value: string) => {
     if (field === "reps") setCurrentReps(value);
     if (field === "weight") setCurrentWeight(value);
+    if (field === "speed") setCurrentSpeed(value);
 
     if (!currentStep) return;
 
@@ -471,6 +567,14 @@ export default function LiveWorkoutPage() {
   }, [currentStep, saveWorkout]);
 
   // Determine rest duration based on step context
+  // Smart rest default based on tracking type: heavy compound → 3min, bodyweight/isolation → 90s, else 60s
+  const getSmartRestDefault = (exercise?: Exercise): string => {
+    const t = exercise?.trackingType || exercise?.type || ""
+    if (t === "reps_weight") return "3min"
+    if (t === "reps_bodyweight" || t === "reps_only") return "90s"
+    return "60s"
+  }
+
   const getRestDuration = (step: WorkoutStep): number => {
     const exercise = exercises[step.exerciseIndex];
     if (step.groupId && !step.isLastInRound) {
@@ -478,10 +582,10 @@ export default function LiveWorkoutPage() {
       return 0;
     } else if (step.groupId && step.isLastInRound) {
       // End of a superset round — use groupRest or exercise rest
-      return parseRestTime(exercise?.groupRest || exercise?.rest || "60s");
+      return parseRestTime(exercise?.groupRest || exercise?.rest || getSmartRestDefault(exercise));
     }
-    // Normal exercise
-    return parseRestTime(exercise?.rest || "60s");
+    // Normal exercise — use explicit rest field or smart default
+    return parseRestTime(exercise?.rest || getSmartRestDefault(exercise));
   };
 
   // Advance to next step with appropriate rest
@@ -496,6 +600,7 @@ export default function LiveWorkoutPage() {
 
     setCurrentReps("");
     setCurrentWeight("");
+    setCurrentSpeed("");
 
     if (restDuration > 0) {
       setIsResting(true);
@@ -513,7 +618,7 @@ export default function LiveWorkoutPage() {
       exIdx === currentStep.exerciseIndex
         ? sets.map((set, sIdx) =>
             sIdx === currentStep.setIndex
-              ? { reps: currentReps, weight: currentWeight, completed: true }
+              ? { reps: currentReps, weight: currentWeight, speed: currentSpeed, completed: true }
               : set
           )
         : sets
@@ -540,7 +645,7 @@ export default function LiveWorkoutPage() {
       exIdx === currentStep.exerciseIndex
         ? sets.map((set, sIdx) =>
             sIdx === currentStep.setIndex
-              ? { reps: "0", weight: "0", completed: true }
+              ? { reps: "0", weight: "0", speed: "", completed: true }
               : set
           )
         : sets
@@ -561,7 +666,7 @@ export default function LiveWorkoutPage() {
     // Mark all sets for the current exercise as skipped
     const updatedData = exerciseData.map((sets, exIdx) =>
       exIdx === currentStep.exerciseIndex
-        ? sets.map(() => ({ reps: "0", weight: "0", completed: true }))
+        ? sets.map(() => ({ reps: "0", weight: "0", speed: "", completed: true }))
         : sets
     );
 
@@ -586,6 +691,7 @@ export default function LiveWorkoutPage() {
 
     setCurrentReps("");
     setCurrentWeight("");
+    setCurrentSpeed("");
 
     const restDuration = getRestDuration(currentStep);
     if (restDuration > 0) {
@@ -645,6 +751,7 @@ export default function LiveWorkoutPage() {
         ? Array.from({ length: oldExercise.sets || 3 }, () => ({
             reps: "",
             weight: "",
+            speed: "",
             completed: false,
           }))
         : sets
@@ -658,6 +765,7 @@ export default function LiveWorkoutPage() {
     // Clear current inputs
     setCurrentReps("");
     setCurrentWeight("");
+    setCurrentSpeed("");
 
     // Auto-save the swap
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
@@ -668,7 +776,8 @@ export default function LiveWorkoutPage() {
   }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId]);
 
   const handleCompleteOrSkipSet = () => {
-    if (isSkipping) {
+    // On the final step, empty inputs just finish the workout — don't prompt to skip
+    if (isSkipping && !isLastStep) {
       setShowSkipModal(true);
       return;
     }
@@ -701,6 +810,7 @@ export default function LiveWorkoutPage() {
         if (setData) {
           setCurrentReps(setData.reps);
           setCurrentWeight(setData.weight);
+          setCurrentSpeed(setData.speed ?? "");
         }
       }
     }
@@ -750,9 +860,14 @@ export default function LiveWorkoutPage() {
     );
   }
 
-  // Superset context label
+  // Superset context label — prefer groupLabel, fall back to group type + round number
   const supersetLabel = currentStep?.groupId
-    ? `Round ${currentStep.roundNumber + 1}`
+    ? (() => {
+        const label = currentExercise?.groupLabel
+        const gtype = currentExercise?.groupType?.toUpperCase() ?? 'ROUND'
+        const round = currentStep.roundNumber + 1
+        return label ? `${label} · ${round}` : `${gtype} ${round}`
+      })()
     : null;
 
   return (
@@ -993,9 +1108,31 @@ export default function LiveWorkoutPage() {
               ) : null}
             </p>
 
+            {/* Rest duration presets */}
+            <div className="mt-6 flex items-center gap-2">
+              {[
+                { label: "60s", secs: 60 },
+                { label: "90s", secs: 90 },
+                { label: "2m", secs: 120 },
+                { label: "3m", secs: 180 },
+              ].map(({ label, secs }) => (
+                <button
+                  key={label}
+                  onClick={() => { setRestTimeRemaining(secs); setRestTotalTime(secs); }}
+                  className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors ${
+                    restTotalTime === secs
+                      ? "border-white bg-white text-black"
+                      : "border-white/30 text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={skipRest}
-              className="mt-6 rounded-full border border-white/30 px-6 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/10"
+              className="mt-4 rounded-full border border-white/30 px-6 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/10"
             >
               Skip Rest
             </button>
@@ -1045,17 +1182,58 @@ export default function LiveWorkoutPage() {
                 </svg>
                 Swap Exercise
               </button>
-              <p className="mt-1 text-sm text-green-400">{currentExercise?.tip}</p>
-              {/* Exercise history from past workouts */}
-              {currentExercise && exerciseHistory[currentExercise.name] && (
-                <p className="mt-1.5 text-sm text-white/50">
-                  Last time:{" "}
-                  <span className="font-medium text-white/70">
-                    {exerciseHistory[currentExercise.name].weight > 0
-                      ? `${exerciseHistory[currentExercise.name].weight} lbs × ${exerciseHistory[currentExercise.name].reps} reps`
-                      : `${exerciseHistory[currentExercise.name].reps} reps`}
-                  </span>
+              {/* Tip / cue */}
+              {currentExercise?.tip && (
+                <p className="mt-1 text-sm text-green-400">{currentExercise.tip}</p>
+              )}
+              {/* Coach details / tempo / duration prescription */}
+              {currentExercise?.details && (
+                <p className="mt-1 text-sm text-blue-300/80">{currentExercise.details}</p>
+              )}
+              {(currentExercise?.tempo || currentExercise?.rpe || currentExercise?.duration) && (
+                <p className="mt-0.5 text-xs text-amber-400/80">
+                  {[
+                    currentExercise.duration && currentExercise.duration,
+                    currentExercise.tempo && `Tempo ${currentExercise.tempo}`,
+                    currentExercise.rpe && `RPE ${currentExercise.rpe}`,
+                  ].filter(Boolean).join(" · ")}
                 </p>
+              )}
+              {/* Primary muscles pills */}
+              {currentExercise?.primaryMuscles && currentExercise.primaryMuscles.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {currentExercise.primaryMuscles.slice(0, 3).map((m) => (
+                    <span key={m} className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white/50 capitalize">
+                      {m.replace(/_/g, " ")}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Exercise history + PR row */}
+              {currentExercise && (exerciseHistory[currentExercise.name] || exercisePRs[currentExercise.name]) && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {exerciseHistory[currentExercise.name] && (
+                    <p className="text-sm text-white/50">
+                      Last:{" "}
+                      <span className="font-medium text-white/70">
+                        {(() => {
+                          const h = exerciseHistory[currentExercise.name]
+                          if (isIntervalExercise || showTimeInput) {
+                            return h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : "completed"
+                          }
+                          if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
+                          return h.reps > 0 ? `${h.reps} reps` : "completed"
+                        })()}
+                      </span>
+                    </p>
+                  )}
+                  {exercisePRs[currentExercise.name] && exercisePRs[currentExercise.name].weight > 0 && (
+                    <p className="flex items-center gap-1 text-sm text-amber-400/80">
+                      <span>🏆</span>
+                      <span className="font-semibold">PR: {exercisePRs[currentExercise.name].weight} lbs</span>
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1079,11 +1257,18 @@ export default function LiveWorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="flex gap-3 mb-4">
+                  <div className="relative flex gap-3 mb-6">
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Weight (lbs)</label>
+                        <div className="mb-1 flex items-center justify-between">
+                          <label className="text-xs text-white/60">Weight (lbs)</label>
+                          {currentExercise && exercisePRs[currentExercise.name] &&
+                            exercisePRs[currentExercise.name].weight > 0 &&
+                            Number(currentWeight) > exercisePRs[currentExercise.name].weight && (
+                            <span className="text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
+                          )}
+                        </div>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -1108,19 +1293,54 @@ export default function LiveWorkoutPage() {
                         />
                       </div>
                     )}
-                    {/* Duration input — for time, time_distance */}
+                    {/* Duration input — for time, time_distance, intervals */}
                     {showTimeInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Duration (sec)</label>
+                        <label className="mb-1 block text-xs text-white/60">
+                          {isIntervalExercise ? 'Duration (sec) — optional' : 'Duration (sec)'}
+                        </label>
                         <input
                           type="number"
                           inputMode="numeric"
                           value={currentReps}
                           onChange={(e) => updateCurrentInput("reps", e.target.value)}
-                          placeholder={currentExercise?.reps || "30"}
+                          placeholder={currentExercise?.duration?.replace(/[^0-9]/g, "") || currentExercise?.reps || "30"}
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
                       </div>
+                    )}
+                    {/* Distance input — time_distance only */}
+                    {tracking === "time_distance" && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Distance (m)</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={currentWeight}
+                          onChange={(e) => updateCurrentInput("weight", e.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {/* Speed input — time_distance and intervals */}
+                    {showSpeedInput && (
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs text-white/60">Speed (mph)</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={currentSpeed}
+                          onChange={(e) => updateCurrentInput("speed", e.target.value)}
+                          placeholder="0.0"
+                          className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {isIntervalExercise && !currentReps && (
+                      <p className="absolute -bottom-5 left-0 right-0 text-center text-[10px] text-white/40">
+                        Log time or just tap Done to move on
+                      </p>
                     )}
                   </div>
 
@@ -1173,9 +1393,11 @@ export default function LiveWorkoutPage() {
                 }`}
               >
                 {isLastStep
-                  ? "Finish Workout 🎉"
+                  ? "Finish Workout"
                   : isSkipping
                   ? "Skip Set →"
+                  : isIntervalExercise
+                  ? "Done →"
                   : "Complete Set →"}
               </button>
             </div>
@@ -1183,11 +1405,15 @@ export default function LiveWorkoutPage() {
             {/* Previous set reference */}
             {currentSetIndex > 0 && exerciseData[currentExerciseIndex]?.[currentSetIndex - 1]?.completed && (
               <p className="mt-3 text-center text-sm text-white/50">
-                Last set: {showWeightInput
-                  ? `${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
+                {isIntervalExercise
+                  ? exerciseData[currentExerciseIndex][currentSetIndex - 1].reps
+                    ? `Round ${currentSetIndex}: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
+                    : `Round ${currentSetIndex}: done`
+                  : showWeightInput
+                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
                   : showTimeInput
-                  ? `${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
-                  : `${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
+                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
+                  : `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
               </p>
             )}
           </motion.div>
@@ -1379,6 +1605,7 @@ export default function LiveWorkoutPage() {
           <WorkoutSummary
             programCompleted={programCompleted}
             completedProgramName={completedProgramName}
+            programId={programId}
             workout={workout}
             elapsedTime={elapsedTime}
             exerciseData={exerciseData}
@@ -1408,347 +1635,5 @@ export default function LiveWorkoutPage() {
 
 // ─── Workout Summary ──────────────────────────────────────────────────────────
 
-const WORKOUT_QUOTES = [
-  "Every rep is a vote for the person you want to become.",
-  "You didn't come this far to only come this far.",
-  "The pain you feel today is the strength you feel tomorrow.",
-  "Discipline is choosing what you want most over what you want now.",
-  "Champions aren't made in gyms. They're made from what they have deep inside.",
-  "Small daily improvements are the key to staggering long-term results.",
-  "You showed up. That's the hardest part.",
-  "Consistency beats intensity every single time.",
-  "Become who you were meant to be — one session at a time.",
-  "The body achieves what the mind believes.",
-  "Results happen over time, not overnight. Work hard, stay consistent, be patient.",
-  "Be stronger than your strongest excuse.",
-]
-
-const GOAL_CLOSINGS: Record<string, string> = {
-  lose_weight: "Every session is burning closer to the best version of you. Keep showing up.",
-  gain_muscle: "Those micro-tears are building something greater. Recover hard, come back stronger.",
-  maintain: "Consistency is its own kind of strength. You showed up — that's the whole game.",
-  improve_performance: "Another session logged. Another step toward elite. The work is compounding.",
-  general_health: "Your future self is grateful you did this today. Keep stacking those wins.",
-}
-
-function getDayOfYear(): number {
-  const now = new Date()
-  return Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000)
-}
-
-interface SummaryProps {
-  programCompleted: boolean
-  completedProgramName: string
-  workout: { day: string; title: string } | null
-  elapsedTime: number
-  exerciseData: { reps: string; weight: string; completed: boolean }[][]
-  exercises: { name: string }[]
-  exerciseHistory: Record<string, { weight: number; reps: number; date: string }>
-  summaryStreak: { streakDays: number; nextMilestone: number | null } | null
-  summaryGoal: string | null
-  formatTime: (s: number) => string
-  onDone: () => void
-}
-
-function ConfettiBurst() {
-  const particles = useMemo(() => {
-    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#f43f5e', '#06b6d4', '#84cc16']
-    return Array.from({ length: 22 }, (_, i) => {
-      const angle = (i / 22) * Math.PI * 2
-      const distance = 80 + (i % 4) * 40
-      return {
-        id: i,
-        color: colors[i % colors.length],
-        x: Math.cos(angle) * distance * (0.7 + (i % 3) * 0.2),
-        y: Math.sin(angle) * distance * 0.8 - 60,
-        size: 5 + (i % 4) * 3,
-        isCircle: i % 3 !== 0,
-        delay: (i % 5) * 0.05,
-      }
-    })
-  }, [])
-
-  return (
-    <div className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2">
-      {particles.map((p) => (
-        <motion.div
-          key={p.id}
-          initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-          animate={{ x: p.x, y: p.y, opacity: 0, scale: 0.3 }}
-          transition={{ duration: 1.1, ease: 'easeOut', delay: p.delay }}
-          style={{
-            position: 'absolute',
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            borderRadius: p.isCircle ? '50%' : '2px',
-          }}
-        />
-      ))}
-    </div>
-  )
-}
-
-function WorkoutSummary({
-  programCompleted, completedProgramName, workout,
-  elapsedTime, exerciseData, exercises, exerciseHistory,
-  summaryStreak, summaryGoal, formatTime, onDone,
-}: SummaryProps) {
-  const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length]
-
-  // Compute PRs
-  const newPRs = exercises.map((exercise, exIdx) => {
-    const sets = exerciseData[exIdx] || []
-    const activeSets = sets.filter(s => s.completed && !(s.reps === "0" && s.weight === "0"))
-    const history = exerciseHistory[exercise.name]
-    if (!history || activeSets.length === 0) return null
-    const bestSet = activeSets.reduce((best, s) => {
-      const w = parseFloat(s.weight) || 0, r = parseInt(s.reps) || 0
-      const bw = parseFloat(best.weight) || 0, br = parseInt(best.reps) || 0
-      return w > bw || (w === bw && r > br) ? s : best
-    }, activeSets[0])
-    const isPR = (parseFloat(bestSet.weight) || 0) > history.weight ||
-      ((parseFloat(bestSet.weight) || 0) === history.weight && (parseInt(bestSet.reps) || 0) > history.reps)
-    return isPR ? { name: exercise.name, bestSet, history } : null
-  }).filter((x): x is NonNullable<typeof x> => x !== null)
-
-  const totalSets = exerciseData.reduce((sum, sets) => sum + sets.filter(s => s.completed).length, 0)
-  const totalVolume = Math.round(exerciseData.reduce((sum, sets) =>
-    sum + sets.reduce((ss, s) => s.completed ? ss + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0) : ss, 0), 0))
-
-  const closingMessage = summaryGoal ? GOAL_CLOSINGS[summaryGoal] : GOAL_CLOSINGS.general_health
-
-  const streakProgress = summaryStreak?.nextMilestone
-    ? Math.min((summaryStreak.streakDays / summaryStreak.nextMilestone) * 100, 100)
-    : 0
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-white overflow-y-auto overscroll-contain"
-      style={{
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
-      }}
-    >
-      {/* Confetti */}
-      <ConfettiBurst />
-
-      <div className="flex-1 px-5 py-4 space-y-5">
-
-        {/* ── Hero header ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 20 }}
-          className="text-center pt-6 pb-2"
-        >
-          {programCompleted ? (
-            <>
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 18 }}
-                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-yellow-500/20 ring-4 ring-yellow-500/30"
-              >
-                <span className="text-5xl">🏆</span>
-              </motion.div>
-              <h1 className="text-4xl font-black text-yellow-400 tracking-tight">PROGRAM COMPLETE</h1>
-              <p className="mt-2 text-zinc-300 font-semibold text-lg">{completedProgramName || workout?.title}</p>
-              <p className="mt-1 text-zinc-500 text-sm">You finished every single workout. That&apos;s elite.</p>
-            </>
-          ) : (
-            <>
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 18 }}
-                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/20 ring-4 ring-emerald-500/30"
-              >
-                <span className="text-5xl">{newPRs.length > 0 ? '🏅' : '💪'}</span>
-              </motion.div>
-              <h1 className="text-4xl font-black tracking-tight">
-                {newPRs.length > 0 ? 'YOU CRUSHED IT' : 'WORKOUT DONE'}
-              </h1>
-              <p className="mt-1.5 text-zinc-400 font-medium">{workout?.day} — {workout?.title}</p>
-              {newPRs.length > 0 && (
-                <p className="mt-2 text-emerald-400 font-semibold text-sm">
-                  🏆 {newPRs.length} new personal record{newPRs.length > 1 ? 's' : ''} today
-                </p>
-              )}
-            </>
-          )}
-
-          {/* Daily quote */}
-          <p className="mt-4 text-zinc-500 text-sm italic leading-relaxed px-4">&ldquo;{quote}&rdquo;</p>
-        </motion.div>
-
-        {/* ── Stats row ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="grid grid-cols-3 gap-2"
-        >
-          <div className="rounded-2xl bg-zinc-900 p-4 text-center border border-zinc-800">
-            <p className="text-2xl font-bold text-emerald-400">{formatTime(elapsedTime)}</p>
-            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">Duration</p>
-          </div>
-          <div className="rounded-2xl bg-zinc-900 p-4 text-center border border-zinc-800">
-            <p className="text-2xl font-bold text-blue-400">{totalSets}</p>
-            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">Sets</p>
-          </div>
-          <div className="rounded-2xl bg-zinc-900 p-4 text-center border border-zinc-800">
-            <p className="text-2xl font-bold text-violet-400">{totalVolume.toLocaleString()}</p>
-            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">Volume lbs</p>
-          </div>
-        </motion.div>
-
-        {/* ── Streak card ── */}
-        {summaryStreak !== null && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.42 }}
-            className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">🔥</span>
-                <div>
-                  <p className="font-bold text-white text-lg leading-none">{summaryStreak.streakDays} day streak</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {summaryStreak.streakDays === 1
-                      ? "The streak starts here. Don't break it."
-                      : summaryStreak.streakDays < 7
-                      ? "Building momentum. Keep it going."
-                      : summaryStreak.streakDays < 30
-                      ? "You're on fire. Stay consistent."
-                      : "Elite consistency. Legendary work."}
-                  </p>
-                </div>
-              </div>
-            </div>
-            {summaryStreak.nextMilestone && (
-              <>
-                <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${streakProgress}%` }}
-                    transition={{ delay: 0.6, duration: 0.8, ease: 'easeOut' }}
-                    className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
-                  />
-                </div>
-                <p className="text-xs text-zinc-600 mt-1.5">
-                  {summaryStreak.streakDays} / {summaryStreak.nextMilestone} days to next milestone
-                </p>
-              </>
-            )}
-          </motion.div>
-        )}
-
-        {/* ── PR highlights ── */}
-        {newPRs.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4"
-          >
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3">🏆 New Personal Records</p>
-            <div className="space-y-2">
-              {newPRs.map((pr, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">{pr.name}</span>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-yellow-400">
-                      {parseFloat(pr.bestSet.weight) > 0
-                        ? `${pr.bestSet.weight} × ${pr.bestSet.reps}`
-                        : `${pr.bestSet.reps} reps`}
-                    </span>
-                    <span className="text-xs text-zinc-600 ml-2">
-                      prev {pr.history.weight > 0
-                        ? `${pr.history.weight} × ${pr.history.reps}`
-                        : `${pr.history.reps} reps`}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Exercise breakdown ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.58 }}
-        >
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-600 mb-3">Exercise Breakdown</p>
-          <div className="space-y-2">
-            {exercises.map((exercise, exIdx) => {
-              const sets = exerciseData[exIdx] || []
-              const activeSets = sets.filter(s => s.completed && !(s.reps === "0" && s.weight === "0"))
-              const skipped = sets.filter(s => s.completed && s.reps === "0" && s.weight === "0").length
-              const isPR = newPRs.some(pr => pr.name === exercise.name)
-              return (
-                <div key={exIdx} className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-sm font-semibold text-white">{exercise.name}</h3>
-                      {isPR && <span className="text-xs text-yellow-400">🏆 PR</span>}
-                    </div>
-                    <span className="text-xs text-zinc-600">
-                      {activeSets.length}/{sets.length} sets{skipped > 0 ? ` (${skipped} skipped)` : ''}
-                    </span>
-                  </div>
-                  {activeSets.length > 0 && (
-                    <div className="flex gap-1.5 flex-wrap">
-                      {activeSets.map((s, i) => (
-                        <span key={i} className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
-                          {parseFloat(s.weight) > 0 ? `${s.weight}×${s.reps}` : `${s.reps} reps`}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </motion.div>
-
-        {/* ── Personal closing message ── */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.7 }}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 text-center"
-        >
-          <p className="text-sm text-zinc-400 leading-relaxed">{closingMessage}</p>
-        </motion.div>
-
-      </div>
-
-      {/* ── CTA ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.75 }}
-        className="px-5 pt-2"
-      >
-        <button
-          onClick={onDone}
-          className={`w-full rounded-2xl py-4 text-base font-bold shadow-lg transition-all active:scale-95 ${
-            programCompleted
-              ? "bg-yellow-500 shadow-yellow-500/20 hover:bg-yellow-400 text-black"
-              : "bg-white shadow-white/10 hover:bg-zinc-100 text-zinc-950"
-          }`}
-        >
-          {programCompleted ? "Find My Next Challenge 🚀" : "I'll Be Back 💪"}
-        </button>
-      </motion.div>
-    </motion.div>
-  )
-}
+// WorkoutSummary, ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, SummaryProps
+// are all imported from @/components/WorkoutSummary above.

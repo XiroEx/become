@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Exercise, ExerciseType } from "@/lib/data/programs";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
+
+interface DbExerciseSuggestion {
+  slug: string;
+  name: string;
+  trackingType: string;
+  isCustom?: boolean;
+}
 
 interface ExerciseEditorProps {
   exercise: Exercise;
@@ -77,10 +84,42 @@ export default function ExerciseEditor({
 }: ExerciseEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dbSuggestions, setDbSuggestions] = useState<DbExerciseSuggestion[]>([]);
+  const dbSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateField = <K extends keyof Exercise>(key: K, value: Exercise[K]) => {
     onUpdate({ ...exercise, [key]: value });
   };
+
+  // Live DB search (exercises + custom) as user types name
+  useEffect(() => {
+    const q = (exercise.name || "").trim();
+    if (q.length < 2) { setDbSuggestions([]); return; }
+    if (dbSearchRef.current) clearTimeout(dbSearchRef.current);
+    dbSearchRef.current = setTimeout(async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return;
+        const [dbRes, customRes] = await Promise.all([
+          fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=5`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/exercises/custom`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        const dbData = dbRes.ok ? await dbRes.json() : { exercises: [] };
+        const customData = customRes.ok ? await customRes.json() : { exercises: [] };
+        const customMatches = (customData.exercises || []).filter((e: DbExerciseSuggestion) =>
+          e.name.toLowerCase().includes(q.toLowerCase())
+        ).map((e: DbExerciseSuggestion) => ({ ...e, isCustom: true }));
+        const combined: DbExerciseSuggestion[] = [
+          ...customMatches,
+          ...(dbData.exercises || []).filter((e: DbExerciseSuggestion) =>
+            !customMatches.some((c: DbExerciseSuggestion) => c.slug === e.slug)
+          ),
+        ].slice(0, 8);
+        setDbSuggestions(combined);
+      } catch { /* silently ignore */ }
+    }, 200);
+    return () => { if (dbSearchRef.current) clearTimeout(dbSearchRef.current); };
+  }, [exercise.name]);
 
   const typeConfig = EXERCISE_TYPES.find((t) => t.value === exercise.type) || EXERCISE_TYPES[0];
   const suggestions = EXERCISE_SUGGESTIONS[exercise.type || 'strength'] || [];
@@ -178,27 +217,47 @@ export default function ExerciseEditor({
                 value={exercise.name}
                 onChange={(e) => updateField("name", e.target.value)}
                 onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
                 placeholder="e.g., Bench Press"
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               />
-              
-              {/* Autocomplete Suggestions */}
-              {showSuggestions && filteredSuggestions.length > 0 && (
-                <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                  {filteredSuggestions.slice(0, 5).map((suggestion, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        updateField("name", suggestion);
-                        setShowSuggestions(false);
-                      }}
-                      className="block w-full px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+
+              {/* Autocomplete — DB results (custom first) + static fallback */}
+              {showSuggestions && (dbSuggestions.length > 0 || filteredSuggestions.length > 0) && (
+                <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  {dbSuggestions.length > 0 ? (
+                    dbSuggestions.map((s) => (
+                      <button
+                        key={s.slug}
+                        type="button"
+                        onClick={() => {
+                          onUpdate({ ...exercise, name: s.name, exerciseSlug: s.slug });
+                          setShowSuggestions(false);
+                          setDbSuggestions([]);
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                      >
+                        <span className="font-medium text-zinc-900 dark:text-white">{s.name}</span>
+                        <span className="ml-2 shrink-0 text-[10px] text-zinc-400 dark:text-zinc-500">
+                          {s.isCustom ? "★ Custom" : s.trackingType?.replace(/_/g, " ")}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    filteredSuggestions.slice(0, 5).map((suggestion, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          updateField("name", suggestion);
+                          setShowSuggestions(false);
+                        }}
+                        className="block w-full px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      >
+                        {suggestion}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>

@@ -281,6 +281,10 @@ export interface IExerciseDefinition extends Document {
   // Status
   isActive: boolean;
 
+  // Custom exercise (user-created)
+  isCustom?: boolean;
+  createdBy?: string; // userId
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -503,6 +507,10 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
       default: true,
       index: true,
     },
+
+    // Custom exercise (user-created)
+    isCustom: { type: Boolean, default: false, index: true },
+    createdBy: { type: String, default: null },
   },
   {
     timestamps: true,

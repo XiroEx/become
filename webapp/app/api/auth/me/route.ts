@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
-import { verifyToken } from '../../../../lib/auth'
+import { verifyToken, verifyAuth } from '../../../../lib/auth'
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,7 +24,12 @@ export async function GET(req: NextRequest) {
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
     }
 
-    const payload = verifyToken(token)
+    let payload: { userId: string; email: string }
+    try {
+      payload = verifyToken(token)
+    } catch {
+      return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
+    }
     await dbConnect()
     const user = await User.findById(payload.userId)
       .select('email name role trainerId savedPrograms profile onboardingCompleted createdAt updatedAt')

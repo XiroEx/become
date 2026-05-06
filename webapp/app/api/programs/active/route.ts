@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth'
+import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import Schedule from '@/models/Schedule'
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
-
-    const token = authHeader.split(' ')[1]
-    const payload = verifyToken(token)
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
+    const payload = { userId: authResult.userId!, email: authResult.email! }
 
     await dbConnect()
 
@@ -48,15 +44,28 @@ export async function GET(request: NextRequest) {
       ).catch(() => {})
     }
 
-    // Filter to in-progress, active, or paused programs (not completed, not orphaned)
+    // Filter to in-progress, active, paused, or completed programs (not orphaned).
+    // We include 'completed' here so we can self-heal programs that were incorrectly auto-completed.
     const inProgressPrograms = userProgress.activePrograms.filter(
       (p: { programId: string; status: string }) =>
         existingIds.has(p.programId) &&
-        (p.status === 'in-progress' || p.status === 'active' || p.status === 'paused')
+        (p.status === 'in-progress' || p.status === 'active' || p.status === 'paused' || p.status === 'completed')
     )
 
-    // Return active programs with progress info
-    const activePrograms = inProgressPrograms.map((program: {
+    // Load schedule documents to derive accurate counts from status fields + dayLabel for log reconciliation
+    const candidateIds = inProgressPrograms.map((p: { programId: string }) => p.programId)
+    const schedules = await Schedule.find(
+      { userId: payload.userId, programId: { $in: candidateIds } },
+      { programId: 1, 'scheduledWorkouts.status': 1, 'scheduledWorkouts.dayLabel': 1, 'scheduledWorkouts.date': 1 }
+    ).lean<{ programId: string; scheduledWorkouts: { status: string; dayLabel: string; date: Date }[] }[]>()
+    const scheduleMap = new Map(schedules.map((s) => [s.programId, s]))
+
+    // Workout logs for cross-referencing historical completions (sessions done before schedule-sync fix
+    // may still show status='scheduled' in the DB even though they were completed via workout logs)
+    type WorkoutLog = { programId: string; day: string; completed: boolean }
+    const workoutLogs = (userProgress.workoutLogs || []) as WorkoutLog[]
+
+    type CandidateProgram = {
       programId: string
       programName: string
       startDate: Date
@@ -66,20 +75,70 @@ export async function GET(request: NextRequest) {
       totalWorkouts: number
       status: string
       lastWorkoutDate?: Date
-    }) => ({
-      programId: program.programId,
-      programName: program.programName,
-      startDate: program.startDate,
-      currentPhase: program.currentPhase,
-      currentDay: program.currentDay,
-      completedWorkouts: program.completedWorkouts,
-      totalWorkouts: program.totalWorkouts,
-      progress: program.totalWorkouts > 0 
-        ? Math.round((program.completedWorkouts / program.totalWorkouts) * 100)
-        : 0,
-      status: program.status,
-      lastWorkoutDate: program.lastWorkoutDate
-    }))
+    }
+
+    // Return active programs with progress info derived from schedule (source of truth).
+    // Self-heal any 'completed' programs that still have remaining scheduled sessions.
+    const activePrograms = (inProgressPrograms as CandidateProgram[]).flatMap((program) => {
+      let completedWorkouts = program.completedWorkouts
+      let totalWorkouts = program.totalWorkouts
+      let effectiveStatus = program.status
+
+      const schedule = scheduleMap.get(program.programId)
+      if (schedule?.scheduledWorkouts?.length) {
+        // All non-rest sessions (skipped still counts toward total — it's a planned session not done)
+        const sessions = schedule.scheduledWorkouts.filter((w) => w.status !== 'rest')
+        totalWorkouts = sessions.length
+
+        // Completed = schedule says completed OR matched by a workout log.
+        // Uses greedy chronological matching to handle repeating dayLabels
+        // (e.g. "Day 1" appears 5× in a 5-week program — one log entry of "Day 1"
+        // should only count as one completion, not five).
+        const availableLogs = new Map<string, number>()
+        for (const log of workoutLogs) {
+          if (log.programId === program.programId && log.completed) {
+            availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
+          }
+        }
+        completedWorkouts = [...sessions]
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .filter((w) => {
+            if (w.status === 'completed') return true
+            if (w.status === 'skipped') return false
+            const n = availableLogs.get(w.dayLabel) || 0
+            if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
+            return false
+          }).length
+
+        // Self-heal: program was incorrectly auto-completed but schedule has remaining sessions
+        const remaining = totalWorkouts - completedWorkouts
+        if (program.status === 'completed' && remaining > 0) {
+          UserProgress.updateOne(
+            { userId: payload.userId, 'activePrograms.programId': program.programId },
+            { $set: { 'activePrograms.$.status': 'in-progress' } }
+          ).catch(() => {})
+          effectiveStatus = 'in-progress'
+        }
+      }
+
+      // Exclude truly completed programs from this endpoint's response
+      if (effectiveStatus === 'completed') return []
+
+      return [{
+        programId: program.programId,
+        programName: program.programName,
+        startDate: program.startDate,
+        currentPhase: program.currentPhase,
+        currentDay: program.currentDay,
+        completedWorkouts,
+        totalWorkouts,
+        progress: totalWorkouts > 0
+          ? Math.round((completedWorkouts / totalWorkouts) * 100)
+          : 0,
+        status: effectiveStatus,
+        lastWorkoutDate: program.lastWorkoutDate,
+      }]
+    })
 
     return NextResponse.json({ activePrograms })
 

@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
-import NutritionLog from '@/models/NutritionLog'
-import FoodItem from '@/models/FoodItem'
+import MealLog from '@/models/MealLog'
+import Food, { IFood, IFoodVariant } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { flattenFoodForResponse } from '@/lib/foodImport'
+import type { IMealItem } from '@/models/Meal'
 
-// GET: Get user's recently logged foods (last 14 days)
+// GET: Get user's recently logged foods (last 14 days, deduped, most recent first)
+//
+// Pulls from MealLog (the canonical store post-overhaul). For items that still
+// resolve to a Food doc, we return the full flattened shape (with variants[]
+// for the picker). For items whose foodId is missing or stale, we synthesize a
+// single-variant Food-shaped object from the snapshot fields so the picker
+// preview doesn't fall to 0.
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
@@ -15,59 +24,61 @@ export async function GET(request: NextRequest) {
     await dbConnect()
 
     const fourteenDaysAgo = new Date()
-    fourteenDaysAgo.setUTCHours(0, 0, 0, 0)
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
 
-    // Get recent logs
-    const logs = await NutritionLog.find({
-      userId: authResult.userId,
-      date: { $gte: fourteenDaysAgo }
+    const logs = await MealLog.find({
+      user: authResult.userId,
+      loggedAt: { $gte: fourteenDaysAgo },
     })
-      .sort({ date: -1 })
-      .lean()
+      .sort({ loggedAt: -1 })
+      .lean<{ items: IMealItem[]; loggedAt: Date }[]>()
 
-    // Extract unique foods, most recently logged first
-    const seenFoods = new Map<string, { name: string; foodId?: string; nutrition: unknown; servingSize: number; servingUnit: string; brand?: string; loggedAt: Date }>()
-
+    // Dedupe by foodId (or name fallback), keeping the first (most recent) hit.
+    const seen = new Map<string, { item: IMealItem; loggedAt: Date }>()
     for (const log of logs) {
-      for (const meal of log.meals) {
-        for (const food of meal.foods) {
-          const key = food.foodId?.toString() || food.name
-          if (!seenFoods.has(key)) {
-            seenFoods.set(key, {
-              name: food.name,
-              foodId: food.foodId?.toString(),
-              nutrition: food.nutrition,
-              servingSize: food.servingSize,
-              servingUnit: food.servingUnit,
-              brand: food.brand,
-              loggedAt: meal.loggedAt
-            })
-          }
-        }
+      for (const item of log.items ?? []) {
+        const key = item.foodId?.toString() || item.name
+        if (!seen.has(key)) seen.set(key, { item, loggedAt: log.loggedAt })
       }
     }
 
-    // Convert to array and limit to 20
-    const recentFoods = Array.from(seenFoods.values()).slice(0, 20)
+    const recent = Array.from(seen.values()).slice(0, 20)
 
-    // Fetch full FoodItem docs for those with foodIds
-    const foodIds = recentFoods
-      .filter(f => f.foodId)
-      .map(f => f.foodId)
-
-    const foodItems = foodIds.length > 0
-      ? await FoodItem.find({ _id: { $in: foodIds } }).lean()
+    const foodIds = recent
+      .map(r => r.item.foodId?.toString())
+      .filter((id): id is string => !!id)
+    const foodDocs = foodIds.length > 0
+      ? await Food.find({ _id: { $in: foodIds } }).lean<(IFood & { _id: mongoose.Types.ObjectId })[]>()
       : []
+    const foodMap = new Map(foodDocs.map(f => [f._id.toString(), f]))
 
-    const foodItemMap = new Map(foodItems.map(fi => [fi._id.toString(), fi]))
-
-    // Enrich with FoodItem data where available
-    const enriched = recentFoods.map(food => {
-      if (food.foodId && foodItemMap.has(food.foodId)) {
-        return { ...foodItemMap.get(food.foodId), lastLoggedAt: food.loggedAt }
+    const enriched = recent.map(({ item, loggedAt }) => {
+      const id = item.foodId?.toString()
+      if (id && foodMap.has(id)) {
+        return { ...flattenFoodForResponse(foodMap.get(id)!), lastLoggedAt: loggedAt }
       }
-      return food
+      // Fallback: synthesize a single-variant Food-shape from the snapshot so
+      // the picker preview has the data it needs.
+      const variant: IFoodVariant = {
+        name: item.variantName || 'Default',
+        isDefault: true,
+        servingSize: item.servingSize,
+        servingUnit: item.servingUnit as IFoodVariant['servingUnit'],
+        alternateServings: [],
+        nutrition: item.nutrition,
+      }
+      return {
+        _id: id || `legacy-${item.name}`,
+        name: item.name,
+        brand: item.brand,
+        servingSize: item.servingSize,
+        servingUnit: item.servingUnit,
+        nutrition: item.nutrition,
+        alternateServings: [],
+        variants: [variant],
+        source: 'manual',
+        lastLoggedAt: loggedAt,
+      }
     })
 
     return NextResponse.json({ foods: enriched })

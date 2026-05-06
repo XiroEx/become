@@ -4,12 +4,19 @@ export interface WorkoutExercise {
   exerciseSlug?: string;
   name: string;
   type?: string;
+  trackingType?: string;      // reps_weight | reps_bodyweight | reps_only | time | time_distance | intervals | none
   sets?: number;
-  reps?: string;
+  reps?: string;              // rep target (or interval target: "20 cal", "AMRAP")
   rest?: string;
-  details?: string;
+  tempo?: string;             // e.g. "3-1-1-0"
+  rpe?: number;               // 1-10
+  duration?: string;          // timed prescription: "30 sec", "60 sec"
+  details?: string;           // coach notes for this exercise in this program
+  tip?: string;               // quick cue shown during live workout
   videoUrl?: string;
   thumbnailUrl?: string;
+  primaryMuscles?: string[];  // hydrated from exercise DB
+  difficulty?: string;        // hydrated from exercise DB
   groupId?: string;
   groupType?: string;
   groupLabel?: string;

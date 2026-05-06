@@ -13,6 +13,13 @@ export interface ISavedProgram {
   order: number;
 }
 
+export interface ISavedFood {
+  foodId: mongoose.Types.ObjectId;
+  savedAt: Date;
+}
+
+export type WeightUnit = 'lbs' | 'kg';
+
 export interface IUserProfile {
   fitnessGoal?: FitnessGoal;
   experienceLevel?: ExperienceLevel;
@@ -24,6 +31,7 @@ export interface IUserProfile {
   equipmentAccess?: EquipmentType[];
   injuryNotes?: string;
   weeklyAvailability?: number;
+  weightUnit?: WeightUnit;
 }
 
 export interface IUser {
@@ -34,6 +42,7 @@ export interface IUser {
   role: UserRole
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
+  savedFoods?: ISavedFood[];
   profile?: IUserProfile;
   onboardingCompleted?: boolean;
   createdAt?: Date
@@ -52,6 +61,11 @@ const SavedProgramSchema = new Schema({
   order: { type: Number, default: 0 },
 }, { _id: false });
 
+const SavedFoodSchema = new Schema({
+  foodId: { type: Schema.Types.ObjectId, ref: 'Food', required: true },
+  savedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const UserProfileSchema = new Schema({
   fitnessGoal: { type: String, enum: ['lose_weight', 'gain_muscle', 'maintain', 'improve_performance', 'general_health'] },
   experienceLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
@@ -63,6 +77,7 @@ const UserProfileSchema = new Schema({
   equipmentAccess: [{ type: String, enum: ['none', 'dumbbells', 'barbell', 'cables', 'full_gym'] }],
   injuryNotes: { type: String },
   weeklyAvailability: { type: Number, min: 1, max: 7 },
+  weightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
 }, { _id: false });
 
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
@@ -86,11 +101,15 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
+  savedFoods: [SavedFoodSchema],
   profile: { type: UserProfileSchema, default: {} },
   onboardingCompleted: { type: Boolean, default: false },
 }, {
   timestamps: true,
 })
+
+// Index to support fast lookups of users by saved food (and basic membership tests)
+UserSchema.index({ 'savedFoods.foodId': 1 })
 
 // Hash password before saving
 UserSchema.pre('save', async function() {

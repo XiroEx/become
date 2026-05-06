@@ -16,6 +16,8 @@ interface HydratedExerciseFields {
   trackingType?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  primaryMuscles?: string[];
+  difficulty?: string;
 }
 
 // Module-level caches (reset per cold start)
@@ -31,7 +33,7 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
 
   const exercises = await ExerciseModel.find(
     {},
-    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, _id: 0 }
+    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, _id: 0 }
   ).lean();
 
   slugCache = new Map();
@@ -43,6 +45,8 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
       trackingType: ex.trackingType || undefined,
       videoUrl: ex.videoUrl || undefined,
       thumbnailUrl: ex.thumbnailUrl || undefined,
+      primaryMuscles: ex.primaryMuscles?.length ? ex.primaryMuscles : undefined,
+      difficulty: ex.difficulty || undefined,
     });
     nameToSlugCache.set(ex.name.toLowerCase(), ex.slug);
     for (const alias of ex.aliases || []) {
@@ -105,6 +109,8 @@ function hydrateExercise(
     ...(info.trackingType && { trackingType: info.trackingType }),
     ...(info.videoUrl && { videoUrl: info.videoUrl }),
     ...(info.thumbnailUrl && { thumbnailUrl: info.thumbnailUrl }),
+    ...(info.primaryMuscles && { primaryMuscles: info.primaryMuscles }),
+    ...(info.difficulty && { difficulty: info.difficulty }),
   };
 }
 

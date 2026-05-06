@@ -20,8 +20,11 @@ export interface IMoodChangeEntry {
 
 export interface ISetLog {
   setNumber: number
-  reps: number
-  weight: number
+  reps?: number       // null for time-only exercises (planks, holds, intervals)
+  weight?: number     // null for bodyweight / cardio exercises
+  duration?: number   // seconds — for time / time_distance / intervals tracking types
+  distance?: number   // meters — for time_distance tracking type
+  speed?: number      // mph — for time_distance / intervals tracking types
   completed: boolean
 }
 
@@ -44,6 +47,7 @@ export interface IWorkoutLog {
   day: string
   completed: boolean
   duration?: number // in minutes
+  notes?: string
   exercises: IExerciseLog[]
 }
 
@@ -119,8 +123,11 @@ const MoodChangeEntrySchema = new Schema<IMoodChangeEntry>({
 
 const SetLogSchema = new Schema<ISetLog>({
   setNumber: { type: Number, required: true },
-  reps: { type: Number, required: true },
-  weight: { type: Number, required: true },
+  reps:     { type: Number, default: null },    // null for time-only exercises
+  weight:   { type: Number, default: null },    // null for bodyweight/cardio
+  duration: { type: Number, default: null },    // seconds (time / intervals / time_distance)
+  distance: { type: Number, default: null },    // meters (time_distance)
+  speed:    { type: Number, default: null },    // mph (time_distance / intervals)
   completed: { type: Boolean, default: false }
 }, { _id: false })
 
@@ -141,6 +148,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   day: { type: String, required: true },
   completed: { type: Boolean, default: false },
   duration: { type: Number },
+  notes: { type: String },
   exercises: [ExerciseLogSchema]
 }, { _id: false })
 

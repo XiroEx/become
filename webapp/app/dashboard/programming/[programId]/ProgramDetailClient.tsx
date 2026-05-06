@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
@@ -343,7 +344,7 @@ export default function ProgramDetailClient({ program }: Props) {
   const handleStartProgram = async () => {
     // If already enrolled, just navigate to workout
     if (activeProgram) {
-      router.push(`/dashboard/programming/${program.program_id}/workout?day=${encodeURIComponent(selectedDayKey)}`);
+      router.push(`/dashboard/programming/${program.program_id}/workout`);
       return;
     }
 
@@ -500,7 +501,7 @@ export default function ProgramDetailClient({ program }: Props) {
               {enrolling ? "Starting..." : activeProgram ? "Continue Program" : "Start Program"}
             </button>
             <button 
-              onClick={() => router.push(`/dashboard/programming/${program.program_id}/workout/live?day=${encodeURIComponent(selectedDayKey)}`)}
+              onClick={() => router.push(`/dashboard/programming/${program.program_id}/workout/live`)}
               className={`flex items-center gap-2 rounded-full px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all sm:px-6 sm:py-3 ${
                 hasInProgressWorkout 
                   ? "bg-yellow-500/20 hover:bg-yellow-500/30 ring-1 ring-yellow-500/50" 
@@ -592,7 +593,7 @@ export default function ProgramDetailClient({ program }: Props) {
               </div>
 
               <div className="flex items-center justify-between text-sm text-zinc-300">
-                <span>Progress: {activeProgram.completedWorkouts}/{activeProgram.totalWorkouts} workouts</span>
+                <span>Progress: {activeProgram.completedWorkouts}/{activeProgram.totalWorkouts} sessions</span>
                 <span className="text-green-400 font-semibold">
                   {Math.round((activeProgram.completedWorkouts / activeProgram.totalWorkouts) * 100)}%
                 </span>
@@ -604,16 +605,27 @@ export default function ProgramDetailClient({ program }: Props) {
                 />
               </div>
               
-              {/* Schedule Link */}
-              <button
-                onClick={() => router.push(`/dashboard/programming/${program.program_id}/schedule`)}
-                className="mt-3 flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                View / Edit Schedule
-              </button>
+              {/* Links row */}
+              <div className="mt-3 flex items-center gap-4">
+                <button
+                  onClick={() => router.push(`/dashboard/programming/${program.program_id}/schedule`)}
+                  className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Schedule
+                </button>
+                <Link
+                  href="/dashboard/progress#workouts"
+                  className="flex items-center gap-1.5 text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Training Log
+                </Link>
+              </div>
 
               {/* Schedule Management */}
               <div className="mt-3 flex flex-wrap items-center gap-3">

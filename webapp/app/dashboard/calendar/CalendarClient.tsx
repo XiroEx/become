@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import WorkoutSummary from '@/components/WorkoutSummary'
 import {
     ChevronLeft,
     ChevronRight,
@@ -19,6 +20,7 @@ import {
     Play,
     ChevronsRight,
     CalendarDays,
+    BarChart2,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -69,6 +71,19 @@ function isSameDay(d1: Date, d2: Date): boolean {
   return d1.getFullYear() === d2.getFullYear() &&
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate()
+}
+
+/**
+ * The server stores scheduled dates as UTC midnight where the YYYY-MM-DD
+ * portion represents the intended LOCAL calendar date. Parse it that way
+ * (not as UTC) and compare against the local date of completedAt.
+ */
+function isMakeupWorkout(scheduledDateStr: string, completedAtStr: string): boolean {
+  const parts = scheduledDateStr.split('T')[0].split('-').map(Number)
+  const scheduledLocal = new Date(parts[0], parts[1] - 1, parts[2])
+  const c = new Date(completedAtStr)
+  const completedLocal = new Date(c.getFullYear(), c.getMonth(), c.getDate())
+  return scheduledLocal.getTime() !== completedLocal.getTime()
 }
 
 // Format a local Date as YYYY-MM-DD using local time components
@@ -126,13 +141,19 @@ function StatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'completed':
       return (
-        <span className="flex items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+        <span className="flex items-center gap-0.5 rounded-full bg-green-700 px-1.5 py-0.5 text-[10px] font-medium text-white dark:bg-green-700 dark:text-white">
           <Check className="h-2.5 w-2.5" /> Done
+        </span>
+      )
+    case 'makeup':
+      return (
+        <span className="flex items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-900/30 dark:text-green-300">
+          <CalendarDays className="h-2.5 w-2.5" /> Made Up
         </span>
       )
     case 'missed':
       return (
-        <span className="flex items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+        <span className="flex items-center gap-0.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white dark:bg-red-600 dark:text-white">
           <X className="h-2.5 w-2.5" /> Missed
         </span>
       )
@@ -168,6 +189,21 @@ export default function CalendarClient() {
   const [showShiftInput, setShowShiftInput] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [pickerMonth, setPickerMonth] = useState(() => new Date())
+  const [logSummary, setLogSummary] = useState<{
+    log: {
+      day: string
+      phase: number
+      completed: boolean
+      duration?: number
+      exercises: Array<{
+        name: string
+        sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }>
+      }>
+    }
+    workout: { day: string; title: string }
+    exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }>
+  } | null>(null)
+  const [logSummaryLoading, setLogSummaryLoading] = useState(false)
 
   // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
@@ -219,6 +255,32 @@ export default function CalendarClient() {
   useEffect(() => {
     fetchSchedules()
   }, [fetchSchedules])
+
+  const fetchWorkoutLog = async (w: ScheduledWorkout & { programName: string; programId: string }) => {
+    setLogSummaryLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      // For makeup workouts the log lives on the actual completion date, not the scheduled date
+      const lookupDate = w.completedAt ?? w.date
+      const dateKey = typeof lookupDate === 'string' ? lookupDate.split('T')[0] : new Date(lookupDate).toISOString().split('T')[0]
+      const res = await fetch(`/api/workouts/log?programId=${w.programId}&date=${dateKey}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.log) {
+          setLogSummary({
+            log: data.log,
+            workout: { day: w.dayLabel, title: w.workoutTitle },
+            exerciseHistory: data.exerciseHistory ?? {},
+          })
+        }
+      }
+    } finally {
+      setLogSummaryLoading(false)
+    }
+  }
 
   // Build workout map — key by the date portion of the stored ISO string.
   // Workout dates are stored as UTC midnight and the YYYY-MM-DD portion represents
@@ -474,8 +536,11 @@ export default function CalendarClient() {
                       <div className="mt-0.5 flex flex-wrap justify-center gap-0.5">
                         {dayWorkouts.map((w, i) => {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
-                          const statusColor = w.status === 'completed' ? 'bg-green-500' :
-                            w.status === 'missed' ? 'bg-red-400' :
+                          const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
+                            isMakeupWorkout(w.date, w.completedAt)
+                          const statusColor = isMakeupDot ? 'bg-green-300' :
+                            w.status === 'completed' ? 'bg-green-700' :
+                            w.status === 'missed' ? 'bg-red-600' :
                             w.status === 'skipped' ? 'bg-amber-400' :
                             colors.dot
                           return <div key={i} className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
@@ -502,6 +567,30 @@ export default function CalendarClient() {
             </div>
           </div>
 
+          {/* Color Legend */}
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 px-1">
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-green-700" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Completed</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-green-300" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Made Up</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-blue-500" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Scheduled</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-red-600" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Missed</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-amber-400" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Skipped</span>
+            </div>
+          </div>
+
           {/* Selected Day Detail Panel */}
           <AnimatePresence>
             {selectedDate && (
@@ -523,6 +612,8 @@ export default function CalendarClient() {
                     {selectedWorkouts.map((w, idx) => {
                       const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
                       const isProgramPaused = pausedProgramIds.has(w.programId)
+                      const isMakeup = w.status === 'completed' && !!w.completedAt &&
+                        isMakeupWorkout(w.date, w.completedAt)
                       return (
                         <div key={idx} className={`rounded-lg border border-zinc-100 p-3 dark:border-zinc-800 ${isProgramPaused ? 'opacity-60' : ''}`}>
                           <div className="flex items-start justify-between gap-2">
@@ -542,7 +633,7 @@ export default function CalendarClient() {
                                 Paused
                               </span>
                             ) : (
-                              <StatusBadge status={w.status} />
+                              <StatusBadge status={isMakeup ? 'makeup' : w.status} />
                             )}
                           </div>
 
@@ -576,18 +667,69 @@ export default function CalendarClient() {
                                   </>
                                 )}
                                 {w.status === 'missed' && (
-                                  <Link
-                                    href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
-                                    className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                                  >
-                                    <Dumbbell className="h-3 w-3" />
-                                    Do It Now
-                                  </Link>
+                                  <>
+                                    <Link
+                                      href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                    >
+                                      <Dumbbell className="h-3 w-3" />
+                                      Do It Now
+                                    </Link>
+                                    <button
+                                      onClick={async () => {
+                                        const token = localStorage.getItem('token')
+                                        if (!token) return
+                                        setActionLoading(true)
+                                        try {
+                                          await fetch('/api/schedule', {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                            body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date }),
+                                          })
+                                          fetchSchedules()
+                                        } finally {
+                                          setActionLoading(false)
+                                        }
+                                      }}
+                                      disabled={actionLoading}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <SkipForward className="h-3 w-3" />
+                                      Skip It
+                                    </button>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Reschedule
+                                    </button>
+                                  </>
                                 )}
                                 {w.status === 'completed' && (
-                                  <span className="text-xs text-green-600 dark:text-green-400">
-                                    Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
-                                  </span>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {isMakeup ? (
+                                      <span className="text-xs text-green-500 dark:text-green-400">
+                                        Made up on {new Date(w.completedAt!).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-green-600 dark:text-green-400">
+                                        Completed {w.completedAt ? new Date(w.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => fetchWorkoutLog(w)}
+                                      disabled={logSummaryLoading}
+                                      className={`flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                                        isMakeup
+                                          ? 'border-green-200 text-green-500 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20'
+                                          : 'border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20'
+                                      }`}
+                                    >
+                                      <BarChart2 className="h-3 w-3" />
+                                      View Summary
+                                    </button>
+                                  </div>
                                 )}
                               </>
                             )}
@@ -602,6 +744,37 @@ export default function CalendarClient() {
           </AnimatePresence>
         </>
       )}
+
+      {/* Workout Log Summary Overlay */}
+      <AnimatePresence>
+        {logSummary && (
+          <WorkoutSummary
+            programCompleted={false}
+            completedProgramName=""
+            workout={logSummary.workout}
+            elapsedTime={logSummary.log.duration ? logSummary.log.duration * 60 : 0}
+            exerciseData={logSummary.log.exercises.map((ex) =>
+              (ex.sets ?? []).map((s) => ({
+                reps: String(s.reps),
+                weight: String(s.weight),
+                completed: s.completed,
+              }))
+            )}
+            exercises={logSummary.log.exercises.map((ex) => ({ name: ex.name }))}
+            exerciseHistory={logSummary.exerciseHistory}
+            summaryStreak={null}
+            summaryGoal={null}
+            formatTime={(s) => {
+              const h = Math.floor(s / 3600)
+              const m = Math.floor((s % 3600) / 60)
+              const sec = s % 60
+              if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+              return `${m}:${String(sec).padStart(2, '0')}`
+            }}
+            onDone={() => setLogSummary(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Action Menu Modal */}
       <AnimatePresence>

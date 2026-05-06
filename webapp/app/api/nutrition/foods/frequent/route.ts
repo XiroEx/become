@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
-import NutritionLog from '@/models/NutritionLog'
-import FoodItem from '@/models/FoodItem'
+import MealLog from '@/models/MealLog'
+import Food, { IFood, IFoodVariant } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { flattenFoodForResponse } from '@/lib/foodImport'
 
-// GET: Get user's most frequently logged foods
+// GET: Get user's most frequently logged foods (across all MealLogs)
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
@@ -14,56 +16,62 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
-    // Aggregate food occurrences across all user logs
+    const userObjId = new mongoose.Types.ObjectId(authResult.userId)
     const pipeline = [
-      { $match: { userId: authResult.userId } },
-      { $unwind: '$meals' },
-      { $unwind: '$meals.foods' },
+      { $match: { user: userObjId } },
+      { $unwind: '$items' },
       {
         $group: {
-          _id: {
-            foodId: '$meals.foods.foodId',
-            name: '$meals.foods.name'
-          },
+          _id: { foodId: '$items.foodId', name: '$items.name' },
           count: { $sum: 1 },
-          lastNutrition: { $last: '$meals.foods.nutrition' },
-          lastServingSize: { $last: '$meals.foods.servingSize' },
-          lastServingUnit: { $last: '$meals.foods.servingUnit' },
-          lastBrand: { $last: '$meals.foods.brand' }
-        }
+          lastNutrition: { $last: '$items.nutrition' },
+          lastServingSize: { $last: '$items.servingSize' },
+          lastServingUnit: { $last: '$items.servingUnit' },
+          lastBrand: { $last: '$items.brand' },
+          lastVariantName: { $last: '$items.variantName' },
+        },
       },
       { $sort: { count: -1 as const } },
-      { $limit: 20 }
+      { $limit: 20 },
     ]
 
-    const results = await NutritionLog.aggregate(pipeline)
+    const results = await MealLog.aggregate(pipeline)
 
-    // Fetch full FoodItem docs for those with foodIds
     const foodIds = results
-      .filter(r => r._id.foodId)
-      .map(r => r._id.foodId)
-
-    const foodItems = foodIds.length > 0
-      ? await FoodItem.find({ _id: { $in: foodIds } }).lean()
+      .map(r => r._id.foodId?.toString())
+      .filter((id): id is string => !!id)
+    const foodDocs = foodIds.length > 0
+      ? await Food.find({ _id: { $in: foodIds } }).lean<(IFood & { _id: mongoose.Types.ObjectId })[]>()
       : []
+    const foodMap = new Map(foodDocs.map(f => [f._id.toString(), f]))
 
-    const foodItemMap = new Map(foodItems.map(fi => [fi._id.toString(), fi]))
-
-    // Build response
     const foods = results.map(r => {
       const foodId = r._id.foodId?.toString()
-      const foodItem = foodId ? foodItemMap.get(foodId) : null
-
+      const foodDoc = foodId ? foodMap.get(foodId) : null
+      if (foodDoc) {
+        return { ...flattenFoodForResponse(foodDoc), count: r.count }
+      }
+      // Synthesized fallback so the picker preview computes correctly when the
+      // underlying Food no longer exists.
+      const variant: IFoodVariant = {
+        name: r.lastVariantName || 'Default',
+        isDefault: true,
+        servingSize: r.lastServingSize,
+        servingUnit: r.lastServingUnit as IFoodVariant['servingUnit'],
+        alternateServings: [],
+        nutrition: r.lastNutrition,
+      }
       return {
+        _id: foodId || `legacy-${r._id.name}`,
         name: r._id.name,
-        foodId: foodId || null,
+        brand: r.lastBrand,
+        servingSize: r.lastServingSize,
+        servingUnit: r.lastServingUnit,
+        nutrition: r.lastNutrition,
+        alternateServings: [],
+        variants: [variant],
+        source: 'manual',
         count: r.count,
-        nutrition: foodItem?.nutrition || r.lastNutrition,
-        servingSize: foodItem?.servingSize || r.lastServingSize,
-        servingUnit: foodItem?.servingUnit || r.lastServingUnit,
-        brand: foodItem?.brand || r.lastBrand,
-        category: foodItem?.category || null,
-        foodItem: foodItem || null
       }
     })
 

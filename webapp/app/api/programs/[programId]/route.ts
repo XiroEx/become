@@ -1,28 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ProgramModel from '@/models/Program';
-import { hydrateProgram } from '@/lib/hydrateExercises';
+import { hydrateProgram, dehydrateProgram } from '@/lib/hydrateExercises';
 import { verifyAuth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/adminAuth';
 
 interface RouteParams {
   params: Promise<{ programId: string }>;
 }
 
-// GET single program
+// GET single program (any authed user)
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const authResult = await verifyAuth(request);
+    if (!authResult.success) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { programId } = await params;
     await dbConnect();
-    
+
     const program = await ProgramModel.findOne({ program_id: programId }).lean();
-    
+
     if (!program) {
       return NextResponse.json(
         { error: 'Program not found' },
         { status: 404 }
       );
     }
-    
+
     const hydrated = await hydrateProgram(program);
     return NextResponse.json(hydrated);
   } catch (error) {
@@ -34,33 +40,51 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PUT update program (requires auth)
-export async function PUT(request: NextRequest, { params }: RouteParams) {
-  try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+async function applyUpdate(request: NextRequest, programId: string) {
+  await dbConnect();
+  const body = await request.json();
 
+  // Convert exercise names to slugs for DB storage (program editor sends names)
+  const dehydrated = await dehydrateProgram(body);
+
+  // Whitelist fields we allow updating
+  const update: Record<string, unknown> = {};
+  const allowed = [
+    'name',
+    'description',
+    'duration_weeks',
+    'training_days_per_week',
+    'goal',
+    'target_user',
+    'equipment',
+    'tags',
+    'phases',
+  ] as const;
+  for (const key of allowed) {
+    if (key in dehydrated) update[key] = (dehydrated as Record<string, unknown>)[key];
+  }
+
+  const program = await ProgramModel.findOneAndUpdate(
+    { program_id: programId },
+    { $set: update },
+    { new: true, runValidators: true }
+  );
+
+  if (!program) {
+    return NextResponse.json({ error: 'Program not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(program);
+}
+
+// PUT update program (admin only)
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const gate = await requireAdmin(request);
+  if (!gate.ok) return gate.response;
+
+  try {
     const { programId } = await params;
-    await dbConnect();
-    
-    const body = await request.json();
-    
-    const program = await ProgramModel.findOneAndUpdate(
-      { program_id: programId },
-      body,
-      { new: true, runValidators: true }
-    );
-    
-    if (!program) {
-      return NextResponse.json(
-        { error: 'Program not found' },
-        { status: 404 }
-      );
-    }
-    
-    return NextResponse.json(program);
+    return await applyUpdate(request, programId);
   } catch (error) {
     console.error('Error updating program:', error);
     return NextResponse.json(
@@ -70,26 +94,41 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE program (requires auth)
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+// PATCH update program (admin only) — alias of PUT
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const gate = await requireAdmin(request);
+  if (!gate.ok) return gate.response;
 
+  try {
+    const { programId } = await params;
+    return await applyUpdate(request, programId);
+  } catch (error) {
+    console.error('Error patching program:', error);
+    return NextResponse.json(
+      { error: 'Failed to update program' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE program (admin only)
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const gate = await requireAdmin(request);
+  if (!gate.ok) return gate.response;
+
+  try {
     const { programId } = await params;
     await dbConnect();
-    
+
     const program = await ProgramModel.findOneAndDelete({ program_id: programId });
-    
+
     if (!program) {
       return NextResponse.json(
         { error: 'Program not found' },
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json({ message: 'Program deleted successfully' });
   } catch (error) {
     console.error('Error deleting program:', error);

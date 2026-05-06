@@ -7,13 +7,17 @@
     "dev:db": "docker compose -f ../db/compose.yml up -d",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "gen-test-token": "node scripts/gen-test-token.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
     "@redbtn/redstyle": "^0.4.11",
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
@@ -28,6 +32,7 @@
     "recharts": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^25",
     "@types/nodemailer": "^7.0.5",
@@ -37,6 +42,7 @@
     "eslint-config-next": "^16.2.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

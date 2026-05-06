@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { Dumbbell } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
@@ -78,6 +79,9 @@ export default function ProgrammingClient() {
   // Drag state for reordering
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Saved programs shown count
+  const [savedShown, setSavedShown] = useState(5);
 
   // User profile for recommendations
   const [userFitnessGoal, setUserFitnessGoal] = useState<FitnessGoal | undefined>(undefined);
@@ -335,12 +339,23 @@ export default function ProgrammingClient() {
     <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 sm:mb-8">
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-          Programs
-        </h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Choose your training path and start building.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
+              Programs
+            </h1>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Choose your training path and start building.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/programming/library"
+            className="mt-1 flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          >
+            <Dumbbell className="h-3.5 w-3.5" />
+            My Exercises
+          </Link>
+        </div>
       </div>
 
       {/* Schedule / Calendar Widget */}
@@ -396,7 +411,7 @@ export default function ProgrammingClient() {
                           {program.progress}%
                         </span>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {program.completedWorkouts}/{program.totalWorkouts}
+                          {program.completedWorkouts}/{program.totalWorkouts} sessions
                         </p>
                       </div>
                       <div className="w-10" />
@@ -466,7 +481,7 @@ export default function ProgrammingClient() {
             </span>
           </div>
           <div className="space-y-2">
-            {savedPrograms.map((program, index) => (
+            {savedPrograms.slice(0, savedShown).map((program, index) => (
               <div
                 key={program.program_id}
                 draggable
@@ -533,6 +548,16 @@ export default function ProgrammingClient() {
                 </button>
               </div>
             ))}
+            {savedPrograms.length > 5 && (
+              <button
+                onClick={() => setSavedShown(n => n > 5 ? 5 : n + 5)}
+                className="mt-1 w-full rounded-xl border border-amber-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-amber-50 dark:border-amber-800/30 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-amber-900/10"
+              >
+                {savedShown >= savedPrograms.length
+                  ? 'Show less'
+                  : `Show more (${savedPrograms.length - savedShown} remaining)`}
+              </button>
+            )}
           </div>
         </div>
       )}

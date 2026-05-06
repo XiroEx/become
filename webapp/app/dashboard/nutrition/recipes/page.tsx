@@ -47,6 +47,8 @@ function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category.toLowerCase()] || 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
 }
 
+const RECIPES_PAGE = 5
+
 export default function RecipesPage() {
   const router = useRouter()
   const [recipes, setRecipes] = useState<RecipeSummary[]>([])
@@ -55,6 +57,7 @@ export default function RecipesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
+  const [shown, setShown] = useState(RECIPES_PAGE)
 
   // Debounce search input
   useEffect(() => {
@@ -92,6 +95,7 @@ export default function RecipesPage() {
       if (res.ok) {
         const data = await res.json()
         setRecipes(data.recipes || [])
+        setShown(RECIPES_PAGE)
       }
     } catch (error) {
       console.error('Failed to fetch recipes:', error)
@@ -190,7 +194,7 @@ export default function RecipesPage() {
         </div>
       ) : (
         <div className="space-y-2 sm:space-y-3">
-          {recipes.map((recipe) => (
+          {recipes.slice(0, shown).map((recipe) => (
             <button
               key={recipe._id}
               onClick={() => router.push(`/dashboard/nutrition/recipes/${recipe._id}`)}
@@ -235,6 +239,16 @@ export default function RecipesPage() {
               </div>
             </button>
           ))}
+          {recipes.length > RECIPES_PAGE && (
+            <button
+              onClick={() => setShown(n => n > RECIPES_PAGE ? RECIPES_PAGE : n + RECIPES_PAGE)}
+              className="mt-1 w-full rounded-lg border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              {shown >= recipes.length
+                ? 'Show less'
+                : `Show more (${recipes.length - shown} remaining)`}
+            </button>
+          )}
         </div>
       )}
     </PageTransition>

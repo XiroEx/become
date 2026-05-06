@@ -7,7 +7,13 @@ import ProgressChart, { MetricData } from '@/components/ProgressChart'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import MoodCard from '@/components/MoodCard'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
-import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed } from 'lucide-react'
+import ProgramNudgeModal, {
+  NUDGE_KEY,
+  type NudgeState,
+  shouldShowNudge,
+  recordNudgeDismiss,
+} from '@/components/ProgramNudgeModal'
+import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
@@ -76,6 +82,9 @@ export default function DashboardClient() {
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
+  const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
+  const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
+  const [showNudge, setShowNudge] = useState(false)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -122,23 +131,25 @@ export default function DashboardClient() {
       }
     }
 
-    // Fetch user progress data
-    async function fetchProgress() {
+    // Fetch user progress data — returns raw response for reuse in nudge check
+    async function fetchProgress(): Promise<UserProgressData | null> {
       try {
         const token = localStorage.getItem('token')
         const headers: HeadersInit = {}
         if (token) {
           headers['Authorization'] = `Bearer ${token}`
         }
-        
+
         const res = await fetch('/api/progress', { headers })
         if (res.ok) {
           const progressData = await res.json()
           setData(progressData)
+          return progressData
         }
+        return null
       } catch (error) {
         console.error('Failed to fetch progress:', error)
-        // Keep mock data on error
+        return null
       } finally {
         setLoading(false)
       }
@@ -206,20 +217,48 @@ export default function DashboardClient() {
           if (profileData.profile?.fitnessGoal) {
             setFitnessGoal(profileData.profile.fitnessGoal as FitnessGoal)
           }
+          if (profileData.profile?.weeklyAvailability) {
+            setWeeklyAvailability(profileData.profile.weeklyAvailability)
+          }
+          if (profileData.profile?.weightUnit === 'kg' || profileData.profile?.weightUnit === 'lbs') {
+            setWeightUnit(profileData.profile.weightUnit)
+          }
         }
       } catch {
         // non-critical
       }
     }
 
+    // Check whether to show the program nudge modal
+    function checkProgramNudge(hasProgram: boolean) {
+      if (hasProgram) return // already enrolled — never show
+      try {
+        const raw = localStorage.getItem(NUDGE_KEY)
+        const state: NudgeState | null = raw ? JSON.parse(raw) : null
+        if (shouldShowNudge(state)) setShowNudge(true)
+      } catch {
+        setShowNudge(true) // on parse error, just show it
+      }
+    }
+
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
-      await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
+      const [progressData] = await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
+      checkProgramNudge(!!progressData?.currentProgram)
     }
 
     init()
   }, [])
+
+  function handleNudgeDismiss() {
+    setShowNudge(false)
+    try {
+      const raw = localStorage.getItem(NUDGE_KEY)
+      const current: NudgeState | null = raw ? JSON.parse(raw) : null
+      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismiss(current)))
+    } catch {}
+  }
 
   const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
     setShowCheckInModal(false)
@@ -307,12 +346,19 @@ export default function DashboardClient() {
         daysSinceMood={checkInInfo.daysSinceMood}
         daysSinceWeight={checkInInfo.daysSinceWeight}
         lastWeight={checkInInfo.lastWeight}
+        weightUnit={weightUnit}
       />
 
       <StreakMilestoneModal
         milestone={milestoneCelebration}
         streakDays={streakData?.streakDays ?? data.stats.streakDays}
         onClose={() => setMilestoneCelebration(null)}
+      />
+
+      <ProgramNudgeModal
+        open={showNudge}
+        fitnessGoal={fitnessGoal ?? null}
+        onExplore={handleNudgeDismiss}
       />
       
       <PageTransition className="space-y-4 sm:space-y-6">
@@ -325,7 +371,7 @@ export default function DashboardClient() {
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         {/* Streak card */}
-        <div className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
+        <Link href="/dashboard/progress" className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30 sm:h-10 sm:w-10">
               <Flame className={`h-4 w-4 sm:h-5 sm:w-5 ${streakData?.activityToday ? 'text-orange-500 dark:text-orange-400' : 'text-zinc-400 dark:text-zinc-600'}`} />
@@ -357,8 +403,8 @@ export default function DashboardClient() {
               </div>
             )
           })()}
-        </div>
-        
+        </Link>
+
         {/* Today's Mood Card - replaces Workouts */}
         <MoodCard 
           currentMood={todaysMood} 
@@ -366,15 +412,15 @@ export default function DashboardClient() {
           isUpdating={isMoodUpdating}
         />
         
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
+        <Link href="/dashboard/progress#workouts" className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 sm:h-10 sm:w-10">
             <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.thisWeekWorkouts}/4</p>
+            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.thisWeekWorkouts}/{weeklyAvailability}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">This Week</p>
           </div>
-        </div>
+        </Link>
         
         <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30 sm:h-10 sm:w-10">
@@ -409,6 +455,30 @@ export default function DashboardClient() {
         />
       )}
 
+      {/* First-time empty state — no program, no workouts yet */}
+      {!loading && !data.currentProgram && data.stats.totalWorkouts === 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+              <Dumbbell className="h-6 w-6 text-zinc-500 dark:text-zinc-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-zinc-900 dark:text-white">No program yet</h3>
+              <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                Browse programs and enroll when you&apos;re ready.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/programming"
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              Browse
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Current Program & Mindset - side by side on desktop, stacked on mobile */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Current Program */}
@@ -434,7 +504,7 @@ export default function DashboardClient() {
             {/* Progress Bar */}
             <div className="mb-3 sm:mb-4">
               <div className="mb-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <span>Progress</span>
+                <Link href="/dashboard/progress#records" className="hover:text-zinc-700 dark:hover:text-zinc-200">Progress</Link>
                 <span>{Math.round((data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100)}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">

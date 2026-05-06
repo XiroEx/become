@@ -12,6 +12,7 @@ interface DailyCheckInModalProps {
   daysSinceMood?: number
   daysSinceWeight?: number
   lastWeight?: number
+  weightUnit?: 'lbs' | 'kg'
 }
 
 // Solid color face components - 5 mood levels
@@ -238,12 +239,13 @@ function getWarningInfo(days: number): { level: 'none' | 'mild' | 'moderate' | '
   return { level: 'none', color: '', message: '' }
 }
 
-export default function DailyCheckInModal({ 
-  isOpen, 
+export default function DailyCheckInModal({
+  isOpen,
   onClose,
   daysSinceMood = 0,
   daysSinceWeight = 0,
-  lastWeight
+  lastWeight,
+  weightUnit = 'lbs'
 }: DailyCheckInModalProps) {
   const [selectedMood, setSelectedMood] = useState<MoodLevel | null>(null)
   const [weight, setWeight] = useState<string>('')
@@ -253,12 +255,13 @@ export default function DailyCheckInModal({
 
   useLockScroll(isOpen)
   
-  // Update weight when lastWeight prop changes (async load)
+  // Pre-fill weight once when lastWeight first loads — do not re-fill on user edits
   useEffect(() => {
-    if (lastWeight && weight === '') {
+    if (lastWeight) {
       setWeight(lastWeight.toString())
     }
-  }, [lastWeight, weight])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastWeight])
   
   const timeGreeting = useMemo(() => getTimeBasedGreeting(), [])
   
@@ -551,7 +554,7 @@ export default function DailyCheckInModal({
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <label htmlFor="weight" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Current Weight (lbs)
+                  Current Weight ({weightUnit})
                 </label>
                 {weightWarning.level !== 'none' && (
                   <span className={`text-xs font-medium ${weightWarning.color}`}>
@@ -576,13 +579,9 @@ export default function DailyCheckInModal({
               <button
                 onClick={handleSubmitAttempt}
                 disabled={isSubmitting}
-                className={`w-full rounded-xl py-3 font-semibold transition-all sm:py-4 ${
-                  hasAnyInput
-                    ? 'bg-zinc-900 hover:bg-black text-white dark:bg-white dark:text-black dark:hover:bg-zinc-200'
-                    : 'bg-zinc-900 hover:bg-black text-white dark:bg-white dark:text-black dark:hover:bg-zinc-200'
-                }`}
+                className="w-full rounded-xl py-3 font-semibold transition-all sm:py-4 bg-zinc-900 hover:bg-black text-white dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
-                {isSubmitting ? 'Saving...' : hasAnyInput ? "Save Check-in" : "Save Check-in"}
+                {isSubmitting ? 'Saving...' : 'Save Check-in'}
               </button>
               
               <button

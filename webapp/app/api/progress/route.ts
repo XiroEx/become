@@ -92,6 +92,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Self-heal: if no in-progress program found, check for 'completed' programs that still have
+    // remaining scheduled sessions (indicates they were incorrectly auto-completed)
+    if (!activeProgram && progress.activePrograms) {
+      const completedPrograms = (progress.activePrograms as Array<{ programId: string; programName: string; status: string; startDate: Date; currentPhase?: number; currentDay?: string; completedWorkouts?: number; totalWorkouts?: number; lastWorkoutDate?: Date }>).filter(p => p.status === 'completed')
+      for (const cp of completedPrograms) {
+        const sched = await Schedule.findOne(
+          { userId: authResult.userId, programId: cp.programId },
+          { 'scheduledWorkouts.status': 1 }
+        ).lean<{ scheduledWorkouts: { status: string }[] }>()
+        if (!sched) continue
+        const remaining = sched.scheduledWorkouts.filter(w => w.status === 'scheduled').length
+        if (remaining > 0) {
+          // Reactivate: update DB status back to in-progress
+          UserProgress.updateOne(
+            { userId: authResult.userId, 'activePrograms.programId': cp.programId },
+            { $set: { 'activePrograms.$.status': 'in-progress' } }
+          ).catch(() => {})
+          activeProgram = { ...cp, status: 'in-progress' }
+          programName = cp.programName
+          programDetails = await ProgramModel.findOne({ program_id: cp.programId }).lean()
+          break
+        }
+      }
+    }
+
     // Enrich with Schedule data so Current Program card and NextWorkoutCard use the same source
     let scheduleNextWorkoutDay: string | undefined
     let scheduleTotalWeeks: number | undefined
@@ -121,10 +146,34 @@ export async function GET(request: NextRequest) {
           nextWorkout = `${nextScheduled.dayLabel} - ${nextScheduled.workoutTitle}`
         }
 
-        // currentWeek: use actual training-days-per-week from schedule settings
-        const daysPerWeek = schedule.settings?.trainingDays?.length || 4
-        const completed = activeProgram.completedWorkouts || 0
-        scheduleCurrentWeek = Math.max(1, Math.ceil(completed / daysPerWeek))
+        // currentWeek: derive from schedule + workout logs (reconciles historical completions).
+        // Greedy chronological matching handles repeating day labels in multi-week programs.
+        // Use program's designed days-per-week so "Week X of Y" reflects program cycles,
+        // not calendar training frequency (they diverge when e.g. a 4-day split is run 5x/week)
+        const daysPerWeek = (programDetails as { training_days_per_week?: number } | null)?.training_days_per_week
+          || schedule.settings?.trainingDays?.length
+          || 4
+        type ProgressLog = { programId: string; day: string; completed: boolean }
+        const wLogs = (progress.workoutLogs || []) as ProgressLog[]
+        const sessions = (schedule.scheduledWorkouts || []).filter(
+          (w: { status: string }) => w.status !== 'rest'
+        ) as Array<{ status: string; dayLabel: string; date: Date }>
+        const availableLogs = new Map<string, number>()
+        for (const log of wLogs) {
+          if (log.programId === activeProgram.programId && log.completed) {
+            availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
+          }
+        }
+        const reconciledCompleted = [...sessions]
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          .filter((w) => {
+            if (w.status === 'completed') return true
+            if (w.status === 'skipped') return false
+            const n = availableLogs.get(w.dayLabel) || 0
+            if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
+            return false
+          }).length
+        scheduleCurrentWeek = Math.max(1, Math.ceil(reconciledCompleted / daysPerWeek))
       }
 
       // totalWeeks from the real program data
@@ -157,7 +206,136 @@ export async function GET(request: NextRequest) {
       { totalWeeks: scheduleTotalWeeks, nextWorkoutDay: scheduleNextWorkoutDay }
     )
 
-    return NextResponse.json(formattedData)
+    const detailed = request.nextUrl.searchParams.get('detailed') === '1'
+    if (!detailed) return NextResponse.json(formattedData)
+
+    // ── Detailed extras: PBs, recent workouts, profile data ──────────────────
+    // Personal bests — max weight per exercise across all completed sets
+    const pbs: Record<string, { name: string; weight: number; reps: number; date: string }> = {}
+    for (const log of (progress.workoutLogs || [])) {
+      if (!log.completed) continue
+      for (const exercise of (log.exercises || [])) {
+        const key = (exercise.exerciseSlug || exercise.name) as string
+        for (const set of (exercise.sets || [])) {
+          if (!set.completed || !(set.weight) || (set.weight as number) <= 0) continue
+          const w = set.weight as number
+          const r = (set.reps as number) || 0
+          const existing = pbs[key]
+          if (!existing || w > existing.weight || (w === existing.weight && r > existing.reps)) {
+            pbs[key] = {
+              name: exercise.name as string,
+              weight: w,
+              reps: r,
+              date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            }
+          }
+        }
+      }
+    }
+
+    // Typed workout log for detailed processing
+    type RawLogDetailed = {
+      completed: boolean; date: Date; programId: string; day: string; duration?: number; notes?: string
+      exercises?: Array<{ name: string; exerciseSlug?: string; sets?: Array<{ completed: boolean; weight?: number; reps?: number }> }>
+    }
+    const allLogs = (progress.workoutLogs || []) as RawLogDetailed[]
+
+    // Recent workouts — last 7 completed, newest first (kept for backward compat)
+    const recentWorkouts = allLogs
+      .filter((l) => l.completed)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 7)
+      .map((l) => ({
+        date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        programId: l.programId,
+        day: l.day,
+        duration: l.duration,
+        exerciseCount: l.exercises?.length ?? 0,
+      }))
+
+    // Detailed workouts — last 20 with full exercise data (for Training Log view)
+    const detailedWorkouts = allLogs
+      .filter((l) => l.completed)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 20)
+      .map((l) => {
+        let totalVol = 0
+        const exercises = (l.exercises || []).map((ex) => {
+          let exVol = 0
+          let bestSet: { weight: number; reps: number } | null = null
+          for (const set of (ex.sets || [])) {
+            if (!set.completed || !set.weight || !set.reps) continue
+            exVol += set.weight * set.reps
+            totalVol += set.weight * set.reps
+            if (!bestSet || set.weight > bestSet.weight || (set.weight === bestSet.weight && set.reps > bestSet.reps)) {
+              bestSet = { weight: set.weight, reps: set.reps }
+            }
+          }
+          const key = ex.exerciseSlug || ex.name
+          const pb = pbs[key]
+          const isPR = !!(pb && bestSet && (bestSet as { weight: number; reps: number }).weight >= pb.weight)
+          return { name: ex.name, slug: ex.exerciseSlug, bestSet, volume: Math.round(exVol), isPR }
+        }).filter((ex) => ex.volume > 0 || ex.bestSet !== null)
+        return {
+          date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          rawDate: (l.date as Date).toISOString(),
+          programId: l.programId,
+          day: l.day,
+          duration: l.duration,
+          notes: l.notes,
+          totalVolume: Math.round(totalVol),
+          exercises,
+        }
+      })
+
+    // Weekly volume — last 12 weeks (for bar chart)
+    let totalVolumeLbs = 0
+    const weekMap = new Map<string, { volume: number; workouts: number; display: string }>()
+    for (const l of allLogs) {
+      if (!l.completed) continue
+      const d = new Date(l.date)
+      const dow = d.getDay()
+      const monday = new Date(d)
+      monday.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1))
+      monday.setHours(0, 0, 0, 0)
+      const key = monday.toISOString().split('T')[0]
+      const display = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      let vol = 0
+      for (const ex of (l.exercises || [])) {
+        for (const set of (ex.sets || [])) {
+          if (set.completed && set.weight && set.reps) {
+            vol += set.weight * set.reps
+            totalVolumeLbs += set.weight * set.reps
+          }
+        }
+      }
+      const existing = weekMap.get(key)
+      weekMap.set(key, { volume: (existing?.volume || 0) + Math.round(vol), workouts: (existing?.workouts || 0) + 1, display })
+    }
+    const weeklyVolume = Array.from(weekMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([, data]) => ({ week: data.display, volume: data.volume, workouts: data.workouts }))
+    totalVolumeLbs = Math.round(totalVolumeLbs)
+
+    // Profile — target weight and weekly availability
+    const UserModel = (await import('@/models/User')).default
+    const user = await UserModel.findById(authResult.userId, 'profile').lean() as { profile?: { targetWeightKg?: number; weeklyAvailability?: number } } | null
+    const targetWeightKg = user?.profile?.targetWeightKg
+    const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
+    const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
+
+    return NextResponse.json({
+      ...formattedData,
+      longestStreak: (progress.longestStreak as number) || 0,
+      pbs: Object.values(pbs).sort((a, b) => b.weight - a.weight),
+      recentWorkouts,
+      detailedWorkouts,
+      weeklyVolume,
+      totalVolumeLbs,
+      targetWeightLbs,
+      weeklyAvailability,
+    })
   } catch (error) {
     console.error('Error fetching progress:', error)
     return NextResponse.json({
@@ -207,20 +385,6 @@ export async function POST(request: NextRequest) {
       case 'workout':
         progress.workoutLogs.push(data)
         progress.totalWorkouts += 1
-        // Update streak
-        const lastWorkout = progress.workoutLogs[progress.workoutLogs.length - 2]
-        if (lastWorkout) {
-          const daysDiff = Math.floor(
-            (new Date().getTime() - new Date(lastWorkout.date).getTime()) / (1000 * 60 * 60 * 24)
-          )
-          if (daysDiff <= 1) {
-            progress.streakDays += 1
-          } else {
-            progress.streakDays = 1
-          }
-        } else {
-          progress.streakDays = 1
-        }
         break
 
       case 'program':
