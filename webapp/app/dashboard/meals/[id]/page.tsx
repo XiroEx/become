@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Clock,
   Users,
+  Bookmark,
 } from 'lucide-react'
 import type { IMeal, IMealItem, IMealRecipe } from '@/models/Meal'
 
@@ -58,6 +59,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
   const [applySheetOpen, setApplySheetOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [savingAsFood, setSavingAsFood] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
@@ -124,6 +126,29 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
   }, [fetchMeal, fetchMe, fetchTags])
 
   const isOwner = Boolean(currentUserId && meal?.createdBy && String(meal.createdBy) === currentUserId)
+
+  const handleSaveAsFood = async () => {
+    if (!meal || savingAsFood) return
+    setSavingAsFood(true)
+    try {
+      const res = await fetch(`/api/meals/${meal._id}/save-as-food`, {
+        method: 'POST',
+        headers: getHeaders(),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setToast(data.alreadyExisted ? 'Already in My Foods' : 'Saved to My Foods')
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setToast(d?.error || 'Failed to save as food.')
+      }
+    } catch {
+      setToast('Network error.')
+    } finally {
+      setSavingAsFood(false)
+      setTimeout(() => setToast(null), 2500)
+    }
+  }
 
   const handleDelete = async () => {
     if (!meal) return
@@ -192,6 +217,18 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
         </Link>
         {isOwner && (
           <div className="flex items-center gap-1">
+            <button
+              onClick={handleSaveAsFood}
+              disabled={savingAsFood}
+              className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              {savingAsFood ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Bookmark className="h-3.5 w-3.5" />
+              )}
+              Save as food
+            </button>
             <Link
               href={`/dashboard/meals/${meal._id}/edit`}
               className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
