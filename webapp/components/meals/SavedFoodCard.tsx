@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Loader2, Bookmark, Check, Plus } from 'lucide-react'
+import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
 
 interface SavedFoodCardProps {
   id: string
@@ -15,6 +16,8 @@ interface SavedFoodCardProps {
   carbs: number
   fats: number
   isVerified?: boolean
+  imageUrl?: string
+  category?: string
   /** Currently logging this food to today */
   logging?: boolean
   /** Just logged — show the success indicator briefly */
@@ -36,6 +39,8 @@ export default function SavedFoodCard({
   carbs,
   fats,
   isVerified,
+  imageUrl,
+  category,
   logging,
   logged,
   removing,
@@ -52,10 +57,8 @@ export default function SavedFoodCard({
       exit={{ opacity: 0, y: -4 }}
       className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
     >
-      {/* Bookmark icon stamp */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-        <Bookmark className="h-5 w-5 fill-current text-amber-500" />
-      </div>
+      {/* Thumbnail — actual image when available, category-tinted icon as fallback */}
+      <FoodThumbnail name={name} category={category} imageUrl={imageUrl} />
 
       {/* Info */}
       <div className="min-w-0 flex-1">

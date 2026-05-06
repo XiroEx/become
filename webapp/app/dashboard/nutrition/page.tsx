@@ -478,15 +478,15 @@ function NutritionPageInner() {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-              Track your meals, macros, and hydration
+              Track your food, macros, and hydration
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard/meals"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
-              aria-label="Saved meals"
-              title="Saved meals"
+              aria-label="Saved recipes & favorites"
+              title="Recipes & favorites"
             >
               <ChefHat className="h-5 w-5" />
             </Link>
@@ -559,7 +559,7 @@ function NutritionPageInner() {
                 className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 <ChefHat className="h-4 w-4" />
-                Browse meals
+                Browse recipes
               </Link>
             </div>
           </div>
@@ -683,7 +683,7 @@ function NutritionPageInner() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30">
               <BookOpen className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Meals</span>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Recipes</span>
           </Link>
 
           <Link

@@ -60,7 +60,7 @@ export default function NewProgramClient() {
   if (loading) {
     return (
       <PageTransition className="pb-6">
-        <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <div className="mx-auto max-w-3xl px-0 py-12 sm:px-6">
           <div className="h-8 w-64 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
           <div className="mt-4 h-32 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
         </div>
@@ -71,8 +71,8 @@ export default function NewProgramClient() {
   if (!allowed) {
     return (
       <PageTransition className="pb-6">
-        <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mx-auto max-w-2xl px-0 py-12 sm:px-6">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-8">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white">
               <Sparkles className="h-8 w-8" />
             </div>
