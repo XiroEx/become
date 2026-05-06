@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import ProgramCreator from "@/app/dashboard/programming/create/ProgramCreator";
+import ProgramCreator from "@/app/dashboard/admin/programs/_editors/ProgramCreator";
 import PageTransition from "@/components/PageTransition";
 import type { Phase, TargetUserLevel } from "@/lib/data/programs";
 
@@ -95,7 +95,7 @@ export default function EditUserProgramClient({ programId }: Props) {
     <ProgramCreator
       mode="user-edit"
       programId={programId}
-      initialData={program}
+      initialProgram={program}
     />
   );
 }

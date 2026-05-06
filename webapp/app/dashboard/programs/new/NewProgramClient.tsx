@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sparkles, Lock } from "lucide-react";
-import ProgramCreator from "@/app/dashboard/programming/create/ProgramCreator";
+import ProgramCreator from "@/app/dashboard/admin/programs/_editors/ProgramCreator";
 import PageTransition from "@/components/PageTransition";
 
 interface EntitlementResponse {

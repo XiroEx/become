@@ -9,6 +9,8 @@ const tabs = [
   { label: 'Overview', href: '/dashboard/admin' },
   { label: 'Users', href: '/dashboard/admin/users' },
   { label: 'Analytics', href: '/dashboard/admin/analytics' },
+  { label: 'Programs', href: '/dashboard/admin/programs' },
+  { label: 'Exercises', href: '/dashboard/admin/exercises' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

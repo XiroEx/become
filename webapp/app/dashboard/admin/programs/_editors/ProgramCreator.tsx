@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+// PhaseEditor & WorkoutEditor & ExerciseEditor live in this folder.
 import PhaseEditor from "./PhaseEditor";
 import {
   TargetUserLevel,
@@ -13,21 +14,6 @@ import {
 } from "@/lib/data/programs";
 
 export type ProgramCreatorMode = 'create' | 'edit' | 'user-create' | 'user-edit';
-
-interface ProgramCreatorProps {
-  mode?: ProgramCreatorMode;
-  programId?: string;       // required for edit/user-edit
-  initialData?: Partial<{
-    name: string;
-    description: string;
-    duration_weeks: number;
-    training_days_per_week: number;
-    goal: string;
-    target_user: TargetUserLevel;
-    equipment: string[];
-    phases: Phase[];
-  }>;
-}
 
 // Equipment options
 const EQUIPMENT_OPTIONS = [
@@ -49,13 +35,6 @@ const EQUIPMENT_OPTIONS = [
   "Bodyweight Only",
 ];
 
-const DRAFT_KEY_BY_MODE: Record<ProgramCreatorMode, string> = {
-  'create': 'become_program_creator_draft',
-  'edit': 'become_program_creator_draft_edit',
-  'user-create': 'become_user_program_creator_draft',
-  'user-edit': 'become_user_program_creator_draft_edit',
-};
-
 const TARGET_USER_OPTIONS: TargetUserLevel[] = [
   "Beginner",
   "Intermediate", 
@@ -75,6 +54,19 @@ interface ProgramFormData {
   equipment: string[];
   phases: Phase[];
 }
+
+export interface ProgramCreatorProps {
+  mode?: ProgramCreatorMode;
+  programId?: string;                       // required for any edit mode
+  initialProgram?: Partial<ProgramFormData>;
+}
+
+const DRAFT_KEY_BY_MODE: Record<ProgramCreatorMode, string> = {
+  'create': 'become_program_creator_draft',
+  'edit': 'become_program_creator_draft_edit',
+  'user-create': 'become_user_program_creator_draft',
+  'user-edit': 'become_user_program_creator_draft_edit',
+};
 
 const createEmptyExercise = (): Exercise => ({
   name: "",
@@ -101,29 +93,32 @@ const createEmptyPhase = (phaseNumber: number, daysPerWeek: number): Phase => ({
 export default function ProgramCreator({
   mode = 'create',
   programId,
-  initialData,
+  initialProgram,
 }: ProgramCreatorProps = {}) {
   const router = useRouter();
+  const isEdit = mode === 'edit' || mode === 'user-edit';
+  const isUserMode = mode === 'user-create' || mode === 'user-edit';
+  const draftKey = DRAFT_KEY_BY_MODE[mode];
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isEdit = mode === 'edit' || mode === 'user-edit';
-  const isUserMode = mode === 'user-create' || mode === 'user-edit';
-  const draftKey = DRAFT_KEY_BY_MODE[mode];
-
   const [formData, setFormData] = useState<ProgramFormData>({
-    name: initialData?.name ?? "",
-    description: initialData?.description ?? "",
-    duration_weeks: initialData?.duration_weeks ?? 4,
-    training_days_per_week: initialData?.training_days_per_week ?? 4,
-    goal: initialData?.goal ?? "",
-    target_user: initialData?.target_user ?? "Intermediate",
-    equipment: initialData?.equipment ?? [],
-    phases: initialData?.phases?.length ? initialData.phases : [createEmptyPhase(1, 4)],
+    name: initialProgram?.name ?? "",
+    description: initialProgram?.description ?? "",
+    duration_weeks: initialProgram?.duration_weeks ?? 4,
+    training_days_per_week: initialProgram?.training_days_per_week ?? 4,
+    goal: initialProgram?.goal ?? "",
+    target_user: (initialProgram?.target_user as TargetUserLevel) ?? "Intermediate",
+    equipment: initialProgram?.equipment ?? [],
+    phases:
+      initialProgram?.phases && initialProgram.phases.length > 0
+        ? initialProgram.phases
+        : [createEmptyPhase(1, initialProgram?.training_days_per_week ?? 4)],
   });
 
-  // Restore draft from localStorage on mount (skip in edit modes — initialData is the source of truth)
+  // Restore draft from localStorage on mount — only in create modes (edit modes
+  // use initialProgram as the source of truth).
   useEffect(() => {
     if (isEdit) return;
     try {
@@ -139,7 +134,7 @@ export default function ProgramCreator({
     }
   }, [draftKey, isEdit]);
 
-  // Auto-save draft to localStorage whenever formData changes (skip in edit modes)
+  // Auto-save draft to localStorage whenever formData changes (create modes only)
   useEffect(() => {
     if (isEdit) return;
     try {
@@ -227,13 +222,14 @@ export default function ProgramCreator({
     }));
   };
 
-  // Save program
+  // Save program (create or update depending on mode)
   const saveProgram = async () => {
     setIsSaving(true);
     setError(null);
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -285,7 +281,7 @@ export default function ProgramCreator({
           router.push('/dashboard/programs/mine');
         }
       } else {
-        router.push("/dashboard/programming");
+        router.push("/dashboard/admin/programs");
       }
       router.refresh();
     } catch (err) {
@@ -332,7 +328,7 @@ export default function ProgramCreator({
           </button>
           
           <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-            Create New Program
+            {isEdit ? "Edit Program" : "Create New Program"}
           </h1>
           
           {/* Progress Steps */}
@@ -721,7 +717,7 @@ export default function ProgramCreator({
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Save Program
+                  {isEdit ? "Update Program" : "Save Program"}
                 </>
               )}
             </button>
