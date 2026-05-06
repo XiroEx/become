@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import PhaseEditor from "./PhaseEditor";
+// PhaseEditor & WorkoutEditor & ExerciseEditor live in this folder.
 import { 
   TargetUserLevel,
   Exercise,
@@ -54,6 +55,12 @@ interface ProgramFormData {
   phases: Phase[];
 }
 
+export interface ProgramCreatorProps {
+  mode?: "create" | "edit";
+  programId?: string;          // required when mode === "edit"
+  initialProgram?: Partial<ProgramFormData>;
+}
+
 const createEmptyExercise = (): Exercise => ({
   name: "",
   type: "strength",
@@ -76,25 +83,34 @@ const createEmptyPhase = (phaseNumber: number, daysPerWeek: number): Phase => ({
   workouts: Array.from({ length: daysPerWeek }, (_, i) => createEmptyWorkout(i + 1)),
 });
 
-export default function ProgramCreator() {
+export default function ProgramCreator({
+  mode = "create",
+  programId,
+  initialProgram,
+}: ProgramCreatorProps = {}) {
   const router = useRouter();
+  const isEdit = mode === "edit";
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [formData, setFormData] = useState<ProgramFormData>({
-    name: "",
-    description: "",
-    duration_weeks: 4,
-    training_days_per_week: 4,
-    goal: "",
-    target_user: "Intermediate",
-    equipment: [],
-    phases: [createEmptyPhase(1, 4)],
+    name: initialProgram?.name ?? "",
+    description: initialProgram?.description ?? "",
+    duration_weeks: initialProgram?.duration_weeks ?? 4,
+    training_days_per_week: initialProgram?.training_days_per_week ?? 4,
+    goal: initialProgram?.goal ?? "",
+    target_user: (initialProgram?.target_user as TargetUserLevel) ?? "Intermediate",
+    equipment: initialProgram?.equipment ?? [],
+    phases:
+      initialProgram?.phases && initialProgram.phases.length > 0
+        ? initialProgram.phases
+        : [createEmptyPhase(1, initialProgram?.training_days_per_week ?? 4)],
   });
 
-  // Restore draft from localStorage on mount
+  // Restore draft from localStorage on mount — ONLY in create mode
   useEffect(() => {
+    if (isEdit) return;
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
       if (saved) {
@@ -106,16 +122,17 @@ export default function ProgramCreator() {
     } catch {
       // Ignore malformed draft
     }
-  }, []);
+  }, [isEdit]);
 
-  // Auto-save draft to localStorage whenever formData changes
+  // Auto-save draft to localStorage whenever formData changes (create mode only)
   useEffect(() => {
+    if (isEdit) return;
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
     } catch {
       // Ignore storage errors (e.g. private browsing quota)
     }
-  }, [formData]);
+  }, [formData, isEdit]);
 
   const steps = [
     { id: "basics", title: "Program Basics", icon: "📋" },
@@ -195,25 +212,35 @@ export default function ProgramCreator() {
     }));
   };
 
-  // Save program
+  // Save program (create or update depending on mode)
   const saveProgram = async () => {
     setIsSaving(true);
     setError(null);
-    
+
     try {
-      const response = await fetch("/api/programs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const token =
+        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const url = isEdit ? `/api/programs/${programId}` : "/api/programs";
+      const method = isEdit ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(formData),
       });
-      
+
       if (!response.ok) {
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.error || "Failed to save program");
       }
-      
-      localStorage.removeItem(DRAFT_KEY);
-      router.push("/dashboard/programming");
+
+      if (!isEdit) {
+        localStorage.removeItem(DRAFT_KEY);
+      }
+      router.push("/dashboard/admin/programs");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save program");
@@ -259,7 +286,7 @@ export default function ProgramCreator() {
           </button>
           
           <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-            Create New Program
+            {isEdit ? "Edit Program" : "Create New Program"}
           </h1>
           
           {/* Progress Steps */}
@@ -648,7 +675,7 @@ export default function ProgramCreator() {
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Save Program
+                  {isEdit ? "Update Program" : "Save Program"}
                 </>
               )}
             </button>

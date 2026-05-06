@@ -3,8 +3,9 @@ import dbConnect from '@/lib/mongodb';
 import ProgramModel from '@/models/Program';
 import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises';
 import { verifyAuth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/adminAuth';
 
-// GET all programs
+// GET all programs (any authed user — read-only browsing)
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request);
@@ -25,17 +26,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST create new program (requires auth)
+// POST create new program (admin only)
 export async function POST(request: NextRequest) {
-  try {
-    const authResult = await verifyAuth(request);
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const gate = await requireAdmin(request);
+  if (!gate.ok) return gate.response;
 
+  try {
     await dbConnect();
     const body = await request.json();
-    
+
     // Convert exercise names to slugs for DB storage
     const dehydrated = await dehydrateProgram(body);
 
@@ -47,14 +46,14 @@ export async function POST(request: NextRequest) {
         .replace(/\s+/g, '-')
         .substring(0, 50);
     }
-    
+
     // Check if program_id already exists
     const existing = await ProgramModel.findOne({ program_id: dehydrated.program_id });
     if (existing) {
       // Append a random suffix
       dehydrated.program_id = `${dehydrated.program_id}-${Date.now().toString(36)}`;
     }
-    
+
     const program = await ProgramModel.create(dehydrated);
     return NextResponse.json(program, { status: 201 });
   } catch (error) {
