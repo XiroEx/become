@@ -75,8 +75,10 @@ async function applyUpdate(request: NextRequest, programId: string) {
     if (key in dehydrated) update[key] = (dehydrated as Record<string, unknown>)[key];
   }
 
+  // Custom programs are owner-managed via /api/programs/custom/[id] — admins
+  // must NOT mutate them through this admin endpoint.
   const program = await ProgramModel.findOneAndUpdate(
-    { program_id: programId },
+    { program_id: programId, isCustom: { $ne: true } },
     { $set: update },
     { new: true, runValidators: true }
   );
@@ -131,7 +133,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { programId } = await params;
     await dbConnect();
 
-    const program = await ProgramModel.findOneAndDelete({ program_id: programId });
+    // Custom programs are owner-managed via /api/programs/custom/[id].
+    const program = await ProgramModel.findOneAndDelete({
+      program_id: programId,
+      isCustom: { $ne: true },
+    });
 
     if (!program) {
       return NextResponse.json(
