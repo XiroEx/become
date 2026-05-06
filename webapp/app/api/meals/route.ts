@@ -97,9 +97,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required field: name' }, { status: 400 })
     }
 
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return NextResponse.json({ error: 'items[] is required and must be non-empty' }, { status: 400 })
+    }
+
     await dbConnect()
 
-    const itemsInput: MealItemInput[] = Array.isArray(body.items) ? body.items : []
+    const itemsInput: MealItemInput[] = body.items
     const items = await resolveItemsFromInput(itemsInput)
 
     const isAdmin = authResult.role === 'admin'

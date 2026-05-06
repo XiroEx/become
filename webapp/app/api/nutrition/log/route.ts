@@ -385,9 +385,10 @@ export async function PUT(request: NextRequest) {
       item.nutrition.protein  = Math.round(item.nutrition.protein  * sizeRatio * 10) / 10
       item.nutrition.carbs    = Math.round(item.nutrition.carbs    * sizeRatio * 10) / 10
       item.nutrition.fats     = Math.round(item.nutrition.fats     * sizeRatio * 10) / 10
-      if (item.nutrition.fiber  != null) item.nutrition.fiber  = Math.round(item.nutrition.fiber  * sizeRatio * 10) / 10
-      if (item.nutrition.sugar  != null) item.nutrition.sugar  = Math.round(item.nutrition.sugar  * sizeRatio * 10) / 10
-      if (item.nutrition.sodium != null) item.nutrition.sodium = Math.round(item.nutrition.sodium * sizeRatio * 10) / 10
+      if (item.nutrition.fiber        != null) item.nutrition.fiber        = Math.round(item.nutrition.fiber        * sizeRatio * 10) / 10
+      if (item.nutrition.sugar        != null) item.nutrition.sugar        = Math.round(item.nutrition.sugar        * sizeRatio * 10) / 10
+      if (item.nutrition.sodium       != null) item.nutrition.sodium       = Math.round(item.nutrition.sodium       * sizeRatio * 10) / 10
+      if (item.nutrition.saturatedFat != null) item.nutrition.saturatedFat = Math.round(item.nutrition.saturatedFat * sizeRatio * 10) / 10
     }
 
     if (updates.servings !== undefined) {
