@@ -316,7 +316,7 @@ export default function ProgramCreator({
     <PageTransition className="pb-6">
       {/* Header */}
       <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <div className="mx-auto max-w-5xl px-2 py-6 sm:px-6">
           <button
             onClick={() => router.back()}
             className="mb-4 flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
@@ -365,7 +365,7 @@ export default function ProgramCreator({
       </div>
 
       {/* Content */}
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <div className="mx-auto max-w-5xl px-2 py-8 sm:px-6">
         <AnimatePresence mode="wait">
           {/* Step 1: Program Basics */}
           {currentStep === 0 && (
@@ -377,7 +377,7 @@ export default function ProgramCreator({
               className="space-y-8"
             >
               {/* Program Name & Description */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Program Details
                 </h2>
@@ -425,7 +425,7 @@ export default function ProgramCreator({
               </div>
 
               {/* Duration & Frequency */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Duration & Schedule
                 </h2>
@@ -469,7 +469,7 @@ export default function ProgramCreator({
               </div>
 
               {/* Target User */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Target Audience
                 </h2>
@@ -492,7 +492,7 @@ export default function ProgramCreator({
               </div>
 
               {/* Equipment */}
-              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Required Equipment
                 </h2>
@@ -566,14 +566,14 @@ export default function ProgramCreator({
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
                 <h2 className="mb-6 text-xl font-bold text-zinc-900 dark:text-white">
                   Program Summary
                 </h2>
                 
                 <div className="space-y-6">
                   {/* Basic Info */}
-                  <div className="rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800">
+                  <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800 sm:p-4">
                     <h3 className="mb-3 font-semibold text-zinc-900 dark:text-white">
                       {formData.name || "Untitled Program"}
                     </h3>
@@ -627,7 +627,7 @@ export default function ProgramCreator({
                       {formData.phases.map((phase, index) => (
                         <div
                           key={index}
-                          className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700"
+                          className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700 sm:p-4"
                         >
                           <div className="flex items-center justify-between">
                             <h5 className="font-semibold text-zinc-900 dark:text-white">

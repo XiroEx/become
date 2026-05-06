@@ -440,13 +440,15 @@ export default function FoodSearchModal({
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       fetchResults(query, activeTab)
-      if (activeTab === 'all') fetchMeals(query)
     }, 300)
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [query, activeTab, isOpen, fetchResults, fetchMeals])
+  // fetchMeals intentionally omitted — recipe results no longer surface in food
+  // search. Save a recipe as a food to make it discoverable here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, activeTab, isOpen, fetchResults])
 
   // Active variant for the currently selected food (or null)
   const activeVariant = useMemo<FoodVariant | null>(() => {

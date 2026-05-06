@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
 import MealCard from '@/components/meals/MealCard'
 import MealApplySheet from '@/components/meals/MealApplySheet'
+import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import SavedFoodCard from '@/components/meals/SavedFoodCard'
 import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle, Bookmark } from 'lucide-react'
 
@@ -42,6 +43,8 @@ interface SavedFoodLite {
   servingUnit: string
   displayLabel?: string
   isVerified?: boolean
+  imageUrl?: string
+  category?: string
   nutrition: { calories: number; protein: number; carbs: number; fats: number }
   variants?: Array<{
     _id?: string
@@ -85,7 +88,7 @@ export default function MealsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [applyTargetMeal, setApplyTargetMeal] = useState<MealLite | null>(null)
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set())
-  const [loggingFoodId, setLoggingFoodId] = useState<string | null>(null)
+  const [logTargetFood, setLogTargetFood] = useState<SavedFoodLite | null>(null)
   const [loggedFoodIds, setLoggedFoodIds] = useState<Set<string>>(new Set())
   const [removingFoodId, setRemovingFoodId] = useState<string | null>(null)
   const [errorToast, setErrorToast] = useState<string | null>(null)
@@ -192,54 +195,23 @@ export default function MealsPage() {
     return out
   }, [tagsResp])
 
-  const handleLogFood = async (food: SavedFoodLite) => {
-    if (loggingFoodId) return
-    setLoggingFoodId(food._id)
-    try {
-      const variant = food.variants?.find(v => v.isDefault) || food.variants?.[0]
-      const item = {
-        foodId: food._id,
-        variantId: variant?._id,
-        variantName: variant?.name,
-        name: food.name,
-        brand: food.brand,
-        servingSize: food.servingSize,
-        servingUnit: food.servingUnit,
-        servings: 1,
-        nutrition: food.nutrition,
-      }
-      const res = await fetch('/api/meal-logs', {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({
-          items: [item],
-          tags: [getDefaultTagForNow()],
-          loggedAt: new Date().toISOString(),
-        }),
+  const handleOpenFoodLog = (food: SavedFoodLite) => {
+    setLogTargetFood(food)
+  }
+
+  const handleFoodLogged = (foodId: string) => {
+    setLoggedFoodIds(prev => {
+      const next = new Set(prev)
+      next.add(foodId)
+      return next
+    })
+    setTimeout(() => {
+      setLoggedFoodIds(prev => {
+        const next = new Set(prev)
+        next.delete(foodId)
+        return next
       })
-      if (res.ok) {
-        setLoggedFoodIds(prev => {
-          const next = new Set(prev)
-          next.add(food._id)
-          return next
-        })
-        setTimeout(() => {
-          setLoggedFoodIds(prev => {
-            const next = new Set(prev)
-            next.delete(food._id)
-            return next
-          })
-        }, 2200)
-      } else {
-        setErrorToast('Failed to log food. Please try again.')
-        setTimeout(() => setErrorToast(null), 3500)
-      }
-    } catch {
-      setErrorToast('Network error.')
-      setTimeout(() => setErrorToast(null), 3500)
-    } finally {
-      setLoggingFoodId(null)
-    }
+    }, 2200)
   }
 
   const handleRemoveFood = async (foodId: string) => {
@@ -296,11 +268,11 @@ export default function MealsPage() {
   return (
     <PageTransition className="space-y-4 pb-24 sm:space-y-6">
       <header className="mb-2 sm:mb-4">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Meals</h1>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Recipes</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
           {tab === 'meals'
-            ? 'Save the meals you eat often. Tap to log.'
-            : 'Foods you bookmarked. Tap to log to today.'}
+            ? 'Save the recipes you cook often. Tap to log.'
+            : 'Your favorite foods. Tap to log.'}
         </p>
       </header>
 
@@ -315,7 +287,7 @@ export default function MealsPage() {
           }`}
         >
           <ChefHat className="h-3.5 w-3.5" />
-          Meals
+          Recipes
         </button>
         <button
           onClick={() => setTab('foods')}
@@ -326,7 +298,7 @@ export default function MealsPage() {
           }`}
         >
           <Bookmark className="h-3.5 w-3.5" />
-          My Foods
+          Favorites
         </button>
       </div>
 
@@ -337,7 +309,7 @@ export default function MealsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={tab === 'meals' ? 'Search your meals…' : 'Search your foods…'}
+          placeholder={tab === 'meals' ? 'Search your recipes…' : 'Search your favorites…'}
           className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600"
         />
         {search && (
@@ -404,12 +376,12 @@ export default function MealsPage() {
           </div>
           <div>
             <p className="text-base font-semibold text-zinc-900 dark:text-white">
-              {debouncedSearch || selectedTag ? 'No meals match' : 'No saved meals yet'}
+              {debouncedSearch || selectedTag ? 'No recipes match' : 'No saved recipes yet'}
             </p>
             <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
               {debouncedSearch || selectedTag
                 ? 'Try a different search or clear the filter.'
-                : 'Save your go-to meals as templates and log them with one tap.'}
+                : 'Save your go-to recipes as templates and log them with one tap.'}
             </p>
           </div>
           {!debouncedSearch && !selectedTag && (
@@ -418,7 +390,7 @@ export default function MealsPage() {
               className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               <Plus className="h-4 w-4" />
-              Create your first meal
+              Create your first recipe
             </Link>
           )}
         </div>
@@ -456,7 +428,7 @@ export default function MealsPage() {
           </div>
           <div>
             <p className="text-base font-semibold text-zinc-900 dark:text-white">
-              {debouncedSearch ? 'No foods match' : 'No saved foods yet'}
+              {debouncedSearch ? 'No favorites match' : 'No favorites yet'}
             </p>
             <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
               {debouncedSearch
@@ -478,14 +450,16 @@ export default function MealsPage() {
                 servingUnit={food.servingUnit}
                 displayLabel={food.displayLabel}
                 isVerified={food.isVerified}
+                imageUrl={food.imageUrl}
+                category={food.category}
                 calories={Math.round(food.nutrition.calories)}
                 protein={Math.round(food.nutrition.protein)}
                 carbs={Math.round(food.nutrition.carbs)}
                 fats={Math.round(food.nutrition.fats)}
-                logging={loggingFoodId === food._id}
+                logging={false}
                 logged={loggedFoodIds.has(food._id)}
                 removing={removingFoodId === food._id}
-                onLog={() => handleLogFood(food)}
+                onLog={() => handleOpenFoodLog(food)}
                 onRemove={() => handleRemoveFood(food._id)}
               />
             ))}
@@ -493,12 +467,12 @@ export default function MealsPage() {
         </div>
       ))}
 
-      {/* Floating + New Meal button (Meals tab only — foods are added via search modal) */}
+      {/* Floating + New Recipe button (Recipes tab only — favorites are added via search modal) */}
       {tab === 'meals' && (
         <Link
           href="/dashboard/meals/new"
           className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
-          aria-label="Create new meal"
+          aria-label="Create new recipe"
         >
           <Plus className="h-6 w-6" />
         </Link>
@@ -515,6 +489,16 @@ export default function MealsPage() {
           {errorToast}
         </motion.div>
       )}
+      {/* Food log sheet — when/what to add this saved food as */}
+      <FoodLogSheet
+        isOpen={!!logTargetFood}
+        food={logTargetFood}
+        defaultTag={getDefaultTagForNow()}
+        availableTags={tagsResp}
+        onClose={() => setLogTargetFood(null)}
+        onLogged={(foodId) => handleFoodLogged(foodId)}
+      />
+
       {/* Apply sheet — portion + tag + time */}
       <MealApplySheet
         isOpen={!!applyTargetMeal}
