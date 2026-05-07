@@ -662,7 +662,7 @@ export default function ProgrammingClient() {
       )}
 
       {/* All Programs Section */}
-      <div className="mb-4">
+      <div id="browse-programs" className="mb-4 scroll-mt-20">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
             Browse Programs

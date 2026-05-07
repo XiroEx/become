@@ -512,7 +512,7 @@ export default function ProgressClient() {
               No workouts logged yet. Start a program to build your history.
             </p>
             <Link
-              href="/dashboard/programming"
+              href="/dashboard/programming#browse-programs"
               className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Browse Programs
