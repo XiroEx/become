@@ -529,32 +529,90 @@ export default function FoodSearchModal({
       return { foodId: id, variants: food.variants }
     }
 
+    const token = localStorage.getItem('token')
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    // Try the source-specific import first (re-fetches authoritative data).
     try {
-      const token = localStorage.getItem('token')
-      const headers: HeadersInit = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
       const res = await fetch('/api/nutrition/foods/import', {
         method: 'POST',
         headers,
         body: JSON.stringify({ source, externalId }),
       })
-      if (!res.ok) {
-        console.warn(`[FoodSearchModal] Import failed (${res.status}) for ${id} — proceeding without persisted Food`)
+      if (res.ok) {
+        const data = await res.json()
+        const importedFood = data?.food
+        if (importedFood?._id) {
+          return {
+            foodId: String(importedFood._id),
+            variants: importedFood.variants ?? food.variants,
+          }
+        }
+      } else {
+        const errBody = await res.text().catch(() => '')
+        console.warn(`[FoodSearchModal] ${source} import failed (${res.status}) for ${id}: ${errBody.slice(0, 200)} — falling back to manual import using cached search data`)
+      }
+    } catch (err) {
+      console.warn('[FoodSearchModal] Import network error — falling back to manual import', err)
+    }
+
+    // Fallback: USDA can be intermittent and the local OFF cache may not
+    // include every result the search returned. The search response already
+    // carries everything we need to persist a usable Food doc, so re-import
+    // it as a manual entry using the cached data.
+    try {
+      const variantsInput = food.variants && food.variants.length > 0
+        ? food.variants.map(v => ({
+            name: v.name,
+            isDefault: v.isDefault,
+            servingSize: v.servingSize,
+            servingUnit: v.servingUnit,
+            alternateServings: v.alternateServings ?? [],
+            nutrition: v.nutrition,
+          }))
+        : undefined
+
+      const manualPayload: Record<string, unknown> = {
+        name: food.name,
+        brand: food.brand,
+        aliases: [],
+      }
+      if (variantsInput) {
+        manualPayload.variants = variantsInput
+      } else if (food.nutrition && typeof food.servingSize === 'number') {
+        manualPayload.servingSize = food.servingSize
+        manualPayload.servingUnit = food.servingUnit
+        manualPayload.alternateServings = food.alternateServings ?? []
+        manualPayload.nutrition = food.nutrition
+      } else {
+        // Nothing usable — bail.
         return { foodId: id, variants: food.variants }
       }
-      const data = await res.json()
-      const importedFood = data?.food
-      if (importedFood?._id) {
-        return {
-          foodId: String(importedFood._id),
-          variants: importedFood.variants ?? food.variants,
+
+      const res = await fetch('/api/nutrition/foods/import', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ source: 'manual', data: manualPayload }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const importedFood = data?.food
+        if (importedFood?._id) {
+          return {
+            foodId: String(importedFood._id),
+            variants: importedFood.variants ?? food.variants,
+          }
         }
+      } else {
+        const errBody = await res.text().catch(() => '')
+        console.warn(`[FoodSearchModal] Manual fallback also failed (${res.status}): ${errBody.slice(0, 200)}`)
       }
-      return { foodId: id, variants: food.variants }
     } catch (err) {
-      console.warn('[FoodSearchModal] Import network error — proceeding without persisted Food', err)
-      return { foodId: id, variants: food.variants }
+      console.warn('[FoodSearchModal] Manual fallback errored', err)
     }
+
+    return { foodId: id, variants: food.variants }
   }
 
   // Save a food (by real foodId) to /api/me/foods. Returns the new isSaved state.

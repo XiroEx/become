@@ -128,7 +128,7 @@ export default function UpcomingWorkouts() {
             No workouts scheduled yet. Enroll in a program and set up a schedule to plan your week.
           </p>
           <Link
-            href="/dashboard/programming"
+            href="/dashboard/programming#browse-programs"
             className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
             Browse Programs
