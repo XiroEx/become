@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Settings2 } from 'lucide-react'
+import { Card } from '@/components/ui'
 import MacroBar from './MacroBar'
 
 interface MacroValues {
@@ -32,7 +33,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
   const strokeDashoffset = circumference - percentage * circumference
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+    <Card>
       {/* Card header */}
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Daily Calories</p>
@@ -120,6 +121,6 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
         <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color="bg-green-600" />
         <MacroBar label="Fats" current={fats.current} goal={fats.goal} color="bg-amber-500" />
       </div>
-    </div>
+    </Card>
   )
 }

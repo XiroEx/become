@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { ArrowLeft, Save, Calculator } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 type GoalType = 'lose' | 'maintain' | 'gain'
 type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
@@ -294,9 +295,9 @@ export default function NutritionGoalsPage() {
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-48 rounded bg-zinc-200 dark:bg-zinc-800" />
           <div className="h-4 w-64 rounded bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-40 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-40 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
-          <div className="h-60 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-40 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-40 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+          <div className="h-60 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
         </div>
       </PageTransition>
     )
@@ -319,7 +320,7 @@ export default function NutritionGoalsPage() {
       </div>
 
       {/* User Stats */}
-      <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+      <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
         <div className="flex flex-wrap gap-6">
           {userWeight && (
@@ -346,7 +347,7 @@ export default function NutritionGoalsPage() {
 
         {/* Manual override inputs when profile is missing height / age / sex */}
         {(!userHeightCm || !userAge || !userSex) && (
-          <div className="mt-4 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
+          <div className="mt-4 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50">
             <p className="mb-3 text-xs font-medium text-zinc-500 dark:text-zinc-400">
               Fill in missing info for TDEE calculation{' '}
               <a href="/dashboard/profile" className="text-blue-600 underline dark:text-blue-400">or update your profile</a>
@@ -411,7 +412,7 @@ export default function NutritionGoalsPage() {
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Goal Type */}
       <div className="mb-4 sm:mb-6">
@@ -441,7 +442,7 @@ export default function NutritionGoalsPage() {
       </div>
 
       {/* Activity Level */}
-      <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+      <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Activity Level</h2>
         <select
           value={goals.activityLevel}
@@ -462,10 +463,10 @@ export default function NutritionGoalsPage() {
             Recalculate from TDEE ({applyGoalAdjustment(tdee, goals.goalType)} cal)
           </button>
         )}
-      </div>
+      </Card>
 
       {/* Macro Preset */}
-      <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+      <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Macro Split</h2>
         <select
           value={macroPreset}
@@ -476,10 +477,10 @@ export default function NutritionGoalsPage() {
             <option key={preset.key} value={preset.key}>{preset.label}</option>
           ))}
         </select>
-      </div>
+      </Card>
 
       {/* Calorie & Macro Inputs */}
-      <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+      <Card className="mb-4 sm:mb-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Daily Targets</h2>
 
         {/* Calories */}
@@ -569,10 +570,10 @@ export default function NutritionGoalsPage() {
             <span className="inline-block h-2 w-2 rounded-full bg-yellow-600" /> Fats {percentages.fats}%
           </span>
         </div>
-      </div>
+      </Card>
 
       {/* Water Goal */}
-      <div className="mb-6 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <Card className="mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Water Goal</h2>
         <div className="flex items-center gap-3">
           <input
@@ -584,7 +585,7 @@ export default function NutritionGoalsPage() {
           />
           <span className="shrink-0 text-sm text-zinc-500 dark:text-zinc-400">oz</span>
         </div>
-      </div>
+      </Card>
 
       {/* Save Button */}
       <button

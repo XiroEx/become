@@ -133,7 +133,7 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            className="w-full max-w-md rounded-t-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
+            className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -206,7 +206,7 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
                       min="0.25"
                       value={servings}
                       onChange={(e) => setServings(e.target.value)}
-                      className="w-28 rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
+                      className="w-28 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                       autoFocus
                     />
                     <span className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -244,7 +244,7 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
                       min="1"
                       value={customGrams}
                       onChange={(e) => setCustomGrams(e.target.value)}
-                      className="w-28 rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
+                      className="w-28 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                       autoFocus
                     />
                     <span className="text-sm text-zinc-500 dark:text-zinc-400">g</span>
@@ -271,24 +271,24 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
 
               {/* Macro preview */}
               {preview && (
-                <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800">
+                <div className="rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50">
                   <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Updated macros</p>
-                  <div className="flex items-center justify-between">
-                    <div className="text-center">
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
                       <p className="text-base font-bold text-zinc-900 dark:text-white">{preview.calories}</p>
-                      <p className="text-[10px] text-zinc-500">cal</p>
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p>
                     </div>
-                    <div className="text-center">
+                    <div>
                       <p className="text-base font-bold text-blue-600 dark:text-blue-400">{preview.protein}g</p>
-                      <p className="text-[10px] text-zinc-500">protein</p>
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
                     </div>
-                    <div className="text-center">
+                    <div>
                       <p className="text-base font-bold text-green-600 dark:text-green-400">{preview.carbs}g</p>
-                      <p className="text-[10px] text-zinc-500">carbs</p>
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
                     </div>
-                    <div className="text-center">
+                    <div>
                       <p className="text-base font-bold text-amber-600 dark:text-amber-400">{preview.fats}g</p>
-                      <p className="text-[10px] text-zinc-500">fats</p>
+                      <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
                     </div>
                   </div>
                 </div>
@@ -304,7 +304,7 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
                   type="button"
                   onClick={handleClose}
                   disabled={saving}
-                  className="flex-1 rounded-xl border-2 border-zinc-200 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="flex-1 rounded-xl border border-zinc-200 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Cancel
                 </button>

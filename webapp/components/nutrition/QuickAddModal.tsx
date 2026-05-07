@@ -79,7 +79,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -115,7 +115,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                   onChange={(e) => setCalories(e.target.value)}
                   placeholder="e.g., 350"
                   required
-                  className="w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-amber-400"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                 />
               </div>
 
@@ -135,7 +135,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                       value={protein}
                       onChange={(e) => setProtein(e.target.value)}
                       placeholder="g"
-                      className="w-full rounded-lg border-2 border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                     />
                   </div>
                   <div>
@@ -148,7 +148,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                       value={carbs}
                       onChange={(e) => setCarbs(e.target.value)}
                       placeholder="g"
-                      className="w-full rounded-lg border-2 border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 transition-colors focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-green-400"
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                     />
                   </div>
                   <div>
@@ -161,7 +161,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                       value={fats}
                       onChange={(e) => setFats(e.target.value)}
                       placeholder="g"
-                      className="w-full rounded-lg border-2 border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-amber-400"
+                      className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                     />
                   </div>
                 </div>
@@ -193,7 +193,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="e.g., Post-workout shake"
-                  className="w-full rounded-lg border-2 border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-500"
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
                 />
               </div>
 
@@ -202,7 +202,7 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="flex-1 rounded-xl border-2 border-zinc-200 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="flex-1 rounded-xl border border-zinc-200 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Cancel
                 </button>

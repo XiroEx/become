@@ -9,6 +9,7 @@ import MealApplySheet from '@/components/meals/MealApplySheet'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import SavedFoodCard from '@/components/meals/SavedFoodCard'
 import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle, Bookmark } from 'lucide-react'
+import { EmptyState } from '@/components/ui'
 
 interface MealLite {
   _id: string
@@ -370,21 +371,15 @@ export default function MealsPage() {
           <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
         </div>
       ) : meals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <ChefHat className="h-7 w-7 text-zinc-400" />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-zinc-900 dark:text-white">
-              {debouncedSearch || selectedTag ? 'No recipes match' : 'No saved recipes yet'}
-            </p>
-            <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-              {debouncedSearch || selectedTag
-                ? 'Try a different search or clear the filter.'
-                : 'Save your go-to recipes as templates and log them with one tap.'}
-            </p>
-          </div>
-          {!debouncedSearch && !selectedTag && (
+        <EmptyState
+          icon={<ChefHat className="h-7 w-7" />}
+          title={debouncedSearch || selectedTag ? 'No recipes match' : 'No saved recipes yet'}
+          description={
+            debouncedSearch || selectedTag
+              ? 'Try a different search or clear the filter.'
+              : 'Save your go-to recipes as templates and log them with one tap.'
+          }
+          action={!debouncedSearch && !selectedTag ? (
             <Link
               href="/dashboard/meals/new"
               className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
@@ -392,8 +387,8 @@ export default function MealsPage() {
               <Plus className="h-4 w-4" />
               Create your first recipe
             </Link>
-          )}
-        </div>
+          ) : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-3">
           {meals.map(meal => (
@@ -422,21 +417,15 @@ export default function MealsPage() {
           <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
         </div>
       ) : filteredFoods.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-            <Bookmark className="h-7 w-7 fill-current text-amber-500" />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-zinc-900 dark:text-white">
-              {debouncedSearch ? 'No favorites match' : 'No favorites yet'}
-            </p>
-            <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-              {debouncedSearch
-                ? 'Try a different search.'
-                : 'Tap the bookmark on any food in the search modal to add it here.'}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={<Bookmark className="h-7 w-7 fill-current text-amber-500" />}
+          title={debouncedSearch ? 'No favorites match' : 'No favorites yet'}
+          description={
+            debouncedSearch
+              ? 'Try a different search.'
+              : 'Tap the bookmark on any food in the search modal to add it here.'
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-3">
           <AnimatePresence initial={false}>

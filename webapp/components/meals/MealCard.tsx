@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Pencil, ChefHat, Loader2, Check } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 interface MealCardProps {
   id: string
@@ -55,13 +56,13 @@ export default function MealCard({
   const fatsPct = totalGrams > 0 ? (fats / totalGrams) * 100 : 0
 
   return (
-    <motion.div
+    <Card as={motion.div}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.2 }}
-      className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      className="overflow-hidden !p-0"
     >
       <div className="flex">
         {/* Thumbnail / icon */}
@@ -161,6 +162,6 @@ export default function MealCard({
           </button>
         </div>
       </div>
-    </motion.div>
+    </Card>
   )
 }

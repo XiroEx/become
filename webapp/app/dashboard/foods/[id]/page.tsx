@@ -78,7 +78,7 @@ function getDefaultTagForNow(): string {
 
 function NutritionRow({ label, value, unit, accent }: { label: string; value: number; unit: string; accent?: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-zinc-100 py-2.5 dark:border-zinc-800 last:border-0">
+    <div className="flex items-center justify-between py-2.5">
       <span className="text-sm text-zinc-600 dark:text-zinc-400">{label}</span>
       <span className={`text-sm font-semibold tabular-nums ${accent ?? 'text-zinc-900 dark:text-white'}`}>
         {Math.round(value * 10) / 10}{unit}
@@ -346,20 +346,20 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Macro summary */}
-      <div className="grid grid-cols-4 gap-2 sm:rounded-xl sm:bg-zinc-50 sm:p-3 dark:sm:bg-zinc-800/60">
-        <div className="rounded-lg bg-zinc-50 py-2 text-center dark:bg-zinc-800/60 sm:bg-transparent dark:sm:bg-transparent">
+      <div className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
+        <div>
           <p className="text-lg font-bold text-zinc-900 dark:text-white">{Math.round(n.calories)}</p>
           <p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p>
         </div>
-        <div className="rounded-lg bg-zinc-50 py-2 text-center dark:bg-zinc-800/60 sm:bg-transparent dark:sm:bg-transparent">
+        <div>
           <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{Math.round(n.protein * 10) / 10}g</p>
           <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
         </div>
-        <div className="rounded-lg bg-zinc-50 py-2 text-center dark:bg-zinc-800/60 sm:bg-transparent dark:sm:bg-transparent">
+        <div>
           <p className="text-lg font-bold text-green-600 dark:text-green-400">{Math.round(n.carbs * 10) / 10}g</p>
           <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
         </div>
-        <div className="rounded-lg bg-zinc-50 py-2 text-center dark:bg-zinc-800/60 sm:bg-transparent dark:sm:bg-transparent">
+        <div>
           <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{Math.round(n.fats * 10) / 10}g</p>
           <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
         </div>
@@ -368,7 +368,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
       {/* Full nutrition breakdown */}
       <div className="sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
         <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Nutrition (per serving)</h2>
-        <div>
+        <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
           <NutritionRow label="Calories" value={n.calories} unit="" />
           <NutritionRow label="Protein" value={n.protein} unit=" g" accent="text-blue-600 dark:text-blue-400" />
           <NutritionRow label="Carbohydrates" value={n.carbs} unit=" g" accent="text-green-600 dark:text-green-400" />
@@ -450,7 +450,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
           onClick={() => !deleting && setConfirmDelete(false)}
         >
           <div
-            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900"
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-bold text-zinc-900 dark:text-white">Delete this food?</h3>
