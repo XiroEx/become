@@ -9,6 +9,9 @@ interface MoodCardProps {
   currentMood: MoodLevel | null
   onMoodChange: (mood: MoodLevel) => void
   isUpdating?: boolean
+  /** Last N mood values (1-5) — used to render a tiny trend bar matching
+      the streak tile's footer shape so the four stat tiles align. */
+  recentMoods?: number[]
 }
 
 // Small face icons for the card - 5 mood levels
@@ -168,7 +171,7 @@ const moodOptions: { level: MoodLevel; Face: typeof BadFace; label: string }[] =
   { level: 5, Face: GreatFace, label: 'Great' },
 ]
 
-export default function MoodCard({ currentMood, onMoodChange, isUpdating = false }: MoodCardProps) {
+export default function MoodCard({ currentMood, onMoodChange, isUpdating = false, recentMoods }: MoodCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const handleMoodSelect = (mood: MoodLevel) => {
@@ -178,6 +181,26 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
 
   const config = currentMood ? moodConfig[currentMood] : null
 
+  // Trend footer — renders a thin bar at avg mood (1-5 → 0-100%) so the
+  // mood tile matches the streak tile's footer height, keeping the 2x2
+  // stat grid visually balanced. Always renders (empty bar + placeholder
+  // label when no data) so all four tiles align.
+  const moodTrend = (() => {
+    const last = (recentMoods ?? []).slice(-7)
+    if (last.length === 0) {
+      return { pct: 0, barColor: 'bg-zinc-300 dark:bg-zinc-700', label: 'No entries yet' }
+    }
+    const avg = last.reduce((s, v) => s + v, 0) / last.length
+    const pct = Math.round((avg / 5) * 100)
+    const barColor =
+      avg >= 4.5 ? 'bg-emerald-500'
+      : avg >= 3.5 ? 'bg-lime-500'
+      : avg >= 2.5 ? 'bg-amber-500'
+      : avg >= 1.5 ? 'bg-orange-500'
+      : 'bg-red-500'
+    return { pct, barColor, label: `Last ${last.length} ${last.length === 1 ? 'day' : 'days'}` }
+  })()
+
   return (
     <div className="relative">
       {/* Main Card - clickable to expand. Matches StatTile shape (h-9 icon
@@ -186,37 +209,49 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         disabled={isUpdating}
-        className={`w-full flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 ${
+        className={`w-full flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 ${
           isUpdating ? 'opacity-60 cursor-wait' : 'cursor-pointer'
         }`}
       >
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-          config ? config.bgColor : 'bg-zinc-100 dark:bg-zinc-800'
-        }`}>
-          {isUpdating ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
-          ) : config ? (
-            <config.Face size="sm" />
-          ) : (
-            <QuestionFace size="sm" />
-          )}
-        </span>
-        <div className="flex-1 min-w-0 text-left">
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Today&apos;s Mood</p>
-          <p className={`text-2xl font-extrabold leading-none tracking-tight ${
-            config ? config.textColor : 'text-zinc-900 dark:text-white'
+        <div className="flex w-full items-center gap-3">
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+            config ? config.bgColor : 'bg-zinc-100 dark:bg-zinc-800'
           }`}>
-            {config ? config.label : 'Set'}
-          </p>
+            {isUpdating ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
+            ) : config ? (
+              <config.Face size="sm" />
+            ) : (
+              <QuestionFace size="sm" />
+            )}
+          </span>
+          <div className="flex-1 min-w-0 text-left">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Today&apos;s Mood</p>
+            <p className={`text-2xl font-extrabold leading-none tracking-tight ${
+              config ? config.textColor : 'text-zinc-900 dark:text-white'
+            }`}>
+              {config ? config.label : 'Set'}
+            </p>
+          </div>
+          <svg
+            className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
-        <svg
-          className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+
+        <div className="w-full">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div
+              className={`h-full rounded-full ${moodTrend.barColor} transition-all duration-500`}
+              style={{ width: `${moodTrend.pct}%` }}
+            />
+          </div>
+          <p className="mt-0.5 text-left text-[10px] text-zinc-400 dark:text-zinc-600">{moodTrend.label}</p>
+        </div>
       </button>
 
       {/* Expanded mood selector */}
