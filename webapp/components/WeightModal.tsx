@@ -154,7 +154,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
           >
             {/* Header - DEBUG: Show all icon options */}
             <div className="text-center mb-6 sm:mb-8">
@@ -197,7 +197,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 placeholder="e.g., 185.5"
-                className="w-full rounded-xl border-2 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-center text-lg font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-center text-lg font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 autoFocus
               />
             </div>
@@ -220,7 +220,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
                 <button
                   onClick={handleSkip}
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border-2 border-zinc-200 dark:border-zinc-700 py-3 font-semibold text-zinc-700 dark:text-zinc-300 transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800 sm:py-4"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 py-3 font-semibold text-zinc-700 dark:text-zinc-300 transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800 sm:py-4"
                 >
                   Skip for Today
                 </button>

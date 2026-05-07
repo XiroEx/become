@@ -871,7 +871,7 @@ export default function ExerciseSwapModal({
                   <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                     <button
                       onClick={() => setShowCreateForm(true)}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 py-3 text-sm font-medium text-zinc-500 transition-colors hover:border-green-400 hover:text-green-600 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-green-500 dark:hover:text-green-400"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 py-3 text-sm font-medium text-zinc-500 transition-colors hover:border-green-400 hover:text-green-600 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-green-500 dark:hover:text-green-400"
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

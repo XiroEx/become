@@ -467,7 +467,7 @@ function Step2({
           <button
             onClick={() => onAvailabilityChange(Math.max(1, days - 1))}
             disabled={days <= 1}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-zinc-200 bg-white text-lg font-bold text-zinc-700 transition-colors hover:border-zinc-300 disabled:opacity-30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-200 bg-white text-lg font-bold text-zinc-700 transition-colors hover:border-zinc-300 disabled:opacity-30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             aria-label="Decrease days"
           >
             −
@@ -478,7 +478,7 @@ function Step2({
           <button
             onClick={() => onAvailabilityChange(Math.min(7, days + 1))}
             disabled={days >= 7}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-zinc-200 bg-white text-lg font-bold text-zinc-700 transition-colors hover:border-zinc-300 disabled:opacity-30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-200 bg-white text-lg font-bold text-zinc-700 transition-colors hover:border-zinc-300 disabled:opacity-30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             aria-label="Increase days"
           >
             +
@@ -596,7 +596,7 @@ function Step3({
     }
   }
 
-  const inputCls = "w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
+  const inputCls = "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
 
   return (
     <div>
@@ -817,7 +817,7 @@ function Step4({
           placeholder="Any injuries or areas to avoid? (optional)"
           value={injuryNotes}
           onChange={(e) => onInjuryNotesChange(e.target.value)}
-          className="w-full resize-none rounded-xl border-2 border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
+          className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
         />
       </div>
     </div>

@@ -65,7 +65,7 @@ function ConfirmationDialog({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+            className="relative w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900"
           >
             {/* Warning Icon */}
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
@@ -925,7 +925,7 @@ export default function ProgramDetailClient({ program }: Props) {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+              className="relative w-full max-w-sm rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900"
             >
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
                 <svg className="h-7 w-7 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

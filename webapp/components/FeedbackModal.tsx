@@ -123,7 +123,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 10 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900"
+            className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900"
             onClick={(e) => e.stopPropagation()}
           >
             {sent ? (

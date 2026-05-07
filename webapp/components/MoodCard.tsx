@@ -180,15 +180,17 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
 
   return (
     <div className="relative">
-      {/* Main Card - clickable to expand */}
+      {/* Main Card - clickable to expand. Matches StatTile shape (h-9 icon
+          badge, xs label, 2xl extrabold value) so the four dashboard stat
+          tiles share one visual language. */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         disabled={isUpdating}
-        className={`w-full flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4 transition-all hover:border-zinc-300 dark:hover:border-zinc-700 ${
+        className={`w-full flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 ${
           isUpdating ? 'opacity-60 cursor-wait' : 'cursor-pointer'
         }`}
       >
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg sm:h-10 sm:w-10 ${
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
           config ? config.bgColor : 'bg-zinc-100 dark:bg-zinc-800'
         }`}>
           {isUpdating ? (
@@ -198,19 +200,19 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
           ) : (
             <QuestionFace size="sm" />
           )}
-        </div>
-        <div className="flex-1 text-left">
-          <p className={`text-lg font-bold sm:text-xl ${
-            config ? config.textColor : 'text-zinc-500 dark:text-zinc-400'
+        </span>
+        <div className="flex-1 min-w-0 text-left">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">Today&apos;s Mood</p>
+          <p className={`text-2xl font-extrabold leading-none tracking-tight ${
+            config ? config.textColor : 'text-zinc-900 dark:text-white'
           }`}>
             {config ? config.label : 'Set'}
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">Today&apos;s Mood</p>
         </div>
-        <svg 
-          className={`h-4 w-4 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-          fill="none" 
-          viewBox="0 0 24 24" 
+        <svg
+          className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
           stroke="currentColor"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

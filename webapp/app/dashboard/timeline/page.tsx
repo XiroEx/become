@@ -846,7 +846,7 @@ function TimelineClient() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 80, opacity: 0 }}
               transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              className="w-full max-w-md rounded-t-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
+              className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-4 flex items-center gap-2.5">
@@ -866,7 +866,7 @@ function TimelineClient() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmDelete(null)}
-                  className="flex-1 rounded-xl border-2 border-zinc-200 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="flex-1 rounded-xl border border-zinc-200 py-3 font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   Cancel
                 </button>

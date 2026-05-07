@@ -13,11 +13,12 @@ import ProgramNudgeModal, {
   shouldShowNudge,
   recordNudgeDismiss,
 } from '@/components/ProgramNudgeModal'
-import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight } from 'lucide-react'
+import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
 import type { FitnessGoal } from '@/models/User'
+import { Card, StatTile } from '@/components/ui'
 
 interface UserProgressData {
   weightData: MetricData[]
@@ -368,69 +369,59 @@ export default function DashboardClient() {
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Track your fitness journey</p>
       </header>
 
-      {/* Quick Stats */}
+      {/* Quick Stats — 2x2 mobile / 4-up desktop. All four use the StatTile
+          primitive (Card + canonical icon-badge). Streak gets a footer slot
+          for its progress-to-next-milestone bar so the visual still works. */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        {/* Streak card */}
-        <Link href="/dashboard/progress" className="flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30 sm:h-10 sm:w-10">
-              <Flame className={`h-4 w-4 sm:h-5 sm:w-5 ${streakData?.activityToday ? 'text-orange-500 dark:text-orange-400' : 'text-zinc-400 dark:text-zinc-600'}`} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl leading-none">
-                {streakData?.streakDays ?? data.stats.streakDays}
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Day Streak
-                {streakData && streakData.streakFreezes > 0 && (
-                  <span className="ml-1.5 text-blue-500 dark:text-blue-400">
-                    {'❄'.repeat(streakData.streakFreezes)}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-          {/* Progress to next milestone */}
-          {streakData?.nextMilestone && streakData.streakDays > 0 && (() => {
+        {/* Streak — always amber accent; icon goes muted when no activity today */}
+        <StatTile
+          href="/dashboard/progress"
+          accent="amber"
+          icon={<Flame className={`h-4 w-4 ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
+          label="Day Streak"
+          labelExtra={streakData && streakData.streakFreezes > 0 ? (
+            <span className="ml-1.5 text-blue-500 dark:text-blue-400">
+              {'❄'.repeat(streakData.streakFreezes)}
+            </span>
+          ) : null}
+          value={streakData?.streakDays ?? data.stats.streakDays}
+          footer={streakData?.nextMilestone && streakData.streakDays > 0 ? (() => {
             const prev = STREAK_MILESTONES.filter(m => m <= streakData.streakDays).slice(-1)[0] ?? 0
             const pct = Math.min(100, Math.round(((streakData.streakDays - prev) / (streakData.nextMilestone - prev)) * 100))
             return (
               <div>
-                <div className="h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-yellow-400 transition-all duration-500" style={{ width: `${pct}%` }} />
+                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${pct}%` }} />
                 </div>
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-0.5">{streakData.nextMilestone - streakData.streakDays}d to 🏆</p>
+                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{streakData.nextMilestone - streakData.streakDays}d to 🏆</p>
               </div>
             )
-          })()}
-        </Link>
+          })() : null}
+        />
 
-        {/* Today's Mood Card - replaces Workouts */}
-        <MoodCard 
-          currentMood={todaysMood} 
+        {/* Today's Mood — keeps custom MoodCard for expand/select behavior;
+            internally uses the same StatTile shape (h-9 round icon badge,
+            xs label, 2xl extrabold value). */}
+        <MoodCard
+          currentMood={todaysMood}
           onMoodChange={handleMoodCardChange}
           isUpdating={isMoodUpdating}
         />
-        
-        <Link href="/dashboard/progress#workouts" className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30 sm:h-10 sm:w-10">
-            <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400 sm:h-5 sm:w-5" />
-          </div>
-          <div>
-            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.thisWeekWorkouts}/{weeklyAvailability}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">This Week</p>
-          </div>
-        </Link>
-        
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30 sm:h-10 sm:w-10">
-            <Target className="h-4 w-4 text-purple-600 dark:text-purple-400 sm:h-5 sm:w-5" />
-          </div>
-          <div>
-            <p className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">{data.stats.goalProgress}%</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Goal</p>
-          </div>
-        </div>
+
+        <StatTile
+          href="/dashboard/progress#workouts"
+          accent="green"
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="This Week"
+          value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
+        />
+
+        <StatTile
+          accent="purple"
+          icon={<Target className="h-4 w-4" />}
+          label="Goal"
+          value={`${data.stats.goalProgress}%`}
+        />
       </div>
 
       {/* Next Workout */}
@@ -457,7 +448,7 @@ export default function DashboardClient() {
 
       {/* First-time empty state — no program, no workouts yet */}
       {!loading && !data.currentProgram && data.stats.totalWorkouts === 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <Card>
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
               <Dumbbell className="h-6 w-6 text-zinc-500 dark:text-zinc-400" />
@@ -476,24 +467,24 @@ export default function DashboardClient() {
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Current Program & Mindset - side by side on desktop, stacked on mobile */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Current Program */}
         {data.currentProgram && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          <Card>
             <div className="mb-3 flex items-center justify-between sm:mb-4">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Current Program</h2>
-              <Link 
+              <Link
                 href={`/dashboard/programming/${data.currentProgram.programId}`}
                 className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
               >
                 View
               </Link>
             </div>
-            
+
             <div className="mb-3 sm:mb-4">
               <h3 className="font-medium text-zinc-900 dark:text-white">{data.currentProgram.name}</h3>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -508,8 +499,8 @@ export default function DashboardClient() {
                 <span>{Math.round((data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100)}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                <div 
-                  className="h-full bg-linear-to-r from-green-500 to-emerald-600 transition-all duration-300"
+                <div
+                  className="h-full bg-green-500 transition-all duration-300"
                   style={{ width: `${(data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100}%` }}
                 />
               </div>
@@ -524,21 +515,21 @@ export default function DashboardClient() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </Link>
-          </div>
+          </Card>
         )}
 
         {/* Mindset Card */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <Card>
           <div className="mb-3 flex items-center justify-between sm:mb-4">
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Mindset</h2>
-            <Link 
+            <Link
               href="/dashboard/mind"
               className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
             >
               View
             </Link>
           </div>
-          
+
           <div className="mb-3 sm:mb-4">
             <h3 className="font-medium text-zinc-900 dark:text-white">Daily Reflection</h3>
             <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -546,8 +537,9 @@ export default function DashboardClient() {
             </p>
           </div>
 
-          {/* Mood Summary */}
-          <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800 sm:mb-4">
+          {/* Mood Summary — flat tinted nested block (no border). Padding
+              tightened from p-3 to p-2.5 so it doesn't read as another card. */}
+          <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50 sm:mb-4">
             <div className="flex -space-x-1">
               {data.moodData.slice(-3).map((mood, idx) => {
                 const moodColors: Record<number, string> = {
@@ -565,9 +557,9 @@ export default function DashboardClient() {
                   5: '😊'
                 }
                 return (
-                  <div 
-                    key={idx} 
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white dark:border-zinc-800 ${
+                  <div
+                    key={idx}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-white dark:ring-zinc-900 ${
                       moodColors[mood.value] || 'bg-zinc-400'
                     }`}
                   >
@@ -595,80 +587,58 @@ export default function DashboardClient() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </Link>
-        </div>
+        </Card>
       </div>
 
-      {/* Quick Links */}
+      {/* Quick Links — 4-tile grid. Visually identical except icon + label.
+          Card primitive, hover swap on border (not shadow elevation). */}
       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-        <Link 
-          href="/dashboard/programming" 
-          className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-            <ClipboardList className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-zinc-900 dark:text-white">All Programs</h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Browse training plans</p>
-          </div>
-          <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-
-        <Link
-          href="/dashboard/nutrition"
-          className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-            <UtensilsCrossed className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-zinc-900 dark:text-white">Nutrition</h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {nutritionData
-                ? `${nutritionData.calories.consumed.toLocaleString()} / ${nutritionData.calories.goal.toLocaleString()} cal today`
-                : 'Track meals & macros'}
-            </p>
-          </div>
-          <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-
-        <Link 
-          href="/dashboard/progress" 
-          className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-            <TrendingUp className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-zinc-900 dark:text-white">Progress</h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Log weight & measurements</p>
-          </div>
-          <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-
-        <Link 
-          href="/dashboard/chat" 
-          className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 sm:p-5"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-            <svg className="h-5 w-5 text-zinc-600 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        {[
+          {
+            href: '/dashboard/programming',
+            icon: <ClipboardList className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
+            title: 'All Programs',
+            description: 'Browse training plans',
+          },
+          {
+            href: '/dashboard/nutrition',
+            icon: <UtensilsCrossed className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
+            title: 'Nutrition',
+            description: nutritionData
+              ? `${nutritionData.calories.consumed.toLocaleString()} / ${nutritionData.calories.goal.toLocaleString()} cal today`
+              : 'Track meals & macros',
+          },
+          {
+            href: '/dashboard/progress',
+            icon: <TrendingUp className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
+            title: 'Progress',
+            description: 'Log weight & measurements',
+          },
+          {
+            href: '/dashboard/chat',
+            icon: <MessageCircle className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
+            title: 'Connect',
+            description: 'Chat with trainers',
+          },
+        ].map((link) => (
+          <Card
+            key={link.href}
+            as={Link}
+            href={link.href}
+            className="flex items-center gap-3 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+              {link.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-zinc-900 dark:text-white">{link.title}</h3>
+              <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">{link.description}</p>
+            </div>
+            <svg className="h-5 w-5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-zinc-900 dark:text-white">Connect</h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Chat with trainers</p>
-          </div>
-          <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
+          </Card>
+        ))}
       </div>
     </PageTransition>
     </>
