@@ -1,11 +1,10 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
-import ProgressChart, { MetricData } from '@/components/ProgressChart'
+import ProgressChart from '@/components/ProgressChart'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
-import MoodCard from '@/components/MoodCard'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import ProgramNudgeModal, {
   NUDGE_KEY,
@@ -13,33 +12,20 @@ import ProgramNudgeModal, {
   shouldShowNudge,
   recordNudgeDismiss,
 } from '@/components/ProgramNudgeModal'
-import { ClipboardList, Flame, Target, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle } from 'lucide-react'
+import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
-import { STREAK_MILESTONES } from '@/lib/streakConstants'
 import type { FitnessGoal } from '@/models/User'
-import { Card, StatTile } from '@/components/ui'
-
-interface UserProgressData {
-  weightData: MetricData[]
-  bmiData: MetricData[]
-  moodData: MetricData[]
-  currentProgram: {
-    programId: string
-    name: string
-    currentPhase: number
-    currentWeek: number
-    totalWeeks: number
-    nextWorkout: string
-    nextWorkoutDay?: string
-  } | null
-  stats: {
-    streakDays: number
-    totalWorkouts: number
-    thisWeekWorkouts: number
-    goalProgress: number
-  }
-}
+import { Card } from '@/components/ui'
+import CustomizeTilesModal from '@/components/dashboard/CustomizeTilesModal'
+import {
+  TILE_DEFS,
+  DEFAULT_TILE_IDS,
+  loadTilePreference,
+  type DashboardTileId,
+  type DashboardTileContext,
+  type UserProgressData,
+} from '@/lib/dashboardTiles'
 
 // Empty initial state — real data loads from /api/progress
 const emptyData: UserProgressData = {
@@ -86,6 +72,13 @@ export default function DashboardClient() {
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
+  const [tileIds, setTileIds] = useState<DashboardTileId[]>(DEFAULT_TILE_IDS)
+  const [showCustomize, setShowCustomize] = useState(false)
+
+  // Load saved tile preference on mount (client only)
+  useEffect(() => {
+    setTileIds(loadTilePreference())
+  }, [])
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -284,8 +277,9 @@ export default function DashboardClient() {
     }
   }
 
-  // Handle mood change from the MoodCard
-  const handleMoodCardChange = async (mood: MoodLevel) => {
+  // Handle mood change from the MoodCard. Memoized so the dashboard tile
+  // context doesn't change identity on every render.
+  const handleMoodCardChange = useCallback(async (mood: MoodLevel) => {
     setIsMoodUpdating(true)
     
     try {
@@ -337,10 +331,41 @@ export default function DashboardClient() {
     } finally {
       setIsMoodUpdating(false)
     }
-  }
+  }, [])
+
+  // Build the context object passed to each tile's render fn. Memoized so
+  // tiles don't re-render on unrelated state changes.
+  const tileCtx = useMemo<DashboardTileContext>(() => ({
+    data,
+    streakData,
+    nutritionData: nutritionData
+      ? {
+          calories: nutritionData.calories,
+          protein: nutritionData.protein,
+          carbs: nutritionData.carbs,
+          fats: nutritionData.fats,
+          water: nutritionData.water,
+        }
+      : null,
+    weeklyAvailability,
+    weightUnit,
+    todaysMood,
+    isMoodUpdating,
+    onMoodChange: handleMoodCardChange,
+  }), [data, streakData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange])
 
   return (
     <>
+      <CustomizeTilesModal
+        open={showCustomize}
+        selectedIds={tileIds}
+        onClose={() => setShowCustomize(false)}
+        onSave={(ids) => {
+          setTileIds(ids)
+          setShowCustomize(false)
+        }}
+      />
+
       <DailyCheckInModal
         isOpen={showCheckInModal}
         onClose={handleCheckInClose}
@@ -369,99 +394,25 @@ export default function DashboardClient() {
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Track your fitness journey</p>
       </header>
 
-      {/* Quick Stats — 2x2 mobile / 4-up desktop. All four use the StatTile
-          primitive (Card + canonical icon-badge). Streak gets a footer slot
-          for its progress-to-next-milestone bar so the visual still works. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        {/* Streak — always amber accent; icon goes muted when no activity today */}
-        <StatTile
-          href="/dashboard/progress"
-          accent="amber"
-          icon={<Flame className={`h-4 w-4 ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
-          label="Day Streak"
-          labelExtra={streakData && streakData.streakFreezes > 0 ? (
-            <span className="ml-1.5 text-blue-500 dark:text-blue-400">
-              {'❄'.repeat(streakData.streakFreezes)}
-            </span>
-          ) : null}
-          value={streakData?.streakDays ?? data.stats.streakDays}
-          footer={(() => {
-            const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
-            const next = streakData?.nextMilestone
-            if (next && days > 0) {
-              const prev = STREAK_MILESTONES.filter(m => m <= days).slice(-1)[0] ?? 0
-              const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
-              return (
-                <div>
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                    <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{next - days}d to 🏆</p>
-                </div>
-              )
-            }
-            return (
-              <div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800" />
-                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">Start your streak</p>
-              </div>
-            )
-          })()}
-        />
-
-        {/* Today's Mood — keeps custom MoodCard for expand/select behavior;
-            internally uses the same StatTile shape (h-9 round icon badge,
-            xs label, 2xl extrabold value). */}
-        <MoodCard
-          currentMood={todaysMood}
-          onMoodChange={handleMoodCardChange}
-          isUpdating={isMoodUpdating}
-          recentMoods={data.moodData.slice(-7).map(m => m.value)}
-        />
-
-        <StatTile
-          href="/dashboard/progress#workouts"
-          accent="green"
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="This Week"
-          value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
-          footer={(() => {
-            const pct = weeklyAvailability > 0
-              ? Math.min(100, Math.round((data.stats.thisWeekWorkouts / weeklyAvailability) * 100))
-              : 0
-            const remaining = Math.max(0, weeklyAvailability - data.stats.thisWeekWorkouts)
-            return (
-              <div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                  <div className="h-full rounded-full bg-green-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-                </div>
-                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
-                  {remaining === 0 ? 'Weekly goal hit 🎉' : `${remaining} to weekly goal`}
-                </p>
-              </div>
-            )
-          })()}
-        />
-
-        <StatTile
-          accent="purple"
-          icon={<Target className="h-4 w-4" />}
-          label="Goal"
-          value={`${data.stats.goalProgress}%`}
-          footer={(() => {
-            const pct = Math.min(100, Math.max(0, data.stats.goalProgress))
-            return (
-              <div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                  <div className="h-full rounded-full bg-purple-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-                </div>
-                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
-                  {pct >= 100 ? 'Annual goal hit 🎯' : 'Annual goal'}
-                </p>
-              </div>
-            )
-          })()}
-        />
+      {/* Quick Stats — 2x2 mobile / 4-up desktop. Tiles come from the
+          dashboardTiles registry; user selection persists to localStorage
+          and reorders via the Customize modal. */}
+      <div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {tileIds.map((id) => (
+            <Fragment key={id}>{TILE_DEFS[id].render(tileCtx)}</Fragment>
+          ))}
+        </div>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowCustomize(true)}
+            className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
+          >
+            <Sliders className="h-3.5 w-3.5" />
+            Customize tiles
+          </button>
+        </div>
       </div>
 
       {/* Next Workout */}
