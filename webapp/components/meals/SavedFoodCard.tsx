@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Loader2, Bookmark, Check, Plus } from 'lucide-react'
 import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
+import { Card } from '@/components/ui'
 
 interface SavedFoodCardProps {
   id: string
@@ -52,17 +53,18 @@ export default function SavedFoodCard({
   const servingText = displayLabel || `${servingSize} ${servingUnit}`
 
   return (
-    <motion.div
+    <Card as={motion.div}
       layout
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+      variant="compact"
+      className="group flex items-center gap-3 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
     >
       {/* Tappable area — thumbnail + info routes to detail */}
       <Link
         href={`/dashboard/foods/${id}`}
-        className="flex min-w-0 flex-1 items-center gap-3 -my-2.5 -ml-3 py-2.5 pl-3 pr-1 transition-colors active:bg-zinc-50 dark:active:bg-zinc-800"
+        className="-my-3 -ml-3 flex min-w-0 flex-1 items-center gap-3 py-3 pl-3 pr-1 transition-colors active:bg-zinc-50 dark:active:bg-zinc-800"
       >
         {/* Thumbnail — actual image when available, category-tinted icon as fallback */}
         <FoodThumbnail
@@ -127,6 +129,6 @@ export default function SavedFoodCard({
           {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bookmark className="h-4 w-4 fill-current text-amber-500" />}
         </button>
       </div>
-    </motion.div>
+    </Card>
   )
 }

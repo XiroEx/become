@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Droplets } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 interface WaterTrackerProps {
   current: number
@@ -20,7 +21,7 @@ export default function WaterTracker({ current, goal, onAddWater }: WaterTracker
   const isComplete = current >= goal
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <Card>
       {/* Header row */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -71,6 +72,6 @@ export default function WaterTracker({ current, goal, onAddWater }: WaterTracker
           </button>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }

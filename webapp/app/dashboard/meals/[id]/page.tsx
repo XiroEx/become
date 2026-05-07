@@ -277,7 +277,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           )}
 
           {/* Macro summary */}
-          <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2 text-center dark:bg-zinc-800">
+          <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
             <div>
               <p className="text-base font-bold text-zinc-900 dark:text-white">{totalCal}</p>
               <p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p>
@@ -394,7 +394,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           onClick={() => !deleting && setConfirmDelete(false)}
         >
           <div
-            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900"
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-bold text-zinc-900 dark:text-white">Delete this recipe?</h3>
