@@ -247,7 +247,7 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="group relative overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-100 transition-all hover:shadow-md dark:bg-zinc-900 dark:ring-zinc-800"
+      className="group relative overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-100 transition-colors hover:ring-zinc-300 dark:bg-zinc-900 dark:ring-zinc-800 dark:hover:ring-zinc-700"
     >
       {/* Main row - clickable header */}
       <div
@@ -347,7 +347,7 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
               </div>
 
               {/* Tab content */}
-              <div className="p-4 sm:p-5">
+              <div className="p-3 sm:p-4">
                 <AnimatePresence mode="wait">
                   {activeTab === 'video' && (
                     <motion.div

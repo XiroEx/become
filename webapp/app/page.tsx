@@ -86,7 +86,7 @@ export default function Home() {
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="mb-8 relative"
         >
-          <div className="relative h-28 w-28 overflow-hidden rounded-full border-2 border-zinc-700 shadow-2xl">
+          <div className="relative h-28 w-28 overflow-hidden rounded-full ring-2 ring-zinc-700 shadow-2xl">
             <Image src={logo} alt={appName} fill className="object-cover" priority />
           </div>
           <div className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full bg-green-500 text-xs font-bold shadow-lg">
@@ -185,7 +185,7 @@ export default function Home() {
                 Jon transformed himself from the ground up — and built this app to give you the exact programming, nutrition guidance, and accountability he used to do it. No templates. No guessing. Just results.
               </p>
               <div className="mt-8 flex items-center gap-4">
-                <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-zinc-700">
+                <div className="relative h-12 w-12 overflow-hidden rounded-full ring-2 ring-zinc-700">
                   <Image src={profileImage} alt="Jon Don" fill className="object-cover" />
                 </div>
                 <div>
@@ -309,7 +309,7 @@ export default function Home() {
 
             <AnimatedSection direction="right" className="flex-1 flex justify-center">
               {/* Streak UI mockup */}
-              <div className="w-full max-w-sm rounded-3xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800">
+              <div className="w-full max-w-sm rounded-2xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800">
                 <div className="text-center">
                   <div className="inline-flex items-center gap-2 rounded-full bg-orange-500/10 px-4 py-2 text-orange-400 border border-orange-500/20">
                     <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -425,7 +425,7 @@ export default function Home() {
 
             <AnimatedSection direction="left" className="flex-1 flex justify-center">
               {/* Onboarding card mockup */}
-              <div className="w-full max-w-sm rounded-3xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800 space-y-5">
+              <div className="w-full max-w-sm rounded-2xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800 space-y-5">
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Step 2 of 4</span>
@@ -733,8 +733,8 @@ export default function Home() {
               { q: "What is a streak freeze?", a: "A streak freeze protects your streak on days you can't train. Earn them through consistent activity — they're your safety net, not an excuse." },
             ].map((faq, i) => (
               <AnimatedSection key={i} delay={i * 0.05}>
-                <details className="group rounded-2xl border border-zinc-800 bg-zinc-900">
-                  <summary className="flex cursor-pointer items-center justify-between p-5 font-semibold text-white">
+                <details className="group rounded-xl border border-zinc-800 bg-zinc-900">
+                  <summary className="flex cursor-pointer items-center justify-between p-4 font-semibold text-white">
                     {faq.q}
                     <svg className="h-5 w-5 shrink-0 text-zinc-500 transition-transform group-open:rotate-180 group-open:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

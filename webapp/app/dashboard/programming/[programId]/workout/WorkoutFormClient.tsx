@@ -1324,7 +1324,7 @@ export default function WorkoutFormPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900"
+              className="relative w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900"
             >
               {/* Warning Icon */}
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
