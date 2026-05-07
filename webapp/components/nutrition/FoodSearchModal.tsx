@@ -524,10 +524,6 @@ export default function FoodSearchModal({
       externalId = id.slice('off-'.length)
     }
 
-    if (!source || !externalId) {
-      return { foodId: id, variants: food.variants, error: 'unknown id format' }
-    }
-
     const token = localStorage.getItem('token')
     if (!token) {
       return { foodId: id, variants: food.variants, error: 'not signed in' }
@@ -539,34 +535,40 @@ export default function FoodSearchModal({
 
     let lastError = ''
 
-    // Try the source-specific import first (re-fetches authoritative data).
-    try {
-      const res = await fetch('/api/nutrition/foods/import', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ source, externalId }),
-      })
-      if (res.ok) {
-        const data = await res.json().catch(() => null)
-        const importedFood = data?.food
-        if (importedFood?._id) {
-          return {
-            foodId: String(importedFood._id),
-            variants: importedFood.variants ?? food.variants,
+    // Try the source-specific import first (re-fetches authoritative data) for
+    // results we know how to refetch. Anything else (legacy log entries, custom
+    // shapes, etc.) skips straight to the manual fallback using cached data.
+    if (source && externalId) {
+      try {
+        const res = await fetch('/api/nutrition/foods/import', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ source, externalId }),
+        })
+        if (res.ok) {
+          const data = await res.json().catch(() => null)
+          const importedFood = data?.food
+          if (importedFood?._id) {
+            return {
+              foodId: String(importedFood._id),
+              variants: importedFood.variants ?? food.variants,
+            }
           }
+          lastError = 'import returned no _id'
+          console.warn('[FoodSearchModal] source import returned no _id, body:', data)
+        } else {
+          const errBody = await res.text().catch(() => '')
+          let parsed: { error?: string } | null = null
+          try { parsed = JSON.parse(errBody) } catch { /* not json */ }
+          lastError = parsed?.error || `${res.status} ${res.statusText}`
+          console.warn(`[FoodSearchModal] ${source} import failed (${res.status}) for ${id}: ${errBody.slice(0, 300)} — falling back to manual import`)
         }
-        lastError = 'import returned no _id'
-        console.warn('[FoodSearchModal] source import returned no _id, body:', data)
-      } else {
-        const errBody = await res.text().catch(() => '')
-        let parsed: { error?: string } | null = null
-        try { parsed = JSON.parse(errBody) } catch { /* not json */ }
-        lastError = parsed?.error || `${res.status} ${res.statusText}`
-        console.warn(`[FoodSearchModal] ${source} import failed (${res.status}) for ${id}: ${errBody.slice(0, 300)} — falling back to manual import`)
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err)
+        console.warn('[FoodSearchModal] Source import network error — falling back to manual import', err)
       }
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
-      console.warn('[FoodSearchModal] Source import network error — falling back to manual import', err)
+    } else {
+      console.log(`[FoodSearchModal] No source-specific path for id=${id} — going straight to manual fallback`)
     }
 
     // Fallback: USDA can be intermittent and the local OFF cache may not
