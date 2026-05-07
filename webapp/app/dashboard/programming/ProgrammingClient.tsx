@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Dumbbell, Sparkles, Search } from "lucide-react";
+import { Dumbbell, Sparkles, Search, Wand2 } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
@@ -83,6 +83,13 @@ export default function ProgrammingClient() {
 
   // Saved programs shown count
   const [savedShown, setSavedShown] = useState(5);
+
+  // "Generate program" — feature coming soon; clicking shows a brief toast
+  const [showSoonToast, setShowSoonToast] = useState(false);
+  function handleGenerateClick() {
+    setShowSoonToast(true);
+    window.setTimeout(() => setShowSoonToast(false), 2400);
+  }
 
   // User profile for recommendations
   const [userFitnessGoal, setUserFitnessGoal] = useState<FitnessGoal | undefined>(undefined);
@@ -351,16 +358,24 @@ export default function ProgrammingClient() {
             href="/dashboard/programming/library"
             className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
-            <Dumbbell className="h-3.5 w-3.5" />
+            <Dumbbell className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
             My Exercises
           </Link>
           <Link
             href="/dashboard/programs/mine"
             className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
-            <Sparkles className="h-3.5 w-3.5" />
+            <Sparkles className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />
             My Programs
           </Link>
+          <button
+            type="button"
+            onClick={handleGenerateClick}
+            className="flex items-center gap-1.5 rounded-full bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800 dark:bg-purple-500 dark:hover:bg-purple-600"
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            Generate
+          </button>
         </div>
       </div>
 
@@ -905,6 +920,20 @@ export default function ProgrammingClient() {
             ) : undefined
           }
         />
+      )}
+
+      {/* Coming soon toast for Generate button */}
+      {showSoonToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border border-purple-500/30 bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-lg dark:border-purple-400/30 dark:bg-purple-500"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Wand2 className="h-3.5 w-3.5" />
+            AI program generation — coming soon
+          </span>
+        </div>
       )}
     </PageTransition>
   );
