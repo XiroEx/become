@@ -13,11 +13,13 @@ import { cn } from "@/lib/cn";
  */
 const VARIANT_CLASSES = {
   default:
-    "rounded-xl border border-zinc-200 bg-white p-3 sm:p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900",
+    "rounded-xl border border-zinc-200 bg-white p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900",
   compact:
-    "rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900",
-  hero:
-    "rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900",
+    "rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900",
+  // Hero cards intentionally omit `bg-*` and `border-{color}` defaults — heroes
+  // bring their own backdrop (chapter color, dark zinc, gradient overlay) per
+  // UI_CONSISTENCY_PLAN.md §7.
+  hero: "rounded-2xl border p-4 sm:p-5",
 } as const;
 
 /**
