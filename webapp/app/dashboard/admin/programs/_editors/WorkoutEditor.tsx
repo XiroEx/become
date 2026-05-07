@@ -189,7 +189,7 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
   };
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+    <div className="border-b border-zinc-200 pb-4 dark:border-zinc-800 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-zinc-50 sm:p-4 sm:pb-4 dark:sm:border-zinc-700 dark:sm:bg-zinc-800/50">
       {/* Workout Title */}
       <div className="mb-4">
         <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">

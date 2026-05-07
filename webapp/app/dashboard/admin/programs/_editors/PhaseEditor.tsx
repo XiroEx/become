@@ -62,10 +62,10 @@ export default function PhaseEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="border-b border-zinc-200 dark:border-zinc-800 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
       {/* Phase Header */}
       <div
-        className="flex cursor-pointer items-center justify-between bg-zinc-50 px-6 py-4 dark:bg-zinc-800/50"
+        className="flex cursor-pointer items-center justify-between py-3 sm:bg-zinc-50 sm:px-6 sm:py-4 dark:sm:bg-zinc-800/50"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-4">
@@ -115,7 +115,7 @@ export default function PhaseEditor({
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="border-t border-zinc-200 p-6 dark:border-zinc-700">
+            <div className="pt-3 sm:border-t sm:border-zinc-200 sm:p-6 dark:sm:border-zinc-700">
               {/* Phase Info Fields */}
               <div className="mb-6 grid gap-4 sm:grid-cols-2">
                 <div>
