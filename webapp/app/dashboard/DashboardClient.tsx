@@ -385,18 +385,28 @@ export default function DashboardClient() {
             </span>
           ) : null}
           value={streakData?.streakDays ?? data.stats.streakDays}
-          footer={streakData?.nextMilestone && streakData.streakDays > 0 ? (() => {
-            const prev = STREAK_MILESTONES.filter(m => m <= streakData.streakDays).slice(-1)[0] ?? 0
-            const pct = Math.min(100, Math.round(((streakData.streakDays - prev) / (streakData.nextMilestone - prev)) * 100))
+          footer={(() => {
+            const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
+            const next = streakData?.nextMilestone
+            if (next && days > 0) {
+              const prev = STREAK_MILESTONES.filter(m => m <= days).slice(-1)[0] ?? 0
+              const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
+              return (
+                <div>
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                    <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{next - days}d to 🏆</p>
+                </div>
+              )
+            }
             return (
               <div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                  <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-                </div>
-                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{streakData.nextMilestone - streakData.streakDays}d to 🏆</p>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800" />
+                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">Start your streak</p>
               </div>
             )
-          })() : null}
+          })()}
         />
 
         {/* Today's Mood — keeps custom MoodCard for expand/select behavior;
@@ -406,6 +416,7 @@ export default function DashboardClient() {
           currentMood={todaysMood}
           onMoodChange={handleMoodCardChange}
           isUpdating={isMoodUpdating}
+          recentMoods={data.moodData.slice(-7).map(m => m.value)}
         />
 
         <StatTile
@@ -414,6 +425,22 @@ export default function DashboardClient() {
           icon={<TrendingUp className="h-4 w-4" />}
           label="This Week"
           value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
+          footer={(() => {
+            const pct = weeklyAvailability > 0
+              ? Math.min(100, Math.round((data.stats.thisWeekWorkouts / weeklyAvailability) * 100))
+              : 0
+            const remaining = Math.max(0, weeklyAvailability - data.stats.thisWeekWorkouts)
+            return (
+              <div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div className="h-full rounded-full bg-green-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+                  {remaining === 0 ? 'Weekly goal hit 🎉' : `${remaining} to weekly goal`}
+                </p>
+              </div>
+            )
+          })()}
         />
 
         <StatTile
@@ -421,6 +448,19 @@ export default function DashboardClient() {
           icon={<Target className="h-4 w-4" />}
           label="Goal"
           value={`${data.stats.goalProgress}%`}
+          footer={(() => {
+            const pct = Math.min(100, Math.max(0, data.stats.goalProgress))
+            return (
+              <div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                  <div className="h-full rounded-full bg-purple-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                </div>
+                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+                  {pct >= 100 ? 'Annual goal hit 🎯' : 'Annual goal'}
+                </p>
+              </div>
+            )
+          })()}
         />
       </div>
 
