@@ -5,6 +5,7 @@ import { Wind, Timer, Play, Pause, RotateCcw, CheckCircle2, X, ChevronRight } fr
 import { motion, AnimatePresence } from 'framer-motion'
 import { getPiecesBySection, type ContentPiece } from '@/lib/mindContent'
 import HorizontalScroll from '@/components/mind/HorizontalScroll'
+import { Card, type CardAccent } from '@/components/ui'
 
 // ─── Breathing protocols ───────────────────────────────────────────────────────
 
@@ -19,9 +20,12 @@ interface Protocol {
   name: string
   tagline: string
   bestFor: string
-  accent: string
-  border: string
-  bg: string
+  /** Tailwind text color for the icon badge */
+  iconColor: string
+  /** Tailwind bg for the icon badge container */
+  iconBg: string
+  /** Status accent for the Card primitive (left stripe) */
+  cardAccent: CardAccent
   phases: BreathPhase[]
   rounds: number
 }
@@ -32,9 +36,9 @@ const PROTOCOLS: Protocol[] = [
     name: 'Physiological Sigh',
     tagline: 'Stanford neuroscience',
     bestFor: 'Instant stress relief',
-    accent: 'text-emerald-400',
-    border: 'border-emerald-500/30',
-    bg: 'bg-emerald-500/5',
+    iconColor: 'text-emerald-500',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/30',
+    cardAccent: 'success',
     rounds: 3,
     phases: [
       { label: 'Inhale', durationMs: 2000, instruction: 'Breathe in through your nose' },
@@ -47,9 +51,9 @@ const PROTOCOLS: Protocol[] = [
     name: 'Box Breathing',
     tagline: 'Navy SEAL standard',
     bestFor: 'Stress & pre-performance',
-    accent: 'text-blue-400',
-    border: 'border-blue-500/30',
-    bg: 'bg-blue-500/5',
+    iconColor: 'text-blue-500',
+    iconBg: 'bg-blue-100 dark:bg-blue-900/30',
+    cardAccent: 'info',
     rounds: 4,
     phases: [
       { label: 'Inhale', durationMs: 4000, instruction: 'Breathe in slowly through your nose' },
@@ -63,9 +67,9 @@ const PROTOCOLS: Protocol[] = [
     name: '4-7-8',
     tagline: 'Dr. Andrew Weil',
     bestFor: 'Deep calm & sleep',
-    accent: 'text-violet-400',
-    border: 'border-violet-500/30',
-    bg: 'bg-violet-500/5',
+    iconColor: 'text-violet-500',
+    iconBg: 'bg-violet-100 dark:bg-violet-900/30',
+    cardAccent: 'warning',
     rounds: 4,
     phases: [
       { label: 'Inhale', durationMs: 4000, instruction: 'Breathe in quietly through your nose' },
@@ -96,7 +100,7 @@ function ProtocolModal({ piece, onClose }: { piece: ContentPiece; onClose: () =>
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full rounded-t-3xl bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-5 pt-5 pb-10"
+          className="w-full rounded-t-2xl bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-5 pt-5 pb-10"
         >
           {/* Handle */}
           <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-zinc-300 dark:bg-zinc-700" />
@@ -265,7 +269,7 @@ function FocusRow() {
   const progress = running || done ? 1 - remaining / selectedSeconds : 0
 
   return (
-    <div className="shrink-0 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-3">
+    <Card className="shrink-0">
       <div className="mb-2.5 flex items-center gap-1.5">
         <Timer className="h-3.5 w-3.5 text-zinc-400" />
         <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Focus Mode</p>
@@ -337,7 +341,7 @@ function FocusRow() {
           />
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -364,28 +368,32 @@ export default function StateShiftTab() {
       <div className="flex h-full flex-col gap-4 overflow-hidden">
 
         {/* ── Hero: fastest reset ──────────────────────────────────────── */}
-        <button
+        <Card
+          as="button"
+          variant="hero"
           onClick={() => setActiveSession(PROTOCOLS[0])}
-          className="group relative shrink-0 overflow-hidden rounded-2xl bg-zinc-900 dark:bg-zinc-800 border border-zinc-800 dark:border-zinc-700 p-5 text-left"
+          className="group relative shrink-0 overflow-hidden bg-zinc-900 dark:bg-zinc-800 border-zinc-800 dark:border-zinc-700 text-left"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
-          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-emerald-500">
-            Fastest Reset Available
-          </p>
-          <p className="text-xl font-bold text-white leading-tight mb-1">
-            Physiological Sigh
-          </p>
-          <p className="text-sm text-zinc-400 mb-4">
-            Double inhale + long exhale. 3 cycles. Proven to drop stress in 60 seconds.
-          </p>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5">
-              <Wind className="h-4 w-4 text-white" />
-              <span className="text-sm font-bold text-white">Start Now</span>
+          <div className="relative">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-emerald-500">
+              Fastest Reset Available
+            </p>
+            <p className="text-xl font-bold text-white leading-tight mb-1">
+              Physiological Sigh
+            </p>
+            <p className="text-sm text-zinc-400 mb-4">
+              Double inhale + long exhale. 3 cycles. Proven to drop stress in 60 seconds.
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5">
+                <Wind className="h-4 w-4 text-white" />
+                <span className="text-sm font-bold text-white">Start Now</span>
+              </div>
+              <span className="text-xs text-zinc-500">~60 seconds</span>
             </div>
-            <span className="text-xs text-zinc-500">~60 seconds</span>
           </div>
-        </button>
+        </Card>
 
         {/* ── Protocols ───────────────────────────────────────────────── */}
         <div className="shrink-0">
@@ -394,10 +402,11 @@ export default function StateShiftTab() {
           </p>
           <HorizontalScroll>
             {QUICK_PROTOCOLS.map((p) => (
-              <button
+              <Card
                 key={p.id}
+                as="button"
                 onClick={() => setActiveProtocol(p)}
-                className="flex w-[200px] shrink-0 flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left"
+                className="flex w-[200px] shrink-0 flex-col justify-between text-left"
               >
                 <div>
                   <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 mb-1.5">{p.source}</p>
@@ -407,7 +416,7 @@ export default function StateShiftTab() {
                   <span>Read</span>
                   <ChevronRight className="h-3 w-3" />
                 </div>
-              </button>
+              </Card>
             ))}
           </HorizontalScroll>
         </div>
@@ -419,18 +428,22 @@ export default function StateShiftTab() {
           </p>
           <HorizontalScroll>
             {PROTOCOLS.map((p) => (
-              <button
+              <Card
                 key={p.id}
+                as="button"
+                accent={p.cardAccent}
                 onClick={() => setActiveSession(p)}
-                className={`flex w-[170px] shrink-0 flex-col gap-3 rounded-2xl border ${p.border} ${p.bg} p-4 text-left`}
+                className="flex w-[170px] shrink-0 flex-col gap-3 text-left"
               >
-                <Wind className={`h-5 w-5 ${p.accent}`} />
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${p.iconBg}`}>
+                  <Wind className={`h-4 w-4 ${p.iconColor}`} />
+                </div>
                 <div>
-                  <p className={`text-sm font-bold ${p.accent} leading-tight`}>{p.name}</p>
+                  <p className={`text-sm font-bold ${p.iconColor} leading-tight`}>{p.name}</p>
                   <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{p.tagline}</p>
                 </div>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-500">{p.rounds} rounds · {p.bestFor}</p>
-              </button>
+              </Card>
             ))}
           </HorizontalScroll>
         </div>

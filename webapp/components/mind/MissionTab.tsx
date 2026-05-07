@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { BookOpen, Edit2, CheckCircle2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import { getPiecesBySection } from '@/lib/mindContent'
+import { Card } from '@/components/ui'
 
 interface Mission {
   purpose: string
@@ -73,7 +74,7 @@ export default function MissionTab() {
   return (
     <div className="space-y-5">
       {/* Header context */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="flex items-start gap-3">
           <BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" />
           <div>
@@ -83,12 +84,12 @@ export default function MissionTab() {
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Mission display or form */}
       {mission && !editing ? (
         <>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+          <Card>
             <div className="mb-4 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Your Purpose</p>
               <button onClick={() => setEditing(true)} className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors">
@@ -104,21 +105,26 @@ export default function MissionTab() {
               {mission.whyItMatters}
             </p>
 
-            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 p-4">
+            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
               <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Daily Action</p>
               <p className="text-sm font-semibold text-zinc-900 dark:text-white">{mission.dailyAction}</p>
             </div>
-          </div>
+          </Card>
 
           {saved && (
-            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-              <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Mission saved.</span>
-            </div>
+            <Card
+              accent="success"
+              className="!border-emerald-200 !bg-emerald-50 dark:!border-emerald-900/40 dark:!bg-emerald-950/20"
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Mission saved.</span>
+              </div>
+            </Card>
           )}
         </>
       ) : (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <Card>
           <p className="mb-4 text-sm font-semibold text-zinc-900 dark:text-white">
             {mission ? 'Update your mission' : 'Define your mission'}
           </p>
@@ -184,7 +190,7 @@ export default function MissionTab() {
               )}
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Mission protocols */}
@@ -198,17 +204,17 @@ const MISSION_PROTOCOLS = getPiecesBySection('mission')
 function MissionProtocols() {
   const [expanded, setExpanded] = useState<string | null>(null)
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <Card>
       <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
         Mission Protocols
       </p>
       <p className="mb-4 text-sm text-zinc-500">Clarity exercises. Use when you feel scattered or lost.</p>
-      <div className="space-y-2">
+      <div className="-mx-3 sm:-mx-4 -mb-3 sm:-mb-4 divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-zinc-200 dark:border-zinc-800">
         {MISSION_PROTOCOLS.map((p) => (
-          <div key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+          <div key={p.id}>
             <button
               onClick={() => setExpanded(expanded === p.id ? null : p.id)}
-              className="flex w-full items-center justify-between p-4 text-left"
+              className="flex w-full items-center justify-between px-3 py-2.5 text-left"
             >
               <div>
                 <p className="text-sm font-bold text-zinc-900 dark:text-white">{p.title}</p>
@@ -217,16 +223,18 @@ function MissionProtocols() {
               <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === p.id ? '−' : '+'}</span>
             </button>
             {expanded === p.id && (
-              <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 bg-zinc-50 dark:bg-zinc-800/30">
-                <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-3">
-                  &ldquo;{p.mantra}&rdquo;
-                </p>
-                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+              <div className="px-3 pb-3 pt-1">
+                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
+                  <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-2">
+                    &ldquo;{p.mantra}&rdquo;
+                  </p>
+                  <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+                </div>
               </div>
             )}
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Flame, RefreshCw, CheckCircle2, Plus, ArrowRight } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import { getPiecesBySection } from '@/lib/mindContent'
+import { Card } from '@/components/ui'
 
 // ─── Identity statement pools ──────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function EvidenceBuilder() {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <Card>
       <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
         Evidence Builder
       </p>
@@ -79,12 +80,12 @@ function EvidenceBuilder() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && logWin()}
           placeholder="I did..."
-          className="flex-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+          className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-2.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
         />
         <button
           onClick={logWin}
           disabled={saving || input.trim().length < 3}
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 disabled:opacity-40 transition-opacity"
+          className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 disabled:opacity-40 transition-opacity"
         >
           {saved ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <Plus className="h-4 w-4" />}
         </button>
@@ -92,7 +93,7 @@ function EvidenceBuilder() {
       {wins.length > 0 && (
         <WinsList wins={wins} />
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -101,7 +102,7 @@ function WinsList({ wins }: { wins: Array<{ win: string }> }) {
   return (
     <div className="space-y-2">
       {wins.slice(0, shown).map((w, i) => (
-        <div key={i} className="flex items-start gap-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
+        <div key={i} className="flex items-start gap-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
           <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
           <p className="text-sm text-zinc-700 dark:text-zinc-300">{w.win}</p>
         </div>
@@ -109,7 +110,7 @@ function WinsList({ wins }: { wins: Array<{ win: string }> }) {
       {wins.length > 5 && (
         <button
           onClick={() => setShown(n => n > 5 ? 5 : n + 5)}
-          className="mt-1 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="mt-1 w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
         >
           {shown >= wins.length ? 'Show less' : `Show more (${wins.length - shown} remaining)`}
         </button>
@@ -133,22 +134,22 @@ function RewriteStory() {
 
   if (step === 4) {
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Rewrite the Story</p>
-        <div className="my-4 rounded-xl bg-zinc-900 p-4">
+        <div className="my-4 rounded-lg bg-zinc-900 p-3">
           <p className="text-xs text-zinc-500 mb-1">Your new story</p>
           <p className="text-base font-bold text-white leading-snug">{newStory}</p>
         </div>
         <p className="mb-4 text-sm text-zinc-500">That&apos;s the story you operate from now. Read it when the old one comes back.</p>
-        <button onClick={reset} className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+        <button onClick={reset} className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
           Rewrite another
         </button>
-      </div>
+      </Card>
     )
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <Card>
       <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">Rewrite the Story</p>
       <p className="mb-4 text-sm text-zinc-500">The story you believe about yourself becomes true. Change the story, change the outcome.</p>
 
@@ -160,9 +161,9 @@ function RewriteStory() {
             onChange={(e) => setBelief(e.target.value)}
             placeholder="e.g. I always quit when it gets hard"
             rows={2}
-            className="mb-3 w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+            className="mb-3 w-full resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
           />
-          <button onClick={() => setStep(1)} disabled={belief.trim().length < 5} className="flex items-center gap-2 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
+          <button onClick={() => setStep(1)} disabled={belief.trim().length < 5} className="flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
             Next <ArrowRight className="h-4 w-4" />
           </button>
         </>
@@ -170,7 +171,7 @@ function RewriteStory() {
 
       {step === 1 && (
         <>
-          <div className="mb-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
+          <div className="mb-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2.5">
             <p className="text-xs text-zinc-500">Your belief</p>
             <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{belief}</p>
           </div>
@@ -180,9 +181,9 @@ function RewriteStory() {
             onChange={(e) => setOpposite(e.target.value)}
             placeholder="e.g. I push through when it gets hard"
             rows={2}
-            className="mb-3 w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+            className="mb-3 w-full resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
           />
-          <button onClick={() => setStep(2)} disabled={opposite.trim().length < 5} className="flex items-center gap-2 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
+          <button onClick={() => setStep(2)} disabled={opposite.trim().length < 5} className="flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
             Next <ArrowRight className="h-4 w-4" />
           </button>
         </>
@@ -197,9 +198,9 @@ function RewriteStory() {
             onChange={(e) => setEvidence(e.target.value)}
             placeholder="e.g. I finished that 6-week program even when I wanted to quit"
             rows={2}
-            className="mb-3 w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+            className="mb-3 w-full resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
           />
-          <button onClick={() => setStep(3)} disabled={evidence.trim().length < 5} className="flex items-center gap-2 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
+          <button onClick={() => setStep(3)} disabled={evidence.trim().length < 5} className="flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
             Next <ArrowRight className="h-4 w-4" />
           </button>
         </>
@@ -213,14 +214,14 @@ function RewriteStory() {
             onChange={(e) => setNewStory(e.target.value)}
             placeholder="e.g. I am someone who finishes what I start, even when it's hard"
             rows={2}
-            className="mb-3 w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+            className="mb-3 w-full resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
           />
-          <button onClick={() => setStep(4)} disabled={newStory.trim().length < 5} className="flex items-center gap-2 rounded-xl bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
+          <button onClick={() => setStep(4)} disabled={newStory.trim().length < 5} className="flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-white px-4 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40">
             Lock it in <CheckCircle2 className="h-4 w-4" />
           </button>
         </>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -258,7 +259,7 @@ export default function SelfImageTab({ streak = 0 }: Props) {
   return (
     <div className="space-y-5">
       {/* Daily identity statement */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Today&apos;s Identity Statement
@@ -279,15 +280,15 @@ export default function SelfImageTab({ streak = 0 }: Props) {
           <button
             onClick={handleAffirm}
             disabled={affirming}
-            className="rounded-xl bg-zinc-900 dark:bg-white px-5 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 transition-opacity disabled:opacity-60"
+            className="rounded-lg bg-zinc-900 dark:bg-white px-5 py-2.5 text-sm font-semibold text-white dark:text-zinc-900 transition-opacity disabled:opacity-60"
           >
             {affirming ? 'Affirming...' : 'This is me — I affirm this'}
           </button>
         )}
-      </div>
+      </Card>
 
       {/* Streak tier */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="flex items-center gap-3">
           <Flame className={`h-6 w-6 ${streakColor}`} />
           <div>
@@ -295,20 +296,20 @@ export default function SelfImageTab({ streak = 0 }: Props) {
             <p className="text-xs text-zinc-500">{streak} day streak — your identity is being built in real time</p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Identity protocols from content library */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
           Identity Protocols
         </p>
         <p className="mb-4 text-sm text-zinc-500">Expand any protocol. Read the mantra. Do the instruction.</p>
-        <div className="space-y-2">
+        <div className="-mx-3 sm:-mx-4 -mb-3 sm:-mb-4 divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-zinc-200 dark:border-zinc-800">
           {IDENTITY_PROTOCOLS.map((p) => (
-            <div key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div key={p.id}>
               <button
                 onClick={() => setExpandedProtocol(expandedProtocol === p.id ? null : p.id)}
-                className="flex w-full items-center justify-between p-4 text-left"
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left"
               >
                 <div>
                   <p className="text-sm font-semibold text-zinc-900 dark:text-white">{p.title}</p>
@@ -317,17 +318,19 @@ export default function SelfImageTab({ streak = 0 }: Props) {
                 <span className="text-zinc-400 text-lg ml-2 shrink-0">{expandedProtocol === p.id ? '−' : '+'}</span>
               </button>
               {expandedProtocol === p.id && (
-                <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 bg-zinc-50 dark:bg-zinc-800/30">
-                  <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-3">
-                    &ldquo;{p.mantra}&rdquo;
-                  </p>
-                  <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+                <div className="px-3 pb-3 pt-1">
+                  <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
+                    <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-2">
+                      &ldquo;{p.mantra}&rdquo;
+                    </p>
+                    <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+                  </div>
                 </div>
               )}
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
       {/* Rewrite the Story */}
       <RewriteStory />

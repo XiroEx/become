@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Users, ChevronRight } from 'lucide-react'
+import { Users } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 // ─── Content ───────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ function ConversationStarters() {
           <button
             key={c.category}
             onClick={() => { setCategory(i); setPromptIdx(0) }}
-            className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-all ${
+            className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
               category === i
                 ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
                 : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
@@ -96,14 +97,14 @@ function ConversationStarters() {
           </button>
         ))}
       </div>
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-4">
+      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
         <p className="text-base font-semibold leading-snug text-zinc-900 dark:text-white">
           &ldquo;{prompt}&rdquo;
         </p>
       </div>
       <button
         onClick={next}
-        className="mt-3 w-full rounded-xl border border-zinc-200 dark:border-zinc-700 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 transition-all"
+        className="mt-3 w-full rounded-lg border border-zinc-200 dark:border-zinc-700 py-2.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 transition-all"
       >
         Next prompt
       </button>
@@ -115,18 +116,18 @@ function PerspectiveShifts() {
   const [expanded, setExpanded] = useState<number | null>(0)
 
   return (
-    <div className="space-y-3">
+    <div className="-mx-3 sm:-mx-4 divide-y divide-zinc-200 dark:divide-zinc-800 border-y border-zinc-200 dark:border-zinc-800">
       {PERSPECTIVE_CARDS.map((c, i) => (
-        <div key={i} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <div key={i}>
           <button
             onClick={() => setExpanded(expanded === i ? null : i)}
-            className="flex w-full items-center justify-between p-4 text-left"
+            className="flex w-full items-center justify-between px-3 py-2.5 text-left"
           >
             <span className="text-sm font-semibold text-zinc-900 dark:text-white pr-2">{c.title}</span>
             <span className="text-zinc-400 text-lg shrink-0">{expanded === i ? '−' : '+'}</span>
           </button>
           {expanded === i && (
-            <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3">
+            <div className="px-3 pb-3 pt-1">
               <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{c.body}</p>
             </div>
           )}
@@ -148,39 +149,41 @@ function AccountabilityActions() {
       <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
         One action to strengthen your environment today.
       </p>
-      {ACCOUNTABILITY_PROMPTS.map((p, i) => {
-        const isToday = i === todayIdx
-        const done = dismissed.includes(i)
-        return (
-          <div
-            key={i}
-            className={`mb-3 rounded-xl border p-4 ${
-              isToday
-                ? 'border-zinc-700 bg-zinc-900'
-                : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
-            } ${done ? 'opacity-50' : ''}`}
-          >
-            <div className="flex items-start gap-3">
-              <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${isToday ? 'bg-white' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
-              <p className={`flex-1 text-sm ${isToday ? 'font-semibold text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                {p}
-              </p>
-              {!done && (
-                <button
-                  onClick={() => setDismissed((d) => [...d, i])}
-                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                    isToday
-                      ? 'bg-white/10 text-white hover:bg-white/20'
-                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  Done
-                </button>
-              )}
+      <div className="space-y-2">
+        {ACCOUNTABILITY_PROMPTS.map((p, i) => {
+          const isToday = i === todayIdx
+          const done = dismissed.includes(i)
+          return (
+            <div
+              key={i}
+              className={`rounded-lg p-3 ${
+                isToday
+                  ? 'bg-zinc-900'
+                  : 'bg-zinc-50 dark:bg-zinc-800/50'
+              } ${done ? 'opacity-50' : ''}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${isToday ? 'bg-white' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+                <p className={`flex-1 text-sm ${isToday ? 'font-semibold text-white' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                  {p}
+                </p>
+                {!done && (
+                  <button
+                    onClick={() => setDismissed((d) => [...d, i])}
+                    className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      isToday
+                        ? 'bg-white/10 text-white hover:bg-white/20'
+                        : 'bg-zinc-200/70 dark:bg-zinc-700/70 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -201,7 +204,7 @@ export default function SocialTab() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="flex items-start gap-3">
           <Users className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" />
           <div>
@@ -211,17 +214,17 @@ export default function SocialTab() {
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Section toggle */}
-      <div className="flex rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 p-1">
+      <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1">
         {sections.map((s) => (
           <button
             key={s.id}
             onClick={() => setSection(s.id)}
-            className={`flex-1 rounded-xl py-2.5 text-xs font-semibold transition-all ${
+            className={`flex-1 rounded-md py-2 text-xs font-semibold transition-all ${
               section === s.id
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-sm'
                 : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
           >
@@ -231,11 +234,11 @@ export default function SocialTab() {
       </div>
 
       {/* Content */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         {section === 'conversation' && <ConversationStarters />}
         {section === 'perspective' && <PerspectiveShifts />}
         {section === 'accountability' && <AccountabilityActions />}
-      </div>
+      </Card>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { CheckCircle2, MessageSquare, Thermometer, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import { getPiecesBySection } from '@/lib/mindContent'
+import { Card } from '@/components/ui'
 
 interface DisciplineChallenge {
   _id: string
@@ -21,17 +22,17 @@ const DISCIPLINE_PROTOCOLS = getPiecesBySection('discipline')
 function DisciplineModes() {
   const [expanded, setExpanded] = useState<string | null>(null)
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <Card>
       <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
         Discipline Protocols
       </p>
       <p className="mb-4 text-sm text-zinc-500">When motivation fails, these don&apos;t.</p>
-      <div className="space-y-2">
+      <div className="-mx-3 sm:-mx-4 -mb-3 sm:-mb-4 divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-zinc-200 dark:border-zinc-800">
         {DISCIPLINE_PROTOCOLS.map((p) => (
-          <div key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+          <div key={p.id}>
             <button
               onClick={() => setExpanded(expanded === p.id ? null : p.id)}
-              className="flex w-full items-center justify-between p-4 text-left"
+              className="flex w-full items-center justify-between px-3 py-2.5 text-left"
             >
               <div>
                 <p className="text-sm font-bold text-zinc-900 dark:text-white">{p.title}</p>
@@ -40,17 +41,19 @@ function DisciplineModes() {
               <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === p.id ? '−' : '+'}</span>
             </button>
             {expanded === p.id && (
-              <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 bg-zinc-50 dark:bg-zinc-800/30">
-                <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-3">
-                  &ldquo;{p.mantra}&rdquo;
-                </p>
-                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+              <div className="px-3 pb-3 pt-1">
+                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
+                  <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-2">
+                    &ldquo;{p.mantra}&rdquo;
+                  </p>
+                  <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+                </div>
               </div>
             )}
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -148,7 +151,7 @@ export default function DisciplineTab() {
   return (
     <div className="space-y-5">
       {/* Daily challenge */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="mb-1 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Daily Challenge
@@ -164,7 +167,7 @@ export default function DisciplineTab() {
             </p>
 
             {challenge.completed ? (
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-4 py-3">
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 px-3 py-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                 <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                   Done. You earned this one.
@@ -172,12 +175,12 @@ export default function DisciplineTab() {
               </div>
             ) : challenge.excuse ? (
               <div className="space-y-3">
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-3">
+                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
                   <p className="text-xs text-zinc-500 mb-1">Your excuse</p>
                   <p className="text-sm text-zinc-700 dark:text-zinc-300 italic">&ldquo;{challenge.excuse}&rdquo;</p>
                 </div>
                 {(excuseResponse || challenge.excuseResponse) && (
-                  <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-4">
+                  <div className="rounded-lg bg-zinc-900 p-3">
                     <p className="text-xs text-zinc-500 mb-2">Response</p>
                     <p className="text-sm font-semibold text-white">
                       {excuseResponse || challenge.excuseResponse}
@@ -187,7 +190,7 @@ export default function DisciplineTab() {
                 <button
                   onClick={markComplete}
                   disabled={submitting}
-                  className="w-full rounded-xl bg-zinc-900 dark:bg-white py-3 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
+                  className="w-full rounded-lg bg-zinc-900 dark:bg-white py-3 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
                 >
                   {submitting ? 'Saving...' : 'I did it anyway — mark complete'}
                 </button>
@@ -199,13 +202,13 @@ export default function DisciplineTab() {
                     <button
                       onClick={markComplete}
                       disabled={submitting}
-                      className="flex-1 rounded-xl bg-zinc-900 dark:bg-white py-3 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
+                      className="flex-1 rounded-lg bg-zinc-900 dark:bg-white py-3 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
                     >
                       {submitting ? 'Saving...' : 'Done — I completed this'}
                     </button>
                     <button
                       onClick={() => setMode('excuse')}
-                      className="flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3 text-xs font-semibold text-zinc-500 hover:border-zinc-400"
+                      className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-3 text-xs font-semibold text-zinc-500 hover:border-zinc-400"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                       Excuse
@@ -223,19 +226,19 @@ export default function DisciplineTab() {
                       onChange={(e) => setExcuseText(e.target.value)}
                       placeholder="I couldn't do it because..."
                       rows={3}
-                      className="w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+                      className="w-full resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={submitExcuse}
                         disabled={submitting || excuseText.trim().length < 5}
-                        className="flex-1 rounded-xl bg-zinc-900 dark:bg-white py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
+                        className="flex-1 rounded-lg bg-zinc-900 dark:bg-white py-2.5 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
                       >
                         {submitting ? 'Submitting...' : 'Submit excuse'}
                       </button>
                       <button
                         onClick={() => setMode('challenge')}
-                        className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-sm text-zinc-500"
+                        className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2.5 text-sm text-zinc-500"
                       >
                         Back
                       </button>
@@ -248,13 +251,13 @@ export default function DisciplineTab() {
         ) : (
           <p className="text-sm text-zinc-500">No challenge available for today.</p>
         )}
-      </div>
+      </Card>
 
       {/* Discipline Modes */}
       <DisciplineModes />
 
       {/* Cold Mode */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="mb-2 flex items-center gap-2">
           <Thermometer className="h-4 w-4 text-blue-400" />
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
@@ -271,7 +274,7 @@ export default function DisciplineTab() {
             <button
               key={s}
               onClick={() => { setColdSeconds(s); setColdRemaining(s); setColdActive(false) }}
-              className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-all ${
+              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
                 coldSeconds === s
                   ? 'bg-blue-500 text-white'
                   : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
@@ -311,7 +314,7 @@ export default function DisciplineTab() {
               <p className="mb-3 text-sm font-semibold text-blue-400">Stay in. Don&apos;t move.</p>
               <button
                 onClick={() => { setColdActive(false); setColdRemaining(coldSeconds) }}
-                className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-2 text-xs text-zinc-500"
+                className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2 text-xs text-zinc-500"
               >
                 Reset
               </button>
@@ -321,7 +324,7 @@ export default function DisciplineTab() {
               <p className="mb-3 text-sm font-semibold text-emerald-500">Done. That&apos;s discipline.</p>
               <button
                 onClick={() => setColdRemaining(coldSeconds)}
-                className="rounded-xl bg-zinc-100 dark:bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-700 dark:text-zinc-300"
+                className="rounded-lg bg-zinc-100 dark:bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-700 dark:text-zinc-300"
               >
                 Reset
               </button>
@@ -329,13 +332,13 @@ export default function DisciplineTab() {
           ) : (
             <button
               onClick={startCold}
-              className="rounded-xl bg-blue-500 px-6 py-2.5 text-sm font-semibold text-white"
+              className="rounded-lg bg-blue-500 px-6 py-2.5 text-sm font-semibold text-white"
             >
               Start Cold Timer
             </button>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
