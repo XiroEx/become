@@ -189,7 +189,7 @@ export default function ExerciseLibraryClient() {
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-            Exercise Library
+            My Exercises
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Your custom exercises — use them in any workout or program.
