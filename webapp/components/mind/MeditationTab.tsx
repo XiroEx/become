@@ -18,6 +18,7 @@ import {
   Calendar,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { Card } from '@/components/ui'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -330,7 +331,7 @@ function StatCard({
   label: string
 }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
+    <Card variant="compact" className="flex items-center gap-2.5 sm:gap-3">
       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg} sm:h-10 sm:w-10`}>
         <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${iconColor}`} />
       </div>
@@ -340,7 +341,7 @@ function StatCard({
         </p>
         <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -357,16 +358,17 @@ function CategoryCard({
 }) {
   const { Icon, colorClass, bgClass } = cat
   return (
-    <button
+    <Card
+      as="button"
       onClick={() => onSelect(cat)}
-      className="group relative flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all active:scale-[0.98]"
+      className="group relative flex flex-col gap-3 text-left hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors active:scale-[0.98]"
     >
       {completedToday && (
         <span className="absolute right-3 top-3">
           <CheckCircle2 className="h-4 w-4 text-emerald-500" />
         </span>
       )}
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${bgClass}`}>
+      <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${bgClass}`}>
         <Icon className={`h-5 w-5 ${colorClass}`} />
       </div>
       <div className="min-w-0">
@@ -386,7 +388,7 @@ function CategoryCard({
           </span>
         ))}
       </div>
-    </button>
+    </Card>
   )
 }
 
@@ -419,10 +421,10 @@ function SessionPicker({
         <span>←</span> All practices
       </button>
 
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         {/* Category header */}
         <div className="mb-5 flex items-start gap-4">
-          <div className={`mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${bgClass}`}>
+          <div className={`mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border ${bgClass}`}>
             <Icon className={`h-6 w-6 ${colorClass}`} />
           </div>
           <div>
@@ -440,7 +442,7 @@ function SessionPicker({
         </p>
 
         {/* Best for */}
-        <div className="mb-5 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3">
+        <div className="mb-5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1">
             Best for
           </p>
@@ -457,7 +459,7 @@ function SessionPicker({
               <button
                 key={d}
                 onClick={() => setSelectedDuration(d)}
-                className={`flex-1 rounded-xl border-2 py-3 text-sm font-semibold transition-all ${
+                className={`flex-1 rounded-lg border py-3 text-sm font-semibold transition-all ${
                   selectedDuration === d
                     ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
                     : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-500'
@@ -478,7 +480,7 @@ function SessionPicker({
             onStart(cat, selectedDuration, audioCtx)
           }}
           disabled={!selectedDuration}
-          className={`mt-4 w-full rounded-xl py-3.5 text-sm font-bold transition-all ${
+          className={`mt-4 w-full rounded-lg py-3.5 text-sm font-bold transition-all ${
             selectedDuration
               ? 'bg-zinc-900 text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 active:scale-[0.98]'
               : 'cursor-not-allowed bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
@@ -486,7 +488,7 @@ function SessionPicker({
         >
           Begin Session
         </button>
-      </div>
+      </Card>
     </div>
   )
 }
@@ -833,8 +835,8 @@ function SessionComplete({
   return (
     <div className="space-y-4">
       {/* Hero */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10">
+      <Card className="text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10">
           <CheckCircle2 className="h-8 w-8 text-emerald-500" />
         </div>
         <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">Session Complete</h2>
@@ -844,28 +846,28 @@ function SessionComplete({
         <p className="mt-4 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
           Your nervous system is thanking you. Consistency here compounds — every session trains your mind to find calm faster.
         </p>
-      </div>
+      </Card>
 
       {/* Updated stats */}
       {stats && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-center">
+          <Card variant="compact" className="text-center">
             <Flame className="mx-auto mb-1 h-4 w-4 text-orange-400" />
             <p className="text-xl font-bold text-zinc-900 dark:text-white">{stats.streakDays}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">day streak</p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-center">
+          </Card>
+          <Card variant="compact" className="text-center">
             <Clock className="mx-auto mb-1 h-4 w-4 text-blue-400" />
             <p className="text-xl font-bold text-zinc-900 dark:text-white">
               {formatMinutes(stats.totalMinutes)}
             </p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">total time</p>
-          </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 text-center">
+          </Card>
+          <Card variant="compact" className="text-center">
             <TrendingUp className="mx-auto mb-1 h-4 w-4 text-violet-400" />
             <p className="text-xl font-bold text-zinc-900 dark:text-white">{stats.totalSessions}</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">sessions</p>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -873,13 +875,13 @@ function SessionComplete({
       <div className="flex flex-col gap-3">
         <button
           onClick={onAnother}
-          className="w-full rounded-xl bg-zinc-900 py-3.5 text-sm font-bold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition-all active:scale-[0.98]"
+          className="w-full rounded-lg bg-zinc-900 py-3.5 text-sm font-bold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 transition-all active:scale-[0.98]"
         >
           Start Another Session
         </button>
         <button
           onClick={onDone}
-          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 py-3.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
+          className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 py-3.5 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-all"
         >
           Done for now
         </button>
@@ -1042,12 +1044,13 @@ export default function MeditationTab() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
           Recommended now
         </p>
-        <button
+        <Card
+          as="button"
           onClick={() => { setSelectedCat(recommendation); setView('pick') }}
-          className="w-full rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm transition-all active:scale-[0.99]"
+          className="w-full text-left hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors active:scale-[0.99]"
         >
           <div className="flex items-start gap-3">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${recommendation.bgClass}`}>
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border ${recommendation.bgClass}`}>
               <recommendation.Icon className={`h-5 w-5 ${recommendation.colorClass}`} />
             </div>
             <div className="flex-1 min-w-0">
@@ -1063,7 +1066,7 @@ export default function MeditationTab() {
               </p>
             </div>
           </div>
-        </button>
+        </Card>
       </div>
 
       {/* All practices */}
@@ -1089,19 +1092,21 @@ export default function MeditationTab() {
           <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
             Recent sessions
           </p>
-          <div className="divide-y divide-zinc-100 dark:divide-zinc-800 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
-            {sessions.slice(0, 7).map((s) => (
-              <div key={s._id} className="flex items-center justify-between px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">{s.categoryName}</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatDate(s.completedAt)}</p>
+          <Card className="!p-0 overflow-hidden">
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {sessions.slice(0, 7).map((s) => (
+                <div key={s._id} className="flex items-center justify-between px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">{s.categoryName}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatDate(s.completedAt)}</p>
+                  </div>
+                  <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
+                    {s.durationMinutes}m
+                  </span>
                 </div>
-                <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">
-                  {s.durationMinutes}m
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </Card>
         </div>
       )}
     </div>

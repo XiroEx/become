@@ -58,7 +58,7 @@ export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, c
           exit={{ y: '100%' }}
           transition={{ type: 'spring', damping: 28, stiffness: 280 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full rounded-t-3xl bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-5 pt-5 pb-10"
+          className="w-full rounded-t-2xl bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-5 pt-5 pb-10"
         >
           {/* Handle */}
           <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-zinc-300 dark:bg-zinc-700" />
@@ -84,25 +84,28 @@ export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, c
           </p>
 
           {/* What unlocks */}
-          <div className={`mb-6 rounded-2xl border ${nextChapter.border} ${nextChapter.bg} p-4`}>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
-              New Systems
-            </p>
-            <div className="space-y-2">
-              {nextChapter.systems.map((sysId) => {
-                const info = SYSTEM_INFO[sysId]
-                return (
-                  <div key={sysId} className="flex items-center gap-3">
-                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${info.iconBg}`}>
-                      <ChevronRight className={`h-4 w-4 ${info.color}`} />
+          <div className={`relative mb-6 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 sm:p-4`}>
+            <div className={`pointer-events-none absolute inset-0 ${nextChapter.bg}`} />
+            <div className="relative">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">
+                New Systems
+              </p>
+              <div className="space-y-2">
+                {nextChapter.systems.map((sysId) => {
+                  const info = SYSTEM_INFO[sysId]
+                  return (
+                    <div key={sysId} className="flex items-center gap-3">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${info.iconBg}`}>
+                        <ChevronRight className={`h-4 w-4 ${info.color}`} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-zinc-900 dark:text-white">{info.label}</p>
+                        <p className="text-xs text-zinc-500">{info.hook}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-zinc-900 dark:text-white">{info.label}</p>
-                      <p className="text-xs text-zinc-500">{info.hook}</p>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
 
@@ -124,7 +127,7 @@ export default function MindLevelUpModal({ currentChapter, xp, readyToLevelUp, c
           <button
             onClick={blocked ? onClose : handleLevelUp}
             disabled={loading}
-            className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold disabled:opacity-50 transition-opacity ${
+            className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold disabled:opacity-50 transition-opacity ${
               blocked
                 ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
                 : 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'

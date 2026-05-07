@@ -14,6 +14,7 @@ import {
   CHAPTERS, SYSTEM_INFO, getXpToNextChapter, isReadyToLevelUp, getUnlockedSystems,
   type XpMilestone,
 } from '@/lib/mindXP'
+import { Card } from '@/components/ui'
 
 export type SectionId =
   | 'home' | 'state-shift' | 'self-image' | 'mission'
@@ -187,7 +188,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
   if (showOnboarding) {
     return (
       <div>
-        <div className="mb-6 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5">
+        <Card className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-2">Before anything else</p>
           <p className="text-lg font-bold text-zinc-900 dark:text-white leading-snug">
             You are not your current circumstances.
@@ -195,7 +196,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
             You are who you&apos;re choosing to become. This takes 60 seconds. Answer honestly — the system calibrates to you.
           </p>
-        </div>
+        </Card>
         <IdentityOnboarding onComplete={onboardingComplete} />
       </div>
     )
@@ -237,7 +238,9 @@ export default function MindHub({ onNavigate, streak }: Props) {
       <div className="space-y-4">
 
         {/* ── Hero card: Chapter + Identity + XP (unified) ─────────────── */}
-        <div className={`rounded-2xl border ${currentChapterData.border} ${currentChapterData.bg} p-4`}>
+        <Card variant="hero" className="relative overflow-hidden bg-zinc-900 dark:bg-zinc-900 border-zinc-800 dark:border-zinc-800">
+          <div className={`pointer-events-none absolute inset-0 ${currentChapterData.bg}`} />
+          <div className="relative">
 
           {/* Header: chapter + streak + edit */}
           <div className="flex items-start justify-between mb-3">
@@ -371,10 +374,11 @@ export default function MindHub({ onNavigate, streak }: Props) {
               )}
             </button>
           )}
-        </div>
+          </div>
+        </Card>
 
         {/* ── State check-in ─────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <Card>
           {!checkedIn ? (
             <>
               <p className="mb-1 text-sm font-bold text-zinc-900 dark:text-white">Where&apos;s your head right now?</p>
@@ -425,7 +429,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
               )}
             </>
           ) : null}
-        </div>
+        </Card>
 
         {/* ── Unlocked systems ───────────────────────────────────────────── */}
         <div>
@@ -437,21 +441,25 @@ export default function MindHub({ onNavigate, streak }: Props) {
               const info = SYSTEM_INFO[sysId]
               const Icon = ICON_MAP[info.iconName] ?? ChevronRight
               return (
-                <motion.button
+                <motion.div
                   key={sysId}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  onClick={() => onNavigate(sysId as SectionId)}
-                  className="flex flex-col gap-3 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 active:scale-[0.98] transition-all"
                 >
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${info.iconBg}`}>
-                    <Icon className={`h-4 w-4 ${info.color}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">{info.label}</p>
-                    <p className="mt-0.5 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{info.hook}</p>
-                  </div>
-                </motion.button>
+                  <Card
+                    as="button"
+                    onClick={() => onNavigate(sysId as SectionId)}
+                    className="flex h-full w-full flex-col gap-3 text-left hover:border-zinc-300 dark:hover:border-zinc-700 active:scale-[0.98] transition-all"
+                  >
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${info.iconBg}`}>
+                      <Icon className={`h-4 w-4 ${info.color}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">{info.label}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-zinc-500 dark:text-zinc-400">{info.hook}</p>
+                    </div>
+                  </Card>
+                </motion.div>
               )
             })}
           </div>
@@ -470,12 +478,12 @@ export default function MindHub({ onNavigate, streak }: Props) {
                   const info = SYSTEM_INFO[sysId]
                   const Icon = ICON_MAP[info.iconName] ?? ChevronRight
                   return (
-                    <div
+                    <Card
                       key={sysId}
-                      className="flex flex-col gap-3 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 bg-zinc-50 dark:bg-zinc-900/50 p-4 opacity-60"
+                      className="flex flex-col gap-3 opacity-60"
                     >
                       <div className="flex items-center justify-between">
-                        <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${info.iconBg} opacity-50`}>
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${info.iconBg} opacity-50`}>
                           <Icon className={`h-4 w-4 ${info.color}`} />
                         </div>
                         <Lock className="h-3.5 w-3.5 text-zinc-400" />
@@ -484,7 +492,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
                         <p className="text-sm font-bold text-zinc-400 dark:text-zinc-600 leading-tight">{info.label}</p>
                         <p className="mt-0.5 text-xs leading-snug text-zinc-400 dark:text-zinc-600">{info.hook}</p>
                       </div>
-                    </div>
+                    </Card>
                   )
                 })}
             </div>

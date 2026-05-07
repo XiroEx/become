@@ -140,7 +140,7 @@ export default function VisionBuilder({ onComplete }: Props) {
         </p>
         <button
           onClick={() => setPhase('steps')}
-          className="flex items-center gap-2 rounded-2xl bg-amber-500 px-6 py-3 font-bold text-white"
+          className="flex items-center gap-2 rounded-xl bg-amber-500 px-6 py-3 font-bold text-white"
         >
           Begin <ArrowRight className="h-4 w-4" />
         </button>
@@ -192,7 +192,7 @@ export default function VisionBuilder({ onComplete }: Props) {
             onChange={(e) => setValues(v => ({ ...v, [step.key]: e.target.value }))}
             placeholder={step.placeholder}
             rows={5}
-            className="mb-3 w-full flex-1 resize-none rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 leading-relaxed"
+            className="mb-3 w-full flex-1 resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 leading-relaxed"
           />
 
           {/* Example hint */}

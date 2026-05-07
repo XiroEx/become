@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Shield, ChevronRight, AlertTriangle } from 'lucide-react'
 import { getPiecesBySection } from '@/lib/mindContent'
+import { Card } from '@/components/ui'
 
 // ─── Fear breakdown prompts ────────────────────────────────────────────────────
 
@@ -119,7 +120,7 @@ function FearBreakdown() {
           <button
             key={i}
             onClick={() => select(i)}
-            className="flex w-full items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-4 text-left hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
+            className="flex w-full items-center justify-between rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-3 text-left hover:border-zinc-300 dark:hover:border-zinc-600 transition-all"
           >
             <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{f.trigger}</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
@@ -152,12 +153,12 @@ function FearBreakdown() {
             onChange={(e) => setCurrent(e.target.value)}
             placeholder="Write your honest answer..."
             rows={3}
-            className="mb-3 w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
+            className="mb-3 w-full resize-none rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:border-zinc-400 dark:focus:border-zinc-500 focus:outline-none"
           />
           <button
             onClick={next}
             disabled={current.trim().length < 3}
-            className="w-full rounded-xl bg-zinc-900 dark:bg-white py-3 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
+            className="w-full rounded-lg bg-zinc-900 dark:bg-white py-3 text-sm font-semibold text-white dark:text-zinc-900 disabled:opacity-40"
           >
             {step + 1 < fear.questions.length ? 'Next question' : 'Finish'}
           </button>
@@ -169,7 +170,7 @@ function FearBreakdown() {
           </p>
           <div className="space-y-3 mb-5">
             {answers.map((a, i) => (
-              <div key={i} className="rounded-xl border border-zinc-100 dark:border-zinc-800 p-3">
+              <div key={i} className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
                 <p className="text-xs text-zinc-400 mb-1">{fear.questions[i]}</p>
                 <p className="text-sm text-zinc-700 dark:text-zinc-300">{a}</p>
               </div>
@@ -177,7 +178,7 @@ function FearBreakdown() {
           </div>
           <button
             onClick={reset}
-            className="w-full rounded-xl bg-zinc-100 dark:bg-zinc-800 py-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300"
+            className="w-full rounded-lg bg-zinc-100 dark:bg-zinc-800 py-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300"
           >
             Explore another fear
           </button>
@@ -191,33 +192,35 @@ function PatternDetector() {
   const [expanded, setExpanded] = useState<number | null>(null)
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+    <div>
+      <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
         Recognize the pattern before it runs you.
       </p>
-      {SABOTAGE_PATTERNS.map((p, i) => (
-        <div key={i} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-          <button
-            onClick={() => setExpanded(expanded === i ? null : i)}
-            className="flex w-full items-center justify-between p-4 text-left"
-          >
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-              <span className="text-sm font-semibold text-zinc-900 dark:text-white">{p.pattern}</span>
-            </div>
-            <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === i ? '−' : '+'}</span>
-          </button>
-          {expanded === i && (
-            <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 space-y-3">
-              <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.description}</p>
-              <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">Override</p>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white">{p.override}</p>
+      <div className="-mx-3 sm:-mx-4 divide-y divide-zinc-200 dark:divide-zinc-800 border-y border-zinc-200 dark:border-zinc-800">
+        {SABOTAGE_PATTERNS.map((p, i) => (
+          <div key={i}>
+            <button
+              onClick={() => setExpanded(expanded === i ? null : i)}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                <span className="text-sm font-semibold text-zinc-900 dark:text-white">{p.pattern}</span>
               </div>
-            </div>
-          )}
-        </div>
-      ))}
+              <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === i ? '−' : '+'}</span>
+            </button>
+            {expanded === i && (
+              <div className="px-3 pb-3 pt-1 space-y-3">
+                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.description}</p>
+                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">Override</p>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">{p.override}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -232,7 +235,7 @@ export default function AntiSabotageTab() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         <div className="flex items-start gap-3">
           <Shield className="mt-0.5 h-5 w-5 shrink-0 text-zinc-500" />
           <div>
@@ -242,17 +245,17 @@ export default function AntiSabotageTab() {
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Section toggle */}
-      <div className="flex rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/80 p-1">
+      <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1">
         {(['fear', 'patterns'] as Section[]).map((s) => (
           <button
             key={s}
             onClick={() => setSection(s)}
-            className={`flex-1 rounded-xl py-2.5 text-xs font-semibold capitalize transition-all ${
+            className={`flex-1 rounded-md py-2 text-xs font-semibold capitalize transition-all ${
               section === s
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm'
+                ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-sm'
                 : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
           >
@@ -262,9 +265,9 @@ export default function AntiSabotageTab() {
       </div>
 
       {/* Content */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <Card>
         {section === 'fear' ? <FearBreakdown /> : <PatternDetector />}
-      </div>
+      </Card>
 
       {/* Anti-sabotage protocols from content library */}
       <AntiSabotageProtocols />
@@ -277,17 +280,17 @@ const ANTI_PROTOCOLS = getPiecesBySection('anti-sabotage')
 function AntiSabotageProtocols() {
   const [expanded, setExpanded] = useState<string | null>(null)
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <Card>
       <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
         Interrupt Protocols
       </p>
       <p className="mb-4 text-sm text-zinc-500">Use these the moment you feel a bad pattern starting.</p>
-      <div className="space-y-2">
+      <div className="-mx-3 sm:-mx-4 -mb-3 sm:-mb-4 divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-zinc-200 dark:border-zinc-800">
         {ANTI_PROTOCOLS.map((p) => (
-          <div key={p.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+          <div key={p.id}>
             <button
               onClick={() => setExpanded(expanded === p.id ? null : p.id)}
-              className="flex w-full items-center justify-between p-4 text-left"
+              className="flex w-full items-center justify-between px-3 py-2.5 text-left"
             >
               <div>
                 <p className="text-sm font-bold text-zinc-900 dark:text-white">{p.title}</p>
@@ -296,16 +299,18 @@ function AntiSabotageProtocols() {
               <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === p.id ? '−' : '+'}</span>
             </button>
             {expanded === p.id && (
-              <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 pb-4 pt-3 bg-zinc-50 dark:bg-zinc-800/30">
-                <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-3">
-                  &ldquo;{p.mantra}&rdquo;
-                </p>
-                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+              <div className="px-3 pb-3 pt-1">
+                <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 p-2.5">
+                  <p className="text-sm font-semibold italic text-zinc-800 dark:text-zinc-200 mb-2">
+                    &ldquo;{p.mantra}&rdquo;
+                  </p>
+                  <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{p.instruction}</p>
+                </div>
               </div>
             )}
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
