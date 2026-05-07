@@ -111,7 +111,7 @@ export default function NewProgramClient() {
             <button
               type="button"
               onClick={() => alert('Billing coming soon. We’ll email you when upgrades are live.')}
-              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-md transition-all hover:from-purple-700 hover:to-indigo-700"
+              className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:from-purple-700 hover:to-indigo-700"
             >
               <Lock className="h-4 w-4" />
               Upgrade to {requiresTier.charAt(0).toUpperCase() + requiresTier.slice(1)}

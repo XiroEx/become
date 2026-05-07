@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Dumbbell, Sparkles } from "lucide-react";
+import { Dumbbell, Sparkles, Search } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
+import { Card, EmptyState } from "@/components/ui";
 import type { FitnessGoal, ExperienceLevel } from "@/models/User";
 
 interface ActiveProgram {
@@ -379,15 +380,10 @@ export default function ProgrammingClient() {
               const { label: startLabel, isFuture } = formatStartLabel(program.startDate)
               const isPaused = program.status === 'paused'
               return (
-              <div
+              <Card
                 key={program.programId}
-                className={`group relative rounded-xl border-2 p-4 transition-all duration-200 ${
-                  isPaused
-                    ? 'border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 hover:border-amber-500/50 dark:from-amber-500/5 dark:to-yellow-500/5'
-                    : isFuture
-                      ? 'border-blue-500/30 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 hover:border-blue-500/50 dark:from-blue-500/5 dark:to-indigo-500/5'
-                      : 'border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 hover:border-green-500/50 dark:from-green-500/5 dark:to-emerald-500/5'
-                }`}
+                accent={isPaused ? 'warning' : isFuture ? 'info' : 'success'}
+                className="group transition-colors duration-200 hover:border-zinc-300 dark:hover:border-zinc-700"
               >
                 <Link href={`/dashboard/programming/${program.programId}`} className="block">
                   <div className="flex items-center justify-between">
@@ -426,10 +422,10 @@ export default function ProgrammingClient() {
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         isPaused
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-500'
+                          ? 'bg-amber-500'
                           : isFuture
-                            ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
-                            : 'bg-gradient-to-r from-green-500 to-emerald-500'
+                            ? 'bg-blue-500'
+                            : 'bg-green-500'
                       }`}
                       style={{ width: `${program.progress}%` }}
                     />
@@ -456,7 +452,7 @@ export default function ProgrammingClient() {
                     </svg>
                   </Link>
                 )}
-              </div>
+              </Card>
               )
             })}
           </div>
@@ -487,18 +483,19 @@ export default function ProgrammingClient() {
           </div>
           <div className="space-y-2">
             {savedPrograms.slice(0, savedShown).map((program, index) => (
-              <div
+              <Card
                 key={program.program_id}
+                variant="compact"
                 draggable
                 onDragStart={() => handleDragStart(index)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDragEnd={handleDragEnd}
-                className={`group flex items-center gap-3 rounded-xl border bg-white p-3 shadow-sm transition-all duration-200 cursor-grab active:cursor-grabbing dark:bg-zinc-900 ${
+                className={`group flex cursor-grab items-center gap-3 transition-all duration-200 active:cursor-grabbing ${
                   dragOverIndex === index
-                    ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                    ? "!border-amber-500 !bg-amber-50 dark:!bg-amber-950/20"
                     : draggedIndex === index
-                    ? "opacity-50 border-zinc-300 dark:border-zinc-700"
-                    : "border-amber-200 dark:border-amber-800/30 hover:border-amber-300 dark:hover:border-amber-700/50"
+                    ? "opacity-50"
+                    : "hover:border-zinc-300 dark:hover:border-zinc-700"
                 }`}
               >
                 {/* Drag Handle */}
@@ -551,12 +548,12 @@ export default function ProgrammingClient() {
                     <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
                 </button>
-              </div>
+              </Card>
             ))}
             {savedPrograms.length > 5 && (
               <button
                 onClick={() => setSavedShown(n => n > 5 ? 5 : n + 5)}
-                className="mt-1 w-full rounded-xl border border-amber-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-amber-50 dark:border-amber-800/30 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-amber-900/10"
+                className="mt-1 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
               >
                 {savedShown >= savedPrograms.length
                   ? 'Show less'
@@ -591,9 +588,10 @@ export default function ProgrammingClient() {
           </div>
           <div className="space-y-3">
             {recommendedPrograms.slice(0, 3).map((program) => (
-              <div
+              <Card
                 key={program.program_id}
-                className="group flex items-center gap-3 rounded-xl border-2 border-green-200 bg-white p-3 transition-all duration-200 hover:border-green-300 dark:border-green-800/40 dark:bg-zinc-900 dark:hover:border-green-700/60 sm:gap-4 sm:p-4"
+                accent="success"
+                className="group flex items-center gap-3 transition-colors duration-200 hover:border-zinc-300 dark:hover:border-zinc-700 sm:gap-4"
               >
                 {/* Save Button */}
                 <button
@@ -642,7 +640,7 @@ export default function ProgrammingClient() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -799,9 +797,9 @@ export default function ProgrammingClient() {
         <>
           <div className="space-y-3">
             {filteredPrograms.map((program) => (
-              <div
+              <Card
                 key={program.program_id}
-                className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 transition-all duration-200 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 sm:gap-4 sm:p-4"
+                className="group flex items-center gap-3 transition-colors duration-200 hover:border-zinc-300 dark:hover:border-zinc-700 sm:gap-4"
               >
                 {/* Save Button */}
                 <button
@@ -860,7 +858,7 @@ export default function ProgrammingClient() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
 
@@ -888,29 +886,25 @@ export default function ProgrammingClient() {
           )}
         </>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 py-16 dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <svg className="h-8 w-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <h3 className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">
-            {hasFilters ? "No matching programs" : "No programs available"}
-          </h3>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {hasFilters
+        <EmptyState
+          icon={<Search className="h-7 w-7" />}
+          title={hasFilters ? "No matching programs" : "No programs available"}
+          description={
+            hasFilters
               ? "Try adjusting your search or filters."
-              : "Programs will appear here once they're available."}
-          </p>
-          {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="mt-4 text-sm text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
+              : "Programs will appear here once they're available."
+          }
+          action={
+            hasFilters ? (
+              <button
+                onClick={clearFilters}
+                className="text-sm font-medium text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              >
+                Clear filters
+              </button>
+            ) : undefined
+          }
+        />
       )}
     </PageTransition>
   );

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import { ArrowLeft, Plus, Trash2, Dumbbell } from "lucide-react";
+import { Card } from "@/components/ui";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -214,7 +215,7 @@ export default function ExerciseLibraryClient() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.18 }}
-            className="mb-6 sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-5 sm:shadow-sm dark:sm:border-zinc-700 dark:sm:bg-zinc-900"
+            className="mb-6 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900"
           >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-white">New Custom Exercise</h2>
@@ -405,12 +406,13 @@ export default function ExerciseLibraryClient() {
       ) : (
         <div className="space-y-2">
           {filteredExercises.slice(0, shown).map((ex, i) => (
-            <motion.div
+            <Card
+              as={motion.div}
               key={ex.slug}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="flex items-center gap-3"
             >
               {/* Icon */}
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/30">
@@ -455,7 +457,7 @@ export default function ExerciseLibraryClient() {
                   <Trash2 className="h-4 w-4" />
                 )}
               </button>
-            </motion.div>
+            </Card>
           ))}
           {filteredExercises.length > EXERCISES_PAGE && (
             <button

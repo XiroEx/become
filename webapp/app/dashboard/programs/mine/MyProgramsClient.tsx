@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Play, ArrowLeft } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
+import { Card, EmptyState } from "@/components/ui";
 
 interface CustomProgramSummary {
   program_id: string;
@@ -136,31 +137,24 @@ export default function MyProgramsClient() {
           ))}
         </div>
       ) : programs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 py-16 px-4 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white">
-            <Plus className="h-8 w-8" />
-          </div>
-          <h3 className="mt-4 text-lg font-semibold text-zinc-900 dark:text-white">
-            You haven&apos;t created any custom programs yet
-          </h3>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Build your own training program tailored to your goals.
-          </p>
-          <Link
-            href="/dashboard/programs/new"
-            className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:from-purple-700 hover:to-indigo-700"
-          >
-            <Plus className="h-4 w-4" />
-            Create Your First Program
-          </Link>
-        </div>
+        <EmptyState
+          icon={<Plus className="h-7 w-7" />}
+          title="You haven't created any custom programs yet"
+          description="Build your own training program tailored to your goals."
+          action={
+            <Link
+              href="/dashboard/programs/new"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
+            >
+              <Plus className="h-4 w-4" />
+              Create Your First Program
+            </Link>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {programs.map((p) => (
-            <div
-              key={p.program_id}
-              className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
-            >
+            <Card key={p.program_id}>
               <div className="flex items-start justify-between gap-3">
                 <Link
                   href={`/dashboard/programming/${p.program_id}`}
@@ -212,7 +206,7 @@ export default function MyProgramsClient() {
                   Delete
                 </button>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

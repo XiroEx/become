@@ -123,7 +123,7 @@ export default function JourneyPage() {
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, type: 'spring', stiffness: 220, damping: 22 }}
-        className="mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-600/10 border border-yellow-500/30 p-5 text-center"
+        className="mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-600/10 border border-yellow-500/30 p-4 sm:p-5 text-center"
       >
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20 ring-4 ring-yellow-500/30">
           <Trophy className="h-8 w-8 text-yellow-400" strokeWidth={1.5} />
