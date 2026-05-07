@@ -132,7 +132,7 @@ export default function ExerciseEditor({
   const showSetsReps = exercise.type === "strength" || exercise.type === "abs" || !exercise.type;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
       {/* Exercise Header */}
       <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
         {/* Drag Handle */}
