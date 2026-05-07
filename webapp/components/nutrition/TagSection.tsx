@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
+import { Card } from '@/components/ui'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -177,11 +178,11 @@ export default function TagSection({
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <Card className="!p-0">
       {/* Header */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="flex w-full items-center gap-3 p-4"
+        className="flex w-full items-center gap-3 p-3 sm:p-4"
       >
         <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${visuals.bgColor}`}>
           <visuals.Icon className={`h-4 w-4 ${visuals.iconColor}`} />
@@ -241,11 +242,11 @@ export default function TagSection({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-zinc-100 dark:border-zinc-800">
+            <div className="border-t border-zinc-200 dark:border-zinc-800">
               {flat.length === 0 ? (
                 <button
                   onClick={() => onAddFood(tag)}
-                  className="flex w-full items-center justify-center gap-1.5 px-4 py-5 text-sm text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                  className="flex w-full items-center justify-center gap-1.5 px-3 py-5 text-sm text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Tap + to add food
@@ -255,12 +256,12 @@ export default function TagSection({
                   {groups.map((group) => (
                     <div key={group.key}>
                       {group.mealName && (
-                        <div className="flex items-center gap-1.5 border-b border-zinc-100 bg-zinc-50/60 px-4 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
+                        <div className="flex items-center gap-1.5 border-b border-zinc-200 bg-zinc-50/60 px-3 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
                           <span className="uppercase tracking-wide">From:</span>
                           <span className="truncate text-zinc-700 dark:text-zinc-200">{group.mealName}</span>
                         </div>
                       )}
-                      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
                         {group.items.map((fi) => (
                           <ItemRow
                             key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
@@ -275,7 +276,7 @@ export default function TagSection({
                   ))}
 
                   {/* Tag totals */}
-                  <div className="border-t border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+                  <div className="border-t border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
                     <div className="flex items-center justify-between text-xs tabular-nums">
                       <div className="flex gap-3 text-zinc-500 dark:text-zinc-400">
                         <span>P: {totalProtein}g</span>
@@ -293,7 +294,7 @@ export default function TagSection({
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </Card>
   )
 }
 

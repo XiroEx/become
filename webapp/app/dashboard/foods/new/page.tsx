@@ -164,7 +164,7 @@ export default function NewCustomFoodPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Grandma's Pancake Mix"
-            className="w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
           />
         </div>
 
@@ -179,7 +179,7 @@ export default function NewCustomFoodPage() {
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
             placeholder="e.g. Aunt Jemima"
-            className="w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
           />
         </div>
 
@@ -192,7 +192,7 @@ export default function NewCustomFoodPage() {
             id="food-category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:focus:border-white dark:focus:ring-white/10"
           >
             {CATEGORIES.map(cat => (
               <option key={cat} value={cat}>{cat}</option>
@@ -213,7 +213,7 @@ export default function NewCustomFoodPage() {
               step="0.01"
               value={servingSize}
               onChange={(e) => setServingSize(e.target.value)}
-              className="w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+              className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:focus:border-white dark:focus:ring-white/10"
             />
           </div>
           <div>
@@ -224,7 +224,7 @@ export default function NewCustomFoodPage() {
               id="serving-unit"
               value={servingUnit}
               onChange={(e) => setServingUnit(e.target.value)}
-              className="w-full rounded-xl border-2 border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:focus:border-white dark:focus:ring-white/10"
             >
               {SERVING_UNITS.map(u => (
                 <option key={u} value={u}>{u}</option>
@@ -244,7 +244,7 @@ export default function NewCustomFoodPage() {
             value={displayLabel}
             onChange={(e) => setDisplayLabel(e.target.value)}
             placeholder='e.g. "1 medium pancake"'
-            className="w-full rounded-xl border-2 border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
           />
           <p className="mt-1 text-[11px] text-zinc-400">Shown in the picker instead of &quot;{servingSize} {servingUnit}&quot;.</p>
         </div>

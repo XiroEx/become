@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Droplets, UtensilsCrossed, Zap } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 interface MacroValues {
   current: number
@@ -52,7 +53,7 @@ export default function NutritionSummaryCard({
   const waterPct = Math.min((water.current / water.goal) * 100, 100)
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <Card>
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm font-semibold text-zinc-900 dark:text-white">Nutrition</span>
@@ -181,6 +182,6 @@ export default function NutritionSummaryCard({
           Quick Add
         </Link>
       </div>
-    </div>
+    </Card>
   )
 }

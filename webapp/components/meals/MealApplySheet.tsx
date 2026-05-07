@@ -244,7 +244,7 @@ export default function MealApplySheet({
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-zinc-200 p-3 dark:border-zinc-800">
+            <div className="flex items-center gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800 sm:px-6">
               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800">
                 {meal.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -275,7 +275,7 @@ export default function MealApplySheet({
               </button>
             </div>
 
-            <div className="space-y-3 p-4">
+            <div className="space-y-3 p-5 sm:p-6">
               {/* Tag picker */}
               <div className="relative">
                 <button
@@ -297,7 +297,7 @@ export default function MealApplySheet({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-800"
+                      className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
                     >
                       <div className="grid grid-cols-2 gap-1">
                         {allTagOptions.map((t) => (
@@ -466,7 +466,7 @@ export default function MealApplySheet({
               </div>
 
               {/* Live nutrition preview */}
-              <div className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2 text-center dark:bg-zinc-800">
+              <div className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
                 <div>
                   <p className="text-base font-bold tabular-nums text-zinc-900 dark:text-white">
                     {previewNutrition.calories}
