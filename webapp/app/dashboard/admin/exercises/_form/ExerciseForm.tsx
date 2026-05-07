@@ -606,7 +606,7 @@ const inputCls =
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-6 border-b border-zinc-200 pb-6 dark:border-zinc-800 sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-5 sm:pb-5 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
+    <section className="mb-6 border-b border-zinc-200 pb-6 dark:border-zinc-800 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 sm:pb-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
       <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
       <div className="grid gap-4 sm:grid-cols-2">{children}</div>
     </section>

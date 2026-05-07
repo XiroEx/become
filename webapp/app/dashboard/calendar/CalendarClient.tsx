@@ -790,7 +790,7 @@ export default function CalendarClient() {
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 50 }}
-              className="relative w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900"
+              className="relative w-full max-w-sm rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900"
             >
               <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-white">
                 Manage Workout

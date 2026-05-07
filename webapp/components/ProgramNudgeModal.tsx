@@ -104,7 +104,7 @@ export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Prop
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-6 shadow-2xl"
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-white dark:bg-zinc-900 p-5 sm:p-6 shadow-2xl"
           >
             {/* Icon */}
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 dark:bg-white">

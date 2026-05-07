@@ -266,7 +266,7 @@ export default function MoodModal({ isOpen, onClose }: MoodModalProps) {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
           >
             {/* Header */}
             <div className="text-center mb-6 sm:mb-8">
@@ -281,34 +281,37 @@ export default function MoodModal({ isOpen, onClose }: MoodModalProps) {
 
             {/* Mood Options */}
             <div className="grid grid-cols-5 gap-3 mb-6 sm:mb-8">
-              {moodOptions.map((option) => (
-                <button
-                  key={option.level}
-                  onClick={() => setSelectedMood(option.level)}
-                  className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all duration-200 sm:p-4 ${
-                    selectedMood === option.level
-                      ? `${option.bgColor} ${option.borderColor} scale-105 shadow-lg`
-                      : `border-zinc-200 dark:border-zinc-700 ${option.hoverColor}`
-                  }`}
-                >
-                  <option.Face selected={selectedMood === option.level} />
-                  <span className={`text-xs font-medium sm:text-sm ${
-                    selectedMood === option.level
-                      ? 'text-zinc-900 dark:text-white'
-                      : 'text-zinc-600 dark:text-zinc-400'
-                  }`}>
-                    {option.label}
-                  </span>
-                  
-                  {selectedMood === option.level && (
-                    <motion.div
-                      layoutId="moodSelection"
-                      className={`absolute -bottom-1 left-1/2 h-1 w-8 -translate-x-1/2 rounded-full bg-linear-to-r ${option.color}`}
-                      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                    />
-                  )}
-                </button>
-              ))}
+              {moodOptions.map((option) => {
+                const isSelected = selectedMood === option.level
+                return (
+                  <button
+                    key={option.level}
+                    onClick={() => setSelectedMood(option.level)}
+                    className={`relative flex flex-col items-center gap-2 rounded-xl border p-3 transition-colors duration-200 sm:p-4 ${
+                      isSelected
+                        ? `${option.bgColor} border-zinc-900 dark:border-white`
+                        : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600'
+                    }`}
+                  >
+                    <option.Face selected={isSelected} />
+                    <span className={`text-xs font-medium sm:text-sm ${
+                      isSelected
+                        ? 'text-zinc-900 dark:text-white'
+                        : 'text-zinc-600 dark:text-zinc-400'
+                    }`}>
+                      {option.label}
+                    </span>
+
+                    {isSelected && (
+                      <motion.div
+                        layoutId="moodSelection"
+                        className={`absolute -bottom-1 left-1/2 h-1 w-8 -translate-x-1/2 rounded-full bg-linear-to-r ${option.color}`}
+                        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                      />
+                    )}
+                  </button>
+                )
+              })}
             </div>
 
             {/* Submit Button */}

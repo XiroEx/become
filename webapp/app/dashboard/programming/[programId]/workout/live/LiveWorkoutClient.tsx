@@ -1467,7 +1467,7 @@ export default function LiveWorkoutPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-md rounded-2xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800"
+              className="relative w-full max-w-md rounded-2xl bg-zinc-900 p-5 sm:p-6 shadow-2xl border border-zinc-800"
             >
               {/* Warning Icon */}
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/20">
@@ -1546,7 +1546,7 @@ export default function LiveWorkoutPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-md rounded-2xl bg-zinc-900 p-6 shadow-2xl border border-zinc-800"
+              className="relative w-full max-w-md rounded-2xl bg-zinc-900 p-5 sm:p-6 shadow-2xl border border-zinc-800"
             >
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/20">
                 <svg className="h-7 w-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

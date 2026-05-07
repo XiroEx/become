@@ -34,6 +34,10 @@ export type StatTileProps = {
   accent?: StatTileAccent;
   /** When provided, renders the tile as a `next/link`. */
   href?: string;
+  /** Optional footer rendered below the icon row (e.g. progress bar). */
+  footer?: React.ReactNode;
+  /** Optional inline supplemental info (e.g. ❄ freeze count after the label). */
+  labelExtra?: React.ReactNode;
   className?: string;
 };
 
@@ -41,6 +45,10 @@ export type StatTileProps = {
  * Compact stat tile used in dashboard 2x2 grid (Day Streak, Mood, Weekly,
  * Goal). Wraps the `Card` primitive with `compact` variant. See
  * UI_CONSISTENCY_PLAN.md §4.3.
+ *
+ * Supports an optional `footer` slot (used by the streak tile to render its
+ * progress-bar to next milestone) so the four tiles share the same outer
+ * shape. The footer sits below the icon-badge row inside the same card.
  */
 export function StatTile({
   icon,
@@ -48,24 +56,32 @@ export function StatTile({
   value,
   accent = "zinc",
   href,
+  footer,
+  labelExtra,
   className,
 }: StatTileProps) {
   const body = (
-    <div className="flex items-center gap-3">
-      <span
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-          ACCENT_BADGE_CLASSES[accent],
-        )}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">{label}</div>
-        <div className="text-2xl font-extrabold tracking-tight text-zinc-900 dark:text-white">
-          {value}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+            ACCENT_BADGE_CLASSES[accent],
+          )}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+            {label}
+            {labelExtra}
+          </div>
+          <div className="text-2xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
+            {value}
+          </div>
         </div>
       </div>
+      {footer}
     </div>
   );
 

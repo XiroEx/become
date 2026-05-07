@@ -15,6 +15,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import type { FitnessGoal } from '@/models/User'
+import { Card } from '@/components/ui'
 
 export interface MetricData {
   date: string
@@ -97,7 +98,7 @@ export default function ProgressChart({ weightData, bmiData, moodData, fitnessGo
   const stats = getStats()
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+    <Card>
       {/* Chart Type Selector */}
       <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 sm:gap-2 sm:mb-6">
         {(Object.keys(chartConfig) as ChartType[]).map((type) => (
@@ -255,6 +256,6 @@ export default function ProgressChart({ weightData, bmiData, moodData, fitnessGo
           )}
         </ResponsiveContainer>
       </div>
-    </div>
+    </Card>
   )
 }

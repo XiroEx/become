@@ -242,7 +242,7 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
                   Group ({selectedForGroup.length})
                 </button>
                 {showGroupMenu && (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
+                  <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
                     {GROUP_TYPE_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
@@ -315,7 +315,7 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
                       elements.push(
                         <div
                           key={`group-${groupId}`}
-                          className={`rounded-xl border-2 ${groupColor} p-3`}
+                          className={`rounded-xl border ${groupColor} p-3`}
                         >
                           {/* Group header */}
                           <div className="mb-2 flex items-center justify-between">

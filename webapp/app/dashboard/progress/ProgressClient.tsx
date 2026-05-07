@@ -242,7 +242,7 @@ function PRChartModal({ name, points, onClose }: {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 60, opacity: 0 }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
+        className="w-full max-w-md rounded-t-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -631,7 +631,7 @@ export default function ProgressClient() {
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
             <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">No weight logged yet</p>
             <LogWeightForm onLogged={handleWeightLogged} />
           </div>

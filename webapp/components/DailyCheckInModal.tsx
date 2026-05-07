@@ -422,7 +422,7 @@ export default function DailyCheckInModal({
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          className="bg-white dark:bg-zinc-800 rounded-xl p-5 m-4 shadow-xl max-w-sm"
+          className="bg-white dark:bg-zinc-800 rounded-xl p-5 sm:p-6 m-4 shadow-2xl max-w-sm"
         >
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -458,7 +458,7 @@ export default function DailyCheckInModal({
           <div className="flex gap-3">
             <button
               onClick={handleWarningCancel}
-              className="flex-1 rounded-lg border-2 border-zinc-200 dark:border-zinc-600 py-2.5 font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+              className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-600 py-2.5 font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
             >
               Go Back
             </button>
@@ -488,7 +488,7 @@ export default function DailyCheckInModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-zinc-900 sm:p-8 max-h-[90vh] overflow-y-auto overscroll-contain touch-auto"
+            className="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6 max-h-[90vh] overflow-y-auto overscroll-contain touch-auto"
           >
             {/* Warning Confirmation Overlay */}
             <AnimatePresence>
@@ -519,34 +519,37 @@ export default function DailyCheckInModal({
                 )}
               </div>
               <div className="grid grid-cols-5 gap-2 sm:gap-3">
-                {moodOptions.map((option) => (
-                  <button
-                    key={option.level}
-                    onClick={() => setSelectedMood(selectedMood === option.level ? null : option.level)}
-                    className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 p-2 transition-all duration-200 sm:p-3 ${
-                      selectedMood === option.level
-                        ? `${option.bgColor} ${option.borderColor} scale-105 shadow-lg`
-                        : `border-zinc-200 dark:border-zinc-700 ${option.hoverColor}`
-                    }`}
-                  >
-                    <option.Face selected={selectedMood === option.level} />
-                    <span className={`text-[10px] font-medium sm:text-xs ${
-                      selectedMood === option.level
-                        ? 'text-zinc-900 dark:text-white'
-                        : 'text-zinc-600 dark:text-zinc-400'
-                    }`}>
-                      {option.label}
-                    </span>
-                    
-                    {selectedMood === option.level && (
-                      <motion.div
-                        layoutId="moodSelection"
-                        className={`absolute -bottom-1 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-linear-to-r ${option.color}`}
-                        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                      />
-                    )}
-                  </button>
-                ))}
+                {moodOptions.map((option) => {
+                  const isSelected = selectedMood === option.level
+                  return (
+                    <button
+                      key={option.level}
+                      onClick={() => setSelectedMood(isSelected ? null : option.level)}
+                      className={`relative flex flex-col items-center gap-1.5 rounded-xl border p-2 transition-colors duration-200 sm:p-3 ${
+                        isSelected
+                          ? `${option.bgColor} border-zinc-900 dark:border-white`
+                          : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600'
+                      }`}
+                    >
+                      <option.Face selected={isSelected} />
+                      <span className={`text-[10px] font-medium sm:text-xs ${
+                        isSelected
+                          ? 'text-zinc-900 dark:text-white'
+                          : 'text-zinc-600 dark:text-zinc-400'
+                      }`}>
+                        {option.label}
+                      </span>
+
+                      {isSelected && (
+                        <motion.div
+                          layoutId="moodSelection"
+                          className={`absolute -bottom-1 left-1/2 h-1 w-6 -translate-x-1/2 rounded-full bg-linear-to-r ${option.color}`}
+                          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                        />
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -570,7 +573,7 @@ export default function DailyCheckInModal({
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 placeholder="e.g., 185.5"
-                className="w-full rounded-xl border-2 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-center text-lg font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-center text-lg font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
               />
             </div>
 
@@ -587,7 +590,7 @@ export default function DailyCheckInModal({
               <button
                 onClick={handleSkipAttempt}
                 disabled={isSubmitting}
-                className="w-full rounded-xl border-2 border-zinc-200 dark:border-zinc-700 py-3 font-semibold text-zinc-700 dark:text-zinc-300 transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800 sm:py-4"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 py-3 font-semibold text-zinc-700 dark:text-zinc-300 transition-all hover:bg-zinc-50 dark:hover:bg-zinc-800 sm:py-4"
               >
                 Skip for Today
               </button>
