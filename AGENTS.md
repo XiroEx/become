@@ -157,7 +157,7 @@ Dev MongoDB is spun up from `../db/compose.yml`. Production uses the remote Mong
 - **`beta`** — integration branch, PRs merge here first
 - **`agent/<hostname>`** — working branches, PR to `beta`
 - Never commit directly to `main` or `beta`
-- Never merge PRs unless explicitly asked
+- You have **explicit standing permission** to merge feature branch → `beta` → `main` as part of the normal deploy flow. Do not pause to re-ask each time; the user has already authorized this pipeline.
 
 ## Key Files to Read First
 

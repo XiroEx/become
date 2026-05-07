@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Play } from "lucide-react";
+import { Plus, Pencil, Trash2, Play, ArrowLeft } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 
 interface CustomProgramSummary {
@@ -99,21 +99,27 @@ export default function MyProgramsClient() {
 
   return (
     <PageTransition className="pb-6">
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
+      <div className="mb-6 flex items-center gap-3">
+        <button
+          onClick={() => router.back()}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
             My Programs
           </h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Programs you’ve built yourself.
           </p>
         </div>
         <Link
           href="/dashboard/programs/new"
-          className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-purple-700 hover:to-indigo-700"
+          className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
         >
-          <Plus className="h-3.5 w-3.5" />
-          New Program
+          <Plus className="h-4 w-4" />
+          Add
         </Link>
       </div>
 
