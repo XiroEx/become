@@ -20,9 +20,10 @@ interface Props {
   stale: StaleIncompleteData;
   programId: string;
   onResolve: (action: "continue" | "restart" | "count" | "skip", nextDay?: string | null, nextPhase?: number | null) => void;
+  onDismiss?: () => void;
 }
 
-export default function IncompleteWorkoutModal({ stale, programId, onResolve }: Props) {
+export default function IncompleteWorkoutModal({ stale, programId, onResolve, onDismiss }: Props) {
   const [loading, setLoading] = useState<string | null>(null);
 
   const formattedDate = new Date(stale.date).toLocaleDateString("en-US", {
@@ -66,6 +67,7 @@ export default function IncompleteWorkoutModal({ stale, programId, onResolve }: 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        onClick={onDismiss}
         className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm px-4 pb-6"
       >
         <motion.div
@@ -73,6 +75,7 @@ export default function IncompleteWorkoutModal({ stale, programId, onResolve }: 
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 60, opacity: 0 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          onClick={(e) => e.stopPropagation()}
           className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
         >
           {/* Header */}
