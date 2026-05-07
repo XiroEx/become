@@ -709,6 +709,7 @@ export default function WorkoutFormPage() {
           stale={staleIncomplete}
           programId={programId}
           onResolve={handleResolveIncomplete}
+          onDismiss={() => setStaleIncomplete(null)}
         />
       )}
 

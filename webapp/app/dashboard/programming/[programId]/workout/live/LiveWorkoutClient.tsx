@@ -878,6 +878,10 @@ export default function LiveWorkoutPage() {
           stale={staleIncomplete}
           programId={programId}
           onResolve={handleResolveIncomplete}
+          onDismiss={() => {
+            setStaleIncomplete(null);
+            router.back();
+          }}
         />
       )}
 
