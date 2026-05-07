@@ -118,7 +118,7 @@ const CardImpl = React.forwardRef<HTMLElement, CardImplProps>(
         {hasAccent ? (
           <span
             aria-hidden="true"
-            className={cn("absolute inset-y-0 left-0 w-[9px]", stripe)}
+            className={cn("absolute inset-y-0 left-0 w-[8px]", stripe)}
           />
         ) : null}
         {children}
