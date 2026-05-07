@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import ExerciseAccordion from "@/components/ExerciseAccordion";
+import { Card } from "@/components/ui";
 
 interface Props {
   program: Program;
@@ -496,7 +497,7 @@ export default function ProgramDetailClient({ program }: Props) {
             <button 
               onClick={handleStartProgram}
               disabled={enrolling}
-              className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed sm:px-8 sm:py-3"
+              className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed sm:px-8 sm:py-3"
             >
               {enrolling ? "Starting..." : activeProgram ? "Continue Program" : "Start Program"}
             </button>
@@ -711,7 +712,7 @@ export default function ProgramDetailClient({ program }: Props) {
       <div className="mx-auto max-w-4xl py-2 px-0 sm:px-6">
         {/* Phase Selector */}
         <div className="-mt-4 relative z-10">
-          <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:p-4">
+          <Card>
             <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               Select Phase
             </div>
@@ -728,9 +729,9 @@ export default function ProgramDetailClient({ program }: Props) {
                       setSelectedDayKey(firstDay);
                     }
                   }}
-                  className={`shrink-0 rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
+                  className={`shrink-0 rounded-lg px-5 py-3 text-sm font-semibold transition-colors ${
                     selectedPhaseIndex === index
-                      ? "bg-zinc-900 text-white shadow-lg dark:bg-white dark:text-black"
+                      ? "bg-zinc-900 text-white dark:bg-white dark:text-black"
                       : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
                   }`}
                 >
@@ -741,7 +742,7 @@ export default function ProgramDetailClient({ program }: Props) {
             </div>
 
             {currentPhase && (
-              <div className="mt-3 rounded-lg bg-linear-to-r from-zinc-50 to-zinc-100 p-3 dark:from-zinc-800 dark:to-zinc-800/50 sm:mt-4 sm:rounded-xl sm:p-4">
+              <div className="mt-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
                 <div className="flex items-start gap-2 sm:gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 dark:bg-white">
                     <svg className="h-4 w-4 text-white dark:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -755,7 +756,7 @@ export default function ProgramDetailClient({ program }: Props) {
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         </div>
 
         {/* Day Selector */}
@@ -835,12 +836,20 @@ export default function ProgramDetailClient({ program }: Props) {
                   let i = 0;
                   const exercises = currentWorkout.exercises;
                   const GROUP_COLORS: Record<string, { border: string; bg: string; badge: string }> = {
-                    superset: { border: "border-purple-300 dark:border-purple-700", bg: "bg-purple-50 dark:bg-purple-950/30", badge: "bg-purple-500" },
-                    circuit: { border: "border-orange-300 dark:border-orange-700", bg: "bg-orange-50 dark:bg-orange-950/30", badge: "bg-orange-500" },
-                    triset: { border: "border-indigo-300 dark:border-indigo-700", bg: "bg-indigo-50 dark:bg-indigo-950/30", badge: "bg-indigo-500" },
-                    giant_set: { border: "border-rose-300 dark:border-rose-700", bg: "bg-rose-50 dark:bg-rose-950/30", badge: "bg-rose-500" },
-                    emom: { border: "border-teal-300 dark:border-teal-700", bg: "bg-teal-50 dark:bg-teal-950/30", badge: "bg-teal-500" },
-                    amrap: { border: "border-amber-300 dark:border-amber-700", bg: "bg-amber-50 dark:bg-amber-950/30", badge: "bg-amber-500" },
+                    superset: { border: "border-purple-200 dark:border-purple-900/40", bg: "bg-purple-50/50 dark:bg-purple-950/20", badge: "bg-purple-500" },
+                    circuit: { border: "border-orange-200 dark:border-orange-900/40", bg: "bg-orange-50/50 dark:bg-orange-950/20", badge: "bg-orange-500" },
+                    triset: { border: "border-indigo-200 dark:border-indigo-900/40", bg: "bg-indigo-50/50 dark:bg-indigo-950/20", badge: "bg-indigo-500" },
+                    giant_set: { border: "border-rose-200 dark:border-rose-900/40", bg: "bg-rose-50/50 dark:bg-rose-950/20", badge: "bg-rose-500" },
+                    emom: { border: "border-teal-200 dark:border-teal-900/40", bg: "bg-teal-50/50 dark:bg-teal-950/20", badge: "bg-teal-500" },
+                    amrap: { border: "border-amber-200 dark:border-amber-900/40", bg: "bg-amber-50/50 dark:bg-amber-950/20", badge: "bg-amber-500" },
+                  };
+                  const GROUP_LABELS: Record<string, string> = {
+                    superset: "Superset",
+                    circuit: "Circuit",
+                    triset: "Triset",
+                    giant_set: "Giant Set",
+                    emom: "EMOM",
+                    amrap: "AMRAP",
                   };
 
                   while (i < exercises.length) {
@@ -852,12 +861,14 @@ export default function ProgramDetailClient({ program }: Props) {
                         groupExercises.push({ exercise: exercises[i], index: i });
                         i++;
                       }
-                      const colors = GROUP_COLORS[ex.groupType || "superset"] || GROUP_COLORS.superset;
+                      const groupKey = ex.groupType || "superset";
+                      const colors = GROUP_COLORS[groupKey] || GROUP_COLORS.superset;
+                      const fallbackLabel = GROUP_LABELS[groupKey] || "Group";
                       elements.push(
-                        <div key={`group-${groupId}`} className={`rounded-xl border-2 ${colors.border} ${colors.bg} p-3`}>
+                        <div key={`group-${groupId}`} className={`rounded-xl border ${colors.border} ${colors.bg} p-3`}>
                           <div className="mb-2 flex items-center gap-2">
                             <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold text-white ${colors.badge}`}>
-                              {ex.groupLabel || ex.groupType || "Group"}
+                              {ex.groupLabel || fallbackLabel}
                             </span>
                             <span className="text-xs text-zinc-500 dark:text-zinc-400">
                               {groupExercises.length} exercises{ex.groupRest ? ` · ${ex.groupRest} rest between rounds` : " · minimal rest between exercises"}

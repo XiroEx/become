@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Calendar, ChevronRight, Check, X, Clock, Dumbbell } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 interface ScheduledWorkout {
   date: string
@@ -100,7 +101,7 @@ export default function UpcomingWorkouts() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+      <Card>
         <div className="animate-pulse">
           <div className="mb-4 h-5 w-40 rounded bg-zinc-200 dark:bg-zinc-800" />
           <div className="grid grid-cols-7 gap-1.5">
@@ -109,13 +110,13 @@ export default function UpcomingWorkouts() {
             ))}
           </div>
         </div>
-      </div>
+      </Card>
     )
   }
 
   if (!hasSchedules) {
     return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+      <Card>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-blue-500" />
@@ -133,7 +134,7 @@ export default function UpcomingWorkouts() {
             Browse Programs
           </Link>
         </div>
-      </div>
+      </Card>
     )
   }
 
@@ -154,7 +155,7 @@ export default function UpcomingWorkouts() {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+    <Card>
       <div className="mb-3 flex items-center justify-between sm:mb-4">
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-blue-500" />
@@ -242,7 +243,7 @@ export default function UpcomingWorkouts() {
         return (
           <Link
             href={`/dashboard/programming/${todayWorkout.programId}/workout?day=${encodeURIComponent(todayWorkout.dayLabel)}`}
-            className="mt-3 flex items-center gap-3 rounded-lg bg-blue-50 p-3 transition-colors hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30"
+            className="mt-3 flex items-center gap-3 rounded-lg bg-blue-50 p-3 transition-colors hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/30"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
               <Dumbbell className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -260,6 +261,6 @@ export default function UpcomingWorkouts() {
           </Link>
         )
       })()}
-    </div>
+    </Card>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { CalendarDays, ChevronRight, Dumbbell, AlertCircle, SkipForward } from 'lucide-react'
+import { Card } from '@/components/ui'
 
 interface ScheduledWorkout {
   date: string
@@ -100,7 +101,7 @@ export default function NextWorkoutCard() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <Card>
         <div className="animate-pulse flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-zinc-200 dark:bg-zinc-800" />
           <div className="flex-1 space-y-2">
@@ -108,7 +109,7 @@ export default function NextWorkoutCard() {
             <div className="h-3 w-40 rounded bg-zinc-100 dark:bg-zinc-800/60" />
           </div>
         </div>
-      </div>
+      </Card>
     )
   }
 
@@ -129,7 +130,10 @@ export default function NextWorkoutCard() {
     <div className="space-y-3">
       {/* Missed workout banner */}
       {missedWorkouts.length > 0 && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/40 dark:bg-red-950/20">
+        <Card
+          accent="danger"
+          className="!border-red-200 !bg-red-50 dark:!border-red-900/40 dark:!bg-red-950/20"
+        >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-red-500" />
@@ -144,12 +148,12 @@ export default function NextWorkoutCard() {
               View all
             </Link>
           </div>
-          <div className="space-y-2">
+          <div className="divide-y divide-red-200/70 dark:divide-red-900/40">
             {missedWorkouts.slice(0, 2).map((w) => {
               const dateStr = typeof w.date === 'string' ? w.date.split('T')[0] : new Date(w.date).toISOString().split('T')[0]
               const displayDate = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
               return (
-                <div key={w.date} className="flex items-center gap-2">
+                <div key={w.date} className="flex items-center gap-2 py-2 first:pt-0 last:pb-0">
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-xs font-medium text-red-800 dark:text-red-300">
                       {displayDate} — {w.dayLabel}: {w.workoutTitle}
@@ -165,7 +169,7 @@ export default function NextWorkoutCard() {
                     <button
                       onClick={() => skipMissed(w)}
                       disabled={skipping === w.date}
-                      className="flex items-center gap-0.5 rounded-lg border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                      className="flex items-center gap-0.5 rounded-lg border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/30"
                     >
                       <SkipForward className="h-2.5 w-2.5" />
                       Skip
@@ -174,16 +178,16 @@ export default function NextWorkoutCard() {
                 </div>
               )
             })}
-            {missedWorkouts.length > 2 && (
-              <p className="text-xs text-red-500">+{missedWorkouts.length - 2} more in calendar</p>
-            )}
           </div>
-        </div>
+          {missedWorkouts.length > 2 && (
+            <p className="mt-2 text-xs text-red-500">+{missedWorkouts.length - 2} more in calendar</p>
+          )}
+        </Card>
       )}
 
       {/* Upcoming workout */}
       {nextWorkout && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <Card>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-blue-500" />
@@ -199,7 +203,7 @@ export default function NextWorkoutCard() {
           </div>
           <Link
             href={`/dashboard/programming/${nextWorkout.programId}/workout?day=${encodeURIComponent(nextWorkout.dayLabel)}`}
-            className="flex items-center gap-3 rounded-lg bg-blue-50 p-3 transition-colors hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30"
+            className="flex items-center gap-3 rounded-lg bg-blue-50 p-3 transition-colors hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/30"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
               <Dumbbell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -214,7 +218,7 @@ export default function NextWorkoutCard() {
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-blue-400" />
           </Link>
-        </div>
+        </Card>
       )}
     </div>
   )
