@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getToken } from '@/lib/clientAuth'
+import { Card } from '@/components/ui'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ function PastEntryCard({ entry }: { entry: JournalEntry }) {
   const preview = isLong && !expanded ? entry.content.slice(0, 120).trimEnd() + '...' : entry.content
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <Card>
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
           {formatDateShort(entry.date)}
@@ -219,7 +220,7 @@ function PastEntryCard({ entry }: { entry: JournalEntry }) {
           {expanded ? 'Show less' : 'Read more'}
         </button>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -415,18 +416,23 @@ export default function JournalTab() {
     <div className="space-y-6">
       {/* Draft restored banner */}
       {draftRestored && (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
-            Draft restored — you were writing earlier
-          </p>
-          <button
-            type="button"
-            onClick={() => { setContent(''); setSelectedMood(undefined); clearDraft(); setDraftRestored(false) }}
-            className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
-          >
-            Discard
-          </button>
-        </div>
+        <Card
+          accent="warning"
+          className="!border-amber-200 !bg-amber-50 dark:!border-amber-900/40 dark:!bg-amber-950/20"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+              Draft restored — you were writing earlier
+            </p>
+            <button
+              type="button"
+              onClick={() => { setContent(''); setSelectedMood(undefined); clearDraft(); setDraftRestored(false) }}
+              className="shrink-0 text-xs font-medium text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+            >
+              Discard
+            </button>
+          </div>
+        </Card>
       )}
 
       {/* Writing streak pill */}
@@ -439,7 +445,7 @@ export default function JournalTab() {
       )}
 
       {/* Today's Entry card */}
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+      <Card>
         <div className="mb-4 flex items-start justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">
@@ -501,7 +507,7 @@ export default function JournalTab() {
             {saving ? 'Saving...' : isUpdate ? 'Update Entry' : 'Save Entry'}
           </button>
         </form>
-      </div>
+      </Card>
 
       {/* Past Entries */}
       {pastEntries.length > 0 && (

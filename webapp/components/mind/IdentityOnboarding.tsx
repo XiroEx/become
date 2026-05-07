@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { Card } from '@/components/ui'
 
 type StartingPoint = 'lost' | 'stuck' | 'building' | 'leveling_up'
 type PrimaryObstacle = 'clarity' | 'discipline' | 'motivation' | 'environment'
@@ -152,11 +153,14 @@ export default function IdentityOnboarding({ onComplete }: Props) {
 
       {/* Resume banner */}
       {resumedFromDraft && (
-        <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/40 dark:bg-blue-950/20">
+        <Card
+          accent="info"
+          className="mb-6 !border-blue-200 !bg-blue-50 dark:!border-blue-900/40 dark:!bg-blue-950/20"
+        >
           <p className="text-sm font-medium text-blue-800 dark:text-blue-400">
             Picking up where you left off — step {step} of 3
           </p>
-        </div>
+        </Card>
       )}
 
       {/* Progress bar */}
@@ -188,7 +192,7 @@ export default function IdentityOnboarding({ onComplete }: Props) {
               <button
                 key={s.id}
                 onClick={() => setStartingPoint(s.id)}
-                className={`flex w-full items-start gap-4 rounded-2xl border p-4 text-left transition-all ${
+                className={`flex w-full items-start gap-4 rounded-xl border p-3 sm:p-4 text-left transition-all ${
                   startingPoint === s.id
                     ? 'border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white'
                     : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-600'
@@ -213,7 +217,7 @@ export default function IdentityOnboarding({ onComplete }: Props) {
           <button
             onClick={() => setStep(2)}
             disabled={!startingPoint}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 dark:bg-white py-4 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-30 transition-opacity"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 dark:bg-white py-4 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-30 transition-opacity"
           >
             Continue <ArrowRight className="h-4 w-4" />
           </button>
@@ -232,7 +236,7 @@ export default function IdentityOnboarding({ onComplete }: Props) {
           <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
             Not what you want to have — who you want to <em>be</em>. Write it like it&apos;s already happening.
           </p>
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1 mb-4">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1 mb-4">
             <textarea
               value={futureSelf}
               onChange={(e) => setFutureSelf(e.target.value)}
@@ -240,21 +244,21 @@ export default function IdentityOnboarding({ onComplete }: Props) {
               rows={5}
               maxLength={500}
               autoFocus
-              className="w-full resize-none rounded-xl bg-transparent px-4 py-4 text-base text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none leading-relaxed"
+              className="w-full resize-none rounded-lg bg-transparent px-4 py-4 text-base text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none leading-relaxed"
             />
           </div>
           <p className="mb-6 text-xs text-zinc-400 text-right">{futureSelf.length}/500</p>
           <div className="flex gap-3">
             <button
               onClick={() => setStep(1)}
-              className="rounded-2xl border border-zinc-200 dark:border-zinc-800 px-5 py-4 text-sm font-semibold text-zinc-500 dark:text-zinc-400"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 px-5 py-4 text-sm font-semibold text-zinc-500 dark:text-zinc-400"
             >
               Back
             </button>
             <button
               onClick={() => setStep(3)}
               disabled={futureSelf.trim().length < 10}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 dark:bg-white py-4 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-30 transition-opacity"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-zinc-900 dark:bg-white py-4 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-30 transition-opacity"
             >
               Continue <ArrowRight className="h-4 w-4" />
             </button>
@@ -279,7 +283,7 @@ export default function IdentityOnboarding({ onComplete }: Props) {
               <button
                 key={o.id}
                 onClick={() => setObstacle(o.id)}
-                className={`flex w-full flex-col gap-1 rounded-2xl border p-4 text-left transition-all ${
+                className={`flex w-full flex-col gap-1 rounded-xl border p-3 sm:p-4 text-left transition-all ${
                   obstacle === o.id
                     ? 'border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white'
                     : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-400 dark:hover:border-zinc-600'
@@ -301,14 +305,14 @@ export default function IdentityOnboarding({ onComplete }: Props) {
           <div className="mt-6 flex gap-3">
             <button
               onClick={() => setStep(2)}
-              className="rounded-2xl border border-zinc-200 dark:border-zinc-800 px-5 py-4 text-sm font-semibold text-zinc-500 dark:text-zinc-400"
+              className="rounded-xl border border-zinc-200 dark:border-zinc-800 px-5 py-4 text-sm font-semibold text-zinc-500 dark:text-zinc-400"
             >
               Back
             </button>
             <button
               onClick={submit}
               disabled={!obstacle || saving}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-zinc-900 dark:bg-white py-4 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-30 transition-opacity"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-zinc-900 dark:bg-white py-4 text-sm font-bold text-white dark:text-zinc-900 disabled:opacity-30 transition-opacity"
             >
               {saving ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Building your system...</>
