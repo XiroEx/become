@@ -15,6 +15,7 @@ import {
   type XpMilestone,
 } from '@/lib/mindXP'
 import { Card } from '@/components/ui'
+import { cn } from '@/lib/cn'
 
 export type SectionId =
   | 'home' | 'state-shift' | 'self-image' | 'mission'
@@ -238,8 +239,14 @@ export default function MindHub({ onNavigate, streak }: Props) {
       <div className="space-y-4">
 
         {/* ── Hero card: Chapter + Identity + XP (unified) ─────────────── */}
-        <Card variant="hero" className="relative overflow-hidden bg-zinc-900 dark:bg-zinc-900 border-zinc-800 dark:border-zinc-800">
-          <div className={`pointer-events-none absolute inset-0 ${currentChapterData.bg}`} />
+        <Card
+          variant="hero"
+          className={cn(
+            "relative overflow-hidden",
+            currentChapterData.bg,
+            currentChapterData.border,
+          )}
+        >
           <div className="relative">
 
           {/* Header: chapter + streak + edit */}
