@@ -154,12 +154,12 @@ interface WorkoutData {
 
 // Color/style config per group type
 const GROUP_STYLES: Record<string, { border: string; bg: string; badge: string; icon: string }> = {
-  superset: { border: "border-purple-300 dark:border-purple-700", bg: "bg-purple-50 dark:bg-purple-950/30", badge: "bg-purple-500", icon: "⇄" },
-  circuit: { border: "border-orange-300 dark:border-orange-700", bg: "bg-orange-50 dark:bg-orange-950/30", badge: "bg-orange-500", icon: "🔄" },
-  triset: { border: "border-indigo-300 dark:border-indigo-700", bg: "bg-indigo-50 dark:bg-indigo-950/30", badge: "bg-indigo-500", icon: "⇄" },
-  giant_set: { border: "border-rose-300 dark:border-rose-700", bg: "bg-rose-50 dark:bg-rose-950/30", badge: "bg-rose-500", icon: "⇄" },
-  emom: { border: "border-teal-300 dark:border-teal-700", bg: "bg-teal-50 dark:bg-teal-950/30", badge: "bg-teal-500", icon: "⏱" },
-  amrap: { border: "border-amber-300 dark:border-amber-700", bg: "bg-amber-50 dark:bg-amber-950/30", badge: "bg-amber-500", icon: "🔥" },
+  superset: { border: "border-purple-200 dark:border-purple-900/40", bg: "bg-purple-50/50 dark:bg-purple-950/20", badge: "bg-purple-500", icon: "⇄" },
+  circuit: { border: "border-orange-200 dark:border-orange-900/40", bg: "bg-orange-50/50 dark:bg-orange-950/20", badge: "bg-orange-500", icon: "🔄" },
+  triset: { border: "border-indigo-200 dark:border-indigo-900/40", bg: "bg-indigo-50/50 dark:bg-indigo-950/20", badge: "bg-indigo-500", icon: "⇄" },
+  giant_set: { border: "border-rose-200 dark:border-rose-900/40", bg: "bg-rose-50/50 dark:bg-rose-950/20", badge: "bg-rose-500", icon: "⇄" },
+  emom: { border: "border-teal-200 dark:border-teal-900/40", bg: "bg-teal-50/50 dark:bg-teal-950/20", badge: "bg-teal-500", icon: "⏱" },
+  amrap: { border: "border-amber-200 dark:border-amber-900/40", bg: "bg-amber-50/50 dark:bg-amber-950/20", badge: "bg-amber-500", icon: "🔥" },
 };
 
 // Fallback demo data in case API fails
@@ -814,7 +814,7 @@ export default function WorkoutFormPage() {
                     className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                   >
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-md ${
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-sm ${
                         completion === 100
                           ? "bg-linear-to-br from-green-500 to-emerald-600 text-white"
                           : "bg-linear-to-br from-zinc-900 to-zinc-700 text-white dark:from-zinc-700 dark:to-zinc-600"
@@ -1100,7 +1100,7 @@ export default function WorkoutFormPage() {
               return (
                 <div
                   key={`group-${groupIndex}`}
-                  className={`overflow-hidden rounded-2xl border-2 ${groupStyle.border} ${groupStyle.bg} p-3 sm:p-4`}
+                  className={`overflow-hidden rounded-xl border ${groupStyle.border} ${groupStyle.bg} p-3 sm:p-4`}
                 >
                   {/* Group header */}
                   <div className="mb-3 flex items-center gap-2">
@@ -1274,7 +1274,7 @@ export default function WorkoutFormPage() {
                   await autoSave(exerciseProgress);
                   setShowSummary(true);
                 }}
-                className="w-full rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-lg shadow-green-500/25 transition-all hover:shadow-xl hover:shadow-green-500/30"
+                className="w-full rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-sm transition-all hover:brightness-105"
               >
                 Complete Workout! 🎉
               </button>
