@@ -108,7 +108,9 @@ const CardImpl = React.forwardRef<HTMLElement, CardImplProps>(
         ref={ref}
         className={cn(
           VARIANT_CLASSES[variant],
-          hasAccent && "relative",
+          // Card clips its rounded corners — accent stripe spans full height
+          // and gets cut by the card's radius rather than overflowing.
+          hasAccent && "relative overflow-hidden",
           className,
         )}
         {...rest}
@@ -116,10 +118,7 @@ const CardImpl = React.forwardRef<HTMLElement, CardImplProps>(
         {hasAccent ? (
           <span
             aria-hidden="true"
-            className={cn(
-              "absolute inset-y-3 left-0 w-[3px] rounded-full",
-              stripe,
-            )}
+            className={cn("absolute inset-y-0 left-0 w-[3px]", stripe)}
           />
         ) : null}
         {children}
