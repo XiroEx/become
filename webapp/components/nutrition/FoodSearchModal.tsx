@@ -505,7 +505,7 @@ export default function FoodSearchModal({
   // collection before being logged. Returns the resolved foodId + variants.
   const importExternalIfNeeded = async (
     food: FoodResult,
-  ): Promise<{ foodId: string; variants?: FoodVariant[] }> => {
+  ): Promise<{ foodId: string; variants?: FoodVariant[]; error?: string }> => {
     const id = String(food._id || '')
 
     // Already a real Food doc — no work to do.
@@ -525,13 +525,19 @@ export default function FoodSearchModal({
     }
 
     if (!source || !externalId) {
-      // Unrecognized id shape — return as-is (graceful degradation)
-      return { foodId: id, variants: food.variants }
+      return { foodId: id, variants: food.variants, error: 'unknown id format' }
     }
 
     const token = localStorage.getItem('token')
-    const headers: HeadersInit = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = `Bearer ${token}`
+    if (!token) {
+      return { foodId: id, variants: food.variants, error: 'not signed in' }
+    }
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    }
+
+    let lastError = ''
 
     // Try the source-specific import first (re-fetches authoritative data).
     try {
@@ -541,7 +547,7 @@ export default function FoodSearchModal({
         body: JSON.stringify({ source, externalId }),
       })
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => null)
         const importedFood = data?.food
         if (importedFood?._id) {
           return {
@@ -549,12 +555,18 @@ export default function FoodSearchModal({
             variants: importedFood.variants ?? food.variants,
           }
         }
+        lastError = 'import returned no _id'
+        console.warn('[FoodSearchModal] source import returned no _id, body:', data)
       } else {
         const errBody = await res.text().catch(() => '')
-        console.warn(`[FoodSearchModal] ${source} import failed (${res.status}) for ${id}: ${errBody.slice(0, 200)} — falling back to manual import using cached search data`)
+        let parsed: { error?: string } | null = null
+        try { parsed = JSON.parse(errBody) } catch { /* not json */ }
+        lastError = parsed?.error || `${res.status} ${res.statusText}`
+        console.warn(`[FoodSearchModal] ${source} import failed (${res.status}) for ${id}: ${errBody.slice(0, 300)} — falling back to manual import`)
       }
     } catch (err) {
-      console.warn('[FoodSearchModal] Import network error — falling back to manual import', err)
+      lastError = err instanceof Error ? err.message : String(err)
+      console.warn('[FoodSearchModal] Source import network error — falling back to manual import', err)
     }
 
     // Fallback: USDA can be intermittent and the local OFF cache may not
@@ -575,9 +587,9 @@ export default function FoodSearchModal({
 
       const manualPayload: Record<string, unknown> = {
         name: food.name,
-        brand: food.brand,
         aliases: [],
       }
+      if (food.brand) manualPayload.brand = food.brand
       if (variantsInput) {
         manualPayload.variants = variantsInput
       } else if (food.nutrition && typeof food.servingSize === 'number') {
@@ -586,9 +598,14 @@ export default function FoodSearchModal({
         manualPayload.alternateServings = food.alternateServings ?? []
         manualPayload.nutrition = food.nutrition
       } else {
-        // Nothing usable — bail.
-        return { foodId: id, variants: food.variants }
+        return {
+          foodId: id,
+          variants: food.variants,
+          error: lastError || 'cached row missing nutrition',
+        }
       }
+
+      console.log('[FoodSearchModal] Attempting manual fallback import with payload:', manualPayload)
 
       const res = await fetch('/api/nutrition/foods/import', {
         method: 'POST',
@@ -596,7 +613,7 @@ export default function FoodSearchModal({
         body: JSON.stringify({ source: 'manual', data: manualPayload }),
       })
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => null)
         const importedFood = data?.food
         if (importedFood?._id) {
           return {
@@ -604,15 +621,20 @@ export default function FoodSearchModal({
             variants: importedFood.variants ?? food.variants,
           }
         }
+        lastError = 'manual import returned no _id'
       } else {
         const errBody = await res.text().catch(() => '')
-        console.warn(`[FoodSearchModal] Manual fallback also failed (${res.status}): ${errBody.slice(0, 200)}`)
+        let parsed: { error?: string } | null = null
+        try { parsed = JSON.parse(errBody) } catch { /* not json */ }
+        lastError = parsed?.error || `manual ${res.status}`
+        console.warn(`[FoodSearchModal] Manual fallback also failed (${res.status}): ${errBody.slice(0, 300)}`)
       }
     } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
       console.warn('[FoodSearchModal] Manual fallback errored', err)
     }
 
-    return { foodId: id, variants: food.variants }
+    return { foodId: id, variants: food.variants, error: lastError || 'unknown error' }
   }
 
   // Save a food (by real foodId) to /api/me/foods. Returns the new isSaved state.
@@ -700,7 +722,8 @@ export default function FoodSearchModal({
         resolvedVariants = imported.variants
         isExternal = !isObjectIdString(foodId)
         if (isExternal) {
-          showToast('Could not save (import failed)')
+          const reason = imported.error ? `: ${imported.error}` : ''
+          showToast(`Could not save${reason}`)
           return
         }
       }
