@@ -1,5 +1,6 @@
 "use client"
 
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Loader2, Bookmark, Check, Plus } from 'lucide-react'
 import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
@@ -29,6 +30,7 @@ interface SavedFoodCardProps {
 }
 
 export default function SavedFoodCard({
+  id,
   name,
   brand,
   servingSize,
@@ -55,30 +57,42 @@ export default function SavedFoodCard({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+      className="group flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
     >
-      {/* Thumbnail — actual image when available, category-tinted icon as fallback */}
-      <FoodThumbnail name={name} category={category} imageUrl={imageUrl} />
+      {/* Tappable area — thumbnail + info routes to detail */}
+      <Link
+        href={`/dashboard/foods/${id}`}
+        className="flex min-w-0 flex-1 items-center gap-3 -my-2.5 -ml-3 py-2.5 pl-3 pr-1 transition-colors active:bg-zinc-50 dark:active:bg-zinc-800"
+      >
+        {/* Thumbnail — actual image when available, category-tinted icon as fallback */}
+        <FoodThumbnail
+          name={name}
+          category={category}
+          imageUrl={imageUrl}
+          className="h-14 w-14 rounded-lg"
+          iconClassName="h-7 w-7"
+        />
 
-      {/* Info */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{name}</p>
-          {isVerified && (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-              ✓
-            </span>
-          )}
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{name}</p>
+            {isVerified && (
+              <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                ✓
+              </span>
+            )}
+          </div>
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+            {brand && <span>{brand} · </span>}
+            <span>{servingText}</span>
+            <span> · {calories} cal</span>
+          </p>
+          <p className="mt-0.5 truncate text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
+            P {protein}g · C {carbs}g · F {fats}g
+          </p>
         </div>
-        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {brand && <span>{brand} · </span>}
-          <span>{servingText}</span>
-          <span> · {calories} cal</span>
-        </p>
-        <p className="mt-0.5 truncate text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
-          P {protein}g · C {carbs}g · F {fats}g
-        </p>
-      </div>
+      </Link>
 
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-1.5">
