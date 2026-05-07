@@ -800,7 +800,7 @@ export default function WorkoutFormPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: exerciseIndex * 0.05 }}
-                  className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-all dark:bg-zinc-900 ${isInsideGroup ? "sm:rounded-xl" : "sm:rounded-2xl"} ${
+                  className={`overflow-hidden rounded-xl border bg-white transition-all dark:bg-zinc-900 ${isInsideGroup ? "sm:rounded-xl" : "sm:rounded-2xl"} ${
                     completion === 100
                       ? "border-green-300 dark:border-green-800"
                       : isInsideGroup
