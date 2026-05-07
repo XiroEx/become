@@ -5,6 +5,7 @@ import MealLog from '@/models/MealLog'
 import Food, { IFood, IFoodVariant } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
+import { baseSlug } from '@/lib/foodSlug'
 
 // GET: Get user's most frequently logged foods (across all MealLogs)
 export async function GET(request: NextRequest) {
@@ -45,11 +46,30 @@ export async function GET(request: NextRequest) {
       : []
     const foodMap = new Map(foodDocs.map(f => [f._id.toString(), f]))
 
+    // Resolve orphan log entries (no foodId) to existing Food docs by base
+    // slug — covers items the user already favorited, so the row reflects
+    // saved state and a re-favorite returns the existing doc instead of
+    // creating a duplicate.
+    const orphanSlugs = Array.from(new Set(
+      results
+        .filter(r => !r._id.foodId || !foodMap.has(r._id.foodId.toString()))
+        .map(r => baseSlug(r._id.name, r.lastBrand))
+    ))
+    const slugDocs = orphanSlugs.length > 0
+      ? await Food.find({ slug: { $in: orphanSlugs } }).lean<(IFood & { _id: mongoose.Types.ObjectId })[]>()
+      : []
+    const slugMap = new Map(slugDocs.map(f => [f.slug, f]))
+
     const foods = results.map(r => {
       const foodId = r._id.foodId?.toString()
       const foodDoc = foodId ? foodMap.get(foodId) : null
       if (foodDoc) {
         return { ...flattenFoodForResponse(foodDoc), count: r.count }
+      }
+      const slug = baseSlug(r._id.name, r.lastBrand)
+      const matched = slugMap.get(slug)
+      if (matched) {
+        return { ...flattenFoodForResponse(matched), count: r.count }
       }
       // Synthesized fallback so the picker preview computes correctly when the
       // underlying Food no longer exists.

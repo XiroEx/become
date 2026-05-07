@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 import Food, { IFood, IFoodVariant, FoodCategory, ServingUnit } from '@/models/Food'
 import OpenFoodFact, { IOpenFoodFact } from '@/models/OpenFoodFact'
 import { fetchUSDAById, mapUSDAFood, MappedFoodResult, USDAFood } from '@/lib/usda'
-import { generateUniqueFoodSlug } from '@/lib/foodSlug'
+import { baseSlug, generateUniqueFoodSlug } from '@/lib/foodSlug'
 
 const VALID_CATEGORIES: FoodCategory[] = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -281,6 +281,17 @@ export async function importManualFood(
   if (input.barcode) {
     const byBarcode = await Food.findOne({ barcode: input.barcode })
     if (byBarcode) return { food: byBarcode, created: false }
+  }
+
+  // Dedupe by base slug — manual saves of the same name+brand used to create
+  // a fresh Food doc each time (with -2/-3 suffixes), filling the user's
+  // saved list with duplicates. baseSlug encodes both name and brand, so an
+  // exact base-slug match on a manual food represents the same conceptual
+  // item.
+  {
+    const base = baseSlug(input.name, input.brand)
+    const candidate = await Food.findOne({ slug: base, source: 'manual' })
+    if (candidate) return { food: candidate, created: false }
   }
 
   // Build variants — accept either a `variants` array or the flat legacy shape
