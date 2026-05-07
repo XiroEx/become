@@ -5,6 +5,7 @@ import MealLog from '@/models/MealLog'
 import Food, { IFood, IFoodVariant } from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
+import { baseSlug } from '@/lib/foodSlug'
 import type { IMealItem } from '@/models/Meal'
 
 // GET: Get user's recently logged foods (last 14 days, deduped, most recent first)
@@ -52,10 +53,29 @@ export async function GET(request: NextRequest) {
       : []
     const foodMap = new Map(foodDocs.map(f => [f._id.toString(), f]))
 
+    // For items missing a foodId, see if a Food doc already exists with the
+    // matching base slug — that resolves "I favorited this earlier" to the
+    // real ObjectId so the row reflects saved state and avoids creating
+    // duplicates on subsequent favorites.
+    const orphanItems = recent.filter(({ item }) => !item.foodId || !foodMap.has(item.foodId.toString()))
+    const slugLookups = Array.from(new Set(
+      orphanItems.map(({ item }) => baseSlug(item.name, item.brand))
+    ))
+    const slugDocs = slugLookups.length > 0
+      ? await Food.find({ slug: { $in: slugLookups } }).lean<(IFood & { _id: mongoose.Types.ObjectId })[]>()
+      : []
+    const slugMap = new Map(slugDocs.map(f => [f.slug, f]))
+
     const enriched = recent.map(({ item, loggedAt }) => {
       const id = item.foodId?.toString()
       if (id && foodMap.has(id)) {
         return { ...flattenFoodForResponse(foodMap.get(id)!), lastLoggedAt: loggedAt }
+      }
+      // Try resolving against an existing Food via base slug
+      const slug = baseSlug(item.name, item.brand)
+      const matched = slugMap.get(slug)
+      if (matched) {
+        return { ...flattenFoodForResponse(matched), lastLoggedAt: loggedAt }
       }
       // Fallback: synthesize a single-variant Food-shape from the snapshot so
       // the picker preview has the data it needs.
