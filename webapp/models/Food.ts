@@ -112,6 +112,24 @@ export interface IFood {
   usageCount: number
   createdBy?: Types.ObjectId
 
+  /**
+   * When true, this Food has been auto-flagged (or admin-flagged) for review
+   * — typically because nutrition values are suspect, the slug had to be
+   * collision-suffixed past -2, or the food has no usable nutrition. Surfaced
+   * in the admin Foods section. See `lib/foodReview.ts` for the auto-flag
+   * rules.
+   */
+  needsReview?: boolean
+
+  /**
+   * Coarse grouping key used by future variant-merging passes — e.g. "Tea,
+   * hot, herbal" → "tea". Lets us cluster the same conceptual food (Eggs,
+   * Chicken Breast, Tea) across prep variants without committing to a hard
+   * canonical record yet. Populated at import time by `lib/foodGrouping.ts`.
+   * Always lowercase, alphanumeric + spaces only.
+   */
+  groupKey?: string
+
   createdAt?: Date
   updatedAt?: Date
 }
@@ -185,6 +203,9 @@ const FoodSchema = new Schema<IFood>({
 
   usageCount: { type: Number, default: 0 },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+
+  needsReview: { type: Boolean, default: false },
+  groupKey: { type: String },
 }, {
   timestamps: true,
 })
@@ -217,5 +238,10 @@ FoodSchema.index({ slug: 1 }, { unique: true })
 FoodSchema.index({ barcode: 1 }, { unique: true, sparse: true })
 FoodSchema.index({ category: 1, isFirstClass: -1 })
 FoodSchema.index({ source: 1, externalId: 1 }, { unique: true, sparse: true })
+// Admin reviews: surface flagged foods quickly without a full collection scan.
+FoodSchema.index({ needsReview: 1, updatedAt: -1 })
+// Future variant-merging passes filter by groupKey; sparse so manual foods
+// without a groupKey don't bloat the index.
+FoodSchema.index({ groupKey: 1 }, { sparse: true })
 
 export default mongoose.models.Food || mongoose.model<IFood>('Food', FoodSchema)

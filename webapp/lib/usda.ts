@@ -30,6 +30,31 @@ export interface USDANutrient {
   unitName: string
 }
 
+/**
+ * USDA `foodPortions` entry — present on Foundation/SR Legacy/Survey detail
+ * responses. Each portion describes a household measure (e.g. "1 cup", "1
+ * slice") with its gram weight. Branded foods sometimes carry these too.
+ *
+ * Shape per https://fdc.nal.usda.gov/api-guide :
+ *   {
+ *     id, amount, modifier, gramWeight,
+ *     portionDescription, sequenceNumber, dataPoints
+ *   }
+ *
+ * `amount` + `modifier` form the human label ("1 cup", "2 slices"); some
+ * entries instead use `portionDescription` ("1 medium banana"). `gramWeight`
+ * is always set when the portion is meaningful.
+ */
+export interface USDAFoodPortion {
+  id?: number
+  amount?: number
+  modifier?: string
+  gramWeight: number
+  portionDescription?: string
+  sequenceNumber?: number
+  dataPoints?: number
+}
+
 export interface USDAFood {
   fdcId: number
   description: string
@@ -41,6 +66,12 @@ export interface USDAFood {
   servingSizeUnit?: string
   foodCategory?: string
   householdServingFullText?: string
+  /**
+   * Detail-only — the search endpoint omits this. When present (Foundation /
+   * SR Legacy / Survey, sometimes Branded), gives rich household-portion data
+   * we use to populate `displayLabel` + `gramsPerServing` + `alternateServings`.
+   */
+  foodPortions?: USDAFoodPortion[]
 }
 
 interface USDASearchResponse {
@@ -412,9 +443,39 @@ export async function fetchUSDAById(fdcId: string): Promise<USDAFood | null> {
 
     const data = await res.json()
     if (!data || typeof data.fdcId !== 'number') return null
+    // foodPortions on the detail endpoint is a richer object; normalize to
+    // the slim shape we consume. The endpoint includes `measureUnit` (e.g.
+    // {name: 'cup'}) but for our purposes amount + modifier + portionDescription
+    // are sufficient (modifier carries "cup, medium" etc).
+    type RawPortion = {
+      id?: number
+      amount?: number
+      modifier?: string
+      gramWeight?: number
+      portionDescription?: string
+      sequenceNumber?: number
+      dataPoints?: number
+    }
+    const rawPortions: RawPortion[] = Array.isArray(data.foodPortions) ? data.foodPortions : []
+    const foodPortions: USDAFoodPortion[] = rawPortions
+      .map((p): USDAFoodPortion | null => {
+        if (typeof p?.gramWeight !== 'number' || p.gramWeight <= 0) return null
+        return {
+          id: typeof p.id === 'number' ? p.id : undefined,
+          amount: typeof p.amount === 'number' ? p.amount : undefined,
+          modifier: typeof p.modifier === 'string' ? p.modifier : undefined,
+          gramWeight: p.gramWeight,
+          portionDescription: typeof p.portionDescription === 'string' ? p.portionDescription : undefined,
+          sequenceNumber: typeof p.sequenceNumber === 'number' ? p.sequenceNumber : undefined,
+          dataPoints: typeof p.dataPoints === 'number' ? p.dataPoints : undefined,
+        }
+      })
+      .filter((p): p is USDAFoodPortion => p !== null)
+
     return {
       ...data,
       foodNutrients: normalizeNutrients(data.foodNutrients),
+      foodPortions: foodPortions.length > 0 ? foodPortions : undefined,
     } as USDAFood
   } catch (err) {
     console.warn(`USDA fetch by id error: ${err instanceof Error ? err.message : String(err)} (fdcId=${fdcId})`)
