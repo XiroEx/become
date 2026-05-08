@@ -349,13 +349,16 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
   const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
 
   try {
-    // Include Foundation + SR Legacy (whole foods) alongside Branded + Survey.
-    // We request more than needed so we have room to sort and trim.
+    // Include Foundation + SR Legacy (whole foods) alongside Branded.
+    // NOTE: Survey (FNDDS) is intentionally omitted — its name contains
+    // parentheses that USDA's own nginx rejects with a 400, even when the
+    // value is URL-encoded. Dropping FNDDS keeps the call working; we still
+    // get the rich whole-food entries from Foundation + SR Legacy.
     const params = new URLSearchParams({
       query,
       api_key: apiKey,
       pageSize: String(Math.min(limit * 2, 50)),
-      dataType: 'Foundation,SR Legacy,Survey (FNDDS),Branded',
+      dataType: 'Foundation,SR Legacy,Branded',
     })
 
     const res = await fetch(`${API_BASE}/foods/search?${params}`, {
