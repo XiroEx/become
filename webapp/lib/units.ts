@@ -209,6 +209,36 @@ export function convertWithBridge(
 // ---------------------------------------------------------------------------
 
 /**
+ * Replace raw upstream unit codes ("34 GRM", "2.5 ONZ", "8 FLZ", "MLT")
+ * inside an arbitrary label with their friendly equivalents ("34 g",
+ * "2.5 oz", "8 fl oz", "ml"). Matches whole-word so "GRM" inside a
+ * brand name like "STORM" stays untouched. Case-preserving.
+ *
+ * Common USDA / supplier codes seen in the wild:
+ *   GRM → g     MLT → ml    ONZ → oz    FLZ → fl oz
+ *   LBR → lb    KGM → kg    TBS → tbsp  TSP → tsp
+ */
+export function prettifyUnitCodes(label: string): string {
+  if (!label) return label
+  return label.replace(
+    /\b(GRM|MLT|ONZ|FLZ|LBR|KGM|TBS|TSP)\b/gi,
+    (m) => {
+      switch (m.toUpperCase()) {
+        case 'GRM': return 'g'
+        case 'MLT': return 'ml'
+        case 'ONZ': return 'oz'
+        case 'FLZ': return 'fl oz'
+        case 'LBR': return 'lb'
+        case 'KGM': return 'kg'
+        case 'TBS': return 'tbsp'
+        case 'TSP': return 'tsp'
+        default:    return m
+      }
+    },
+  )
+}
+
+/**
  * Human label for a unit (singular form). Discrete units are returned
  * unmodified ("each", "slice", "scoop", "serving") — pluralization is
  * handled inside `formatQuantity`.

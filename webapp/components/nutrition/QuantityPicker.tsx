@@ -30,6 +30,7 @@ import {
   familyOf,
   unitLabel,
   parseQuantityString,
+  prettifyUnitCodes,
   suggestedToggleUnit,
   formatQuantity,
 } from '@/lib/units'
@@ -108,7 +109,7 @@ interface QuickOption {
  * UNITS_AND_SERVINGS_PLAN §4.3 row.
  */
 function labelForQuantity(quantity: number, unit: Unit, displayLabel?: string, isPrimary?: boolean): string {
-  if (isPrimary && displayLabel) return displayLabel
+  if (isPrimary && displayLabel) return prettifyUnitCodes(displayLabel)
   return formatQuantity(quantity, unit)
 }
 
@@ -195,10 +196,8 @@ function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
   if (alternates.length > 0) {
     const alt = alternates[0]
     const altQty = size * alt.multiplier
-    const altLabel = enrichLabelWithBridge(
-      alt.label || labelForQuantity(altQty, unit),
-      variant,
-    )
+    const rawAltLabel = alt.label ? prettifyUnitCodes(alt.label) : labelForQuantity(altQty, unit)
+    const altLabel = enrichLabelWithBridge(rawAltLabel, variant)
     const dupQty = Math.abs(altQty - size) < 0.001
     const dupLabel = altLabel.trim() === primary.label.trim()
     if (!dupQty && !dupLabel) {
