@@ -9,6 +9,9 @@ import type { IFoodEntry } from '@/models/NutritionLog'
 import { getToken } from '@/lib/clientAuth'
 import BarcodeScanner from './BarcodeScanner'
 import MealApplySheet from '@/components/meals/MealApplySheet'
+import QuantityPicker, { type QuantityPickerSelection } from './QuantityPicker'
+import type { Unit } from '@/lib/units'
+import type { ServingUnit } from '@/models/Food'
 
 interface FoodSearchModalProps {
   isOpen: boolean
@@ -43,6 +46,7 @@ interface FoodNutrition {
   fiber?: number
   sugar?: number
   sodium?: number
+  saturatedFat?: number
 }
 
 interface FoodVariant {
@@ -50,10 +54,12 @@ interface FoodVariant {
   name: string
   isDefault?: boolean
   servingSize: number
-  servingUnit: string
+  servingUnit: ServingUnit
   displayLabel?: string
   alternateServings?: AlternateServing[]
   nutrition: FoodNutrition
+  gramsPerServing?: number
+  mlPerServing?: number
 }
 
 interface FoodResult {
@@ -61,9 +67,12 @@ interface FoodResult {
   name: string
   brand?: string
   servingSize: number
-  servingUnit: string
+  servingUnit: ServingUnit
+  displayLabel?: string
   alternateServings?: AlternateServing[]
   nutrition: FoodNutrition
+  gramsPerServing?: number
+  mlPerServing?: number
   source?: 'custom' | 'manual' | 'openfoodfacts' | 'usda'
   image_url?: string
   nutriscore_grade?: string
@@ -193,11 +202,10 @@ export default function FoodSearchModal({
   const [applyMeal, setApplyMeal] = useState<MealResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedFood, setSelectedFood] = useState<FoodResult | null>(null)
-  const [servings, setServings] = useState('1')
-  // Index into serving options: 0 = default serving, 1+ = alternate servings
-  const [selectedServingIdx, setSelectedServingIdx] = useState(0)
-  const [inputMode, setInputMode] = useState<'servings' | 'grams'>('servings')
-  const [customGrams, setCustomGrams] = useState('100')
+  // Resolved selection from the QuantityPicker. Null until the picker emits its
+  // first value (which it does on mount), then a complete spec of what the user
+  // is about to log.
+  const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
   // Index into selectedFood.variants — defaults to the variant marked isDefault.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   // Loading state for the import-on-pick network call.
@@ -219,19 +227,12 @@ export default function FoodSearchModal({
       isDefault: true,
       servingSize: food.servingSize,
       servingUnit: food.servingUnit,
+      displayLabel: food.displayLabel,
       alternateServings: food.alternateServings,
       nutrition: food.nutrition,
+      gramsPerServing: food.gramsPerServing,
+      mlPerServing: food.mlPerServing,
     }
-  }
-
-  // Returns the gram amount of the first alternate (label) serving, or the base serving size.
-  // Used to pre-fill the custom weight input with the actual label serving rather than 100g.
-  const getLabelServingGrams = (food: FoodResult, variantIdx = 0): string => {
-    const v = getActiveVariant(food, variantIdx)
-    if (v.alternateServings && v.alternateServings.length > 0) {
-      return String(Math.round(v.alternateServings[0].multiplier * v.servingSize))
-    }
-    return String(v.servingSize)
   }
 
   // Barcode scanner state
@@ -269,11 +270,8 @@ export default function FoodSearchModal({
       setFoodsExpanded(true)
       setApplyMeal(null)
       setSelectedFood(null)
-      setServings('1')
-      setSelectedServingIdx(0)
+      setSelection(null)
       setSelectedVariantIdx(0)
-      setInputMode('servings')
-      setCustomGrams('100')
       setActiveTab('all')
       setScannerOpen(false)
       setBarcodeError(null)
@@ -332,13 +330,9 @@ export default function FoodSearchModal({
         const data = await res.json()
         if (data.food) {
           const variantIdx = pickDefaultVariantIdx(data.food.variants)
-          const activeVariant = getActiveVariant(data.food, variantIdx)
           setSelectedFood(data.food)
           setSelectedVariantIdx(variantIdx)
-          setServings('1')
-          setSelectedServingIdx(activeVariant.alternateServings?.length ? 1 : 0)
-          setInputMode('servings')
-          setCustomGrams(getLabelServingGrams(data.food, variantIdx))
+          setSelection(null) // QuantityPicker emits its initial selection on mount
           setResults([data.food])
         } else {
           setBarcodeError(`No food found for barcode ${code}. Try searching by name.`)
@@ -455,51 +449,6 @@ export default function FoodSearchModal({
     if (!selectedFood) return null
     return getActiveVariant(selectedFood, selectedVariantIdx)
   }, [selectedFood, selectedVariantIdx])
-
-  // Build serving options for the active variant
-  const servingOptions = useMemo(() => {
-    if (!activeVariant) return []
-
-    const options: { label: string; multiplier: number; servingSize: number; servingUnit: string }[] = [
-      {
-        // Prefer human-friendly displayLabel ("1 cup", "1 medium banana") when set;
-        // fall back to the bare "240 g" form. Math is unaffected — multiplier is 1.
-        label: activeVariant.displayLabel || `${activeVariant.servingSize} ${activeVariant.servingUnit}`,
-        multiplier: 1,
-        servingSize: activeVariant.servingSize,
-        servingUnit: activeVariant.servingUnit,
-      },
-    ]
-
-    if (activeVariant.alternateServings) {
-      for (const alt of activeVariant.alternateServings) {
-        options.push({
-          label: alt.label,
-          multiplier: alt.multiplier,
-          servingSize: Math.round(activeVariant.servingSize * alt.multiplier * 10) / 10,
-          servingUnit: activeVariant.servingUnit,
-        })
-      }
-    }
-
-    return options
-  }, [activeVariant])
-
-  // Current serving option
-  const currentServing = servingOptions[selectedServingIdx] || servingOptions[0]
-  const servingMultiplier = currentServing?.multiplier ?? 1
-
-  const isWeightBased = activeVariant?.servingUnit === 'g' || activeVariant?.servingUnit === 'oz'
-  const servingSizeInGrams = activeVariant
-    ? activeVariant.servingUnit === 'oz'
-      ? activeVariant.servingSize * 28.3495
-      : activeVariant.servingSize
-    : 1
-
-  // Effective multiplier and servings count for the preview
-  const effectiveServings = inputMode === 'grams'
-    ? (Number(customGrams) || 0) / servingSizeInGrams
-    : (Number(servings) || 1) * servingMultiplier
 
   // Copy-on-pick: external (usda-/off-) results get persisted to our Food
   // collection before being logged. Returns the resolved foodId + variants.
@@ -756,7 +705,7 @@ export default function FoodSearchModal({
   }
 
   const handleAddFood = async () => {
-    if (!selectedFood || !currentServing || !activeVariant || adding) return
+    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0 || adding) return
 
     setAdding(true)
     try {
@@ -774,58 +723,57 @@ export default function FoodSearchModal({
         resolvedVariantId = String(activeVariant._id)
       }
 
-      const baseEntry = {
+      // Build the legacy IFoodEntry shape, but extend with the new
+      // logged{Quantity,Unit,GramsPerServing,MlPerServing} fields the API
+      // tolerates. The math now lives in `selection`: nutrition is scaled,
+      // and `multiplier` plays the role of "servings" for back-compat readers.
+      const entry: IFoodEntry & {
+        loggedQuantity?: number
+        loggedUnit?: Unit
+        loggedGramsPerServing?: number
+        loggedMlPerServing?: number
+      } = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         foodId: isObjectIdString(foodId) ? foodId : undefined,
         variantId: resolvedVariantId,
         variantName: resolvedVariantName,
         name: selectedFood.name,
         brand: selectedFood.brand,
+        servingSize: activeVariant.servingSize,
+        servingUnit: activeVariant.servingUnit,
+        // `servings` here is the back-compat "× per-variant-serving" multiplier.
+        // New consumers should prefer loggedQuantity + loggedUnit.
+        servings: selection.multiplier,
+        nutrition: {
+          calories: selection.nutrition.calories,
+          protein: selection.nutrition.protein,
+          carbs: selection.nutrition.carbs,
+          fats: selection.nutrition.fats,
+          fiber: selection.nutrition.fiber,
+          sugar: selection.nutrition.sugar,
+          sodium: selection.nutrition.sodium,
+        },
+        loggedQuantity: selection.quantity,
+        loggedUnit: selection.unit,
+        loggedGramsPerServing: activeVariant.gramsPerServing,
+        loggedMlPerServing: activeVariant.mlPerServing,
       }
 
-      let entry: IFoodEntry
-
-      if (inputMode === 'grams' && isWeightBased) {
-        const gramsServings = (Number(customGrams) || 1) / servingSizeInGrams
-        // Store per-serving nutrition (unscaled) with fractional servings count
-        entry = {
-          ...baseEntry,
-          servingSize: activeVariant.servingSize,
-          servingUnit: activeVariant.servingUnit,
-          servings: gramsServings,
-          nutrition: {
-            calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
-            protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
-            carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
-            fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
-            fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
-            sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
-            sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
-          },
-        }
-      } else {
-        const mult = servingMultiplier
-        // Scale nutrition by the serving option multiplier (alt serving sizes)
-        entry = {
-          ...baseEntry,
-          servingSize: currentServing.servingSize,
-          servingUnit: currentServing.servingUnit,
-          servings: Number(servings) || 1,
-          nutrition: {
-            calories: Math.round(activeVariant.nutrition.calories * mult * 10) / 10,
-            protein:  Math.round(activeVariant.nutrition.protein  * mult * 10) / 10,
-            carbs:    Math.round(activeVariant.nutrition.carbs    * mult * 10) / 10,
-            fats:     Math.round(activeVariant.nutrition.fats     * mult * 10) / 10,
-            fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * mult * 10) / 10 : undefined,
-            sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * mult * 10) / 10 : undefined,
-            sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * mult * 1000) / 1000 : undefined,
-          },
-        }
+      // Per-serving nutrition is what the API expects; the multiplier (`servings`)
+      // does the scaling on the server. Recompute the per-serving snapshot from
+      // the variant rather than from the scaled selection so the value stays
+      // stable across re-edits at any quantity.
+      entry.nutrition = {
+        calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
+        protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
+        carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
+        fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
+        fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
+        sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
+        sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
       }
 
       // Compute custom loggedAt only when the user explicitly picked a date+time.
-      // customTime is now a full "yyyy-MM-ddTHH:mm" string so the user can backdate
-      // to yesterday or any earlier day. When null, the server defaults to "now".
       let loggedAtIso: string | undefined
       if (customTime) {
         loggedAtIso = buildLocalIsoFromDateTime(customTime)
@@ -837,11 +785,8 @@ export default function FoodSearchModal({
         loggedAtIso,
       )
       setSelectedFood(null)
-      setServings('1')
-      setSelectedServingIdx(0)
+      setSelection(null)
       setSelectedVariantIdx(0)
-      setInputMode('servings')
-      setCustomGrams('100')
       setCustomTime(null)
       setTimeEditOpen(false)
     } finally {
@@ -1246,17 +1191,12 @@ export default function FoodSearchModal({
                         onClick={() => {
                           if (selectedFood?._id === food._id) {
                             setSelectedFood(null)
+                            setSelection(null)
                           } else {
                             const variantIdx = pickDefaultVariantIdx(food.variants)
-                            const av = getActiveVariant(food, variantIdx)
                             setSelectedFood(food)
                             setSelectedVariantIdx(variantIdx)
-                            setServings('1')
-                            // Pre-select the label serving (index 1) when available,
-                            // so the default shown is what's on the nutrition label, not 100g.
-                            setSelectedServingIdx(av.alternateServings?.length ? 1 : 0)
-                            setInputMode('servings')
-                            setCustomGrams(getLabelServingGrams(food, variantIdx))
+                            setSelection(null)
                           }
                         }}
                         onKeyDown={(e) => {
@@ -1376,9 +1316,9 @@ export default function FoodSearchModal({
                                           key={variant._id ?? vIdx}
                                           onClick={() => {
                                             setSelectedVariantIdx(vIdx)
-                                            setServings('1')
-                                            setSelectedServingIdx(variant.alternateServings?.length ? 1 : 0)
-                                            setCustomGrams(getLabelServingGrams(food, vIdx))
+                                            // QuantityPicker resets to its
+                                            // defaults on variant change.
+                                            setSelection(null)
                                           }}
                                           className={`flex flex-col items-start gap-0.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
                                             isActive
@@ -1399,89 +1339,32 @@ export default function FoodSearchModal({
                                 </div>
                               )}
 
-                              {/* Servings / Grams toggle for weight-based foods */}
-                              {selectedFood?._id === food._id && (activeVariant?.servingUnit === 'g' || activeVariant?.servingUnit === 'oz') && (
-                                <div className="mb-2.5 flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
-                                  <button
-                                    onClick={() => setInputMode('servings')}
-                                    className={`flex-1 rounded-md py-1 text-xs font-semibold transition-colors ${
-                                      inputMode === 'servings'
-                                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                                    }`}
-                                  >
-                                    Servings
-                                  </button>
-                                  <button
-                                    onClick={() => setInputMode('grams')}
-                                    className={`flex-1 rounded-md py-1 text-xs font-semibold transition-colors ${
-                                      inputMode === 'grams'
-                                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                                    }`}
-                                  >
-                                    Custom weight (g)
-                                  </button>
+                              {/* Quantity picker — replaces the legacy servings/grams toggle.
+                                  Resolves nutrition for any (quantity, unit) within the
+                                  variant's domain (or its bridged cross-family). */}
+                              {selectedFood?._id === food._id && activeVariant && (
+                                <div className="mb-2.5">
+                                  <QuantityPicker
+                                    variant={activeVariant}
+                                    onChange={setSelection}
+                                  />
                                 </div>
                               )}
 
-                              {/* Serving option selector (shown in servings mode when alternate servings exist) */}
-                              {inputMode === 'servings' && servingOptions.length > 1 && (
-                                <div className="mb-2.5 flex flex-wrap gap-1.5">
-                                  {servingOptions.map((opt, idx) => (
-                                    <button
-                                      key={idx}
-                                      onClick={() => setSelectedServingIdx(idx)}
-                                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                                        selectedServingIdx === idx
-                                          ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                                          : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600'
-                                      }`}
-                                    >
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div className="flex items-center gap-3">
-                                {inputMode === 'grams' ? (
-                                  <>
-                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Grams</label>
-                                    <input
-                                      type="number"
-                                      min="1"
-                                      step="1"
-                                      value={customGrams}
-                                      onChange={(e) => setCustomGrams(e.target.value)}
-                                      className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:focus:border-blue-400"
-                                    />
-                                  </>
-                                ) : (
-                                  <>
-                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Servings</label>
-                                    <input
-                                      type="number"
-                                      min="0.25"
-                                      step="0.25"
-                                      value={servings}
-                                      onChange={(e) => setServings(e.target.value)}
-                                      className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:focus:border-blue-400"
-                                    />
-                                  </>
-                                )}
-                                <div className="flex-1 text-right">
+                              {/* Live nutrition preview from the resolved selection. */}
+                              <div className="flex items-center justify-end gap-3">
+                                <div className="text-right">
                                   <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
                                     <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {Math.round((activeVariant?.nutrition.calories ?? 0) * effectiveServings)} cal
+                                      {Math.round(selection?.nutrition.calories ?? 0)} cal
                                     </span>
                                   </p>
                                   <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                    P: {Math.round((activeVariant?.nutrition.protein ?? 0) * effectiveServings)}g
+                                    P: {Math.round(selection?.nutrition.protein ?? 0)}g
                                     {' '}&middot;{' '}
-                                    C: {Math.round((activeVariant?.nutrition.carbs ?? 0) * effectiveServings)}g
+                                    C: {Math.round(selection?.nutrition.carbs ?? 0)}g
                                     {' '}&middot;{' '}
-                                    F: {Math.round((activeVariant?.nutrition.fats ?? 0) * effectiveServings)}g
+                                    F: {Math.round(selection?.nutrition.fats ?? 0)}g
                                   </p>
                                 </div>
                               </div>
@@ -1568,7 +1451,7 @@ export default function FoodSearchModal({
                               </div>
                               <button
                                 onClick={handleAddFood}
-                                disabled={adding}
+                                disabled={adding || !selection || selection.quantity <= 0}
                                 className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                               >
                                 {adding ? (

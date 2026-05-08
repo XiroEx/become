@@ -5,6 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IMealItem } from '@/models/Meal'
+import type { ServingUnit } from '@/models/Food'
+import type { Unit } from '@/lib/units'
+import QuantityPicker, {
+  type QuantityPickerSelection,
+  type QuantityPickerVariant,
+} from './QuantityPicker'
 
 interface EditFoodModalProps {
   isOpen: boolean
@@ -16,12 +22,6 @@ interface EditFoodModalProps {
   onSaved: () => void   // refetch after save
 }
 
-type InputMode = 'servings' | 'grams'
-
-function servingSizeInGrams(item: IMealItem): number {
-  return item.servingUnit === 'oz' ? item.servingSize * 28.3495 : item.servingSize
-}
-
 // Variant names that are essentially "no preparation" — don't display them.
 const HIDDEN_VARIANT_NAMES = new Set(['default', 'raw'])
 
@@ -30,61 +30,77 @@ function shouldShowVariantName(name: string | undefined): name is string {
   return !HIDDEN_VARIANT_NAMES.has(name.trim().toLowerCase())
 }
 
-export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }: EditFoodModalProps) {
-  const [servings, setServings] = useState('')
-  const [customGrams, setCustomGrams] = useState('')
-  const [inputMode, setInputMode] = useState<InputMode>('servings')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  const isWeightBased = item?.servingUnit === 'g' || item?.servingUnit === 'oz'
-
-  useLockScroll(isOpen)
-
-  useEffect(() => {
-    if (item) {
-      setServings(String(item.servings))
-      setCustomGrams(String(Math.round(item.servings * servingSizeInGrams(item))))
-      setInputMode('servings')
-      setError('')
-    }
-  }, [item])
-
-  // nutrition is stored per-serving
-  const base = useMemo(() => {
-    if (!item) return null
-    return {
+/**
+ * Build a synthetic variant + initial selection for the QuantityPicker from a
+ * stored MealLog item. The item carries per-serving nutrition + a `servings`
+ * multiplier, so we project it back to a single canonical variant ("1 serving =
+ * servingSize × servingUnit at the snapshotted nutrition") and treat the
+ * already-applied multiplier as "loggedQuantity" in the same unit.
+ *
+ * Read-on-write back-compat (UNITS_AND_SERVINGS_PLAN §14 decision 2): when the
+ * stored item lacks loggedQuantity / loggedUnit (old write), we synthesize
+ * `loggedQuantity = servingSize × multiplier` so the picker opens at the same
+ * physical amount the user originally logged.
+ */
+function deriveVariantAndInitial(item: IMealItem): {
+  variant: QuantityPickerVariant
+  initial: { quantity: number; unit: Unit }
+} {
+  const servingUnit = (item.servingUnit as Unit)
+  const variant: QuantityPickerVariant = {
+    servingSize: item.servingSize,
+    servingUnit: servingUnit as ServingUnit,
+    nutrition: {
       calories: item.nutrition.calories,
       protein:  item.nutrition.protein,
       carbs:    item.nutrition.carbs,
       fats:     item.nutrition.fats,
+      fiber:    item.nutrition.fiber,
+      sugar:    item.nutrition.sugar,
+      sodium:   item.nutrition.sodium,
+      saturatedFat: item.nutrition.saturatedFat,
+    },
+    alternateServings: [],
+    gramsPerServing: item.loggedGramsPerServing,
+    mlPerServing: item.loggedMlPerServing,
+  }
+
+  if (item.loggedQuantity != null && item.loggedUnit) {
+    return {
+      variant,
+      initial: { quantity: item.loggedQuantity, unit: item.loggedUnit as Unit },
+    }
+  }
+
+  // Backfill: synthesize from `servings × servingSize` in the variant's own unit.
+  const synthesizedQty = (item.servings ?? 1) * item.servingSize
+  return { variant, initial: { quantity: synthesizedQty, unit: servingUnit } }
+}
+
+export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }: EditFoodModalProps) {
+  const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useLockScroll(isOpen)
+
+  // Fresh derive on each item change so the picker opens with the right state.
+  const derived = useMemo(() => (item ? deriveVariantAndInitial(item) : null), [item])
+
+  useEffect(() => {
+    if (item) {
+      setSelection(null)
+      setError('')
     }
   }, [item])
 
-  const effectiveServings = useMemo(() => {
-    if (!item) return 0
-    if (inputMode === 'grams') {
-      const grams = parseFloat(customGrams) || 0
-      return grams / servingSizeInGrams(item)
-    }
-    return parseFloat(servings) || 0
-  }, [inputMode, servings, customGrams, item])
-
-  const preview = useMemo(() => {
-    if (!base) return null
-    const s = effectiveServings
-    return {
-      calories: Math.round(base.calories * s),
-      protein:  Math.round(base.protein  * s * 10) / 10,
-      carbs:    Math.round(base.carbs    * s * 10) / 10,
-      fats:     Math.round(base.fats     * s * 10) / 10,
-    }
-  }, [base, effectiveServings])
+  // Live preview: the selection itself carries the scaled nutrition.
+  const preview = selection?.nutrition
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!item || !item._id || !logId) return
-    if (effectiveServings <= 0) { setError('Amount must be greater than 0'); return }
+    if (!item || !item._id || !logId || !selection) return
+    if (selection.quantity <= 0) { setError('Amount must be greater than 0'); return }
 
     setSaving(true)
     setError('')
@@ -96,7 +112,15 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ servings: effectiveServings }),
+        body: JSON.stringify({
+          // Back-compat: keep `servings` (multiplier) flowing for legacy readers.
+          servings: selection.multiplier,
+          // New shape — picked up by the route updates in this PR.
+          loggedQuantity: selection.quantity,
+          loggedUnit: selection.unit,
+          loggedGramsPerServing: item.loggedGramsPerServing,
+          loggedMlPerServing: item.loggedMlPerServing,
+        }),
       })
       if (res.ok) {
         onSaved()
@@ -120,7 +144,7 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
 
   return (
     <AnimatePresence>
-      {isOpen && item && (
+      {isOpen && item && derived && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -165,109 +189,16 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Mode toggle for weight-based foods */}
-              {isWeightBased && (
-                <div className="flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('servings')}
-                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
-                      inputMode === 'servings'
-                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                    }`}
-                  >
-                    Servings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInputMode('grams')}
-                    className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
-                      inputMode === 'grams'
-                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                    }`}
-                  >
-                    Custom weight (g)
-                  </button>
-                </div>
-              )}
-
-              {inputMode === 'servings' ? (
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Servings
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.25"
-                      min="0.25"
-                      value={servings}
-                      onChange={(e) => setServings(e.target.value)}
-                      className="w-28 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
-                      autoFocus
-                    />
-                    <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                      × {item.servingSize}{item.servingUnit}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 flex gap-2">
-                    {[0.5, 1, 1.5, 2].map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setServings(String(v))}
-                        className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
-                          parseFloat(servings) === v
-                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                        }`}
-                      >
-                        {v}×
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Amount (grams)
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="1"
-                      min="1"
-                      value={customGrams}
-                      onChange={(e) => setCustomGrams(e.target.value)}
-                      className="w-28 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
-                      autoFocus
-                    />
-                    <span className="text-sm text-zinc-500 dark:text-zinc-400">g</span>
-                  </div>
-
-                  <div className="mt-2 flex gap-2">
-                    {[50, 100, 150, 200].map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setCustomGrams(String(v))}
-                        className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors ${
-                          parseFloat(customGrams) === v
-                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                            : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
-                        }`}
-                      >
-                        {v}g
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div>
+                <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Amount
+                </p>
+                <QuantityPicker
+                  variant={derived.variant}
+                  initial={derived.initial}
+                  onChange={setSelection}
+                />
+              </div>
 
               {/* Macro preview */}
               {preview && (
@@ -275,19 +206,19 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
                   <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Updated macros</p>
                   <div className="grid grid-cols-4 gap-2 text-center">
                     <div>
-                      <p className="text-base font-bold text-zinc-900 dark:text-white">{preview.calories}</p>
+                      <p className="text-base font-bold text-zinc-900 dark:text-white">{Math.round(preview.calories)}</p>
                       <p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p>
                     </div>
                     <div>
-                      <p className="text-base font-bold text-blue-600 dark:text-blue-400">{preview.protein}g</p>
+                      <p className="text-base font-bold text-blue-600 dark:text-blue-400">{Math.round(preview.protein * 10) / 10}g</p>
                       <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
                     </div>
                     <div>
-                      <p className="text-base font-bold text-green-600 dark:text-green-400">{preview.carbs}g</p>
+                      <p className="text-base font-bold text-green-600 dark:text-green-400">{Math.round(preview.carbs * 10) / 10}g</p>
                       <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
                     </div>
                     <div>
-                      <p className="text-base font-bold text-amber-600 dark:text-amber-400">{preview.fats}g</p>
+                      <p className="text-base font-bold text-amber-600 dark:text-amber-400">{Math.round(preview.fats * 10) / 10}g</p>
                       <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
                     </div>
                   </div>
@@ -310,7 +241,7 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || effectiveServings <= 0}
+                  disabled={saving || !selection || selection.quantity <= 0}
                   className="flex-1 rounded-xl bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                 >
                   {saving ? 'Saving…' : 'Save'}

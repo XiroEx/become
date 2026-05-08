@@ -4,6 +4,36 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, ChevronDown, Tag as TagIcon, Loader2, Apple } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
+import QuantityPicker, {
+  type QuantityPickerSelection,
+  type QuantityPickerVariant,
+} from '@/components/nutrition/QuantityPicker'
+import type { ServingUnit } from '@/models/Food'
+
+// `servingUnit` is loosened to `string` here because callers (saved foods
+// page, meals page) hand us responses where the field is typed as `string`.
+// The QuantityPicker re-narrows internally.
+interface FoodLogSheetVariant {
+  _id?: string
+  name: string
+  isDefault?: boolean
+  servingSize: number
+  servingUnit: string
+  displayLabel?: string
+  alternateServings?: { label: string; multiplier: number }[]
+  nutrition: {
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+    fiber?: number
+    sugar?: number
+    sodium?: number
+    saturatedFat?: number
+  }
+  gramsPerServing?: number
+  mlPerServing?: number
+}
 
 interface FoodLogSheetFood {
   _id: string
@@ -13,15 +43,20 @@ interface FoodLogSheetFood {
   servingSize: number
   servingUnit: string
   displayLabel?: string
-  nutrition: { calories: number; protein: number; carbs: number; fats: number }
-  variants?: Array<{
-    _id?: string
-    name: string
-    isDefault?: boolean
-    servingSize: number
-    servingUnit: string
-    nutrition: { calories: number; protein: number; carbs: number; fats: number }
-  }>
+  alternateServings?: { label: string; multiplier: number }[]
+  nutrition: {
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+    fiber?: number
+    sugar?: number
+    sodium?: number
+    saturatedFat?: number
+  }
+  gramsPerServing?: number
+  mlPerServing?: number
+  variants?: FoodLogSheetVariant[]
 }
 
 interface Props {
@@ -33,8 +68,6 @@ interface Props {
   onClose: () => void
   onLogged?: (foodId: string) => void
 }
-
-const SERVING_PILLS = [0.25, 0.5, 1, 1.5, 2, 3]
 
 function titleCaseTag(tag: string): string {
   return tag
@@ -59,6 +92,35 @@ function buildLocalIsoFromDateTime(value: string): string {
   return d.toISOString()
 }
 
+/**
+ * Resolve the food's primary variant for the picker. Mirrors the projection
+ * pattern used in FoodSearchModal (default variant when present, otherwise the
+ * flat top-level fields synthesized into a single-variant view).
+ */
+function pickVariant(food: FoodLogSheetFood): QuantityPickerVariant {
+  if (food.variants && food.variants.length > 0) {
+    const v = food.variants.find(x => x.isDefault) ?? food.variants[0]
+    return {
+      servingSize: v.servingSize,
+      servingUnit: v.servingUnit as ServingUnit,
+      displayLabel: v.displayLabel,
+      alternateServings: v.alternateServings ?? [],
+      nutrition: v.nutrition,
+      gramsPerServing: v.gramsPerServing,
+      mlPerServing: v.mlPerServing,
+    }
+  }
+  return {
+    servingSize: food.servingSize,
+    servingUnit: food.servingUnit as ServingUnit,
+    displayLabel: food.displayLabel,
+    alternateServings: food.alternateServings ?? [],
+    nutrition: food.nutrition,
+    gramsPerServing: food.gramsPerServing,
+    mlPerServing: food.mlPerServing,
+  }
+}
+
 export default function FoodLogSheet({
   isOpen,
   food,
@@ -71,9 +133,7 @@ export default function FoodLogSheet({
   const [activeTag, setActiveTag] = useState<string>(defaultTag)
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [customTagInput, setCustomTagInput] = useState('')
-  const [servings, setServings] = useState<number>(1)
-  const [customServings, setCustomServings] = useState<string>('1')
-  const [customServingsMode, setCustomServingsMode] = useState(false)
+  const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
   const [customTime, setCustomTime] = useState<string | null>(null)
   const [timeEditOpen, setTimeEditOpen] = useState(false)
   const [logging, setLogging] = useState(false)
@@ -84,9 +144,7 @@ export default function FoodLogSheet({
   useEffect(() => {
     if (isOpen) {
       setActiveTag(defaultTag)
-      setServings(1)
-      setCustomServings('1')
-      setCustomServingsMode(false)
+      setSelection(null)
       setCustomTime(null)
       setTimeEditOpen(false)
       setError(null)
@@ -95,6 +153,8 @@ export default function FoodLogSheet({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, food?._id])
+
+  const variant = useMemo(() => (food ? pickVariant(food) : null), [food])
 
   const allTagOptions = useMemo<string[]>(() => {
     const defaults = availableTags?.defaults ?? ['breakfast', 'lunch', 'dinner', 'snack', 'pre-workout', 'post-workout']
@@ -111,24 +171,7 @@ export default function FoodLogSheet({
     return out
   }, [availableTags])
 
-  const effectiveServings = useMemo<number>(() => {
-    if (customServingsMode) {
-      const n = Number(customServings)
-      return Number.isFinite(n) && n > 0 ? n : 0
-    }
-    return servings
-  }, [customServingsMode, customServings, servings])
-
-  const previewNutrition = useMemo(() => {
-    if (!food) return { calories: 0, protein: 0, carbs: 0, fats: 0 }
-    const n = food.nutrition
-    return {
-      calories: Math.round((n.calories ?? 0) * effectiveServings),
-      protein: Math.round((n.protein ?? 0) * effectiveServings * 10) / 10,
-      carbs: Math.round((n.carbs ?? 0) * effectiveServings * 10) / 10,
-      fats: Math.round((n.fats ?? 0) * effectiveServings * 10) / 10,
-    }
-  }, [food, effectiveServings])
+  const previewNutrition = selection?.nutrition
 
   const handleAddCustomTag = () => {
     const norm = customTagInput.trim().toLowerCase().replace(/\s+/g, '-')
@@ -139,9 +182,9 @@ export default function FoodLogSheet({
   }
 
   const handleLog = async () => {
-    if (!food || logging) return
-    if (!Number.isFinite(effectiveServings) || effectiveServings <= 0) {
-      setError('Pick a valid serving count.')
+    if (!food || !variant || !selection || logging) return
+    if (!Number.isFinite(selection.quantity) || selection.quantity <= 0) {
+      setError('Pick a valid amount.')
       return
     }
     setLogging(true)
@@ -151,17 +194,32 @@ export default function FoodLogSheet({
       const headers: HeadersInit = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
-      const variant = food.variants?.find(v => v.isDefault) || food.variants?.[0]
+      const variantSrc = food.variants?.find(v => v.isDefault) || food.variants?.[0]
+      // Match the FoodSearchModal log shape: per-serving nutrition + the
+      // multiplier as `servings`, plus the new logged{Quantity,Unit,...} fields.
       const item = {
         foodId: food._id,
-        variantId: variant?._id,
-        variantName: variant?.name,
+        variantId: variantSrc?._id,
+        variantName: variantSrc?.name,
         name: food.name,
         brand: food.brand,
-        servingSize: food.servingSize,
-        servingUnit: food.servingUnit,
-        servings: effectiveServings,
-        nutrition: food.nutrition,
+        servingSize: variant.servingSize,
+        servingUnit: variant.servingUnit,
+        servings: selection.multiplier,
+        nutrition: {
+          calories: variant.nutrition.calories,
+          protein: variant.nutrition.protein,
+          carbs: variant.nutrition.carbs,
+          fats: variant.nutrition.fats,
+          fiber: variant.nutrition.fiber,
+          sugar: variant.nutrition.sugar,
+          sodium: variant.nutrition.sodium,
+          saturatedFat: variant.nutrition.saturatedFat,
+        },
+        loggedQuantity: selection.quantity,
+        loggedUnit: selection.unit,
+        loggedGramsPerServing: variant.gramsPerServing,
+        loggedMlPerServing: variant.mlPerServing,
       }
 
       const loggedAt = customTime
@@ -195,7 +253,7 @@ export default function FoodLogSheet({
 
   return (
     <AnimatePresence>
-      {isOpen && food && (
+      {isOpen && food && variant && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -311,55 +369,12 @@ export default function FoodLogSheet({
                 </AnimatePresence>
               </div>
 
-              {/* Servings picker */}
+              {/* Quantity picker */}
               <div>
                 <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Servings
+                  Amount
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {SERVING_PILLS.map(s => {
-                    const active = !customServingsMode && servings === s
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => { setCustomServingsMode(false); setServings(s) }}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                          active
-                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                        }`}
-                      >
-                        {s === 1 ? `1 (${servingLabel})` : `${s}×`}
-                      </button>
-                    )
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => setCustomServingsMode(true)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      customServingsMode
-                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                        : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                    }`}
-                  >
-                    Custom
-                  </button>
-                </div>
-                {customServingsMode && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Servings</label>
-                    <input
-                      type="number"
-                      min="0.05"
-                      max="20"
-                      step="0.05"
-                      value={customServings}
-                      onChange={(e) => setCustomServings(e.target.value)}
-                      className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                    />
-                  </div>
-                )}
+                <QuantityPicker variant={variant} onChange={setSelection} />
               </div>
 
               {/* Time picker */}
@@ -408,19 +423,27 @@ export default function FoodLogSheet({
               {/* Macro preview */}
               <div className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
                 <div>
-                  <p className="text-base font-bold text-zinc-900 dark:text-white">{previewNutrition.calories}</p>
+                  <p className="text-base font-bold text-zinc-900 dark:text-white">
+                    {Math.round(previewNutrition?.calories ?? 0)}
+                  </p>
                   <p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p>
                 </div>
                 <div>
-                  <p className="text-base font-bold text-blue-600 dark:text-blue-400">{previewNutrition.protein}g</p>
+                  <p className="text-base font-bold text-blue-600 dark:text-blue-400">
+                    {Math.round((previewNutrition?.protein ?? 0) * 10) / 10}g
+                  </p>
                   <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
                 </div>
                 <div>
-                  <p className="text-base font-bold text-green-600 dark:text-green-400">{previewNutrition.carbs}g</p>
+                  <p className="text-base font-bold text-green-600 dark:text-green-400">
+                    {Math.round((previewNutrition?.carbs ?? 0) * 10) / 10}g
+                  </p>
                   <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
                 </div>
                 <div>
-                  <p className="text-base font-bold text-amber-600 dark:text-amber-400">{previewNutrition.fats}g</p>
+                  <p className="text-base font-bold text-amber-600 dark:text-amber-400">
+                    {Math.round((previewNutrition?.fats ?? 0) * 10) / 10}g
+                  </p>
                   <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
                 </div>
               </div>
@@ -434,7 +457,7 @@ export default function FoodLogSheet({
               <button
                 type="button"
                 onClick={handleLog}
-                disabled={logging || effectiveServings <= 0}
+                disabled={logging || !selection || selection.quantity <= 0}
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
                 {logging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

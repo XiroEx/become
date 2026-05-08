@@ -20,6 +20,11 @@ export interface MealItemInput {
   servingUnit?: string
   servings?: number
   nutrition?: Partial<IMealNutrition>
+  // Provenance (PR 4 picker rework). Optional — old writes don't carry these.
+  loggedQuantity?: number
+  loggedUnit?: string
+  loggedGramsPerServing?: number
+  loggedMlPerServing?: number
 }
 
 function coerceObjectId(v: string | mongoose.Types.ObjectId | undefined): mongoose.Types.ObjectId | undefined {
@@ -57,6 +62,10 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
   const foodObjectId = coerceObjectId(input.foodId)
   let variantObjectId = coerceObjectId(input.variantId)
   let variantName = input.variantName
+  // Bridge snapshots — fall back to the variant's stored bridges so re-edits
+  // can show the right unit toggle even when the client forgot to send them.
+  let loggedGramsPerServing = input.loggedGramsPerServing
+  let loggedMlPerServing = input.loggedMlPerServing
 
   if (foodObjectId) {
     const foodDoc = await Food.findById(foodObjectId).lean<(IFood & { _id: mongoose.Types.ObjectId }) | null>()
@@ -71,6 +80,8 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
         if (!servingUnit) servingUnit = chosen.servingUnit
         if (!variantObjectId) variantObjectId = chosen._id
         if (!variantName) variantName = chosen.name
+        if (loggedGramsPerServing == null) loggedGramsPerServing = chosen.gramsPerServing
+        if (loggedMlPerServing == null) loggedMlPerServing = chosen.mlPerServing
       }
       if (!name) name = foodDoc.name
       if (!brand) brand = foodDoc.brand
@@ -92,6 +103,12 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
     servingUnit,
     servings: input.servings ?? 1,
     nutrition,
+    // Pass-through of the new picker provenance. Stored when present, omitted
+    // (left undefined → no schema field) when not — old writes stay clean.
+    loggedQuantity: input.loggedQuantity,
+    loggedUnit: input.loggedUnit,
+    loggedGramsPerServing,
+    loggedMlPerServing,
   }
 }
 

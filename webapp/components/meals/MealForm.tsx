@@ -133,6 +133,15 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   }
 
   const handleAddItem = (food: IFoodEntry) => {
+    // FoodSearchModal extends IFoodEntry with the new logged* fields (PR 4).
+    // Forward them so meal templates carry the same provenance and re-edits
+    // round-trip through the picker.
+    const extra = food as IFoodEntry & {
+      loggedQuantity?: number
+      loggedUnit?: string
+      loggedGramsPerServing?: number
+      loggedMlPerServing?: number
+    }
     const newItem: IMealItem & { _id?: string } = {
       foodId: food.foodId as IMealItem['foodId'],
       variantId: food.variantId as IMealItem['variantId'],
@@ -151,6 +160,10 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         sugar: food.nutrition.sugar,
         sodium: food.nutrition.sodium,
       },
+      loggedQuantity: extra.loggedQuantity,
+      loggedUnit: extra.loggedUnit,
+      loggedGramsPerServing: extra.loggedGramsPerServing,
+      loggedMlPerServing: extra.loggedMlPerServing,
     }
     setItems(prev => [...prev, newItem])
     setFoodSearchOpen(false)
