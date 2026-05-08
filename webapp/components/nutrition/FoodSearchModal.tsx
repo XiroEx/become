@@ -110,6 +110,23 @@ function pickDefaultVariantIdx(variants: FoodVariant[] | undefined): number {
   return idx >= 0 ? idx : 0
 }
 
+// Friendly serving label for the row underline. USDA / OFF foods often store
+// nutrition per 100 g but carry the "real" household serving in displayLabel
+// or alternateServings[0]. Showing raw "100 g" when the food has a 28 g pouch
+// label is misleading — fall through the better signals first.
+function preferredServingLabel(food: FoodResult): string {
+  if (food.displayLabel && food.displayLabel.trim()) return food.displayLabel.trim()
+  if (food.alternateServings && food.alternateServings.length > 0) {
+    const alt = food.alternateServings[0]
+    if (alt.label && alt.label.trim()) return alt.label.trim()
+  }
+  if (food.gramsPerServing != null && food.gramsPerServing > 0
+      && Math.abs(food.gramsPerServing - food.servingSize) > 0.1) {
+    return `${Math.round(food.gramsPerServing)} g`
+  }
+  return `${food.servingSize} ${food.servingUnit}`
+}
+
 function titleCaseTag(tag: string): string {
   return tag
     .split(/[-_\s]+/)
@@ -1239,7 +1256,7 @@ export default function FoodSearchModal({
                                 {food.brand} &middot;{' '}
                               </span>
                             )}
-                            {food.servingSize} {food.servingUnit}
+                            {preferredServingLabel(food)}
                           </p>
                         </div>
                         <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
