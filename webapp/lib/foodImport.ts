@@ -1,9 +1,11 @@
 import mongoose from 'mongoose'
 import Food, { IFood, IFoodVariant, FoodCategory, ServingUnit } from '@/models/Food'
 import OpenFoodFact, { IOpenFoodFact } from '@/models/OpenFoodFact'
-import { fetchUSDAById, mapUSDAFood, MappedFoodResult, USDAFood } from '@/lib/usda'
+import { fetchUSDAById, mapUSDAFood, MappedFoodResult, USDAFood, USDAFoodPortion } from '@/lib/usda'
 import { baseSlug, generateUniqueFoodSlug } from '@/lib/foodSlug'
 import { parseQuantityString, convert, familyOf } from '@/lib/units'
+import { baseGroupKey } from '@/lib/foodGrouping'
+import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
 
 const VALID_CATEGORIES: FoodCategory[] = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -54,6 +56,161 @@ function buildVariantFromMapped(
 }
 
 // ---------------------------------------------------------------------------
+// USDA foodPortions enrichment
+// ---------------------------------------------------------------------------
+
+/**
+ * Heuristic: identify a portion that describes a household measure (cup,
+ * tbsp, slice, piece, medium, etc.) versus a raw gram weight or a metric
+ * conversion. We prefer household measures for the primary serving because
+ * "1 cup" is more useful to a logger than "240 g".
+ */
+const HOUSEHOLD_MEASURE_KEYWORDS = [
+  'cup', 'cups', 'tbsp', 'tablespoon', 'tablespoons',
+  'tsp', 'teaspoon', 'teaspoons',
+  'piece', 'pieces', 'slice', 'slices',
+  'medium', 'large', 'small',
+  'serving', 'servings', 'each',
+  'fl oz', 'fluid ounce', 'fluid ounces',
+  'package', 'container', 'bottle', 'can', 'cookie', 'cookies',
+  'bar', 'bars', 'patty', 'patties', 'fillet', 'fillets',
+  'wing', 'wings', 'leg', 'thigh', 'breast', 'drumstick',
+  'whole', 'half', 'quarter',
+  'pint', 'quart', 'gallon',
+  'scoop', 'scoops', 'pat', 'pats', 'sheet', 'sheets',
+]
+
+function describesHousehold(p: USDAFoodPortion): boolean {
+  const text = `${p.modifier ?? ''} ${p.portionDescription ?? ''}`.toLowerCase()
+  if (!text.trim()) return false
+  return HOUSEHOLD_MEASURE_KEYWORDS.some(kw => text.includes(kw))
+}
+
+function portionLabel(p: USDAFoodPortion): string {
+  const desc = p.portionDescription?.trim()
+  const mod = p.modifier?.trim()
+  // "1 medium" + portionDescription "Banana" → "1 medium banana"; but USDA
+  // commonly puts the noun in modifier and amount + descriptor in
+  // portionDescription. Combine in the way that reads naturally.
+  if (desc && /^\d/.test(desc)) {
+    // portionDescription already starts with a number — use it verbatim.
+    if (mod && !desc.toLowerCase().includes(mod.toLowerCase())) {
+      return `${desc} ${mod}`.trim()
+    }
+    return desc
+  }
+  const amt = typeof p.amount === 'number' ? p.amount : null
+  if (amt != null && mod) return `${formatAmount(amt)} ${mod}`.trim()
+  if (amt != null && desc) return `${formatAmount(amt)} ${desc}`.trim()
+  if (mod) return mod
+  if (desc) return desc
+  return `${p.gramWeight} g`
+}
+
+function formatAmount(n: number): string {
+  if (Number.isInteger(n)) return String(n)
+  if (Math.abs(n - 0.5) < 0.001) return '½'
+  if (Math.abs(n - 0.25) < 0.001) return '¼'
+  if (Math.abs(n - 0.75) < 0.001) return '¾'
+  if (Math.abs(n - 1.5) < 0.001) return '1½'
+  return String(Math.round(n * 100) / 100)
+}
+
+/**
+ * Order portions by usefulness for a logger:
+ *   1. Household measures (cup, tbsp, slice, medium, etc.) before raw grams.
+ *   2. Within those, lowest sequenceNumber first (USDA often orders these
+ *      meaningfully — primary household serving is sequenceNumber 1).
+ *   3. Ties broken by largest gramWeight (typical "1 cup" > "1 tbsp" — bigger
+ *      portion is usually more representative of one logged item).
+ */
+function rankPortions(portions: USDAFoodPortion[]): USDAFoodPortion[] {
+  return [...portions].sort((a, b) => {
+    const ah = describesHousehold(a) ? 0 : 1
+    const bh = describesHousehold(b) ? 0 : 1
+    if (ah !== bh) return ah - bh
+    const aSeq = a.sequenceNumber ?? Number.MAX_SAFE_INTEGER
+    const bSeq = b.sequenceNumber ?? Number.MAX_SAFE_INTEGER
+    if (aSeq !== bSeq) return aSeq - bSeq
+    return b.gramWeight - a.gramWeight
+  })
+}
+
+/**
+ * Apply foodPortions data to a MappedFoodResult.
+ *
+ * For non-Branded foods (Foundation/SR Legacy/Survey) where USDA's serving is
+ * generic per-100g, the best portion becomes the primary serving — its
+ * displayLabel + gramsPerServing populate the variant. Other portions go to
+ * alternateServings (capped at 4).
+ *
+ * For Branded foods we keep the existing primary (householdServingFullText
+ * already gave us a label) and append portions as alternateServings only.
+ */
+function applyFoodPortionsToMapped(
+  mapped: MappedFoodResult,
+  food: USDAFood,
+): MappedFoodResult {
+  const portions = food.foodPortions
+  if (!portions || portions.length === 0) return mapped
+
+  const ranked = rankPortions(portions)
+  const isBranded = food.dataType === 'Branded'
+
+  if (isBranded) {
+    // Keep existing primary; append the top portions as alternates.
+    // The existing `mapped.alternateServings` may already include "100 g" — we
+    // dedupe by label to avoid clutter.
+    const existing = (mapped.alternateServings ?? []).slice()
+    const existingLabels = new Set(existing.map(s => s.label.toLowerCase()))
+    for (const p of ranked.slice(0, 4)) {
+      const label = portionLabel(p)
+      if (existingLabels.has(label.toLowerCase())) continue
+      const multiplier = p.gramWeight / mapped.servingSize
+      if (!Number.isFinite(multiplier) || multiplier <= 0) continue
+      existing.push({ label, multiplier })
+      existingLabels.add(label.toLowerCase())
+    }
+    return {
+      ...mapped,
+      alternateServings: existing.length > 0 ? existing : undefined,
+    }
+  }
+
+  // Non-Branded: build a primary variant from the best household portion.
+  const primary = ranked[0]
+  const primaryLabel = `${portionLabel(primary)} (${Math.round(primary.gramWeight)} g)`
+
+  // Storage stays per-100g (servingSize=100, servingUnit='g'), nutrition
+  // unchanged. gramsPerServing tells the picker the household weight, and
+  // alternateServings get the rest.
+  const alternates: { label: string; multiplier: number }[] = []
+  // Always keep "100 g" available so the picker can fall back when the user
+  // wants raw grams — this matches the old behavior for these data types.
+  // (Existing alternateServings from mapUSDAFood already has it for branded;
+  // for non-branded servingSize=100 so the existing alts may be empty.)
+  for (const alt of mapped.alternateServings ?? []) {
+    if (alt.label.toLowerCase() !== primaryLabel.toLowerCase()) alternates.push(alt)
+  }
+
+  for (const p of ranked.slice(1, 5)) {
+    const label = `${portionLabel(p)} (${Math.round(p.gramWeight)} g)`
+    if (label.toLowerCase() === primaryLabel.toLowerCase()) continue
+    if (alternates.some(a => a.label.toLowerCase() === label.toLowerCase())) continue
+    const multiplier = p.gramWeight / mapped.servingSize
+    if (!Number.isFinite(multiplier) || multiplier <= 0) continue
+    alternates.push({ label, multiplier })
+  }
+
+  return {
+    ...mapped,
+    displayLabel: primaryLabel,
+    gramsPerServing: primary.gramWeight,
+    alternateServings: alternates.slice(0, 4),
+  }
+}
+
+// ---------------------------------------------------------------------------
 // USDA → Food
 // ---------------------------------------------------------------------------
 
@@ -87,8 +244,13 @@ export async function importFromUSDA(
   const usda = await fetchUSDAById(String(fdcId))
   if (!usda) throw new Error(`USDA food not found for fdcId=${fdcId}`)
 
-  const mapped = mapUSDAFood(usda)
-  if (!mapped) throw new Error(`USDA food has no usable nutrition for fdcId=${fdcId}`)
+  const baseMapped = mapUSDAFood(usda)
+  if (!baseMapped) throw new Error(`USDA food has no usable nutrition for fdcId=${fdcId}`)
+
+  // Detail-only foodPortions enriches the mapping with household measures.
+  // For non-Branded foods this becomes the primary serving; for Branded it
+  // adds alternateServings.
+  const mapped = applyFoodPortionsToMapped(baseMapped, usda)
 
   // Strip prep qualifier from canonical name so it lives in the variant name
   const baseName = mapped.name.replace(/,\s*[a-z][a-z\s\-/]*$/i, '').trim() || mapped.name
@@ -97,6 +259,12 @@ export async function importFromUSDA(
   const slug = await generateUniqueFoodSlug(Food, baseName, mapped.brand)
 
   const variant = buildVariantFromMapped(mapped, variantName)
+
+  // Auto-review flag — set if the import produced anything suspect.
+  const needsReview = computeReviewIssues({
+    slug,
+    variants: [variant],
+  } as FoodForReview).length > 0
 
   const food = await Food.create({
     name: baseName,
@@ -114,6 +282,8 @@ export async function importFromUSDA(
     imageUrl: undefined,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
+    needsReview,
+    groupKey: baseGroupKey(baseName) || undefined,
   })
 
   return { food, created: true }
@@ -199,9 +369,21 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
 
   // Prefer parsed grams from the serving_size text (handles "1 cup (240 g)")
   // over serving_quantity, which OFF often sets to the leading "1" not 240.
+  // Also: when serving_size text is empty/unparseable but OFF sets
+  // serving_quantity with a recognized serving_unit (g/ml/oz/etc.), trust it.
+  // The previous >=5 floor was filtering out tea bags, spices, single-bite
+  // snacks (often serving_quantity 1 or 2). Drop the floor to >=1 so small-
+  // but-real servings persist instead of getting silently rejected.
   const parsedGrams = extractGramsFromServingSize(off.serving_size)
-  const candidateGrams = parsedGrams ?? off.serving_quantity
-  const actualGrams = candidateGrams && candidateGrams >= 5 ? candidateGrams : null
+  const offUnitNormalized = (off.serving_unit ?? '').toLowerCase().trim()
+  const KNOWN_OFF_UNITS = new Set(['g', 'gram', 'grams', 'ml', 'oz', 'mlt', 'grm'])
+  const sqFromText = (off.serving_size ?? '').trim() === ''
+    && off.serving_quantity != null
+    && KNOWN_OFF_UNITS.has(offUnitNormalized)
+    ? off.serving_quantity
+    : null
+  const candidateGrams = parsedGrams ?? sqFromText ?? off.serving_quantity
+  const actualGrams = candidateGrams && candidateGrams >= 1 ? candidateGrams : null
 
   // Preserve the source unit when it's clearly liquid. ml ≠ g for non-water liquids
   // (oils ~0.92 g/ml, honey ~1.4 g/ml). For water-like liquids the diff is <5%, but
@@ -266,6 +448,11 @@ export async function importFromOpenFoodFacts(
     ? off.category as FoodCategory
     : 'Other'
 
+  const needsReview = computeReviewIssues({
+    slug,
+    variants: [variant],
+  } as FoodForReview).length > 0
+
   const food = await Food.create({
     name: off.product_name,
     slug,
@@ -282,6 +469,8 @@ export async function importFromOpenFoodFacts(
     imageUrl: off.image_url || undefined,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
+    needsReview,
+    groupKey: baseGroupKey(off.product_name) || undefined,
   })
 
   return { food, created: true }
@@ -416,6 +605,11 @@ export async function importManualFood(
 
   const slug = await generateUniqueFoodSlug(Food, input.name, input.brand)
 
+  const needsReview = computeReviewIssues({
+    slug,
+    variants,
+  } as FoodForReview).length > 0
+
   const food = await Food.create({
     name: input.name,
     slug,
@@ -432,6 +626,8 @@ export async function importManualFood(
     imageUrl: input.imageUrl,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
+    needsReview,
+    groupKey: baseGroupKey(input.name) || undefined,
   })
 
   return { food, created: true }
@@ -474,6 +670,8 @@ export function flattenFoodForResponse(food: IFood & { _id: mongoose.Types.Objec
     variants: food.variants,
     aliases: food.aliases,
     createdBy: food.createdBy,
+    needsReview: food.needsReview,
+    groupKey: food.groupKey,
     createdAt: food.createdAt,
     updatedAt: food.updatedAt,
   }

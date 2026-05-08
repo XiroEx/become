@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import Food, { IFood } from '@/models/Food'
@@ -6,7 +6,12 @@ import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { searchUSDA } from '@/lib/usda'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
-import { flattenFoodForResponse, importManualFood } from '@/lib/foodImport'
+import {
+  flattenFoodForResponse,
+  importManualFood,
+  importFromUSDA,
+  importFromOpenFoodFacts,
+} from '@/lib/foodImport'
 import { parseQuantityString, convert } from '@/lib/units'
 
 // ---------------------------------------------------------------------------
@@ -63,10 +68,20 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
   }
 
   // OFF's serving_quantity is unreliable — often parses "1" from "1 cup (240 ml)".
-  // Prefer extracting actual grams from the serving_size text.
+  // Prefer extracting actual grams from the serving_size text. When that text
+  // is empty/unparseable but OFF set a serving_quantity + recognized
+  // serving_unit, trust the quantity. Floor relaxed from 5g to 1g — the >=5
+  // gate was filtering out tea bags, spices, single-bite snacks.
   const parsedGrams = extractGramsFromOffServing(off.serving_size)
-  const candidateGrams = parsedGrams ?? off.serving_quantity
-  const actualGrams = candidateGrams && candidateGrams >= 5 ? candidateGrams : null
+  const offUnitNormalized = (off.serving_unit ?? '').toLowerCase().trim()
+  const KNOWN_OFF_UNITS = new Set(['g', 'gram', 'grams', 'ml', 'oz', 'mlt', 'grm'])
+  const sqFromText = (off.serving_size ?? '').trim() === ''
+    && off.serving_quantity != null
+    && KNOWN_OFF_UNITS.has(offUnitNormalized)
+    ? off.serving_quantity
+    : null
+  const candidateGrams = parsedGrams ?? sqFromText ?? off.serving_quantity
+  const actualGrams = candidateGrams && candidateGrams >= 1 ? candidateGrams : null
 
   // Preserve the source unit when liquid — ml ≠ g (oils ~0.92, honey ~1.4).
   const isLiquid = off.serving_unit === 'ml' || /\bml\b|millilitre/i.test(off.serving_size || '')
@@ -344,11 +359,99 @@ export async function GET(request: NextRequest) {
 
     const paged = combined.slice(offset, offset + limit)
 
+    // Background auto-import: every external result returned to the client
+    // that's not already in our DB gets persisted asynchronously via
+    // `after()`. The user gets the response immediately; the import runs
+    // after the response is sent. Idempotent — `importFromUSDA` /
+    // `importFromOpenFoodFacts` short-circuit on `findOne({ source,
+    // externalId })`, so re-running the same query is a no-op DB-wise.
+    after(() => backgroundImportExternals(paged, authResult.userId))
+
     return NextResponse.json({ foods: paged, total: combined.length, offset, limit })
   } catch (error) {
     console.error('Error searching foods:', error)
     return NextResponse.json({ error: 'Failed to search foods' }, { status: 500 })
   }
+}
+
+// ---------------------------------------------------------------------------
+// Background auto-import — promise-pool concurrency cap of 5
+// ---------------------------------------------------------------------------
+
+/** Concurrency cap for background import work. Avoids hammering USDA + OFF
+ * from a single user search; 5 is enough to clear a 30-result page in 2-3
+ * batched waves. */
+const BG_IMPORT_CONCURRENCY = 5
+
+interface BackgroundImportItem {
+  _id?: unknown
+  source?: string
+  barcode?: string
+}
+
+/**
+ * Schedule background imports for external (`usda-XXX` / `off-XXX`) results.
+ * Runs after the response has been sent. All errors are swallowed and
+ * logged — a failed import must NOT cause the user-facing search to fail.
+ *
+ * Notes:
+ *  - USDA import calls `fetchUSDAById` to get the full nutrient + portion
+ *    set. Acceptable cost in the background path; the response has already
+ *    been delivered. Each fetch has its own 12s timeout.
+ *  - Items already imported (their `_id` is an ObjectId, not a synthetic
+ *    string) are skipped here.
+ */
+async function backgroundImportExternals(
+  results: BackgroundImportItem[],
+  userId?: string,
+): Promise<void> {
+  const queue: Array<() => Promise<void>> = []
+
+  for (const r of results) {
+    const id = typeof r._id === 'string' ? r._id : ''
+    if (!id) continue
+
+    if (id.startsWith('usda-')) {
+      const fdcId = id.slice('usda-'.length)
+      if (!fdcId) continue
+      queue.push(async () => {
+        try {
+          await importFromUSDA(fdcId, userId)
+        } catch (err) {
+          console.warn(`bg-import USDA fdcId=${fdcId} failed:`, err instanceof Error ? err.message : String(err))
+        }
+      })
+    } else if (id.startsWith('off-')) {
+      const code = id.slice('off-'.length)
+      if (!code) continue
+      queue.push(async () => {
+        try {
+          await importFromOpenFoodFacts(code, userId)
+        } catch (err) {
+          console.warn(`bg-import OFF code=${code} failed:`, err instanceof Error ? err.message : String(err))
+        }
+      })
+    }
+  }
+
+  if (queue.length === 0) return
+
+  // Simple promise pool — N workers each pull tasks off the shared queue.
+  // No external dep, no fancy backpressure; we just want a hard cap on
+  // concurrent external HTTP calls.
+  let cursor = 0
+  async function worker(): Promise<void> {
+    while (true) {
+      const i = cursor++
+      if (i >= queue.length) return
+      await queue[i]()
+    }
+  }
+  const workers: Promise<void>[] = []
+  for (let i = 0; i < Math.min(BG_IMPORT_CONCURRENCY, queue.length); i++) {
+    workers.push(worker())
+  }
+  await Promise.all(workers)
 }
 
 // ---------------------------------------------------------------------------
