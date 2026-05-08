@@ -17,6 +17,7 @@ import Food, { IFoodVariant } from '@/models/Food'
 import { verifyAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
 import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import { redirectFoodRefs } from '@/lib/foodMergeRefs'
 
 const MAX_VARIANTS_PER_FOOD = 12
 const MAX_ALIASES = 30
@@ -140,6 +141,15 @@ export async function POST(
     target.needsReview = computeReviewIssues(target.toObject() as unknown as FoodForReview).length > 0
 
     await target.save()
+
+    // Redirect any user-owned references to source → target before deleting
+    // the source. Otherwise saved-food bookmarks and historical log entries
+    // would be left dangling.
+    await redirectFoodRefs(
+      source._id as mongoose.Types.ObjectId,
+      target._id as mongoose.Types.ObjectId,
+    )
+
     await Food.deleteOne({ _id: source._id })
 
     const fresh = await Food.findById(target._id)
