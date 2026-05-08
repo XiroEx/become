@@ -110,21 +110,46 @@ function pickDefaultVariantIdx(variants: FoodVariant[] | undefined): number {
   return idx >= 0 ? idx : 0
 }
 
+// Pattern matching a parenthesized weight/volume in a label, e.g. "(28 g)".
+const ROW_PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|milliliters?|oz|ounces?|fl\s*oz)\s*\)/i
+
 // Friendly serving label for the row underline. USDA / OFF foods often store
 // nutrition per 100 g but carry the "real" household serving in displayLabel
 // or alternateServings[0]. Showing raw "100 g" when the food has a 28 g pouch
-// label is misleading — fall through the better signals first.
+// label is misleading — fall through the better signals first. Also append
+// "(28 g)" when the chosen label is just a count ("12 chips") and we know
+// the gram weight via the bridge or a mass-family servingSize.
 function preferredServingLabel(food: FoodResult): string {
-  if (food.displayLabel && food.displayLabel.trim()) return food.displayLabel.trim()
-  if (food.alternateServings && food.alternateServings.length > 0) {
+  let base = ''
+  if (food.displayLabel && food.displayLabel.trim()) base = food.displayLabel.trim()
+  else if (food.alternateServings && food.alternateServings.length > 0) {
     const alt = food.alternateServings[0]
-    if (alt.label && alt.label.trim()) return alt.label.trim()
-  }
-  if (food.gramsPerServing != null && food.gramsPerServing > 0
+    if (alt.label && alt.label.trim()) base = alt.label.trim()
+  } else if (food.gramsPerServing != null && food.gramsPerServing > 0
       && Math.abs(food.gramsPerServing - food.servingSize) > 0.1) {
-    return `${Math.round(food.gramsPerServing)} g`
+    base = `${Math.round(food.gramsPerServing)} g`
+  } else {
+    base = `${food.servingSize} ${food.servingUnit}`
   }
-  return `${food.servingSize} ${food.servingUnit}`
+
+  if (ROW_PARENS_WEIGHT_RE.test(base)) return base
+
+  // Append "(N g)" when we have a gram bridge (or the variant is mass-native
+  // with a servingSize that isn't itself "100 g"). Skip the trivial "100 g"
+  // tail when the storage size already says it.
+  let grams: number | null = null
+  if (food.gramsPerServing != null && food.gramsPerServing > 0) grams = food.gramsPerServing
+  else if (food.servingUnit === 'g') grams = food.servingSize
+  else if (food.servingUnit === 'oz') grams = food.servingSize * 28.3495
+
+  if (grams != null && grams > 0
+      && !(Math.abs(grams - food.servingSize) < 0.5 && food.servingUnit === 'g')) {
+    const rounded = Math.abs(grams - Math.round(grams)) < 0.05
+      ? String(Math.round(grams))
+      : (Math.round(grams * 10) / 10).toString()
+    return `${base} (${rounded} g)`
+  }
+  return base
 }
 
 function titleCaseTag(tag: string): string {
