@@ -27,6 +27,9 @@ import {
   RefreshCw,
   Save,
   Check,
+  Split as SplitIcon,
+  GitMerge,
+  Search,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui/Card'
@@ -46,6 +49,8 @@ interface Variant {
   alternateServings: { label: string; multiplier: number }[]
   gramsPerServing?: number
   mlPerServing?: number
+  externalId?: string
+  externalDataType?: string
   nutrition: {
     calories: number
     protein: number
@@ -202,12 +207,18 @@ function VariantEditor({
   onChange,
   onRemove,
   canRemove,
+  onSplit,
+  canSplit,
+  splitting,
 }: {
   variant: Variant
   index: number
   onChange: (next: Variant) => void
   onRemove: () => void
   canRemove: boolean
+  onSplit?: () => void
+  canSplit?: boolean
+  splitting?: boolean
 }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
@@ -224,6 +235,18 @@ function VariantEditor({
           />
           Default
         </label>
+        {canSplit && onSplit && (
+          <button
+            type="button"
+            onClick={onSplit}
+            disabled={splitting}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 dark:hover:bg-amber-900/20 dark:hover:text-amber-400"
+            title="Split this variant into its own food"
+          >
+            {splitting ? <Loader2 className="h-3 w-3 animate-spin" /> : <SplitIcon className="h-3 w-3" />}
+            Split
+          </button>
+        )}
         {canRemove && (
           <button
             type="button"
@@ -235,6 +258,21 @@ function VariantEditor({
           </button>
         )}
       </div>
+
+      {(variant.externalId || variant.externalDataType) && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+          {variant.externalDataType && (
+            <span className="rounded bg-zinc-200 px-1.5 py-0.5 dark:bg-zinc-700">
+              {variant.externalDataType}
+            </span>
+          )}
+          {variant.externalId && (
+            <span className="rounded bg-zinc-200 px-1.5 py-0.5 font-mono dark:bg-zinc-700">
+              fdcId {variant.externalId}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="flex flex-col gap-1">
@@ -395,6 +433,19 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [splittingVariantId, setSplittingVariantId] = useState<string | null>(null)
+  const [mergePickerOpen, setMergePickerOpen] = useState(false)
+  const [mergeQuery, setMergeQuery] = useState('')
+  const [mergeResults, setMergeResults] = useState<Array<{
+    _id: string
+    name: string
+    brand?: string
+    source?: string
+    externalDataType?: string
+    variants?: { _id?: string }[]
+  }>>([])
+  const [mergeSearching, setMergeSearching] = useState(false)
+  const [merging, setMerging] = useState(false)
 
   const headers = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -529,6 +580,87 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
     } catch {
       setToast({ message: 'Network error', type: 'error' })
       setDeleting(false)
+    }
+  }
+
+  const splitVariant = async (variantId: string) => {
+    if (!food || splittingVariantId) return
+    setSplittingVariantId(variantId)
+    try {
+      const res = await fetch(`/api/admin/foods/${id}/split`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ variantId }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setToast({ message: (data as { error?: string }).error ?? 'Split failed', type: 'error' })
+        return
+      }
+      const data = (await res.json()) as { food: AdminFood }
+      setToast({ message: `Split into "${data.food.name}"`, type: 'success' })
+      // Navigate to the new food so the admin can curate it.
+      router.push(`/dashboard/admin/foods/${data.food._id}`)
+    } catch {
+      setToast({ message: 'Network error', type: 'error' })
+    } finally {
+      setSplittingVariantId(null)
+    }
+  }
+
+  const searchMergeTargets = async (q: string) => {
+    setMergeQuery(q)
+    if (!q.trim() || !food) {
+      setMergeResults([])
+      return
+    }
+    setMergeSearching(true)
+    try {
+      const params = new URLSearchParams({
+        q,
+        limit: '12',
+      })
+      // Match source so admins don't accidentally try to merge USDA into OFF.
+      if (food.source) params.set('source', food.source)
+      const res = await fetch(`/api/admin/foods?${params.toString()}`, {
+        headers: headers(),
+      })
+      if (!res.ok) {
+        setMergeResults([])
+        return
+      }
+      const data = (await res.json()) as { foods: typeof mergeResults }
+      // Don't allow selecting the food itself.
+      setMergeResults(data.foods.filter(f => f._id !== id))
+    } catch {
+      setMergeResults([])
+    } finally {
+      setMergeSearching(false)
+    }
+  }
+
+  const mergeInto = async (targetId: string) => {
+    if (!food || merging) return
+    setMerging(true)
+    try {
+      const res = await fetch(`/api/admin/foods/${id}/merge`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ targetId }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setToast({ message: (data as { error?: string }).error ?? 'Merge failed', type: 'error' })
+        return
+      }
+      setToast({ message: 'Merged', type: 'success' })
+      // Source food is gone — navigate to the target.
+      router.push(`/dashboard/admin/foods/${targetId}`)
+    } catch {
+      setToast({ message: 'Network error', type: 'error' })
+    } finally {
+      setMerging(false)
+      setMergePickerOpen(false)
     }
   }
 
@@ -728,6 +860,84 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
         </Card>
       )}
 
+      {/* Merge into another food */}
+      <Card variant="default">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Merge</p>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Move all variants into another food, then delete this one. Same source only.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMergePickerOpen(o => !o)
+              if (!mergePickerOpen) {
+                setMergeQuery('')
+                setMergeResults([])
+              }
+            }}
+            disabled={merging}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <GitMerge className="h-3.5 w-3.5" />
+            {mergePickerOpen ? 'Cancel' : 'Merge into another food'}
+          </button>
+        </div>
+
+        {mergePickerOpen && (
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                value={mergeQuery}
+                onChange={e => searchMergeTargets(e.target.value)}
+                placeholder="Search foods..."
+                className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                autoFocus
+              />
+            </div>
+            {mergeSearching && (
+              <p className="text-xs text-zinc-500">Searching...</p>
+            )}
+            {!mergeSearching && mergeQuery && mergeResults.length === 0 && (
+              <p className="text-xs text-zinc-500">No matches.</p>
+            )}
+            {mergeResults.length > 0 && (
+              <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                {mergeResults.map(t => (
+                  <li key={t._id}>
+                    <button
+                      type="button"
+                      onClick={() => mergeInto(t._id)}
+                      disabled={merging}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-800"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          {t.name}
+                        </p>
+                        <p className="truncate text-[11px] text-zinc-500">
+                          {t.brand && <>{t.brand} · </>}
+                          {t.source && <span className="uppercase">{t.source}</span>}
+                          {t.externalDataType && <> · {t.externalDataType}</>}
+                          {Array.isArray(t.variants) && (
+                            <> · {t.variants.length} variant{t.variants.length === 1 ? '' : 's'}</>
+                          )}
+                        </p>
+                      </div>
+                      <GitMerge className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Card>
+
       {/* Variants */}
       <Card variant="default">
         <div className="mb-3 flex items-center justify-between">
@@ -765,6 +975,9 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
               index={idx}
               variant={v}
               canRemove={food.variants.length > 1}
+              canSplit={food.variants.length > 1 && !!v._id && !dirty}
+              splitting={splittingVariantId === v._id}
+              onSplit={v._id ? () => splitVariant(v._id!) : undefined}
               onRemove={() =>
                 setFood({
                   ...food,

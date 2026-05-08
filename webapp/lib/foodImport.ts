@@ -4,7 +4,7 @@ import OpenFoodFact, { IOpenFoodFact } from '@/models/OpenFoodFact'
 import { fetchUSDAById, mapUSDAFood, MappedFoodResult, USDAFood, USDAFoodPortion } from '@/lib/usda'
 import { baseSlug, generateUniqueFoodSlug } from '@/lib/foodSlug'
 import { parseQuantityString, convert, familyOf } from '@/lib/units'
-import { baseGroupKey } from '@/lib/foodGrouping'
+import { baseGroupKey, prettifyGroupKey } from '@/lib/foodGrouping'
 import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
 
 const VALID_CATEGORIES: FoodCategory[] = [
@@ -54,6 +54,95 @@ function buildVariantFromMapped(
     mlPerServing: mapped.mlPerServing,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Variant-merging helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Hard cap on how many variants a single Food doc may carry. Beyond this
+ * the picker UI gets unwieldy and the doc gets bloated. New auto-merge
+ * candidates falling on a capped parent are written as standalone foods
+ * (siblings) instead.
+ */
+const MAX_VARIANTS_PER_FOOD = 12
+
+/**
+ * Cap on aliases — original USDA descriptions accumulate here when variants
+ * are merged into a parent. Without a cap, a popular groupKey (eg "tea")
+ * could collect dozens of strings.
+ */
+const MAX_ALIASES = 30
+
+/**
+ * Derive a tidy variant name from a USDA description and the parent food's
+ * name. The intent is to put the *qualifier* into the variant name so the
+ * picker reads naturally:
+ *
+ *   parent="Tea", desc="Tea, hot, herbal"    → "Hot, herbal"
+ *   parent="Tea", desc="Tea, iced, bottled"  → "Iced, bottled"
+ *   parent="Eggs", desc="Eggs, scrambled"    → "Scrambled"
+ *
+ * If the description doesn't start with the parent name, fall back to using
+ * the cleaned description verbatim (capped). If nothing usable remains,
+ * returns 'Default' — caller must dedupe.
+ */
+function deriveVariantName(description: string, parentName: string): string {
+  const desc = (description ?? '').trim()
+  const parent = (parentName ?? '').trim()
+  if (!desc) return 'Default'
+
+  let work = desc
+  // "Tea, hot, herbal" with parent "Tea" → "hot, herbal"
+  // "Tea hot, herbal" with parent "Tea"  → "hot, herbal"
+  if (parent && desc.toLowerCase().startsWith(parent.toLowerCase())) {
+    work = desc.slice(parent.length).trim()
+    // Strip leading separator (comma or space)
+    work = work.replace(/^[,\s]+/, '').trim()
+  }
+
+  // Collapse whitespace + repeated separators
+  work = work
+    .replace(/\s+/g, ' ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/^[,\s]+|[,\s]+$/g, '')
+    .trim()
+
+  if (!work) return 'Default'
+
+  // Capitalize the first letter of each comma-separated segment so the
+  // picker reads cleanly without going noisy with full title-casing.
+  const titled = work
+    .split(',')
+    .map(s => {
+      const t = s.trim()
+      if (!t) return ''
+      return t.charAt(0).toUpperCase() + t.slice(1)
+    })
+    .filter(Boolean)
+    .join(', ')
+
+  // Cap at 60 chars; ellipsize beyond.
+  if (titled.length > 60) return titled.slice(0, 57) + '...'
+  return titled
+}
+
+/**
+ * Ensure `candidateName` doesn't collide with any name in `existingNames`.
+ * If it does, suffix " (2)", " (3)", etc. Avoids picker confusion when two
+ * distinct USDA entries happen to flatten to the same variant name.
+ */
+function dedupeVariantName(existingNames: string[], candidateName: string): string {
+  const existing = new Set(existingNames.map(n => n.toLowerCase()))
+  if (!existing.has(candidateName.toLowerCase())) return candidateName
+  for (let n = 2; n < 100; n++) {
+    const next = `${candidateName} (${n})`
+    if (!existing.has(next.toLowerCase())) return next
+  }
+  // Pathological — fall back to a uniq suffix.
+  return `${candidateName} (${Date.now() % 10000})`
+}
+
 
 // ---------------------------------------------------------------------------
 // USDA foodPortions enrichment
@@ -237,9 +326,17 @@ export async function importFromUSDA(
   fdcId: string,
   createdBy?: mongoose.Types.ObjectId | string,
 ): Promise<{ food: IFood; created: boolean }> {
-  // Already imported?
+  // Already imported as the primary externalId?
   const existing = await Food.findOne({ source: 'usda', externalId: String(fdcId) })
   if (existing) return { food: existing, created: false }
+
+  // Already merged in as a variant of another USDA food? Re-imports of a
+  // variant should return the *parent* doc, not create a duplicate.
+  const existingAsVariant = await Food.findOne({
+    source: 'usda',
+    'variants.externalId': String(fdcId),
+  })
+  if (existingAsVariant) return { food: existingAsVariant, created: false }
 
   const usda = await fetchUSDAById(String(fdcId))
   if (!usda) throw new Error(`USDA food not found for fdcId=${fdcId}`)
@@ -254,11 +351,71 @@ export async function importFromUSDA(
 
   // Strip prep qualifier from canonical name so it lives in the variant name
   const baseName = mapped.name.replace(/,\s*[a-z][a-z\s\-/]*$/i, '').trim() || mapped.name
+  const groupKey = baseGroupKey(baseName)
+
+  // Merge eligibility:
+  //   - Branded products are inherently distinct SKUs → never merge.
+  //   - Empty / single-char groupKey doesn't merge (too vague).
+  // ---------------------------------------------------------------
+  const eligibleForMerge =
+    usda.dataType !== 'Branded' &&
+    !!groupKey &&
+    groupKey.length >= 2
+
+  if (eligibleForMerge) {
+    // Look for an existing parent food with the same groupKey that's NOT
+    // verified (verified parents are admin-curated and locked) and isn't
+    // a Branded entry. We use findOneAndUpdate with a $expr filter so the
+    // push is atomic — no lost-update race when two concurrent imports
+    // hit the same groupKey.
+    //
+    // Two attempts:
+    //   1. Try to push as a non-default variant onto an existing parent
+    //      (size < cap, not verified).
+    //   2. If that fails (no candidate, or candidate filled up), fall back
+    //      to creating a fresh standalone Food.
+    const variantName = deriveVariantName(usda.description, baseName)
+
+    // Look up a candidate to compute the merged name + alias additions.
+    // We do a non-atomic findOne first to read the current state and decide
+    // whether to rename the parent. The atomic update below verifies the
+    // parent is still mergeable at write time.
+    const candidate = await Food.findOne({
+      source: 'usda',
+      groupKey,
+      externalDataType: { $ne: 'Branded' },
+      isVerified: { $ne: true },
+    })
+
+    if (candidate && candidate.variants.length < MAX_VARIANTS_PER_FOOD) {
+      const merged = await tryMergeIntoCandidate({
+        candidateId: candidate._id as mongoose.Types.ObjectId,
+        candidateCurrentName: candidate.name,
+        candidateCurrentAliases: candidate.aliases,
+        usdaDescription: usda.description,
+        usdaDataType: usda.dataType,
+        groupKey,
+        mapped,
+        variantName,
+        fdcId: String(fdcId),
+      })
+
+      if (merged) return { food: merged, created: false }
+      // Otherwise fall through to creating a fresh standalone Food.
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // No-merge path: create a fresh single-variant Food.
+  // ---------------------------------------------------------------
   const variantName = variantNameFromUSDA(usda)
-
   const slug = await generateUniqueFoodSlug(Food, baseName, mapped.brand)
-
   const variant = buildVariantFromMapped(mapped, variantName)
+
+  // Stamp the variant with its own externalId/dataType so future merges
+  // don't lose track of which USDA entry produced it.
+  variant.externalId = String(fdcId)
+  variant.externalDataType = usda.dataType
 
   // Auto-review flag — set if the import produced anything suspect.
   const needsReview = computeReviewIssues({
@@ -287,6 +444,140 @@ export async function importFromUSDA(
   })
 
   return { food, created: true }
+}
+
+/**
+ * Atomic merge attempt: try to push a new variant onto an existing parent
+ * Food. Returns the updated parent on success, or null if the parent has
+ * since been verified, hit the variant cap, or disappeared between the
+ * lookup and the update.
+ *
+ * Uses findOneAndUpdate with a $expr cap-check so concurrent imports of
+ * different fdcIds with the same groupKey can't double-push past the cap.
+ */
+async function tryMergeIntoCandidate(opts: {
+  candidateId: mongoose.Types.ObjectId
+  candidateCurrentName: string
+  candidateCurrentAliases: string[]
+  usdaDescription: string
+  usdaDataType: string
+  groupKey: string
+  mapped: MappedFoodResult
+  variantName: string
+  fdcId: string
+}): Promise<IFood | null> {
+  const {
+    candidateId,
+    candidateCurrentName,
+    candidateCurrentAliases,
+    usdaDescription,
+    usdaDataType,
+    groupKey,
+    mapped,
+    variantName,
+    fdcId,
+  } = opts
+
+  // Dedupe the variant name against the existing parent variants.
+  // Read-then-write race accepted — two distinct fdcIds generally produce
+  // distinct variant names anyway; a numeric-suffix near-collision (very
+  // rare) is cosmetic only.
+  const variantNamesDoc = await Food.findById(candidateId)
+    .select('variants.name')
+    .lean<{ variants: { name: string }[] } | null>()
+  const existingNames = variantNamesDoc?.variants?.map(v => v.name) ?? []
+  const finalVariantName = dedupeVariantName(existingNames, variantName)
+
+  // Build the new variant. isDefault is always false for merged variants —
+  // we never reassign the parent's default.
+  const newVariant: IFoodVariant = {
+    ...buildVariantFromMapped(mapped, finalVariantName),
+    isDefault: false,
+    externalId: fdcId,
+    externalDataType: usdaDataType,
+  }
+
+  // Decide if the parent should be renamed. If the parent's current name is
+  // still the original USDA description (i.e. it has comma-qualifiers and
+  // matches the cooked baseName equivalent), rename it to the prettified
+  // groupKey. We detect "still original" heuristically: parent name contains
+  // a comma OR parent.name matches the new import's baseName plus a
+  // qualifier; in both cases switching to prettifyGroupKey(groupKey)
+  // produces a tidier display.
+  const prettifiedGroup = prettifyGroupKey(groupKey)
+  const lowerName = candidateCurrentName.toLowerCase().trim()
+  const lowerPretty = prettifiedGroup.toLowerCase()
+  const looksRenamedAlready = lowerName === lowerPretty || !lowerName.includes(',')
+
+  let newParentName: string | undefined
+  let aliasToAdd: string | undefined
+  if (!looksRenamedAlready && prettifiedGroup) {
+    newParentName = prettifiedGroup
+    aliasToAdd = candidateCurrentName.trim()
+  }
+  // Always preserve the new USDA description as an alias too — search needs it.
+  const incomingAlias = usdaDescription.trim()
+
+  // Build the $set and $push update.
+  // Note: $push with $each can do nothing (we just push one). We use plain $push.
+  const setOps: Record<string, unknown> = {}
+  if (newParentName && newParentName !== candidateCurrentName) {
+    setOps.name = newParentName
+  }
+
+  // Aliases: append both `aliasToAdd` (the parent's old name) and
+  // `incomingAlias` (the new USDA description), deduped, capped at 30.
+  // We do this in JS since the cap requires array slicing — easier to read
+  // than fighting MongoDB's $push+$slice semantics.
+  const newAliases = [...candidateCurrentAliases]
+  const pushIfMissing = (s?: string) => {
+    if (!s) return
+    if (newAliases.some(a => a.toLowerCase() === s.toLowerCase())) return
+    newAliases.push(s)
+  }
+  if (aliasToAdd) pushIfMissing(aliasToAdd)
+  pushIfMissing(incomingAlias)
+  while (newAliases.length > MAX_ALIASES) newAliases.shift()
+  if (
+    newAliases.length !== candidateCurrentAliases.length ||
+    newAliases.some((a, i) => a !== candidateCurrentAliases[i])
+  ) {
+    setOps.aliases = newAliases
+  }
+
+  // Atomic update: push variant only if cap not exceeded, parent still
+  // unverified, and groupKey unchanged. Re-runs computeReviewIssues after.
+  const updated = await Food.findOneAndUpdate(
+    {
+      _id: candidateId,
+      isVerified: { $ne: true },
+      externalDataType: { $ne: 'Branded' },
+      groupKey,
+      $expr: { $lt: [{ $size: '$variants' }, MAX_VARIANTS_PER_FOOD] },
+      // Don't merge if a variant with this fdcId is already there (race
+      // protection; the outer check handled the common case but a concurrent
+      // import of the same fdcId could still slip through).
+      'variants.externalId': { $ne: fdcId },
+    },
+    {
+      $push: { variants: newVariant },
+      ...(Object.keys(setOps).length > 0 ? { $set: setOps } : {}),
+    },
+    { new: true },
+  )
+
+  if (!updated) return null
+
+  // Recompute needsReview against the merged state. Variants are appended
+  // so the *default* variant didn't change — but the slug check might be
+  // affected by a name change. We recompute and write only if it differs.
+  const recomputed = computeReviewIssues(updated.toObject() as unknown as FoodForReview).length > 0
+  if (recomputed !== updated.needsReview) {
+    updated.needsReview = recomputed
+    await updated.save()
+  }
+
+  return updated
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +957,7 @@ export function flattenFoodForResponse(food: IFood & { _id: mongoose.Types.Objec
     isVerified: food.isVerified,
     usageCount: food.usageCount,
     source: food.source,
+    externalId: food.externalId,
     externalDataType: food.externalDataType,
     variants: food.variants,
     aliases: food.aliases,
