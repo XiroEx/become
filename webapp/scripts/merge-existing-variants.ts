@@ -100,6 +100,74 @@ interface FoodDoc {
   groupKey?: string
 }
 
+// ---------------------------------------------------------------------------
+// Redirect user-owned references to a source Food onto the merged target so
+// saved-food bookmarks and historical MealLog/Meal items follow the merge
+// instead of being orphaned. Inlined (instead of importing from
+// @/lib/foodMergeRefs) so this script runs without Next.js path-alias setup.
+// ---------------------------------------------------------------------------
+interface SavedFoodEntry {
+  foodId: mongoose.Types.ObjectId
+  savedAt: Date
+}
+interface UserDoc {
+  _id: mongoose.Types.ObjectId
+  savedFoods?: SavedFoodEntry[]
+}
+
+async function redirectFoodRefsRaw(
+  sourceId: mongoose.Types.ObjectId,
+  targetId: mongoose.Types.ObjectId,
+): Promise<{ usersUpdated: number; mealLogsUpdated: number; mealsUpdated: number }> {
+  if (sourceId.equals(targetId)) {
+    return { usersUpdated: 0, mealLogsUpdated: 0, mealsUpdated: 0 }
+  }
+
+  const Users = mongoose.connection.collection<UserDoc>('users')
+  const MealLogs = mongoose.connection.collection('meallogs')
+  const Meals = mongoose.connection.collection('meals')
+
+  // Saved-foods: redirect AND dedupe (set semantics). Walk every affected
+  // user, rebuild the array.
+  let usersUpdated = 0
+  const cursor = Users.find({ 'savedFoods.foodId': sourceId })
+  for await (const u of cursor) {
+    const seen = new Set<string>()
+    const next: SavedFoodEntry[] = []
+    for (const sf of u.savedFoods ?? []) {
+      const isSource = sf.foodId.equals(sourceId)
+      const newId = isSource ? targetId : sf.foodId
+      const key = newId.toString()
+      if (seen.has(key)) continue
+      seen.add(key)
+      next.push({
+        foodId: newId,
+        savedAt: sf.savedAt instanceof Date ? sf.savedAt : new Date(sf.savedAt),
+      })
+    }
+    await Users.updateOne({ _id: u._id }, { $set: { savedFoods: next } })
+    usersUpdated++
+  }
+
+  // MealLog / Meal items: redirect only, dupes are valid.
+  const mealLogResult = await MealLogs.updateMany(
+    { 'items.foodId': sourceId },
+    { $set: { 'items.$[elem].foodId': targetId } },
+    { arrayFilters: [{ 'elem.foodId': sourceId }] },
+  )
+  const mealResult = await Meals.updateMany(
+    { 'items.foodId': sourceId },
+    { $set: { 'items.$[elem].foodId': targetId } },
+    { arrayFilters: [{ 'elem.foodId': sourceId }] },
+  )
+
+  return {
+    usersUpdated,
+    mealLogsUpdated: mealLogResult.modifiedCount ?? 0,
+    mealsUpdated: mealResult.modifiedCount ?? 0,
+  }
+}
+
 async function main() {
   console.log(`[merge-existing-variants] connecting to ${isProd ? 'PROD' : 'DEV'}...`)
   await mongoose.connect(MONGODB_URI as string)
@@ -131,6 +199,9 @@ async function main() {
   let groupsSkippedVerified = 0
   let groupsSkippedSingleton = 0
   let groupsSkippedCapped = 0
+  let refsUsersRedirected = 0
+  let refsMealLogsRedirected = 0
+  let refsMealsRedirected = 0
 
   for (const [groupKey, foods] of byGroup.entries()) {
     scanned += foods.length
@@ -270,6 +341,22 @@ async function main() {
 
     await Food.updateOne({ _id: primary._id }, { $set: update })
 
+    // Redirect user-owned references for every source being deleted, BEFORE
+    // we drop the docs. Otherwise saved-food bookmarks + historical MealLog
+    // entries would dangle.
+    let usersUpdatedHere = 0
+    let mealLogsUpdatedHere = 0
+    let mealsUpdatedHere = 0
+    for (const srcId of deletedSourceIds) {
+      const r = await redirectFoodRefsRaw(srcId, primary._id)
+      usersUpdatedHere += r.usersUpdated
+      mealLogsUpdatedHere += r.mealLogsUpdated
+      mealsUpdatedHere += r.mealsUpdated
+    }
+    refsUsersRedirected += usersUpdatedHere
+    refsMealLogsRedirected += mealLogsUpdatedHere
+    refsMealsRedirected += mealsUpdatedHere
+
     // Delete the merged source foods.
     if (deletedSourceIds.length > 0) {
       const result = await Food.deleteMany({ _id: { $in: deletedSourceIds } })
@@ -286,6 +373,9 @@ async function main() {
   console.log(`  groups merged: ${groupsMerged}`)
   console.log(`  variants moved: ${variantsMoved}`)
   console.log(`  source foods deleted: ${foodsDeleted}`)
+  console.log(`  user saved-food refs redirected: ${refsUsersRedirected}`)
+  console.log(`  meal-log items redirected: ${refsMealLogsRedirected}`)
+  console.log(`  meal-template items redirected: ${refsMealsRedirected}`)
   console.log(`  groups skipped (singleton): ${groupsSkippedSingleton}`)
   console.log(`  groups skipped (verified parent): ${groupsSkippedVerified}`)
   console.log(`  groups partially skipped (cap): ${groupsSkippedCapped}`)

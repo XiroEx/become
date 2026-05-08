@@ -13,6 +13,7 @@ import {
   importFromOpenFoodFacts,
 } from '@/lib/foodImport'
 import { parseQuantityString, convert } from '@/lib/units'
+import { synthMergeUsdaResults } from '@/lib/usdaSynthMerge'
 
 // ---------------------------------------------------------------------------
 // Map an OpenFoodFact document to the same shape as a flattened Food
@@ -358,7 +359,18 @@ export async function GET(request: NextRequest) {
         }
       }
     }
-    const usdaWithFlag = usdaResults
+
+    // Synthetic-merge the live USDA results before sending. This collapses
+    // same-`groupKey` non-Branded entries (e.g. 10 separate "Beverages,
+    // coffee, *" rows) into one consolidated synthetic entry with multiple
+    // variants. The shape mirrors what the background-import + auto-merge
+    // will produce server-side, so first-time searches don't show fragmented
+    // lists. `additionalFdcIds` are the secondary members folded into a
+    // synthetic primary — passed to the background queue so every member
+    // gets imported (and merged into the same parent via importFromUSDA's
+    // groupKey logic).
+    const synth = synthMergeUsdaResults(usdaResults, knownVariantExternalIds)
+    const usdaWithFlag = synth.entries
       .filter(r => {
         const fdcId = typeof r._id === 'string' && r._id.startsWith('usda-')
           ? r._id.slice('usda-'.length)
@@ -395,7 +407,14 @@ export async function GET(request: NextRequest) {
     // after the response is sent. Idempotent — `importFromUSDA` /
     // `importFromOpenFoodFacts` short-circuit on `findOne({ source,
     // externalId })`, so re-running the same query is a no-op DB-wise.
-    after(() => backgroundImportExternals(paged, authResult.userId))
+    //
+    // We also queue `synth.additionalFdcIds` — the secondary members folded
+    // into synthetic primaries. Without this, only the synthetic primary's
+    // fdcId would be imported and the persisted Food doc wouldn't end up
+    // with the same variant set the user just saw. importFromUSDA's
+    // groupKey-based merge logic ensures these all land on the same parent.
+    const extraFdcIds = synth.additionalFdcIds
+    after(() => backgroundImportExternals(paged, authResult.userId, extraFdcIds))
 
     return NextResponse.json({ foods: paged, total: combined.length, offset, limit })
   } catch (error) {
@@ -430,12 +449,18 @@ interface BackgroundImportItem {
  *    been delivered. Each fetch has its own 12s timeout.
  *  - Items already imported (their `_id` is an ObjectId, not a synthetic
  *    string) are skipped here.
+ *  - `extraFdcIds` are USDA fdcIds NOT directly returned to the client —
+ *    typically the secondary members folded into a synth-merged entry.
+ *    importFromUSDA's groupKey logic merges them onto the same parent the
+ *    user saw, so the persisted shape matches the response shape.
  */
 async function backgroundImportExternals(
   results: BackgroundImportItem[],
   userId?: string,
+  extraFdcIds: string[] = [],
 ): Promise<void> {
   const queue: Array<() => Promise<void>> = []
+  const queuedFdcIds = new Set<string>()
 
   for (const r of results) {
     const id = typeof r._id === 'string' ? r._id : ''
@@ -444,6 +469,8 @@ async function backgroundImportExternals(
     if (id.startsWith('usda-')) {
       const fdcId = id.slice('usda-'.length)
       if (!fdcId) continue
+      if (queuedFdcIds.has(fdcId)) continue
+      queuedFdcIds.add(fdcId)
       queue.push(async () => {
         try {
           await importFromUSDA(fdcId, userId)
@@ -462,6 +489,19 @@ async function backgroundImportExternals(
         }
       })
     }
+  }
+
+  // Tack on the synth-merge secondary members.
+  for (const fdcId of extraFdcIds) {
+    if (!fdcId || queuedFdcIds.has(fdcId)) continue
+    queuedFdcIds.add(fdcId)
+    queue.push(async () => {
+      try {
+        await importFromUSDA(fdcId, userId)
+      } catch (err) {
+        console.warn(`bg-import USDA fdcId=${fdcId} (synth-secondary) failed:`, err instanceof Error ? err.message : String(err))
+      }
+    })
   }
 
   if (queue.length === 0) return
