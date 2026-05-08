@@ -10,7 +10,7 @@ const VALID_CATEGORIES: FoodCategory[] = [
 ]
 
 const VALID_SERVING_UNITS: ServingUnit[] = [
-  'g', 'oz', 'cup', 'each', 'ml', 'tbsp', 'tsp', 'slice', 'scoop',
+  'g', 'oz', 'cup', 'each', 'ml', 'tbsp', 'tsp', 'slice', 'scoop', 'serving',
 ]
 
 export function coerceCategory(c: string | undefined): FoodCategory {
@@ -241,6 +241,8 @@ export interface ManualFoodInput {
     servingSize: number
     servingUnit: string
     alternateServings?: { label: string; multiplier: number }[]
+    gramsPerServing?: number
+    mlPerServing?: number
     nutrition: {
       calories: number
       protein: number
@@ -259,6 +261,8 @@ export interface ManualFoodInput {
   servingSize?: number
   servingUnit?: string
   alternateServings?: { label: string; multiplier: number }[]
+  gramsPerServing?: number
+  mlPerServing?: number
   nutrition?: {
     calories: number
     protein: number
@@ -306,6 +310,8 @@ export async function importManualFood(
       servingSize: input.servingSize,
       servingUnit: input.servingUnit || 'g',
       alternateServings: input.alternateServings ?? [],
+      gramsPerServing: input.gramsPerServing,
+      mlPerServing: input.mlPerServing,
       nutrition: input.nutrition,
     }]
   }
@@ -316,6 +322,8 @@ export async function importManualFood(
     servingSize: v.servingSize,
     servingUnit: coerceServingUnit(v.servingUnit),
     alternateServings: v.alternateServings ?? [],
+    gramsPerServing: v.gramsPerServing,
+    mlPerServing: v.mlPerServing,
     nutrition: v.nutrition,
   }))
 
@@ -370,6 +378,8 @@ export function flattenFoodForResponse(food: IFood & { _id: mongoose.Types.Objec
     displayLabel: v.displayLabel,
     alternateServings: v.alternateServings,
     nutrition: v.nutrition,
+    gramsPerServing: v.gramsPerServing,
+    mlPerServing: v.mlPerServing,
     barcode: food.barcode,
     imageUrl: food.imageUrl,
     isFirstClass: food.isFirstClass,

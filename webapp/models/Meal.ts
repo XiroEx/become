@@ -32,6 +32,23 @@ export interface IMealItem {
   servingUnit: string
   servings: number
   nutrition: IMealNutrition
+
+  // ---------------------------------------------------------------------------
+  // Provenance for re-edit (PR 1 foundation; consumers wired up in PR 4).
+  //
+  // What the user actually entered in the picker — number + unit. Mirrors
+  // picker state so the next edit opens with the same quantity and unit
+  // instead of being re-derived from `multiplier × servingSize`.
+  //
+  // `loggedUnit` is stored as a plain string here so the model file stays
+  // self-contained; runtime values are members of the `Unit` type from
+  // `lib/units.ts`. The bridge snapshots let the picker show the right
+  // unit toggle without re-fetching the Food.
+  // ---------------------------------------------------------------------------
+  loggedQuantity?: number
+  loggedUnit?: string
+  loggedGramsPerServing?: number
+  loggedMlPerServing?: number
 }
 
 export interface IMealRecipe {
@@ -89,6 +106,10 @@ const MealItemSchema = new Schema<IMealItem>({
   servingUnit: { type: String, required: true },
   servings: { type: Number, required: true, default: 1 },
   nutrition: { type: MealNutritionSchema, required: true },
+  loggedQuantity: { type: Number },
+  loggedUnit: { type: String },
+  loggedGramsPerServing: { type: Number },
+  loggedMlPerServing: { type: Number },
 }, { _id: true })
 
 const MealRecipeSchema = new Schema<IMealRecipe>({

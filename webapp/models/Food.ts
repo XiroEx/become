@@ -31,6 +31,7 @@ export type ServingUnit =
   | 'tsp'
   | 'slice'
   | 'scoop'
+  | 'serving'
 
 export type FoodSource = 'usda' | 'openfoodfacts' | 'manual'
 
@@ -65,6 +66,27 @@ export interface IFoodVariant {
   displayLabel?: string
   alternateServings: IAlternateServing[]
   nutrition: IFoodNutrition
+
+  /**
+   * Cross-domain bridge — grams in one canonical serving (servingSize × servingUnit).
+   * Optional. Stored canonical; input UIs may accept any mass unit (oz, lb, g)
+   * and convert via `parseQuantityString` before persisting.
+   *
+   * Populated from:
+   *   - USDA: parsed from householdServingFullText when it includes a gram value
+   *   - OpenFoodFacts: parsed from serving_size text
+   *   - Manual / recipe-sourced: optional; recipe save-as-food sets it from totals
+   *
+   * Don't compute this from servingSize when servingUnit is each/slice/scoop/serving —
+   * we don't actually know the gram weight in those cases.
+   */
+  gramsPerServing?: number
+
+  /**
+   * Cross-domain bridge — millilitres in one canonical serving. Optional.
+   * Input UIs may accept any volume unit (fl oz, cup, tbsp, tsp, ml).
+   */
+  mlPerServing?: number
 }
 
 export interface IFood {
@@ -121,11 +143,13 @@ const VariantSchema = new Schema<IFoodVariant>({
   servingUnit: {
     type: String,
     required: true,
-    enum: ['g', 'oz', 'cup', 'each', 'ml', 'tbsp', 'tsp', 'slice', 'scoop'],
+    enum: ['g', 'oz', 'cup', 'each', 'ml', 'tbsp', 'tsp', 'slice', 'scoop', 'serving'],
   },
   displayLabel: { type: String },
   alternateServings: { type: [AlternateServingSchema], default: [] },
   nutrition: { type: NutritionSchema, required: true },
+  gramsPerServing: { type: Number },
+  mlPerServing: { type: Number },
 }, { _id: true })
 
 const FoodSchema = new Schema<IFood>({
