@@ -7,6 +7,8 @@
  * Searches Branded + Survey (FNDDS) foods and maps to a Food-search-result shape.
  */
 
+import { parseQuantityString, convert, familyOf } from '@/lib/units'
+
 const API_BASE = 'https://api.nal.usda.gov/fdc/v1'
 
 // Nutrient IDs in the USDA schema
@@ -89,8 +91,77 @@ export interface MappedFoodResult {
     sodium?: number
     saturatedFat?: number
   }
+  /** Cross-domain bridges — populated at import time when derivable. */
+  gramsPerServing?: number
+  mlPerServing?: number
   source: 'usda'
   dataType?: string
+}
+
+// USDA serving-size unit codes (rough mapping). The API uses both ISO-ish
+// codes ("GRM", "MLT") and human strings ("g", "ml") inconsistently across
+// data types; check both.
+const USDA_MASS_UNITS = new Set(['grm', 'g', 'gram', 'grams'])
+const USDA_VOLUME_UNITS = new Set(['mlt', 'ml', 'milliliter', 'milliliters'])
+
+/**
+ * Try to derive cross-domain bridges (gramsPerServing / mlPerServing) from a
+ * USDA food's servingSize/servingSizeUnit and householdServingFullText.
+ *
+ *   - If servingSizeUnit is a mass unit, gramsPerServing = servingSize.
+ *   - If servingSizeUnit is a volume unit, mlPerServing = servingSize. We
+ *     additionally try to mine a gram value out of householdServingFullText
+ *     ("1 cup (240 g)") so liquids with declared density get both bridges.
+ *   - For Foundation/SR Legacy/Survey foods reported per-100g (no
+ *     servingSize), gramsPerServing defaults to 100 (the implicit serving).
+ */
+function deriveUsdaBridges(food: USDAFood): {
+  gramsPerServing?: number
+  mlPerServing?: number
+} {
+  const rawUnit = (food.servingSizeUnit || '').toLowerCase().trim()
+  const size = food.servingSize
+  let gramsPerServing: number | undefined
+  let mlPerServing: number | undefined
+
+  if (size != null && size > 0) {
+    if (USDA_MASS_UNITS.has(rawUnit)) {
+      gramsPerServing = size
+    } else if (USDA_VOLUME_UNITS.has(rawUnit)) {
+      mlPerServing = size
+    }
+  }
+
+  // householdServingFullText may carry a parenthesized gram/ml hint.
+  const hh = food.householdServingFullText
+  if (hh) {
+    const parenMatches = hh.match(/\(([^)]+)\)/g)
+    const candidates: string[] = []
+    if (parenMatches) {
+      for (const p of parenMatches) candidates.push(p.slice(1, -1).trim())
+    }
+    candidates.push(hh)
+    for (const c of candidates) {
+      const parsed = parseQuantityString(c)
+      if (!parsed) continue
+      const fam = familyOf(parsed.unit)
+      if (fam === 'mass' && gramsPerServing == null) {
+        gramsPerServing = convert(parsed.value, parsed.unit, 'g')
+      } else if (fam === 'volume' && mlPerServing == null) {
+        mlPerServing = convert(parsed.value, parsed.unit, 'ml')
+      }
+    }
+  }
+
+  // No serving info at all → USDA per-100g foods (Foundation/SR Legacy/Survey
+  // without household serving). Default to gramsPerServing = 100.
+  if (gramsPerServing == null && mlPerServing == null) {
+    if (size == null || size === 100) {
+      gramsPerServing = 100
+    }
+  }
+
+  return { gramsPerServing, mlPerServing }
 }
 
 export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResult | null> {
@@ -151,6 +222,8 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
         const alternateServings: { label: string; multiplier: number }[] = []
         if (servingSize !== 100) alternateServings.push({ label: `100 ${unitLabel}`, multiplier: 100 / servingSize })
 
+        const { gramsPerServing, mlPerServing } = deriveUsdaBridges(food)
+
         return {
           _id: `usda-${food.fdcId}`,
           name: food.description,
@@ -161,6 +234,8 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
           servingUnit: servingUnit === 'ml' ? 'ml' : 'g',
           alternateServings: alternateServings.length > 0 ? alternateServings : undefined,
           nutrition,
+          gramsPerServing,
+          mlPerServing,
           source: 'usda',
           dataType: food.dataType,
         }
@@ -220,6 +295,8 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
     alternateServings.push({ label: `100 ${unitLabel}`, multiplier: 100 / servingSize })
   }
 
+  const { gramsPerServing, mlPerServing } = deriveUsdaBridges(food)
+
   return {
     _id: `usda-${food.fdcId}`,
     name: food.description,
@@ -230,6 +307,8 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
     servingUnit: servingUnit === 'ml' ? 'ml' : 'g',
     alternateServings: alternateServings.length > 0 ? alternateServings : undefined,
     nutrition,
+    gramsPerServing,
+    mlPerServing,
     source: 'usda',
     dataType: food.dataType,
   }
