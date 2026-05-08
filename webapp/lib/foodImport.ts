@@ -65,7 +65,7 @@ function buildVariantFromMapped(
  * candidates falling on a capped parent are written as standalone foods
  * (siblings) instead.
  */
-const MAX_VARIANTS_PER_FOOD = 12
+export const MAX_VARIANTS_PER_FOOD = 12
 
 /**
  * Cap on aliases — original USDA descriptions accumulate here when variants
@@ -87,7 +87,7 @@ const MAX_ALIASES = 30
  * the cleaned description verbatim (capped). If nothing usable remains,
  * returns 'Default' — caller must dedupe.
  */
-function deriveVariantName(description: string, parentName: string): string {
+export function deriveVariantName(description: string, parentName: string): string {
   const desc = (description ?? '').trim()
   const parent = (parentName ?? '').trim()
   if (!desc) return 'Default'
