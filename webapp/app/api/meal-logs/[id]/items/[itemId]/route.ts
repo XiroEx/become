@@ -50,6 +50,23 @@ export async function PATCH(
     if (body.brand !== undefined) item.brand = body.brand
     if (body.variantName !== undefined) item.variantName = body.variantName
 
+    // PR 4 provenance: persist the user's actual entered quantity + unit when
+    // the client supplies them. Old clients that PATCH only `servings` keep
+    // working — the legacy multiplier is still the canonical scaling factor
+    // for back-compat reads.
+    if (typeof body.loggedQuantity === 'number') {
+      item.loggedQuantity = body.loggedQuantity
+    }
+    if (typeof body.loggedUnit === 'string') {
+      item.loggedUnit = body.loggedUnit
+    }
+    if (typeof body.loggedGramsPerServing === 'number') {
+      item.loggedGramsPerServing = body.loggedGramsPerServing
+    }
+    if (typeof body.loggedMlPerServing === 'number') {
+      item.loggedMlPerServing = body.loggedMlPerServing
+    }
+
     if (body.nutrition && typeof body.nutrition === 'object') {
       // Replace nutrition wholesale to keep semantics simple — caller passes
       // the new per-serving nutrition.

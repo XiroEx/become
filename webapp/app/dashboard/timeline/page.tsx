@@ -27,6 +27,7 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/models/NutritionLog'
+import { formatQuantity, type Unit } from '@/lib/units'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -518,6 +519,14 @@ function TimelineClient() {
       const d = new Date(addFoodFor.date.getFullYear(), addFoodFor.date.getMonth(), addFoodFor.date.getDate(), now.getHours(), now.getMinutes(), 0, 0)
       iso = d.toISOString()
     }
+    // FoodSearchModal also supplies the new logged* provenance (PR 4 picker
+    // rework) — pass it through when present so re-edits round-trip.
+    const extra = entry as typeof entry & {
+      loggedQuantity?: number
+      loggedUnit?: string
+      loggedGramsPerServing?: number
+      loggedMlPerServing?: number
+    }
     const item = {
       foodId: entry.foodId,
       variantId: entry.variantId,
@@ -528,6 +537,10 @@ function TimelineClient() {
       servingUnit: entry.servingUnit,
       servings: entry.servings,
       nutrition: entry.nutrition,
+      loggedQuantity: extra.loggedQuantity,
+      loggedUnit: extra.loggedUnit,
+      loggedGramsPerServing: extra.loggedGramsPerServing,
+      loggedMlPerServing: extra.loggedMlPerServing,
     }
     try {
       const res = await fetch('/api/meal-logs', {
@@ -1469,8 +1482,13 @@ function ItemRow({
 }) {
   const cal = Math.round((item.nutrition?.calories ?? 0) * (item.servings ?? 1))
   const showVariant = shouldShowVariantName(item.variantName)
-  const servingDisplay = `${item.servings !== 1 ? `${item.servings} servings` : '1 serving'}`
-  const sizeDisplay = `${item.servingSize} ${item.servingUnit}`
+  // Prefer the user's actual logged quantity + unit when present (PR 4
+  // provenance). Old log rows fall back to the legacy "X servings · servingSize"
+  // display since they don't carry the new fields.
+  const hasLoggedShape = item.loggedQuantity != null && !!item.loggedUnit
+  const detailDisplay = hasLoggedShape
+    ? formatQuantity(item.loggedQuantity!, item.loggedUnit as Unit)
+    : `${item.servings !== 1 ? `${item.servings} servings` : '1 serving'} · ${item.servingSize} ${item.servingUnit}`
 
   return (
     <li className={`flex items-center gap-3 ${compact ? 'px-3 py-2' : 'px-3 py-2.5 sm:px-4'}`}>
@@ -1487,7 +1505,7 @@ function ItemRow({
           {item.brand && (
             <span className="text-zinc-400 dark:text-zinc-500">{item.brand} &middot; </span>
           )}
-          {servingDisplay} &middot; {sizeDisplay}
+          {detailDisplay}
         </p>
       </div>
       <span className={`shrink-0 font-semibold tabular-nums text-zinc-700 dark:text-zinc-300 ${compact ? 'text-[11px]' : 'text-sm'}`}>

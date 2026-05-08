@@ -278,7 +278,16 @@ function NutritionPageInner() {
   const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string) => {
     const useTag = (tag || foodSearchTag || 'snack').toLowerCase()
     try {
-      // Build a MealItemInput from the legacy IFoodEntry shape.
+      // Build a MealItemInput from the legacy IFoodEntry shape. The
+      // FoodSearchModal extends IFoodEntry with the new logged* fields (PR 4
+      // picker rework); pass them through when the modal supplied them so the
+      // log row knows the user's actual unit + bridges for future re-edits.
+      const extra = food as IFoodEntry & {
+        loggedQuantity?: number
+        loggedUnit?: string
+        loggedGramsPerServing?: number
+        loggedMlPerServing?: number
+      }
       const itemPayload = {
         foodId: food.foodId,
         variantId: food.variantId,
@@ -289,6 +298,10 @@ function NutritionPageInner() {
         servingUnit: food.servingUnit,
         servings: food.servings,
         nutrition: food.nutrition,
+        loggedQuantity: extra.loggedQuantity,
+        loggedUnit: extra.loggedUnit,
+        loggedGramsPerServing: extra.loggedGramsPerServing,
+        loggedMlPerServing: extra.loggedMlPerServing,
       }
 
       // When the user explicitly picked a custom time we ALWAYS create a new
