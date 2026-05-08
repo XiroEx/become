@@ -136,6 +136,17 @@ export async function POST(request: NextRequest) {
       ...body,
       createdBy: authResult.userId,
       totalsPerServing: body.totalsPerServing || totalsPerServing,
+      // Optional per-serving bridge values (UNITS_AND_SERVINGS_PLAN §10.8).
+      // Spread already covers them, but be explicit for clarity & sanity-check
+      // numeric typing.
+      gramsPerServing:
+        typeof body.gramsPerServing === 'number' && body.gramsPerServing > 0
+          ? body.gramsPerServing
+          : undefined,
+      mlPerServing:
+        typeof body.mlPerServing === 'number' && body.mlPerServing > 0
+          ? body.mlPerServing
+          : undefined,
       usageCount: 0
     })
 

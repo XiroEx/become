@@ -71,11 +71,15 @@ export async function POST(
     let foodDoc = existing
     let created = false
     if (!foodDoc) {
-      // Bridge values: derived from the recipe items when the math is
-      // reliable (see lib/recipeMath.ts). Either may come back undefined —
-      // that's the honest signal "we don't know" and the picker handles it.
-      const gramsPerServing = await estimatedGramsPerServing(meal)
-      const mlPerServing = estimatedMlPerServing(meal)
+      // Bridge values: prefer the user's explicit override stored on
+      // meal.recipe.gramsPerServing / mlPerServing (UNITS_AND_SERVINGS_PLAN
+      // §10.8). When the override is absent we fall back to the
+      // recipe-items estimator. Either source may legitimately be undefined,
+      // which is the honest signal "we don't know" and the picker handles it.
+      const overrideGrams = meal.recipe?.gramsPerServing
+      const overrideMl = meal.recipe?.mlPerServing
+      const gramsPerServing = overrideGrams ?? (await estimatedGramsPerServing(meal))
+      const mlPerServing = overrideMl ?? estimatedMlPerServing(meal)
 
       const result = await importManualFood(
         {
