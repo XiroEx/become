@@ -6,6 +6,7 @@ import Food from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { importManualFood, flattenFoodForResponse } from '@/lib/foodImport'
+import { estimatedGramsPerServing, estimatedMlPerServing } from '@/lib/recipeMath'
 
 // ---------------------------------------------------------------------------
 // POST /api/meals/[id]/save-as-food
@@ -70,6 +71,12 @@ export async function POST(
     let foodDoc = existing
     let created = false
     if (!foodDoc) {
+      // Bridge values: derived from the recipe items when the math is
+      // reliable (see lib/recipeMath.ts). Either may come back undefined —
+      // that's the honest signal "we don't know" and the picker handles it.
+      const gramsPerServing = await estimatedGramsPerServing(meal)
+      const mlPerServing = estimatedMlPerServing(meal)
+
       const result = await importManualFood(
         {
           name: meal.name,
@@ -79,9 +86,11 @@ export async function POST(
             name: '1 serving',
             isDefault: true,
             servingSize: 1,
-            servingUnit: 'each',
+            servingUnit: 'serving',
             alternateServings: [],
             nutrition: perServing,
+            gramsPerServing,
+            mlPerServing,
           }],
         },
         auth.userId,
