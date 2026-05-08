@@ -92,3 +92,22 @@ export function baseGroupKey(name: string): string {
   const words = work.split(/\s+/).slice(0, 2)
   return words.join(' ')
 }
+
+/**
+ * Title-case a groupKey for display ("chicken breast" → "Chicken Breast").
+ *
+ * Unlike `baseGroupKey`, this is purely cosmetic — used when a parent Food
+ * gets renamed at first-merge time (the original full USDA description is
+ * moved to aliases, the parent gets the cleaner base name).
+ *
+ * Words are split on whitespace; each word is capitalized. Empty input
+ * returns ''.
+ */
+export function prettifyGroupKey(groupKey: string): string {
+  if (!groupKey) return ''
+  return groupKey
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}

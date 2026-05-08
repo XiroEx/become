@@ -336,7 +336,37 @@ export async function GET(request: NextRequest) {
     // Tag external sources as never-saved so the frontend can render the bookmark
     // state uniformly. (Saved external foods would have been imported into our DB
     // and surface via customFoods above with isSaved:true.)
-    const usdaWithFlag = usdaResults.map(r => ({ ...r, isSaved: false }))
+    //
+    // Merged-variant dedup: USDA results whose fdcId matches any *variant's*
+    // externalId on a Food we've already surfaced (via customFoods) are
+    // already represented in our DB — the parent owns them. Drop those from
+    // the live USDA list so we don't show e.g. "Tea" + "Tea, hot, herbal" +
+    // "Tea, hot, leaf, black" as three separate hits.
+    const knownVariantExternalIds = new Set<string>()
+    for (const f of customFoods) {
+      if (f.source !== 'usda') continue
+      // Top-level externalId — the primary variant's fdcId for both legacy
+      // single-variant docs and merged docs.
+      if (typeof f.externalId === 'string' && f.externalId) {
+        knownVariantExternalIds.add(f.externalId)
+      }
+      // Variant-level externalIds — set on every merged-in variant.
+      const variants = Array.isArray(f.variants) ? f.variants : []
+      for (const v of variants) {
+        if (typeof v?.externalId === 'string' && v.externalId) {
+          knownVariantExternalIds.add(v.externalId)
+        }
+      }
+    }
+    const usdaWithFlag = usdaResults
+      .filter(r => {
+        const fdcId = typeof r._id === 'string' && r._id.startsWith('usda-')
+          ? r._id.slice('usda-'.length)
+          : ''
+        if (!fdcId) return true
+        return !knownVariantExternalIds.has(fdcId)
+      })
+      .map(r => ({ ...r, isSaved: false }))
     const offWithFlag = offFoods.map(r => ({ ...r, isSaved: false }))
 
     const combined = [...customFoods, ...usdaWithFlag, ...offWithFlag]
