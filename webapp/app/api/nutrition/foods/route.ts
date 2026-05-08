@@ -7,20 +7,43 @@ import { verifyAuth } from '@/lib/auth'
 import { searchUSDA } from '@/lib/usda'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
 import { flattenFoodForResponse, importManualFood } from '@/lib/foodImport'
+import { parseQuantityString, convert } from '@/lib/units'
 
 // ---------------------------------------------------------------------------
 // Map an OpenFoodFact document to the same shape as a flattened Food
 // ---------------------------------------------------------------------------
 
+/**
+ * Thin wrapper around `parseQuantityString` — extracts a gram value from a
+ * freeform OFF `serving_size` string ("240 g", "1 cup (240 g)", "8 oz").
+ * Returns null when the parsed unit is volume/discrete (no honest g equivalent
+ * without a density bridge). Behavior is at least as permissive as the
+ * previous regex implementation.
+ *
+ * `parseQuantityString` only sees a single number+unit, so for parenthesized
+ * forms ("1 cup (240 g)") we also try the inner-paren substring as a fallback.
+ */
 function extractGramsFromOffServing(text?: string): number | null {
   if (!text) return null
-  const paren = text.match(/\((\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\)/i)
-  if (paren) return parseFloat(paren[1])
-  const direct = text.match(/(\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\b/i)
-  if (direct) {
-    const n = parseFloat(direct[1])
-    if (/oz|ounces?/i.test(direct[0])) return n * 28.3495
-    return n
+  const tryParse = (s: string): number | null => {
+    const parsed = parseQuantityString(s)
+    if (!parsed) return null
+    if (parsed.unit === 'g' || parsed.unit === 'oz' || parsed.unit === 'lb') {
+      return convert(parsed.value, parsed.unit, 'g')
+    }
+    return null
+  }
+  // Direct: "240 g", "8 oz"
+  const direct = tryParse(text)
+  if (direct != null) return direct
+  // Parenthesized: "1 cup (240 g)" → try the contents of any parens.
+  const parenMatches = text.match(/\(([^)]+)\)/g)
+  if (parenMatches) {
+    for (const p of parenMatches) {
+      const inner = p.slice(1, -1).trim()
+      const v = tryParse(inner)
+      if (v != null) return v
+    }
   }
   return null
 }

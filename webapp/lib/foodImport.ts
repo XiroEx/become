@@ -3,6 +3,7 @@ import Food, { IFood, IFoodVariant, FoodCategory, ServingUnit } from '@/models/F
 import OpenFoodFact, { IOpenFoodFact } from '@/models/OpenFoodFact'
 import { fetchUSDAById, mapUSDAFood, MappedFoodResult, USDAFood } from '@/lib/usda'
 import { baseSlug, generateUniqueFoodSlug } from '@/lib/foodSlug'
+import { parseQuantityString, convert, familyOf } from '@/lib/units'
 
 const VALID_CATEGORIES: FoodCategory[] = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -47,6 +48,8 @@ function buildVariantFromMapped(
     displayLabel: mapped.displayLabel,
     alternateServings: mapped.alternateServings ?? [],
     nutrition: mapped.nutrition,
+    gramsPerServing: mapped.gramsPerServing,
+    mlPerServing: mapped.mlPerServing,
   }
 }
 
@@ -125,19 +128,58 @@ export async function importFromUSDA(
  * in grams/ml, but it's frequently parsed as the leading number from the text
  * (e.g. "1 cup (240 ml)" → 1 instead of 240). When that happens our multiplier
  * comes out 100x too small. Fall back to extracting grams from `serving_size`.
+ *
+ * Thin wrapper around `parseQuantityString` so OFF and the foods route share
+ * one parser. Also tries inner parenthesized substrings for forms like
+ * "1 cup (240 g)" since `parseQuantityString` reads a single number+unit.
  */
 function extractGramsFromServingSize(text?: string): number | null {
   if (!text) return null
-  // Parenthesized: "1 cup (240 g)" → 240
-  const paren = text.match(/\((\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\)/i)
-  if (paren) return parseFloat(paren[1])
-  // Direct: "240 g", "240ml", "8 oz"
-  const direct = text.match(/(\d+(?:\.\d+)?)\s*(?:g|grams?|ml|millilitres?|oz|ounces?)\b/i)
-  if (direct) {
-    const n = parseFloat(direct[1])
-    // Convert oz to grams (28.35 g/oz) so multipliers stay consistent
-    if (/oz|ounces?/i.test(direct[0])) return n * 28.3495
-    return n
+  const tryParse = (s: string): number | null => {
+    const parsed = parseQuantityString(s)
+    if (!parsed) return null
+    if (parsed.unit === 'g' || parsed.unit === 'oz' || parsed.unit === 'lb') {
+      return convert(parsed.value, parsed.unit, 'g')
+    }
+    return null
+  }
+  const direct = tryParse(text)
+  if (direct != null) return direct
+  const parenMatches = text.match(/\(([^)]+)\)/g)
+  if (parenMatches) {
+    for (const p of parenMatches) {
+      const inner = p.slice(1, -1).trim()
+      const v = tryParse(inner)
+      if (v != null) return v
+    }
+  }
+  return null
+}
+
+/**
+ * Symmetric to `extractGramsFromServingSize` — extracts a milliliter value
+ * from a freeform serving-size string. Returns null when the parsed unit is
+ * mass/discrete. Used to set the `mlPerServing` bridge on liquid imports.
+ */
+function extractMlFromServingSize(text?: string): number | null {
+  if (!text) return null
+  const tryParse = (s: string): number | null => {
+    const parsed = parseQuantityString(s)
+    if (!parsed) return null
+    if (familyOf(parsed.unit) === 'volume') {
+      return convert(parsed.value, parsed.unit, 'ml')
+    }
+    return null
+  }
+  const direct = tryParse(text)
+  if (direct != null) return direct
+  const parenMatches = text.match(/\(([^)]+)\)/g)
+  if (parenMatches) {
+    for (const p of parenMatches) {
+      const inner = p.slice(1, -1).trim()
+      const v = tryParse(inner)
+      if (v != null) return v
+    }
   }
   return null
 }
@@ -173,6 +215,22 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
     alternateServings.push({ label, multiplier: actualGrams / 100 })
   }
 
+  // Bridges: the variant's nutrition is per 100 (g or ml). gramsPerServing /
+  // mlPerServing describe ONE serving — i.e. `actualGrams` when defined.
+  // For liquids, the parsed value came out of the volume family so we treat
+  // it as ml. For solids it's grams. Don't fake the cross-family bridge.
+  let gramsPerServing: number | undefined
+  let mlPerServing: number | undefined
+  if (actualGrams != null) {
+    if (isLiquid) {
+      // For liquids, prefer a true volume parse so we don't conflate g and ml.
+      const parsedMl = extractMlFromServingSize(off.serving_size) ?? actualGrams
+      mlPerServing = parsedMl
+    } else {
+      gramsPerServing = actualGrams
+    }
+  }
+
   return {
     name: 'Default',
     isDefault: true,
@@ -181,6 +239,8 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
     displayLabel: actualGrams ? off.serving_size || undefined : undefined,
     alternateServings,
     nutrition,
+    gramsPerServing,
+    mlPerServing,
   }
 }
 
@@ -316,16 +376,40 @@ export async function importManualFood(
     }]
   }
 
-  const variants: IFoodVariant[] = variantsInput.map((v, idx) => ({
-    name: v.name || (idx === 0 ? 'Default' : `Variant ${idx + 1}`),
-    isDefault: v.isDefault ?? idx === 0,
-    servingSize: v.servingSize,
-    servingUnit: coerceServingUnit(v.servingUnit),
-    alternateServings: v.alternateServings ?? [],
-    gramsPerServing: v.gramsPerServing,
-    mlPerServing: v.mlPerServing,
-    nutrition: v.nutrition,
-  }))
+  const variants: IFoodVariant[] = variantsInput.map((v, idx) => {
+    const servingUnit = coerceServingUnit(v.servingUnit)
+    // Auto-fill the bridge when the unit is in a known family AND the caller
+    // didn't already provide one. This means custom foods created via direct
+    // API call (not via the picker) get a sensible bridge for free, without
+    // overriding any explicit input.
+    let gramsPerServing = v.gramsPerServing
+    let mlPerServing = v.mlPerServing
+    const family = familyOf(servingUnit)
+    if (gramsPerServing == null && family === 'mass') {
+      try {
+        gramsPerServing = convert(v.servingSize, servingUnit, 'g')
+      } catch {
+        // unreachable — same family — but keep defensive
+      }
+    }
+    if (mlPerServing == null && family === 'volume') {
+      try {
+        mlPerServing = convert(v.servingSize, servingUnit, 'ml')
+      } catch {
+        // unreachable — same family — but keep defensive
+      }
+    }
+    return {
+      name: v.name || (idx === 0 ? 'Default' : `Variant ${idx + 1}`),
+      isDefault: v.isDefault ?? idx === 0,
+      servingSize: v.servingSize,
+      servingUnit,
+      alternateServings: v.alternateServings ?? [],
+      gramsPerServing,
+      mlPerServing,
+      nutrition: v.nutrition,
+    }
+  })
 
   // Ensure exactly one default
   if (!variants.some(v => v.isDefault)) variants[0].isDefault = true
