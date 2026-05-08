@@ -11,6 +11,7 @@ import QuantityPicker, {
   type QuantityPickerSelection,
   type QuantityPickerVariant,
 } from './QuantityPicker'
+import BridgeFieldGroup, { type BridgeValues } from './BridgeFieldGroup'
 
 interface EditFoodModalProps {
   isOpen: boolean
@@ -82,6 +83,11 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // Local bridge edits — start from the logged snapshot. Saving the form
+  // persists these alongside the quantity edit, so the next time this item
+  // opens the picker has the bridge available for cross-family conversions.
+  const [bridge, setBridge] = useState<BridgeValues>({})
+
   useLockScroll(isOpen)
 
   // Fresh derive on each item change so the picker opens with the right state.
@@ -91,8 +97,24 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
     if (item) {
       setSelection(null)
       setError('')
+      setBridge({
+        gramsPerServing: item.loggedGramsPerServing,
+        mlPerServing: item.loggedMlPerServing,
+      })
     }
   }, [item])
+
+  // Apply the live bridge values to the picker variant so the unit dropdown
+  // reflects them immediately (e.g. typing 100 g unlocks gram options on a
+  // cup-native variant).
+  const variantForPicker = useMemo<QuantityPickerVariant | null>(() => {
+    if (!derived) return null
+    return {
+      ...derived.variant,
+      gramsPerServing: bridge.gramsPerServing ?? derived.variant.gramsPerServing,
+      mlPerServing: bridge.mlPerServing ?? derived.variant.mlPerServing,
+    }
+  }, [derived, bridge.gramsPerServing, bridge.mlPerServing])
 
   // Live preview: the selection itself carries the scaled nutrition.
   const preview = selection?.nutrition
@@ -118,8 +140,11 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
           // New shape — picked up by the route updates in this PR.
           loggedQuantity: selection.quantity,
           loggedUnit: selection.unit,
-          loggedGramsPerServing: item.loggedGramsPerServing,
-          loggedMlPerServing: item.loggedMlPerServing,
+          // Bridge values: prefer the user's inline edits, fall back to the
+          // existing snapshot. The route only assigns these when the field is
+          // present, so undefined values leave the stored snapshot intact.
+          loggedGramsPerServing: bridge.gramsPerServing ?? item.loggedGramsPerServing,
+          loggedMlPerServing: bridge.mlPerServing ?? item.loggedMlPerServing,
         }),
       })
       if (res.ok) {
@@ -194,11 +219,25 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
                   Amount
                 </p>
                 <QuantityPicker
-                  variant={derived.variant}
+                  variant={variantForPicker ?? derived.variant}
                   initial={derived.initial}
                   onChange={setSelection}
                 />
               </div>
+
+              {/*
+                Bridge disclosure (PR 5 §5). Default-collapsed when both
+                bridges are missing on the item; expanded when either is set.
+                Saving the form persists these onto the item so the next edit
+                opens with cross-family options available.
+              */}
+              <BridgeFieldGroup
+                value={bridge}
+                onChange={setBridge}
+                servingUnit={item.servingUnit}
+                collapsible
+              />
+
 
               {/* Macro preview */}
               {preview && (

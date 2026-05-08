@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { ArrowLeft, Loader2, Save, AlertCircle } from 'lucide-react'
+import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 
 const CATEGORIES = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -33,6 +34,11 @@ export default function NewCustomFoodPage() {
   const [sugar, setSugar] = useState('')
   const [sodium, setSodium] = useState('')
   const [saturatedFat, setSaturatedFat] = useState('')
+
+  // Optional bridge values for cross-domain conversion in the picker.
+  // The user can opt in to declare "1 cup ≈ 240 g" or "1 oz ≈ 30 ml" so the
+  // food's picker can offer mass↔volume conversions later.
+  const [bridge, setBridge] = useState<BridgeValues>({})
 
   const [bookmark, setBookmark] = useState(true)
 
@@ -86,6 +92,12 @@ export default function NewCustomFoodPage() {
 
     if (displayLabel.trim()) {
       variant.displayLabel = displayLabel.trim()
+    }
+    if (bridge.gramsPerServing != null) {
+      variant.gramsPerServing = bridge.gramsPerServing
+    }
+    if (bridge.mlPerServing != null) {
+      variant.mlPerServing = bridge.mlPerServing
     }
 
     try {
@@ -273,6 +285,16 @@ export default function NewCustomFoodPage() {
             <NumberField label="Sodium (mg)" value={sodium} onChange={setSodium} />
             <NumberField label="Sat. fat (g)" value={saturatedFat} onChange={setSaturatedFat} />
           </div>
+        </div>
+
+        {/* Cross-domain bridge fields (lets the picker offer mass↔volume conversion). */}
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <BridgeFieldGroup
+            value={bridge}
+            onChange={setBridge}
+            servingUnit={servingUnit}
+            collapsible
+          />
         </div>
 
         {/* Bookmark toggle */}

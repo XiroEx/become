@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Trash2, X, Save, ArrowLeft, ChevronDown, AlertCircle, Loader2, ChefHat, ImagePlus, ImageIcon } from 'lucide-react'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem, IMealRecipe } from '@/models/Meal'
@@ -61,6 +62,12 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   const [recipeServings, setRecipeServings] = useState<string>(
     initial?.recipe?.servings != null ? String(initial.recipe.servings) : '1'
   )
+  // Optional explicit per-serving bridges. When set, save-as-food on this
+  // meal uses these instead of the auto-estimator (UNITS_AND_SERVINGS_PLAN §10.8).
+  const [bridge, setBridge] = useState<BridgeValues>({
+    gramsPerServing: initial?.recipe?.gramsPerServing,
+    mlPerServing: initial?.recipe?.mlPerServing,
+  })
 
   const [foodSearchOpen, setFoodSearchOpen] = useState(false)
   const [tagPickerOpen, setTagPickerOpen] = useState(false)
@@ -81,6 +88,10 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       setPrepTime(initial.recipe?.prepTimeMinutes != null ? String(initial.recipe.prepTimeMinutes) : '')
       setCookTime(initial.recipe?.cookTimeMinutes != null ? String(initial.recipe.cookTimeMinutes) : '')
       setRecipeServings(initial.recipe?.servings != null ? String(initial.recipe.servings) : '1')
+      setBridge({
+        gramsPerServing: initial.recipe?.gramsPerServing,
+        mlPerServing: initial.recipe?.mlPerServing,
+      })
     }
   }, [initial])
 
@@ -304,6 +315,8 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             prepTimeMinutes: prepTime ? Number(prepTime) || undefined : undefined,
             cookTimeMinutes: cookTime ? Number(cookTime) || undefined : undefined,
             servings: Number(recipeServings) || 1,
+            gramsPerServing: bridge.gramsPerServing,
+            mlPerServing: bridge.mlPerServing,
           }
         : undefined,
     }
@@ -696,6 +709,12 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
                       className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                     />
                   </div>
+                  <BridgeFieldGroup
+                    value={bridge}
+                    onChange={setBridge}
+                    collapsible
+                    title="Optional: weight or volume per serving"
+                  />
                 </div>
               </motion.div>
             )}
