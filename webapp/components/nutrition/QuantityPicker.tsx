@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pencil } from 'lucide-react'
 import {
   type Unit,
+  convert,
   familyOf,
   unitLabel,
   parseQuantityString,
@@ -111,32 +112,106 @@ function labelForQuantity(quantity: number, unit: Unit, displayLabel?: string, i
   return formatQuantity(quantity, unit)
 }
 
+// Pattern matching a parenthesized weight/volume in a label, e.g. "(28 g)".
+const PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|milliliters?|oz|ounces?|fl\s*oz)\s*\)/i
+
+/**
+ * If `label` is a human serving name without an embedded gram/ml suffix
+ * ("12 chips") and we know the gram weight, append it as "(28 g)". Same for
+ * ml when the variant is volume-native. Returns the label untouched when:
+ *   - the label already mentions a gram/ml value in parens
+ *   - we have nothing to append
+ *   - the resolved value is the trivial "100 g" sentinel (per-100g foods
+ *     where the bridge equals storage size — no signal to add)
+ */
+function enrichLabelWithBridge(
+  label: string,
+  variant: Pick<QuantityPickerVariant, 'servingSize' | 'servingUnit' | 'gramsPerServing' | 'mlPerServing'>,
+): string {
+  if (!label) return label
+  if (PARENS_WEIGHT_RE.test(label)) return label
+
+  const unit = variant.servingUnit as Unit
+  const family = familyOf(unit)
+
+  // Resolve a gram value to append. Prefer gramsPerServing (the bridge);
+  // otherwise compute from servingSize when the variant is mass-native.
+  let grams: number | null = null
+  if (variant.gramsPerServing != null && variant.gramsPerServing > 0) {
+    grams = variant.gramsPerServing
+  } else if (family === 'mass') {
+    try {
+      grams = convert(variant.servingSize, unit, 'g')
+    } catch {
+      grams = null
+    }
+  }
+  if (grams != null) {
+    // Avoid the trivial "(100 g)" tail when the storage size already implies it.
+    if (Math.abs(grams - 100) < 0.5 && Math.abs(variant.servingSize - 100) < 0.5 && unit === 'g') {
+      return label
+    }
+    return `${label} (${roundReadable(grams)} g)`
+  }
+
+  let ml: number | null = null
+  if (variant.mlPerServing != null && variant.mlPerServing > 0) {
+    ml = variant.mlPerServing
+  } else if (family === 'volume') {
+    try {
+      ml = convert(variant.servingSize, unit, 'ml')
+    } catch {
+      ml = null
+    }
+  }
+  if (ml != null) return `${label} (${roundReadable(ml)} ml)`
+
+  return label
+}
+
+function roundReadable(n: number): string {
+  if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n))
+  return (Math.round(n * 10) / 10).toString()
+}
+
 function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
   const unit = variant.servingUnit as Unit
   const size = variant.servingSize
 
+  const baseLabel = labelForQuantity(size, unit, variant.displayLabel, true)
   const primary: QuickOption = {
     id: 'primary',
-    label: labelForQuantity(size, unit, variant.displayLabel, true),
+    label: enrichLabelWithBridge(baseLabel, variant),
     quantity: size,
     unit,
   }
 
   // Prefer the variant's first alternateServing as the "second chip" when one
-  // exists — it carries authored knowledge ("1 medium banana"). Otherwise fall
-  // back to the synthetic "half" option.
+  // exists AND it doesn't render to the same chip as the primary (same label
+  // OR same effective quantity). Otherwise fall back to the synthetic "half"
+  // option so the row stays useful.
   const alternates = variant.alternateServings ?? []
-  let middle: QuickOption
+  let middle: QuickOption | null = null
   if (alternates.length > 0) {
     const alt = alternates[0]
     const altQty = size * alt.multiplier
-    middle = {
-      id: 'alt-0',
-      label: alt.label || labelForQuantity(altQty, unit),
-      quantity: altQty,
-      unit,
+    const altLabel = enrichLabelWithBridge(
+      alt.label || labelForQuantity(altQty, unit),
+      variant,
+    )
+    const dupQty = Math.abs(altQty - size) < 0.001
+    const dupLabel = altLabel.trim() === primary.label.trim()
+    if (!dupQty && !dupLabel) {
+      middle = {
+        id: 'alt-0',
+        label: altLabel,
+        quantity: altQty,
+        unit,
+      }
     }
-  } else {
+  }
+
+  if (!middle) {
     const halfQty = size / 2
     middle = {
       id: 'half',
