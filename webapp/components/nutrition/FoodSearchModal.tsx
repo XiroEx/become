@@ -11,6 +11,7 @@ import BarcodeScanner from './BarcodeScanner'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import QuantityPicker, { type QuantityPickerSelection } from './QuantityPicker'
 import type { Unit } from '@/lib/units'
+import { prettifyUnitCodes } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
 
 interface FoodSearchModalProps {
@@ -131,6 +132,8 @@ function preferredServingLabel(food: FoodResult): string {
   } else {
     base = `${food.servingSize} ${food.servingUnit}`
   }
+  // Normalize raw upstream codes ("GRM"/"ONZ"/etc.) to friendly forms.
+  base = prettifyUnitCodes(base)
 
   if (ROW_PARENS_WEIGHT_RE.test(base)) return base
 
