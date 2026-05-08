@@ -9,6 +9,7 @@ import QuantityPicker, {
   type QuantityPickerVariant,
 } from '@/components/nutrition/QuantityPicker'
 import type { ServingUnit } from '@/models/Food'
+import { prettifyUnitCodes } from '@/lib/units'
 
 // `servingUnit` is loosened to `string` here because callers (saved foods
 // page, meals page) hand us responses where the field is typed as `string`.
@@ -249,7 +250,7 @@ export default function FoodLogSheet({
     }
   }
 
-  const servingLabel = food?.displayLabel || `${food?.servingSize}${food?.servingUnit}`
+  const servingLabel = prettifyUnitCodes(food?.displayLabel || `${food?.servingSize}${food?.servingUnit}`)
 
   return (
     <AnimatePresence>
