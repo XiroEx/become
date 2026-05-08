@@ -56,6 +56,13 @@ export interface IMealRecipe {
   prepTimeMinutes?: number
   cookTimeMinutes?: number
   servings: number
+  /**
+   * Optional per-serving bridges. When the meal is later saved as a Food via
+   * /api/meals/[id]/save-as-food, these win over the auto-estimated values
+   * (UNITS_AND_SERVINGS_PLAN §10.8).
+   */
+  gramsPerServing?: number
+  mlPerServing?: number
 }
 
 export interface IMeal {
@@ -117,6 +124,8 @@ const MealRecipeSchema = new Schema<IMealRecipe>({
   prepTimeMinutes: { type: Number },
   cookTimeMinutes: { type: Number },
   servings: { type: Number, default: 1 },
+  gramsPerServing: { type: Number },
+  mlPerServing: { type: Number },
 }, { _id: false })
 
 const MealSchema = new Schema<IMeal>({

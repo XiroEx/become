@@ -32,6 +32,13 @@ export interface IRecipe {
     fats: number
     fiber?: number
   }
+  /**
+   * Optional explicit per-serving bridges for when the recipe is later turned
+   * into a Food. The recipe creator UI captures these so the resulting Food
+   * variant can use them in the picker (UNITS_AND_SERVINGS_PLAN §10.8).
+   */
+  gramsPerServing?: number
+  mlPerServing?: number
   tags: string[]
   isPublic: boolean
   createdBy?: Types.ObjectId
@@ -76,6 +83,8 @@ const RecipeSchema = new Schema<IRecipe>({
   prepTime: { type: Number },
   cookTime: { type: Number },
   totalsPerServing: { type: TotalsPerServingSchema, required: true },
+  gramsPerServing: { type: Number },
+  mlPerServing: { type: Number },
   tags: { type: [String], default: [] },
   isPublic: { type: Boolean, default: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },

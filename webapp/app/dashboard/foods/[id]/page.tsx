@@ -17,6 +17,7 @@ import {
 import PageTransition from '@/components/PageTransition'
 import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
+import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 
 interface Variant {
   _id?: string
@@ -26,6 +27,8 @@ interface Variant {
   servingUnit: string
   displayLabel?: string
   alternateServings?: { label: string; multiplier: number }[]
+  gramsPerServing?: number
+  mlPerServing?: number
   nutrition: {
     calories: number
     protein: number
@@ -50,6 +53,8 @@ interface FoodResponse {
   servingSize: number
   servingUnit: string
   displayLabel?: string
+  gramsPerServing?: number
+  mlPerServing?: number
   nutrition: Variant['nutrition']
   variants?: Variant[]
   createdBy?: string
@@ -102,6 +107,8 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [tagsResp, setTagsResp] = useState<TagsResp>({ defaults: [], userTags: [] })
   const [toast, setToast] = useState<string | null>(null)
+  // Saved-bridge values keyed by variant index. Only the owner sees the edit UI.
+  const [savingBridge, setSavingBridge] = useState<number | null>(null)
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -205,6 +212,66 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const handleBridgeSave = useCallback(
+    async (variantIndex: number, next: BridgeValues) => {
+      if (!food) return
+      const variants = (food.variants && food.variants.length > 0 ? food.variants : []).slice()
+      if (variants.length === 0) {
+        // Synthesize a default variant from the flattened fields so PATCH writes
+        // a real array.
+        variants.push({
+          _id: undefined,
+          name: 'Default',
+          isDefault: true,
+          servingSize: food.servingSize,
+          servingUnit: food.servingUnit,
+          displayLabel: food.displayLabel,
+          alternateServings: [],
+          nutrition: food.nutrition,
+        })
+      }
+      const target = variants[variantIndex]
+      if (!target) return
+
+      const noChange =
+        (target.gramsPerServing ?? null) === (next.gramsPerServing ?? null) &&
+        (target.mlPerServing ?? null) === (next.mlPerServing ?? null)
+      if (noChange) return
+
+      const updated: Variant[] = variants.map((v, i) =>
+        i === variantIndex
+          ? {
+              ...v,
+              gramsPerServing: next.gramsPerServing,
+              mlPerServing: next.mlPerServing,
+            }
+          : v
+      )
+
+      setSavingBridge(variantIndex)
+      try {
+        const res = await fetch(`/api/nutrition/foods/${food._id}`, {
+          method: 'PATCH',
+          headers: getHeaders(),
+          body: JSON.stringify({ variants: updated }),
+        })
+        if (res.ok) {
+          // Optimistically update local state so the readout reflects the save.
+          setFood({ ...food, variants: updated })
+          setToast('Bridge saved')
+        } else {
+          setToast('Failed to save bridge')
+        }
+      } catch {
+        setToast('Network error')
+      } finally {
+        setSavingBridge(null)
+        setTimeout(() => setToast(null), 2200)
+      }
+    },
+    [food, getHeaders]
+  )
+
   const handleDelete = async () => {
     if (!food || deleting) return
     setDeleting(true)
@@ -254,7 +321,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
     )
   }
 
-  const variants = food.variants && food.variants.length > 0 ? food.variants : [{
+  const variants: Variant[] = food.variants && food.variants.length > 0 ? food.variants : [{
     _id: undefined,
     name: 'Default',
     isDefault: true,
@@ -262,6 +329,8 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
     servingUnit: food.servingUnit,
     displayLabel: food.displayLabel,
     alternateServings: [],
+    gramsPerServing: food.gramsPerServing,
+    mlPerServing: food.mlPerServing,
     nutrition: food.nutrition,
   }]
   const defaultVariant = variants.find(v => v.isDefault) ?? variants[0]
@@ -391,27 +460,68 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
             {variants.map((v, idx) => (
               <div
                 key={v._id ?? idx}
-                className="flex items-center justify-between border-b border-zinc-100 py-2 dark:border-zinc-800 last:border-0"
+                className="border-b border-zinc-100 py-2 dark:border-zinc-800 last:border-0"
               >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                    {v.name}
-                    {v.isDefault && (
-                      <span className="ml-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                        default
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {v.displayLabel || `${v.servingSize} ${v.servingUnit}`}
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                      {v.name}
+                      {v.isDefault && (
+                        <span className="ml-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                          default
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {v.displayLabel || `${v.servingSize} ${v.servingUnit}`}
+                    </p>
+                  </div>
+                  <p className="text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+                    {Math.round(v.nutrition.calories)} cal
                   </p>
                 </div>
-                <p className="text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-                  {Math.round(v.nutrition.calories)} cal
-                </p>
+                {isOwner && (
+                  <div className="mt-2">
+                    <BridgeFieldGroup
+                      value={{ gramsPerServing: v.gramsPerServing, mlPerServing: v.mlPerServing }}
+                      onChange={(next) => handleBridgeSave(idx, next)}
+                      servingUnit={v.servingUnit}
+                      collapsible
+                      title={
+                        savingBridge === idx
+                          ? 'Saving bridge…'
+                          : 'Optional: weight / volume per serving'
+                      }
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Single-variant bridge editor (only for owners) */}
+      {isOwner && variants.length === 1 && (
+        <div className="sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
+          <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Bridge values
+          </h2>
+          <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-500">
+            Optional — lets the picker convert between mass and volume for this food.
+          </p>
+          <BridgeFieldGroup
+            value={{
+              gramsPerServing: defaultVariant.gramsPerServing,
+              mlPerServing: defaultVariant.mlPerServing,
+            }}
+            onChange={(next) => handleBridgeSave(0, next)}
+            servingUnit={defaultVariant.servingUnit}
+            collapsible={false}
+          />
+          {savingBridge === 0 && (
+            <p className="mt-1 text-[11px] text-zinc-400">Saving…</p>
+          )}
         </div>
       )}
 

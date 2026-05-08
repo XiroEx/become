@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { ArrowLeft, Plus, X, Search, ChevronUp, ChevronDown, Save } from 'lucide-react'
+import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 
 interface FoodResult {
   _id: string
@@ -51,6 +52,9 @@ export default function CreateRecipePage() {
   const [tagsInput, setTagsInput] = useState('')
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>([])
   const [instructions, setInstructions] = useState<string[]>([''])
+  // Optional per-serving bridge values. Lets the resulting Food (if the
+  // recipe is later saved-as-food) carry sensible cross-domain conversions.
+  const [bridge, setBridge] = useState<BridgeValues>({})
 
   // Food search state
   const [showFoodSearch, setShowFoodSearch] = useState(false)
@@ -233,7 +237,10 @@ export default function CreateRecipePage() {
         ingredients,
         instructions: cleanedInstructions,
         isPublic: true,
-        totalsPerServing: perServing
+        totalsPerServing: perServing,
+        // Carry the optional bridges through to the persisted Recipe doc.
+        gramsPerServing: bridge.gramsPerServing,
+        mlPerServing: bridge.mlPerServing,
       }
 
       const res = await fetch('/api/nutrition/recipes', {
@@ -548,6 +555,16 @@ export default function CreateRecipePage() {
           </div>
         </div>
       )}
+
+      {/* Per-serving bridge fields (optional). */}
+      <div className="mb-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+        <BridgeFieldGroup
+          value={bridge}
+          onChange={setBridge}
+          collapsible
+          title="Optional: weight or volume per serving"
+        />
+      </div>
 
       {/* Instructions */}
       <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
