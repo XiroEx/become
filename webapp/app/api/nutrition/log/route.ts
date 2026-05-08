@@ -70,6 +70,12 @@ interface LegacyFoodEntry {
     sugar?: number
     sodium?: number
   }
+  // PR 4 picker rework — surfaced when present so re-edit clients can avoid
+  // synthesizing from `multiplier × servingSize`.
+  loggedQuantity?: number
+  loggedUnit?: string
+  loggedGramsPerServing?: number
+  loggedMlPerServing?: number
 }
 
 function mealLogToLegacyFoodEntries(log: IMealLog): LegacyFoodEntry[] {
@@ -93,6 +99,10 @@ function mealLogToLegacyFoodEntries(log: IMealLog): LegacyFoodEntry[] {
       sugar: item.nutrition.sugar,
       sodium: item.nutrition.sodium,
     },
+    loggedQuantity: item.loggedQuantity,
+    loggedUnit: item.loggedUnit,
+    loggedGramsPerServing: item.loggedGramsPerServing,
+    loggedMlPerServing: item.loggedMlPerServing,
   }))
 }
 
@@ -275,6 +285,13 @@ export async function POST(request: NextRequest) {
       servingUnit: food.servingUnit,
       servings: food.servings ?? 1,
       nutrition: food.nutrition,
+      // PR 4 provenance — pass-through. Old callers omit these and the route
+      // continues to work; new callers carry the full quantity+unit so re-edits
+      // round-trip without losing the user's intent.
+      loggedQuantity: food.loggedQuantity,
+      loggedUnit: food.loggedUnit,
+      loggedGramsPerServing: food.loggedGramsPerServing,
+      loggedMlPerServing: food.loggedMlPerServing,
     })
 
     // Find an existing MealLog of this primary tag in the same day, or create

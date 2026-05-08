@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
 import { Card } from '@/components/ui'
+import { formatQuantity, type Unit } from '@/lib/units'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -310,8 +311,13 @@ interface ItemRowProps {
 function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
   const [expanded, setExpanded] = useState(false)
   const totalCalories = Math.round((item.nutrition.calories ?? 0) * (item.servings ?? 1))
-  const servingDisplay = `${item.servings !== 1 ? `${item.servings} servings` : '1 serving'}`
-  const sizeDisplay = `${item.servingSize} ${item.servingUnit}`
+  // Prefer the user's actual logged quantity + unit when present (PR 4
+  // provenance). Old log rows fall back to the legacy "X servings · servingSize"
+  // display since they don't carry the new fields.
+  const hasLoggedShape = item.loggedQuantity != null && !!item.loggedUnit
+  const detailDisplay = hasLoggedShape
+    ? formatQuantity(item.loggedQuantity!, item.loggedUnit as Unit)
+    : `${item.servings !== 1 ? `${item.servings} servings` : '1 serving'} · ${item.servingSize} ${item.servingUnit}`
   const showVariant = shouldShowVariantName(item.variantName)
 
   return (
@@ -333,7 +339,7 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
             {item.brand && (
               <span className="text-zinc-400 dark:text-zinc-500">{item.brand} &middot; </span>
             )}
-            {servingDisplay} &middot; {sizeDisplay}
+            {detailDisplay}
           </p>
         </div>
         <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
