@@ -87,6 +87,21 @@ export interface IFoodVariant {
    * Input UIs may accept any volume unit (fl oz, cup, tbsp, tsp, ml).
    */
   mlPerServing?: number
+
+  /**
+   * When merged into a multi-variant Food, this variant's source-specific
+   * external id (e.g. USDA fdcId). The top-level `externalId` is preserved as
+   * the *primary* variant's id; alternates carry their own here so re-imports
+   * hit the right upstream record and idempotency holds across merges.
+   */
+  externalId?: string
+
+  /**
+   * Mirrors the parent's `externalDataType` — set on each merged variant so
+   * we can tell which USDA dataset (Foundation / SR Legacy / Survey) each one
+   * came from after merging. Useful in admin UI for transparency.
+   */
+  externalDataType?: string
 }
 
 export interface IFood {
@@ -168,6 +183,8 @@ const VariantSchema = new Schema<IFoodVariant>({
   nutrition: { type: NutritionSchema, required: true },
   gramsPerServing: { type: Number },
   mlPerServing: { type: Number },
+  externalId: { type: String },
+  externalDataType: { type: String },
 }, { _id: true })
 
 const FoodSchema = new Schema<IFood>({
@@ -240,8 +257,12 @@ FoodSchema.index({ category: 1, isFirstClass: -1 })
 FoodSchema.index({ source: 1, externalId: 1 }, { unique: true, sparse: true })
 // Admin reviews: surface flagged foods quickly without a full collection scan.
 FoodSchema.index({ needsReview: 1, updatedAt: -1 })
-// Future variant-merging passes filter by groupKey; sparse so manual foods
+// Variant-merging passes filter by groupKey; sparse so manual foods
 // without a groupKey don't bloat the index.
 FoodSchema.index({ groupKey: 1 }, { sparse: true })
+// Variant-level externalId: when merging USDA Foundation/SR Legacy variants
+// into a single Food doc, each variant carries its own fdcId so re-imports
+// can find the parent quickly. Sparse — only USDA-source variants populate it.
+FoodSchema.index({ 'variants.externalId': 1, source: 1 }, { sparse: true })
 
 export default mongoose.models.Food || mongoose.model<IFood>('Food', FoodSchema)
