@@ -79,11 +79,25 @@ function isSameDay(d1: Date, d2: Date): boolean {
  * (not as UTC) and compare against the local date of completedAt.
  */
 function isMakeupWorkout(scheduledDateStr: string, completedAtStr: string): boolean {
-  const parts = scheduledDateStr.split('T')[0].split('-').map(Number)
-  const scheduledLocal = new Date(parts[0], parts[1] - 1, parts[2])
+  const scheduledLocal = localDateFromScheduledIso(scheduledDateStr)
   const c = new Date(completedAtStr)
   const completedLocal = new Date(c.getFullYear(), c.getMonth(), c.getDate())
   return scheduledLocal.getTime() !== completedLocal.getTime()
+}
+
+/**
+ * Convert a stored scheduled-workout ISO string ("2026-05-11T00:00:00.000Z")
+ * into a Date at LOCAL midnight on the same calendar day. Required because
+ * the YYYY-MM-DD portion is the intended local date — passing the raw ISO
+ * to `new Date()` interprets it as UTC midnight, which becomes the previous
+ * evening in any timezone west of UTC and silently shifts the displayed day.
+ */
+function localDateFromScheduledIso(iso: string): Date {
+  const datePart = typeof iso === 'string'
+    ? iso.split('T')[0]
+    : new Date(iso).toISOString().split('T')[0]
+  const [y, m, d] = datePart.split('-').map(Number)
+  return new Date(y, m - 1, d)
 }
 
 // Format a local Date as YYYY-MM-DD using local time components
@@ -796,7 +810,7 @@ export default function CalendarClient() {
                 Manage Workout
               </h3>
               <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-                {actionMenuWorkout.dayLabel} · {new Date(actionMenuWorkout.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                {actionMenuWorkout.dayLabel} · {localDateFromScheduledIso(actionMenuWorkout.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               </p>
 
               {/* This Workout */}
@@ -815,8 +829,13 @@ export default function CalendarClient() {
 
                 <button
                   onClick={() => {
-                    const currentWDate = new Date(actionMenuWorkout.date)
-                    currentWDate.setDate(currentWDate.getDate() + 1)
+                    // Parse the workout's local date, advance one day, then
+                    // emit a fresh local-midnight ISO so the server stores the
+                    // intended local YYYY-MM-DD. Using `new Date(iso) + setDate`
+                    // would carry the UTC-midnight shift and bump to the wrong
+                    // calendar day in non-UTC timezones.
+                    const next = localDateFromScheduledIso(actionMenuWorkout.date)
+                    next.setDate(next.getDate() + 1)
                     const token = localStorage.getItem('token')
                     if (!token) return
                     setActionLoading(true)
@@ -830,7 +849,7 @@ export default function CalendarClient() {
                         programId: actionMenuWorkout.programId,
                         action: 'reschedule',
                         workoutDate: actionMenuWorkout.date,
-                        newDate: currentWDate.toISOString(),
+                        newDate: next.toISOString(),
                       }),
                     }).then(() => {
                       setActionMenuWorkout(null)
@@ -882,7 +901,7 @@ export default function CalendarClient() {
                       {getMonthDays(pickerMonth.getFullYear(), pickerMonth.getMonth()).map((day) => {
                         const isPickerMonth = day.getMonth() === pickerMonth.getMonth()
                         const isPast = day < today
-                        const isWorkoutDay = isSameDay(day, new Date(actionMenuWorkout.date))
+                        const isWorkoutDay = isSameDay(day, localDateFromScheduledIso(actionMenuWorkout.date))
                         const isTodayCell = isSameDay(day, today)
                         return (
                           <button
@@ -931,7 +950,7 @@ export default function CalendarClient() {
                   <button
                     onClick={() => {
                       setShowDatePicker(true)
-                      setPickerMonth(new Date(actionMenuWorkout.date))
+                      setPickerMonth(localDateFromScheduledIso(actionMenuWorkout.date))
                     }}
                     disabled={actionLoading}
                     className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
