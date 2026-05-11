@@ -21,6 +21,8 @@ export interface ISavedFood {
 
 export type WeightUnit = 'lbs' | 'kg';
 
+export type PlanPromoteMode = 'manual' | 'auto';
+
 export interface IUserProfile {
   fitnessGoal?: FitnessGoal;
   experienceLevel?: ExperienceLevel;
@@ -33,6 +35,13 @@ export interface IUserProfile {
   injuryNotes?: string;
   weeklyAvailability?: number;
   weightUnit?: WeightUnit;
+  /**
+   * When a meal plan's date arrives, how should it be handled?
+   *   'manual' — show the plan as a "Tap to log" row. Default.
+   *   'auto'   — promote silently on the first day-view load that day.
+   * Per-plan override is not in v1 — global pref only.
+   */
+  planPromoteMode?: PlanPromoteMode;
 }
 
 export interface IUser {
@@ -80,6 +89,7 @@ const UserProfileSchema = new Schema({
   injuryNotes: { type: String },
   weeklyAvailability: { type: Number, min: 1, max: 7 },
   weightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
+  planPromoteMode: { type: String, enum: ['manual', 'auto'], default: 'manual' },
 }, { _id: false });
 
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({

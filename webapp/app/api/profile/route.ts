@@ -50,6 +50,23 @@ export async function PATCH(request: NextRequest) {
       name?: string;
     };
 
+    // Allowed profile sub-keys. Keep this list explicit so a malformed body
+    // can't write arbitrary fields onto the profile sub-doc.
+    const ALLOWED_PROFILE_KEYS: Array<keyof IUserProfile> = [
+      'fitnessGoal',
+      'experienceLevel',
+      'age',
+      'biologicalSex',
+      'heightCm',
+      'currentWeightKg',
+      'targetWeightKg',
+      'equipmentAccess',
+      'injuryNotes',
+      'weeklyAvailability',
+      'weightUnit',
+      'planPromoteMode',
+    ];
+
     // Build the update object using dot-notation for nested profile fields
     // so we don't overwrite the entire profile sub-document
     const update: Record<string, unknown> = {};
@@ -62,6 +79,7 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.profile !== undefined) {
       for (const [key, value] of Object.entries(body.profile)) {
+        if (!ALLOWED_PROFILE_KEYS.includes(key as keyof IUserProfile)) continue;
         update[`profile.${key}`] = value;
       }
     }
