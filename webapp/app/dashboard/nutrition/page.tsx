@@ -16,6 +16,7 @@ import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import FeatureGuard from '@/components/FeatureGuard'
 import { Card, EmptyState } from '@/components/ui'
+import { isFutureLocalDate } from '@/lib/mealPlanDates'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,10 @@ function NutritionPageInner() {
   const [newTagInput, setNewTagInput] = useState('')
 
   const dateParam = formatDateParam(selectedDate)
+  // True when the user has scrolled to a future calendar day. Drives the
+  // copy on "Add food" → "Schedule food" CTAs and routes new picker opens
+  // through plan mode (see openFoodSearch).
+  const viewingFuture = isFutureLocalDate(selectedDate)
 
   // ── Auth helper ────────────────────────────────────────────────────────────
 
@@ -424,7 +429,10 @@ function NutritionPageInner() {
   const openFoodSearch = (tag: string, autoScan = false) => {
     setFoodSearchTag(tag.toLowerCase())
     setFoodSearchAutoScan(autoScan)
-    setPlanForDate(null)
+    // When the user is viewing a future date, "Add food" becomes "Schedule
+    // food" — automatically route through plan mode against the visible
+    // date. Logs on a future date don't make semantic sense; planning does.
+    setPlanForDate(isFutureLocalDate(selectedDate) ? selectedDate : null)
     setFoodSearchOpen(true)
   }
 
@@ -576,12 +584,14 @@ function NutritionPageInner() {
           fats={{ current: totalFats, goal: goals.fats }}
         />
 
-        {/* Empty state — nothing logged today yet */}
+        {/* Empty state — nothing logged today yet (or nothing planned, on a future day) */}
         {visibleTags.length === 0 && quickAdds.length === 0 && (
           <EmptyState
             icon={<UtensilsCrossed className="h-6 w-6" />}
-            title="Nothing logged yet"
-            description="Add your first food of the day to start tracking."
+            title={viewingFuture ? 'Nothing planned yet' : 'Nothing logged yet'}
+            description={viewingFuture
+              ? "Plan ahead — schedule a meal for this day so it's ready when it arrives."
+              : 'Add your first food of the day to start tracking.'}
             action={
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
@@ -589,7 +599,7 @@ function NutritionPageInner() {
                   className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                 >
                   <Plus className="h-4 w-4" />
-                  Add food
+                  {viewingFuture ? 'Schedule food' : 'Add food'}
                 </button>
                 <Link
                   href="/dashboard/meals"
@@ -615,6 +625,7 @@ function NutritionPageInner() {
             onRemoveTag={handleRemoveSessionTag}
             removable={sessionTags.includes(tag) && (logsByTag[tag] || []).length === 0}
             onPlan={(t) => openPlanDatePicker(t)}
+            futureDate={viewingFuture}
           />
         ))}
 
@@ -708,9 +719,13 @@ function NutritionPageInner() {
           <Card
             as="button"
             type="button"
-            onClick={() => setQuickAddOpen(true)}
+            onClick={() => { if (!viewingFuture) setQuickAddOpen(true) }}
+            disabled={viewingFuture}
             variant="compact"
-            className="flex cursor-pointer flex-col items-center gap-2 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
+            title={viewingFuture ? 'Quick Add is for logging — use Add food (Schedule food) to plan ahead' : undefined}
+            className={`flex flex-col items-center gap-2 transition-colors ${viewingFuture
+              ? 'opacity-50 cursor-not-allowed'
+              : 'cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-700'}`}
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
               <Plus className="h-5 w-5 text-green-600 dark:text-green-400" />

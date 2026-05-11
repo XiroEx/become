@@ -99,6 +99,18 @@ export function compareDateKeys(a: string, b: string): number {
 }
 
 /**
+ * Is `date` strictly after today, comparing on LOCAL calendar boundaries?
+ * `date` may be at any time of day; only its YYYY-MM-DD portion is consulted.
+ * Used by the nutrition page to switch the picker into plan mode + relabel
+ * "Add food" → "Schedule food" when the user has scrolled to a future date.
+ */
+export function isFutureLocalDate(date: Date, now: Date = new Date()): boolean {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  return target.getTime() > today.getTime()
+}
+
+/**
  * Today's date key in the SERVER's local zone (the deployed server is UTC).
  * Use sparingly — the canonical "today" decision is CLIENT-side. This helper
  * exists for permissive past-date rejection only (see Section 8.6 of the plan).

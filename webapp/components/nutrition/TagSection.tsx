@@ -55,6 +55,11 @@ interface TagSectionProps {
   // and "Apply meal…" (opens the meal picker in plan mode).
   onPlan?: (tag: string) => void
   onApplyMeal?: (tag: string) => void
+  // True when the parent page is viewing a future calendar day. Adjusts
+  // the "+" button aria-label so screen readers announce "Schedule food"
+  // instead of "Add food" — the underlying handler already routes through
+  // plan mode in this case.
+  futureDate?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -145,6 +150,7 @@ export default function TagSection({
   removable = false,
   onPlan,
   onApplyMeal,
+  futureDate = false,
 }: TagSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -231,7 +237,7 @@ export default function TagSection({
                 onAddFood(tag)
               }}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-              aria-label={`Add food to ${label}`}
+              aria-label={futureDate ? `Schedule food for ${label}` : `Add food to ${label}`}
             >
               <Plus className="h-4 w-4" />
             </button>
