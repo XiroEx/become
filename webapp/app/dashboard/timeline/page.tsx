@@ -20,11 +20,13 @@ import {
   Check,
   X,
   Sparkles,
+  CalendarDays,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/models/NutritionLog'
@@ -312,6 +314,15 @@ function TimelineClient() {
   // Plan-tools sheets (PR 5). Both open from the month-view kebab menu.
   const [copyDayOpen, setCopyDayOpen] = useState(false)
   const [applyMealOpen, setApplyMealOpen] = useState(false)
+  // ScheduleMealsDrawer state — opens from day/week/month CTAs. The drawer
+  // contents (target date + optional range) are derived from the surface that
+  // opens it.
+  const [scheduleDrawer, setScheduleDrawer] = useState<{
+    open: boolean
+    date: Date
+    endDate?: Date
+    range?: boolean
+  } | null>(null)
 
   // ── Auth helper ──────────────────────────────────────────────────────────
 
@@ -629,6 +640,31 @@ function TimelineClient() {
       setConfirmDelete(null)
     }
   }
+
+  // Is a given calendar date strictly after today (local)? Lifts the same
+  // semantics used in nutrition/page.tsx for "viewingFuture".
+  const isFutureDate = (d: Date): boolean => {
+    const today = new Date()
+    return d.getFullYear() > today.getFullYear()
+      || (d.getFullYear() === today.getFullYear() && (
+        d.getMonth() > today.getMonth()
+          || (d.getMonth() === today.getMonth() && d.getDate() > today.getDate())
+      ))
+  }
+
+  // Is a date today OR future (i.e. eligible for scheduling)? Used to decide
+  // whether the Day-view "Add food" button should relabel to "Schedule meals"
+  // and open the drawer.
+  const isTodayOrFuture = (d: Date): boolean => {
+    const today = new Date()
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const dKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return dKey >= todayKey
+  }
+
+  // Does the visible week contain any day on or after today? Decides whether
+  // the week view should surface the "Schedule meals" header CTA.
+  const weekHasFuture = useMemo(() => isTodayOrFuture(range.to), [range.to])
 
   // Default tag derived from the time of day — matches the nutrition page's helper.
   const defaultTagForNow = (): string => {
@@ -1068,11 +1104,28 @@ function TimelineClient() {
         {viewMode === 'week' && (
           <WeekView
             days={filteredDays}
+            plans={plans}
             summary={weekSummary}
             onEditItem={(logId, item) => setEditEntry({ logId, item })}
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
             onToggleFilter={toggleFilter}
-            onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
+            onAddFood={(date) => {
+              // Future day: open the rich drawer; today/past: open the picker
+              if (isFutureDate(date)) {
+                setScheduleDrawer({ open: true, date })
+              } else {
+                setAddFoodFor({ date, tag: defaultTagForNow() })
+              }
+            }}
+            onScheduleMeals={() => {
+              // Open drawer in range mode covering the visible week.
+              setScheduleDrawer({ open: true, date: range.from, endDate: range.to, range: true })
+            }}
+            onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
+            onDeletePlan={handleDeletePlan}
+            onSkipPlan={handleSkipPlan}
+            onPromotePlan={handlePromotePlan}
+            weekHasFuture={weekHasFuture}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
@@ -1100,8 +1153,9 @@ function TimelineClient() {
                 plans={plans}
                 onEditItem={(logId, item) => setEditEntry({ logId, item })}
                 onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
-                    onToggleFilter={toggleFilter}
+                onToggleFilter={toggleFilter}
                 onAddFood={(d) => setAddFoodFor({ date: d, tag: defaultTagForNow() })}
+                onScheduleMeals={(d) => setScheduleDrawer({ open: true, date: d })}
                 onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
                 onDeletePlan={handleDeletePlan}
                 onSkipPlan={handleSkipPlan}
@@ -1133,20 +1187,29 @@ function TimelineClient() {
 
       {/* Floating + Add Food — Day view always, Month view when a day is
           selected in the strip (FAB plans/logs that specific day). Week
-          view has per-day buttons. */}
-      {(viewMode === 'day' || (viewMode === 'month' && monthSelectedDate)) && (
-        <button
-          type="button"
-          onClick={() => {
-            const target = viewMode === 'month' ? (monthSelectedDate ?? selectedDate) : selectedDate
-            setAddFoodFor({ date: target, tag: defaultTagForNow() })
-          }}
-          aria-label="Add food"
-          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-      )}
+          view has per-day buttons. On a future date the FAB relabels to
+          "Schedule meals" and opens the richer drawer instead. */}
+      {(viewMode === 'day' || (viewMode === 'month' && monthSelectedDate)) && (() => {
+        const target = viewMode === 'month' ? (monthSelectedDate ?? selectedDate) : selectedDate
+        const targetFuture = isFutureDate(target)
+        return (
+          <button
+            type="button"
+            onClick={() => {
+              if (targetFuture) {
+                setScheduleDrawer({ open: true, date: target })
+              } else {
+                setAddFoodFor({ date: target, tag: defaultTagForNow() })
+              }
+            }}
+            aria-label={targetFuture ? 'Schedule meals' : 'Add food'}
+            title={targetFuture ? 'Schedule meals' : 'Add food'}
+            className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+          >
+            {targetFuture ? <CalendarDays className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
+          </button>
+        )
+      })()}
 
       {/* Inline Food Search Modal — pre-filled with the day the user tapped.
           mode flips to 'plan' for strictly-future dates so the picker hides
@@ -1297,6 +1360,24 @@ function TimelineClient() {
           fetchData()
         }}
       />
+
+      {/* ScheduleMealsDrawer — the rich planning surface. Opened by the
+          day-view FAB on future days, the week-view "Schedule meals" header
+          button, and the month-view day-strip "Schedule" CTA. */}
+      {scheduleDrawer && (
+        <ScheduleMealsDrawer
+          isOpen={scheduleDrawer.open}
+          defaultDate={scheduleDrawer.date}
+          defaultEndDate={scheduleDrawer.endDate}
+          initialRange={scheduleDrawer.range}
+          availableTags={tagsResp}
+          onClose={() => setScheduleDrawer(null)}
+          onMutated={() => {
+            setMonthReloadKey(k => k + 1)
+            fetchData()
+          }}
+        />
+      )}
     </FeatureGuard>
   )
 }
@@ -1467,25 +1548,59 @@ function DayView({
 
 interface WeekViewProps {
   days: DayBucket[]
+  plans: MealPlan[]
   summary: { total: number; avg: number; max: number; daysLogged: number }
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
+  onScheduleMeals: () => void
+  onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
+  onDeletePlan: (planId: string, scope?: 'one' | 'series') => Promise<void>
+  onSkipPlan: (planId: string) => Promise<void>
+  onPromotePlan: (planId: string) => Promise<void>
+  weekHasFuture: boolean
   activeFilters: Set<string>
   isFilterActive: boolean
 }
 
 function WeekView({
-  days, summary, onEditItem, onDeleteLog,
-  onToggleFilter, onAddFood, activeFilters, isFilterActive,
+  days, plans, summary, onEditItem, onDeleteLog,
+  onToggleFilter, onAddFood, onScheduleMeals,
+  onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
+  weekHasFuture,
+  activeFilters, isFilterActive,
 }: WeekViewProps) {
   // Order newest-first so the most recent days are at the top.
   const ordered = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days])
-  const allEmpty = days.every(d => d.logs.length === 0)
+  // Map of date key -> plans for that day.
+  const plansByDate = useMemo(() => {
+    const map = new Map<string, MealPlan[]>()
+    for (const p of plans) {
+      const key = p.plannedDateKey ?? p.plannedDate.split('T')[0]
+      const arr = map.get(key) ?? []
+      arr.push(p)
+      map.set(key, arr)
+    }
+    return map
+  }, [plans])
+  const allEmpty = days.every(d => (d.logs.length === 0) && ((plansByDate.get(d.date)?.length ?? 0) === 0))
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Schedule meals CTA — visible when the visible week contains today
+          or a future day. Opens the drawer in range mode covering this week. */}
+      {weekHasFuture && (
+        <button
+          type="button"
+          onClick={onScheduleMeals}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+        >
+          <CalendarDays className="h-4 w-4" />
+          Schedule meals for this week
+        </button>
+      )}
+
       {/* Summary panel */}
       <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="grid grid-cols-3 gap-3 border-b border-zinc-100 pb-3 dark:border-zinc-800">
@@ -1550,10 +1665,15 @@ function WeekView({
             <WeekDayGroup
               key={d.date}
               day={d}
+              plans={plansByDate.get(d.date) ?? []}
               onEditItem={onEditItem}
               onDeleteLog={onDeleteLog}
               onToggleFilter={onToggleFilter}
               onAddFood={onAddFood}
+              onEditPlanItem={onEditPlanItem}
+              onDeletePlan={onDeletePlan}
+              onSkipPlan={onSkipPlan}
+              onPromotePlan={onPromotePlan}
               activeFilters={activeFilters}
             />
           ))}
@@ -1585,6 +1705,10 @@ interface MonthDayStripProps {
   onDeleteLog: (logId: string, mealName?: string) => void
   onToggleFilter: (tag: string) => void
   onAddFood?: (date: Date) => void
+  /** Opens the feature-rich ScheduleMealsDrawer for the given date. Surfaces
+   *  a "Schedule meals" CTA next to the per-day "Plan food" button when the
+   *  day is today/future. */
+  onScheduleMeals?: (date: Date) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   onDeletePlan?: (planId: string, scope?: 'one' | 'series') => Promise<void>
   onSkipPlan?: (planId: string) => Promise<void>
@@ -1598,6 +1722,7 @@ interface MonthDayStripProps {
 function MonthDayStrip({
   date, logs, plans,
   onEditItem, onDeleteLog, onToggleFilter, onAddFood,
+  onScheduleMeals,
   onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
   onOpenDayView,
   activeFilters,
@@ -1633,16 +1758,29 @@ function MonthDayStrip({
             </button>
           )}
         </div>
-        {canAdd && (
-          <button
-            type="button"
-            onClick={() => onAddFood?.(date)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {isFuture ? 'Plan food' : 'Add food'}
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {onScheduleMeals && (isFuture || isToday) && (
+            <button
+              type="button"
+              onClick={() => onScheduleMeals(date)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+              title="Schedule meals (drawer)"
+            >
+              <CalendarDays className="h-3.5 w-3.5" />
+              Schedule
+            </button>
+          )}
+          {canAdd && (
+            <button
+              type="button"
+              onClick={() => onAddFood?.(date)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {isFuture ? 'Plan food' : 'Add food'}
+            </button>
+          )}
+        </div>
       </div>
       {empty ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -1693,21 +1831,30 @@ function MonthDayStrip({
 
 interface WeekDayGroupProps {
   day: DayBucket
+  plans: MealPlan[]
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
+  onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
+  onDeletePlan: (planId: string, scope?: 'one' | 'series') => Promise<void>
+  onSkipPlan: (planId: string) => Promise<void>
+  onPromotePlan: (planId: string) => Promise<void>
   activeFilters: Set<string>
 }
 
 function WeekDayGroup({
-  day, onEditItem, onDeleteLog,
-  onToggleFilter, onAddFood, activeFilters,
+  day, plans, onEditItem, onDeleteLog,
+  onToggleFilter, onAddFood,
+  onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
+  activeFilters,
 }: WeekDayGroupProps) {
   const dt = parseDateParam(day.date)
   const isToday = isSameLocalDay(dt, new Date())
   const calories = Math.round(day.dailyTotals.calories || 0)
-  const [expanded, setExpanded] = useState<boolean>(isToday || day.logs.length > 0)
+  const activePlans = plans.filter(p => p.status === 'active')
+  const plannedCals = Math.round(activePlans.reduce((s, p) => s + (p.expectedNutrition?.calories ?? 0), 0))
+  const [expanded, setExpanded] = useState<boolean>(isToday || day.logs.length > 0 || activePlans.length > 0)
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -1732,11 +1879,20 @@ function WeekDayGroup({
                   Today
                 </span>
               )}
+              {activePlans.length > 0 && (
+                <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                  <CalendarDays className="h-2.5 w-2.5" />
+                  {activePlans.length}
+                </span>
+              )}
             </p>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              {day.logs.length === 0
+              {day.logs.length === 0 && activePlans.length === 0
                 ? 'No entries'
-                : `${day.logs.length} ${day.logs.length === 1 ? 'entry' : 'entries'}`
+                : [
+                    day.logs.length > 0 ? `${day.logs.length} ${day.logs.length === 1 ? 'entry' : 'entries'}` : null,
+                    activePlans.length > 0 ? `${activePlans.length} planned${plannedCals > 0 ? ` · ${plannedCals} cal` : ''}` : null,
+                  ].filter(Boolean).join(' · ')
               }
             </p>
           </div>
@@ -1771,7 +1927,7 @@ function WeekDayGroup({
             className="overflow-hidden"
           >
             <div className="border-t border-zinc-100 px-3 py-3 dark:border-zinc-800 sm:px-4">
-              {day.logs.length === 0 ? (
+              {day.logs.length === 0 && activePlans.length === 0 ? (
                 <button
                   type="button"
                   onClick={() => onAddFood(dt)}
@@ -1781,7 +1937,7 @@ function WeekDayGroup({
                   Add food
                 </button>
               ) : (
-                <motion.ol layout className="space-y-2">
+                <motion.ol layout className="space-y-2 list-none p-0 m-0">
                   <AnimatePresence initial={false}>
                     {day.logs.map((log, idx) => (
                       <TimelineLogCard
@@ -1793,6 +1949,18 @@ function WeekDayGroup({
                         onDeleteLog={onDeleteLog}
                         onToggleFilter={onToggleFilter}
                         activeFilters={activeFilters}
+                      />
+                    ))}
+                    {activePlans.map(plan => (
+                      <TimelinePlanCard
+                        key={plan._id}
+                        plan={plan}
+                        compact
+                        isToday={isToday}
+                        onEditItem={onEditPlanItem}
+                        onDeletePlan={onDeletePlan}
+                        onSkipPlan={onSkipPlan}
+                        onPromotePlan={onPromotePlan}
                       />
                     ))}
                   </AnimatePresence>
