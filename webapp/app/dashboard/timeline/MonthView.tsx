@@ -57,6 +57,8 @@ interface MonthViewProps {
   getHeaders: () => HeadersInit
   /** Tap on the date pill inside a cell — caller drills in to Day view. */
   onDrillToDay: (date: Date) => void
+  /** Bumping this number forces a re-fetch (e.g. after a plan is created). */
+  reloadKey?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +75,7 @@ export default function MonthView({
   goal,
   getHeaders,
   onDrillToDay,
+  reloadKey,
 }: MonthViewProps) {
   const today = useMemo(() => new Date(), [])
 
@@ -156,6 +159,13 @@ export default function MonthView({
   }, [fetchRange, getHeaders])
 
   useEffect(() => { reload() }, [reload])
+  // External refresh trigger (e.g. after a plan is created elsewhere on the page).
+  useEffect(() => {
+    if (reloadKey !== undefined) {
+      reload()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey])
 
   // ── Bucketing ─────────────────────────────────────────────────────────────
   // Plan §8.5: log placement uses LOCAL date of loggedAt (the server returns
