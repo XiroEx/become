@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Settings as SettingsIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Settings as SettingsIcon, MoreVertical, CopyPlus, ChefHat } from 'lucide-react'
 import {
   DAY_LABELS,
   MONTH_NAMES,
@@ -59,6 +59,10 @@ interface MonthViewProps {
   onDrillToDay: (date: Date) => void
   /** Bumping this number forces a re-fetch (e.g. after a plan is created). */
   reloadKey?: number
+  /** Optional handlers for the "Plan tools" kebab menu (PR 5).
+   *  Each fires when the user picks an item; the parent owns the sheet state. */
+  onCopyDayForward?: () => void
+  onApplyMealToDays?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +80,10 @@ export default function MonthView({
   getHeaders,
   onDrillToDay,
   reloadKey,
+  onCopyDayForward,
+  onApplyMealToDays,
 }: MonthViewProps) {
+  const [planToolsOpen, setPlanToolsOpen] = useState(false)
   const today = useMemo(() => new Date(), [])
 
   // Settings (localStorage-only — per plan §5.8).
@@ -346,6 +353,56 @@ export default function MonthView({
           >
             <SettingsIcon className="h-4 w-4" />
           </button>
+          {(onCopyDayForward || onApplyMealToDays) && (
+            <div className="relative">
+              <button
+                onClick={() => setPlanToolsOpen(o => !o)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+                aria-label="Plan tools"
+                aria-expanded={planToolsOpen}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              <AnimatePresence>
+                {planToolsOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setPlanToolsOpen(false)}
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-10 z-40 min-w-[180px] rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      {onCopyDayForward && (
+                        <button
+                          type="button"
+                          onClick={() => { setPlanToolsOpen(false); onCopyDayForward() }}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        >
+                          <CopyPlus className="h-3.5 w-3.5 text-blue-500" />
+                          Copy a day forward…
+                        </button>
+                      )}
+                      {onApplyMealToDays && (
+                        <button
+                          type="button"
+                          onClick={() => { setPlanToolsOpen(false); onApplyMealToDays() }}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        >
+                          <ChefHat className="h-3.5 w-3.5 text-orange-500" />
+                          Apply meal to days…
+                        </button>
+                      )}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
         <button
           onClick={() => onChangeMonth(1)}

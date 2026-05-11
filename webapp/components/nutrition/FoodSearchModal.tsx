@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Clock, Star, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat } from 'lucide-react'
+import { Search, X, Plus, Clock, Star, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import { getToken } from '@/lib/clientAuth'
@@ -36,7 +36,13 @@ interface FoodSearchModalProps {
   onClose: () => void
   // Tag is optional — meal-building flow ignores it.
   // loggedAt (ISO string) is optional — passed when user explicitly picks a custom time.
-  onSelectFood: (food: IFoodEntry, tag?: string, loggedAt?: string) => void
+  // planOptions is plan-mode-only — passes the recurrence selection through.
+  onSelectFood: (
+    food: IFoodEntry,
+    tag?: string,
+    loggedAt?: string,
+    planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
+  ) => void
   autoScan?: boolean
 }
 
@@ -268,6 +274,11 @@ export default function FoodSearchModal({
   const [customTime, setCustomTime] = useState<string | null>(null)
   // When true, render the inline <input type="datetime-local"> instead of just the pill.
   const [timeEditOpen, setTimeEditOpen] = useState(false)
+  // Recurrence disclosure (plan mode only). null = one-time plan; otherwise
+  // creates a series of N plans stepped daily / weekly. Hidden by default.
+  const [repeatOpen, setRepeatOpen] = useState(false)
+  const [repeatEvery, setRepeatEvery] = useState<'day' | 'week'>('week')
+  const [repeatCount, setRepeatCount] = useState<number>(6)
 
   // Resolve the active variant for a food + variant index.
   const getActiveVariant = (food: FoodResult, variantIdx: number): FoodVariant => {
@@ -833,16 +844,27 @@ export default function FoodSearchModal({
         loggedAtIso = buildLocalIsoFromDateTime(customTime)
       }
 
+      // Plan-mode recurrence — pass only when the user opened the disclosure
+      // and set a count > 1. count === 1 is functionally the same as a
+      // one-time plan (and the server would reject count < 1), so we collapse
+      // it to undefined so the server takes the simple path.
+      const planOptions = isPlanMode && repeatOpen && repeatCount > 1
+        ? { repeat: { every: repeatEvery, count: repeatCount } }
+        : undefined
+
       onSelectFood(
         entry,
         tagPickerEnabled ? activeTag : undefined,
         loggedAtIso,
+        planOptions,
       )
       setSelectedFood(null)
       setSelection(null)
       setSelectedVariantIdx(0)
       setCustomTime(null)
       setTimeEditOpen(false)
+      setRepeatOpen(false)
+      setRepeatCount(6)
     } finally {
       setAdding(false)
     }
@@ -1506,6 +1528,69 @@ export default function FoodSearchModal({
                                 </span>
                               </div>
                               )}
+                              {/* Recurrence disclosure — plan mode only. Per plan
+                                  §7.3 expand-on-create. Hidden by default; tap to open
+                                  a small selector for "every day/week for N times". */}
+                              {isPlanMode && (
+                                <div className="mt-2.5 flex flex-col gap-1.5">
+                                  {!repeatOpen ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setRepeatOpen(true)}
+                                      className="inline-flex w-fit items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                                      aria-label="Repeat this plan"
+                                    >
+                                      <Repeat className="h-3 w-3" />
+                                      Repeat…
+                                    </button>
+                                  ) : (
+                                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 dark:border-blue-900/40 dark:bg-blue-900/20">
+                                      <Repeat className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
+                                      <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                                        Every
+                                      </span>
+                                      <select
+                                        value={repeatEvery}
+                                        onChange={e => setRepeatEvery(e.target.value === 'day' ? 'day' : 'week')}
+                                        className="rounded-md border border-blue-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-blue-900/60 dark:bg-zinc-900 dark:text-blue-200"
+                                        aria-label="Recurrence interval"
+                                      >
+                                        <option value="day">day</option>
+                                        <option value="week">week</option>
+                                      </select>
+                                      <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                                        for
+                                      </span>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        max={repeatEvery === 'day' ? 30 : 52}
+                                        value={repeatCount}
+                                        onChange={e => {
+                                          const n = Number(e.target.value)
+                                          const max = repeatEvery === 'day' ? 30 : 52
+                                          if (Number.isFinite(n)) setRepeatCount(Math.max(1, Math.min(max, Math.round(n))))
+                                        }}
+                                        className="w-12 rounded-md border border-blue-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-blue-900/60 dark:bg-zinc-900 dark:text-blue-200"
+                                        aria-label="Number of occurrences"
+                                      />
+                                      <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                                        {repeatEvery === 'day'
+                                          ? (repeatCount === 1 ? 'day' : 'days')
+                                          : (repeatCount === 1 ? 'week' : 'weeks')}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setRepeatOpen(false); setRepeatCount(6) }}
+                                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 dark:text-blue-200 dark:hover:bg-blue-900/40"
+                                        aria-label="Close recurrence"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               <button
                                 onClick={handleAddFood}
                                 disabled={adding || !selection || selection.quantity <= 0}
@@ -1520,7 +1605,11 @@ export default function FoodSearchModal({
                                   <>
                                     <Plus className="h-4 w-4" />
                                     {isPlanMode
-                                      ? (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                      ? (
+                                          repeatOpen && repeatCount > 1
+                                            ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
+                                            : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                        )
                                       : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
                                   </>
                                 )}

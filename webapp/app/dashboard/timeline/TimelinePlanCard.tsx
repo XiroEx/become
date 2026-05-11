@@ -27,6 +27,7 @@ import {
   ChevronDown,
   Loader2,
   Pencil,
+  Repeat,
   SkipForward,
   Trash2,
   Sparkles,
@@ -43,7 +44,9 @@ interface TimelinePlanCardProps {
   // emphasised). Computed by the caller using `localDateFromPlannedIso`.
   isToday?: boolean
   onEditItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
-  onDeletePlan: (planId: string) => Promise<void>
+  // Delete handler — when `seriesScope === 'series'`, the caller appends
+  // ?series=true to the DELETE call (plan §7.2).
+  onDeletePlan: (planId: string, seriesScope?: 'one' | 'series') => Promise<void>
   onSkipPlan: (planId: string) => Promise<void>
   onPromotePlan?: (planId: string) => Promise<void>
 }
@@ -100,12 +103,12 @@ export default function TimelinePlanCard({
   const firstItemName = plan.mealName ?? (firstItem?.name ?? 'Planned meal')
   const remainder = Math.max(0, itemCount - 1)
 
-  const handleDelete = async () => {
+  const handleDelete = async (scope: 'one' | 'series' = 'one') => {
     if (working) return
     setWorking('delete')
     setHidden(true)
     try {
-      await onDeletePlan(plan._id)
+      await onDeletePlan(plan._id, scope)
     } catch {
       // Parent re-fetches on failure; bring back the card.
       setHidden(false)
@@ -183,8 +186,8 @@ export default function TimelinePlanCard({
         />
       </button>
 
-      {/* Sub-header: meal-template badge + notes */}
-      {(plan.mealName || plan.notes) && (
+      {/* Sub-header: meal-template badge + notes + series indicator */}
+      {(plan.mealName || plan.notes || plan.seriesId) && (
         <div className={`-mt-1 flex flex-wrap items-center gap-1.5 ${compact ? 'px-3 pb-2' : 'px-3 pb-2 sm:px-4'}`}>
           {plan.mealName && (
             <span className="inline-flex items-center gap-1 rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
@@ -192,6 +195,12 @@ export default function TimelinePlanCard({
               <span className="text-[10px] uppercase tracking-wider opacity-70">From</span>
               <span>·</span>
               <span className="normal-case tracking-normal">{plan.mealName}</span>
+            </span>
+          )}
+          {plan.seriesId && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              <Repeat className="h-3 w-3" />
+              Series
             </span>
           )}
           {plan.notes && (
@@ -266,22 +275,45 @@ export default function TimelinePlanCard({
               </button>
 
               {confirmingDelete ? (
-                <div className="ml-auto inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-1.5 py-1 dark:border-red-900/40 dark:bg-red-900/20">
-                  <span className="text-[11px] font-medium text-red-700 dark:text-red-300">Delete?</span>
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={working !== null}
-                    className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/40"
-                  >
-                    Yes
-                  </button>
+                <div className="ml-auto inline-flex flex-wrap items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-1.5 py-1 dark:border-red-900/40 dark:bg-red-900/20">
+                  <span className="text-[11px] font-medium text-red-700 dark:text-red-300">
+                    {plan.seriesId ? 'Delete:' : 'Delete?'}
+                  </span>
+                  {plan.seriesId ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete('one')}
+                        disabled={working !== null}
+                        className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/40"
+                      >
+                        This one
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete('series')}
+                        disabled={working !== null}
+                        className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/40"
+                      >
+                        Whole series
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete('one')}
+                      disabled={working !== null}
+                      className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/40"
+                    >
+                      Yes
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setConfirmingDelete(false)}
                     className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
-                    No
+                    Cancel
                   </button>
                 </div>
               ) : (
