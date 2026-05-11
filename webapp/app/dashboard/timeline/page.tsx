@@ -27,6 +27,7 @@ import CalorieRing from '@/components/nutrition/CalorieRing'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
+import DateOnlyPicker from '@/components/ui/DateOnlyPicker'
 import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/models/NutritionLog'
@@ -274,6 +275,10 @@ function TimelineClient() {
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate)
   // Month view: the inline-expanded day strip. Null = no selection.
   const [monthSelectedDate, setMonthSelectedDate] = useState<Date | null>(null)
+  // Header date popover — tapping the date label between the prev/next arrows
+  // opens a DateOnlyPicker so the user can jump to any day/week without
+  // clicking the arrows N times.
+  const [headerDatePickerOpen, setHeaderDatePickerOpen] = useState(false)
   const [days, setDays] = useState<DayBucket[]>([])
   // Active plans within the day/week range. Used by DayView/WeekView to render
   // TimelinePlanCard rows alongside logs.
@@ -584,7 +589,8 @@ function TimelineClient() {
 
   const goPrev = () => navigate(viewMode === 'day' ? -1 : -7)
   const goNext = () => navigate(viewMode === 'day' ? 1 : 7)
-  const goToday = () => setSelectedDate(new Date())
+  // (goToday removed — the header DateOnlyPicker exposes a "Today" chip, and
+  // tapping the date label now opens the picker instead of jumping silently.)
 
   const setView = (v: ViewMode) => {
     setViewMode(v)
@@ -990,22 +996,61 @@ function TimelineClient() {
             <ChevronLeft className="h-5 w-5" />
           </button>
 
-          <button
-            onClick={goToday}
-            className="flex flex-col items-center gap-0.5"
-          >
-            <span className="text-sm font-semibold text-zinc-900 dark:text-white">
-              {viewMode === 'day'
-                ? formatShortDate(selectedDate)
-                : formatRangeLabel(range.from, range.to)
-              }
-            </span>
-            {viewMode === 'day' && isSameLocalDay(selectedDate, new Date()) && (
-              <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Today
+          <div className="relative">
+            <button
+              onClick={() => setHeaderDatePickerOpen(o => !o)}
+              className="flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-haspopup="dialog"
+              aria-expanded={headerDatePickerOpen}
+              aria-label={viewMode === 'day' ? 'Pick a date' : 'Pick a week'}
+            >
+              <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-900 dark:text-white">
+                {viewMode === 'day'
+                  ? formatShortDate(selectedDate)
+                  : formatRangeLabel(range.from, range.to)
+                }
+                <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${headerDatePickerOpen ? 'rotate-180' : ''}`} />
               </span>
-            )}
-          </button>
+              {viewMode === 'day' && isSameLocalDay(selectedDate, new Date()) && (
+                <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Today
+                </span>
+              )}
+            </button>
+
+            <AnimatePresence>
+              {headerDatePickerOpen && (
+                <>
+                  {/* Backdrop — closes the popover on tap outside (mobile-friendly;
+                      cheaper than a global click-outside listener). */}
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setHeaderDatePickerOpen(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute left-1/2 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                    role="dialog"
+                    aria-label={viewMode === 'day' ? 'Pick a date' : 'Pick a week'}
+                  >
+                    <DateOnlyPicker
+                      value={`${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`}
+                      showTodayChip
+                      onChange={(key) => {
+                        if (!key) return
+                        const [y, m, d] = key.split('-').map(Number)
+                        setSelectedDate(new Date(y, m - 1, d))
+                        setHeaderDatePickerOpen(false)
+                      }}
+                    />
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
 
           <button
             onClick={goNext}
