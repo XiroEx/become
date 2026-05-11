@@ -1151,12 +1151,20 @@ function TimelineClient() {
                 onDeletePlan={handleDeletePlan}
                 onSkipPlan={handleSkipPlan}
                 onPromotePlan={handlePromotePlan}
+                onOpenDayView={(d) => {
+                  setSelectedDate(d)
+                  setView('day')
+                  setMonthSelectedDate(null)
+                }}
                 activeFilters={activeFilters}
               />
             )}
             goal={goals.calories}
             getHeaders={getHeaders}
             onDrillToDay={(date) => {
+              // Retained for backwards compat with the MonthView API; no
+              // longer reachable from the calendar grid itself — drill-in
+              // moved into the day-strip header's "Open" link above.
               setSelectedDate(date)
               setView('day')
               setMonthSelectedDate(null)
@@ -1631,6 +1639,9 @@ interface MonthDayStripProps {
   onDeletePlan?: (planId: string, scope?: 'one' | 'series') => Promise<void>
   onSkipPlan?: (planId: string) => Promise<void>
   onPromotePlan?: (planId: string) => Promise<void>
+  /** Drill-in to the full Day view for this date. Renders as a small text
+   *  link in the strip header so cell-taps stay non-destructive (preview only). */
+  onOpenDayView?: (date: Date) => void
   activeFilters: Set<string>
 }
 
@@ -1638,6 +1649,7 @@ function MonthDayStrip({
   date, logs, plans,
   onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, onAddFood,
   onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
+  onOpenDayView,
   activeFilters,
 }: MonthDayStripProps) {
   const empty = logs.length === 0 && plans.length === 0
@@ -1656,9 +1668,21 @@ function MonthDayStrip({
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-          {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </h3>
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+            {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </h3>
+          {onOpenDayView && (
+            <button
+              type="button"
+              onClick={() => onOpenDayView(date)}
+              className="inline-flex shrink-0 items-center gap-0.5 rounded-md text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Open
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
         {canAdd && (
           <button
             type="button"
