@@ -28,6 +28,9 @@ import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import { formatQuantity, type Unit } from '@/lib/units'
+import MonthView from './MonthView'
+import type { MealPlan } from './planning'
+import { tagDotColors } from './planning'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -56,7 +59,7 @@ interface NutritionGoals {
   waterGoal: number
 }
 
-type ViewMode = 'day' | 'week'
+type ViewMode = 'day' | 'week' | 'month'
 
 const DEFAULT_TAGS = ['breakfast', 'lunch', 'dinner', 'snack']
 
@@ -277,11 +280,15 @@ function TimelineClient() {
 
   const initialView = useMemo<ViewMode>(() => {
     const v = searchParams?.get('view')
-    return v === 'week' ? 'week' : 'day'
+    if (v === 'week') return 'week'
+    if (v === 'month') return 'month'
+    return 'day'
   }, [searchParams])
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialView)
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate)
+  // Month view: the inline-expanded day strip. Null = no selection.
+  const [monthSelectedDate, setMonthSelectedDate] = useState<Date | null>(null)
   const [days, setDays] = useState<DayBucket[]>([])
   const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
@@ -322,6 +329,12 @@ function TimelineClient() {
   // ── Fetchers ─────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
+    // Month view fetches its own data inside MonthView; skip the page-level
+    // fetch to avoid an unused round-trip.
+    if (viewMode === 'month') {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const fromStr = formatDateParam(range.from)
@@ -679,9 +692,21 @@ function TimelineClient() {
             <CalendarIcon className="h-3.5 w-3.5" />
             Week
           </button>
+          <button
+            onClick={() => setView('month')}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
+              viewMode === 'month'
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            <CalendarIcon className="h-3.5 w-3.5" />
+            Month
+          </button>
         </div>
 
-        {/* Date navigation */}
+        {/* Date navigation — Day/Week only. Month view has its own header. */}
+        {viewMode !== 'month' && (
         <div className="flex items-center justify-between">
           <button
             onClick={goPrev}
@@ -716,8 +741,10 @@ function TimelineClient() {
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
+        )}
 
         {/* Tag filter chips */}
+        {viewMode !== 'month' && (
         <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
           <button
             onClick={() => setFilterChipsOpen(o => !o)}
@@ -781,9 +808,10 @@ function TimelineClient() {
             )}
           </AnimatePresence>
         </div>
+        )}
 
         {/* Body */}
-        {viewMode === 'day' ? (
+        {viewMode === 'day' && (
           <DayView
             date={selectedDate}
             day={filteredDays[0]}
@@ -797,7 +825,8 @@ function TimelineClient() {
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
-        ) : (
+        )}
+        {viewMode === 'week' && (
           <WeekView
             days={filteredDays}
             summary={weekSummary}
@@ -808,6 +837,43 @@ function TimelineClient() {
             onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
+          />
+        )}
+        {viewMode === 'month' && (
+          <MonthView
+            currentDate={selectedDate}
+            selectedDate={monthSelectedDate}
+            onSelectDate={(d) => setMonthSelectedDate(d)}
+            onChangeMonth={(delta) => {
+              const next = new Date(selectedDate)
+              next.setDate(1)
+              next.setMonth(next.getMonth() + delta)
+              setSelectedDate(next)
+              setMonthSelectedDate(null)
+            }}
+            onJumpToday={() => {
+              setSelectedDate(new Date())
+              setMonthSelectedDate(new Date())
+            }}
+            renderDayStrip={({ date, logs, plans }) => (
+              <MonthDayStrip
+                date={date}
+                logs={logs as MealLog[]}
+                plans={plans}
+                onEditItem={(logId, item) => setEditEntry({ logId, item })}
+                onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
+                onUpdateTime={handleUpdateLogTime}
+                onToggleFilter={toggleFilter}
+                activeFilters={activeFilters}
+              />
+            )}
+            goal={goals.calories}
+            getHeaders={getHeaders}
+            onDrillToDay={(date) => {
+              setSelectedDate(date)
+              setView('day')
+              setMonthSelectedDate(null)
+            }}
           />
         )}
       </PageTransition>
@@ -1088,6 +1154,97 @@ function SummaryStat({ label, value, unit }: { label: string; value: string; uni
       <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className="mt-0.5 text-lg font-bold tabular-nums text-zinc-900 dark:text-white">{value}</p>
       <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{unit}</p>
+    </div>
+  )
+}
+
+// ── Month-view day strip ──────────────────────────────────────────────────────
+// Renders the inline expanded day below the calendar grid. Plans render as
+// read-only rows in PR 2; PR 3b replaces this placeholder with TimelinePlanCard.
+
+interface MonthDayStripProps {
+  date: Date
+  logs: MealLog[]
+  plans: MealPlan[]
+  onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
+  onDeleteLog: (logId: string, mealName?: string) => void
+  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
+  onToggleFilter: (tag: string) => void
+  activeFilters: Set<string>
+}
+
+function MonthDayStrip({
+  date, logs, plans,
+  onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, activeFilters,
+}: MonthDayStripProps) {
+  const empty = logs.length === 0 && plans.length === 0
+  const activePlans = plans.filter(p => p.status === 'active')
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
+      <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
+        {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+      </h3>
+      {empty ? (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Nothing here yet.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {logs.map(log => (
+            <TimelineLogCard
+              key={log._id}
+              log={log}
+              defaultExpanded={false}
+              compact
+              onEditItem={onEditItem}
+              onDeleteLog={onDeleteLog}
+              onUpdateTime={onUpdateTime}
+              onToggleFilter={onToggleFilter}
+              activeFilters={activeFilters}
+            />
+          ))}
+          {activePlans.map(plan => (
+            <MonthPlannedRow key={plan._id} plan={plan} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Placeholder plan row for PR 2 — no actions. PR 3b replaces with TimelinePlanCard.
+function MonthPlannedRow({ plan }: { plan: MealPlan }) {
+  const dots = tagDotColors(plan.tag)
+  const cals = Math.round(plan.expectedNutrition?.calories ?? 0)
+  return (
+    <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full border-[1.5px] ${dots.ring}`} aria-hidden="true" />
+        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+          Planned
+        </span>
+        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          {titleCaseTag(plan.tag)}
+        </span>
+        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
+          {cals} cal
+        </span>
+      </div>
+      {plan.mealName && (
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Planned from: {plan.mealName}
+        </p>
+      )}
+      {plan.items.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+          {plan.items.slice(0, 3).map((item, idx) => (
+            <li key={idx}>{item.name}</li>
+          ))}
+          {plan.items.length > 3 && (
+            <li className="text-zinc-400">+ {plan.items.length - 3} more</li>
+          )}
+        </ul>
+      )}
     </div>
   )
 }
