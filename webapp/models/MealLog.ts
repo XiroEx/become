@@ -22,6 +22,12 @@ export interface IMealLog {
 
   totalNutrition: IMealNutrition
 
+  // Back-reference: the plan this log was promoted from. Optional; only set
+  // when the log was created via /api/meal-plans/[id]/promote. Lets the UI
+  // tag a log card "from plan" and lets DELETE on the log flip the plan
+  // status from 'promoted' back to 'active' (see plan §9.1).
+  fromPlanId?: Types.ObjectId
+
   createdAt?: Date
   updatedAt?: Date
 }
@@ -77,6 +83,8 @@ const MealLogSchema = new Schema<IMealLog>({
   totalNutrition: { type: MealLogNutritionSchema, default: () => ({
     calories: 0, protein: 0, carbs: 0, fats: 0,
   }) },
+
+  fromPlanId: { type: Schema.Types.ObjectId, ref: 'MealPlan' },
 }, {
   timestamps: true,
 })

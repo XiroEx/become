@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import MealLog from '@/models/MealLog'
+import MealPlan from '@/models/MealPlan'
 import { verifyAuth } from '@/lib/auth'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 
@@ -102,7 +103,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
 
+    const sourcePlanId = log.fromPlanId
     await MealLog.deleteOne({ _id: id })
+
+    // Plan §9.1: if this log was promoted from a plan, flip the plan back to
+    // 'active' so the user can re-log it. Match status='promoted' to avoid
+    // resurrecting a plan the user has since skipped/superseded.
+    if (sourcePlanId) {
+      await MealPlan.findOneAndUpdate(
+        { _id: sourcePlanId, user: authResult.userId, status: 'promoted' },
+        { $set: { status: 'active' }, $unset: { logId: '', promotedAt: '' } },
+      ).catch(() => null)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
