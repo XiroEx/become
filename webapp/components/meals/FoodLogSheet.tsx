@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, ChevronDown, Tag as TagIcon, Loader2, Apple, Repeat } from 'lucide-react'
+import { X, Check, ChevronDown, Tag as TagIcon, Loader2, Apple, Repeat, CalendarDays } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import QuantityPicker, {
   type QuantityPickerSelection,
   type QuantityPickerVariant,
 } from '@/components/nutrition/QuantityPicker'
+import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
+import { combineDateWithNowTime } from '@/lib/mealPlanDates'
 import type { ServingUnit } from '@/models/Food'
 import { prettifyUnitCodes } from '@/lib/units'
 
@@ -85,20 +87,13 @@ function titleCaseTag(tag: string): string {
     .join('-')
 }
 
-function dateToDateTimeInputValue(d: Date): string {
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mi = String(d.getMinutes()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
-}
-
-function buildLocalIsoFromDateTime(value: string): string {
-  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
-  if (!m) return new Date().toISOString()
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), 0, 0)
-  return d.toISOString()
+// Format a Date as a local YYYY-MM-DD key — used to seed the DateOnlyPicker
+// from `viewedDate` and to compare against "today".
+function dateToKey(d: Date): string {
+  const y = d.getFullYear()
+  const mo = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${mo}-${day}`
 }
 
 /**
@@ -146,8 +141,11 @@ export default function FoodLogSheet({
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [customTagInput, setCustomTagInput] = useState('')
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
-  const [customTime, setCustomTime] = useState<string | null>(null)
-  const [timeEditOpen, setTimeEditOpen] = useState(false)
+  // User-picked log date as YYYY-MM-DD — null = "Now". No time component;
+  // submission grafts the current wall-clock time onto the picked date via
+  // combineDateWithNowTime().
+  const [customDate, setCustomDate] = useState<string | null>(null)
+  const [dateEditOpen, setDateEditOpen] = useState(false)
   const [logging, setLogging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Recurrence (plan mode only). See plan §7.
@@ -161,8 +159,8 @@ export default function FoodLogSheet({
     if (isOpen) {
       setActiveTag(defaultTag)
       setSelection(null)
-      setCustomTime(null)
-      setTimeEditOpen(false)
+      setCustomDate(null)
+      setDateEditOpen(false)
       setError(null)
       setTagDropdownOpen(false)
       setCustomTagInput('')
@@ -269,8 +267,10 @@ export default function FoodLogSheet({
           setError(data?.error || 'Failed to plan food.')
         }
       } else {
-        const loggedAt = customTime
-          ? buildLocalIsoFromDateTime(customTime)
+        // No time picker — when the user picks a date, project to that day
+        // with the current wall-clock time; otherwise stamp "now" as today.
+        const loggedAt = customDate
+          ? combineDateWithNowTime(customDate)
           : new Date().toISOString()
 
         const res = await fetch('/api/meal-logs', {
@@ -483,49 +483,62 @@ export default function FoodLogSheet({
                 </div>
               )}
 
-              {/* Time picker — hidden in plan mode (plans carry a calendar date only) */}
+              {/* Date-only picker — defaults to "Now" (today @ current wall-clock).
+                  Tap to backdate. Hidden in plan mode — plans carry the
+                  page-supplied plannedDate. */}
               {!isPlanMode && (
-              <div className="flex items-center gap-1.5">
-                {!timeEditOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTimeEditOpen(true)
-                      if (!customTime) {
-                        const now = new Date()
-                        const base = viewedDate ?? now
-                        const combined = new Date(
-                          base.getFullYear(),
-                          base.getMonth(),
-                          base.getDate(),
-                          now.getHours(),
-                          now.getMinutes(),
-                        )
-                        setCustomTime(dateToDateTimeInputValue(combined))
-                      }
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                  >
-                    {customTime ? `At ${customTime.slice(11)}` : 'Now'}
-                  </button>
-                ) : (
-                  <>
-                    <input
-                      type="datetime-local"
-                      value={customTime ?? ''}
-                      onChange={(e) => setCustomTime(e.target.value)}
-                      className="rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                    />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => { setCustomTime(null); setTimeEditOpen(false) }}
-                      className="rounded-full px-2 py-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                      onClick={() => setDateEditOpen(v => !v)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                        customDate
+                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                      }`}
+                      aria-expanded={dateEditOpen}
+                      aria-label={customDate ? `Logging for ${formatDatePillLabel(customDate)}, tap to change date` : 'Log date: now, tap to choose a past date'}
                     >
-                      Use now
+                      <CalendarDays className="h-3 w-3" />
+                      <span className="tabular-nums">{formatDatePillLabel(customDate)}</span>
                     </button>
-                  </>
-                )}
-              </div>
+                    {customDate && (
+                      <button
+                        type="button"
+                        onClick={() => { setCustomDate(null); setDateEditOpen(false) }}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+                        aria-label="Clear date"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {dateEditOpen && (
+                      <motion.div
+                        key="dateonly-disclosure"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <DateOnlyPicker
+                          value={customDate ?? dateToKey(viewedDate ?? new Date())}
+                          maxDate={dateToKey(new Date())}
+                          showTodayChip
+                          onClear={() => { setCustomDate(null); setDateEditOpen(false) }}
+                          onChange={(next) => {
+                            const todayKey = dateToKey(new Date())
+                            setCustomDate(next === todayKey ? null : next)
+                            setDateEditOpen(false)
+                          }}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               )}
 
               {/* Macro preview */}
