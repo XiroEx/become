@@ -30,7 +30,8 @@ import type { IFoodEntry } from '@/models/NutritionLog'
 import { formatQuantity, type Unit } from '@/lib/units'
 import MonthView from './MonthView'
 import type { MealPlan } from './planning'
-import { tagDotColors } from './planning'
+import { tagDotColors, fetchPlansInRange } from './planning'
+import TimelinePlanCard from './TimelinePlanCard'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -290,6 +291,9 @@ function TimelineClient() {
   // Month view: the inline-expanded day strip. Null = no selection.
   const [monthSelectedDate, setMonthSelectedDate] = useState<Date | null>(null)
   const [days, setDays] = useState<DayBucket[]>([])
+  // Active plans within the day/week range. Used by DayView/WeekView to render
+  // TimelinePlanCard rows alongside logs.
+  const [plans, setPlans] = useState<MealPlan[]>([])
   const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
     defaults: DEFAULT_TAGS, userTags: [],
@@ -298,6 +302,12 @@ function TimelineClient() {
   const [loading, setLoading] = useState(true)
   const [errorToast, setErrorToast] = useState<string | null>(null)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
+  // Plan-edit entry — opened when a user taps Edit on a plan item.
+  const [editPlanEntry, setEditPlanEntry] = useState<{
+    planId: string
+    item: IMealItem & { _id?: string }
+    planItems: (IMealItem & { _id?: string })[]
+  } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ logId: string; mealName?: string } | null>(null)
   const [filterChipsOpen, setFilterChipsOpen] = useState(false)
   // Inline add-food: keeps the user on the timeline page instead of redirecting.
@@ -345,7 +355,12 @@ function TimelineClient() {
         ? `/api/meal-logs?date=${fromStr}`
         : `/api/meal-logs?from=${fromStr}&to=${toStr}`
 
-      const res = await fetch(url, { headers: getHeaders() })
+      // Fetch plans + logs in parallel. Plans are filtered to "active" so
+      // promoted/skipped/superseded don't render in day or week strips.
+      const [res, plansResp] = await Promise.all([
+        fetch(url, { headers: getHeaders() }),
+        fetchPlansInRange(fromStr, toStr, getHeaders()),
+      ])
       if (res.ok) {
         const data = await res.json()
         if (viewMode === 'day') {
@@ -366,9 +381,11 @@ function TimelineClient() {
       } else {
         setDays([])
       }
+      setPlans((plansResp.plans ?? []).filter(p => p.status === 'active'))
     } catch (err) {
       console.error('Failed to fetch timeline data:', err)
       setDays([])
+      setPlans([])
     } finally {
       setLoading(false)
     }
@@ -619,6 +636,49 @@ function TimelineClient() {
     }
   }
 
+  // Plan delete — OPTIMISTIC per §5.10. The TimelinePlanCard hides itself
+  // immediately; we fire DELETE in the background; on error we re-fetch (which
+  // brings the card back) and toast.
+  const handleDeletePlan = useCallback(async (planId: string) => {
+    try {
+      const res = await fetch(`/api/meal-plans/${planId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      })
+      if (!res.ok) throw new Error('delete_failed')
+      // Page-level state: drop the plan from the list so it can't re-appear
+      // even if fetchData is delayed (Month view picks up the change via
+      // monthReloadKey below).
+      setPlans(prev => prev.filter(p => p._id !== planId))
+      setMonthReloadKey(k => k + 1)
+    } catch (err) {
+      console.error('Failed to delete plan:', err)
+      showErrorToast('Failed to delete plan.')
+      await fetchData()
+      throw err
+    }
+  }, [getHeaders])
+
+  // Plan skip — OPTIMISTIC fade per §5.10.
+  const handleSkipPlan = useCallback(async (planId: string) => {
+    try {
+      const res = await fetch(`/api/meal-plans/${planId}/skip`, {
+        method: 'POST',
+        headers: getHeaders(),
+      })
+      if (!res.ok) throw new Error('skip_failed')
+      // Locally remove from the active set so it doesn't render in the day
+      // view's "active plans" section after the fade animation completes.
+      setPlans(prev => prev.filter(p => p._id !== planId))
+      setMonthReloadKey(k => k + 1)
+    } catch (err) {
+      console.error('Failed to skip plan:', err)
+      showErrorToast('Failed to skip plan.')
+      await fetchData()
+      throw err
+    }
+  }, [getHeaders])
+
   // Update a log's loggedAt — used by the inline time editor on each card.
   // Refetches the day so the chronological ordering is correct after the edit.
   const handleUpdateLogTime = async (logId: string, isoString: string): Promise<boolean> => {
@@ -861,6 +921,7 @@ function TimelineClient() {
           <DayView
             date={selectedDate}
             day={filteredDays[0]}
+            plans={plans}
             goals={goals}
             dayTotals={dayTotals}
             onEditItem={(logId, item) => setEditEntry({ logId, item })}
@@ -868,6 +929,9 @@ function TimelineClient() {
             onUpdateTime={handleUpdateLogTime}
             onToggleFilter={toggleFilter}
             onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
+            onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
+            onDeletePlan={handleDeletePlan}
+            onSkipPlan={handleSkipPlan}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
@@ -911,6 +975,9 @@ function TimelineClient() {
                 onUpdateTime={handleUpdateLogTime}
                 onToggleFilter={toggleFilter}
                 onAddFood={(d) => setAddFoodFor({ date: d, tag: defaultTagForNow() })}
+                onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
+                onDeletePlan={handleDeletePlan}
+                onSkipPlan={handleSkipPlan}
                 activeFilters={activeFilters}
               />
             )}
@@ -957,13 +1024,26 @@ function TimelineClient() {
         onSelectFood={(entry, tag, loggedAt) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt)}
       />
 
-      {/* Edit Food Modal */}
+      {/* Edit Food Modal — log mode */}
       <EditFoodModal
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
         onClose={() => setEditEntry(null)}
         onSaved={fetchData}
+      />
+
+      {/* Edit Food Modal — plan mode (separate mount so the two surfaces
+          don't share state when both are momentarily open during animations) */}
+      <EditFoodModal
+        isOpen={editPlanEntry !== null}
+        item={editPlanEntry?.item ?? null}
+        logId=""
+        mode="plan"
+        planId={editPlanEntry?.planId}
+        planItems={editPlanEntry?.planItems}
+        onClose={() => setEditPlanEntry(null)}
+        onSaved={() => { fetchData(); setMonthReloadKey(k => k + 1) }}
       />
 
       {/* Delete confirmation */}
@@ -1041,6 +1121,7 @@ function TimelineClient() {
 interface DayViewProps {
   date: Date
   day?: DayBucket
+  plans: MealPlan[]
   goals: NutritionGoals
   dayTotals: { calories: number; protein: number; carbs: number; fats: number }
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
@@ -1048,22 +1129,34 @@ interface DayViewProps {
   onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
+  onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
+  onDeletePlan: (planId: string) => Promise<void>
+  onSkipPlan: (planId: string) => Promise<void>
   activeFilters: Set<string>
   isFilterActive: boolean
 }
 
 function DayView({
-  date, day, goals, dayTotals, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, onAddFood, activeFilters, isFilterActive,
+  date, day, plans, goals, dayTotals, onEditItem, onDeleteLog,
+  onUpdateTime, onToggleFilter, onAddFood,
+  onEditPlanItem, onDeletePlan, onSkipPlan,
+  activeFilters, isFilterActive,
 }: DayViewProps) {
   const logs = day?.logs ?? []
+  const isToday = isSameLocalDay(date, new Date())
+  // Filter the parent's plans to this day's plannedDateKey.
+  const dayKey = formatDateParam(date)
+  const dayPlans = useMemo(
+    () => plans.filter(p => (p.plannedDateKey ?? p.plannedDate.split('T')[0]) === dayKey),
+    [plans, dayKey],
+  )
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Day header */}
       <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          {isSameLocalDay(date, new Date()) ? 'Today' : 'Day'}
+          {isToday ? 'Today' : 'Day'}
         </p>
         <h2 className="mt-0.5 text-lg font-bold text-zinc-900 dark:text-white">
           {formatLongDate(date)}
@@ -1080,7 +1173,7 @@ function DayView({
       />
 
       {/* Timeline — chronologically ordered, full-width cards. */}
-      {logs.length === 0 ? (
+      {logs.length === 0 && dayPlans.length === 0 ? (
         <EmptyState
           message={isFilterActive
             ? 'No entries match the active tag filter.'
@@ -1101,6 +1194,16 @@ function DayView({
                 onUpdateTime={onUpdateTime}
                 onToggleFilter={onToggleFilter}
                 activeFilters={activeFilters}
+              />
+            ))}
+            {dayPlans.map(plan => (
+              <TimelinePlanCard
+                key={plan._id}
+                plan={plan}
+                isToday={isToday}
+                onEditItem={onEditPlanItem}
+                onDeletePlan={onDeletePlan}
+                onSkipPlan={onSkipPlan}
               />
             ))}
           </AnimatePresence>
@@ -1235,12 +1338,17 @@ interface MonthDayStripProps {
   onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   onAddFood?: (date: Date) => void
+  onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
+  onDeletePlan?: (planId: string) => Promise<void>
+  onSkipPlan?: (planId: string) => Promise<void>
   activeFilters: Set<string>
 }
 
 function MonthDayStrip({
   date, logs, plans,
-  onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, onAddFood, activeFilters,
+  onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, onAddFood,
+  onEditPlanItem, onDeletePlan, onSkipPlan,
+  activeFilters,
 }: MonthDayStripProps) {
   const empty = logs.length === 0 && plans.length === 0
   const activePlans = plans.filter(p => p.status === 'active')
@@ -1291,47 +1399,22 @@ function MonthDayStrip({
               activeFilters={activeFilters}
             />
           ))}
-          {activePlans.map(plan => (
-            <MonthPlannedRow key={plan._id} plan={plan} />
+          {/* TimelinePlanCard delegates the actual network calls to the
+              parent via the handlers below. Optimistic-hide / fade lives
+              inside the card; on reject, the parent re-fetches. */}
+          {onEditPlanItem && onDeletePlan && onSkipPlan && activePlans.map(plan => (
+            <ul key={plan._id} className="m-0 list-none p-0">
+              <TimelinePlanCard
+                plan={plan}
+                compact
+                isToday={isToday}
+                onEditItem={onEditPlanItem}
+                onDeletePlan={onDeletePlan}
+                onSkipPlan={onSkipPlan}
+              />
+            </ul>
           ))}
         </div>
-      )}
-    </div>
-  )
-}
-
-// Placeholder plan row for PR 2 — no actions. PR 3b replaces with TimelinePlanCard.
-function MonthPlannedRow({ plan }: { plan: MealPlan }) {
-  const dots = tagDotColors(plan.tag)
-  const cals = Math.round(plan.expectedNutrition?.calories ?? 0)
-  return (
-    <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full border-[1.5px] ${dots.ring}`} aria-hidden="true" />
-        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-          Planned
-        </span>
-        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-          {titleCaseTag(plan.tag)}
-        </span>
-        <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
-          {cals} cal
-        </span>
-      </div>
-      {plan.mealName && (
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Planned from: {plan.mealName}
-        </p>
-      )}
-      {plan.items.length > 0 && (
-        <ul className="mt-2 space-y-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-          {plan.items.slice(0, 3).map((item, idx) => (
-            <li key={idx}>{item.name}</li>
-          ))}
-          {plan.items.length > 3 && (
-            <li className="text-zinc-400">+ {plan.items.length - 3} more</li>
-          )}
-        </ul>
       )}
     </div>
   )

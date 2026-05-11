@@ -17,8 +17,14 @@ interface EditFoodModalProps {
   isOpen: boolean
   // The item to edit. Must include _id for the PATCH route to work.
   item: (IMealItem & { _id?: string }) | null
-  // The MealLog id this item belongs to.
+  // The MealLog id this item belongs to. Required in log mode (mode='log' or unset).
   logId: string
+  // 'log' (default) — PATCH /api/meal-logs/[logId]/items/[itemId]
+  // 'plan' — PATCH /api/meal-plans/[planId] with the full items[] array, with
+  //   this item replaced by the picker's new values. Requires planId + planItems.
+  mode?: 'log' | 'plan'
+  planId?: string
+  planItems?: (IMealItem & { _id?: string })[]
   onClose: () => void
   onSaved: () => void   // refetch after save
 }
@@ -78,7 +84,10 @@ function deriveVariantAndInitial(item: IMealItem): {
   return { variant, initial: { quantity: synthesizedQty, unit: servingUnit } }
 }
 
-export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }: EditFoodModalProps) {
+export default function EditFoodModal({
+  isOpen, item, logId, mode = 'log', planId, planItems, onClose, onSaved,
+}: EditFoodModalProps) {
+  const isPlanMode = mode === 'plan'
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -121,32 +130,81 @@ export default function EditFoodModal({ isOpen, item, logId, onClose, onSaved }:
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!item || !item._id || !logId || !selection) return
+    if (!item || !item._id || !selection) return
     if (selection.quantity <= 0) { setError('Amount must be greater than 0'); return }
 
     setSaving(true)
     setError('')
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/meal-logs/${logId}/items/${item._id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          // Back-compat: keep `servings` (multiplier) flowing for legacy readers.
-          servings: selection.multiplier,
-          // New shape — picked up by the route updates in this PR.
-          loggedQuantity: selection.quantity,
-          loggedUnit: selection.unit,
-          // Bridge values: prefer the user's inline edits, fall back to the
-          // existing snapshot. The route only assigns these when the field is
-          // present, so undefined values leave the stored snapshot intact.
-          loggedGramsPerServing: bridge.gramsPerServing ?? item.loggedGramsPerServing,
-          loggedMlPerServing: bridge.mlPerServing ?? item.loggedMlPerServing,
-        }),
-      })
+      let res: Response
+      if (isPlanMode) {
+        if (!planId || !planItems) {
+          setError('Plan context missing.')
+          setSaving(false)
+          return
+        }
+        // Build updated items[] — replace the matching item by _id and PATCH
+        // the whole plan with the new array. Per plan §4.4, PATCH accepts a
+        // full items[] replacement and recomputes expectedNutrition via the
+        // pre-save hook.
+        const updated = planItems.map(it => {
+          if (it._id !== item._id) return it
+          return {
+            ...it,
+            servings: selection.multiplier,
+            loggedQuantity: selection.quantity,
+            loggedUnit: selection.unit,
+            loggedGramsPerServing: bridge.gramsPerServing ?? it.loggedGramsPerServing,
+            loggedMlPerServing: bridge.mlPerServing ?? it.loggedMlPerServing,
+            // Roll the scaled-per-serving nutrition forward; the QuantityPicker
+            // returned per-serving nutrition based on the bridge it solved.
+            nutrition: {
+              calories: selection.nutrition.calories / selection.multiplier,
+              protein:  selection.nutrition.protein  / selection.multiplier,
+              carbs:    selection.nutrition.carbs    / selection.multiplier,
+              fats:     selection.nutrition.fats     / selection.multiplier,
+              fiber:    (selection.nutrition.fiber  ?? 0) / selection.multiplier,
+              sugar:    (selection.nutrition.sugar  ?? 0) / selection.multiplier,
+              sodium:   (selection.nutrition.sodium ?? 0) / selection.multiplier,
+              saturatedFat: (selection.nutrition.saturatedFat ?? 0) / selection.multiplier,
+            },
+          }
+        })
+        res = await fetch(`/api/meal-plans/${planId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ items: updated }),
+        })
+      } else {
+        if (!logId) {
+          setError('Log id missing.')
+          setSaving(false)
+          return
+        }
+        res = await fetch(`/api/meal-logs/${logId}/items/${item._id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            // Back-compat: keep `servings` (multiplier) flowing for legacy readers.
+            servings: selection.multiplier,
+            // New shape — picked up by the route updates in this PR.
+            loggedQuantity: selection.quantity,
+            loggedUnit: selection.unit,
+            // Bridge values: prefer the user's inline edits, fall back to the
+            // existing snapshot. The route only assigns these when the field is
+            // present, so undefined values leave the stored snapshot intact.
+            loggedGramsPerServing: bridge.gramsPerServing ?? item.loggedGramsPerServing,
+            loggedMlPerServing: bridge.mlPerServing ?? item.loggedMlPerServing,
+          }),
+        })
+      }
       if (res.ok) {
         onSaved()
         onClose()

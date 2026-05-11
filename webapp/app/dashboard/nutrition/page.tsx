@@ -99,6 +99,12 @@ function NutritionPageInner() {
 
   // Modal state
   const [foodSearchOpen, setFoodSearchOpen] = useState(false)
+  // Plan mode state — when set, the food search modal opens with mode='plan'
+  // and uses planForDate as its viewedDate (which the picker forwards to the
+  // create-plan call).
+  const [planForDate, setPlanForDate] = useState<Date | null>(null)
+  const [planDatePickerTag, setPlanDatePickerTag] = useState<string | null>(null)
+  const [planDateInput, setPlanDateInput] = useState<string>('')
   const [foodSearchTag, setFoodSearchTag] = useState<string>('snack')
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
@@ -418,7 +424,29 @@ function NutritionPageInner() {
   const openFoodSearch = (tag: string, autoScan = false) => {
     setFoodSearchTag(tag.toLowerCase())
     setFoodSearchAutoScan(autoScan)
+    setPlanForDate(null)
     setFoodSearchOpen(true)
+  }
+
+  // Plan flow: tap "Plan…" on the TagSection kebab → opens a small date
+  // picker → user picks a future date → food picker opens in plan mode.
+  const openPlanDatePicker = (tag: string) => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    setPlanDateInput(formatDateParam(tomorrow))
+    setPlanDatePickerTag(tag.toLowerCase())
+  }
+
+  const confirmPlanDate = () => {
+    if (!planDatePickerTag || !planDateInput) return
+    const [y, m, d] = planDateInput.split('-').map(Number)
+    if (!y || !m || !d) return
+    const picked = new Date(y, m - 1, d)
+    setPlanForDate(picked)
+    setFoodSearchTag(planDatePickerTag)
+    setFoodSearchAutoScan(false)
+    setFoodSearchOpen(true)
+    setPlanDatePickerTag(null)
   }
 
   const handleAddSessionTag = () => {
@@ -586,6 +614,7 @@ function NutritionPageInner() {
             onRemoveEntry={handleRemoveEntry}
             onRemoveTag={handleRemoveSessionTag}
             removable={sessionTags.includes(tag) && (logsByTag[tag] || []).length === 0}
+            onPlan={(t) => openPlanDatePicker(t)}
           />
         ))}
 
@@ -715,16 +744,104 @@ function NutritionPageInner() {
         </div>
       </PageTransition>
 
-      {/* Food Search Modal */}
+      {/* Food Search Modal — log mode (default) and plan mode (when planForDate set). */}
       <FoodSearchModal
         isOpen={foodSearchOpen}
         currentTag={foodSearchTag}
         availableTags={tagsResp}
-        viewedDate={selectedDate}
+        viewedDate={planForDate ?? selectedDate}
+        mode={planForDate ? 'plan' : 'log'}
         autoScan={foodSearchAutoScan}
-        onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false) }}
-        onSelectFood={handleAddFood}
+        onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null) }}
+        onSelectFood={(entry, tag, loggedAt) => {
+          if (planForDate) {
+            // Submit to /api/meal-plans inline since the nutrition page's
+            // handleAddFood targets the log endpoint by default.
+            const planned = `${planForDate.getFullYear()}-${String(planForDate.getMonth() + 1).padStart(2, '0')}-${String(planForDate.getDate()).padStart(2, '0')}`
+            const useTag = (tag ?? foodSearchTag ?? 'snack').toLowerCase()
+            const item = {
+              foodId: entry.foodId,
+              variantId: entry.variantId,
+              variantName: entry.variantName,
+              name: entry.name,
+              brand: entry.brand,
+              servingSize: entry.servingSize,
+              servingUnit: entry.servingUnit,
+              servings: entry.servings,
+              nutrition: entry.nutrition,
+              loggedQuantity: (entry as { loggedQuantity?: number }).loggedQuantity,
+              loggedUnit: (entry as { loggedUnit?: string }).loggedUnit,
+              loggedGramsPerServing: (entry as { loggedGramsPerServing?: number }).loggedGramsPerServing,
+              loggedMlPerServing: (entry as { loggedMlPerServing?: number }).loggedMlPerServing,
+            }
+            const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+            const headers: HeadersInit = { 'Content-Type': 'application/json' }
+            if (token) headers['Authorization'] = `Bearer ${token}`
+            fetch('/api/meal-plans', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ plannedDate: planned, tag: useTag, items: [item] }),
+            }).then(r => {
+              if (!r.ok) {
+                showErrorToast('Failed to plan food.')
+                return
+              }
+              setFoodSearchOpen(false)
+              setPlanForDate(null)
+            }).catch(() => {
+              showErrorToast('Failed to plan food. Check your connection.')
+            })
+            return
+          }
+          handleAddFood(entry, tag, loggedAt)
+        }}
       />
+
+      {/* Plan-date picker dialog — opens when the user taps "Plan for a future day…" */}
+      {planDatePickerTag && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={() => setPlanDatePickerTag(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-5 dark:bg-zinc-900 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">
+              Plan {planDatePickerTag}
+            </h3>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Pick a future date to plan a meal for.
+            </p>
+            <input
+              type="date"
+              value={planDateInput}
+              min={(() => {
+                const d = new Date()
+                d.setDate(d.getDate() + 1)
+                return formatDateParam(d)
+              })()}
+              onChange={(e) => setPlanDateInput(e.target.value)}
+              className="mt-3 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setPlanDatePickerTag(null)}
+                className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmPlanDate}
+                disabled={!planDateInput}
+                className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-black"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Add Modal */}
       <QuickAddModal

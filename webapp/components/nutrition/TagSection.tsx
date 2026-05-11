@@ -15,6 +15,9 @@ import {
   Plus,
   ChevronDown,
   X,
+  MoreVertical,
+  CalendarDays,
+  ChefHat,
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
 import { Card } from '@/components/ui'
@@ -47,6 +50,11 @@ interface TagSectionProps {
   onRemoveEntry: (logId: string, itemId: string) => void
   onRemoveTag?: (tag: string) => void
   removable?: boolean
+  // Plan affordances (Plan §6.1). When provided, the header gets a kebab
+  // menu with "Plan…" (opens the food picker in plan mode for a future date)
+  // and "Apply meal…" (opens the meal picker in plan mode).
+  onPlan?: (tag: string) => void
+  onApplyMeal?: (tag: string) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -135,8 +143,11 @@ export default function TagSection({
   onRemoveEntry,
   onRemoveTag,
   removable = false,
+  onPlan,
+  onApplyMeal,
 }: TagSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [kebabOpen, setKebabOpen] = useState(false)
   const visuals = getVisuals(tag)
   const label = titleCaseTag(tag)
 
@@ -224,6 +235,59 @@ export default function TagSection({
             >
               <Plus className="h-4 w-4" />
             </button>
+            {(onPlan || onApplyMeal) && (
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setKebabOpen(o => !o)
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  aria-label={`More actions for ${label}`}
+                  aria-expanded={kebabOpen}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+                <AnimatePresence>
+                  {kebabOpen && (
+                    <>
+                      {/* Dismiss overlay */}
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={(e) => { e.stopPropagation(); setKebabOpen(false) }}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-8 z-40 min-w-[160px] rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {onPlan && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setKebabOpen(false); onPlan(tag) }}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <CalendarDays className="h-3.5 w-3.5 text-blue-500" />
+                            Plan for a future day…
+                          </button>
+                        )}
+                        {onApplyMeal && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setKebabOpen(false); onApplyMeal(tag) }}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <ChefHat className="h-3.5 w-3.5 text-orange-500" />
+                            Apply meal template…
+                          </button>
+                        )}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
             <ChevronDown
               className={`h-4 w-4 text-zinc-400 transition-transform ${
                 isCollapsed ? '-rotate-90' : ''
