@@ -29,8 +29,12 @@ interface MealApplySheetProps {
   availableTags?: { defaults: string[]; userTags: string[] }
   // Date the user is viewing (sets the day in the time picker). Defaults to today.
   viewedDate?: Date
+  // 'log' (default) — POST /api/meals/[id]/log
+  // 'plan' — POST /api/meal-plans with mealId. Time picker hidden; the sheet
+  // uses viewedDate as the plannedDate. Submit CTA reads "Plan".
+  mode?: 'log' | 'plan'
   onClose: () => void
-  // Called after a successful POST to /api/meals/[id]/log. Caller refetches state.
+  // Called after a successful POST. Caller refetches state.
   onApplied?: () => void
 }
 
@@ -85,9 +89,11 @@ export default function MealApplySheet({
   defaultTag,
   availableTags,
   viewedDate,
+  mode = 'log',
   onClose,
   onApplied,
 }: MealApplySheetProps) {
+  const isPlanMode = mode === 'plan'
   const [activeTag, setActiveTag] = useState<string>(defaultTag)
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [customTagInput, setCustomTagInput] = useState('')
@@ -193,19 +199,38 @@ export default function MealApplySheet({
       const headers: HeadersInit = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
-      const loggedAt = customTime
-        ? buildLocalIsoFromDateTime(customTime)
-        : new Date().toISOString()
-
-      const res = await fetch(`/api/meals/${meal._id}/log`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          portion: effectivePortion,
-          tags: [activeTag],
-          loggedAt,
-        }),
-      })
+      let res: Response
+      if (isPlanMode) {
+        // Plan flow: snapshot the meal as a MealPlan at viewedDate.
+        // The server snapshots items[] from the meal at plan-create time.
+        const base = viewedDate ?? new Date()
+        const y = base.getFullYear()
+        const m = String(base.getMonth() + 1).padStart(2, '0')
+        const d = String(base.getDate()).padStart(2, '0')
+        const plannedDate = `${y}-${m}-${d}`
+        res = await fetch('/api/meal-plans', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            plannedDate,
+            tag: activeTag,
+            mealId: meal._id,
+          }),
+        })
+      } else {
+        const loggedAt = customTime
+          ? buildLocalIsoFromDateTime(customTime)
+          : new Date().toISOString()
+        res = await fetch(`/api/meals/${meal._id}/log`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            portion: effectivePortion,
+            tags: [activeTag],
+            loggedAt,
+          }),
+        })
+      }
       if (res.ok) {
         setApplied(true)
         onApplied?.()
@@ -406,7 +431,8 @@ export default function MealApplySheet({
                 )}
               </div>
 
-              {/* Time picker */}
+              {/* Time picker — hidden in plan mode (plans carry a calendar date only). */}
+              {!isPlanMode && (
               <div className="flex items-center gap-1.5">
                 {!timeEditOpen ? (
                   <button
@@ -464,6 +490,7 @@ export default function MealApplySheet({
                   {customTime ? 'Logged at custom time' : 'Logged now'}
                 </span>
               </div>
+              )}
 
               {/* Live nutrition preview */}
               <div className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
@@ -508,15 +535,17 @@ export default function MealApplySheet({
                 {applying ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Logging…
+                    {isPlanMode ? 'Planning…' : 'Logging…'}
                   </>
                 ) : applied ? (
                   <>
                     <Check className="h-4 w-4" />
-                    Logged!
+                    {isPlanMode ? 'Planned!' : 'Logged!'}
                   </>
                 ) : (
-                  `Apply to ${titleCaseTag(activeTag)}`
+                  isPlanMode
+                    ? `Plan ${titleCaseTag(activeTag)}`
+                    : `Apply to ${titleCaseTag(activeTag)}`
                 )}
               </button>
             </div>
