@@ -122,3 +122,42 @@ export function todayUtcKey(now: Date = new Date()): string {
     now.getUTCDate(),
   )))
 }
+
+/**
+ * Today's date key in the user's LOCAL timezone, as YYYY-MM-DD. Used by the
+ * date-only picker to compute "today" highlights and to derive a sensible
+ * default when the user hasn't picked a date.
+ */
+export function todayLocalKey(now: Date = new Date()): string {
+  const y = now.getFullYear()
+  const mo = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${mo}-${d}`
+}
+
+/**
+ * Given a YYYY-MM-DD date string and the current moment, produce an ISO
+ * timestamp at the picked date with the current wall-clock hour/minute/second
+ * in the user's local timezone. Use this when a UI lets the user pick a date
+ * for a log entry — the user didn't pick a time, so we preserve "now's clock"
+ * on the chosen date as the most defensible default. Pass `now` explicitly
+ * in tests to keep them deterministic.
+ *
+ *   combineDateWithNowTime('2026-05-11', new Date('2026-05-11T18:42:13Z'))
+ *     // → '2026-05-11T...' with local 18:42 hours
+ */
+export function combineDateWithNowTime(dateKey: string, now: Date = new Date()): string {
+  const m = YYYY_MM_DD.exec(dateKey)
+  if (!m) throw new Error(`Invalid date key: ${dateKey} (expected YYYY-MM-DD)`)
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  // Build a Date at the picked YYYY-MM-DD in LOCAL time, then graft the
+  // current wall-clock hour/minute/second/ms onto it. The resulting Date is
+  // a local instant; .toISOString() normalizes to UTC for transport.
+  const combined = new Date(
+    y, mo - 1, d,
+    now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds(),
+  )
+  return combined.toISOString()
+}

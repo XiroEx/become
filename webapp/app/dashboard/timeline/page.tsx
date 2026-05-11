@@ -227,26 +227,6 @@ function primaryTag(tags: string[] | undefined): string | undefined {
   return def ?? lower[0]
 }
 
-// Format a Date to "HH:mm" in the user's local TZ (matches <input type="time"> shape).
-function dateToTimeInputValue(d: Date): string {
-  const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
-  return `${h}:${m}`
-}
-
-// Combine an existing loggedAt's date portion (local) with a new "HH:mm" time
-// and return an ISO string. Used when the user re-times a logged entry.
-function rebuildIsoWithTime(currentIso: string, timeStr: string): string | null {
-  const [hStr, mStr] = timeStr.split(':')
-  const h = Number(hStr)
-  const m = Number(mStr)
-  if (Number.isNaN(h) || Number.isNaN(m)) return null
-  const cur = new Date(currentIso)
-  if (Number.isNaN(cur.getTime())) return null
-  const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), h, m, 0, 0)
-  return next.toISOString()
-}
-
 // ── Defaults ───────────────────────────────────────────────────────────────────
 
 const defaultGoals: NutritionGoals = {
@@ -850,28 +830,6 @@ function TimelineClient() {
     }
   }, [getHeaders])
 
-  // Update a log's loggedAt — used by the inline time editor on each card.
-  // Refetches the day so the chronological ordering is correct after the edit.
-  const handleUpdateLogTime = async (logId: string, isoString: string): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/meal-logs/${logId}`, {
-        method: 'PATCH',
-        headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: isoString }),
-      })
-      if (!res.ok) {
-        showErrorToast('Failed to update time.')
-        return false
-      }
-      await fetchData()
-      return true
-    } catch (err) {
-      console.error('Failed to update log time:', err)
-      showErrorToast('Failed to update time. Check your connection.')
-      return false
-    }
-  }
-
   // ── Day-mode totals (for CalorieRing) ────────────────────────────────────
 
   const dayTotals = useMemo(() => {
@@ -1097,7 +1055,6 @@ function TimelineClient() {
             dayTotals={dayTotals}
             onEditItem={(logId, item) => setEditEntry({ logId, item })}
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
-            onUpdateTime={handleUpdateLogTime}
             onToggleFilter={toggleFilter}
             onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
             onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
@@ -1114,7 +1071,6 @@ function TimelineClient() {
             summary={weekSummary}
             onEditItem={(logId, item) => setEditEntry({ logId, item })}
             onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
-            onUpdateTime={handleUpdateLogTime}
             onToggleFilter={toggleFilter}
             onAddFood={(date) => setAddFoodFor({ date, tag: defaultTagForNow() })}
             activeFilters={activeFilters}
@@ -1144,8 +1100,7 @@ function TimelineClient() {
                 plans={plans}
                 onEditItem={(logId, item) => setEditEntry({ logId, item })}
                 onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
-                onUpdateTime={handleUpdateLogTime}
-                onToggleFilter={toggleFilter}
+                    onToggleFilter={toggleFilter}
                 onAddFood={(d) => setAddFoodFor({ date: d, tag: defaultTagForNow() })}
                 onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
                 onDeletePlan={handleDeletePlan}
@@ -1356,7 +1311,6 @@ interface DayViewProps {
   dayTotals: { calories: number; protein: number; carbs: number; fats: number }
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
-  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
   onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
@@ -1369,7 +1323,7 @@ interface DayViewProps {
 
 function DayView({
   date, day, plans, goals, dayTotals, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, onAddFood,
+  onToggleFilter, onAddFood,
   onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
   activeFilters, isFilterActive,
 }: DayViewProps) {
@@ -1487,7 +1441,6 @@ function DayView({
                 defaultExpanded={idx === 0}
                 onEditItem={onEditItem}
                 onDeleteLog={onDeleteLog}
-                onUpdateTime={onUpdateTime}
                 onToggleFilter={onToggleFilter}
                 activeFilters={activeFilters}
               />
@@ -1517,7 +1470,6 @@ interface WeekViewProps {
   summary: { total: number; avg: number; max: number; daysLogged: number }
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
-  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
   activeFilters: Set<string>
@@ -1526,7 +1478,7 @@ interface WeekViewProps {
 
 function WeekView({
   days, summary, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, onAddFood, activeFilters, isFilterActive,
+  onToggleFilter, onAddFood, activeFilters, isFilterActive,
 }: WeekViewProps) {
   // Order newest-first so the most recent days are at the top.
   const ordered = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days])
@@ -1600,7 +1552,6 @@ function WeekView({
               day={d}
               onEditItem={onEditItem}
               onDeleteLog={onDeleteLog}
-              onUpdateTime={onUpdateTime}
               onToggleFilter={onToggleFilter}
               onAddFood={onAddFood}
               activeFilters={activeFilters}
@@ -1632,7 +1583,6 @@ interface MonthDayStripProps {
   plans: MealPlan[]
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
-  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   onAddFood?: (date: Date) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
@@ -1647,7 +1597,7 @@ interface MonthDayStripProps {
 
 function MonthDayStrip({
   date, logs, plans,
-  onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, onAddFood,
+  onEditItem, onDeleteLog, onToggleFilter, onAddFood,
   onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
   onOpenDayView,
   activeFilters,
@@ -1708,7 +1658,6 @@ function MonthDayStrip({
               compact
               onEditItem={onEditItem}
               onDeleteLog={onDeleteLog}
-              onUpdateTime={onUpdateTime}
               onToggleFilter={onToggleFilter}
               activeFilters={activeFilters}
             />
@@ -1746,7 +1695,6 @@ interface WeekDayGroupProps {
   day: DayBucket
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
-  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
   activeFilters: Set<string>
@@ -1754,7 +1702,7 @@ interface WeekDayGroupProps {
 
 function WeekDayGroup({
   day, onEditItem, onDeleteLog,
-  onUpdateTime, onToggleFilter, onAddFood, activeFilters,
+  onToggleFilter, onAddFood, activeFilters,
 }: WeekDayGroupProps) {
   const dt = parseDateParam(day.date)
   const isToday = isSameLocalDay(dt, new Date())
@@ -1843,7 +1791,6 @@ function WeekDayGroup({
                         compact
                         onEditItem={onEditItem}
                         onDeleteLog={onDeleteLog}
-                        onUpdateTime={onUpdateTime}
                         onToggleFilter={onToggleFilter}
                         activeFilters={activeFilters}
                       />
@@ -1862,17 +1809,17 @@ function WeekDayGroup({
 // ── Unified timeline log card (used in both Day and Week views) ──────────────
 //
 // The card carries:
-//   • Header row — clock + time pill (left), tag chips (left, after time), and
-//     the day-total calorie chip (right). Time and cal never truncate; tags
-//     truncate first if there's no horizontal room.
+//   • Header row — clock + time pill (left, read-only), tag chips (left, after
+//     time), and the day-total calorie chip (right). Time and cal never
+//     truncate; tags truncate first if there's no horizontal room.
 //   • Optional "From: <mealName>" badge below the header row.
 //   • Expandable item list. The first card in each list defaults expanded so
 //     users see items without an extra tap; subsequent cards stay collapsed.
 //   • Footer with macros + Delete.
-//   • Inline time editor: tapping the time pill opens an <input type="time">.
-//     On save, the parent PATCHes /api/meal-logs/[id] then refetches the day,
-//     and Framer Motion's `layout` smoothly animates the card to its new
-//     chronological slot.
+//   • Time is read-only — the platform no longer surfaces a time picker. The
+//     logged time-of-day is preserved and displayed so users can see at a
+//     glance when an item landed, but cannot be edited inline. (Date editing
+//     happens through re-logging or via the date-only picker on add.)
 //   • Tag chips are buttons; tapping toggles them in the parent's filter set.
 
 interface TimelineLogCardProps {
@@ -1883,7 +1830,6 @@ interface TimelineLogCardProps {
   compact?: boolean
   onEditItem: (logId: string, item: IMealItem & { _id?: string }) => void
   onDeleteLog: (logId: string, mealName?: string) => void
-  onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
   activeFilters: Set<string>
 }
@@ -1894,7 +1840,6 @@ function TimelineLogCard({
   compact = false,
   onEditItem,
   onDeleteLog,
-  onUpdateTime,
   onToggleFilter,
   activeFilters,
 }: TimelineLogCardProps) {
@@ -1903,35 +1848,6 @@ function TimelineLogCard({
   const accent = primaryTag(log.tags)
 
   const [expanded, setExpanded] = useState(defaultExpanded)
-  // Inline time editor state. `pendingTime` is a "HH:mm" string while the
-  // user is editing; null when the editor is closed.
-  const [pendingTime, setPendingTime] = useState<string | null>(null)
-  const [savingTime, setSavingTime] = useState(false)
-
-  const editorOpen = pendingTime !== null
-
-  const openEditor = (e: React.MouseEvent | React.KeyboardEvent) => {
-    e.stopPropagation()
-    setPendingTime(dateToTimeInputValue(new Date(log.loggedAt)))
-  }
-
-  const cancelEditor = () => {
-    setPendingTime(null)
-    setSavingTime(false)
-  }
-
-  const saveEditor = async () => {
-    if (!pendingTime || savingTime) return
-    const iso = rebuildIsoWithTime(log.loggedAt, pendingTime)
-    if (!iso) {
-      cancelEditor()
-      return
-    }
-    setSavingTime(true)
-    const ok = await onUpdateTime(log._id, iso)
-    setSavingTime(false)
-    if (ok) setPendingTime(null)
-  }
 
   return (
     <motion.li
@@ -1951,58 +1867,13 @@ function TimelineLogCard({
         aria-label={expanded ? 'Collapse entry' : 'Expand entry'}
       >
         {/* Time pill — first child, never truncates. Tap to edit. */}
-        {editorOpen ? (
-          <div
-            className="flex shrink-0 items-center gap-1 rounded-full bg-blue-100 px-2 py-1 dark:bg-blue-900/40"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Clock className="h-3 w-3 text-blue-700 dark:text-blue-200" />
-            <input
-              type="time"
-              value={pendingTime ?? ''}
-              onChange={(e) => setPendingTime(e.target.value)}
-              autoFocus
-              disabled={savingTime}
-              className="bg-transparent text-[11px] font-semibold text-blue-700 tabular-nums focus:outline-none disabled:opacity-60 dark:text-blue-200"
-            />
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); saveEditor() }}
-              disabled={savingTime || !pendingTime}
-              aria-label="Save time"
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 disabled:opacity-50 dark:text-blue-200 dark:hover:bg-blue-900/60"
-            >
-              <Check className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); cancelEditor() }}
-              disabled={savingTime}
-              aria-label="Cancel time edit"
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 disabled:opacity-50 dark:text-blue-200 dark:hover:bg-blue-900/60"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ) : (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={openEditor}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                openEditor(e)
-              }
-            }}
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold tabular-nums text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-            aria-label={`Logged at ${time}, tap to change time`}
-            title="Tap to change time"
-          >
-            <Clock className="h-3 w-3" />
-            {time}
-          </span>
-        )}
+        <span
+          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+          aria-label={`Logged at ${time}`}
+        >
+          <Clock className="h-3 w-3" />
+          {time}
+        </span>
 
         {/* Tag chips — second-priority. They truncate (the inner div carries
             min-w-0 so flexbox can shrink the chip row instead of the time/cal). */}
