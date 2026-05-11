@@ -339,10 +339,13 @@ function TimelineClient() {
     if (viewMode === 'day') {
       return { from: selectedDate, to: selectedDate }
     }
-    // Week view: 7 days ending at selectedDate (inclusive).
-    const to = selectedDate
+    // Week view: calendar-aligned Sun → Sat containing selectedDate. Matches
+    // the convention used by the workouts calendar, UpcomingWorkouts widget,
+    // and MonthView so all week strips in the app start on the same day.
     const from = new Date(selectedDate)
-    from.setDate(from.getDate() - 6)
+    from.setDate(from.getDate() - from.getDay())
+    const to = new Date(from)
+    to.setDate(from.getDate() + 6)
     return { from, to }
   }, [viewMode, selectedDate])
 
