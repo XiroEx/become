@@ -19,6 +19,7 @@ import {
   Tag as TagIcon,
   Check,
   X,
+  Sparkles,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import CalorieRing from '@/components/nutrition/CalorieRing'
@@ -32,6 +33,7 @@ import MonthView from './MonthView'
 import type { MealPlan } from './planning'
 import { tagDotColors, fetchPlansInRange } from './planning'
 import TimelinePlanCard from './TimelinePlanCard'
+import { CopyDayForwardSheet, ApplyMealToDaysSheet } from './PlanToolsSheets'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -327,6 +329,9 @@ function TimelineClient() {
     planIds: string[]
     expiresAt: number
   } | null>(null)
+  // Plan-tools sheets (PR 5). Both open from the month-view kebab menu.
+  const [copyDayOpen, setCopyDayOpen] = useState(false)
+  const [applyMealOpen, setApplyMealOpen] = useState(false)
 
   // ── Auth helper ──────────────────────────────────────────────────────────
 
@@ -680,6 +685,7 @@ function TimelineClient() {
     entry: IFoodEntry & { foodId?: string; variantId?: string; variantName?: string },
     tag?: string,
     loggedAtIso?: string,
+    planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
   ) => {
     if (!addFoodFor) return
     const useTag = tag || addFoodFor.tag
@@ -708,10 +714,12 @@ function TimelineClient() {
     if (pickerMode === 'plan') {
       try {
         const plannedDate = `${addFoodFor.date.getFullYear()}-${String(addFoodFor.date.getMonth() + 1).padStart(2, '0')}-${String(addFoodFor.date.getDate()).padStart(2, '0')}`
+        const body: Record<string, unknown> = { plannedDate, tag: useTag, items: [item] }
+        if (planOptions?.repeat) body.repeat = planOptions.repeat
         const res = await fetch('/api/meal-plans', {
           method: 'POST',
           headers: getHeaders(),
-          body: JSON.stringify({ plannedDate, tag: useTag, items: [item] }),
+          body: JSON.stringify(body),
         })
         if (!res.ok) {
           showErrorToast('Failed to plan food.')
@@ -719,7 +727,16 @@ function TimelineClient() {
         }
         const data = await res.json().catch(() => ({}))
         setAddFoodFor(null)
-        if (data?.merged) showSuccessToast(`Added to existing ${titleCaseTag(useTag)} plan`)
+        // Recurrence response has shape { seriesId, created, merged, replaced, ... }.
+        // One-time response has { plan, merged?, replaced? }.
+        if (typeof data?.seriesId === 'string') {
+          const total = (data.created ?? 0) + (data.merged ?? 0) + (data.replaced ?? 0)
+          const parts: string[] = []
+          if (data.created) parts.push(`${data.created} new`)
+          if (data.merged) parts.push(`${data.merged} merged`)
+          if (data.replaced) parts.push(`${data.replaced} replaced`)
+          showSuccessToast(`${total} ${titleCaseTag(useTag)} plans created (${parts.join(', ')})`)
+        } else if (data?.merged) showSuccessToast(`Added to existing ${titleCaseTag(useTag)} plan`)
         else if (data?.replaced) showSuccessToast(`Replaced existing ${titleCaseTag(useTag)} plan`)
         else showSuccessToast(`Planned for ${titleCaseTag(useTag)}`)
         // Bump the month-view reload key so the grid re-fetches plans + logs.
@@ -761,17 +778,25 @@ function TimelineClient() {
   // Plan delete — OPTIMISTIC per §5.10. The TimelinePlanCard hides itself
   // immediately; we fire DELETE in the background; on error we re-fetch (which
   // brings the card back) and toast.
-  const handleDeletePlan = useCallback(async (planId: string) => {
+  // scope: 'series' appends ?series=true so the API drops all sibling active
+  // plans sharing the seriesId.
+  const handleDeletePlan = useCallback(async (planId: string, scope: 'one' | 'series' = 'one') => {
     try {
-      const res = await fetch(`/api/meal-plans/${planId}`, {
+      const qs = scope === 'series' ? '?series=true' : ''
+      const res = await fetch(`/api/meal-plans/${planId}${qs}`, {
         method: 'DELETE',
         headers: getHeaders(),
       })
       if (!res.ok) throw new Error('delete_failed')
-      // Page-level state: drop the plan from the list so it can't re-appear
-      // even if fetchData is delayed (Month view picks up the change via
-      // monthReloadKey below).
-      setPlans(prev => prev.filter(p => p._id !== planId))
+      if (scope === 'series') {
+        // Drop every plan in the series from local state.
+        const target = plans.find(p => p._id === planId)
+        const seriesId = target?.seriesId
+        if (seriesId) setPlans(prev => prev.filter(p => p.seriesId !== seriesId))
+        else setPlans(prev => prev.filter(p => p._id !== planId))
+      } else {
+        setPlans(prev => prev.filter(p => p._id !== planId))
+      }
       setMonthReloadKey(k => k + 1)
     } catch (err) {
       console.error('Failed to delete plan:', err)
@@ -779,7 +804,7 @@ function TimelineClient() {
       await fetchData()
       throw err
     }
-  }, [getHeaders])
+  }, [getHeaders, plans])
 
   // Plan skip — OPTIMISTIC fade per §5.10.
   const handleSkipPlan = useCallback(async (planId: string) => {
@@ -1137,6 +1162,8 @@ function TimelineClient() {
               setMonthSelectedDate(null)
             }}
             reloadKey={monthReloadKey}
+            onCopyDayForward={() => setCopyDayOpen(true)}
+            onApplyMealToDays={() => setApplyMealOpen(true)}
           />
         )}
       </PageTransition>
@@ -1169,7 +1196,7 @@ function TimelineClient() {
         viewedDate={addFoodFor?.date}
         mode={pickerMode}
         onClose={() => setAddFoodFor(null)}
-        onSelectFood={(entry, tag, loggedAt) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt)}
+        onSelectFood={(entry, tag, loggedAt, planOptions) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt, planOptions)}
       />
 
       {/* Edit Food Modal — log mode */}
@@ -1277,6 +1304,36 @@ function TimelineClient() {
           </button>
         </div>
       )}
+
+      {/* Plan tools — bulk sheets (PR 5). Both fire onApplied which bumps the
+          month-view reload key + refetches day data. */}
+      <CopyDayForwardSheet
+        isOpen={copyDayOpen}
+        defaultSourceDate={monthSelectedDate ?? selectedDate}
+        contextDate={selectedDate}
+        getHeaders={getHeaders}
+        onClose={() => setCopyDayOpen(false)}
+        onApplied={summary => {
+          const total = summary.created + summary.merged + summary.replaced
+          showSuccessToast(`${total} plan${total === 1 ? '' : 's'} created`)
+          setMonthReloadKey(k => k + 1)
+          fetchData()
+        }}
+      />
+      <ApplyMealToDaysSheet
+        isOpen={applyMealOpen}
+        contextDate={selectedDate}
+        defaultTag={defaultTagForNow()}
+        availableTags={tagsResp}
+        getHeaders={getHeaders}
+        onClose={() => setApplyMealOpen(false)}
+        onApplied={summary => {
+          const total = summary.created + summary.merged + summary.replaced
+          showSuccessToast(`${total} meal plan${total === 1 ? '' : 's'} created`)
+          setMonthReloadKey(k => k + 1)
+          fetchData()
+        }}
+      />
     </FeatureGuard>
   )
 }
@@ -1295,7 +1352,7 @@ interface DayViewProps {
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
   onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
-  onDeletePlan: (planId: string) => Promise<void>
+  onDeletePlan: (planId: string, scope?: 'one' | 'series') => Promise<void>
   onSkipPlan: (planId: string) => Promise<void>
   onPromotePlan: (planId: string) => Promise<void>
   activeFilters: Set<string>
@@ -1317,25 +1374,90 @@ function DayView({
     [plans, dayKey],
   )
 
+  // CalorieRing preview toggle (plan §13 Q3). LocalStorage-backed and OFF by
+  // default. When ON, the ring renders `consumed + plannedFromActivePlans`.
+  // Only shown when there ARE active plans for this day; otherwise the toggle
+  // is hidden because there's nothing to preview.
+  const [previewPlanned, setPreviewPlanned] = useState<boolean>(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setPreviewPlanned(window.localStorage.getItem('timeline.dayView.previewPlanned') === '1')
+  }, [])
+  const togglePreviewPlanned = useCallback(() => {
+    setPreviewPlanned(prev => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('timeline.dayView.previewPlanned', next ? '1' : '0')
+      }
+      return next
+    })
+  }, [])
+
+  const plannedTotals = useMemo(() => {
+    let calories = 0, protein = 0, carbs = 0, fats = 0
+    for (const p of dayPlans) {
+      if (p.status !== 'active') continue
+      calories += p.expectedNutrition?.calories ?? 0
+      protein += p.expectedNutrition?.protein ?? 0
+      carbs += p.expectedNutrition?.carbs ?? 0
+      fats += p.expectedNutrition?.fats ?? 0
+    }
+    return {
+      calories: Math.round(calories),
+      protein: Math.round(protein),
+      carbs: Math.round(carbs),
+      fats: Math.round(fats),
+    }
+  }, [dayPlans])
+  const showPreview = previewPlanned && plannedTotals.calories > 0
+  const ringTotals = showPreview
+    ? {
+        calories: dayTotals.calories + plannedTotals.calories,
+        protein: dayTotals.protein + plannedTotals.protein,
+        carbs: dayTotals.carbs + plannedTotals.carbs,
+        fats: dayTotals.fats + plannedTotals.fats,
+      }
+    : dayTotals
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Day header */}
       <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          {isToday ? 'Today' : 'Day'}
-        </p>
-        <h2 className="mt-0.5 text-lg font-bold text-zinc-900 dark:text-white">
-          {formatLongDate(date)}
-        </h2>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              {isToday ? 'Today' : 'Day'}
+            </p>
+            <h2 className="mt-0.5 text-lg font-bold text-zinc-900 dark:text-white">
+              {formatLongDate(date)}
+            </h2>
+          </div>
+          {plannedTotals.calories > 0 && (
+            <button
+              type="button"
+              onClick={togglePreviewPlanned}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                showPreview
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400'
+                  : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
+              }`}
+              aria-pressed={showPreview}
+              aria-label={showPreview ? 'Hide planned calories in ring' : 'Preview planned calories in ring'}
+            >
+              <Sparkles className="h-3 w-3" />
+              {showPreview ? `Previewing +${plannedTotals.calories}` : 'Preview planned'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Calorie ring + macros */}
       <CalorieRing
-        consumed={dayTotals.calories}
+        consumed={ringTotals.calories}
         goal={goals.calories}
-        protein={{ current: dayTotals.protein, goal: goals.protein }}
-        carbs={{ current: dayTotals.carbs, goal: goals.carbs }}
-        fats={{ current: dayTotals.fats, goal: goals.fats }}
+        protein={{ current: ringTotals.protein, goal: goals.protein }}
+        carbs={{ current: ringTotals.carbs, goal: goals.carbs }}
+        fats={{ current: ringTotals.fats, goal: goals.fats }}
       />
 
       {/* Timeline — chronologically ordered, full-width cards. */}
@@ -1506,7 +1628,7 @@ interface MonthDayStripProps {
   onToggleFilter: (tag: string) => void
   onAddFood?: (date: Date) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
-  onDeletePlan?: (planId: string) => Promise<void>
+  onDeletePlan?: (planId: string, scope?: 'one' | 'series') => Promise<void>
   onSkipPlan?: (planId: string) => Promise<void>
   onPromotePlan?: (planId: string) => Promise<void>
   activeFilters: Set<string>
