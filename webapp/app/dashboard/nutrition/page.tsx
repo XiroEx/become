@@ -11,12 +11,15 @@ import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock, ChefHat } from 'lucide-react'
+import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock, ChefHat, CalendarDays } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import FeatureGuard from '@/components/FeatureGuard'
 import { Card, EmptyState } from '@/components/ui'
 import { isFutureLocalDate } from '@/lib/mealPlanDates'
+import type { MealPlan } from '@/app/dashboard/timeline/planning'
+import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -114,6 +117,11 @@ function NutritionPageInner() {
   // "+ Add tag" inline input state
   const [showAddTagInput, setShowAddTagInput] = useState(false)
   const [newTagInput, setNewTagInput] = useState('')
+  // Plans for the visible date — fetched only when viewingFuture (today/past
+  // days don't render plans).
+  const [plans, setPlans] = useState<MealPlan[]>([])
+  // Schedule-meals drawer — opens on "Schedule meals" CTA when viewingFuture.
+  const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false)
 
   const dateParam = formatDateParam(selectedDate)
   // True when the user has scrolled to a future calendar day. Drives the
@@ -206,16 +214,29 @@ function NutritionPageInner() {
     }
   }, [getHeaders])
 
+  // Fetch plans for the visible date. Only meaningful when viewingFuture, but
+  // we always fetch so that switching between today→future doesn't introduce
+  // a flash of stale state. The view filters on viewingFuture downstream.
+  const fetchPlans = useCallback(async () => {
+    try {
+      const resp = await fetchPlansInRange(dateParam, dateParam, getHeaders())
+      setPlans((resp.plans ?? []).filter(p => p.status === 'active'))
+    } catch (err) {
+      console.error('Failed to fetch plans:', err)
+      setPlans([])
+    }
+  }, [dateParam, getHeaders])
+
   // ── Init ───────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     async function init() {
       setLoading(true)
-      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans()])
       setLoading(false)
     }
     init()
-  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans])
 
   // ── Visible tags ──────────────────────────────────────────────────────────────
   // Only show tags that have content today, plus any session-added empty tags.
@@ -226,16 +247,23 @@ function NutritionPageInner() {
   const visibleTags = useMemo<string[]>(() => {
     const defaultsWithContent: string[] = []
     const customTagsToday = new Set<string>()
+    const addTag = (t: string) => {
+      if (DEFAULT_TAGS.includes(t)) {
+        if (!defaultsWithContent.includes(t)) defaultsWithContent.push(t)
+      } else {
+        customTagsToday.add(t)
+      }
+    }
     for (const log of logs) {
       const tags = (log.tags ?? []).map(t => String(t).toLowerCase())
       const effective = tags.length === 0 ? ['snack'] : tags
-      for (const t of effective) {
-        if (DEFAULT_TAGS.includes(t)) {
-          if (!defaultsWithContent.includes(t)) defaultsWithContent.push(t)
-        } else {
-          customTagsToday.add(t)
-        }
-      }
+      for (const t of effective) addTag(t)
+    }
+    // When viewing a future date, plans drive section visibility too — a tag
+    // with only plans (no logs) still gets a row so the user sees what's
+    // scheduled.
+    if (viewingFuture) {
+      for (const p of plans) addTag(String(p.tag).toLowerCase())
     }
     // Defaults preserved in canonical order, then custom-with-content sorted, then session-added.
     const out: string[] = DEFAULT_TAGS.filter(t => defaultsWithContent.includes(t))
@@ -243,7 +271,7 @@ function NutritionPageInner() {
     for (const t of customSorted) if (!out.includes(t)) out.push(t)
     for (const t of sessionTags) if (!out.includes(t)) out.push(t)
     return out
-  }, [logs, sessionTags])
+  }, [logs, sessionTags, viewingFuture, plans])
 
   // Map tag -> logs that include this tag.
   const logsByTag = useMemo<Record<string, MealLogLite[]>>(() => {
@@ -260,6 +288,19 @@ function NutritionPageInner() {
     }
     return map
   }, [visibleTags, logs])
+
+  // Map tag -> plans that target this tag. Empty when not viewing future.
+  const plansByTag = useMemo<Record<string, MealPlan[]>>(() => {
+    const map: Record<string, MealPlan[]> = {}
+    if (!viewingFuture) return map
+    for (const t of visibleTags) map[t] = []
+    for (const p of plans) {
+      const key = String(p.tag).toLowerCase()
+      if (!map[key]) map[key] = []
+      map[key].push(p)
+    }
+    return map
+  }, [viewingFuture, plans, visibleTags])
 
   // ── Date navigation ───────────────────────────────────────────────────────
 
@@ -361,6 +402,22 @@ function NutritionPageInner() {
     } catch (err) {
       console.error('Failed to add food:', err)
       showErrorToast('Failed to add food. Check your connection.')
+    }
+  }
+
+  // Optimistically remove a plan; on failure, refetch.
+  const handleRemovePlan = async (planId: string) => {
+    const prev = plans
+    setPlans(p => p.filter(x => x._id !== planId))
+    try {
+      const res = await fetch(`/api/meal-plans/${planId}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      })
+      if (!res.ok) throw new Error('delete_failed')
+    } catch {
+      setPlans(prev)
+      showErrorToast('Failed to remove plan.')
     }
   }
 
@@ -473,11 +530,36 @@ function NutritionPageInner() {
 
   // Quick-add total calories
   const quickAddCalories = quickAdds.reduce((s, qa) => s + (qa.calories || 0), 0)
-  // The CalorieRing shows MealLog daily totals + quick-add calories.
-  const totalConsumedCalories = dailyTotals.calories + quickAddCalories
-  const totalProtein = dailyTotals.protein + quickAdds.reduce((s, qa) => s + (qa.protein || 0), 0)
-  const totalCarbs = dailyTotals.carbs + quickAdds.reduce((s, qa) => s + (qa.carbs || 0), 0)
-  const totalFats = dailyTotals.fats + quickAdds.reduce((s, qa) => s + (qa.fats || 0), 0)
+  // Planned totals for the visible date — only meaningful when viewingFuture
+  // (when not, plans is empty / filtered upstream).
+  const plannedTotals = useMemo(() => {
+    if (!viewingFuture) return { calories: 0, protein: 0, carbs: 0, fats: 0 }
+    let c = 0, p = 0, cb = 0, f = 0
+    for (const plan of plans) {
+      const n = plan.expectedNutrition
+      c += n?.calories ?? 0
+      p += n?.protein ?? 0
+      cb += n?.carbs ?? 0
+      f += n?.fats ?? 0
+    }
+    return { calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb), fats: Math.round(f) }
+  }, [viewingFuture, plans])
+
+  // The CalorieRing shows MealLog daily totals + quick-add calories on today/
+  // past dates. On future dates the ring previews PLANNED totals — there are
+  // no logs to display.
+  const totalConsumedCalories = viewingFuture
+    ? plannedTotals.calories
+    : dailyTotals.calories + quickAddCalories
+  const totalProtein = viewingFuture
+    ? plannedTotals.protein
+    : dailyTotals.protein + quickAdds.reduce((s, qa) => s + (qa.protein || 0), 0)
+  const totalCarbs = viewingFuture
+    ? plannedTotals.carbs
+    : dailyTotals.carbs + quickAdds.reduce((s, qa) => s + (qa.carbs || 0), 0)
+  const totalFats = viewingFuture
+    ? plannedTotals.fats
+    : dailyTotals.fats + quickAdds.reduce((s, qa) => s + (qa.fats || 0), 0)
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
@@ -590,17 +672,27 @@ function NutritionPageInner() {
             icon={<UtensilsCrossed className="h-6 w-6" />}
             title={viewingFuture ? 'Nothing planned yet' : 'Nothing logged yet'}
             description={viewingFuture
-              ? "Plan ahead — schedule a meal for this day so it's ready when it arrives."
+              ? "Plan ahead — schedule meals for this day so they're ready when it arrives."
               : 'Add your first food of the day to start tracking.'}
             action={
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <button
-                  onClick={() => openFoodSearch('breakfast', false)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                >
-                  <Plus className="h-4 w-4" />
-                  {viewingFuture ? 'Schedule food' : 'Add food'}
-                </button>
+                {viewingFuture ? (
+                  <button
+                    onClick={() => setScheduleDrawerOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Schedule meals
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => openFoodSearch('breakfast', false)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add food
+                  </button>
+                )}
                 <Link
                   href="/dashboard/meals"
                   className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -613,17 +705,37 @@ function NutritionPageInner() {
           />
         )}
 
+        {/* When the user IS viewing a future date and already has plans, surface
+            the Schedule-meals CTA prominently above the tag sections so it's
+            never more than one tap away from richer planning. */}
+        {viewingFuture && visibleTags.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setScheduleDrawerOpen(true)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Schedule meals
+          </button>
+        )}
+
         {/* Tag Sections */}
         {visibleTags.map(tag => (
           <TagSection
             key={tag}
             tag={tag}
             logs={logsByTag[tag] || []}
+            plans={plansByTag[tag] || []}
             onAddFood={(t) => openFoodSearch(t, false)}
             onEditEntry={(logId, item) => setEditEntry({ logId, item })}
             onRemoveEntry={handleRemoveEntry}
+            onRemovePlan={handleRemovePlan}
             onRemoveTag={handleRemoveSessionTag}
-            removable={sessionTags.includes(tag) && (logsByTag[tag] || []).length === 0}
+            removable={
+              sessionTags.includes(tag)
+              && (logsByTag[tag] || []).length === 0
+              && (plansByTag[tag] || []).length === 0
+            }
             onPlan={(t) => openPlanDatePicker(t)}
             futureDate={viewingFuture}
           />
@@ -872,6 +984,16 @@ function NutritionPageInner() {
         logId={editEntry?.logId ?? ''}
         onClose={() => setEditEntry(null)}
         onSaved={fetchMealLogs}
+      />
+
+      {/* Schedule-meals drawer — opens from the future-date empty-state CTA
+          or the persistent "Schedule meals" button above the tag list. */}
+      <ScheduleMealsDrawer
+        isOpen={scheduleDrawerOpen}
+        defaultDate={selectedDate}
+        availableTags={tagsResp}
+        onClose={() => setScheduleDrawerOpen(false)}
+        onMutated={() => { fetchPlans(); fetchTags() }}
       />
 
       {/* Error toast */}

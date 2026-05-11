@@ -22,6 +22,7 @@ import {
 import type { IMealItem } from '@/models/Meal'
 import { Card } from '@/components/ui'
 import { formatQuantity, type Unit } from '@/lib/units'
+import type { MealPlan } from '@/app/dashboard/timeline/planning'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,13 @@ interface TagSectionProps {
   // instead of "Add food" — the underlying handler already routes through
   // plan mode in this case.
   futureDate?: boolean
+  // Plan rendering — when the parent is viewing a future date, it passes the
+  // MealPlan entries that target this tag. Each renders as a row prefixed
+  // with a "Planned" pill. Optional handlers let the parent delete a plan or
+  // edit a plan item without re-implementing modal plumbing here.
+  plans?: MealPlan[]
+  onRemovePlan?: (planId: string) => void
+  onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -151,6 +159,9 @@ export default function TagSection({
   onPlan,
   onApplyMeal,
   futureDate = false,
+  plans = [],
+  onRemovePlan,
+  onEditPlanItem,
 }: TagSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -176,10 +187,24 @@ export default function TagSection({
     totalCarbs += (item.nutrition.carbs ?? 0) * s
     totalFats += (item.nutrition.fats ?? 0) * s
   }
-  totalCalories = Math.round(totalCalories)
+  // Add planned totals to the section totals so the header chip + footer
+  // reflect everything the user will eat that day.
+  let plannedCalories = 0
+  for (const p of plans) {
+    if (p.status !== 'active') continue
+    plannedCalories += p.expectedNutrition?.calories ?? 0
+    for (const item of p.items) {
+      const s = item.servings ?? 1
+      totalProtein += (item.nutrition?.protein ?? 0) * s
+      totalCarbs += (item.nutrition?.carbs ?? 0) * s
+      totalFats += (item.nutrition?.fats ?? 0) * s
+    }
+  }
+  totalCalories = Math.round(totalCalories + plannedCalories)
   totalProtein = Math.round(totalProtein)
   totalCarbs = Math.round(totalCarbs)
   totalFats = Math.round(totalFats)
+  const hasContent = flat.length > 0 || plans.length > 0
 
   // Group flattened items by mealName so meal-template logs render as a
   // mini-block with a "From: …" header.
@@ -211,7 +236,7 @@ export default function TagSection({
             <span className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
               {label}
             </span>
-            {flat.length > 0 && (
+            {hasContent && (
               <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400 shrink-0">
                 {totalCalories} cal
               </span>
@@ -314,13 +339,13 @@ export default function TagSection({
             className="overflow-hidden"
           >
             <div className="border-t border-zinc-200 dark:border-zinc-800">
-              {flat.length === 0 ? (
+              {!hasContent ? (
                 <button
                   onClick={() => onAddFood(tag)}
                   className="flex w-full items-center justify-center gap-1.5 px-3 py-5 text-sm text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Tap + to add food
+                  Tap + to {futureDate ? 'schedule food' : 'add food'}
                 </button>
               ) : (
                 <>
@@ -346,6 +371,36 @@ export default function TagSection({
                     </div>
                   ))}
 
+                  {/* Planned rows — one per item per plan. Visually distinct
+                      via a "Planned" pill on the leading row. */}
+                  {plans.length > 0 && (
+                    <div className={flat.length > 0 ? 'border-t border-zinc-200 dark:border-zinc-800' : ''}>
+                      <div className="flex items-center gap-1.5 bg-blue-50/60 px-3 py-1.5 dark:bg-blue-900/10">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                          Planned
+                        </span>
+                        {plans.some(p => p.mealName) && (
+                          <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {plans.filter(p => p.mealName).map(p => p.mealName).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                        {plans.map((plan) =>
+                          plan.items.map((item) => (
+                            <PlanItemRow
+                              key={`${plan._id}-${item._id ?? Math.random()}`}
+                              planId={plan._id}
+                              item={item}
+                              onEdit={onEditPlanItem ? () => onEditPlanItem(plan._id, item, plan.items) : undefined}
+                              onDelete={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                            />
+                          )),
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Tag totals */}
                   <div className="border-t border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
                     <div className="flex items-center justify-between text-xs tabular-nums">
@@ -366,6 +421,90 @@ export default function TagSection({
         )}
       </AnimatePresence>
     </Card>
+  )
+}
+
+// ── Plan item row — shown when the page is viewing a future date. Has a
+// distinct visual treatment (blue tint background) and a "Planned" microbadge
+// next to the food name. Edit/delete handlers are optional — when omitted the
+// row is read-only. ────────────────────────────────────────────────────────
+
+interface PlanItemRowProps {
+  planId: string
+  item: IMealItem & { _id?: string }
+  onEdit?: () => void
+  onDelete?: () => void
+}
+
+function PlanItemRow({ item, onEdit, onDelete }: PlanItemRowProps) {
+  const [expanded, setExpanded] = useState(false)
+  const totalCalories = Math.round((item.nutrition?.calories ?? 0) * (item.servings ?? 1))
+  const hasLoggedShape = item.loggedQuantity != null && !!item.loggedUnit
+  const detailDisplay = hasLoggedShape
+    ? formatQuantity(item.loggedQuantity!, item.loggedUnit as Unit)
+    : `${item.servings !== 1 ? `${item.servings} servings` : '1 serving'} · ${item.servingSize} ${item.servingUnit}`
+  const showVariant = shouldShowVariantName(item.variantName)
+  return (
+    <div className="group bg-blue-50/30 dark:bg-blue-900/5">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-blue-50/60 dark:hover:bg-blue-900/15"
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
+            {item.name}
+            {showVariant && (
+              <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                {' '}&middot; {item.variantName}
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+            {item.brand && (
+              <span className="text-zinc-400 dark:text-zinc-500">{item.brand} &middot; </span>
+            )}
+            {detailDisplay}
+          </p>
+        </div>
+        <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+          {totalCalories}
+        </span>
+      </button>
+      <AnimatePresence>
+        {expanded && (onEdit || onDelete) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-center justify-end gap-1 px-3 pb-2">
+              {onEdit && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit() }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                  aria-label="Edit planned entry"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                  </svg>
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete() }}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                  aria-label="Remove plan"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 
