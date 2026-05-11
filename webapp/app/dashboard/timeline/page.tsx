@@ -315,6 +315,18 @@ function TimelineClient() {
   const [addFoodFor, setAddFoodFor] = useState<{ date: Date; tag: string } | null>(null)
   // Bumps to force MonthView to re-fetch after a plan mutation.
   const [monthReloadKey, setMonthReloadKey] = useState(0)
+  // Plan promotion mode — fetched from /api/profile. Default 'manual' until
+  // we hear otherwise from the server.
+  const [promoteMode, setPromoteMode] = useState<'manual' | 'auto'>('manual')
+  // Per-page-load idempotency guard for the auto-promote sweep. Prevents
+  // re-firing on a re-render when the user is still viewing today.
+  const [autoPromoteFiredFor, setAutoPromoteFiredFor] = useState<string | null>(null)
+  // Undo state for the most recent auto-promotion batch.
+  const [undoBatch, setUndoBatch] = useState<{
+    logIds: string[]
+    planIds: string[]
+    expiresAt: number
+  } | null>(null)
 
   // ── Auth helper ──────────────────────────────────────────────────────────
 
@@ -403,6 +415,22 @@ function TimelineClient() {
     }
   }, [getHeaders])
 
+  // Profile fetch — drives the auto-promote behavior on day view mount.
+  // `planPromoteMode` reads as 'manual' by default for users created before
+  // this feature (the field is optional with no DB migration).
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await fetch('/api/profile', { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        const mode = data?.profile?.planPromoteMode === 'auto' ? 'auto' : 'manual'
+        setPromoteMode(mode)
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile:', err)
+    }
+  }, [getHeaders])
+
   const fetchTags = useCallback(async () => {
     try {
       const res = await fetch('/api/tags', { headers: getHeaders() })
@@ -419,7 +447,101 @@ function TimelineClient() {
   }, [getHeaders])
 
   useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { fetchGoals(); fetchTags() }, [fetchGoals, fetchTags])
+  useEffect(() => { fetchGoals(); fetchTags(); fetchProfile() }, [fetchGoals, fetchTags, fetchProfile])
+
+  // Auto-promote sweep — runs once per page-load when:
+  //   • profile.planPromoteMode === 'auto'
+  //   • viewMode === 'day'
+  //   • selectedDate is today (local)
+  //   • plans state has loaded
+  //   • there are active plans for today
+  // Per §6.4 + §13 Q2 the sweep is GATED to today only. We never silently
+  // promote past-day plans (truthfulness over convenience).
+  useEffect(() => {
+    if (promoteMode !== 'auto') return
+    if (viewMode !== 'day') return
+    if (!isSameLocalDay(selectedDate, new Date())) return
+    if (plans.length === 0) return
+    const todayKey = formatDateParam(selectedDate)
+    if (autoPromoteFiredFor === todayKey) return  // idempotent across re-renders
+    const targets = plans.filter(p =>
+      p.status === 'active'
+      && (p.plannedDateKey ?? p.plannedDate.split('T')[0]) === todayKey,
+    )
+    if (targets.length === 0) {
+      // Mark as fired so we don't re-evaluate; if a plan appears later
+      // (e.g. user just created one), the dep change re-runs but the key
+      // matches and we no-op — that's intentional, post-mount plan creation
+      // does not auto-promote (user can tap Log it).
+      setAutoPromoteFiredFor(todayKey)
+      return
+    }
+    setAutoPromoteFiredFor(todayKey)
+    let cancelled = false
+    const promoteAll = async () => {
+      const results = await Promise.allSettled(targets.map(p => {
+        return fetch(`/api/meal-plans/${p._id}/promote`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+        }).then(async r => {
+          if (!r.ok) throw new Error('promote_failed')
+          const data = await r.json().catch(() => ({}))
+          return {
+            planId: p._id,
+            logId: data?.log?._id ? String(data.log._id) : null,
+          }
+        })
+      }))
+      if (cancelled) return
+      const successful = results.flatMap(r =>
+        r.status === 'fulfilled' && r.value.logId
+          ? [{ planId: r.value.planId, logId: r.value.logId }]
+          : [],
+      )
+      if (successful.length === 0) return
+      // The undo toast carries the message + button. Don't fire a parallel
+      // success toast — they'd stack at the same z-index.
+      setUndoBatch({
+        logIds: successful.map(s => s.logId),
+        planIds: successful.map(s => s.planId),
+        expiresAt: Date.now() + 8000,
+      })
+      setMonthReloadKey(k => k + 1)
+      await fetchData()
+    }
+    promoteAll()
+    return () => { cancelled = true }
+  }, [promoteMode, viewMode, selectedDate, plans, autoPromoteFiredFor, getHeaders, fetchData])
+
+  // Auto-dismiss the undo toast after its expiry. We don't enforce expiry on
+  // the click handler — a late click still works server-side; we just hide
+  // the affordance.
+  useEffect(() => {
+    if (!undoBatch) return
+    const remaining = undoBatch.expiresAt - Date.now()
+    if (remaining <= 0) {
+      setUndoBatch(null)
+      return
+    }
+    const t = setTimeout(() => setUndoBatch(null), remaining)
+    return () => clearTimeout(t)
+  }, [undoBatch])
+
+  // Undo handler — DELETEs the new logs. The MealLog DELETE handler in
+  // /api/meal-logs/[id] auto-flips the source plan back from 'promoted' to
+  // 'active' via the `fromPlanId` back-reference (see plan §9.1) so a second
+  // explicit plan PATCH is unnecessary.
+  const handleUndoAutoPromote = useCallback(async () => {
+    if (!undoBatch) return
+    const { logIds } = undoBatch
+    setUndoBatch(null)
+    await Promise.allSettled(
+      logIds.map(id => fetch(`/api/meal-logs/${id}`, { method: 'DELETE', headers: getHeaders() })),
+    )
+    setMonthReloadKey(k => k + 1)
+    await fetchData()
+  }, [undoBatch, getHeaders, fetchData])
 
   // ── Filtering ────────────────────────────────────────────────────────────
 
@@ -679,6 +801,30 @@ function TimelineClient() {
     }
   }, [getHeaders])
 
+  // Plan promote — POST /api/meal-plans/[id]/promote. Per §6.4 manual mode,
+  // the client passes loggedAt=now (the user is acting now); for back-promote
+  // the server constructs a default loggedAt from the plannedDate + the
+  // tag's default time when body.loggedAt is omitted. We pass it here so the
+  // resulting log is unambiguous in the user's local TZ.
+  const handlePromotePlan = useCallback(async (planId: string) => {
+    try {
+      const res = await fetch(`/api/meal-plans/${planId}/promote`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+      })
+      if (!res.ok) throw new Error('promote_failed')
+      setPlans(prev => prev.filter(p => p._id !== planId))
+      setMonthReloadKey(k => k + 1)
+      showSuccessToast('Logged from plan')
+      await fetchData()
+    } catch (err) {
+      console.error('Failed to promote plan:', err)
+      showErrorToast('Failed to log plan.')
+      throw err
+    }
+  }, [getHeaders])
+
   // Update a log's loggedAt — used by the inline time editor on each card.
   // Refetches the day so the chronological ordering is correct after the edit.
   const handleUpdateLogTime = async (logId: string, isoString: string): Promise<boolean> => {
@@ -932,6 +1078,7 @@ function TimelineClient() {
             onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
             onDeletePlan={handleDeletePlan}
             onSkipPlan={handleSkipPlan}
+            onPromotePlan={handlePromotePlan}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
           />
@@ -978,6 +1125,7 @@ function TimelineClient() {
                 onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
                 onDeletePlan={handleDeletePlan}
                 onSkipPlan={handleSkipPlan}
+                onPromotePlan={handlePromotePlan}
                 activeFilters={activeFilters}
               />
             )}
@@ -1112,6 +1260,23 @@ function TimelineClient() {
           {successToast}
         </div>
       )}
+
+      {/* Auto-promote undo toast — appears after a successful sweep. The
+          parent's effect fires PROMOTE for every active plan today, then
+          presents Undo for ~8s. */}
+      {undoBatch && (
+        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-3 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+          <Check className="h-4 w-4 shrink-0" />
+          <span>{undoBatch.logIds.length} plan{undoBatch.logIds.length === 1 ? '' : 's'} logged</span>
+          <button
+            type="button"
+            onClick={handleUndoAutoPromote}
+            className="rounded-md bg-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wider hover:bg-white/25 dark:bg-zinc-900/15 dark:hover:bg-zinc-900/25"
+          >
+            Undo
+          </button>
+        </div>
+      )}
     </FeatureGuard>
   )
 }
@@ -1132,6 +1297,7 @@ interface DayViewProps {
   onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   onDeletePlan: (planId: string) => Promise<void>
   onSkipPlan: (planId: string) => Promise<void>
+  onPromotePlan: (planId: string) => Promise<void>
   activeFilters: Set<string>
   isFilterActive: boolean
 }
@@ -1139,7 +1305,7 @@ interface DayViewProps {
 function DayView({
   date, day, plans, goals, dayTotals, onEditItem, onDeleteLog,
   onUpdateTime, onToggleFilter, onAddFood,
-  onEditPlanItem, onDeletePlan, onSkipPlan,
+  onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
   activeFilters, isFilterActive,
 }: DayViewProps) {
   const logs = day?.logs ?? []
@@ -1204,6 +1370,7 @@ function DayView({
                 onEditItem={onEditPlanItem}
                 onDeletePlan={onDeletePlan}
                 onSkipPlan={onSkipPlan}
+                onPromotePlan={onPromotePlan}
               />
             ))}
           </AnimatePresence>
@@ -1341,13 +1508,14 @@ interface MonthDayStripProps {
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   onDeletePlan?: (planId: string) => Promise<void>
   onSkipPlan?: (planId: string) => Promise<void>
+  onPromotePlan?: (planId: string) => Promise<void>
   activeFilters: Set<string>
 }
 
 function MonthDayStrip({
   date, logs, plans,
   onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, onAddFood,
-  onEditPlanItem, onDeletePlan, onSkipPlan,
+  onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
   activeFilters,
 }: MonthDayStripProps) {
   const empty = logs.length === 0 && plans.length === 0
@@ -1402,18 +1570,24 @@ function MonthDayStrip({
           {/* TimelinePlanCard delegates the actual network calls to the
               parent via the handlers below. Optimistic-hide / fade lives
               inside the card; on reject, the parent re-fetches. */}
-          {onEditPlanItem && onDeletePlan && onSkipPlan && activePlans.map(plan => (
-            <ul key={plan._id} className="m-0 list-none p-0">
-              <TimelinePlanCard
-                plan={plan}
-                compact
-                isToday={isToday}
-                onEditItem={onEditPlanItem}
-                onDeletePlan={onDeletePlan}
-                onSkipPlan={onSkipPlan}
-              />
+          {onEditPlanItem && onDeletePlan && onSkipPlan && activePlans.length > 0 && (
+            <ul className="m-0 space-y-3 list-none p-0">
+              <AnimatePresence initial={false}>
+                {activePlans.map(plan => (
+                  <TimelinePlanCard
+                    key={plan._id}
+                    plan={plan}
+                    compact
+                    isToday={isToday}
+                    onEditItem={onEditPlanItem}
+                    onDeletePlan={onDeletePlan}
+                    onSkipPlan={onSkipPlan}
+                    onPromotePlan={onPromotePlan}
+                  />
+                ))}
+              </AnimatePresence>
             </ul>
-          ))}
+          )}
         </div>
       )}
     </div>
