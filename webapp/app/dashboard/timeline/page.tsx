@@ -303,6 +303,8 @@ function TimelineClient() {
   // Inline add-food: keeps the user on the timeline page instead of redirecting.
   // viewedDate determines which day the new MealLog gets attached to.
   const [addFoodFor, setAddFoodFor] = useState<{ date: Date; tag: string } | null>(null)
+  // Bumps to force MonthView to re-fetch after a plan mutation.
+  const [monthReloadKey, setMonthReloadKey] = useState(0)
 
   // ── Auth helper ──────────────────────────────────────────────────────────
 
@@ -513,10 +515,28 @@ function TimelineClient() {
     return 'snack'
   }
 
-  // Adds a food directly to a specific day's timeline. Mirrors the nutrition
-  // page's append-or-create logic so behavior is consistent across views.
-  // entry is the IFoodEntry shape from FoodSearchModal; tag + loggedAtIso are
-  // optional overrides.
+  // Pick mode for the food picker based on `addFoodFor.date` — strictly-future
+  // dates create plans; today and past dates create logs. Computed via a
+  // local-date comparison so a tap on a future cell at 11:59pm still treats
+  // it as future even when the system clock straddles UTC midnight.
+  const pickerMode: 'log' | 'plan' = useMemo(() => {
+    if (!addFoodFor) return 'log'
+    const target = addFoodFor.date
+    const today = new Date()
+    const targetKey = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    return targetKey > todayKey ? 'plan' : 'log'
+  }, [addFoodFor])
+
+  // A non-error positive feedback toast — used to confirm plan create/merge.
+  const [successToast, setSuccessToast] = useState<string | null>(null)
+  const showSuccessToast = (msg: string) => {
+    setSuccessToast(msg)
+    setTimeout(() => setSuccessToast(null), 3000)
+  }
+
+  // Adds a food directly to a specific day's timeline OR creates a plan for
+  // a future day. Routes by `pickerMode`.
   const handleAddFood = async (
     entry: IFoodEntry & { foodId?: string; variantId?: string; variantName?: string },
     tag?: string,
@@ -524,16 +544,6 @@ function TimelineClient() {
   ) => {
     if (!addFoodFor) return
     const useTag = tag || addFoodFor.tag
-    // If user didn't pick a custom time, use the viewed day at "now"-ish (current
-    // local time-of-day, but on the viewed day so the entry lands on that date).
-    let iso = loggedAtIso
-    if (!iso) {
-      const now = new Date()
-      const d = new Date(addFoodFor.date.getFullYear(), addFoodFor.date.getMonth(), addFoodFor.date.getDate(), now.getHours(), now.getMinutes(), 0, 0)
-      iso = d.toISOString()
-    }
-    // FoodSearchModal also supplies the new logged* provenance (PR 4 picker
-    // rework) — pass it through when present so re-edits round-trip.
     const extra = entry as typeof entry & {
       loggedQuantity?: number
       loggedUnit?: string
@@ -554,6 +564,42 @@ function TimelineClient() {
       loggedUnit: extra.loggedUnit,
       loggedGramsPerServing: extra.loggedGramsPerServing,
       loggedMlPerServing: extra.loggedMlPerServing,
+    }
+
+    if (pickerMode === 'plan') {
+      try {
+        const plannedDate = `${addFoodFor.date.getFullYear()}-${String(addFoodFor.date.getMonth() + 1).padStart(2, '0')}-${String(addFoodFor.date.getDate()).padStart(2, '0')}`
+        const res = await fetch('/api/meal-plans', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ plannedDate, tag: useTag, items: [item] }),
+        })
+        if (!res.ok) {
+          showErrorToast('Failed to plan food.')
+          return
+        }
+        const data = await res.json().catch(() => ({}))
+        setAddFoodFor(null)
+        if (data?.merged) showSuccessToast(`Added to existing ${titleCaseTag(useTag)} plan`)
+        else if (data?.replaced) showSuccessToast(`Replaced existing ${titleCaseTag(useTag)} plan`)
+        else showSuccessToast(`Planned for ${titleCaseTag(useTag)}`)
+        // Bump the month-view reload key so the grid re-fetches plans + logs.
+        // Also refetch the day/week page-level data for consistency.
+        setMonthReloadKey(k => k + 1)
+        await fetchData()
+      } catch (err) {
+        console.error('Failed to create plan:', err)
+        showErrorToast('Failed to plan food. Check your connection.')
+      }
+      return
+    }
+
+    // Log mode (default) — preserve the existing log-create flow exactly.
+    let iso = loggedAtIso
+    if (!iso) {
+      const now = new Date()
+      const d = new Date(addFoodFor.date.getFullYear(), addFoodFor.date.getMonth(), addFoodFor.date.getDate(), now.getHours(), now.getMinutes(), 0, 0)
+      iso = d.toISOString()
     }
     try {
       const res = await fetch('/api/meal-logs', {
@@ -864,6 +910,7 @@ function TimelineClient() {
                 onDeleteLog={(logId, mealName) => setConfirmDelete({ logId, mealName })}
                 onUpdateTime={handleUpdateLogTime}
                 onToggleFilter={toggleFilter}
+                onAddFood={(d) => setAddFoodFor({ date: d, tag: defaultTagForNow() })}
                 activeFilters={activeFilters}
               />
             )}
@@ -874,29 +921,38 @@ function TimelineClient() {
               setView('day')
               setMonthSelectedDate(null)
             }}
+            reloadKey={monthReloadKey}
           />
         )}
       </PageTransition>
 
-      {/* Floating + Add Food (Day view only — Week view has per-day buttons) */}
-      {viewMode === 'day' && (
+      {/* Floating + Add Food — Day view always, Month view when a day is
+          selected in the strip (FAB plans/logs that specific day). Week
+          view has per-day buttons. */}
+      {(viewMode === 'day' || (viewMode === 'month' && monthSelectedDate)) && (
         <button
           type="button"
-          onClick={() => setAddFoodFor({ date: selectedDate, tag: defaultTagForNow() })}
-          aria-label="Add food to this day"
+          onClick={() => {
+            const target = viewMode === 'month' ? (monthSelectedDate ?? selectedDate) : selectedDate
+            setAddFoodFor({ date: target, tag: defaultTagForNow() })
+          }}
+          aria-label="Add food"
           className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
         >
           <Plus className="h-6 w-6" />
         </button>
       )}
 
-      {/* Inline Food Search Modal — pre-filled with the day the user tapped */}
+      {/* Inline Food Search Modal — pre-filled with the day the user tapped.
+          mode flips to 'plan' for strictly-future dates so the picker hides
+          the time row and the submit routes to /api/meal-plans. */}
       <FoodSearchModal
         isOpen={addFoodFor !== null}
         currentTag={addFoodFor?.tag ?? 'snack'}
         availableTags={tagsResp}
         showTagPicker={true}
         viewedDate={addFoodFor?.date}
+        mode={pickerMode}
         onClose={() => setAddFoodFor(null)}
         onSelectFood={(entry, tag, loggedAt) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt)}
       />
@@ -966,6 +1022,14 @@ function TimelineClient() {
         <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
           <AlertCircle className="h-4 w-4 shrink-0" />
           {errorToast}
+        </div>
+      )}
+
+      {/* Success toast (plan create/merge) */}
+      {successToast && !errorToast && (
+        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
+          <Check className="h-4 w-4 shrink-0" />
+          {successToast}
         </div>
       )}
     </FeatureGuard>
@@ -1170,23 +1234,47 @@ interface MonthDayStripProps {
   onDeleteLog: (logId: string, mealName?: string) => void
   onUpdateTime: (logId: string, isoString: string) => Promise<boolean>
   onToggleFilter: (tag: string) => void
+  onAddFood?: (date: Date) => void
   activeFilters: Set<string>
 }
 
 function MonthDayStrip({
   date, logs, plans,
-  onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, activeFilters,
+  onEditItem, onDeleteLog, onUpdateTime, onToggleFilter, onAddFood, activeFilters,
 }: MonthDayStripProps) {
   const empty = logs.length === 0 && plans.length === 0
   const activePlans = plans.filter(p => p.status === 'active')
+  // Past-date strips don't get an "Add" CTA — past-day plans are a non-goal
+  // (Section 1.2). Today + future days get a contextual CTA whose copy flips
+  // by mode (Plan vs Log).
+  const todayKey = (() => {
+    const t = new Date()
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+  })()
+  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const isFuture = dateKey > todayKey
+  const isToday = dateKey === todayKey
+  const canAdd = !!onAddFood && (isFuture || isToday)
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
-      <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">
-        {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-      </h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+          {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        </h3>
+        {canAdd && (
+          <button
+            type="button"
+            onClick={() => onAddFood?.(date)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {isFuture ? 'Plan food' : 'Add food'}
+          </button>
+        )}
+      </div>
       {empty ? (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Nothing here yet.
+          {isFuture ? 'No plans yet for this day.' : 'No entries.'}
         </p>
       ) : (
         <div className="space-y-3">

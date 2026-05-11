@@ -27,6 +27,12 @@ interface FoodSearchModalProps {
   // time picker uses this date as its "day" — the picker only sets the time.
   // Defaults to today when omitted.
   viewedDate?: Date
+  // 'log' (default) — normal log flow: the time picker is visible and onSelectFood
+  // is called with loggedAt for /api/meal-logs.
+  // 'plan' — plan-create flow: the time picker is hidden (plans only carry a
+  // calendar date), the submit CTA flips to "Plan", and onSelectFood is called
+  // without loggedAt. The caller is responsible for routing to /api/meal-plans.
+  mode?: 'log' | 'plan'
   onClose: () => void
   // Tag is optional — meal-building flow ignores it.
   // loggedAt (ISO string) is optional — passed when user explicitly picks a custom time.
@@ -228,10 +234,12 @@ export default function FoodSearchModal({
   availableTags,
   showTagPicker,
   viewedDate,
+  mode = 'log',
   onClose,
   onSelectFood,
   autoScan = false,
 }: FoodSearchModalProps) {
+  const isPlanMode = mode === 'plan'
   const tagPickerEnabled = showTagPicker ?? Boolean(currentTag)
   const [activeTag, setActiveTag] = useState<string>(currentTag ?? 'snack')
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
@@ -819,8 +827,9 @@ export default function FoodSearchModal({
       }
 
       // Compute custom loggedAt only when the user explicitly picked a date+time.
+      // In plan mode, never send a loggedAt — plans carry a calendar date only.
       let loggedAtIso: string | undefined
-      if (customTime) {
+      if (!isPlanMode && customTime) {
         loggedAtIso = buildLocalIsoFromDateTime(customTime)
       }
 
@@ -888,7 +897,7 @@ export default function FoodSearchModal({
             <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-800">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-                  Add Food
+                  {isPlanMode ? 'Plan Food' : 'Add Food'}
                 </h2>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -1414,7 +1423,9 @@ export default function FoodSearchModal({
                                 </div>
                               </div>
                               {/* When picker — defaults to "Now"; tap to set a custom date+time
-                                  (lets users backdate to yesterday or any prior day). */}
+                                  (lets users backdate to yesterday or any prior day).
+                                  Hidden in plan mode — plans only carry a calendar date. */}
+                              {!isPlanMode && (
                               <div className="mt-2.5 flex items-center gap-1.5">
                                 {!timeEditOpen ? (
                                   <button
@@ -1494,6 +1505,7 @@ export default function FoodSearchModal({
                                   {customTime ? 'Logged at custom time' : 'Logged now'}
                                 </span>
                               </div>
+                              )}
                               <button
                                 onClick={handleAddFood}
                                 disabled={adding || !selection || selection.quantity <= 0}
@@ -1502,12 +1514,14 @@ export default function FoodSearchModal({
                                 {adding ? (
                                   <>
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                    Adding…
+                                    {isPlanMode ? 'Planning…' : 'Adding…'}
                                   </>
                                 ) : (
                                   <>
                                     <Plus className="h-4 w-4" />
-                                    {tagPickerEnabled ? `Add to ${tagLabel}` : 'Add'}
+                                    {isPlanMode
+                                      ? (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                      : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
                                   </>
                                 )}
                               </button>
@@ -1556,6 +1570,7 @@ export default function FoodSearchModal({
         defaultTag={tagPickerEnabled ? activeTag : 'snack'}
         availableTags={availableTags}
         viewedDate={viewedDate}
+        mode={mode}
         onClose={() => setApplyMeal(null)}
         onApplied={() => {
           setApplyMeal(null)

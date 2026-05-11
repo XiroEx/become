@@ -66,8 +66,16 @@ interface Props {
   defaultTag: string
   availableTags?: { defaults: string[]; userTags: string[] }
   viewedDate?: Date
+  // 'log' (default) — normal log flow: POST /api/meal-logs with loggedAt.
+  // 'plan' — plan-create flow: POST /api/meal-plans with plannedDate from
+  // `viewedDate` (required in plan mode). The time picker is hidden.
+  mode?: 'log' | 'plan'
   onClose: () => void
   onLogged?: (foodId: string) => void
+  // Plan-mode success callback: fires after POST /api/meal-plans. Receives
+  // the API response shape ({ plan, merged?, replaced? }) so the caller can
+  // surface the right toast.
+  onPlanned?: (resp: { plan: unknown; merged?: boolean; replaced?: boolean }) => void
 }
 
 function titleCaseTag(tag: string): string {
@@ -128,9 +136,12 @@ export default function FoodLogSheet({
   defaultTag,
   availableTags,
   viewedDate,
+  mode = 'log',
   onClose,
   onLogged,
+  onPlanned,
 }: Props) {
+  const isPlanMode = mode === 'plan'
   const [activeTag, setActiveTag] = useState<string>(defaultTag)
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
   const [customTagInput, setCustomTagInput] = useState('')
@@ -223,25 +234,50 @@ export default function FoodLogSheet({
         loggedMlPerServing: variant.mlPerServing,
       }
 
-      const loggedAt = customTime
-        ? buildLocalIsoFromDateTime(customTime)
-        : new Date().toISOString()
-
-      const res = await fetch('/api/meal-logs', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          items: [item],
-          tags: [activeTag],
-          loggedAt,
-        }),
-      })
-      if (res.ok) {
-        onLogged?.(food._id)
-        setTimeout(() => onClose(), 250)
+      if (isPlanMode) {
+        // Plan mode — POST /api/meal-plans. `plannedDate` is the YYYY-MM-DD
+        // of `viewedDate` (required in plan mode). Default `mode: 'merge'`
+        // so a same-(date, tag) plan accumulates items rather than 409-ing.
+        const planDateBasis = viewedDate ?? new Date()
+        const plannedDate = `${planDateBasis.getFullYear()}-${String(planDateBasis.getMonth() + 1).padStart(2, '0')}-${String(planDateBasis.getDate()).padStart(2, '0')}`
+        const res = await fetch('/api/meal-plans', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            plannedDate,
+            tag: activeTag,
+            items: [item],
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}))
+          onPlanned?.({ plan: data?.plan, merged: !!data?.merged, replaced: !!data?.replaced })
+          setTimeout(() => onClose(), 250)
+        } else {
+          const data = await res.json().catch(() => ({}))
+          setError(data?.error || 'Failed to plan food.')
+        }
       } else {
-        const data = await res.json().catch(() => ({}))
-        setError(data?.error || 'Failed to log food.')
+        const loggedAt = customTime
+          ? buildLocalIsoFromDateTime(customTime)
+          : new Date().toISOString()
+
+        const res = await fetch('/api/meal-logs', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            items: [item],
+            tags: [activeTag],
+            loggedAt,
+          }),
+        })
+        if (res.ok) {
+          onLogged?.(food._id)
+          setTimeout(() => onClose(), 250)
+        } else {
+          const data = await res.json().catch(() => ({}))
+          setError(data?.error || 'Failed to log food.')
+        }
       }
     } catch {
       setError('Network error.')
@@ -378,7 +414,8 @@ export default function FoodLogSheet({
                 <QuantityPicker variant={variant} onChange={setSelection} />
               </div>
 
-              {/* Time picker */}
+              {/* Time picker — hidden in plan mode (plans carry a calendar date only) */}
+              {!isPlanMode && (
               <div className="flex items-center gap-1.5">
                 {!timeEditOpen ? (
                   <button
@@ -420,6 +457,7 @@ export default function FoodLogSheet({
                   </>
                 )}
               </div>
+              )}
 
               {/* Macro preview */}
               <div className="grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
@@ -462,7 +500,7 @@ export default function FoodLogSheet({
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
                 {logging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {logging ? 'Logging…' : 'Log to day'}
+                {logging ? (isPlanMode ? 'Planning…' : 'Logging…') : (isPlanMode ? 'Plan for day' : 'Log to day')}
               </button>
             </div>
           </motion.div>
