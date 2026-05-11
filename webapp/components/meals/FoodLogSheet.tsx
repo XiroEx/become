@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, ChevronDown, Tag as TagIcon, Loader2, Apple } from 'lucide-react'
+import { X, Check, ChevronDown, Tag as TagIcon, Loader2, Apple, Repeat } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import QuantityPicker, {
   type QuantityPickerSelection,
@@ -150,6 +150,10 @@ export default function FoodLogSheet({
   const [timeEditOpen, setTimeEditOpen] = useState(false)
   const [logging, setLogging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Recurrence (plan mode only). See plan §7.
+  const [repeatOpen, setRepeatOpen] = useState(false)
+  const [repeatEvery, setRepeatEvery] = useState<'day' | 'week'>('week')
+  const [repeatCount, setRepeatCount] = useState<number>(6)
 
   useLockScroll(isOpen)
 
@@ -162,6 +166,9 @@ export default function FoodLogSheet({
       setError(null)
       setTagDropdownOpen(false)
       setCustomTagInput('')
+      setRepeatOpen(false)
+      setRepeatCount(6)
+      setRepeatEvery('week')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, food?._id])
@@ -240,14 +247,18 @@ export default function FoodLogSheet({
         // so a same-(date, tag) plan accumulates items rather than 409-ing.
         const planDateBasis = viewedDate ?? new Date()
         const plannedDate = `${planDateBasis.getFullYear()}-${String(planDateBasis.getMonth() + 1).padStart(2, '0')}-${String(planDateBasis.getDate()).padStart(2, '0')}`
+        const body: Record<string, unknown> = {
+          plannedDate,
+          tag: activeTag,
+          items: [item],
+        }
+        if (repeatOpen && repeatCount > 1) {
+          body.repeat = { every: repeatEvery, count: repeatCount }
+        }
         const res = await fetch('/api/meal-plans', {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            plannedDate,
-            tag: activeTag,
-            items: [item],
-          }),
+          body: JSON.stringify(body),
         })
         if (res.ok) {
           const data = await res.json().catch(() => ({}))
@@ -413,6 +424,64 @@ export default function FoodLogSheet({
                 </p>
                 <QuantityPicker variant={variant} onChange={setSelection} />
               </div>
+
+              {/* Recurrence disclosure — plan mode only. Expand-on-create per plan §7. */}
+              {isPlanMode && (
+                <div>
+                  {!repeatOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => setRepeatOpen(true)}
+                      className="inline-flex w-fit items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      aria-label="Repeat this plan"
+                    >
+                      <Repeat className="h-3 w-3" />
+                      Repeat…
+                    </button>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 dark:border-blue-900/40 dark:bg-blue-900/20">
+                      <Repeat className="h-3.5 w-3.5 text-blue-700 dark:text-blue-300" />
+                      <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Every</span>
+                      <select
+                        value={repeatEvery}
+                        onChange={e => setRepeatEvery(e.target.value === 'day' ? 'day' : 'week')}
+                        className="rounded-md border border-blue-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-blue-900/60 dark:bg-zinc-900 dark:text-blue-200"
+                        aria-label="Recurrence interval"
+                      >
+                        <option value="day">day</option>
+                        <option value="week">week</option>
+                      </select>
+                      <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">for</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={repeatEvery === 'day' ? 30 : 52}
+                        value={repeatCount}
+                        onChange={e => {
+                          const n = Number(e.target.value)
+                          const max = repeatEvery === 'day' ? 30 : 52
+                          if (Number.isFinite(n)) setRepeatCount(Math.max(1, Math.min(max, Math.round(n))))
+                        }}
+                        className="w-12 rounded-md border border-blue-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-blue-800 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-blue-900/60 dark:bg-zinc-900 dark:text-blue-200"
+                        aria-label="Number of occurrences"
+                      />
+                      <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                        {repeatEvery === 'day'
+                          ? (repeatCount === 1 ? 'day' : 'days')
+                          : (repeatCount === 1 ? 'week' : 'weeks')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setRepeatOpen(false); setRepeatCount(6) }}
+                        className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full text-blue-700 hover:bg-blue-200/60 dark:text-blue-200 dark:hover:bg-blue-900/40"
+                        aria-label="Close recurrence"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Time picker — hidden in plan mode (plans carry a calendar date only) */}
               {!isPlanMode && (
