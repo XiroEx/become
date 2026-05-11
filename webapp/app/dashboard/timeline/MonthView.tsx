@@ -509,11 +509,11 @@ export default function MonthView({
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
                   ].join(' ')}
                 >
-                  {/* Date pill — drill-in target. */}
+                  {/* Date pill — pure label. Drill-to-day moved to an explicit
+                      link in the day-strip header (see MonthDayStrip) so a tap
+                      anywhere in the cell selects only, never switches views. */}
                   <span
-                    role="button"
-                    tabIndex={-1}
-                    onClick={(e) => { e.stopPropagation(); onDrillToDay(day) }}
+                    aria-hidden="true"
                     className={[
                       'flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium sm:h-7 sm:w-7 sm:text-sm',
                       isToday
