@@ -334,7 +334,41 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
     nutrition: food.nutrition,
   }]
   const defaultVariant = variants.find(v => v.isDefault) ?? variants[0]
-  const n = defaultVariant.nutrition
+
+  // Per-serving nutrition. The variant's stored `nutrition` is per
+  // `servingSize` `servingUnit` (commonly per-100g for OpenFoodFacts imports).
+  // When `gramsPerServing` / `mlPerServing` are set and differ from the
+  // storage size, the actual user-facing serving is THAT (e.g. one 38g bag),
+  // so the per-serving macros must be scaled down accordingly. This matches
+  // the QuantityPicker's primary-chip behavior.
+  const rawN = defaultVariant.nutrition
+  const perServingScale = (() => {
+    if (defaultVariant.servingUnit === 'g'
+      && defaultVariant.gramsPerServing != null
+      && defaultVariant.gramsPerServing > 0
+      && Math.abs(defaultVariant.gramsPerServing - defaultVariant.servingSize) > 0.001) {
+      return defaultVariant.gramsPerServing / defaultVariant.servingSize
+    }
+    if (defaultVariant.servingUnit === 'ml'
+      && defaultVariant.mlPerServing != null
+      && defaultVariant.mlPerServing > 0
+      && Math.abs(defaultVariant.mlPerServing - defaultVariant.servingSize) > 0.001) {
+      return defaultVariant.mlPerServing / defaultVariant.servingSize
+    }
+    return 1
+  })()
+  const n = perServingScale === 1
+    ? rawN
+    : {
+        calories: rawN.calories * perServingScale,
+        protein: rawN.protein * perServingScale,
+        carbs: rawN.carbs * perServingScale,
+        fats: rawN.fats * perServingScale,
+        fiber: rawN.fiber != null ? rawN.fiber * perServingScale : undefined,
+        sugar: rawN.sugar != null ? rawN.sugar * perServingScale : undefined,
+        sodium: rawN.sodium != null ? rawN.sodium * perServingScale : undefined,
+        saturatedFat: rawN.saturatedFat != null ? rawN.saturatedFat * perServingScale : undefined,
+      }
 
   return (
     <PageTransition className="space-y-4 pb-32">

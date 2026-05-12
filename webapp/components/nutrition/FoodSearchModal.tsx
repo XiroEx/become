@@ -134,6 +134,26 @@ const ROW_PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|m
 // label is misleading — fall through the better signals first. Also append
 // "(28 g)" when the chosen label is just a count ("12 chips") and we know
 // the gram weight via the bridge or a mass-family servingSize.
+// Scale a food's stored nutrition (which for OFF imports is per-100g/ml) down
+// to its "actual" per-serving when gramsPerServing / mlPerServing diverge
+// from servingSize. Mirrors the QuantityPicker primary-chip behavior so the
+// number alongside the search result matches what the picker will preview.
+function rowCalories(food: FoodResult): number {
+  let scale = 1
+  if (food.servingUnit === 'g'
+    && food.gramsPerServing != null
+    && food.gramsPerServing > 0
+    && Math.abs(food.gramsPerServing - food.servingSize) > 0.001) {
+    scale = food.gramsPerServing / food.servingSize
+  } else if (food.servingUnit === 'ml'
+    && food.mlPerServing != null
+    && food.mlPerServing > 0
+    && Math.abs(food.mlPerServing - food.servingSize) > 0.001) {
+    scale = food.mlPerServing / food.servingSize
+  }
+  return Math.round((food.nutrition.calories ?? 0) * scale)
+}
+
 function preferredServingLabel(food: FoodResult): string {
   let base = ''
   if (food.displayLabel && food.displayLabel.trim()) base = food.displayLabel.trim()
@@ -164,6 +184,10 @@ function preferredServingLabel(food: FoodResult): string {
     const rounded = Math.abs(grams - Math.round(grams)) < 0.05
       ? String(Math.round(grams))
       : (Math.round(grams * 10) / 10).toString()
+    // Don't double up — if the base label already mentions the same gram
+    // value inline (e.g. "38 g"), skip the suffix.
+    const bareMatch = /\b(\d+(?:\.\d+)?)\s*g\b/i.exec(base)
+    if (bareMatch && Math.abs(Number(bareMatch[1]) - grams) < 0.5) return base
     return `${base} (${rounded} g)`
   }
   return base
@@ -1285,7 +1309,7 @@ export default function FoodSearchModal({
                           </p>
                         </div>
                         <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-                          {food.nutrition.calories} cal
+                          {rowCalories(food)} cal
                         </span>
                         {/* Save / unsave bookmark (or remove on My Foods tab) */}
                         {(() => {
