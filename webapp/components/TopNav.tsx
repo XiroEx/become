@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { User, LogOut, MessageSquareText, Settings, ShieldCheck } from 'lucide-react'
 import FeedbackModal from './FeedbackModal'
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
 
 export default function TopNav() {
   const [isOpen, setIsOpen] = useState(false)
