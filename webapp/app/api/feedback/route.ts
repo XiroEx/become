@@ -4,7 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Feedback from '@/models/Feedback'
 import { sendEmail } from '@/lib/email'
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || 'Become'
+const appName = process.env.NEXT_PUBLIC_APP_NAME || 'BECOME'
 
 interface ImagePayload {
   name: string

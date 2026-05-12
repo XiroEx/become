@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import AnimatedSection from "@/components/AnimatedSection";
 import PhoneMockup from "@/components/PhoneMockup";
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME";
 const logo = process.env.NEXT_PUBLIC_LOGO || "/logo.png";
 const profileImage = process.env.NEXT_PUBLIC_PROFILE_IMAGE || "/profile.png";
 
@@ -109,7 +109,7 @@ export default function Home() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="relative mt-4 h-12 w-full max-w-xs"
         >
-          <p className="text-base text-zinc-500 mb-1">Train to Become</p>
+          <p className="text-base text-zinc-500 mb-1">Train to BECOME</p>
           <AnimatePresence mode="wait">
             <motion.span
               key={phraseIndex}
