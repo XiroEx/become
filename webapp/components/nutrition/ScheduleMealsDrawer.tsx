@@ -1182,7 +1182,7 @@ function CopyDayTab({ fromKey, toKey, rangeMode, onApplied }: CopyDayTabProps) {
       setLoadingPreview(true)
       try {
         if (sourceType === 'log') {
-          const res = await fetch(`/api/meal-logs?date=${sourceKey}`, { headers: getHeaders() })
+          const res = await fetch(`/api/meal-logs?date=${sourceKey}&tz=${new Date().getTimezoneOffset()}`, { headers: getHeaders() })
           if (!res.ok) {
             if (!cancelled) setPreview([])
             return
