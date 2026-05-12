@@ -74,7 +74,8 @@ export default function DisciplineTab() {
     const token = getToken()
     if (!token) { setLoading(false); return }
 
-    fetch('/api/mind/discipline', { headers: { Authorization: `Bearer ${token}` } })
+    const tz = new Date().getTimezoneOffset()
+    fetch(`/api/mind/discipline?tz=${tz}`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.challenge) setChallenge(data.challenge) })
       .catch(() => {})
@@ -102,7 +103,7 @@ export default function DisciplineTab() {
       const res = await fetch('/api/mind/discipline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'complete' }),
+        body: JSON.stringify({ action: 'complete', tz: new Date().getTimezoneOffset() }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -121,7 +122,7 @@ export default function DisciplineTab() {
       const res = await fetch('/api/mind/discipline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'excuse', excuse: excuseText }),
+        body: JSON.stringify({ action: 'excuse', excuse: excuseText, tz: new Date().getTimezoneOffset() }),
       })
       if (res.ok) {
         const data = await res.json()

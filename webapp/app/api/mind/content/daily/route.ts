@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import DailyContentLog from '@/models/DailyContentLog'
-
-function todayUTC(): Date {
-  const d = new Date()
-  d.setUTCHours(0, 0, 0, 0)
-  return d
-}
+import {
+  readTzOffset,
+  readTzOffsetFromBody,
+  localDateKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 
 // GET — return today's content log if it exists
 export async function GET(request: NextRequest) {
@@ -17,9 +17,16 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
+    const { searchParams } = new URL(request.url)
+    const tzOffsetMinutes = readTzOffset(searchParams)
+    // Anchor "today" to the caller's LOCAL day, stored at UTC midnight of
+    // that day's YYYY-MM-DD for back-compat with rows previously written
+    // by callers in non-UTC zones.
+    const today = utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
+
     const log = await DailyContentLog.findOne({
       userId: auth.userId,
-      date: todayUTC(),
+      date: today,
     }).lean()
 
     return NextResponse.json({ log: log ?? null })
@@ -43,10 +50,11 @@ export async function POST(request: NextRequest) {
       contentId?: string
       ctaClicked?: boolean
     }
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     await dbConnect()
 
-    const today = todayUTC()
+    const today = utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
 
     if (ctaClicked === true) {
       // Just mark CTA clicked on whatever log exists today

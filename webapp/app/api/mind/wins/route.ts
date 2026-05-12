@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import DailyWin from '@/models/DailyWin'
-
-function todayMidnightUTC(): Date {
-  const d = new Date()
-  d.setUTCHours(0, 0, 0, 0)
-  return d
-}
+import {
+  readTzOffsetFromBody,
+  localDateKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,6 +34,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { win } = body as { win?: string }
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (!win || win.trim().length < 3) {
       return NextResponse.json({ error: 'Win text required' }, { status: 400 })
@@ -42,7 +42,10 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const today = todayMidnightUTC()
+    // Stamp the win with the caller's LOCAL day at UTC midnight, so a win
+    // logged at 11pm in a zone west of UTC lands on the user's "today" row
+    // rather than spilling into "tomorrow UTC".
+    const today = utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
 
     // Allow multiple wins per day — just append
     const doc = await DailyWin.create({

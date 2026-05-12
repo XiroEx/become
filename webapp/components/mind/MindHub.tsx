@@ -87,10 +87,11 @@ export default function MindHub({ onNavigate, streak }: Props) {
     if (!token) { setLoading(false); return }
     const h = { Authorization: `Bearer ${token}` }
 
+    const tz = new Date().getTimezoneOffset()
     const [identityRes, progressRes, contentRes] = await Promise.all([
       fetch('/api/mind/identity', { headers: h }),
       fetch('/api/mind/progress', { headers: h }),
-      fetch('/api/mind/content/daily', { headers: h }),
+      fetch(`/api/mind/content/daily?tz=${tz}`, { headers: h }),
     ])
 
     const [identityData, progressData, contentData] = await Promise.all([
@@ -131,6 +132,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
     setLogging(true)
     try {
       const token = getToken()
+      const tz = new Date().getTimezoneOffset()
       await Promise.all([
         fetch('/api/mind/state', {
           method: 'POST',
@@ -140,7 +142,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
         fetch('/api/mind/content/daily', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ state, contentId: piece.id }),
+          body: JSON.stringify({ state, contentId: piece.id, tz }),
         }),
       ])
       // Refresh XP
@@ -157,7 +159,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
     fetch('/api/mind/content/daily', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ctaClicked: true }),
+      body: JSON.stringify({ ctaClicked: true, tz: new Date().getTimezoneOffset() }),
     }).catch(() => {})
     onNavigate(section)
   }
