@@ -138,7 +138,7 @@ export default function MonthView({
     setLoading(true)
     try {
       const [logsRes, plansRes] = await Promise.all([
-        fetch(`/api/meal-logs?from=${fetchRange.from}&to=${fetchRange.to}`, {
+        fetch(`/api/meal-logs?from=${fetchRange.from}&to=${fetchRange.to}&tz=${new Date().getTimezoneOffset()}`, {
           headers: getHeaders(),
         }).then(r => r.ok ? r.json() : { days: [] }).catch(() => ({ days: [] })),
         fetchPlansInRange(fetchRange.from, fetchRange.to, getHeaders()),

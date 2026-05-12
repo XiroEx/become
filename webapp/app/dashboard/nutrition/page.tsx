@@ -144,7 +144,8 @@ function NutritionPageInner() {
 
   const fetchMealLogs = useCallback(async () => {
     try {
-      const res = await fetch(`/api/meal-logs?date=${dateParam}`, { headers: getHeaders() })
+      const tz = new Date().getTimezoneOffset()
+      const res = await fetch(`/api/meal-logs?date=${dateParam}&tz=${tz}`, { headers: getHeaders() })
       if (res.ok) {
         const data = await res.json()
         setLogs((data.logs || []).map((l: MealLogLite) => ({ ...l, _id: String(l._id) })))
