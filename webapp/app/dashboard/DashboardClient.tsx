@@ -158,8 +158,9 @@ export default function DashboardClient() {
           headers['Authorization'] = `Bearer ${token}`
         }
 
+        const tz = new Date().getTimezoneOffset()
         const [logRes, goalsRes] = await Promise.all([
-          fetch('/api/nutrition/log', { headers }),
+          fetch(`/api/nutrition/log?tz=${tz}`, { headers }),
           fetch('/api/nutrition/goals', { headers })
         ])
 
