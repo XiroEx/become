@@ -155,7 +155,14 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const items = await resolveItemsFromInput(body.items as MealItemInput[])
+    let items
+    try {
+      items = await resolveItemsFromInput(body.items as MealItemInput[])
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid item payload'
+      console.error('[meal-logs POST] item resolution failed:', message, '— payload:', JSON.stringify(body.items).slice(0, 1000))
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
     const loggedAt = body.loggedAt ? new Date(body.loggedAt) : new Date()
     if (Number.isNaN(loggedAt.getTime())) {
       return NextResponse.json({ error: 'Invalid loggedAt' }, { status: 400 })
