@@ -367,9 +367,10 @@ function TimelineClient() {
     try {
       const fromStr = formatDateParam(range.from)
       const toStr = formatDateParam(range.to)
+      const tz = new Date().getTimezoneOffset()
       const url = viewMode === 'day'
-        ? `/api/meal-logs?date=${fromStr}`
-        : `/api/meal-logs?from=${fromStr}&to=${toStr}`
+        ? `/api/meal-logs?date=${fromStr}&tz=${tz}`
+        : `/api/meal-logs?from=${fromStr}&to=${toStr}&tz=${tz}`
 
       // Fetch plans + logs in parallel. Plans are filtered to "active" so
       // promoted/skipped/superseded don't render in day or week strips.
