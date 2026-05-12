@@ -253,7 +253,7 @@ export async function GET(request: NextRequest) {
     const { start, end } = localDayWindowForKey(dateKey, tzOffsetMinutes)
     const nutritionLogKey = nutritionLogDateKey(dateKey)
 
-    const [mealLogs, nutritionLog, goals] = await Promise.all([
+    const [mealLogs, primaryLog, goals] = await Promise.all([
       MealLog.find({
         user: authResult.userId,
         loggedAt: { $gte: start, $lte: end },
@@ -261,6 +261,48 @@ export async function GET(request: NextRequest) {
       NutritionLog.findOne({ userId: authResult.userId, date: nutritionLogKey }).lean(),
       NutritionGoal.findOne({ userId: authResult.userId }).lean(),
     ])
+
+    // Back-compat fallback: PR #246/#247 (2026-05-12) made NutritionLog rows
+    // get keyed at UTC midnight of the LOCAL YYYY-MM-DD. Rows written before
+    // that fix by callers in non-UTC zones during their local evening landed
+    // at a UTC-midnight that no longer matches their local-day key. If the
+    // canonical lookup misses, search the local-day window for any legacy row.
+    //
+    // We only honor the fallback when exactly one row falls in the window —
+    // multiple rows would mean data is genuinely ambiguous (canonical row +
+    // legacy row both exist for the same local day), in which case we prefer
+    // the canonical lookup result (which was null) over guessing.
+    let nutritionLog = primaryLog
+    if (!nutritionLog) {
+      const candidates = await NutritionLog.find({
+        userId: authResult.userId,
+        date: { $gte: start, $lt: new Date(end.getTime() + 1) },
+      }).lean()
+      if (candidates.length === 1) {
+        const fallback = candidates[0]
+        console.warn(
+          `[nutrition/log] back-compat fallback hit — userId=${authResult.userId} dateKey=${dateKey} rowDate=${fallback.date.toISOString()}`
+        )
+        nutritionLog = fallback
+        // Self-heal: rewrite the legacy row's `date` to the canonical key so
+        // the next read hits the primary lookup. We do this asynchronously
+        // (don't await) so the response isn't blocked. Rationale: keeping
+        // legacy rows around indefinitely means the fallback path stays warm
+        // forever, and every legacy-keyed read costs an extra query. Self-
+        // healing converges the dataset toward the canonical key with zero
+        // operator effort. The alternative (audit-only) was considered but
+        // rejected — there's no reason to preserve the old key, and the
+        // migration script remains the bulk-fix tool for offline conversion.
+        NutritionLog.updateOne(
+          { _id: fallback._id },
+          { $set: { date: nutritionLogKey } }
+        ).catch((err) => {
+          console.warn(
+            `[nutrition/log] self-heal updateOne failed — _id=${fallback._id} err=${err instanceof Error ? err.message : String(err)}`
+          )
+        })
+      }
+    }
 
     const meals = buildLegacyMeals(mealLogs)
     const water = nutritionLog?.water ?? { current: 0, goal: goals?.waterGoal ?? 96 }
