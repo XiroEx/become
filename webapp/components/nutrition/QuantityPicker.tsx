@@ -115,6 +115,9 @@ function labelForQuantity(quantity: number, unit: Unit, displayLabel?: string, i
 
 // Pattern matching a parenthesized weight/volume in a label, e.g. "(28 g)".
 const PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|milliliters?|oz|ounces?|fl\s*oz)\s*\)/i
+// Matches a bare gram/ml number anywhere in the label, e.g. "38 g" or "240 ml".
+// Used to skip the bridge suffix when the label already conveys the same info.
+const BARE_MASS_RE = /\b(\d+(?:\.\d+)?)\s*(g|grams?|ml|millilitres?|milliliters?)\b/i
 
 /**
  * If `label` is a human serving name without an embedded gram/ml suffix
@@ -131,6 +134,10 @@ function enrichLabelWithBridge(
 ): string {
   if (!label) return label
   if (PARENS_WEIGHT_RE.test(label)) return label
+
+  // If the label already says e.g. "38 g" inline, skip the bridge suffix when
+  // it would just repeat the same number (no "(38 g)" tacked onto "38 g").
+  const bareMatch = BARE_MASS_RE.exec(label)
 
   const unit = variant.servingUnit as Unit
   const family = familyOf(unit)
@@ -152,6 +159,10 @@ function enrichLabelWithBridge(
     if (Math.abs(grams - 100) < 0.5 && Math.abs(variant.servingSize - 100) < 0.5 && unit === 'g') {
       return label
     }
+    // If the label already mentions the same gram number inline, don't double up.
+    if (bareMatch && /^g/i.test(bareMatch[2]) && Math.abs(Number(bareMatch[1]) - grams) < 0.5) {
+      return label
+    }
     return `${label} (${roundReadable(grams)} g)`
   }
 
@@ -165,7 +176,12 @@ function enrichLabelWithBridge(
       ml = null
     }
   }
-  if (ml != null) return `${label} (${roundReadable(ml)} ml)`
+  if (ml != null) {
+    if (bareMatch && /^m/i.test(bareMatch[2]) && Math.abs(Number(bareMatch[1]) - ml) < 0.5) {
+      return label
+    }
+    return `${label} (${roundReadable(ml)} ml)`
+  }
 
   return label
 }
@@ -179,11 +195,23 @@ function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
   const unit = variant.servingUnit as Unit
   const size = variant.servingSize
 
-  const baseLabel = labelForQuantity(size, unit, variant.displayLabel, true)
+  // For per-100g (or per-100ml) imports — common for OpenFoodFacts foods —
+  // the variant's storage `servingSize` is the canonical-math reference (100)
+  // and the actual user-facing serving is in `gramsPerServing`/`mlPerServing`.
+  // The primary chip must represent "1 serving as the food defines it", so
+  // when those bridges exist and differ from the storage size, use them.
+  let primaryQty = size
+  if (unit === 'g' && variant.gramsPerServing != null && variant.gramsPerServing > 0 && Math.abs(variant.gramsPerServing - size) > 0.001) {
+    primaryQty = variant.gramsPerServing
+  } else if (unit === 'ml' && variant.mlPerServing != null && variant.mlPerServing > 0 && Math.abs(variant.mlPerServing - size) > 0.001) {
+    primaryQty = variant.mlPerServing
+  }
+
+  const baseLabel = labelForQuantity(primaryQty, unit, variant.displayLabel, true)
   const primary: QuickOption = {
     id: 'primary',
     label: enrichLabelWithBridge(baseLabel, variant),
-    quantity: size,
+    quantity: primaryQty,
     unit,
   }
 
@@ -198,7 +226,7 @@ function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
     const altQty = size * alt.multiplier
     const rawAltLabel = alt.label ? prettifyUnitCodes(alt.label) : labelForQuantity(altQty, unit)
     const altLabel = enrichLabelWithBridge(rawAltLabel, variant)
-    const dupQty = Math.abs(altQty - size) < 0.001
+    const dupQty = Math.abs(altQty - primaryQty) < 0.001
     const dupLabel = altLabel.trim() === primary.label.trim()
     if (!dupQty && !dupLabel) {
       middle = {
@@ -211,7 +239,7 @@ function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
   }
 
   if (!middle) {
-    const halfQty = size / 2
+    const halfQty = primaryQty / 2
     middle = {
       id: 'half',
       label: labelForQuantity(halfQty, unit),
@@ -220,7 +248,7 @@ function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
     }
   }
 
-  const doubleQty = size * 2
+  const doubleQty = primaryQty * 2
   const doubleOption: QuickOption = {
     id: 'double',
     label: labelForQuantity(doubleQty, unit),
