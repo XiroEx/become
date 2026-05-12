@@ -151,7 +151,7 @@ export default function RecipeDetailPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ mealType, food })
+        body: JSON.stringify({ mealType, food, tz: new Date().getTimezoneOffset() })
       })
 
       if (res.ok) {

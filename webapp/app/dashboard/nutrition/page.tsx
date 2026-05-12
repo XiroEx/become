@@ -171,7 +171,7 @@ function NutritionPageInner() {
   // ignored — we use /api/meal-logs for those).
   const fetchSideTables = useCallback(async () => {
     try {
-      const res = await fetch(`/api/nutrition/log?date=${dateParam}`, { headers: getHeaders() })
+      const res = await fetch(`/api/nutrition/log?date=${dateParam}&tz=${new Date().getTimezoneOffset()}`, { headers: getHeaders() })
       if (res.ok) {
         const data = await res.json()
         setWater({
