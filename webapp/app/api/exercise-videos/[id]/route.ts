@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import ExerciseVideo from '@/models/ExerciseVideo';
+import Exercise from '@/models/Exercise';
 import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
 import mongoose from 'mongoose';
@@ -49,8 +50,22 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
 
     const update: Record<string, unknown> = {};
-    for (const key of ['exerciseName', 'videoUrl', 'thumbnailUrl', 'isPlaceholder'] as const) {
+    for (const key of ['exerciseName', 'videoUrl', 'thumbnailUrl', 'isPlaceholder', 'slug'] as const) {
       if (key in body) update[key] = body[key];
+    }
+
+    // If exerciseName is changing and slug wasn't explicitly set, try to
+    // re-resolve the slug from the new exercise name so the canonical key
+    // stays consistent with the displayed name.
+    if ('exerciseName' in body && !('slug' in body)) {
+      const exercise = await Exercise.findOne({
+        $or: [{ name: body.exerciseName }, { aliases: body.exerciseName }],
+      })
+        .select('slug')
+        .lean<{ slug: string } | null>();
+      if (exercise?.slug) {
+        update.slug = exercise.slug;
+      }
     }
 
     const video = await ExerciseVideo.findByIdAndUpdate(
