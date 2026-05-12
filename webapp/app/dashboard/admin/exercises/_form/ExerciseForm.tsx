@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import VideosEditor from './VideosEditor'
+import AdminVideoPreview from './AdminVideoPreview'
 import {
   CATEGORIES,
   MECHANICS,
@@ -538,6 +539,11 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
               className={inputCls}
               placeholder="https://… or /videos/bench-press.mp4"
             />
+            {value.videoUrl && (
+              <div className="mt-2">
+                <AdminVideoPreview url={value.videoUrl} size="md" />
+              </div>
+            )}
           </Field>
           <Field label="Thumbnail URL" full>
             <input
@@ -546,6 +552,16 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
               onChange={(e) => update('thumbnailUrl', e.target.value || undefined)}
               className={inputCls}
             />
+            {value.thumbnailUrl && (
+              <div className="mt-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={value.thumbnailUrl}
+                  alt="Thumbnail preview"
+                  className="h-32 w-auto rounded-lg object-contain bg-black ring-1 ring-zinc-200 dark:ring-zinc-800"
+                />
+              </div>
+            )}
           </Field>
         </Section>
 
