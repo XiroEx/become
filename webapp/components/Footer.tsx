@@ -1,4 +1,4 @@
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Jon Don Fit";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
 
 export default function Footer() {
   return (
