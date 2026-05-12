@@ -250,6 +250,7 @@ export default function CalendarClient() {
         weekEnd.setDate(weekEnd.getDate() + 7)
         url += `from=${weekStart.toISOString()}&to=${weekEnd.toISOString()}`
       }
+      url += `&tz=${new Date().getTimezoneOffset()}`
 
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -345,6 +346,7 @@ export default function CalendarClient() {
       const token = localStorage.getItem('token')
       if (!token) return
 
+      const tz = new Date().getTimezoneOffset()
       const res = await fetch('/api/schedule', {
         method: 'PATCH',
         headers: {
@@ -355,6 +357,7 @@ export default function CalendarClient() {
           programId: actionMenuWorkout.programId,
           action,
           workoutDate: actionMenuWorkout.date,
+          tz,
         }),
       })
 
@@ -698,7 +701,7 @@ export default function CalendarClient() {
                                           await fetch('/api/schedule', {
                                             method: 'PATCH',
                                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                                            body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date }),
+                                            body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date, tz: new Date().getTimezoneOffset() }),
                                           })
                                           fetchSchedules()
                                         } finally {
@@ -850,6 +853,7 @@ export default function CalendarClient() {
                         action: 'reschedule',
                         workoutDate: actionMenuWorkout.date,
                         newDate: next.toISOString(),
+                        tz: new Date().getTimezoneOffset(),
                       }),
                     }).then(() => {
                       setActionMenuWorkout(null)
@@ -922,6 +926,7 @@ export default function CalendarClient() {
                                   action: 'reschedule',
                                   workoutDate: actionMenuWorkout.date,
                                   newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
+                                  tz: new Date().getTimezoneOffset(),
                                 }),
                               }).then(() => {
                                 setActionMenuWorkout(null)
@@ -1001,7 +1006,7 @@ export default function CalendarClient() {
                               const res = await fetch('/api/schedule', {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'shift', days: shiftDays }),
+                                body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'shift', days: shiftDays, tz: new Date().getTimezoneOffset() }),
                               })
                               if (res.ok) {
                                 setActionMenuWorkout(null)
@@ -1044,7 +1049,7 @@ export default function CalendarClient() {
                           const res = await fetch('/api/schedule', {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                            body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'resume' }),
+                            body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'resume', tz: new Date().getTimezoneOffset() }),
                           })
                           if (res.ok) {
                             setActionMenuWorkout(null)
@@ -1071,7 +1076,7 @@ export default function CalendarClient() {
                           const res = await fetch('/api/schedule', {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                            body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'pause' }),
+                            body: JSON.stringify({ programId: actionMenuWorkout.programId, action: 'pause', tz: new Date().getTimezoneOffset() }),
                           })
                           if (res.ok) {
                             setActionMenuWorkout(null)

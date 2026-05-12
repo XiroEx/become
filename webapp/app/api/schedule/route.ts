@@ -5,6 +5,7 @@ import Schedule from '@/models/Schedule'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import { generateScheduledWorkouts, regenerateSchedule, type PhaseData } from '@/lib/schedule'
+import { readTzOffset, readTzOffsetFromBody, localDateKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
 // GET: Fetch schedule(s) for a user
 export async function GET(request: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get('from')
     const to = searchParams.get('to')
     const view = searchParams.get('view') // 'week' | 'month' | 'upcoming' | 'all'
+    const tzOffsetMinutes = readTzOffset(searchParams)
 
     await dbConnect()
 
@@ -33,11 +35,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ schedules: [] })
     }
 
-    // Determine date range
+    // Determine date range. "Today" is anchored to the caller's LOCAL day
+    // and stored at UTC midnight of that day's YYYY-MM-DD — matching how
+    // Schedule slot dates are written (always UTC midnight in lib/schedule.ts).
     let fromDate: Date | null = null
     let toDate: Date | null = null
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
+    const now = utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
 
     if (from && to) {
       fromDate = new Date(from)
@@ -79,14 +82,17 @@ export async function GET(request: NextRequest) {
 
       for (const w of allWorkouts) {
         const wDate = new Date(w.date)
-        wDate.setHours(0, 0, 0, 0)
+        wDate.setUTCHours(0, 0, 0, 0)
         const dateKey = wDate.getTime().toString()
 
         if (w.status === 'completed' || w.status === 'skipped' || w.status === 'missed') {
           // Trust the DB — these were set by the workout handler or admin correction
           statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
         } else if (wDate < now && w.status === 'scheduled') {
-          // Past scheduled slot that was never completed — it's missed
+          // Past scheduled slot that was never completed — it's missed.
+          // `now` is anchored to the caller's local day boundary (see above)
+          // so evening users in zones west of UTC don't see today's slot
+          // marked missed before their local midnight.
           statusByDate[dateKey] = { status: 'missed' }
         } else {
           // Future scheduled, rest, or any other status — keep as-is
@@ -97,7 +103,7 @@ export async function GET(request: NextRequest) {
       // Apply computed statuses and filter to the requested date range
       let updatedWorkouts = allWorkouts.map((w) => {
         const wDate = new Date(w.date)
-        wDate.setHours(0, 0, 0, 0)
+        wDate.setUTCHours(0, 0, 0, 0)
         const result = statusByDate[wDate.getTime().toString()]
         if (!result) return w
         return { ...w, status: result.status, ...(result.completedAt ? { completedAt: result.completedAt } : {}) }
@@ -238,7 +244,9 @@ export async function PATCH(request: NextRequest) {
     }
     const payload = { userId: authResult.userId!, email: authResult.email! }
 
-    const { programId, action, workoutDate, newDate, swapWithDate, days, resumeDate } = await request.json()
+    const body = await request.json()
+    const { programId, action, workoutDate, newDate, swapWithDate, days, resumeDate } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (!programId || !action) {
       return NextResponse.json({ error: 'programId and action are required' }, { status: 400 })
@@ -322,8 +330,11 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'Program not found' }, { status: 404 })
       }
 
-      const now = new Date()
-      now.setUTCHours(0, 0, 0, 0)
+      // Anchor "today" to the caller's LOCAL day at UTC midnight, matching
+      // how Schedule slot dates are stored. Without this, evening users in
+      // zones west of UTC would shift today's slot as if it were already
+      // past.
+      const now = utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
 
       // Find the earliest future scheduled workout
       const futureWorkouts = schedule.scheduledWorkouts.filter((w) => {

@@ -6,46 +6,8 @@ import Food from '@/models/Food'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 import { computeTotalNutrition, IMealNutrition } from '@/models/Meal'
 import { recordStreakActivity } from '@/lib/streak'
+import { readTzOffset, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
 import mongoose from 'mongoose'
-
-// Returns the UTC window that corresponds to a LOCAL calendar day for a
-// caller in `tzOffsetMinutes` (positive WEST of UTC, matching the browser's
-// `Date.getTimezoneOffset()`). When tzOffsetMinutes is 0/missing, this is
-// effectively a UTC day — preserving legacy behavior for clients that don't
-// send the offset.
-function localDayWindow(dateStr: string, tzOffsetMinutes: number): { start: Date; end: Date } {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
-  if (!m) {
-    const fallback = new Date(dateStr + 'T00:00:00.000Z')
-    const end = new Date(fallback)
-    end.setUTCHours(23, 59, 59, 999)
-    return { start: fallback, end }
-  }
-  const utcMidnight = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  const start = new Date(utcMidnight + tzOffsetMinutes * 60_000)
-  const end = new Date(start.getTime() + 86_400_000 - 1)
-  return { start, end }
-}
-
-function readTzOffset(searchParams: URLSearchParams): number {
-  const raw = searchParams.get('tz')
-  if (raw == null) return 0
-  const n = Number(raw)
-  if (!Number.isFinite(n)) return 0
-  // Sanity-clamp to ±14h.
-  return Math.max(-840, Math.min(840, n))
-}
-
-function dateKey(d: Date, tzOffsetMinutes = 0): string {
-  // Render the YYYY-MM-DD of the LOCAL calendar day for a caller in
-  // tzOffsetMinutes (browser-style: positive WEST of UTC). When the offset is
-  // 0, returns the UTC day — matches legacy behavior.
-  const shifted = new Date(d.getTime() - tzOffsetMinutes * 60_000)
-  const y = shifted.getUTCFullYear()
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(shifted.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 function emptyNutrition(): IMealNutrition {
   return {
@@ -95,7 +57,7 @@ export async function GET(request: NextRequest) {
     const tzOffsetMinutes = readTzOffset(searchParams)
 
     if (dateParam) {
-      const { start, end } = localDayWindow(dateParam, tzOffsetMinutes)
+      const { start, end } = localDayWindowForKey(dateParam, tzOffsetMinutes)
       const logs = await MealLog.find({
         user: authResult.userId,
         loggedAt: { $gte: start, $lte: end },
@@ -112,8 +74,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (fromParam && toParam) {
-      const { start } = localDayWindow(fromParam, tzOffsetMinutes)
-      const { end } = localDayWindow(toParam, tzOffsetMinutes)
+      const { start } = localDayWindowForKey(fromParam, tzOffsetMinutes)
+      const { end } = localDayWindowForKey(toParam, tzOffsetMinutes)
       const logs = await MealLog.find({
         user: authResult.userId,
         loggedAt: { $gte: start, $lte: end },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import NutritionLog from '@/models/NutritionLog'
 import { verifyAuth } from '@/lib/auth'
+import { readTzOffset, localDateKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
 // GET: Nutrition history/summary for charts
 export async function GET(request: NextRequest) {
@@ -16,40 +17,47 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get('period') || 'week'
     const dateStr = searchParams.get('date')
+    const tzOffsetMinutes = readTzOffset(searchParams)
 
-    // Calculate date range
-    const endDate = dateStr ? new Date(dateStr + 'T23:59:59.999Z') : new Date()
-    endDate.setUTCHours(23, 59, 59, 999)
+    // Anchor the window to the caller's LOCAL day, then widen to a list of
+    // YYYY-MM-DD keys. NutritionLog rows are keyed at UTC midnight of the
+    // local day's YYYY-MM-DD (see /api/nutrition/log + /api/nutrition/water),
+    // so we read by the same key.
+    const endKey = localDateKey(dateStr, tzOffsetMinutes)
+    const endMidnight = utcMidnightDateKey(endKey)
+    const span = period === 'month' ? 30 : 7
 
-    const startDate = new Date(endDate)
-    startDate.setUTCHours(0, 0, 0, 0)
-
-    if (period === 'month') {
-      startDate.setDate(startDate.getDate() - 29) // 30 days including today
-    } else {
-      startDate.setDate(startDate.getDate() - 6) // 7 days including today
+    const dayKeys: string[] = []
+    const dayDates: Date[] = []
+    for (let i = span - 1; i >= 0; i--) {
+      const d = new Date(endMidnight.getTime() - i * 86_400_000)
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+      dayKeys.push(key)
+      dayDates.push(d)
     }
 
-    // Fetch logs for the period
+    const startMidnight = dayDates[0]
+
+    // Fetch logs in a slightly widened range so any legacy rows in adjacent
+    // UTC days don't get lost. We still bucket by row.date's UTC YYYY-MM-DD.
     const logs = await NutritionLog.find({
       userId: authResult.userId,
-      date: { $gte: startDate, $lte: endDate }
+      date: { $gte: startMidnight, $lte: endMidnight }
     })
       .sort({ date: 1 })
       .lean()
 
-    // Build daily array with all dates (fill gaps with zeros)
-    const days = []
-    const current = new Date(startDate)
+    // Build daily array
+    const logsByKey = new Map<string, typeof logs[number]>()
+    for (const l of logs) {
+      const ld = new Date(l.date)
+      const k = `${ld.getUTCFullYear()}-${String(ld.getUTCMonth() + 1).padStart(2, '0')}-${String(ld.getUTCDate()).padStart(2, '0')}`
+      logsByKey.set(k, l)
+    }
 
-    while (current <= endDate) {
-      const dayStr = current.toISOString().split('T')[0]
-      const log = logs.find(l => {
-        const logDate = new Date(l.date)
-        return logDate.toISOString().split('T')[0] === dayStr
-      })
-
-      days.push({
+    const days = dayKeys.map(dayStr => {
+      const log = logsByKey.get(dayStr)
+      return {
         date: dayStr,
         calories: log?.dailyTotals?.calories ?? 0,
         protein: log?.dailyTotals?.protein ?? 0,
@@ -61,10 +69,8 @@ export async function GET(request: NextRequest) {
         water: log?.water?.current ?? 0,
         mealCount: log?.meals?.length ?? 0,
         hasData: !!log
-      })
-
-      current.setDate(current.getDate() + 1)
-    }
+      }
+    })
 
     // Calculate averages (only from days with data)
     const daysWithData = days.filter(d => d.hasData)
@@ -83,8 +89,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       period,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: dayKeys[0],
+      endDate: dayKeys[dayKeys.length - 1],
       days,
       averages
     })

@@ -3,12 +3,11 @@ import dbConnect from '@/lib/mongodb'
 import NutritionLog from '@/models/NutritionLog'
 import NutritionGoal from '@/models/NutritionGoal'
 import { verifyAuth } from '@/lib/auth'
-
-function getDateStart(dateStr?: string | null): Date {
-  const d = dateStr ? new Date(dateStr + 'T00:00:00.000Z') : new Date()
-  d.setUTCHours(0, 0, 0, 0)
-  return d
-}
+import {
+  readTzOffsetFromBody,
+  localDateKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 
 // POST: Quick add raw macros
 export async function POST(request: NextRequest) {
@@ -20,6 +19,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { calories, protein, carbs, fats, note, date: dateStr } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (calories === undefined || typeof calories !== 'number') {
       return NextResponse.json({ error: 'Missing required field: calories (number)' }, { status: 400 })
@@ -27,7 +27,9 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const date = getDateStart(dateStr)
+    // Row key: UTC midnight of the LOCAL day's YYYY-MM-DD — matches the
+    // nutrition/log read path so quick-adds land in the same row as meals.
+    const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
 
     const quickAddEntry = {
       id: crypto.randomUUID(),
@@ -77,6 +79,7 @@ export async function DELETE(request: NextRequest) {
 
     const body = await request.json()
     const { quickAddId, date: dateStr } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (!quickAddId) {
       return NextResponse.json({ error: 'Missing required field: quickAddId' }, { status: 400 })
@@ -84,7 +87,7 @@ export async function DELETE(request: NextRequest) {
 
     await dbConnect()
 
-    const date = getDateStart(dateStr)
+    const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
     const log = await NutritionLog.findOne({ userId: authResult.userId, date })
 
     if (!log) {

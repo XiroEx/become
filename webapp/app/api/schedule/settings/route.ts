@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Schedule from '@/models/Schedule'
 import ProgramModel from '@/models/Program'
 import { regenerateSchedule, type PhaseData } from '@/lib/schedule'
+import { readTzOffsetFromBody, localDateKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
 // PUT: Update training day preferences and regenerate future workouts
 export async function PUT(request: NextRequest) {
@@ -14,7 +15,9 @@ export async function PUT(request: NextRequest) {
     }
     const payload = { userId: authResult.userId!, email: authResult.email! }
 
-    const { programId, trainingDays, startDate } = await request.json()
+    const body = await request.json()
+    const { programId, trainingDays, startDate } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (!programId || !trainingDays) {
       return NextResponse.json({ error: 'programId and trainingDays are required' }, { status: 400 })
@@ -33,7 +36,12 @@ export async function PUT(request: NextRequest) {
     }
 
     const phases = (program.phases || []) as PhaseData[]
-    const effectiveStart = startDate ? new Date(startDate) : new Date()
+    // Default "now" to the caller's LOCAL today (at UTC midnight, matching
+    // how slot dates are stored). Without tz awareness, evening users in
+    // zones west of UTC would regenerate as if it were tomorrow already.
+    const effectiveStart = startDate
+      ? new Date(startDate)
+      : utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
     const result = regenerateSchedule(
       schedule.scheduledWorkouts,
       phases,

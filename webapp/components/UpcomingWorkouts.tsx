@@ -78,7 +78,8 @@ export default function UpcomingWorkouts() {
         const token = localStorage.getItem('token')
         if (!token) return
 
-        const res = await fetch('/api/schedule?view=week', {
+        const tz = new Date().getTimezoneOffset()
+        const res = await fetch(`/api/schedule?view=week&tz=${tz}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         })
 
