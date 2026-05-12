@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Plus, Trash2, Upload } from 'lucide-react'
 
 interface VideoDoc {
   _id: string
@@ -24,6 +24,10 @@ export default function VideosEditor({ exerciseName, exerciseSlug }: Props) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ videoUrl: '', thumbnailUrl: '', isPlaceholder: true })
   const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -86,6 +90,55 @@ export default function VideosEditor({ exerciseName, exerciseSlug }: Props) {
     }
   }
 
+  async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!exerciseSlug) {
+      setUploadError('Save the exercise once before uploading a video')
+      return
+    }
+    setUploading(true)
+    setUploadProgress(0)
+    setUploadError(null)
+
+    try {
+      const token = localStorage.getItem('token')
+      const form = new FormData()
+      form.append('video', file)
+
+      const result = await new Promise<{ ok: boolean; status: number; body: string }>(
+        (resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', `/api/exercises/${exerciseSlug}/video`)
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
+          }
+          xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, body: xhr.responseText })
+          xhr.onerror = () => reject(new Error('Network error'))
+          xhr.send(form)
+        }
+      )
+
+      if (!result.ok) {
+        let msg = `Upload failed (${result.status})`
+        try {
+          const parsed = JSON.parse(result.body) as { error?: string }
+          if (parsed.error) msg = parsed.error
+        } catch {}
+        throw new Error(msg)
+      }
+
+      await reload()
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+      setUploadProgress(null)
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('Delete this video?')) return
     try {
@@ -142,7 +195,46 @@ export default function VideosEditor({ exerciseName, exerciseSlug }: Props) {
       )}
 
       <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
-        <p className="mb-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">Add a video</p>
+        <p className="mb-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+          Upload a video file
+        </p>
+        <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          MP4 / MOV / WebM, up to 100 MB. Uploads stream to our object store and replace the
+          exercise&apos;s primary video.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4,video/quicktime,video/webm,video/x-matroska"
+          onChange={handleFileSelected}
+          className="hidden"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || !exerciseSlug}
+            className="flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {uploading ? `Uploading… ${uploadProgress ?? 0}%` : 'Choose file'}
+          </button>
+          {uploading && uploadProgress !== null && (
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+              <div
+                className="h-full bg-emerald-500 transition-all"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          )}
+        </div>
+        {uploadError && (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
+        )}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-800">
+        <p className="mb-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">Or link a video URL</p>
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             type="text"
