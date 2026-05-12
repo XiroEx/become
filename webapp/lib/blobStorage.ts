@@ -20,6 +20,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
   type PutObjectCommandInput,
@@ -33,8 +34,17 @@ export interface BlobPutInput {
   cacheControl?: string
 }
 
+export interface BlobGetResult {
+  body: ReadableStream<Uint8Array> | null
+  contentType?: string
+  contentLength?: number
+  etag?: string
+  lastModified?: Date
+}
+
 export interface BlobStore {
   put(input: BlobPutInput): Promise<{ key: string; publicUrl: string }>
+  get(key: string): Promise<BlobGetResult>
   delete(key: string): Promise<void>
   exists(key: string): Promise<boolean>
   publicUrl(key: string): string
@@ -74,6 +84,17 @@ class S3BlobStore implements BlobStore {
     }
     await this.client.send(new PutObjectCommand(params))
     return { key, publicUrl: this.publicUrl(key) }
+  }
+
+  async get(key: string): Promise<BlobGetResult> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }))
+    return {
+      body: res.Body?.transformToWebStream() ?? null,
+      contentType: res.ContentType,
+      contentLength: res.ContentLength,
+      etag: res.ETag,
+      lastModified: res.LastModified,
+    }
   }
 
   async delete(key: string) {
