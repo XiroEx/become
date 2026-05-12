@@ -28,7 +28,14 @@ export async function POST(
     }
 
     const body = await request.json()
-    const item = await resolveItemFromInput(body as MealItemInput)
+    let item
+    try {
+      item = await resolveItemFromInput(body as MealItemInput)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid item payload'
+      console.error('[meal-logs items POST] item resolution failed:', message, '— payload:', JSON.stringify(body).slice(0, 1000))
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
 
     log.items.push(item)
     await log.save()

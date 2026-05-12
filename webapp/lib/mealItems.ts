@@ -88,10 +88,11 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
     }
   }
 
-  if (!name) throw new Error('Item is missing required field: name')
-  if (servingSize == null) throw new Error('Item is missing required field: servingSize')
-  if (!servingUnit) throw new Error('Item is missing required field: servingUnit')
-  if (!nutrition) throw new Error('Item is missing required field: nutrition')
+  const ctx = `foodId=${input.foodId ?? '∅'} variantId=${input.variantId ?? '∅'} name=${input.name ?? '∅'}`
+  if (!name) throw new Error(`Item is missing required field: name (${ctx})`)
+  if (servingSize == null) throw new Error(`Item is missing required field: servingSize (${ctx})`)
+  if (!servingUnit) throw new Error(`Item is missing required field: servingUnit (${ctx})`)
+  if (!nutrition) throw new Error(`Item is missing required field: nutrition (${ctx})`)
 
   return {
     foodId: foodObjectId,

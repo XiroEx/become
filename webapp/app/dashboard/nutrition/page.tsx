@@ -397,7 +397,10 @@ function NutritionPageInner() {
         // Once a session-added tag has content, it'll appear via logsByTag — drop it.
         setSessionTags(prev => prev.filter(t => t !== useTag))
       } else {
-        showErrorToast('Failed to add food. Please try again.')
+        const data = await res.json().catch(() => null)
+        const serverMessage = data && typeof data.error === 'string' ? data.error : null
+        showErrorToast(serverMessage ? `Failed to add food: ${serverMessage}` : 'Failed to add food. Please try again.')
+        console.error('[nutrition] add food failed', { status: res.status, error: serverMessage, payload: itemPayload })
       }
     } catch (err) {
       console.error('Failed to add food:', err)
