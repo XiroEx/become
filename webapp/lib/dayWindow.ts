@@ -1,0 +1,97 @@
+/**
+ * Timezone-aware day-window helpers.
+ *
+ * The browser sends its tz offset (minutes WEST of UTC, matching
+ * `Date.getTimezoneOffset()` semantics) as the `tz` query/body param.
+ * Server endpoints use these helpers to interpret YYYY-MM-DD as the
+ * CALLER'S LOCAL day rather than the (often wrong) UTC day.
+ *
+ * Pattern shipped in PR #244 (meal-logs) and PR #246 (nutrition/log).
+ */
+
+const TZ_CLAMP_MIN = -840 // ±14h
+const TZ_CLAMP_MAX = 840
+
+/** Read `tz` from URL search params, clamped to ±14h. Defaults to 0 (UTC). */
+export function readTzOffset(searchParams: URLSearchParams): number {
+  const raw = searchParams.get('tz')
+  if (raw == null) return 0
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(TZ_CLAMP_MIN, Math.min(TZ_CLAMP_MAX, n))
+}
+
+/** Read `tz` from a JSON body, clamped to ±14h. Defaults to 0 (UTC). */
+export function readTzOffsetFromBody(body: unknown): number {
+  if (!body || typeof body !== 'object') return 0
+  const raw = (body as Record<string, unknown>).tz
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.max(TZ_CLAMP_MIN, Math.min(TZ_CLAMP_MAX, raw))
+}
+
+/**
+ * Resolve a YYYY-MM-DD calendar-day key for a caller in `tzOffsetMinutes`
+ * (browser-style: positive WEST of UTC). When `dateStr` is provided and
+ * well-formed, returns it verbatim (the caller's intended local day).
+ * Otherwise derives "today" in the caller's local zone from `now`.
+ */
+export function localDateKey(
+  dateStr: string | null | undefined,
+  tzOffsetMinutes: number,
+  now: Date = new Date()
+): string {
+  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
+  const shifted = new Date(now.getTime() - tzOffsetMinutes * 60_000)
+  const y = shifted.getUTCFullYear()
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(shifted.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/**
+ * Returns the UTC window [start, end] that corresponds to the LOCAL calendar
+ * day identified by `dateKey` (YYYY-MM-DD) for a caller in `tzOffsetMinutes`.
+ * Used to filter rows by a Date field so events that happened during the
+ * user's local evening — which spill into the next UTC day in zones west
+ * of UTC — are still included.
+ */
+export function localDayWindowForKey(
+  dateKey: string,
+  tzOffsetMinutes: number
+): { start: Date; end: Date } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  if (!m) {
+    const fb = new Date(dateKey + 'T00:00:00.000Z')
+    return { start: fb, end: new Date(fb.getTime() + 86_400_000 - 1) }
+  }
+  const utcMidnight = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const start = new Date(utcMidnight + tzOffsetMinutes * 60_000)
+  const end = new Date(start.getTime() + 86_400_000 - 1)
+  return { start, end }
+}
+
+/**
+ * Render the YYYY-MM-DD of the LOCAL calendar day for a caller in
+ * `tzOffsetMinutes`. When offset is 0, returns the UTC day — matches legacy
+ * behavior for clients that don't send `tz`.
+ */
+export function dateKey(d: Date, tzOffsetMinutes = 0): string {
+  const shifted = new Date(d.getTime() - tzOffsetMinutes * 60_000)
+  const y = shifted.getUTCFullYear()
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(shifted.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Returns a Date pegged to UTC midnight of the supplied YYYY-MM-DD. Used as
+ * the storage key for row-keyed models (NutritionLog.date, DailyWin.date,
+ * DisciplineChallenge.date, DailyContentLog.date, Schedule slot dates),
+ * preserving backwards compatibility with rows previously written by code
+ * paths that did `new Date(dateStr + 'T00:00:00.000Z')`.
+ */
+export function utcMidnightDateKey(dateKey: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
+  if (!m) return new Date(dateKey + 'T00:00:00.000Z')
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+}

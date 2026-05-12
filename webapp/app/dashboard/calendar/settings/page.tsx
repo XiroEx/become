@@ -37,7 +37,8 @@ export default function CalendarSettingsPage() {
         const token = localStorage.getItem('token')
         if (!token) return
 
-        const res = await fetch('/api/schedule', {
+        const tz = new Date().getTimezoneOffset()
+        const res = await fetch(`/api/schedule?tz=${tz}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         })
 
@@ -77,6 +78,7 @@ export default function CalendarSettingsPage() {
       const token = localStorage.getItem('token')
       if (!token) return
 
+      const tz = new Date().getTimezoneOffset()
       const res = await fetch('/api/schedule/settings', {
         method: 'PUT',
         headers: {
@@ -86,6 +88,7 @@ export default function CalendarSettingsPage() {
         body: JSON.stringify({
           programId,
           trainingDays: editDays,
+          tz,
         }),
       })
 
@@ -95,7 +98,7 @@ export default function CalendarSettingsPage() {
         setEditingSchedule(null)
 
         // Refresh schedules
-        const refreshRes = await fetch('/api/schedule', {
+        const refreshRes = await fetch(`/api/schedule?tz=${tz}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         })
         if (refreshRes.ok) {

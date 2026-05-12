@@ -443,10 +443,11 @@ function NutritionPageInner() {
 
   const handleAddWater = async (amount: number) => {
     try {
+      const tz = new Date().getTimezoneOffset()
       const res = await fetch('/api/nutrition/water', {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ amount, date: dateParam }),
+        body: JSON.stringify({ amount, date: dateParam, tz }),
       })
       if (res.ok) {
         await fetchSideTables()
@@ -458,10 +459,11 @@ function NutritionPageInner() {
 
   const handleQuickAdd = async (data: { calories: number; protein: number; carbs: number; fats: number; note?: string }) => {
     try {
+      const tz = new Date().getTimezoneOffset()
       const res = await fetch('/api/nutrition/quick-add', {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ ...data, date: dateParam }),
+        body: JSON.stringify({ ...data, date: dateParam, tz }),
       })
       if (res.ok) {
         await fetchSideTables()
@@ -474,10 +476,11 @@ function NutritionPageInner() {
 
   const handleDeleteQuickAdd = async (quickAddId: string) => {
     try {
+      const tz = new Date().getTimezoneOffset()
       const res = await fetch('/api/nutrition/quick-add', {
         method: 'DELETE',
         headers: getHeaders(),
-        body: JSON.stringify({ quickAddId, date: dateParam }),
+        body: JSON.stringify({ quickAddId, date: dateParam, tz }),
       })
       if (res.ok) {
         await fetchSideTables()

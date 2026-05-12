@@ -51,7 +51,7 @@ function EvidenceBuilder() {
       const res = await fetch('/api/mind/wins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ win: input.trim() }),
+        body: JSON.stringify({ win: input.trim(), tz: new Date().getTimezoneOffset() }),
       })
       if (res.ok) {
         const data = await res.json()

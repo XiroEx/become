@@ -38,8 +38,9 @@ export default function NextWorkoutCard() {
       const to = new Date(now)
       to.setDate(to.getDate() + 14)
 
+      const tz = new Date().getTimezoneOffset()
       const res = await fetch(
-        `/api/schedule?from=${from.toISOString()}&to=${to.toISOString()}`,
+        `/api/schedule?from=${from.toISOString()}&to=${to.toISOString()}&tz=${tz}`,
         { headers: { Authorization: `Bearer ${token}` } }
       )
 
@@ -88,10 +89,11 @@ export default function NextWorkoutCard() {
     if (!token) return
     setSkipping(w.date)
     try {
+      const tz = new Date().getTimezoneOffset()
       await fetch('/api/schedule', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date }),
+        body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date, tz }),
       })
       await fetchSchedules()
     } finally {

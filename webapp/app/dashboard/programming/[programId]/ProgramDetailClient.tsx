@@ -226,12 +226,14 @@ export default function ProgramDetailClient({ program }: Props) {
       const token = localStorage.getItem("token");
       if (!token) return;
       const isPaused = activeProgram?.status === 'paused';
+      const tz = new Date().getTimezoneOffset();
       const res = await fetch("/api/schedule", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           programId: program.program_id,
           action: isPaused ? 'resume' : 'pause',
+          tz,
         }),
       });
       if (res.ok) {
@@ -250,6 +252,7 @@ export default function ProgramDetailClient({ program }: Props) {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
+      const tz = new Date().getTimezoneOffset();
       const res = await fetch("/api/schedule", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -257,6 +260,7 @@ export default function ProgramDetailClient({ program }: Props) {
           programId: program.program_id,
           action: 'shift',
           days: delayDays,
+          tz,
         }),
       });
       if (res.ok) {
@@ -353,7 +357,8 @@ export default function ProgramDetailClient({ program }: Props) {
     try {
       const token = localStorage.getItem('token');
       if (token) {
-        const res = await fetch('/api/schedule?view=all', {
+        const tz = new Date().getTimezoneOffset();
+        const res = await fetch(`/api/schedule?view=all&tz=${tz}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {

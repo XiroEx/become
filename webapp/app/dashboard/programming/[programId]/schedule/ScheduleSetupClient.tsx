@@ -73,7 +73,8 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
       try {
         const token = localStorage.getItem('token')
         if (!token) { setMode('create'); return }
-        const res = await fetch(`/api/schedule?programId=${programId}&view=all`, {
+        const tz = new Date().getTimezoneOffset()
+        const res = await fetch(`/api/schedule?programId=${programId}&view=all&tz=${tz}`, {
           headers: { 'Authorization': `Bearer ${token}` },
         })
         if (res.ok) {

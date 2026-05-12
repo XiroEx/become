@@ -8,6 +8,13 @@ import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
 import { resolveItemFromInput } from '@/lib/mealItems'
+import {
+  readTzOffset,
+  readTzOffsetFromBody,
+  localDateKey,
+  localDayWindowForKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 import mongoose from 'mongoose'
 
 // ---------------------------------------------------------------------------
@@ -26,52 +33,6 @@ import mongoose from 'mongoose'
 
 const PRIMARY_TAGS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 type MealType = typeof PRIMARY_TAGS[number]
-
-// Resolve the YYYY-MM-DD calendar-day key for a caller in `tzOffsetMinutes`
-// (browser-style: positive WEST of UTC). When `dateStr` is provided, returns
-// it verbatim (treating it as the user's intended local day). Otherwise
-// derives "today" in the caller's local zone from `now`.
-function localDateKey(dateStr: string | null | undefined, tzOffsetMinutes: number, now: Date = new Date()): string {
-  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr
-  const shifted = new Date(now.getTime() - tzOffsetMinutes * 60_000)
-  const y = shifted.getUTCFullYear()
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(shifted.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-// Returns the UTC window for a LOCAL calendar day. Used to filter MealLog by
-// loggedAt so logs that happened during the user's evening (which in non-UTC
-// zones can spill into the next UTC day) are still included.
-function localDayWindowForKey(dateKey: string, tzOffsetMinutes: number): { start: Date; end: Date } {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
-  if (!m) {
-    const fb = new Date(dateKey + 'T00:00:00.000Z')
-    return { start: fb, end: new Date(fb.getTime() + 86_400_000 - 1) }
-  }
-  const utcMidnight = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  const start = new Date(utcMidnight + tzOffsetMinutes * 60_000)
-  const end = new Date(start.getTime() + 86_400_000 - 1)
-  return { start, end }
-}
-
-function readTzOffset(searchParams: URLSearchParams): number {
-  const raw = searchParams.get('tz')
-  if (raw == null) return 0
-  const n = Number(raw)
-  if (!Number.isFinite(n)) return 0
-  return Math.max(-840, Math.min(840, n))
-}
-
-// NutritionLog rows are keyed by `date` at UTC midnight of the local-day's
-// YYYY-MM-DD. This keeps the calendar-day identifier stable across timezones
-// AND preserves backwards compatibility with rows written by the old code
-// path (which used UTC midnight derived from `new Date(dateStr+'T00:00Z')`).
-function nutritionLogDateKey(dateKey: string): Date {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
-  if (!m) return new Date(dateKey + 'T00:00:00.000Z')
-  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
-}
 
 function pickPrimaryTag(tags: string[] | undefined): MealType {
   if (Array.isArray(tags)) {
@@ -251,7 +212,7 @@ export async function GET(request: NextRequest) {
     const tzOffsetMinutes = readTzOffset(searchParams)
     const dateKey = localDateKey(searchParams.get('date'), tzOffsetMinutes)
     const { start, end } = localDayWindowForKey(dateKey, tzOffsetMinutes)
-    const nutritionLogKey = nutritionLogDateKey(dateKey)
+    const nutritionLogKey = utcMidnightDateKey(dateKey)
 
     const [mealLogs, primaryLog, goals] = await Promise.all([
       MealLog.find({
@@ -342,10 +303,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { mealType, food, date: dateStr, tz: bodyTz } = body
-    const tzOffsetMinutes = typeof bodyTz === 'number' && Number.isFinite(bodyTz)
-      ? Math.max(-840, Math.min(840, bodyTz))
-      : 0
+    const { mealType, food, date: dateStr } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (!mealType || !food || !food.name || !food.nutrition) {
       return NextResponse.json({ error: 'Missing required fields: mealType, food.name, food.nutrition' }, { status: 400 })
@@ -358,7 +317,7 @@ export async function POST(request: NextRequest) {
 
     const dateKey = localDateKey(dateStr, tzOffsetMinutes)
     const { start, end } = localDayWindowForKey(dateKey, tzOffsetMinutes)
-    const date = nutritionLogDateKey(dateKey)
+    const date = utcMidnightDateKey(dateKey)
 
     const item = await resolveItemFromInput({
       foodId: food.foodId,
@@ -453,10 +412,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { mealId, foodEntryId, updates, date: dateStr, tz: bodyTz } = body
-    const tzOffsetMinutes = typeof bodyTz === 'number' && Number.isFinite(bodyTz)
-      ? Math.max(-840, Math.min(840, bodyTz))
-      : 0
+    const { mealId, foodEntryId, updates, date: dateStr } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (!mealId || !foodEntryId || !updates) {
       return NextResponse.json({ error: 'Missing required fields: mealId, foodEntryId, updates' }, { status: 400 })
@@ -587,7 +544,7 @@ export async function DELETE(request: NextRequest) {
 
 async function buildLegacyDayResponse(userId: string, dateKey: string, tzOffsetMinutes = 0) {
   const { start, end } = localDayWindowForKey(dateKey, tzOffsetMinutes)
-  const nutritionKey = nutritionLogDateKey(dateKey)
+  const nutritionKey = utcMidnightDateKey(dateKey)
   const [mealLogs, nutritionLog, goals] = await Promise.all([
     MealLog.find({
       user: userId,

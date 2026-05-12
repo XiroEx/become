@@ -3,12 +3,11 @@ import dbConnect from '@/lib/mongodb'
 import NutritionLog from '@/models/NutritionLog'
 import NutritionGoal from '@/models/NutritionGoal'
 import { verifyAuth } from '@/lib/auth'
-
-function getDateStart(dateStr?: string | null): Date {
-  const d = dateStr ? new Date(dateStr + 'T00:00:00.000Z') : new Date()
-  d.setUTCHours(0, 0, 0, 0)
-  return d
-}
+import {
+  readTzOffsetFromBody,
+  localDateKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 
 // POST: Log water (increment)
 export async function POST(request: NextRequest) {
@@ -20,6 +19,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { amount, date: dateStr } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (amount === undefined || typeof amount !== 'number') {
       return NextResponse.json({ error: 'Missing required field: amount (number)' }, { status: 400 })
@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const date = getDateStart(dateStr)
+    // Row-keyed at UTC midnight of the LOCAL day's YYYY-MM-DD — preserves
+    // back-compat with rows written before the tz fix while routing evening
+    // users' increments into the correct local-day row.
+    const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
 
     // Try to increment on existing log
     let log = await NutritionLog.findOneAndUpdate(
@@ -66,6 +69,7 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json()
     const { amount, date: dateStr } = body
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (amount === undefined || typeof amount !== 'number') {
       return NextResponse.json({ error: 'Missing required field: amount (number)' }, { status: 400 })
@@ -73,7 +77,7 @@ export async function PUT(request: NextRequest) {
 
     await dbConnect()
 
-    const date = getDateStart(dateStr)
+    const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
 
     // Try to set on existing log
     let log = await NutritionLog.findOneAndUpdate(
