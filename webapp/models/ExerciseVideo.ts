@@ -3,6 +3,10 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 export type ExerciseVideoStatus = 'pending' | 'active' | 'failed';
 
 export interface IExerciseVideo extends Document {
+  // `slug` is the canonical key tying this video to its Exercise. It mirrors
+  // Exercise.slug (which is the unique id). Optional in the type because
+  // pre-migration rows do not have it; new writes always populate it.
+  slug?: string;
   exerciseName: string;
   videoUrl: string;
   thumbnailUrl?: string;
@@ -22,10 +26,24 @@ export interface IExerciseVideo extends Document {
 
 const ExerciseVideoSchema = new Schema<IExerciseVideo>(
   {
+    // Canonical key — matches Exercise.slug. Sparse so legacy/unmigrated
+    // rows (which lack the field) don't all collide on `null` under the
+    // unique index. Once the migration is run for an environment, every
+    // row should have `slug` populated.
+    slug: {
+      type: String,
+      default: null,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    // exerciseName is retained for display + legacy fallback reads, but is
+    // NO LONGER unique — two exercises can share a display name (only slug
+    // is unique on Exercise). Kept indexed so legacy `findOne({ exerciseName })`
+    // queries stay cheap.
     exerciseName: {
       type: String,
       required: true,
-      unique: true,
       index: true,
     },
     videoUrl: {

@@ -26,6 +26,19 @@ const ALLOWED_MIMES = new Set([
   'video/x-matroska',
 ])
 
+// NOTE: Next.js App Router does not honor `export const config = { api: ... }`
+// — that's a Pages Router relic. There is no app-level streaming hook here,
+// so we lean on:
+//   1. an early `Content-Length` check below (cheap DoS guard),
+//   2. the reverse-proxy `client_max_body_size` / equivalent on the edge
+//      (the only real hard cap — the app server can still be fed a chunked
+//      request with no Content-Length).
+//
+// TODO(uploads): replace this whole post-to-app-server flow with the
+// direct-to-S3 path via `BlobStore.presignedPutUrl` in `lib/blobStorage.ts`.
+// That removes the app server from the byte path entirely and turns this
+// route into a small "register the URL" handler.
+
 interface RouteParams {
   params: Promise<{ slug: string }>
 }
@@ -35,6 +48,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   if (!gate.ok) return gate.response
 
   const { slug } = await params
+
+  // Cheap DoS guard: reject oversized uploads BEFORE buffering the body.
+  // `request.formData()` fully buffers the multipart payload into memory,
+  // so doing the size check after parsing means an authed admin can
+  // RAM-bomb the server with a multi-GB upload. This is best-effort —
+  // a chunked request can omit Content-Length, which is why the reverse
+  // proxy must enforce the real cap (e.g. nginx `client_max_body_size`).
+  const contentLengthRaw = request.headers.get('content-length')
+  if (contentLengthRaw) {
+    const contentLength = Number(contentLengthRaw)
+    if (Number.isFinite(contentLength) && contentLength > MAX_BYTES) {
+      return NextResponse.json(
+        { error: `Upload too large (max ${MAX_BYTES} bytes)` },
+        { status: 413 }
+      )
+    }
+  }
 
   let formData: FormData
   try {
@@ -68,7 +98,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   try {
     await connectDB()
-    const exercise = await Exercise.findOne({ slug })
+    // Mirror the admin scope used by the sibling PUT/PATCH/DELETE on
+    // /api/exercises/[slug]: custom (user-owned) exercises are NOT
+    // admin-mutable. Without the filter an admin could overwrite a user's
+    // custom exercise video by guessing the slug pattern.
+    const exercise = await Exercise.findOne({ slug, isCustom: { $ne: true } })
     if (!exercise) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
     }
@@ -96,10 +130,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     exercise.videoStorageKey = key
     await exercise.save()
 
+    // Upsert keyed on `slug` — Exercise.name is NOT unique, so keying on it
+    // (the old behavior) let two exercises sharing a display name overwrite
+    // each other's video metadata. Slug is unique on Exercise, so it's the
+    // correct join key. `exerciseName` is still written for display + legacy
+    // readers that haven't been switched to slug lookups yet.
     await ExerciseVideo.findOneAndUpdate(
-      { exerciseName: exercise.name },
+      { slug },
       {
         $set: {
+          slug,
+          exerciseName: exercise.name,
           videoUrl: publicUrl,
           isPlaceholder: false,
           storageKey: key,
@@ -135,7 +176,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   try {
     await connectDB()
-    const exercise = await Exercise.findOne({ slug })
+    // Same custom-scope filter as POST (see comment above) — admins cannot
+    // delete a custom exercise's video via the admin endpoint.
+    const exercise = await Exercise.findOne({ slug, isCustom: { $ne: true } })
     if (!exercise) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
     }
@@ -153,9 +196,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     exercise.videoStorageKey = null
     await exercise.save()
 
+    // Key on slug (canonical join). The name fallback used to fail closed
+    // for unmigrated rows; we tack on a $or so the delete still finds a
+    // legacy row that only has `exerciseName`.
     await ExerciseVideo.findOneAndUpdate(
-      { exerciseName: exercise.name },
-      { $set: { videoUrl: '', isPlaceholder: true, storageKey: null, status: 'pending' } }
+      { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
+      { $set: { slug, exerciseName: exercise.name, videoUrl: '', isPlaceholder: true, storageKey: null, status: 'pending' } }
     )
 
     invalidateExerciseCache()
@@ -167,6 +213,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export const config = {
-  api: { bodyParser: false },
-}
+
+// Intentionally NO `export const config = { api: { bodyParser: false } }`
+// — that's a Next.js Pages Router knob and has zero effect in App Router.
+// Hard byte caps must be enforced at the reverse proxy (nginx
+// `client_max_body_size`, Cloudflare upload limit, etc.). The
+// `Content-Length` check above is only a cheap early-reject.

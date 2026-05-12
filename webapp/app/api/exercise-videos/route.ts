@@ -32,7 +32,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (exerciseSlug) {
-      // Look up the exercise to find its name (since videos key on exerciseName)
+      // Prefer the canonical `slug` key (populated by the upload route +
+      // migration). Fall back to name/alias matching for unmigrated rows.
+      const slugMatch = await ExerciseVideo.findOne({ slug: exerciseSlug }).lean();
+      if (slugMatch) {
+        return NextResponse.json({ videos: [slugMatch] });
+      }
+
       const exercise = await Exercise.findOne({ slug: exerciseSlug })
         .select('name aliases')
         .lean<{ name: string; aliases?: string[] }>();
@@ -80,9 +86,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve slug from the exercise so new rows are written with the
+    // canonical key. Best-effort: a video for an unknown exercise name
+    // still gets created (slug stays null) for backward compatibility
+    // with manual seeding.
+    const exercise = await Exercise.findOne({
+      $or: [{ name: exerciseName }, { aliases: exerciseName }],
+    })
+      .select('slug')
+      .lean<{ slug: string } | null>();
+    const slug = exercise?.slug ?? null;
+
+    // Upsert keyed on slug when we have it (canonical), else fall back to
+    // name (legacy behavior) so this endpoint stays usable for un-linked
+    // seed data.
+    const filter = slug ? { slug } : { exerciseName, slug: null };
     const video = await ExerciseVideo.findOneAndUpdate(
-      { exerciseName },
+      filter,
       {
+        slug,
         exerciseName,
         videoUrl,
         thumbnailUrl: thumbnailUrl ?? null,
