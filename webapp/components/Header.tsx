@@ -7,7 +7,7 @@ interface HeaderProps {
   backUrl?: string;
 }
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "Become";
+const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME";
 const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "Transform your body and mind.";
 const logo = process.env.NEXT_PUBLIC_LOGO || "/logo.png";
 
