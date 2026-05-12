@@ -99,6 +99,52 @@ export function nutritionForQuantity(
   return scaleNutrition(variant.nutrition, factor)
 }
 
+/**
+ * Scale a variant's stored nutrition to its actual per-serving values.
+ *
+ * Background: OpenFoodFacts imports are stored as per-100g canonical
+ * (`servingSize=100`, `servingUnit='g'`) with the user-facing serving in
+ * `gramsPerServing` (e.g. 38 for a one-bag chip serving). The stored
+ * `nutrition` is per the canonical 100g, so the UI must scale it down to
+ * the actual serving for display. Same idea for `ml` / `mlPerServing`.
+ *
+ * When `gramsPerServing` / `mlPerServing` match the storage size, or are
+ * absent, or the unit isn't 'g' or 'ml' (e.g. 'each' / 'slice'), the
+ * original nutrition is returned unchanged (scale = 1).
+ *
+ * Used by per-serving display surfaces (food detail page, variants list).
+ * Logging code paths must NOT use this — they send the raw stored
+ * nutrition along with `loggedQuantity` / `loggedGramsPerServing` so the
+ * server can do its own scaling.
+ */
+export function scalePerServingNutrition(
+  variant: {
+    servingUnit?: string
+    servingSize: number
+    gramsPerServing?: number
+    mlPerServing?: number
+    nutrition: IFoodNutrition
+  },
+): IFoodNutrition {
+  const unit = variant.servingUnit
+  const size = variant.servingSize
+  if (unit === 'g'
+    && variant.gramsPerServing != null
+    && variant.gramsPerServing > 0
+    && size > 0
+    && Math.abs(variant.gramsPerServing - size) > 0.001) {
+    return scaleNutrition(variant.nutrition, variant.gramsPerServing / size)
+  }
+  if (unit === 'ml'
+    && variant.mlPerServing != null
+    && variant.mlPerServing > 0
+    && size > 0
+    && Math.abs(variant.mlPerServing - size) > 0.001) {
+    return scaleNutrition(variant.nutrition, variant.mlPerServing / size)
+  }
+  return variant.nutrition
+}
+
 // ---------------------------------------------------------------------------
 // Internal
 // ---------------------------------------------------------------------------

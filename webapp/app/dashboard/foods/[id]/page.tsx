@@ -18,6 +18,7 @@ import PageTransition from '@/components/PageTransition'
 import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
+import { scalePerServingNutrition } from '@/lib/foodMath'
 
 interface Variant {
   _id?: string
@@ -340,35 +341,10 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
   // When `gramsPerServing` / `mlPerServing` are set and differ from the
   // storage size, the actual user-facing serving is THAT (e.g. one 38g bag),
   // so the per-serving macros must be scaled down accordingly. This matches
-  // the QuantityPicker's primary-chip behavior.
-  const rawN = defaultVariant.nutrition
-  const perServingScale = (() => {
-    if (defaultVariant.servingUnit === 'g'
-      && defaultVariant.gramsPerServing != null
-      && defaultVariant.gramsPerServing > 0
-      && Math.abs(defaultVariant.gramsPerServing - defaultVariant.servingSize) > 0.001) {
-      return defaultVariant.gramsPerServing / defaultVariant.servingSize
-    }
-    if (defaultVariant.servingUnit === 'ml'
-      && defaultVariant.mlPerServing != null
-      && defaultVariant.mlPerServing > 0
-      && Math.abs(defaultVariant.mlPerServing - defaultVariant.servingSize) > 0.001) {
-      return defaultVariant.mlPerServing / defaultVariant.servingSize
-    }
-    return 1
-  })()
-  const n = perServingScale === 1
-    ? rawN
-    : {
-        calories: rawN.calories * perServingScale,
-        protein: rawN.protein * perServingScale,
-        carbs: rawN.carbs * perServingScale,
-        fats: rawN.fats * perServingScale,
-        fiber: rawN.fiber != null ? rawN.fiber * perServingScale : undefined,
-        sugar: rawN.sugar != null ? rawN.sugar * perServingScale : undefined,
-        sodium: rawN.sodium != null ? rawN.sodium * perServingScale : undefined,
-        saturatedFat: rawN.saturatedFat != null ? rawN.saturatedFat * perServingScale : undefined,
-      }
+  // the QuantityPicker's primary-chip behavior. Logic lives in
+  // `lib/foodMath.scalePerServingNutrition` so the variants list below
+  // can reuse it.
+  const n = scalePerServingNutrition(defaultVariant)
 
   return (
     <PageTransition className="space-y-4 pb-32">
@@ -491,7 +467,12 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
             Variants ({variants.length})
           </h2>
           <div className="space-y-2">
-            {variants.map((v, idx) => (
+            {variants.map((v, idx) => {
+              // Each variant's stored nutrition is per its own (servingSize,
+              // servingUnit) — for OFF imports that's per-100g. Scale to the
+              // actual per-serving values so the list matches the headline.
+              const vn = scalePerServingNutrition(v)
+              return (
               <div
                 key={v._id ?? idx}
                 className="border-b border-zinc-100 py-2 dark:border-zinc-800 last:border-0"
@@ -511,7 +492,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
                     </p>
                   </div>
                   <p className="text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-                    {Math.round(v.nutrition.calories)} cal
+                    {Math.round(vn.calories)} cal
                   </p>
                 </div>
                 {isOwner && (
@@ -530,7 +511,8 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
