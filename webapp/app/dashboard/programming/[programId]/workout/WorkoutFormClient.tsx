@@ -11,24 +11,43 @@ import WorkoutSummary from "@/components/WorkoutSummary";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 
-// Video player component with local video or YouTube embed support
+// Match a direct video file URL by extension, with optional query string.
+// Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
+const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
+
+// Detect a YouTube embed/watch URL. We never auto-detect Vimeo etc. — anything
+// else falls through to the play-thumbnail and iframe branch.
+function isYouTubeUrl(u: string): boolean {
+  return /(?:youtube\.com|youtu\.be)/i.test(u);
+}
+
+function mimeForVideoUrl(u: string): string {
+  if (/\.mov(\?.*)?$/i.test(u)) return 'video/quicktime';
+  if (/\.webm(\?.*)?$/i.test(u)) return 'video/webm';
+  if (/\.mkv(\?.*)?$/i.test(u)) return 'video/x-matroska';
+  return 'video/mp4';
+}
+
+// Video player component — renders direct files inline (no native controls)
+// and YouTube via iframe.
 function VideoPlayer({ exerciseName }: { exerciseName: string }) {
   const videoUrl = getExerciseVideoUrl(exerciseName);
   const thumbnailUrl = getExerciseThumbnail(exerciseName);
-  const isLocalVideo = videoUrl.startsWith('/') && (videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mov'));
+  // Direct = anything that ends in a known video extension, regardless of
+  // whether it's a local path or a remote https:// URL.
+  const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
 
-  // For local videos, show inline video player
-  if (isLocalVideo) {
+  if (isDirectVideo) {
     return (
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
         <video
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           autoPlay
           loop
           muted
           playsInline
         >
-          <source src={videoUrl} type={videoUrl.endsWith('.mov') ? 'video/quicktime' : 'video/mp4'} />
+          <source src={videoUrl} type={mimeForVideoUrl(videoUrl)} />
         </video>
         <div className="absolute top-2 right-2">
           <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
@@ -39,10 +58,18 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
     );
   }
 
-  // For YouTube videos (future use when real videos are added)
+  // YouTube embed branch — only used when the URL looks like YouTube.
+  // Anything else (an unknown remote URL) also falls here and renders the
+  // thumbnail + play button; tapping launches the URL in an iframe which is
+  // probably wrong, so guard with a check.
   const [isPlaying, setIsPlaying] = useState(false);
+  const isYouTube = isYouTubeUrl(videoUrl);
 
-  if (isPlaying) {
+  // Only YouTube URLs get the iframe treatment — handing a random video URL
+  // to <iframe> triggers the browser's native video viewer (huge default
+  // controls, wrong aspect ratio). If the URL isn't YouTube, fall through to
+  // the placeholder rather than mis-embed it.
+  if (isPlaying && isYouTube) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg">
         <iframe
