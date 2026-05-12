@@ -273,6 +273,7 @@ export interface IExerciseDefinition extends Document {
   // Media (merged from ExerciseVideo collection)
   videoUrl?: string;
   thumbnailUrl?: string;
+  videoStorageKey?: string | null; // BlobStore object key — canonical id for the binary
 
   // Tags & search
   tags: string[];
@@ -489,8 +490,9 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
     alternatives:  [{ type: String }], // slugs
 
     // Media
-    videoUrl:      { type: String, default: null },
-    thumbnailUrl:  { type: String, default: null },
+    videoUrl:        { type: String, default: null },
+    thumbnailUrl:    { type: String, default: null },
+    videoStorageKey: { type: String, default: null },
 
     // Tags & search
     tags: [{ type: String, index: true }],
