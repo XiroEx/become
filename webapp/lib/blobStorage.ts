@@ -34,17 +34,26 @@ export interface BlobPutInput {
   cacheControl?: string
 }
 
+export interface BlobGetOptions {
+  /** HTTP Range header value, e.g. `bytes=0-1023`. Forwarded as-is to S3.
+   *  When set, the returned result is a partial object with `contentRange`
+   *  populated and `contentLength` covering only the requested slice. */
+  range?: string
+}
+
 export interface BlobGetResult {
   body: ReadableStream<Uint8Array> | null
   contentType?: string
   contentLength?: number
+  contentRange?: string
+  acceptRanges?: string
   etag?: string
   lastModified?: Date
 }
 
 export interface BlobStore {
   put(input: BlobPutInput): Promise<{ key: string; publicUrl: string }>
-  get(key: string): Promise<BlobGetResult>
+  get(key: string, options?: BlobGetOptions): Promise<BlobGetResult>
   delete(key: string): Promise<void>
   exists(key: string): Promise<boolean>
   publicUrl(key: string): string
@@ -86,12 +95,18 @@ class S3BlobStore implements BlobStore {
     return { key, publicUrl: this.publicUrl(key) }
   }
 
-  async get(key: string): Promise<BlobGetResult> {
-    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }))
+  async get(key: string, options: BlobGetOptions = {}): Promise<BlobGetResult> {
+    const res = await this.client.send(new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Range: options.range,
+    }))
     return {
       body: res.Body?.transformToWebStream() ?? null,
       contentType: res.ContentType,
       contentLength: res.ContentLength,
+      contentRange: res.ContentRange,
+      acceptRanges: res.AcceptRanges,
       etag: res.ETag,
       lastModified: res.LastModified,
     }
