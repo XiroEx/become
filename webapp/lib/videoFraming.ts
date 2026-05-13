@@ -194,58 +194,11 @@ function clamp(n: number, lo: number, hi: number) {
   return n;
 }
 
-// ─── Inline sanity tests ─────────────────────────────────────────────────────
-// Run with: `npx ts-node webapp/lib/videoFraming.ts` (or `tsx`). Not wired into
-// a test framework — we don't have one — but keeps the auto rules honest.
-
-if (typeof require !== 'undefined' && require.main === module) {
-  const tests: Array<[VideoFramingInput, VideoSurface, Partial<ResolvedFraming>]> = [
-    // Landscape 16:9 demo
-    [{ videoWidth: 1920, videoHeight: 1080 }, 'form',    { fit: 'contain', detectedOrientation: 'landscape' }],
-    [{ videoWidth: 1920, videoHeight: 1080 }, 'live',    { fit: 'cover',   detectedOrientation: 'landscape' }],
-    [{ videoWidth: 1920, videoHeight: 1080 }, 'preview', { fit: 'contain', detectedOrientation: 'landscape' }],
-    // Portrait phone demo
-    [{ videoWidth: 1080, videoHeight: 1920 }, 'form',    { fit: 'contain', positionY: 50, detectedOrientation: 'portrait' }],
-    [{ videoWidth: 1080, videoHeight: 1920 }, 'live',    { fit: 'cover',   positionY: 40, detectedOrientation: 'portrait' }],
-    // Square
-    [{ videoWidth: 720, videoHeight: 720 }, 'live', { fit: 'cover', detectedOrientation: 'square' }],
-    // Unknown
-    [{ }, 'live', { fit: 'contain', detectedOrientation: 'unknown', isAuto: true }],
-    // Override wins per field
-    [
-      { videoWidth: 1080, videoHeight: 1920, videoFraming: { positionY: 70 } },
-      'live',
-      { fit: 'cover', positionY: 70, isAuto: false },
-    ],
-    // Override fit alone
-    [
-      { videoWidth: 1920, videoHeight: 1080, videoFraming: { fit: 'contain' } },
-      'live',
-      { fit: 'contain', isAuto: false },
-    ],
-    // Clamp out-of-range zoom
-    [
-      { videoWidth: 1920, videoHeight: 1080, videoFraming: { zoom: 9999 } },
-      'form',
-      { zoom: 400 },
-    ],
-  ];
-
-  let pass = 0;
-  let fail = 0;
-  for (const [input, surface, expect] of tests) {
-    const out = resolveFraming(input, surface);
-    let ok = true;
-    for (const [k, v] of Object.entries(expect)) {
-      // @ts-expect-error indexing into ResolvedFraming dynamically
-      if (out[k] !== v) {
-        ok = false;
-        console.error('FAIL', { input, surface, expect, got: out, key: k });
-        break;
-      }
-    }
-    if (ok) pass++; else fail++;
-  }
-  console.log(`videoFraming tests: ${pass} passed, ${fail} failed`);
-  if (fail > 0) process.exit(1);
-}
+// NOTE: a previous version of this file shipped an inline `require.main ===
+// module` sanity-test block here. Turbopack's client runtime polyfills
+// `require` (so the `typeof require !== 'undefined'` guard didn't keep the
+// block out of the browser bundle), then `module` is undefined in the
+// browser and the chunk throws on module evaluation — blanking every page
+// that imports `resolveFraming` (workout form + live workout + admin
+// preview). Block removed. If we want unit tests later, put them in
+// `videoFraming.test.ts` (Vitest excludes test files from the client graph).
