@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Video, VideoOff } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 
 interface ExerciseListItem {
@@ -17,6 +17,7 @@ interface ExerciseListItem {
   bodyRegion?: string
   movementPatterns?: string[]
   isActive?: boolean
+  videoUrl?: string | null
 }
 
 const CATEGORIES = [
@@ -279,6 +280,23 @@ export default function AdminExercisesPage() {
                   <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
                     {ex.name}
                   </span>
+                  {ex.videoUrl ? (
+                    <Video
+                      className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+                      strokeWidth={1.75}
+                      aria-label="Has video"
+                    >
+                      <title>Has video</title>
+                    </Video>
+                  ) : (
+                    <VideoOff
+                      className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-600"
+                      strokeWidth={1.75}
+                      aria-label="No video"
+                    >
+                      <title>No video</title>
+                    </VideoOff>
+                  )}
                   <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                     {ex.category}
                   </span>
