@@ -14,8 +14,22 @@
  * (`useAutoPersistVideoDimensions`) handles that for the workout surfaces.
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { resolveFraming, type VideoFramingInput, type VideoSurface } from '@/lib/videoFraming';
+
+// Persists the user's mute preference across the session so a viewer who
+// unmutes once doesn't have to un-mute every exercise card.
+const MUTE_LS_KEY = 'become:video-muted';
+
+function readInitialMuted(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return window.localStorage.getItem(MUTE_LS_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
 
 // Same detection regex used elsewhere — kept local so this component is
 // self-contained when imported by anything that already imports the regex.
@@ -41,6 +55,10 @@ export interface FramedVideoProps extends VideoFramingInput {
   className?: string;
   /** Show a tiny "Demo" badge in the corner (form/preview only). */
   showBadge?: boolean;
+  /** Show a mute/unmute toggle button. Workout form uses this so users can
+   *  hear coaching audio without giving up clean autoplay (the video still
+   *  starts muted; the toggle persists across the session via localStorage). */
+  showMuteToggle?: boolean;
   /**
    * Replace the default wrapper classes entirely. Use when the parent already
    * sizes the container (e.g. small thumbnail in a list row) — defaults still
@@ -58,9 +76,54 @@ export default function FramedVideo({
   onDimensions,
   className,
   showBadge,
+  showMuteToggle,
   wrapperOverride,
 }: FramedVideoProps) {
   const reportedRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Always start muted (autoplay requires it). After mount, sync to the
+  // user's saved preference. SSR-safe because the initial render is always
+  // muted; only the client effect can flip it.
+  const [muted, setMuted] = useState<boolean>(true);
+  useEffect(() => {
+    if (!showMuteToggle) return;
+    const remembered = readInitialMuted();
+    if (!remembered) {
+      setMuted(false);
+    }
+  }, [showMuteToggle]);
+
+  // Keep the <video> element's muted attribute in sync with state. When the
+  // user un-mutes, also nudge play() since some browsers pause a previously-
+  // autoplaying muted video the moment you flip muted=false.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = muted;
+    if (!muted) {
+      v.play().catch(() => {
+        // Autoplay-with-sound was rejected. Fall back to muted so the demo
+        // keeps looping silently — the user can try the toggle again.
+        v.muted = true;
+        setMuted(true);
+      });
+    }
+  }, [muted]);
+
+  const toggleMute = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setMuted((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(MUTE_LS_KEY, next ? '1' : '0');
+      } catch {
+        /* private mode / disabled storage — fall through */
+      }
+      return next;
+    });
+  }, []);
 
   // Resolve every render so manual edits in the framing editor are reflected
   // immediately (no debounce — sliders already throttle their setState).
@@ -111,6 +174,7 @@ export default function FramedVideo({
   return (
     <div className={`${wrapperCls} ${className ?? ''}`}>
       <video
+        ref={videoRef}
         key={src}
         className="h-full w-full"
         style={{
@@ -120,7 +184,7 @@ export default function FramedVideo({
         }}
         autoPlay
         loop
-        muted
+        muted={muted}
         playsInline
         preload="metadata"
         onLoadedMetadata={handleLoadedMetadata}
@@ -133,6 +197,21 @@ export default function FramedVideo({
             Demo
           </span>
         </div>
+      )}
+      {showMuteToggle && (
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={muted ? 'Unmute video' : 'Mute video'}
+          title={muted ? 'Unmute' : 'Mute'}
+          className="absolute bottom-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80 active:scale-95"
+        >
+          {muted ? (
+            <VolumeX className="h-4 w-4" strokeWidth={1.75} />
+          ) : (
+            <Volume2 className="h-4 w-4" strokeWidth={1.75} />
+          )}
+        </button>
       )}
     </div>
   );
