@@ -229,37 +229,56 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
             Exercises ({workout.exercises.length})
           </p>
           <div className="flex items-center gap-2">
-            {/* Group selected exercises button */}
-            {selectedForGroup.length >= 2 && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowGroupMenu(!showGroupMenu)}
-                  className="flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-purple-700"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                  Group ({selectedForGroup.length})
-                </button>
-                {showGroupMenu && (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                    {GROUP_TYPE_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => createGroup(opt.value)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                      >
-                        <span className={`h-2.5 w-2.5 rounded-full ${opt.color}`} />
-                        <div>
-                          <div className="font-medium text-zinc-900 dark:text-white">{opt.label}</div>
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400">{opt.description}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Combine into group button — always visible (disabled until 2+
+                selected) so the affordance is obvious. The previous version
+                only showed the button after the user had already discovered
+                the per-row checkbox, which made grouping nearly invisible. */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => selectedForGroup.length >= 2 && setShowGroupMenu(!showGroupMenu)}
+                disabled={selectedForGroup.length < 2}
+                aria-label={
+                  selectedForGroup.length >= 2
+                    ? `Combine ${selectedForGroup.length} selected exercises into a group`
+                    : 'Select 2 or more exercises (using the circles on the left) to combine them into a superset, circuit, or other group'
+                }
+                title={
+                  selectedForGroup.length >= 2
+                    ? `Combine ${selectedForGroup.length} selected exercises`
+                    : 'Select 2+ exercises with the circles on the left, then tap here to choose a group type (superset, circuit, etc.)'
+                }
+                className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  selectedForGroup.length >= 2
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'border border-purple-200 bg-purple-50 text-purple-500 cursor-not-allowed dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-400/70'
+                }`}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                {selectedForGroup.length >= 2
+                  ? `Combine (${selectedForGroup.length})`
+                  : 'Combine'}
+              </button>
+              {showGroupMenu && selectedForGroup.length >= 2 && (
+                <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  {GROUP_TYPE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => createGroup(opt.value)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${opt.color}`} />
+                      <div>
+                        <div className="font-medium text-zinc-900 dark:text-white">{opt.label}</div>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">{opt.description}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {selectedForGroup.length > 0 && (
               <button
                 onClick={() => setSelectedForGroup([])}
@@ -280,7 +299,16 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
           </div>
         </div>
 
-        {/* Group selection hint */}
+        {/* Persistent hint so users discover the grouping flow without
+            having to find the tiny selection circle first. Only suppressed
+            once they've already selected at least one (then more specific
+            hints + the active "Combine" button take over). */}
+        {selectedForGroup.length === 0 && workout.exercises.length >= 2 && (
+          <div className="mb-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+            <span className="inline-flex h-3 w-3 -translate-y-px items-center justify-center rounded-full border-2 border-purple-400 align-middle mr-1.5" />
+            Tap the circle to the left of each exercise to combine them into a <span className="font-medium text-zinc-800 dark:text-zinc-200">superset</span>, <span className="font-medium text-zinc-800 dark:text-zinc-200">circuit</span>, <span className="font-medium text-zinc-800 dark:text-zinc-200">EMOM</span>, or other group.
+          </div>
+        )}
         {selectedForGroup.length > 0 && selectedForGroup.length < 2 && (
           <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-700 dark:border-purple-800 dark:bg-purple-950/30 dark:text-purple-300">
             Select at least one more exercise to create a group (superset, circuit, etc.)
@@ -393,21 +421,34 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
                                 selectedForGroup.includes(idx) ? "ring-2 ring-purple-400 rounded-xl" : ""
                               }`}
                             >
-                              {/* Selection checkbox overlay */}
+                              {/* Selection checkbox overlay — bumped to
+                                  h-6/w-6 and offset further so it sits clearly
+                                  outside the row body. The bigger tap target
+                                  + persistent hint above the list makes the
+                                  grouping flow discoverable. */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   toggleSelectForGroup(idx);
                                 }}
-                                className={`absolute -left-2 top-3 z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all ${
+                                aria-label={
                                   selectedForGroup.includes(idx)
-                                    ? "border-purple-500 bg-purple-500 text-white"
-                                    : "border-zinc-300 bg-white hover:border-purple-400 dark:border-zinc-600 dark:bg-zinc-800"
+                                    ? "Deselect exercise (remove from group selection)"
+                                    : "Select exercise to combine into a superset, circuit, or other group"
+                                }
+                                title={
+                                  selectedForGroup.includes(idx)
+                                    ? "Deselect"
+                                    : "Select to combine with other exercises"
+                                }
+                                className={`absolute -left-3 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 shadow-sm transition-all ${
+                                  selectedForGroup.includes(idx)
+                                    ? "border-purple-500 bg-purple-500 text-white scale-110"
+                                    : "border-purple-300 bg-white hover:border-purple-500 hover:scale-105 dark:border-purple-700 dark:bg-zinc-900"
                                 }`}
-                                title="Select to group"
                               >
                                 {selectedForGroup.includes(idx) && (
-                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                   </svg>
                                 )}
