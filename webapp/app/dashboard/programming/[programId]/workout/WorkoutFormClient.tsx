@@ -10,6 +10,8 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary from "@/components/WorkoutSummary";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
+import FramedVideo from "@/components/FramedVideo";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -30,7 +32,19 @@ function mimeForVideoUrl(u: string): string {
 
 // Video player component — renders direct files inline (no native controls)
 // and YouTube via iframe.
-function VideoPlayer({ exerciseName }: { exerciseName: string }) {
+function VideoPlayer({
+  exerciseName,
+  exerciseSlug,
+  videoWidth,
+  videoHeight,
+  videoFraming,
+}: {
+  exerciseName: string;
+  exerciseSlug?: string;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+}) {
   const videoUrl = getExerciseVideoUrl(exerciseName);
   const thumbnailUrl = getExerciseThumbnail(exerciseName);
   // Direct = anything that ends in a known video extension, regardless of
@@ -39,22 +53,33 @@ function VideoPlayer({ exerciseName }: { exerciseName: string }) {
 
   if (isDirectVideo) {
     return (
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
-        <video
-          className="h-full w-full object-contain"
-          autoPlay
-          loop
-          muted
-          playsInline
-        >
-          <source src={videoUrl} type={mimeForVideoUrl(videoUrl)} />
-        </video>
-        <div className="absolute top-2 right-2">
-          <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
-            Demo
-          </span>
-        </div>
-      </div>
+      <FramedVideo
+        src={videoUrl}
+        surface="form"
+        videoWidth={videoWidth}
+        videoHeight={videoHeight}
+        videoFraming={videoFraming}
+        showBadge
+        onDimensions={(w, h) => {
+          // Self-heal: first time a user plays a video with no persisted dims,
+          // back-write them. Best-effort — ignore network errors.
+          if (videoWidth && videoHeight) return;
+          if (!exerciseSlug) return;
+          if (typeof window === 'undefined') return;
+          const token = localStorage.getItem('token');
+          void fetch(
+            `/api/exercises/${encodeURIComponent(exerciseSlug)}/video/dimensions`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ width: w, height: h }),
+            }
+          ).catch(() => {});
+        }}
+      />
     );
   }
 
@@ -164,6 +189,9 @@ interface Exercise {
   tip?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
   groupId?: string;
@@ -927,7 +955,13 @@ export default function WorkoutFormPage() {
                         <div className="border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                           {/* Video Demo Section */}
                           <div className="mb-4">
-                            <VideoPlayer exerciseName={exercise.name} />
+                            <VideoPlayer
+                              exerciseName={exercise.name}
+                              exerciseSlug={exercise.exerciseSlug}
+                              videoWidth={exercise.videoWidth}
+                              videoHeight={exercise.videoHeight}
+                              videoFraming={exercise.videoFraming}
+                            />
                           </div>
 
                           {/* Prescription meta — details / tempo / muscles */}

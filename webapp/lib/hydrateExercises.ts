@@ -18,6 +18,14 @@ interface HydratedExerciseFields {
   thumbnailUrl?: string;
   primaryMuscles?: string[];
   difficulty?: string;
+  videoWidth?: number;
+  videoHeight?: number;
+  videoFraming?: {
+    fit?: 'contain' | 'cover';
+    positionX?: number;
+    positionY?: number;
+    zoom?: number;
+  };
 }
 
 // Module-level caches (reset per cold start)
@@ -33,7 +41,7 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
 
   const exercises = await ExerciseModel.find(
     {},
-    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, _id: 0 }
+    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1, _id: 0 }
   ).lean();
 
   slugCache = new Map();
@@ -47,6 +55,9 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
       thumbnailUrl: ex.thumbnailUrl || undefined,
       primaryMuscles: ex.primaryMuscles?.length ? ex.primaryMuscles : undefined,
       difficulty: ex.difficulty || undefined,
+      videoWidth: ex.videoWidth ?? undefined,
+      videoHeight: ex.videoHeight ?? undefined,
+      videoFraming: ex.videoFraming ?? undefined,
     });
     nameToSlugCache.set(ex.name.toLowerCase(), ex.slug);
     for (const alias of ex.aliases || []) {
@@ -111,6 +122,9 @@ function hydrateExercise(
     ...(info.thumbnailUrl && { thumbnailUrl: info.thumbnailUrl }),
     ...(info.primaryMuscles && { primaryMuscles: info.primaryMuscles }),
     ...(info.difficulty && { difficulty: info.difficulty }),
+    ...(info.videoWidth != null && { videoWidth: info.videoWidth }),
+    ...(info.videoHeight != null && { videoHeight: info.videoHeight }),
+    ...(info.videoFraming && { videoFraming: info.videoFraming }),
   };
 }
 

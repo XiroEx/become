@@ -88,6 +88,13 @@ async function applyUpdate(request: NextRequest, slug: string) {
     'alternatives',
     'videoUrl',
     'thumbnailUrl',
+    'videoWidth',
+    'videoHeight',
+    // NB: framing edits go through PATCH /api/exercises/[slug]/framing (which
+    // also mirrors to the ExerciseVideo row). We intentionally do NOT include
+    // 'videoFraming' here — keeping the dedicated endpoint as the single
+    // write path avoids a stale-overwrite bug where the form holds an older
+    // copy and pushes it back on an unrelated save.
     'tags',
     'bodyRegion',
     'isActive',

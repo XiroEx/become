@@ -211,6 +211,26 @@ export type Equipment =
 
 export type BodyRegion = 'upper_body' | 'lower_body' | 'core' | 'full_body';
 
+// ─── Video Framing Sub-document ──────────────────────────────────────────────
+
+/**
+ * Per-video framing overrides. Any field that's `undefined` falls back to the
+ * "auto" rules in `lib/videoFraming.ts` — only fields the admin explicitly
+ * tunes are persisted. Once an admin clicks "Reset to auto" we wipe the whole
+ * subdoc so future auto-rule changes (e.g. better portrait heuristics) take
+ * effect.
+ */
+export interface IVideoFraming {
+  /** 'contain' shows the whole frame (letterbox); 'cover' fills + crops. */
+  fit?: 'contain' | 'cover';
+  /** object-position-x, 0–100, 50 = centered. */
+  positionX?: number;
+  /** object-position-y, 0–100, 50 = centered. */
+  positionY?: number;
+  /** Scale percentage applied via CSS transform. 100 = no zoom, 200 = 2×. */
+  zoom?: number;
+}
+
 // ─── Cardio Metrics Sub-document ─────────────────────────────────────────────
 
 export interface ICardioMetrics {
@@ -274,6 +294,12 @@ export interface IExerciseDefinition extends Document {
   videoUrl?: string;
   thumbnailUrl?: string;
   videoStorageKey?: string | null; // BlobStore object key — canonical id for the binary
+  /** Intrinsic video width in px — captured at upload or first playback. */
+  videoWidth?: number | null;
+  /** Intrinsic video height in px — captured at upload or first playback. */
+  videoHeight?: number | null;
+  /** Optional per-video framing overrides. Absence = use auto rules. */
+  videoFraming?: IVideoFraming | null;
 
   // Tags & search
   tags: string[];
@@ -292,6 +318,13 @@ export interface IExerciseDefinition extends Document {
 }
 
 // ─── Schema Definition ──────────────────────────────────────────────────────
+
+const VideoFramingSchema = new Schema<IVideoFraming>({
+  fit:       { type: String, enum: ['contain', 'cover'], default: undefined },
+  positionX: { type: Number, default: undefined, min: 0, max: 100 },
+  positionY: { type: Number, default: undefined, min: 0, max: 100 },
+  zoom:      { type: Number, default: undefined, min: 50, max: 400 },
+}, { _id: false });
 
 const CardioMetricsSchema = new Schema<ICardioMetrics>({
   trackDistance:   { type: Boolean, default: false },
@@ -493,6 +526,9 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
     videoUrl:        { type: String, default: null },
     thumbnailUrl:    { type: String, default: null },
     videoStorageKey: { type: String, default: null },
+    videoWidth:      { type: Number, default: null },
+    videoHeight:     { type: Number, default: null },
+    videoFraming:    { type: VideoFramingSchema, default: undefined },
 
     // Tags & search
     tags: [{ type: String, index: true }],

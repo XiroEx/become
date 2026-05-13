@@ -18,6 +18,8 @@
 // ---------------------------------------------------------------------------
 
 import { ExternalLink, VideoOff } from 'lucide-react'
+import FramedVideo from '@/components/FramedVideo'
+import type { VideoFramingOverride } from '@/lib/videoFraming'
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i
 
@@ -25,21 +27,30 @@ function isYouTubeUrl(u: string): boolean {
   return /(?:youtube\.com|youtu\.be)/i.test(u)
 }
 
-function mimeForVideoUrl(u: string): string {
-  if (/\.mov(\?.*)?$/i.test(u)) return 'video/quicktime'
-  if (/\.webm(\?.*)?$/i.test(u)) return 'video/webm'
-  if (/\.mkv(\?.*)?$/i.test(u)) return 'video/x-matroska'
-  return 'video/mp4'
-}
-
 export interface AdminVideoPreviewProps {
   url?: string | null
   /** Visual size. `sm` is the row-thumbnail size; `md` is the form-preview size. */
   size?: 'sm' | 'md'
   className?: string
+  /** Persisted intrinsic dims (for smart framing). */
+  videoWidth?: number | null
+  videoHeight?: number | null
+  /** Optional manual framing override. */
+  videoFraming?: VideoFramingOverride | null
+  /** Called when intrinsic dims first become available — used by the form to
+   *  auto-persist via PATCH /api/exercises/[slug]/video/dimensions. */
+  onDimensions?: (w: number, h: number) => void
 }
 
-export default function AdminVideoPreview({ url, size = 'md', className }: AdminVideoPreviewProps) {
+export default function AdminVideoPreview({
+  url,
+  size = 'md',
+  className,
+  videoWidth,
+  videoHeight,
+  videoFraming,
+  onDimensions,
+}: AdminVideoPreviewProps) {
   const trimmed = url?.trim() || ''
 
   // ── Sizing ────────────────────────────────────────────────────────────
@@ -58,21 +69,36 @@ export default function AdminVideoPreview({ url, size = 'md', className }: Admin
   }
 
   // ── Direct video file ─────────────────────────────────────────────────
+  // Uses FramedVideo so the preview reflects the exact framing rules used
+  // in the workout flow. `size='sm'` still uses the 96×56 wrapper but the
+  // <FramedVideo>'s internal aspect-video would override that, so for the
+  // small badge size we render a custom inner wrapper.
   if (DIRECT_VIDEO_FILE.test(trimmed)) {
-    return (
-      <div className={`${wrapperBase} ${dims} ${className ?? ''}`}>
-        <video
-          className="h-full w-full object-contain"
+    if (size === 'sm') {
+      // Small row thumbnail — we want the same framing math but compressed
+      // into the 96×56 box without FramedVideo's own aspect-video constraint.
+      return (
+        <FramedVideo
           src={trimmed}
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="metadata"
-        >
-          <source src={trimmed} type={mimeForVideoUrl(trimmed)} />
-        </video>
-      </div>
+          surface="preview"
+          videoWidth={videoWidth}
+          videoHeight={videoHeight}
+          videoFraming={videoFraming}
+          onDimensions={onDimensions}
+          wrapperOverride={`${wrapperBase} ${dims} ${className ?? ''}`}
+        />
+      )
+    }
+    return (
+      <FramedVideo
+        src={trimmed}
+        surface="preview"
+        videoWidth={videoWidth}
+        videoHeight={videoHeight}
+        videoFraming={videoFraming}
+        onDimensions={onDimensions}
+        className={`${className ?? ''} max-w-sm ring-1 ring-zinc-200 dark:ring-zinc-800`}
+      />
     )
   }
 

@@ -2,6 +2,19 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export type ExerciseVideoStatus = 'pending' | 'active' | 'failed';
 
+/**
+ * Mirrors `IVideoFraming` from `models/Exercise.ts`. Duplicated rather than
+ * imported to avoid a cycle (Exercise pulls nothing from ExerciseVideo, but
+ * keeping the dependency arrow one-way keeps the model files independently
+ * loadable).
+ */
+export interface IExerciseVideoFraming {
+  fit?: 'contain' | 'cover';
+  positionX?: number;
+  positionY?: number;
+  zoom?: number;
+}
+
 export interface IExerciseVideo extends Document {
   // `slug` is the canonical key tying this video to its Exercise. It mirrors
   // Exercise.slug (which is the unique id). Optional in the type because
@@ -20,9 +33,22 @@ export interface IExerciseVideo extends Document {
   sizeBytes?: number;
   mimeType?: string;
   uploadedBy?: mongoose.Types.ObjectId;
+  /** Intrinsic video pixel dims — populated server-side at upload or
+   * back-written from the client when it first plays the file. */
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  /** Per-video framing override; mirrors `Exercise.videoFraming`. */
+  framing?: IExerciseVideoFraming | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const ExerciseVideoFramingSchema = new Schema<IExerciseVideoFraming>({
+  fit:       { type: String, enum: ['contain', 'cover'], default: undefined },
+  positionX: { type: Number, default: undefined, min: 0, max: 100 },
+  positionY: { type: Number, default: undefined, min: 0, max: 100 },
+  zoom:      { type: Number, default: undefined, min: 50, max: 400 },
+}, { _id: false });
 
 const ExerciseVideoSchema = new Schema<IExerciseVideo>(
   {
@@ -63,6 +89,9 @@ const ExerciseVideoSchema = new Schema<IExerciseVideo>(
     sizeBytes: { type: Number, default: null },
     mimeType: { type: String, default: null },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    videoWidth: { type: Number, default: null },
+    videoHeight: { type: Number, default: null },
+    framing: { type: ExerciseVideoFramingSchema, default: undefined },
   },
   {
     timestamps: true,
