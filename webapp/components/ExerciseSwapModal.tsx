@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { useLockScroll } from "@/lib/useLockScroll";
+import FramedVideo from "@/components/FramedVideo";
+
+const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1154,24 +1157,14 @@ function AlternativeCard({
 function ExerciseVideoPreview({ exerciseName }: { exerciseName: string }) {
   const videoUrl = getExerciseVideoUrl(exerciseName);
   const thumbnailUrl = getExerciseThumbnail(exerciseName);
-  const isLocalVideo =
-    videoUrl.startsWith("/") && (videoUrl.endsWith(".mp4") || videoUrl.endsWith(".mov"));
+  // Direct = any local or remote URL ending in a known video extension (the
+  // old `startsWith('/')` check excluded /api/blob proxy URLs).
+  const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
 
-  if (isLocalVideo) {
+  if (isDirectVideo) {
     return (
-      <div className="relative mb-3 aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
-        <video
-          className="h-full w-full object-cover"
-          autoPlay
-          loop
-          muted
-          playsInline
-        >
-          <source
-            src={videoUrl}
-            type={videoUrl.endsWith(".mov") ? "video/quicktime" : "video/mp4"}
-          />
-        </video>
+      <div className="mb-3">
+        <FramedVideo src={videoUrl} surface="preview" />
       </div>
     );
   }
