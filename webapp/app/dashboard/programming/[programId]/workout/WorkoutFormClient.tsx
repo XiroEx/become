@@ -60,6 +60,7 @@ function VideoPlayer({
         videoHeight={videoHeight}
         videoFraming={videoFraming}
         showBadge
+        showMuteToggle
         onDimensions={(w, h) => {
           // Self-heal: first time a user plays a video with no persisted dims,
           // back-write them. Best-effort — ignore network errors.
