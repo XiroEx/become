@@ -9,6 +9,8 @@ import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
+import FramedVideo from "@/components/FramedVideo";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
 
 interface SetData {
   reps: string;
@@ -53,6 +55,9 @@ interface Exercise {
   details?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
   groupId?: string;
@@ -896,17 +901,33 @@ export default function LiveWorkoutPage() {
             <span className="text-sm font-medium text-white/40">No video available</span>
           </div>
         ) : (
-          <video
-            key={currentVideo}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-full w-full object-cover"
-          >
-            <source src={currentVideo} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+          <FramedVideo
+            src={currentVideo}
+            surface="live"
+            videoWidth={currentExercise?.videoWidth}
+            videoHeight={currentExercise?.videoHeight}
+            videoFraming={currentExercise?.videoFraming}
+            onDimensions={(w, h) => {
+              // Back-write dims to the server the first time this video is
+              // played by anyone. Fire-and-forget — workout flow keeps moving
+              // regardless of the result.
+              if (currentExercise?.videoWidth && currentExercise?.videoHeight) return;
+              const slug = currentExercise?.exerciseSlug;
+              if (!slug) return;
+              const token = localStorage.getItem("token");
+              void fetch(
+                `/api/exercises/${encodeURIComponent(slug)}/video/dimensions`,
+                {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({ width: w, height: h }),
+                }
+              ).catch(() => {});
+            }}
+          />
         )}
       </div>
 
