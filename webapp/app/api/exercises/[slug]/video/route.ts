@@ -128,6 +128,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     exercise.videoUrl = publicUrl
     exercise.videoStorageKey = key
+    // A fresh upload invalidates any previously-captured dimensions and any
+    // hand-tuned framing — different file, framing rules need to recompute
+    // from the new intrinsic dims (client back-fills via /video/dimensions
+    // on first play).
+    exercise.videoWidth = null
+    exercise.videoHeight = null
+    exercise.videoFraming = undefined
     await exercise.save()
 
     // Upsert keyed on `slug` — Exercise.name is NOT unique, so keying on it
@@ -148,7 +155,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           sizeBytes: file.size,
           mimeType,
           uploadedBy: gate.userId,
+          // Reset dims + framing — see Exercise block above for rationale.
+          videoWidth: null,
+          videoHeight: null,
         },
+        $unset: { framing: '' },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     )
@@ -194,6 +205,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     exercise.videoUrl = undefined
     exercise.videoStorageKey = null
+    exercise.videoWidth = null
+    exercise.videoHeight = null
+    exercise.videoFraming = undefined
     await exercise.save()
 
     // Key on slug (canonical join). The name fallback used to fail closed

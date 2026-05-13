@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import VideosEditor from './VideosEditor'
 import AdminVideoPreview from './AdminVideoPreview'
+import VideoFramingEditor from '@/components/admin/VideoFramingEditor'
+import type { VideoFramingOverride } from '@/lib/videoFraming'
 import {
   CATEGORIES,
   MECHANICS,
@@ -48,6 +50,9 @@ export interface ExerciseFormValue {
   alternatives: string[]
   videoUrl?: string
   thumbnailUrl?: string
+  videoWidth?: number | null
+  videoHeight?: number | null
+  videoFraming?: VideoFramingOverride | null
   tags: string[]
   bodyRegion: (typeof BODY_REGIONS)[number]
   isActive: boolean
@@ -83,6 +88,9 @@ export const EMPTY_EXERCISE: ExerciseFormValue = {
   alternatives: [],
   videoUrl: undefined,
   thumbnailUrl: undefined,
+  videoWidth: null,
+  videoHeight: null,
+  videoFraming: null,
   tags: [],
   bodyRegion: 'full_body',
   isActive: true,
@@ -540,8 +548,52 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
               placeholder="https://… or /videos/bench-press.mp4"
             />
             {value.videoUrl && (
-              <div className="mt-2">
-                <AdminVideoPreview url={value.videoUrl} size="md" />
+              <div className="mt-2 space-y-2">
+                <AdminVideoPreview
+                  url={value.videoUrl}
+                  size="md"
+                  videoWidth={value.videoWidth}
+                  videoHeight={value.videoHeight}
+                  videoFraming={value.videoFraming}
+                  onDimensions={(w, h) => {
+                    // Mirror locally so the framing editor sees the new dims
+                    // immediately; the back-write is fire-and-forget. Skip if
+                    // we already have dims persisted.
+                    if (value.videoWidth && value.videoHeight) return
+                    update('videoWidth', w)
+                    update('videoHeight', h)
+                    // Auto-persist dims to BOTH Exercise and ExerciseVideo rows.
+                    if (!isEdit || !(originalSlug ?? value.slug)) return
+                    const token = localStorage.getItem('token')
+                    void fetch(
+                      `/api/exercises/${encodeURIComponent(originalSlug ?? value.slug)}/video/dimensions`,
+                      {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        },
+                        body: JSON.stringify({ width: w, height: h }),
+                      }
+                    ).catch(() => {})
+                  }}
+                />
+                {/* Fine-tune framing — only meaningful once the exercise has been saved (we need a slug). */}
+                {isEdit && (originalSlug ?? value.slug) && (
+                  <VideoFramingEditor
+                    slug={originalSlug ?? value.slug}
+                    videoUrl={value.videoUrl}
+                    videoWidth={value.videoWidth}
+                    videoHeight={value.videoHeight}
+                    videoFraming={value.videoFraming}
+                    onSaved={(next) => update('videoFraming', next)}
+                    onDimensions={(w, h) => {
+                      if (value.videoWidth && value.videoHeight) return
+                      update('videoWidth', w)
+                      update('videoHeight', h)
+                    }}
+                  />
+                )}
               </div>
             )}
           </Field>
