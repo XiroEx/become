@@ -3,6 +3,12 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrlAsync, getExerciseThumbnailAsync } from "@/lib/data/exerciseVideos";
+import FramedVideo from "@/components/FramedVideo";
+
+// Match a direct video file URL by extension, with optional query string —
+// works for both local public/ paths AND remote HTTPS URLs (e.g. /api/blob).
+const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
+const isYouTubeUrl = (u: string) => /(?:youtube\.com|youtu\.be)/i.test(u);
 
 export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown'
   | 'power' | 'cardio' | 'plyometric' | 'calisthenics' | 'olympic'
@@ -80,33 +86,25 @@ function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exe
     );
   }
 
-  const isLocalVideo = videoUrl.startsWith('/') && (videoUrl.endsWith('.mp4') || videoUrl.endsWith('.mov'));
+  // Direct = anything that ends in a known video extension (local OR remote
+  // https URL — e.g. /api/blob/... served through our proxy).
+  const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
 
-  // For local videos, show inline video player
-  if (isLocalVideo) {
+  if (isDirectVideo) {
     return (
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900">
-        <video
-          key={videoUrl}
-          className="h-full w-full object-cover"
-          controls
-          crossOrigin="anonymous"
-          preload="auto"
-        >
-          <source src={videoUrl} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-        <div className="absolute top-3 right-3 pointer-events-none">
-          <span className="inline-block rounded bg-black/60 px-2 py-1 text-xs font-medium text-white backdrop-blur-sm">
-            Demo
-          </span>
-        </div>
-      </div>
+      <FramedVideo
+        src={videoUrl}
+        surface="form"
+        showBadge
+        showMuteToggle
+      />
     );
   }
 
-  // For YouTube videos (future use when real videos are added)
-  if (isPlaying) {
+  // Iframe path: only used when the URL actually looks like YouTube — handing
+  // a random video URL to <iframe> triggers the browser's native video viewer
+  // with huge default controls and no looping.
+  if (isPlaying && isYouTubeUrl(videoUrl)) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg">
         <iframe
