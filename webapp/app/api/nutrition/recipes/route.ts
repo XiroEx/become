@@ -111,7 +111,9 @@ export async function POST(request: NextRequest) {
     await dbConnect()
 
     // Calculate totalsPerServing from ingredients
-    const servings = body.servings || 1
+    const servings = (typeof body.servings === 'number' && Number.isFinite(body.servings) && body.servings > 0)
+      ? body.servings
+      : 1
     const totals = { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
 
     for (const ingredient of body.ingredients) {
