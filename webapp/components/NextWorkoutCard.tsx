@@ -90,12 +90,19 @@ export default function NextWorkoutCard() {
     setSkipping(w.date)
     try {
       const tz = new Date().getTimezoneOffset()
-      await fetch('/api/schedule', {
+      const res = await fetch('/api/schedule', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date, tz }),
       })
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => '')
+        console.error(`[NextWorkoutCard] skip failed (${res.status}):`, errBody)
+        return
+      }
       await fetchSchedules()
+    } catch (err) {
+      console.error('[NextWorkoutCard] skip error:', err)
     } finally {
       setSkipping(null)
     }
