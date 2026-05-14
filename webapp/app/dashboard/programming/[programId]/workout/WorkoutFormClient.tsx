@@ -887,57 +887,57 @@ export default function WorkoutFormPage() {
 
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-zinc-900 dark:text-white truncate">{exercise.name}</h3>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {exercise.sets} sets
-                          {exercise.duration
-                            ? ` × ${exercise.duration}`
-                            : exercise.reps
-                            ? ` × ${exercise.reps}${["time","time_distance","intervals"].includes(exercise.trackingType||"") ? "s" : ""}`
-                            : ""}
-                        </span>
-                        {exercise.rest && <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>}
-                        {exercise.tempo && <span className="text-xs text-amber-600 dark:text-amber-400">Tempo {exercise.tempo}</span>}
-                        {exercise.difficulty && <span className="text-xs capitalize text-zinc-400 dark:text-zinc-500">{exercise.difficulty}</span>}
-                        {swappedExercises[exerciseIndex] && (
-                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                            Swapped
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {exercise.sets} sets
+                            {exercise.duration
+                              ? ` × ${exercise.duration}`
+                              : exercise.reps
+                              ? ` × ${exercise.reps}${["time","time_distance","intervals"].includes(exercise.trackingType||"") ? "s" : ""}`
+                              : ""}
                           </span>
-                        )}
+                          {exercise.rest && <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>}
+                          {exercise.tempo && <span className="text-xs text-amber-600 dark:text-amber-400">Tempo {exercise.tempo}</span>}
+                          {exercise.difficulty && <span className="text-xs capitalize text-zinc-400 dark:text-zinc-500">{exercise.difficulty}</span>}
+                          {swappedExercises[exerciseIndex] && (
+                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                              Swapped
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {/* Swap button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openSwapModal(exerciseIndex);
+                            }}
+                            className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-zinc-400 transition-all hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
+                            title="Swap exercise"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                            </svg>
+                          </button>
+                          {/* Mini progress */}
+                          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                            <div
+                              className="h-full bg-linear-to-r from-green-500 to-emerald-500 transition-all"
+                              style={{ width: `${completion}%` }}
+                            />
+                          </div>
+                          <motion.svg
+                            animate={{ rotate: isExpanded ? 180 : 0 }}
+                            className="h-5 w-5 text-zinc-400"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </motion.svg>
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Swap button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openSwapModal(exerciseIndex);
-                      }}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-400 transition-all hover:bg-blue-100 hover:text-blue-600 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-400"
-                      title="Swap exercise"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                      </svg>
-                    </button>
-
-                    {/* Mini progress */}
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                        <div
-                          className="h-full bg-linear-to-r from-green-500 to-emerald-500 transition-all"
-                          style={{ width: `${completion}%` }}
-                        />
-                      </div>
-                      <motion.svg
-                        animate={{ rotate: isExpanded ? 180 : 0 }}
-                        className="h-5 w-5 text-zinc-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </motion.svg>
                     </div>
                   </button>
 
