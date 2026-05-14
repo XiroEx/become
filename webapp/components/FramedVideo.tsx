@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX, Maximize2 } from 'lucide-react';
 import { resolveFraming, type VideoFramingInput, type VideoSurface } from '@/lib/videoFraming';
 
 // Persists the user's mute preference across the session so a viewer who
@@ -59,6 +59,11 @@ export interface FramedVideoProps extends VideoFramingInput {
    *  hear coaching audio without giving up clean autoplay (the video still
    *  starts muted; the toggle persists across the session via localStorage). */
   showMuteToggle?: boolean;
+  /** Show a fullscreen-toggle button in the top-left. Tapping it puts the
+   *  underlying <video> into native fullscreen (Fullscreen API + iOS
+   *  webkitEnterFullscreen fallback). When fullscreen, the browser's own
+   *  controls show — that's the OS default we lean on. */
+  showFullscreenToggle?: boolean;
   /**
    * Replace the default wrapper classes entirely. Use when the parent already
    * sizes the container (e.g. small thumbnail in a list row) — defaults still
@@ -77,6 +82,7 @@ export default function FramedVideo({
   className,
   showBadge,
   showMuteToggle,
+  showFullscreenToggle,
   wrapperOverride,
 }: FramedVideoProps) {
   const reportedRef = useRef(false);
@@ -123,6 +129,27 @@ export default function FramedVideo({
       }
       return next;
     });
+  }, []);
+
+  const enterFullscreen = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const v = videoRef.current;
+    if (!v) return;
+    // iOS Safari ignores standard requestFullscreen on arbitrary elements but
+    // exposes webkitEnterFullscreen directly on <video>. Standard browsers use
+    // the Fullscreen API on the video element itself.
+    const ios = (v as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen;
+    if (typeof ios === 'function') {
+      ios.call(v);
+      return;
+    }
+    if (typeof v.requestFullscreen === 'function') {
+      v.requestFullscreen().catch(() => {
+        // Some browsers reject fullscreen if not triggered by a direct user
+        // gesture or if disabled by permissions policy. Fail silently.
+      });
+    }
   }, []);
 
   // Resolve every render so manual edits in the framing editor are reflected
@@ -197,6 +224,17 @@ export default function FramedVideo({
             Demo
           </span>
         </div>
+      )}
+      {showFullscreenToggle && (
+        <button
+          type="button"
+          onClick={enterFullscreen}
+          aria-label="Open video in fullscreen"
+          title="Fullscreen"
+          className="absolute top-2 left-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80 active:scale-95"
+        >
+          <Maximize2 className="h-4 w-4" strokeWidth={1.75} />
+        </button>
       )}
       {showMuteToggle && (
         <button
