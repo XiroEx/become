@@ -15,7 +15,6 @@ import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock, ChefHat, CalendarDays } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
-import FeatureGuard from '@/components/FeatureGuard'
 import { Card, EmptyState } from '@/components/ui'
 import { isFutureLocalDate } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
@@ -605,12 +604,12 @@ function NutritionPageInner() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // Nutrition is now generally available — was previously admin-gated by
+  // FeatureGuard while the food DB + macro tracker stabilized. Kept the
+  // FeatureGuard component around in case we need to gate other surfaces
+  // again, but nutrition is unlocked for every authed user.
   return (
-    <FeatureGuard
-      feature="Nutrition"
-      description="Precision nutrition tracking and meal planning, built around your goals. Launching soon."
-      icon={<UtensilsCrossed className="h-10 w-10" />}
-    >
+    <>
       <PageTransition className="space-y-4 pb-6 sm:space-y-6">
         {/* Header */}
         <header className="mb-2 flex items-start justify-between gap-3 sm:mb-4">
@@ -1010,6 +1009,6 @@ function NutritionPageInner() {
           {errorToast}
         </div>
       )}
-    </FeatureGuard>
+    </>
   )
 }
