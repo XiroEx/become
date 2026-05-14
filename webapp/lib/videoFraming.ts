@@ -107,15 +107,15 @@ function autoFraming(orientation: VideoOrientation, surface: VideoSurface): Auto
       };
 
     case 'portrait':
-      // Portrait source. In a portrait `live` container both axes match → cover
-      // = no crop. In a 16:9 `form`/`preview` container, contain shows the
-      // entire portrait frame letterboxed; cover would crop top/bottom of a
-      // standing person. We bias positionY to 40 in `live` only because
-      // portrait sources tend to put the subject's torso slightly above center.
+      // Portrait source. Cover everywhere — fills the container with the
+      // action visible, biased slightly upward (positionY 40) because
+      // portrait demos tend to put the subject's torso above center.
+      // Admins can override per-video via the framing editor if a specific
+      // demo needs to show the whole frame (use `fit: contain`).
       return {
-        fit: surface === 'live' ? 'cover' : 'contain',
+        fit: 'cover',
         positionX: 50,
-        positionY: surface === 'live' ? 40 : 50,
+        positionY: 40,
         zoom: 100,
       };
 
@@ -132,10 +132,10 @@ function autoFraming(orientation: VideoOrientation, surface: VideoSurface): Auto
     case 'unknown':
     default:
       // No dimensions yet (first render before metadata loads, or older rows
-      // without dims). Contain is safe — it never crops content the admin
-      // couldn't recover.
+      // without dims). Cover by default so the box always fills; metadata
+      // load re-resolves with the real orientation a tick later.
       return {
-        fit: 'contain',
+        fit: 'cover',
         positionX: 50,
         positionY: 50,
         zoom: 100,

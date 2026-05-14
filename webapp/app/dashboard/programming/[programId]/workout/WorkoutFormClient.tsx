@@ -59,7 +59,6 @@ function VideoPlayer({
         videoWidth={videoWidth}
         videoHeight={videoHeight}
         videoFraming={videoFraming}
-        showBadge
         showMuteToggle
         showFullscreenToggle
         onDimensions={(w, h) => {
