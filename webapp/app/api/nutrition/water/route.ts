@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     const { amount, date: dateStr } = body
     const tzOffsetMinutes = readTzOffsetFromBody(body)
 
-    if (amount === undefined || typeof amount !== 'number') {
-      return NextResponse.json({ error: 'Missing required field: amount (number)' }, { status: 400 })
+    if (amount === undefined || typeof amount !== 'number' || !Number.isFinite(amount)) {
+      return NextResponse.json({ error: 'amount must be a finite number' }, { status: 400 })
     }
 
     await dbConnect()
@@ -71,8 +71,8 @@ export async function PUT(request: NextRequest) {
     const { amount, date: dateStr } = body
     const tzOffsetMinutes = readTzOffsetFromBody(body)
 
-    if (amount === undefined || typeof amount !== 'number') {
-      return NextResponse.json({ error: 'Missing required field: amount (number)' }, { status: 400 })
+    if (amount === undefined || typeof amount !== 'number' || !Number.isFinite(amount)) {
+      return NextResponse.json({ error: 'amount must be a finite number' }, { status: 400 })
     }
 
     await dbConnect()

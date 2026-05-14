@@ -41,6 +41,10 @@ export function scalingFactor(
   const target = variant.servingUnit as Unit
   const servingSize = variant.servingSize
 
+  if (!Number.isFinite(servingSize) || servingSize <= 0) {
+    throw new Error(`variant.servingSize must be > 0 (got ${servingSize})`)
+  }
+
   if (unit === target) {
     return quantity / servingSize
   }

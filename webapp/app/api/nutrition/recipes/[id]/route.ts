@@ -63,7 +63,11 @@ export async function PUT(
 
     // If ingredients changed, recalculate totalsPerServing
     if (body.ingredients) {
-      const servings = body.servings || recipe.servings || 1
+      const candidates = [body.servings, recipe.servings]
+      const validServings = candidates.find(
+        (n) => typeof n === 'number' && Number.isFinite(n) && n > 0,
+      )
+      const servings = validServings ?? 1
       const totals = { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
 
       for (const ingredient of body.ingredients) {
