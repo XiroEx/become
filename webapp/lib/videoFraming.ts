@@ -94,10 +94,13 @@ interface AutoFraming {
 function autoFraming(orientation: VideoOrientation, surface: VideoSurface): AutoFraming {
   switch (orientation) {
     case 'landscape':
-      // Landscape source. Form/preview = contain (no crop). Live = cover so
-      // the wide source fills a portrait phone (sides crop, action centered).
+      // Landscape source. ALL surfaces use `cover` — widescreen videos should
+      // fill the box without side black bars. The form / preview containers
+      // are 16:9 and most landscape demos are 16:9 or close, so cover ≈ no
+      // visible crop. For non-16:9 landscape sources (4:3, 21:9) cover will
+      // crop a bit — admins can manually override with the framing editor.
       return {
-        fit: surface === 'live' ? 'cover' : 'contain',
+        fit: 'cover',
         positionX: 50,
         positionY: 50,
         zoom: 100,

@@ -97,6 +97,7 @@ function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exe
         surface="form"
         showBadge
         showMuteToggle
+        showFullscreenToggle
       />
     );
   }
