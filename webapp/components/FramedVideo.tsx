@@ -152,6 +152,43 @@ export default function FramedVideo({
     }
   }, []);
 
+  // When the user exits fullscreen, browsers leave the <video> paused — even
+  // though it was autoplaying before. The autoplay attribute fires once on
+  // mount, not on every state change, so the small-view loop just dies.
+  // Listen for the exit event on both APIs (webkit on iOS, standard
+  // fullscreenchange on the rest) and resume play() so the demo keeps looping.
+  useEffect(() => {
+    if (!showFullscreenToggle) return;
+    const v = videoRef.current;
+    if (!v) return;
+
+    const resumeIfNotFullscreen = () => {
+      const stillFullscreen =
+        document.fullscreenElement === v ||
+        (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement === v;
+      if (stillFullscreen) return;
+      // Tiny delay so the browser finishes transitioning before play() — iOS
+      // Safari otherwise re-suspends the video.
+      window.setTimeout(() => {
+        v.play().catch(() => {
+          // Autoplay-with-sound may be blocked if the user un-muted; mute and
+          // retry once so the loop keeps going visually.
+          v.muted = true;
+          v.play().catch(() => {});
+        });
+      }, 50);
+    };
+
+    // iOS dispatches webkitendfullscreen on the <video> element itself.
+    v.addEventListener('webkitendfullscreen', resumeIfNotFullscreen);
+    // Standard browsers dispatch fullscreenchange on document.
+    document.addEventListener('fullscreenchange', resumeIfNotFullscreen);
+    return () => {
+      v.removeEventListener('webkitendfullscreen', resumeIfNotFullscreen);
+      document.removeEventListener('fullscreenchange', resumeIfNotFullscreen);
+    };
+  }, [showFullscreenToggle]);
+
   // Resolve every render so manual edits in the framing editor are reflected
   // immediately (no debounce — sliders already throttle their setState).
   const resolved = useMemo(
