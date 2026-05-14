@@ -170,18 +170,76 @@ export default function LiveWorkoutPage() {
     }
   };
 
-  // Initialize exercises and build flow helper
-  const initializeExercises = (exList: Exercise[]) => {
-    const data = exList.map((ex) =>
-      Array.from({ length: ex.sets || 3 }, () => ({
-        reps: "",
-        weight: "",
-        speed: "",
+  // Initialize exercises and build flow helper. Optional `prefill` map seeds
+  // reps/weight/speed from the user's last completed set per exercise slug —
+  // so opening a fresh workout starts with last-time's numbers ready to
+  // confirm, NOT marked complete.
+  type PerformanceEntry = {
+    reps?: number;
+    weight?: number;
+    speed?: number;
+    duration?: number;
+    distance?: number;
+  };
+  const initializeExercises = (
+    exList: Exercise[],
+    prefill?: Record<string, PerformanceEntry | null>,
+  ) => {
+    const data = exList.map((ex) => {
+      // Match either by direct slug or by name-normalized slug — same logic
+      // the endpoint uses on its side.
+      const directSlug = ex.exerciseSlug?.toLowerCase();
+      const nameSlug = ex.name
+        ?.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      const prior =
+        (directSlug && prefill?.[directSlug]) ||
+        (nameSlug && prefill?.[nameSlug]) ||
+        null;
+      return Array.from({ length: ex.sets || 3 }, () => ({
+        reps: prior?.reps != null ? String(prior.reps) : '',
+        weight: prior?.weight != null ? String(prior.weight) : '',
+        speed: prior?.speed != null ? String(prior.speed) : '',
         completed: false,
-      }))
-    );
+      }));
+    });
     const flow = buildWorkoutFlow(exList);
     return { data, flow };
+  };
+
+  // Fetch the user's last-completed-set per exercise so the live workout can
+  // prefill inputs. Best-effort — failure returns an empty map and we fall
+  // back to empty inputs.
+  const fetchLastPerformance = async (
+    token: string,
+    exList: Exercise[],
+  ): Promise<Record<string, PerformanceEntry | null>> => {
+    const slugs = Array.from(
+      new Set(
+        exList
+          .map((ex) => {
+            if (ex.exerciseSlug) return ex.exerciseSlug.toLowerCase();
+            return ex.name
+              ?.toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '');
+          })
+          .filter((s): s is string => Boolean(s)),
+      ),
+    );
+    if (slugs.length === 0) return {};
+    try {
+      const res = await fetch(
+        `/api/workouts/last-performance?slugs=${encodeURIComponent(slugs.join(','))}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return {};
+      const data = (await res.json()) as { performances?: Record<string, PerformanceEntry | null> };
+      return data.performances ?? {};
+    } catch {
+      return {};
+    }
   };
 
   // Load the current workout from API
@@ -214,7 +272,14 @@ export default function LiveWorkoutPage() {
           setExercises(workoutData.exercises);
           setCurrentPhase(data.phase || 1);
 
-          let { data: initialData, flow } = initializeExercises(workoutData.exercises);
+          // Prefill from last completed set per exercise — kicked off in
+          // parallel with the resume-progress lookup below so we don't add
+          // latency in the resume path. Results are used only on fresh
+          // start (resume / draft override entirely).
+          const prefillPromise = fetchLastPerformance(token, workoutData.exercises);
+          const lastPerformance = await prefillPromise;
+
+          let { data: initialData, flow } = initializeExercises(workoutData.exercises, lastPerformance);
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
