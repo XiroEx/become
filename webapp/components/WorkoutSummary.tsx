@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Trophy, Award, Dumbbell, Flame, Rocket, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
+import { Card } from '@/components/ui/Card'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -133,7 +134,7 @@ export default function WorkoutSummary({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-white overflow-y-auto overscroll-contain"
+      className="fixed inset-0 z-50 flex flex-col overflow-y-auto overscroll-contain bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-white"
       style={{
         paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
         paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
@@ -141,14 +142,14 @@ export default function WorkoutSummary({
     >
       <ConfettiBurst />
 
-      <div className="flex-1 px-5 py-4 space-y-5">
+      <div className="flex-1 space-y-5 px-5 py-4">
 
         {/* Hero header */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, type: 'spring', stiffness: 260, damping: 20 }}
-          className="text-center pt-6 pb-2"
+          className="pb-2 pt-6 text-center"
         >
           {programCompleted ? (
             <>
@@ -156,13 +157,13 @@ export default function WorkoutSummary({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 18 }}
-                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-yellow-500/20 ring-4 ring-yellow-500/30"
+                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-yellow-500/15 ring-4 ring-yellow-500/30 dark:bg-yellow-500/20"
               >
-                <Trophy className="h-12 w-12 text-yellow-400" strokeWidth={1.5} />
+                <Trophy className="h-12 w-12 text-yellow-500 dark:text-yellow-400" strokeWidth={1.5} />
               </motion.div>
-              <h1 className="text-4xl font-black text-yellow-400 tracking-tight">PROGRAM COMPLETE</h1>
-              <p className="mt-2 text-zinc-300 font-semibold text-lg">{completedProgramName || workout?.title}</p>
-              <p className="mt-1 text-zinc-500 text-sm">You finished every single workout. That&apos;s elite.</p>
+              <h1 className="text-4xl font-black tracking-tight text-yellow-600 dark:text-yellow-400">PROGRAM COMPLETE</h1>
+              <p className="mt-2 text-lg font-semibold text-zinc-700 dark:text-zinc-300">{completedProgramName || workout?.title}</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">You finished every single workout. That&apos;s elite.</p>
             </>
           ) : (
             <>
@@ -170,26 +171,26 @@ export default function WorkoutSummary({
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.25, type: 'spring', stiffness: 300, damping: 18 }}
-                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/20 ring-4 ring-emerald-500/30"
+                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-emerald-500/15 ring-4 ring-emerald-500/30 dark:bg-emerald-500/20"
               >
                 {newPRs.length > 0
-                  ? <Award className="h-12 w-12 text-emerald-400" strokeWidth={1.5} />
-                  : <Dumbbell className="h-12 w-12 text-emerald-400" strokeWidth={1.5} />
+                  ? <Award className="h-12 w-12 text-emerald-600 dark:text-emerald-400" strokeWidth={1.5} />
+                  : <Dumbbell className="h-12 w-12 text-emerald-600 dark:text-emerald-400" strokeWidth={1.5} />
                 }
               </motion.div>
               <h1 className="text-4xl font-black tracking-tight">
                 {newPRs.length > 0 ? 'YOU CRUSHED IT' : 'WORKOUT DONE'}
               </h1>
-              <p className="mt-1.5 text-zinc-400 font-medium">{workout?.day} — {workout?.title}</p>
+              <p className="mt-1.5 font-medium text-zinc-600 dark:text-zinc-400">{workout?.day} — {workout?.title}</p>
               {newPRs.length > 0 && (
-                <p className="mt-2 flex items-center justify-center gap-1.5 text-emerald-400 font-semibold text-sm">
+                <p className="mt-2 flex items-center justify-center gap-1.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   <Trophy className="h-3.5 w-3.5" />
                   {newPRs.length} new personal record{newPRs.length > 1 ? 's' : ''} today
                 </p>
               )}
             </>
           )}
-          <p className="mt-4 text-zinc-500 text-sm italic leading-relaxed px-4">&ldquo;{quote}&rdquo;</p>
+          <p className="mt-4 px-4 text-sm italic leading-relaxed text-zinc-500 dark:text-zinc-500">&ldquo;{quote}&rdquo;</p>
         </motion.div>
 
         {/* Stats row */}
@@ -199,18 +200,18 @@ export default function WorkoutSummary({
           transition={{ delay: 0.3 }}
           className="grid grid-cols-3 gap-2"
         >
-          <div className="rounded-2xl bg-zinc-900 p-4 text-center border border-zinc-800">
-            <p className="text-2xl font-bold text-emerald-400">{formatTime(elapsedTime)}</p>
-            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">Duration</p>
-          </div>
-          <div className="rounded-2xl bg-zinc-900 p-4 text-center border border-zinc-800">
-            <p className="text-2xl font-bold text-blue-400">{totalSets}</p>
-            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">Sets</p>
-          </div>
-          <div className="rounded-2xl bg-zinc-900 p-4 text-center border border-zinc-800">
-            <p className="text-2xl font-bold text-violet-400">{totalVolume.toLocaleString()}</p>
-            <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wide">Volume lbs</p>
-          </div>
+          <Card variant="compact" className="text-center">
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatTime(elapsedTime)}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Duration</p>
+          </Card>
+          <Card variant="compact" className="text-center">
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalSets}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Sets</p>
+          </Card>
+          <Card variant="compact" className="text-center">
+            <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{totalVolume.toLocaleString()}</p>
+            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Volume lbs</p>
+          </Card>
         </motion.div>
 
         {/* Streak card */}
@@ -219,43 +220,44 @@ export default function WorkoutSummary({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.42 }}
-            className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4"
           >
-            <div className="flex items-center gap-2 mb-3">
-              <motion.div
-                animate={{ scale: [1, 1.18, 1] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <Flame className="h-7 w-7 text-orange-500" strokeWidth={1.5} />
-              </motion.div>
-              <div>
-                <p className="font-bold text-white text-lg leading-none">{summaryStreak.streakDays} day streak</p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  {summaryStreak.streakDays === 1
-                    ? "The streak starts here. Don't break it."
-                    : summaryStreak.streakDays < 7
-                    ? "Building momentum. Keep it going."
-                    : summaryStreak.streakDays < 30
-                    ? "You're on fire. Stay consistent."
-                    : "Elite consistency. Legendary work."}
-                </p>
-              </div>
-            </div>
-            {summaryStreak.nextMilestone && (
-              <>
-                <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${streakProgress}%` }}
-                    transition={{ delay: 0.6, duration: 0.8, ease: 'easeOut' }}
-                    className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
-                  />
+            <Card variant="default">
+              <div className="mb-3 flex items-center gap-2">
+                <motion.div
+                  animate={{ scale: [1, 1.18, 1] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <Flame className="h-7 w-7 text-orange-500" strokeWidth={1.5} />
+                </motion.div>
+                <div>
+                  <p className="text-lg font-bold leading-none text-zinc-900 dark:text-white">{summaryStreak.streakDays} day streak</p>
+                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                    {summaryStreak.streakDays === 1
+                      ? "The streak starts here. Don't break it."
+                      : summaryStreak.streakDays < 7
+                      ? "Building momentum. Keep it going."
+                      : summaryStreak.streakDays < 30
+                      ? "You're on fire. Stay consistent."
+                      : "Elite consistency. Legendary work."}
+                  </p>
                 </div>
-                <p className="text-xs text-zinc-600 mt-1.5">
-                  {summaryStreak.streakDays} / {summaryStreak.nextMilestone} days to next milestone
-                </p>
-              </>
-            )}
+              </div>
+              {summaryStreak.nextMilestone && (
+                <>
+                  <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${streakProgress}%` }}
+                      transition={{ delay: 0.6, duration: 0.8, ease: 'easeOut' }}
+                      className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-500">
+                    {summaryStreak.streakDays} / {summaryStreak.nextMilestone} days to next milestone
+                  </p>
+                </>
+              )}
+            </Card>
           </motion.div>
         )}
 
@@ -265,30 +267,34 @@ export default function WorkoutSummary({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-4"
           >
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-yellow-400 mb-3">
-              <Trophy className="h-3.5 w-3.5" /> New Personal Records
-            </p>
-            <div className="space-y-2">
-              {newPRs.map((pr, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-white">{pr.name}</span>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-yellow-400">
-                      {parseFloat(pr.bestSet.weight) > 0
-                        ? `${pr.bestSet.weight} × ${pr.bestSet.reps}`
-                        : `${pr.bestSet.reps} reps`}
-                    </span>
-                    <span className="text-xs text-zinc-600 ml-2">
-                      prev {pr.history.weight > 0
-                        ? `${pr.history.weight} × ${pr.history.reps}`
-                        : `${pr.history.reps} reps`}
-                    </span>
+            <Card
+              variant="default"
+              className="border-yellow-500/30 bg-yellow-500/10 dark:border-yellow-500/30 dark:bg-yellow-500/10"
+            >
+              <p className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-yellow-700 dark:text-yellow-400">
+                <Trophy className="h-3.5 w-3.5" /> New Personal Records
+              </p>
+              <div className="space-y-2">
+                {newPRs.map((pr, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">{pr.name}</span>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-yellow-700 dark:text-yellow-400">
+                        {parseFloat(pr.bestSet.weight) > 0
+                          ? `${pr.bestSet.weight} × ${pr.bestSet.reps}`
+                          : `${pr.bestSet.reps} reps`}
+                      </span>
+                      <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">
+                        prev {pr.history.weight > 0
+                          ? `${pr.history.weight} × ${pr.history.reps}`
+                          : `${pr.history.reps} reps`}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </Card>
           </motion.div>
         )}
 
@@ -298,7 +304,7 @@ export default function WorkoutSummary({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.58 }}
         >
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-600 mb-3">Exercise Breakdown</p>
+          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-500">Exercise Breakdown</p>
           <div className="space-y-2">
             {exercises.map((exercise, exIdx) => {
               const sets = exerciseData[exIdx] || []
@@ -306,26 +312,30 @@ export default function WorkoutSummary({
               const skipped = sets.filter(s => s.completed && s.reps === "0" && s.weight === "0").length
               const isPR = newPRs.some(pr => pr.name === exercise.name)
               return (
-                <div key={exIdx} className="rounded-xl bg-zinc-900 border border-zinc-800 p-3">
-                  <div className="flex items-center justify-between mb-1.5">
+                <Card key={exIdx} variant="compact">
+                  <div className="mb-1.5 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <h3 className="text-sm font-semibold text-white">{exercise.name}</h3>
-                      {isPR && <span className="inline-flex items-center gap-0.5 text-xs text-yellow-400"><Trophy className="h-3 w-3" /> PR</span>}
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{exercise.name}</h3>
+                      {isPR && (
+                        <span className="inline-flex items-center gap-0.5 text-xs text-yellow-600 dark:text-yellow-400">
+                          <Trophy className="h-3 w-3" /> PR
+                        </span>
+                      )}
                     </div>
-                    <span className="text-xs text-zinc-600">
+                    <span className="text-xs text-zinc-500 dark:text-zinc-500">
                       {activeSets.length}/{sets.length} sets{skipped > 0 ? ` (${skipped} skipped)` : ''}
                     </span>
                   </div>
                   {activeSets.length > 0 && (
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="flex flex-wrap gap-1.5">
                       {activeSets.map((s, i) => (
-                        <span key={i} className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">
+                        <span key={i} className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
                           {parseFloat(s.weight) > 0 ? `${s.weight}×${s.reps}` : `${s.reps} reps`}
                         </span>
                       ))}
                     </div>
                   )}
-                </div>
+                </Card>
               )
             })}
           </div>
@@ -336,9 +346,10 @@ export default function WorkoutSummary({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
-          className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4 text-center"
         >
-          <p className="text-sm text-zinc-400 leading-relaxed">{closingMessage}</p>
+          <Card variant="default" className="text-center">
+            <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">{closingMessage}</p>
+          </Card>
         </motion.div>
 
       </div>
@@ -348,14 +359,14 @@ export default function WorkoutSummary({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.75 }}
-        className="px-5 pt-2"
+        className="space-y-2 px-5 pt-2"
       >
         <button
           onClick={onDone}
-          className={`w-full rounded-2xl py-4 text-base font-bold shadow-lg transition-all active:scale-95 ${
+          className={`w-full rounded-xl py-4 text-base font-bold shadow-sm transition-all active:scale-95 ${
             programCompleted
-              ? "bg-yellow-500 shadow-yellow-500/20 hover:bg-yellow-400 text-black"
-              : "bg-white shadow-white/10 hover:bg-zinc-100 text-zinc-950"
+              ? "bg-yellow-500 text-zinc-950 shadow-yellow-500/20 hover:bg-yellow-400"
+              : "bg-zinc-900 text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
           }`}
         >
           <span className="flex items-center justify-center gap-2">
@@ -368,14 +379,14 @@ export default function WorkoutSummary({
         {programCompleted && programId ? (
           <Link
             href={`/dashboard/programming/${programId}/journey`}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-yellow-500/40 py-3.5 text-sm font-semibold text-yellow-400 transition-all hover:border-yellow-500/70 hover:text-yellow-300"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-yellow-500/40 py-3.5 text-sm font-semibold text-yellow-700 transition-all hover:border-yellow-500/70 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300"
           >
             <Trophy className="h-4 w-4" /> See Your Full Journey
           </Link>
         ) : (
           <Link
             href="/dashboard/progress#workouts"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/20 py-3.5 text-sm font-semibold text-white/70 transition-all hover:text-white hover:border-white/40"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 py-3.5 text-sm font-semibold text-zinc-700 transition-all hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-700 dark:hover:text-white"
           >
             <TrendingUp className="h-4 w-4" /> View Training Log
           </Link>
