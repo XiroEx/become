@@ -40,9 +40,15 @@ export async function PATCH(
     const item = log.items[idx]
 
     if (body.servings !== undefined && typeof body.servings === 'number') {
+      if (!Number.isFinite(body.servings) || body.servings < 0) {
+        return NextResponse.json({ error: 'servings must be a non-negative number' }, { status: 400 })
+      }
       item.servings = body.servings
     }
     if (body.servingSize !== undefined && typeof body.servingSize === 'number') {
+      if (!Number.isFinite(body.servingSize) || body.servingSize <= 0) {
+        return NextResponse.json({ error: 'servingSize must be a positive number' }, { status: 400 })
+      }
       item.servingSize = body.servingSize
     }
     if (typeof body.servingUnit === 'string') item.servingUnit = body.servingUnit

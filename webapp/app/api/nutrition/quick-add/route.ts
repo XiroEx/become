@@ -21,8 +21,13 @@ export async function POST(request: NextRequest) {
     const { calories, protein, carbs, fats, note, date: dateStr } = body
     const tzOffsetMinutes = readTzOffsetFromBody(body)
 
-    if (calories === undefined || typeof calories !== 'number') {
-      return NextResponse.json({ error: 'Missing required field: calories (number)' }, { status: 400 })
+    if (calories === undefined || typeof calories !== 'number' || !Number.isFinite(calories) || calories < 0) {
+      return NextResponse.json({ error: 'calories must be a non-negative finite number' }, { status: 400 })
+    }
+    for (const [k, v] of Object.entries({ protein, carbs, fats }) as [string, unknown][]) {
+      if (v !== undefined && v !== null && (typeof v !== 'number' || !Number.isFinite(v) || v < 0)) {
+        return NextResponse.json({ error: `${k} must be a non-negative finite number` }, { status: 400 })
+      }
     }
 
     await dbConnect()

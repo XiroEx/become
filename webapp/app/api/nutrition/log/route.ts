@@ -441,19 +441,32 @@ export async function PUT(request: NextRequest) {
 
     // Legacy semantics: rescaling on servingSize change rescales nutrition.
     if (updates.servingSize !== undefined && updates.servingSize !== item.servingSize) {
-      const sizeRatio = updates.servingSize / item.servingSize
-      item.servingSize = updates.servingSize
-      item.nutrition.calories = Math.round(item.nutrition.calories * sizeRatio * 10) / 10
-      item.nutrition.protein  = Math.round(item.nutrition.protein  * sizeRatio * 10) / 10
-      item.nutrition.carbs    = Math.round(item.nutrition.carbs    * sizeRatio * 10) / 10
-      item.nutrition.fats     = Math.round(item.nutrition.fats     * sizeRatio * 10) / 10
-      if (item.nutrition.fiber        != null) item.nutrition.fiber        = Math.round(item.nutrition.fiber        * sizeRatio * 10) / 10
-      if (item.nutrition.sugar        != null) item.nutrition.sugar        = Math.round(item.nutrition.sugar        * sizeRatio * 10) / 10
-      if (item.nutrition.sodium       != null) item.nutrition.sodium       = Math.round(item.nutrition.sodium       * sizeRatio * 10) / 10
-      if (item.nutrition.saturatedFat != null) item.nutrition.saturatedFat = Math.round(item.nutrition.saturatedFat * sizeRatio * 10) / 10
+      if (!Number.isFinite(updates.servingSize) || updates.servingSize <= 0) {
+        return NextResponse.json({ error: 'servingSize must be a positive number' }, { status: 400 })
+      }
+      if (!item.servingSize || item.servingSize <= 0) {
+        // Legacy/malformed item — can't rescale without a positive denominator.
+        // Accept the new size and leave nutrition untouched rather than producing
+        // Infinity macros.
+        item.servingSize = updates.servingSize
+      } else {
+        const sizeRatio = updates.servingSize / item.servingSize
+        item.servingSize = updates.servingSize
+        item.nutrition.calories = Math.round(item.nutrition.calories * sizeRatio * 10) / 10
+        item.nutrition.protein  = Math.round(item.nutrition.protein  * sizeRatio * 10) / 10
+        item.nutrition.carbs    = Math.round(item.nutrition.carbs    * sizeRatio * 10) / 10
+        item.nutrition.fats     = Math.round(item.nutrition.fats     * sizeRatio * 10) / 10
+        if (item.nutrition.fiber        != null) item.nutrition.fiber        = Math.round(item.nutrition.fiber        * sizeRatio * 10) / 10
+        if (item.nutrition.sugar        != null) item.nutrition.sugar        = Math.round(item.nutrition.sugar        * sizeRatio * 10) / 10
+        if (item.nutrition.sodium       != null) item.nutrition.sodium       = Math.round(item.nutrition.sodium       * sizeRatio * 10) / 10
+        if (item.nutrition.saturatedFat != null) item.nutrition.saturatedFat = Math.round(item.nutrition.saturatedFat * sizeRatio * 10) / 10
+      }
     }
 
     if (updates.servings !== undefined) {
+      if (!Number.isFinite(updates.servings) || updates.servings < 0) {
+        return NextResponse.json({ error: 'servings must be a non-negative number' }, { status: 400 })
+      }
       item.servings = updates.servings
     }
 
