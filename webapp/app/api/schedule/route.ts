@@ -450,6 +450,11 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip, shift, pause, resume' }, { status: 400 })
     }
 
+    // ScheduledWorkoutSchema is declared with `_id: false`, which means
+    // Mongoose can't always detect direct subdoc mutations like
+    // `scheduledWorkouts[i].status = ...`. Force the array to be marked
+    // modified so the change actually persists on save().
+    schedule.markModified('scheduledWorkouts')
     await schedule.save()
 
     return NextResponse.json({
