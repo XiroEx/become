@@ -165,7 +165,11 @@ export async function GET(request: NextRequest) {
       computedCompleted = [...sessions]
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .filter((w) => {
-          if (w.status === 'completed') return true
+          if (w.status === 'completed') {
+            const n = availableLogs.get(w.dayLabel) || 0
+            if (n > 0) availableLogs.set(w.dayLabel, n - 1)
+            return true
+          }
           if (w.status === 'skipped') return false
           const n = availableLogs.get(w.dayLabel) || 0
           if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
@@ -178,15 +182,12 @@ export async function GET(request: NextRequest) {
     if (!requestedDay) {
       let scheduledDay: string | null = null
       if (schedule?.scheduledWorkouts?.length) {
-        const now = new Date()
-        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
         let earliestKey = ''
         for (const w of schedule.scheduledWorkouts) {
           if (w.status !== 'scheduled') continue
           const wKey = typeof w.date === 'string'
             ? (w.date as string).split('T')[0]
             : new Date(w.date as Date).toISOString().split('T')[0]
-          if (wKey < todayKey) continue
           if (!scheduledDay || wKey < earliestKey) {
             scheduledDay = w.dayLabel
             earliestKey = wKey
