@@ -103,7 +103,13 @@ export async function GET(request: NextRequest) {
         completedWorkouts = [...sessions]
           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .filter((w) => {
-            if (w.status === 'completed') return true
+            if (w.status === 'completed') {
+              // Consume the matching log so a future scheduled occurrence of the same dayLabel
+              // doesn't get counted a second time (double-count bug).
+              const n = availableLogs.get(w.dayLabel) || 0
+              if (n > 0) availableLogs.set(w.dayLabel, n - 1)
+              return true
+            }
             if (w.status === 'skipped') return false
             const n = availableLogs.get(w.dayLabel) || 0
             if (n > 0) { availableLogs.set(w.dayLabel, n - 1); return true }
