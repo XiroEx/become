@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import WorkoutSummary from '@/components/WorkoutSummary'
 import {
@@ -192,11 +192,26 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function CalendarClient() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [viewMode, setViewMode] = useState<ViewMode>('month')
-  const [currentDate, setCurrentDate] = useState(() => new Date())
+  const [currentDate, setCurrentDate] = useState(() => {
+    const dateParam = searchParams.get('date')
+    if (dateParam) {
+      const d = new Date(dateParam + 'T12:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return new Date()
+  })
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
+    const dateParam = searchParams.get('date')
+    if (dateParam) {
+      const d = new Date(dateParam + 'T12:00:00')
+      if (!isNaN(d.getTime())) return d
+    }
+    return null
+  })
   const [actionMenuWorkout, setActionMenuWorkout] = useState<(ScheduledWorkout & { programName: string }) | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [shiftDays, setShiftDays] = useState(7)

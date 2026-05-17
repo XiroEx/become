@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Calendar, ChevronRight, Check, X, Clock, Dumbbell } from 'lucide-react'
 import { Card } from '@/components/ui'
 
@@ -68,6 +69,7 @@ function StatusIcon({ status }: { status: string }) {
 }
 
 export default function UpcomingWorkouts() {
+  const router = useRouter()
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [loading, setLoading] = useState(true)
   const [hasSchedules, setHasSchedules] = useState(false)
@@ -180,17 +182,8 @@ export default function UpcomingWorkouts() {
           const isPast = day < today
           const isRest = !workouts || workouts.length === 0
 
-          return (
-            <div
-              key={key}
-              className={`relative flex flex-col items-center rounded-lg p-1.5 sm:p-2 transition-colors ${
-                isToday
-                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                  : isPast
-                    ? 'bg-zinc-50 dark:bg-zinc-800/50'
-                    : 'bg-zinc-50 dark:bg-zinc-800/30'
-              }`}
-            >
+          const inner = (
+            <>
               {/* Day label */}
               <span className={`text-[10px] font-medium sm:text-xs ${
                 isToday ? 'text-zinc-300 dark:text-zinc-600' : 'text-zinc-400 dark:text-zinc-500'
@@ -222,11 +215,33 @@ export default function UpcomingWorkouts() {
               {/* Workout title (visible on larger screens) */}
               {workout && (
                 <span className="mt-0.5 hidden text-center text-[8px] leading-tight text-zinc-500 dark:text-zinc-400 sm:block sm:text-[9px]">
-                  {workout.workoutTitle.length > 12 
-                    ? workout.workoutTitle.slice(0, 12) + '…' 
+                  {workout.workoutTitle.length > 12
+                    ? workout.workoutTitle.slice(0, 12) + '…'
                     : workout.workoutTitle}
                 </span>
               )}
+            </>
+          )
+
+          const cellClass = `relative flex flex-col items-center rounded-lg p-1.5 sm:p-2 transition-colors ${
+            isToday
+              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+              : isPast
+                ? 'bg-zinc-50 dark:bg-zinc-800/50'
+                : 'bg-zinc-50 dark:bg-zinc-800/30'
+          } ${workout ? 'cursor-pointer active:opacity-70' : ''}`
+
+          return workout ? (
+            <button
+              key={key}
+              onClick={() => router.push(`/dashboard/calendar?date=${key}`)}
+              className={cellClass}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div key={key} className={cellClass}>
+              {inner}
             </div>
           )
         })}
