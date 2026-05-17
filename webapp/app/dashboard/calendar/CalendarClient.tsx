@@ -822,8 +822,18 @@ export default function CalendarClient() {
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 50 }}
-              className="relative w-full max-w-sm rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900"
+              className="relative w-full max-w-sm rounded-2xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-zinc-900 overflow-hidden"
             >
+              {/* Loading overlay */}
+              {actionLoading && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/80 backdrop-blur-sm dark:bg-zinc-900/80">
+                  <svg className="h-8 w-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">Moving workout…</p>
+                </div>
+              )}
               <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-white">
                 Manage Workout
               </h3>
@@ -871,6 +881,7 @@ export default function CalendarClient() {
                         tz: new Date().getTimezoneOffset(),
                       }),
                     }).then(() => {
+                      setSelectedDate(next)
                       setActionMenuWorkout(null)
                       fetchSchedules()
                     }).finally(() => setActionLoading(false))
@@ -944,6 +955,7 @@ export default function CalendarClient() {
                                   tz: new Date().getTimezoneOffset(),
                                 }),
                               }).then(() => {
+                                setSelectedDate(day)
                                 setActionMenuWorkout(null)
                                 setShowDatePicker(false)
                                 fetchSchedules()
