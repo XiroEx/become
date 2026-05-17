@@ -44,7 +44,7 @@ interface FoodSearchModalProps {
     tag?: string,
     loggedAt?: string,
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
-  ) => void
+  ) => void | Promise<void>
   autoScan?: boolean
 }
 
@@ -842,7 +842,7 @@ export default function FoodSearchModal({
         ? { repeat: { every: repeatEvery, count: repeatCount } }
         : undefined
 
-      onSelectFood(
+      await onSelectFood(
         entry,
         tagPickerEnabled ? activeTag : undefined,
         loggedAtIso,

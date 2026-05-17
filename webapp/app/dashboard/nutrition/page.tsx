@@ -425,17 +425,22 @@ function NutritionPageInner() {
   }
 
   const handleRemoveEntry = async (logId: string, itemId: string) => {
+    const prev = logs
+    setLogs(ls => ls.map(l => l._id === logId
+      ? { ...l, items: l.items.filter(it => it._id !== itemId) }
+      : l
+    ).filter(l => l.items.length > 0))
     try {
       const res = await fetch(`/api/meal-logs/${logId}/items/${itemId}`, {
         method: 'DELETE',
         headers: getHeaders(),
       })
-      if (res.ok) {
-        await fetchMealLogs()
-      } else {
+      if (!res.ok) {
+        setLogs(prev)
         showErrorToast('Failed to delete entry.')
       }
     } catch (err) {
+      setLogs(prev)
       console.error('Failed to delete entry:', err)
     }
   }
@@ -910,7 +915,7 @@ function NutritionPageInner() {
             const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
             const headers: HeadersInit = { 'Content-Type': 'application/json' }
             if (token) headers['Authorization'] = `Bearer ${token}`
-            fetch('/api/meal-plans', {
+            return fetch('/api/meal-plans', {
               method: 'POST',
               headers,
               body: JSON.stringify({ plannedDate: planned, tag: useTag, items: [item] }),
@@ -924,9 +929,8 @@ function NutritionPageInner() {
             }).catch(() => {
               showErrorToast('Failed to plan food. Check your connection.')
             })
-            return
           }
-          handleAddFood(entry, tag, loggedAt)
+          return handleAddFood(entry, tag, loggedAt)
         }}
       />
 
