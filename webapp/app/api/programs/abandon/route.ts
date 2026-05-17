@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
 
     // Remove the program from active programs
     userProgress.activePrograms.splice(programIndex, 1)
+    // ActiveProgramSchema uses _id: false — direct array mutations need markModified
+    userProgress.markModified('activePrograms')
 
     // Workout logs are preserved for historical tracking — only enrollment is removed
 
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (userProgress.currentProgram?.programId === programId) {
       userProgress.currentProgram = undefined
     }
-    
+
     await userProgress.save()
 
     // Delete associated schedule
