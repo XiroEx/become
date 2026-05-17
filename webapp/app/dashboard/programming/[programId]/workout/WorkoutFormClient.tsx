@@ -252,6 +252,7 @@ export default function WorkoutFormPage() {
   // Track which exercises have been swapped: exerciseIndex -> { originalSlug, originalName }
   const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
   const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
+  const [isCompleting, setIsCompleting] = useState(false);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Summary state
@@ -1330,13 +1331,29 @@ export default function WorkoutFormPage() {
               className="mt-4 sm:mt-6"
             >
               <button
+                disabled={isCompleting}
                 onClick={async () => {
-                  await autoSave(exerciseProgress);
-                  setShowSummary(true);
+                  setIsCompleting(true);
+                  try {
+                    await autoSave(exerciseProgress);
+                    setShowSummary(true);
+                  } finally {
+                    setIsCompleting(false);
+                  }
                 }}
-                className="w-full rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-sm transition-all hover:brightness-105"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-70 disabled:cursor-wait"
               >
-                Complete Workout! 🎉
+                {isCompleting ? (
+                  <>
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Saving…
+                  </>
+                ) : (
+                  'Complete Workout! 🎉'
+                )}
               </button>
             </motion.div>
           )}

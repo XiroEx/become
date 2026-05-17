@@ -84,6 +84,9 @@ export default function ProgrammingClient() {
   // Saved programs shown count
   const [savedShown, setSavedShown] = useState(5);
 
+  // Per-program loading state for save/unsave
+  const [savingProgramId, setSavingProgramId] = useState<string | null>(null);
+
   // "Generate program" — feature coming soon; clicking shows a brief toast
   const [showSoonToast, setShowSoonToast] = useState(false);
   function handleGenerateClick() {
@@ -203,10 +206,10 @@ export default function ProgrammingClient() {
 
   const toggleSaveProgram = async (programId: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token || savingProgramId === programId) return;
 
     const isSaved = savedProgramIds.has(programId);
-    
+    setSavingProgramId(programId);
     try {
       const res = await fetch("/api/programs/saved", {
         method: isSaved ? "DELETE" : "POST",
@@ -222,6 +225,8 @@ export default function ProgrammingClient() {
       }
     } catch (error) {
       console.error("Error toggling save:", error);
+    } finally {
+      setSavingProgramId(null);
     }
   };
 
@@ -556,12 +561,20 @@ export default function ProgrammingClient() {
                 {/* Unsave Button */}
                 <button
                   onClick={() => toggleSaveProgram(program.program_id)}
-                  className="shrink-0 p-1.5 text-amber-500 hover:text-amber-600 transition-colors"
+                  disabled={savingProgramId === program.program_id}
+                  className="shrink-0 p-1.5 text-amber-500 hover:text-amber-600 transition-colors disabled:opacity-50"
                   title="Remove from saved"
                 >
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  {savingProgramId === program.program_id ? (
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                  )}
                 </button>
               </Card>
             ))}
@@ -611,12 +624,20 @@ export default function ProgrammingClient() {
                 {/* Save Button */}
                 <button
                   onClick={() => toggleSaveProgram(program.program_id)}
-                  className="shrink-0 p-1 text-zinc-400 hover:text-amber-500 transition-colors"
+                  disabled={savingProgramId === program.program_id}
+                  className="shrink-0 p-1 text-zinc-400 hover:text-amber-500 transition-colors disabled:opacity-50"
                   title="Save for later"
                 >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  {savingProgramId === program.program_id ? (
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                  )}
                 </button>
 
                 {/* Content */}
@@ -819,12 +840,20 @@ export default function ProgrammingClient() {
                 {/* Save Button */}
                 <button
                   onClick={() => toggleSaveProgram(program.program_id)}
-                  className="shrink-0 p-1 text-zinc-400 hover:text-amber-500 transition-colors"
+                  disabled={savingProgramId === program.program_id}
+                  className="shrink-0 p-1 text-zinc-400 hover:text-amber-500 transition-colors disabled:opacity-50"
                   title="Save for later"
                 >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  {savingProgramId === program.program_id ? (
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                  )}
                 </button>
 
                 {/* Content - Link */}
