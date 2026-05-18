@@ -18,6 +18,7 @@
     "@redbtn/redstyle": "^0.4.11",
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/web-push": "^3.6.4",
     "@zxing/browser": "^0.2.0",
     "@zxing/library": "^0.22.0",
     "bcrypt": "^6.0.0",
@@ -31,7 +32,8 @@
     "nodemailer": "^7.0.12",
     "react": "19.2.1",
     "react-dom": "19.2.1",
-    "recharts": "^3.6.0"
+    "recharts": "^3.6.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
