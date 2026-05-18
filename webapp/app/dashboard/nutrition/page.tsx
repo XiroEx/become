@@ -12,10 +12,11 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, AlertCircle, Tag as TagIcon, Clock, ChefHat, CalendarDays } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
-import { Card, EmptyState } from '@/components/ui'
+import { Card, EmptyState, Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 import { isFutureLocalDate } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
@@ -112,7 +113,7 @@ function NutritionPageInner() {
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
-  const [errorToast, setErrorToast] = useState<string | null>(null)
+  const { toast, showToast } = useToast(4000)
   // "+ Add tag" inline input state
   const [showAddTagInput, setShowAddTagInput] = useState(false)
   const [newTagInput, setNewTagInput] = useState('')
@@ -306,10 +307,7 @@ function NutritionPageInner() {
 
   // ── Event handlers ────────────────────────────────────────────────────────
 
-  const showErrorToast = (msg: string) => {
-    setErrorToast(msg)
-    setTimeout(() => setErrorToast(null), 4000)
-  }
+  const showErrorToast = (msg: string) => showToast(msg, 'error')
 
   // Find an existing MealLog today whose primary tag === tag.
   // "Primary tag" = first matching default tag in the log's tags array, else the
@@ -1006,13 +1004,7 @@ function NutritionPageInner() {
         onMutated={() => { fetchPlans(); fetchTags() }}
       />
 
-      {/* Error toast */}
-      {errorToast && (
-        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {errorToast}
-        </div>
-      )}
+      <Toast toast={toast} />
     </>
   )
 }

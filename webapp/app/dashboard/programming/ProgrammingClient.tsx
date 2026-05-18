@@ -6,7 +6,8 @@ import { Dumbbell, Sparkles, Search, Wand2 } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
-import { Card, EmptyState } from "@/components/ui";
+import { Card, EmptyState, Toast } from "@/components/ui";
+import { useToast } from "@/hooks/useToast";
 import type { FitnessGoal, ExperienceLevel } from "@/models/User";
 
 interface ActiveProgram {
@@ -88,10 +89,9 @@ export default function ProgrammingClient() {
   const [savingProgramId, setSavingProgramId] = useState<string | null>(null);
 
   // "Generate program" — feature coming soon; clicking shows a brief toast
-  const [showSoonToast, setShowSoonToast] = useState(false);
+  const { toast, showToast } = useToast();
   function handleGenerateClick() {
-    setShowSoonToast(true);
-    window.setTimeout(() => setShowSoonToast(false), 2400);
+    showToast('Coming soon', 'info');
   }
 
   // User profile for recommendations
@@ -952,18 +952,7 @@ export default function ProgrammingClient() {
       )}
 
       {/* Coming soon toast for Generate button */}
-      {showSoonToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full border border-purple-500/30 bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-lg dark:border-purple-400/30 dark:bg-purple-500"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Wand2 className="h-3.5 w-3.5" />
-            AI program generation — coming soon
-          </span>
-        </div>
-      )}
+      <Toast toast={toast} />
     </PageTransition>
   );
 }

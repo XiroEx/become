@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
 import MealCard from '@/components/meals/MealCard'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import SavedFoodCard from '@/components/meals/SavedFoodCard'
-import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, AlertCircle, Bookmark } from 'lucide-react'
-import { EmptyState } from '@/components/ui'
+import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, Bookmark } from 'lucide-react'
+import { EmptyState, Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 
 interface MealLite {
   _id: string
@@ -92,7 +93,7 @@ export default function MealsPage() {
   const [logTargetFood, setLogTargetFood] = useState<SavedFoodLite | null>(null)
   const [loggedFoodIds, setLoggedFoodIds] = useState<Set<string>>(new Set())
   const [removingFoodId, setRemovingFoodId] = useState<string | null>(null)
-  const [errorToast, setErrorToast] = useState<string | null>(null)
+  const { toast, showToast } = useToast()
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -226,12 +227,10 @@ export default function MealsPage() {
       if (res.ok) {
         setSavedFoods(prev => prev.filter(f => f._id !== foodId))
       } else {
-        setErrorToast('Failed to remove food.')
-        setTimeout(() => setErrorToast(null), 3500)
+        showToast('Failed to remove food.', 'error')
       }
     } catch {
-      setErrorToast('Network error.')
-      setTimeout(() => setErrorToast(null), 3500)
+      showToast('Network error.', 'error')
     } finally {
       setRemovingFoodId(null)
     }
@@ -467,17 +466,7 @@ export default function MealsPage() {
         </Link>
       )}
 
-      {/* Error toast */}
-      {errorToast && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-lg"
-        >
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {errorToast}
-        </motion.div>
-      )}
+      <Toast toast={toast} />
       {/* Food log sheet — when/what to add this saved food as */}
       <FoodLogSheet
         isOpen={!!logTargetFood}

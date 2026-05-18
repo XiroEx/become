@@ -12,13 +12,14 @@ import {
   Trash2,
   ChefHat,
   Loader2,
-  Check,
   AlertCircle,
   Clock,
   Users,
   Bookmark,
 } from 'lucide-react'
 import type { IMeal, IMealItem, IMealRecipe } from '@/models/Meal'
+import { Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 
 function getDefaultTagForNow(): string {
   const h = new Date().getHours()
@@ -61,7 +62,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [savingAsFood, setSavingAsFood] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const { toast, showToast } = useToast()
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
     defaults: [], userTags: [],
   })
@@ -137,16 +138,15 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
       })
       if (res.ok) {
         const data = await res.json()
-        setToast(data.alreadyExisted ? 'Already in My Foods' : 'Saved to My Foods')
+        showToast(data.alreadyExisted ? 'Already in My Foods' : 'Saved to My Foods', 'success')
       } else {
         const d = await res.json().catch(() => ({}))
-        setToast(d?.error || 'Failed to save as food.')
+        showToast(d?.error || 'Failed to save as food.', 'error')
       }
     } catch {
-      setToast('Network error.')
+      showToast('Network error.', 'error')
     } finally {
       setSavingAsFood(false)
-      setTimeout(() => setToast(null), 2500)
     }
   }
 
@@ -161,13 +161,11 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         router.push('/dashboard/meals')
       } else {
-        setToast('Failed to delete recipe.')
-        setTimeout(() => setToast(null), 3000)
+        showToast('Failed to delete recipe.', 'error')
         setDeleting(false)
       }
     } catch {
-      setToast('Network error.')
-      setTimeout(() => setToast(null), 3000)
+      showToast('Network error.', 'error')
       setDeleting(false)
     }
   }
@@ -378,7 +376,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
         availableTags={tagsResp}
         onClose={() => setApplySheetOpen(false)}
         onApplied={() => {
-          setToast('Logged to your day')
+          showToast('Logged to your day', 'success')
           setTimeout(() => {
             router.push('/dashboard/nutrition')
           }, 600)
@@ -422,17 +420,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
         </motion.div>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-white dark:text-black"
-        >
-          <Check className="h-4 w-4 shrink-0" />
-          {toast}
-        </motion.div>
-      )}
+      <Toast toast={toast} />
     </PageTransition>
   )
 }

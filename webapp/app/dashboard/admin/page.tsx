@@ -21,6 +21,8 @@ import {
   CartesianGrid,
 } from 'recharts'
 import PageTransition from '@/components/PageTransition'
+import { Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 
 interface AdminStats {
   users: {
@@ -103,7 +105,7 @@ export default function AdminOverviewPage() {
   const [isDark, setIsDark] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { toast, showToast } = useToast()
 
   useEffect(() => {
     setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -132,12 +134,6 @@ export default function AdminOverviewPage() {
     load()
   }, [])
 
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 3000)
-    return () => clearTimeout(t)
-  }, [toast])
-
   async function handleResetOnboarding() {
     setResetLoading(true)
     try {
@@ -147,13 +143,13 @@ export default function AdminOverviewPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
-        setToast({ message: 'Onboarding reset for all users', type: 'success' })
+        showToast('Onboarding reset for all users', 'success')
       } else {
         const data = await res.json() as { error?: string }
-        setToast({ message: data.error ?? 'Reset failed', type: 'error' })
+        showToast(data.error ?? 'Reset failed', 'error')
       }
     } catch {
-      setToast({ message: 'Network error', type: 'error' })
+      showToast('Network error', 'error')
     } finally {
       setResetLoading(false)
       setShowConfirm(false)
@@ -189,16 +185,7 @@ export default function AdminOverviewPage() {
 
   return (
     <PageTransition>
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl px-4 py-2 text-sm font-medium text-white shadow-lg ${
-            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+      <Toast toast={toast} />
 
       {showConfirm && (
         <ConfirmModal
