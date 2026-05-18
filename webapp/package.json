@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "npm run dev:db && next dev",
     "dev:db": "docker compose -f ../db/compose.yml up -d",
-    "build": "next build",
+    "build": "next build --no-turbopack",
     "start": "next start",
     "lint": "eslint",
     "gen-test-token": "node scripts/gen-test-token.mjs",
