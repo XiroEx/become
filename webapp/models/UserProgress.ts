@@ -104,6 +104,11 @@ export interface IUserProgress {
     workoutReminder?: boolean
     reEngagement?: boolean
   }
+  lastPushSentAt?: {
+    streakAtRisk?: Date
+    workoutReminder?: Date
+    reEngagement?: Date
+  }
   createdAt?: Date
   updatedAt?: Date
 }
@@ -213,6 +218,11 @@ const UserProgressSchema = new Schema<IUserProgress>({
     streakAtRisk: { type: Boolean },
     workoutReminder: { type: Boolean },
     reEngagement: { type: Boolean },
+  },
+  lastPushSentAt: {
+    streakAtRisk: { type: Date },
+    workoutReminder: { type: Date },
+    reEngagement: { type: Date },
   },
 }, {
   timestamps: true
