@@ -10,6 +10,8 @@ import {
   Flame,
   BarChart3,
   RefreshCw,
+  Bell,
+  Send,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -106,6 +108,48 @@ export default function AdminOverviewPage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const { toast, showToast } = useToast()
+
+  // Push notification tester
+  const [notifyEmail, setNotifyEmail] = useState('')
+  const [notifyTitle, setNotifyTitle] = useState('')
+  const [notifyBody, setNotifyBody] = useState('')
+  const [notifyUrl, setNotifyUrl] = useState('/dashboard')
+  const [notifySending, setNotifySending] = useState(false)
+
+  const PRESETS = [
+    { label: 'Streak at Risk', title: "Don't break your streak!", body: 'Log a workout, mood, or weight to keep it alive.', url: '/dashboard', tag: 'streak-at-risk' },
+    { label: 'Workout Ready', title: "Today's workout is ready", body: 'Tap to start your session.', url: '/dashboard/calendar', tag: 'workout-reminder' },
+    { label: 'Re-engagement', title: 'We miss you!', body: 'Come back and keep building your best self.', url: '/dashboard', tag: 're-engagement' },
+  ] as const
+
+  async function handleSendNotification() {
+    if (!notifyTitle.trim() || !notifyBody.trim()) {
+      showToast('Title and message are required', 'error')
+      return
+    }
+    setNotifySending(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/notify', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: notifyEmail.trim() || undefined, title: notifyTitle, bodyText: notifyBody, url: notifyUrl }),
+      })
+      const data = await res.json() as { sent?: number; subscriptions?: number; errors?: number; error?: string }
+      if (!res.ok) {
+        showToast(data.error ?? 'Failed to send', 'error')
+      } else if (data.sent === 0) {
+        showToast('No push subscriptions found for that user', 'neutral')
+      } else {
+        const target = notifyEmail.trim() || 'all subscribers'
+        showToast(`Sent to ${data.sent} subscription${data.sent !== 1 ? 's' : ''} (${target})`, 'success')
+      }
+    } catch {
+      showToast('Request failed', 'error')
+    } finally {
+      setNotifySending(false)
+    }
+  }
 
   useEffect(() => {
     setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -319,6 +363,67 @@ export default function AdminOverviewPage() {
             No workout data for this period
           </p>
         )}
+      </div>
+
+      {/* Push notification tester */}
+      <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mb-3 flex items-center gap-2">
+          <Bell className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Test Push Notification</h2>
+        </div>
+
+        {/* Presets */}
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {PRESETS.map((p) => (
+            <button
+              key={p.tag}
+              onClick={() => { setNotifyTitle(p.title); setNotifyBody(p.body); setNotifyUrl(p.url) }}
+              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          {/* Target */}
+          <input
+            type="email"
+            value={notifyEmail}
+            onChange={e => setNotifyEmail(e.target.value)}
+            placeholder="User email (leave blank to broadcast to all)"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+          />
+          <input
+            type="text"
+            value={notifyTitle}
+            onChange={e => setNotifyTitle(e.target.value)}
+            placeholder="Title"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+          />
+          <textarea
+            value={notifyBody}
+            onChange={e => setNotifyBody(e.target.value)}
+            placeholder="Message body"
+            rows={2}
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+          />
+          <input
+            type="text"
+            value={notifyUrl}
+            onChange={e => setNotifyUrl(e.target.value)}
+            placeholder="URL (e.g. /dashboard)"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
+          />
+          <button
+            onClick={handleSendNotification}
+            disabled={notifySending || !notifyTitle.trim() || !notifyBody.trim()}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Send className="h-3.5 w-3.5" />
+            {notifySending ? 'Sending...' : notifyEmail.trim() ? 'Send to User' : 'Broadcast to All'}
+          </button>
+        </div>
       </div>
 
       {/* Quick actions */}
