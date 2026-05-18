@@ -44,6 +44,37 @@ const EQUIPMENT_OPTIONS: { value: EquipmentType; label: string }[] = [
   { value: 'full_gym', label: 'Full Gym' },
 ]
 
+// ─── Notification types & helpers ─────────────────────────────────────────────
+
+type NotificationPermissionState = 'granted' | 'denied' | 'default'
+
+interface NotificationPrefs {
+  streakAtRisk: boolean
+  workoutReminder: boolean
+  reEngagement: boolean
+}
+
+type NotificationPrefKey = keyof NotificationPrefs
+
+interface PreferencesResponse {
+  preferences?: Partial<NotificationPrefs>
+}
+
+const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
+  { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
+  { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
+  { key: 'reEngagement', label: 'Re-engagement', sublabel: "When you've been inactive for a few days" },
+]
+
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
+}
+
 // ─── Unit conversion helpers ──────────────────────────────────────────────────
 
 function cmToFtIn(cm: number): { ft: number; inches: number } {
@@ -96,6 +127,16 @@ export default function ProfilePage() {
   const [planPromoteMode, setPlanPromoteMode] = useState<PlanPromoteMode>('manual')
 
   const isImperial = weightUnit === 'lbs'
+
+  // Notifications
+  const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>('default')
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({
+    streakAtRisk: true,
+    workoutReminder: true,
+    reEngagement: true,
+  })
+  const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
+  const [enablingNotifications, setEnablingNotifications] = useState(false)
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -151,6 +192,125 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchProfile()
   }, [fetchProfile])
+
+  // ─── Notifications ────────────────────────────────────────────────────────
+
+  const fetchNotifPrefs = useCallback(async () => {
+    const token = getToken()
+    if (!token) {
+      setNotifPrefsLoading(false)
+      return
+    }
+    try {
+      const res = await fetch('/api/notifications/preferences', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const data: PreferencesResponse = await res.json()
+      const p = data.preferences ?? {}
+      setNotifPrefs({
+        streakAtRisk: p.streakAtRisk ?? true,
+        workoutReminder: p.workoutReminder ?? true,
+        reEngagement: p.reEngagement ?? true,
+      })
+    } catch {
+      // ignore — defaults remain
+    } finally {
+      setNotifPrefsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setNotifPrefsLoading(false)
+      return
+    }
+    const permission = Notification.permission as NotificationPermissionState
+    setNotifPermission(permission)
+    if (permission === 'granted') {
+      fetchNotifPrefs()
+    } else {
+      setNotifPrefsLoading(false)
+    }
+  }, [fetchNotifPrefs])
+
+  const handleNotifToggle = async (key: NotificationPrefKey, value: boolean) => {
+    const previous = notifPrefs[key]
+    // Optimistic update
+    setNotifPrefs(prev => ({ ...prev, [key]: value }))
+
+    const token = getToken()
+    if (!token) {
+      setNotifPrefs(prev => ({ ...prev, [key]: previous }))
+      showToast('Failed to save preference', 'error')
+      return
+    }
+    try {
+      const res = await fetch('/api/notifications/preferences', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ [key]: value }),
+      })
+      if (!res.ok) throw new Error('PATCH failed')
+    } catch {
+      setNotifPrefs(prev => ({ ...prev, [key]: previous }))
+      showToast('Failed to save preference', 'error')
+    }
+  }
+
+  const enableNotifications = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    setEnablingNotifications(true)
+    try {
+      const permission = await Notification.requestPermission()
+      setNotifPermission(permission as NotificationPermissionState)
+      if (permission !== 'granted') return
+
+      // Subscribe to push, mirroring NotificationOptIn logic
+      if ('serviceWorker' in navigator && 'PushManager' in window && VAPID_PUBLIC_KEY) {
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as unknown as ArrayBuffer,
+          })
+
+          const token = getToken()
+          if (token) {
+            await fetch('/api/notifications/subscribe', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                platform: 'web',
+                endpoint: sub.endpoint,
+                keys: {
+                  p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')!))),
+                  auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')!))),
+                },
+              }),
+            })
+          }
+        } catch (err) {
+          console.warn('Push subscription failed:', err)
+        }
+      }
+
+      // Now that permission is granted, load per-type preferences
+      setNotifPrefsLoading(true)
+      await fetchNotifPrefs()
+      showToast('Notifications enabled')
+    } catch {
+      showToast('Failed to enable notifications', 'error')
+    } finally {
+      setEnablingNotifications(false)
+    }
+  }
 
   // Convert existing values when the user switches units
   const handleUnitToggle = (newUnit: WeightUnit) => {
@@ -636,6 +796,98 @@ export default function ProfilePage() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Notifications */}
+      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Notifications</h2>
+
+        {/* Permission status */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                  notifPermission === 'granted'
+                    ? 'bg-green-500'
+                    : notifPermission === 'denied'
+                      ? 'bg-red-500'
+                      : 'bg-zinc-400 dark:bg-zinc-500'
+                }`}
+              />
+              <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                {notifPermission === 'granted'
+                  ? 'Active'
+                  : notifPermission === 'denied'
+                    ? 'Blocked'
+                    : 'Not enabled'}
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {notifPermission === 'granted'
+                ? "You'll receive push notifications"
+                : notifPermission === 'denied'
+                  ? 'Enable in your browser settings to receive notifications'
+                  : 'Turn on notifications to stay on your streak'}
+            </p>
+          </div>
+          {notifPermission === 'default' && (
+            <button
+              type="button"
+              onClick={enableNotifications}
+              disabled={enablingNotifications}
+              className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+            >
+              {enablingNotifications ? 'Enabling…' : 'Enable'}
+            </button>
+          )}
+        </div>
+
+        {/* Per-type toggles */}
+        {notifPermission === 'granted' && (
+          <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+            {notifPrefsLoading ? (
+              <div className="space-y-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="h-4 w-32 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+                      <div className="h-3 w-48 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+                    </div>
+                    <div className="h-6 w-11 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              NOTIFICATION_TOGGLES.map(({ key, label, sublabel }) => {
+                const value = notifPrefs[key]
+                return (
+                  <div key={key} className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{label}</p>
+                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{sublabel}</p>
+                    </div>
+                    <button
+                      role="switch"
+                      aria-checked={value}
+                      aria-label={label}
+                      onClick={() => handleNotifToggle(key, !value)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                        value ? 'bg-blue-600' : 'bg-zinc-600'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                          value ? 'translate-x-5' : 'translate-x-0.5'
+                        } mt-0.5`}
+                      />
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )}
       </section>
 
       {/* Save Button */}
