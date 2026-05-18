@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageTransition from '@/components/PageTransition'
 import { getToken } from '@/lib/clientAuth'
+import Toast from '@/components/ui/Toast'
+import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -99,7 +101,7 @@ function lbsToKg(lbs: number): number {
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { toast, showToast } = useToast()
 
   // Form state
   const [name, setName] = useState('')
@@ -137,11 +139,6 @@ export default function ProfilePage() {
   })
   const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
   const [enablingNotifications, setEnablingNotifications] = useState(false)
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 
   const fetchProfile = useCallback(async () => {
     const token = getToken()
@@ -909,16 +906,7 @@ export default function ProfilePage() {
         )}
       </button>
 
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg transition-all duration-300 ${
-            toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+      <Toast toast={toast} />
     </PageTransition>
   )
 }
