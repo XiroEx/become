@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import NotificationOptIn from '@/components/NotificationOptIn'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart from '@/components/ProgressChart'
@@ -633,6 +634,7 @@ export default function DashboardClient() {
         ))}
       </div>
     </PageTransition>
+    <NotificationOptIn />
     </>
   )
 }

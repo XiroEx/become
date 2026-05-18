@@ -99,6 +99,11 @@ export interface IUserProgress {
   milestonesReached: number[]
   lastStreakEmailDate?: Date
   totalWorkouts: number
+  notificationPrefs?: {
+    streakAtRisk?: boolean
+    workoutReminder?: boolean
+    reEngagement?: boolean
+  }
   createdAt?: Date
   updatedAt?: Date
 }
@@ -203,7 +208,12 @@ const UserProgressSchema = new Schema<IUserProgress>({
   streakFreezes: { type: Number, default: 1 },
   milestonesReached: { type: [Number], default: [] },
   lastStreakEmailDate: { type: Date },
-  totalWorkouts: { type: Number, default: 0 }
+  totalWorkouts: { type: Number, default: 0 },
+  notificationPrefs: {
+    streakAtRisk: { type: Boolean },
+    workoutReminder: { type: Boolean },
+    reEngagement: { type: Boolean },
+  },
 }, {
   timestamps: true
 })
