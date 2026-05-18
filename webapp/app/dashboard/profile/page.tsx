@@ -101,6 +101,7 @@ function lbsToKg(lbs: number): number {
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState<'profile' | 'training' | 'settings'>('profile')
   const { toast, showToast } = useToast()
 
   // Form state
@@ -422,489 +423,485 @@ export default function ProfilePage() {
 
   const { bmiCm, bmiKg } = getBmiValues()
 
+  const TABS = [
+    { id: ‘profile’, label: ‘Profile’ },
+    { id: ‘training’, label: ‘Training’ },
+    { id: ‘settings’, label: ‘Settings’ },
+  ] as const
+
+  const SaveButton = () => (
+    <button
+      onClick={handleSave}
+      disabled={saving}
+      className=”w-full rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200”
+    >
+      {saving ? (
+        <span className=”flex items-center justify-center gap-2”>
+          <svg className=”h-4 w-4 animate-spin” fill=”none” viewBox=”0 0 24 24”>
+            <circle className=”opacity-25” cx=”12” cy=”12” r=”10” stroke=”currentColor” strokeWidth=”4” />
+            <path className=”opacity-75” fill=”currentColor” d=”M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z” />
+          </svg>
+          Saving...
+        </span>
+      ) : (
+        ‘Save Changes’
+      )}
+    </button>
+  )
+
   return (
-    <PageTransition className="pb-10 space-y-6">
+    <PageTransition className=”pb-10 space-y-4”>
       {/* Header */}
       <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Profile</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <h1 className=”text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl”>Profile</h1>
+        <p className=”mt-1 text-sm text-zinc-500 dark:text-zinc-400”>
           Manage your account and fitness preferences.
         </p>
       </header>
 
-      {/* Account */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Account</h2>
-        <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-              placeholder="Your name"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              readOnly
-              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400 cursor-not-allowed"
-            />
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Email cannot be changed.</p>
-          </div>
-        </div>
-      </section>
+      {/* Tab bar */}
+      <div className=”flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60”>
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? ‘bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white’
+                : ‘text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200’
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Fitness Goal */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Fitness Goal</h2>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {FITNESS_GOALS.map(goal => (
-            <button
-              key={goal.value}
-              onClick={() => setFitnessGoal(goal.value)}
-              className={`flex items-center gap-3 rounded-xl border-2 p-3 text-left transition-all duration-150 ${
-                fitnessGoal === goal.value
-                  ? 'border-green-500 bg-green-50 dark:border-green-500 dark:bg-green-900/20'
-                  : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
-              }`}
-            >
-              <span className="text-2xl">{goal.icon}</span>
-              <div className="min-w-0">
-                <p className={`text-sm font-semibold ${fitnessGoal === goal.value ? 'text-green-700 dark:text-green-400' : 'text-zinc-900 dark:text-white'}`}>
-                  {goal.label}
-                </p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">{goal.description}</p>
+      {/* ── Profile tab ────────────────────────────────────────────────────────── */}
+      {activeTab === ‘profile’ && (
+        <>
+          {/* Account */}
+          <section className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”>
+            <h2 className=”mb-4 text-base font-semibold text-zinc-900 dark:text-white”>Account</h2>
+            <div className=”space-y-4”>
+              <div>
+                <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Name</label>
+                <input
+                  type=”text”
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                  placeholder=”Your name”
+                />
               </div>
-              {fitnessGoal === goal.value && (
-                <div className="ml-auto shrink-0">
-                  <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Experience & Schedule */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Experience &amp; Schedule</h2>
-
-        {/* Experience Level */}
-        <div className="mb-5">
-          <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Experience Level
-          </label>
-          <div className="flex gap-2">
-            {EXPERIENCE_LEVELS.map(level => (
-              <button
-                key={level.value}
-                onClick={() => setExperienceLevel(level.value)}
-                className={`flex-1 rounded-lg border-2 py-2.5 text-sm font-medium transition-all ${
-                  experienceLevel === level.value
-                    ? 'border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-900/20 dark:text-green-400'
-                    : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600'
-                }`}
-              >
-                {level.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Weekly Availability */}
-        <div>
-          <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Weekly Availability
-          </label>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setWeeklyAvailability(v => Math.max(1, v - 1))}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-              aria-label="Decrease"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-              </svg>
-            </button>
-            <div className="flex-1 text-center">
-              <span className="text-2xl font-bold text-zinc-900 dark:text-white">{weeklyAvailability}</span>
-              <span className="ml-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-                day{weeklyAvailability !== 1 ? 's' : ''}/week
-              </span>
+              <div>
+                <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Email</label>
+                <input
+                  type=”email”
+                  value={email}
+                  readOnly
+                  className=”w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400 cursor-not-allowed”
+                />
+                <p className=”mt-1 text-xs text-zinc-400 dark:text-zinc-500”>Email cannot be changed.</p>
+              </div>
             </div>
-            <button
-              onClick={() => setWeeklyAvailability(v => Math.min(7, v + 1))}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-              aria-label="Increase"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      {/* Body Stats */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>
-            {bmiCm && bmiKg && (() => {
-              const bmi = bmiKg / Math.pow(bmiCm / 100, 2)
-              const cat = bmi < 18.5 ? { label: 'Underweight', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' }
-                : bmi < 25 ? { label: 'Normal', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' }
-                : bmi < 30 ? { label: 'Overweight', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' }
-                : { label: 'Obese', cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' }
-              return (
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cat.cls}`}>
-                  BMI {bmi.toFixed(1)} · {cat.label}
-                </span>
-              )
-            })()}
-          </div>
-          {/* Unit toggle — controls both height and weight units */}
-          <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
-            {(['lbs', 'kg'] as WeightUnit[]).map(unit => (
-              <button
-                key={unit}
-                onClick={() => handleUnitToggle(unit)}
-                className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
-                  weightUnit === unit
-                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
-                    : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
-                }`}
-              >
-                {unit === 'lbs' ? 'Imperial' : 'Metric'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          {/* Age */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Age</label>
-            <input
-              type="number"
-              value={age}
-              onChange={e => setAge(e.target.value)}
-              min={10}
-              max={120}
-              placeholder="—"
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
-          </div>
+          {/* Body Stats */}
+          <section className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”>
+            <div className=”mb-4 flex items-center justify-between”>
+              <div className=”flex items-center gap-3”>
+                <h2 className=”text-base font-semibold text-zinc-900 dark:text-white”>Body Stats</h2>
+                {bmiCm && bmiKg && (() => {
+                  const bmi = bmiKg / Math.pow(bmiCm / 100, 2)
+                  const cat = bmi < 18.5 ? { label: ‘Underweight’, cls: ‘bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300’ }
+                    : bmi < 25 ? { label: ‘Normal’, cls: ‘bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400’ }
+                    : bmi < 30 ? { label: ‘Overweight’, cls: ‘bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400’ }
+                    : { label: ‘Obese’, cls: ‘bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400’ }
+                  return (
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${cat.cls}`}>
+                      BMI {bmi.toFixed(1)} · {cat.label}
+                    </span>
+                  )
+                })()}
+              </div>
+              <div className=”flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700”>
+                {([‘lbs’, ‘kg’] as WeightUnit[]).map(unit => (
+                  <button
+                    key={unit}
+                    onClick={() => handleUnitToggle(unit)}
+                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
+                      weightUnit === unit
+                        ? ‘bg-zinc-900 text-white dark:bg-white dark:text-zinc-900’
+                        : ‘text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200’
+                    }`}
+                  >
+                    {unit === ‘lbs’ ? ‘Imperial’ : ‘Metric’}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className=”grid grid-cols-2 gap-4”>
+              <div>
+                <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Age</label>
+                <input
+                  type=”number”
+                  value={age}
+                  onChange={e => setAge(e.target.value)}
+                  min={10}
+                  max={120}
+                  placeholder=”—“
+                  className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                />
+              </div>
+              <div className=”col-span-2”>
+                <label className=”mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Biological Sex</label>
+                <div className=”flex flex-wrap gap-2”>
+                  {BIOLOGICAL_SEX_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setBiologicalSex(opt.value)}
+                      className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-all ${
+                        biologicalSex === opt.value
+                          ? ‘border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-900/20 dark:text-green-400’
+                          : ‘border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400’
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className=”col-span-2”>
+                <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>
+                  Height {isImperial ? ‘(ft / in)’ : ‘(cm)’}
+                </label>
+                {isImperial ? (
+                  <div className=”flex gap-2”>
+                    <div className=”relative flex-1”>
+                      <input
+                        type=”number”
+                        value={heightFt}
+                        onChange={e => setHeightFt(e.target.value)}
+                        min={1}
+                        max={9}
+                        placeholder=”5”
+                        className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 pr-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                      />
+                      <span className=”pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400”>ft</span>
+                    </div>
+                    <div className=”relative flex-1”>
+                      <input
+                        type=”number”
+                        value={heightIn}
+                        onChange={e => setHeightIn(e.target.value)}
+                        min={0}
+                        max={11}
+                        placeholder=”10”
+                        className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 pr-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                      />
+                      <span className=”pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400”>in</span>
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type=”number”
+                    value={heightCm}
+                    onChange={e => setHeightCm(e.target.value)}
+                    min={50}
+                    max={300}
+                    placeholder=”—“
+                    className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                  />
+                )}
+              </div>
+              <div>
+                <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>
+                  Current Weight ({isImperial ? ‘lbs’ : ‘kg’})
+                </label>
+                <input
+                  type=”number”
+                  value={weightDisplay}
+                  onChange={e => setWeightDisplay(e.target.value)}
+                  min={isImperial ? 44 : 20}
+                  max={isImperial ? 1100 : 500}
+                  step={isImperial ? 1 : 0.1}
+                  placeholder=”—“
+                  className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                />
+              </div>
+              <div>
+                <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>
+                  Target Weight ({isImperial ? ‘lbs’ : ‘kg’})
+                </label>
+                <input
+                  type=”number”
+                  value={targetWeightDisplay}
+                  onChange={e => setTargetWeightDisplay(e.target.value)}
+                  min={isImperial ? 44 : 20}
+                  max={isImperial ? 1100 : 500}
+                  step={isImperial ? 1 : 0.1}
+                  placeholder=”—“
+                  className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500”
+                />
+              </div>
+            </div>
+          </section>
 
-          {/* Biological Sex */}
-          <div className="col-span-2">
-            <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Biological Sex</label>
-            <div className="flex flex-wrap gap-2">
-              {BIOLOGICAL_SEX_OPTIONS.map(opt => (
+          <SaveButton />
+        </>
+      )}
+
+      {/* ── Training tab ───────────────────────────────────────────────────────── */}
+      {activeTab === ‘training’ && (
+        <>
+          {/* Fitness Goal */}
+          <section className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”>
+            <h2 className=”mb-4 text-base font-semibold text-zinc-900 dark:text-white”>Fitness Goal</h2>
+            <div className=”grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3”>
+              {FITNESS_GOALS.map(goal => (
                 <button
-                  key={opt.value}
-                  onClick={() => setBiologicalSex(opt.value)}
-                  className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-all ${
-                    biologicalSex === opt.value
-                      ? 'border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-900/20 dark:text-green-400'
-                      : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
+                  key={goal.value}
+                  onClick={() => setFitnessGoal(goal.value)}
+                  className={`flex items-center gap-3 rounded-xl border-2 p-3 text-left transition-all duration-150 ${
+                    fitnessGoal === goal.value
+                      ? ‘border-green-500 bg-green-50 dark:border-green-500 dark:bg-green-900/20’
+                      : ‘border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600’
                   }`}
                 >
-                  {opt.label}
+                  <span className=”text-2xl”>{goal.icon}</span>
+                  <div className=”min-w-0”>
+                    <p className={`text-sm font-semibold ${fitnessGoal === goal.value ? ‘text-green-700 dark:text-green-400’ : ‘text-zinc-900 dark:text-white’}`}>
+                      {goal.label}
+                    </p>
+                    <p className=”text-xs text-zinc-500 dark:text-zinc-400”>{goal.description}</p>
+                  </div>
+                  {fitnessGoal === goal.value && (
+                    <div className=”ml-auto shrink-0”>
+                      <svg className=”h-4 w-4 text-green-500” fill=”currentColor” viewBox=”0 0 20 20”>
+                        <path fillRule=”evenodd” d=”M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z” clipRule=”evenodd” />
+                      </svg>
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
-          </div>
+          </section>
 
-          {/* Height */}
-          <div className="col-span-2">
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Height {isImperial ? '(ft / in)' : '(cm)'}
-            </label>
-            {isImperial ? (
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type="number"
-                    value={heightFt}
-                    onChange={e => setHeightFt(e.target.value)}
-                    min={1}
-                    max={9}
-                    placeholder="5"
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 pr-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">ft</span>
-                </div>
-                <div className="relative flex-1">
-                  <input
-                    type="number"
-                    value={heightIn}
-                    onChange={e => setHeightIn(e.target.value)}
-                    min={0}
-                    max={11}
-                    placeholder="10"
-                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 pr-9 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">in</span>
-                </div>
-              </div>
-            ) : (
-              <input
-                type="number"
-                value={heightCm}
-                onChange={e => setHeightCm(e.target.value)}
-                min={50}
-                max={300}
-                placeholder="—"
-                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-              />
-            )}
-          </div>
-
-          {/* Current Weight */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Current Weight ({isImperial ? 'lbs' : 'kg'})
-            </label>
-            <input
-              type="number"
-              value={weightDisplay}
-              onChange={e => setWeightDisplay(e.target.value)}
-              min={isImperial ? 44 : 20}
-              max={isImperial ? 1100 : 500}
-              step={isImperial ? 1 : 0.1}
-              placeholder="—"
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
-          </div>
-
-          {/* Target Weight */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Target Weight ({isImperial ? 'lbs' : 'kg'})
-            </label>
-            <input
-              type="number"
-              value={targetWeightDisplay}
-              onChange={e => setTargetWeightDisplay(e.target.value)}
-              min={isImperial ? 44 : 20}
-              max={isImperial ? 1100 : 500}
-              step={isImperial ? 1 : 0.1}
-              placeholder="—"
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Equipment & Injuries */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Equipment &amp; Injuries</h2>
-
-        {/* Equipment multi-select */}
-        <div className="mb-5">
-          <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Equipment Access
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {EQUIPMENT_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => toggleEquipment(opt.value)}
-                className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-all ${
-                  equipmentAccess.includes(opt.value)
-                    ? 'border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-900/20 dark:text-green-400'
-                    : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Injury Notes */}
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Injury Notes
-            <span className="ml-1 font-normal text-zinc-400">(optional)</span>
-          </label>
-          <textarea
-            value={injuryNotes}
-            onChange={e => setInjuryNotes(e.target.value)}
-            rows={3}
-            placeholder="e.g. Bad left knee, shoulder impingement..."
-            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 resize-none"
-          />
-        </div>
-      </section>
-
-      {/* Nutrition Preferences — Plan promote mode (meal-plan PR 4) */}
-      <section
-        id="nutrition"
-        className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
-      >
-        <h2 className="mb-1 text-base font-semibold text-zinc-900 dark:text-white">Nutrition Planning</h2>
-        <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-          When a planned meal&apos;s day arrives, how should it become a log?
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {(
-            [
-              {
-                value: 'manual' as const,
-                label: 'Manual',
-                description: 'Tap “Log it” to confirm each plan as you eat it.',
-              },
-              {
-                value: 'auto' as const,
-                label: 'Auto',
-                description: 'Promote today’s plans on day-view load. You can undo.',
-              },
-            ]
-          ).map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setPlanPromoteMode(opt.value)}
-              className={`flex flex-col gap-1 rounded-xl border-2 p-3 text-left transition-all duration-150 ${
-                planPromoteMode === opt.value
-                  ? 'border-green-500 bg-green-50 dark:border-green-500 dark:bg-green-900/20'
-                  : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
-              }`}
-              aria-pressed={planPromoteMode === opt.value}
-            >
-              <span className={`text-sm font-semibold ${planPromoteMode === opt.value ? 'text-green-700 dark:text-green-400' : 'text-zinc-900 dark:text-white'}`}>
-                {opt.label}
-              </span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {opt.description}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Notifications */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Notifications</h2>
-
-        {/* Permission status */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                  notifPermission === 'granted'
-                    ? 'bg-green-500'
-                    : notifPermission === 'denied'
-                      ? 'bg-red-500'
-                      : 'bg-zinc-400 dark:bg-zinc-500'
-                }`}
-              />
-              <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                {notifPermission === 'granted'
-                  ? 'Active'
-                  : notifPermission === 'denied'
-                    ? 'Blocked'
-                    : 'Not enabled'}
-              </p>
-            </div>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {notifPermission === 'granted'
-                ? "You'll receive push notifications"
-                : notifPermission === 'denied'
-                  ? 'Enable in your browser settings to receive notifications'
-                  : 'Turn on notifications to stay on your streak'}
-            </p>
-          </div>
-          {notifPermission === 'default' && (
-            <button
-              type="button"
-              onClick={enableNotifications}
-              disabled={enablingNotifications}
-              className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-            >
-              {enablingNotifications ? 'Enabling…' : 'Enable'}
-            </button>
-          )}
-        </div>
-
-        {/* Per-type toggles */}
-        {notifPermission === 'granted' && (
-          <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
-            {notifPrefsLoading ? (
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="h-4 w-32 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-                      <div className="h-3 w-48 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-                    </div>
-                    <div className="h-6 w-11 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
-                  </div>
+          {/* Experience & Schedule */}
+          <section className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”>
+            <h2 className=”mb-4 text-base font-semibold text-zinc-900 dark:text-white”>Experience &amp; Schedule</h2>
+            <div className=”mb-5”>
+              <label className=”mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Experience Level</label>
+              <div className=”flex gap-2”>
+                {EXPERIENCE_LEVELS.map(level => (
+                  <button
+                    key={level.value}
+                    onClick={() => setExperienceLevel(level.value)}
+                    className={`flex-1 rounded-lg border-2 py-2.5 text-sm font-medium transition-all ${
+                      experienceLevel === level.value
+                        ? ‘border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-900/20 dark:text-green-400’
+                        : ‘border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600’
+                    }`}
+                  >
+                    {level.label}
+                  </button>
                 ))}
               </div>
-            ) : (
-              NOTIFICATION_TOGGLES.map(({ key, label, sublabel }) => {
-                const value = notifPrefs[key]
-                return (
-                  <div key={key} className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{label}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{sublabel}</p>
-                    </div>
-                    <button
-                      role="switch"
-                      aria-checked={value}
-                      aria-label={label}
-                      onClick={() => handleNotifToggle(key, !value)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
-                        value ? 'bg-blue-600' : 'bg-zinc-600'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
-                          value ? 'translate-x-5' : 'translate-x-0.5'
-                        } mt-0.5`}
-                      />
-                    </button>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        )}
-      </section>
+            </div>
+            <div>
+              <label className=”mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Weekly Availability</label>
+              <div className=”flex items-center gap-4”>
+                <button
+                  onClick={() => setWeeklyAvailability(v => Math.max(1, v - 1))}
+                  className=”flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700”
+                  aria-label=”Decrease”
+                >
+                  <svg className=”h-5 w-5” fill=”none” viewBox=”0 0 24 24” stroke=”currentColor”>
+                    <path strokeLinecap=”round” strokeLinejoin=”round” strokeWidth={2} d=”M20 12H4” />
+                  </svg>
+                </button>
+                <div className=”flex-1 text-center”>
+                  <span className=”text-2xl font-bold text-zinc-900 dark:text-white”>{weeklyAvailability}</span>
+                  <span className=”ml-1.5 text-sm text-zinc-500 dark:text-zinc-400”>
+                    day{weeklyAvailability !== 1 ? ‘s’ : ‘’}/week
+                  </span>
+                </div>
+                <button
+                  onClick={() => setWeeklyAvailability(v => Math.min(7, v + 1))}
+                  className=”flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700”
+                  aria-label=”Increase”
+                >
+                  <svg className=”h-5 w-5” fill=”none” viewBox=”0 0 24 24” stroke=”currentColor”>
+                    <path strokeLinecap=”round” strokeLinejoin=”round” strokeWidth={2} d=”M12 4v16m8-8H4” />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </section>
 
-      {/* Save Button */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-      >
-        {saving ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Saving...
-          </span>
-        ) : (
-          'Save Changes'
-        )}
-      </button>
+          {/* Equipment & Injuries */}
+          <section className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”>
+            <h2 className=”mb-4 text-base font-semibold text-zinc-900 dark:text-white”>Equipment &amp; Injuries</h2>
+            <div className=”mb-5”>
+              <label className=”mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>Equipment Access</label>
+              <div className=”flex flex-wrap gap-2”>
+                {EQUIPMENT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => toggleEquipment(opt.value)}
+                    className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-all ${
+                      equipmentAccess.includes(opt.value)
+                        ? ‘border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-900/20 dark:text-green-400’
+                        : ‘border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400’
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className=”mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300”>
+                Injury Notes <span className=”font-normal text-zinc-400”>(optional)</span>
+              </label>
+              <textarea
+                value={injuryNotes}
+                onChange={e => setInjuryNotes(e.target.value)}
+                rows={3}
+                placeholder=”e.g. Bad left knee, shoulder impingement...”
+                className=”w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 resize-none”
+              />
+            </div>
+          </section>
+
+          <SaveButton />
+        </>
+      )}
+
+      {/* ── Settings tab ───────────────────────────────────────────────────────── */}
+      {activeTab === ‘settings’ && (
+        <>
+          {/* Notifications */}
+          <section className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”>
+            <h2 className=”mb-4 text-base font-semibold text-zinc-900 dark:text-white”>Notifications</h2>
+            <div className=”flex items-start justify-between gap-4”>
+              <div className=”min-w-0”>
+                <div className=”flex items-center gap-2”>
+                  <span
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                      notifPermission === ‘granted’
+                        ? ‘bg-green-500’
+                        : notifPermission === ‘denied’
+                          ? ‘bg-red-500’
+                          : ‘bg-zinc-400 dark:bg-zinc-500’
+                    }`}
+                  />
+                  <p className=”text-sm font-medium text-zinc-900 dark:text-white”>
+                    {notifPermission === ‘granted’ ? ‘Active’ : notifPermission === ‘denied’ ? ‘Blocked’ : ‘Not enabled’}
+                  </p>
+                </div>
+                <p className=”mt-1 text-xs text-zinc-500 dark:text-zinc-400”>
+                  {notifPermission === ‘granted’
+                    ? “You’ll receive push notifications”
+                    : notifPermission === ‘denied’
+                      ? ‘Enable in your browser settings to receive notifications’
+                      : ‘Turn on notifications to stay on your streak’}
+                </p>
+              </div>
+              {notifPermission === ‘default’ && (
+                <button
+                  type=”button”
+                  onClick={enableNotifications}
+                  disabled={enablingNotifications}
+                  className=”shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60”
+                >
+                  {enablingNotifications ? ‘Enabling…’ : ‘Enable’}
+                </button>
+              )}
+            </div>
+            {notifPermission === ‘granted’ && (
+              <div className=”mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800”>
+                {notifPrefsLoading ? (
+                  <div className=”space-y-4”>
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className=”flex items-center justify-between gap-4”>
+                        <div className=”min-w-0 flex-1 space-y-1.5”>
+                          <div className=”h-4 w-32 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800” />
+                          <div className=”h-3 w-48 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800” />
+                        </div>
+                        <div className=”h-6 w-11 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800” />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  NOTIFICATION_TOGGLES.map(({ key, label, sublabel }) => {
+                    const value = notifPrefs[key]
+                    return (
+                      <div key={key} className=”flex items-start justify-between gap-4”>
+                        <div className=”min-w-0”>
+                          <p className=”text-sm font-medium text-zinc-900 dark:text-white”>{label}</p>
+                          <p className=”mt-0.5 text-xs text-zinc-500 dark:text-zinc-400”>{sublabel}</p>
+                        </div>
+                        <button
+                          role=”switch”
+                          aria-checked={value}
+                          aria-label={label}
+                          onClick={() => handleNotifToggle(key, !value)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                            value ? ‘bg-blue-600’ : ‘bg-zinc-600’
+                          }`}
+                        >
+                          <span
+                            className={`mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                              value ? ‘translate-x-5’ : ‘translate-x-0.5’
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Nutrition Planning */}
+          <section
+            id=”nutrition”
+            className=”rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6”
+          >
+            <h2 className=”mb-1 text-base font-semibold text-zinc-900 dark:text-white”>Nutrition Planning</h2>
+            <p className=”mb-4 text-xs text-zinc-500 dark:text-zinc-400”>
+              When a planned meal&apos;s day arrives, how should it become a log?
+            </p>
+            <div className=”grid grid-cols-1 gap-2 sm:grid-cols-2”>
+              {([
+                { value: ‘manual’ as const, label: ‘Manual’, description: ‘Tap “Log it” to confirm each plan as you eat it.’ },
+                { value: ‘auto’ as const, label: ‘Auto’, description: ‘Promote today’s plans on day-view load. You can undo.’ },
+              ]).map(opt => (
+                <button
+                  key={opt.value}
+                  type=”button”
+                  onClick={() => setPlanPromoteMode(opt.value)}
+                  className={`flex flex-col gap-1 rounded-xl border-2 p-3 text-left transition-all duration-150 ${
+                    planPromoteMode === opt.value
+                      ? ‘border-green-500 bg-green-50 dark:border-green-500 dark:bg-green-900/20’
+                      : ‘border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600’
+                  }`}
+                  aria-pressed={planPromoteMode === opt.value}
+                >
+                  <span className={`text-sm font-semibold ${planPromoteMode === opt.value ? ‘text-green-700 dark:text-green-400’ : ‘text-zinc-900 dark:text-white’}`}>
+                    {opt.label}
+                  </span>
+                  <span className=”text-xs text-zinc-500 dark:text-zinc-400”>{opt.description}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <SaveButton />
+        </>
+      )}
 
       <Toast toast={toast} />
     </PageTransition>
