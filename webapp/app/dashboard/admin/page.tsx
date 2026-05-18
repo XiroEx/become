@@ -117,9 +117,9 @@ export default function AdminOverviewPage() {
   const [notifySending, setNotifySending] = useState(false)
 
   const PRESETS = [
-    { label: 'Streak at Risk', title: "Don't break your streak!", body: 'Log a workout, mood, or weight to keep it alive.', url: '/dashboard', tag: 'streak-at-risk' },
-    { label: 'Workout Ready', title: "Today's workout is ready", body: 'Tap to start your session.', url: '/dashboard/calendar', tag: 'workout-reminder' },
-    { label: 'Re-engagement', title: 'We miss you!', body: 'Come back and keep building your best self.', url: '/dashboard', tag: 're-engagement' },
+    { label: 'Streak at Risk', title: "Don't break your 🔥 streak", body: 'Log a workout, mood, or weight to keep it alive.', url: '/dashboard', tag: 'streak-at-risk' },
+    { label: 'Workout Ready', title: "Today's workout is ready 💪", body: 'Tap to start your session.', url: '/dashboard/calendar', tag: 'workout-reminder' },
+    { label: 'Re-engagement', title: 'We miss you 👋', body: 'Come back and keep building your best self.', url: '/dashboard', tag: 're-engagement' },
   ] as const
 
   async function handleSendNotification() {
