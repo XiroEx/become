@@ -378,7 +378,7 @@ export default function CalendarClient() {
 
       if (res.ok) {
         setActionMenuWorkout(null)
-        fetchSchedules()
+        await fetchSchedules()
       }
     } catch (error) {
       console.error('Action failed:', error)
@@ -713,12 +713,12 @@ export default function CalendarClient() {
                                         if (!token) return
                                         setActionLoading(true)
                                         try {
-                                          await fetch('/api/schedule', {
+                                          const res = await fetch('/api/schedule', {
                                             method: 'PATCH',
                                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                                             body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date, tz: new Date().getTimezoneOffset() }),
                                           })
-                                          fetchSchedules()
+                                          if (res.ok) await fetchSchedules()
                                         } finally {
                                           setActionLoading(false)
                                         }
@@ -856,7 +856,7 @@ export default function CalendarClient() {
                 </button>
 
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     // Parse the workout's local date, advance one day, then
                     // emit a fresh local-midnight ISO so the server stores the
                     // intended local YYYY-MM-DD. Using `new Date(iso) + setDate`
@@ -867,24 +867,29 @@ export default function CalendarClient() {
                     const token = localStorage.getItem('token')
                     if (!token) return
                     setActionLoading(true)
-                    fetch('/api/schedule', {
-                      method: 'PATCH',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                      },
-                      body: JSON.stringify({
-                        programId: actionMenuWorkout.programId,
-                        action: 'reschedule',
-                        workoutDate: actionMenuWorkout.date,
-                        newDate: next.toISOString(),
-                        tz: new Date().getTimezoneOffset(),
-                      }),
-                    }).then(() => {
-                      setSelectedDate(next)
-                      setActionMenuWorkout(null)
-                      fetchSchedules()
-                    }).finally(() => setActionLoading(false))
+                    try {
+                      const res = await fetch('/api/schedule', {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                          programId: actionMenuWorkout.programId,
+                          action: 'reschedule',
+                          workoutDate: actionMenuWorkout.date,
+                          newDate: next.toISOString(),
+                          tz: new Date().getTimezoneOffset(),
+                        }),
+                      })
+                      if (res.ok) {
+                        setSelectedDate(next)
+                        setActionMenuWorkout(null)
+                        await fetchSchedules()
+                      }
+                    } finally {
+                      setActionLoading(false)
+                    }
                   }}
                   disabled={actionLoading}
                   className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
@@ -937,29 +942,34 @@ export default function CalendarClient() {
                           <button
                             key={toDateKey(day)}
                             disabled={isPast || isWorkoutDay || actionLoading}
-                            onClick={() => {
+                            onClick={async () => {
                               const token = localStorage.getItem('token')
                               if (!token) return
                               setActionLoading(true)
-                              fetch('/api/schedule', {
-                                method: 'PATCH',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({
-                                  programId: actionMenuWorkout.programId,
-                                  action: 'reschedule',
-                                  workoutDate: actionMenuWorkout.date,
-                                  newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
-                                  tz: new Date().getTimezoneOffset(),
-                                }),
-                              }).then(() => {
-                                setSelectedDate(day)
-                                setActionMenuWorkout(null)
-                                setShowDatePicker(false)
-                                fetchSchedules()
-                              }).finally(() => setActionLoading(false))
+                              try {
+                                const res = await fetch('/api/schedule', {
+                                  method: 'PATCH',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`,
+                                  },
+                                  body: JSON.stringify({
+                                    programId: actionMenuWorkout.programId,
+                                    action: 'reschedule',
+                                    workoutDate: actionMenuWorkout.date,
+                                    newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
+                                    tz: new Date().getTimezoneOffset(),
+                                  }),
+                                })
+                                if (res.ok) {
+                                  setSelectedDate(day)
+                                  setActionMenuWorkout(null)
+                                  setShowDatePicker(false)
+                                  await fetchSchedules()
+                                }
+                              } finally {
+                                setActionLoading(false)
+                              }
                             }}
                             className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] transition-colors mx-auto ${
                               !isPickerMonth ? 'text-zinc-300 dark:text-zinc-700' :

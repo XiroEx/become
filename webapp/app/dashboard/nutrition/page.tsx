@@ -913,6 +913,7 @@ function NutritionPageInner() {
             const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
             const headers: HeadersInit = { 'Content-Type': 'application/json' }
             if (token) headers['Authorization'] = `Bearer ${token}`
+            const targetDate = planForDate
             return fetch('/api/meal-plans', {
               method: 'POST',
               headers,
@@ -922,6 +923,11 @@ function NutritionPageInner() {
                 showErrorToast('Failed to plan food.')
                 return
               }
+              showToast(
+                `Planned for ${targetDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`,
+                'success'
+              )
+              setSelectedDate(targetDate)
               setFoodSearchOpen(false)
               setPlanForDate(null)
             }).catch(() => {
