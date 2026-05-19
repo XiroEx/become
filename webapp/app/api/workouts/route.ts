@@ -304,32 +304,45 @@ export async function POST(request: NextRequest) {
       //    ScheduledWorkout subdocs have no _id — match by date+dayLabel using arrayFilters.
       try {
         const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean<{
-          scheduledWorkouts: { date: Date; dayLabel: string; status: string }[]
+          scheduledWorkouts: { date: Date; dayLabel: string; status: string; completedAt?: Date }[]
         }>()
         if (schedule?.scheduledWorkouts?.length) {
-          const match = schedule.scheduledWorkouts
-            .filter((w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed'))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+          // Guard: if a slot with this dayLabel was already marked completed today
+          // (by a prior save/retry in the same session), don't mark a second one.
+          const todayStr = new Date().toDateString()
+          const alreadyMarkedToday = schedule.scheduledWorkouts.some(
+            (w) =>
+              w.dayLabel === day &&
+              w.status === 'completed' &&
+              w.completedAt &&
+              new Date(w.completedAt).toDateString() === todayStr
+          )
 
-          if (match) {
-            await Schedule.updateOne(
-              { userId: payload.userId, programId },
-              {
-                $set: {
-                  'scheduledWorkouts.$[elem].status': 'completed',
-                  'scheduledWorkouts.$[elem].completedAt': new Date(),
-                },
-              },
-              {
-                arrayFilters: [
-                  {
-                    'elem.date': match.date,
-                    'elem.dayLabel': day,
-                    'elem.status': { $in: ['scheduled', 'missed'] },
+          if (!alreadyMarkedToday) {
+            const match = schedule.scheduledWorkouts
+              .filter((w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed'))
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+
+            if (match) {
+              await Schedule.updateOne(
+                { userId: payload.userId, programId },
+                {
+                  $set: {
+                    'scheduledWorkouts.$[elem].status': 'completed',
+                    'scheduledWorkouts.$[elem].completedAt': new Date(),
                   },
-                ],
-              }
-            )
+                },
+                {
+                  arrayFilters: [
+                    {
+                      'elem.date': match.date,
+                      'elem.dayLabel': day,
+                      'elem.status': { $in: ['scheduled', 'missed'] },
+                    },
+                  ],
+                }
+              )
+            }
           }
         }
       } catch (scheduleError) {
