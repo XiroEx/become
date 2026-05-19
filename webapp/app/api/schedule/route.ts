@@ -197,7 +197,6 @@ export async function POST(request: NextRequest) {
         settings: {
           trainingDays,
           startDate: new Date(startDate),
-          autoAdvance: true,
         },
         scheduledWorkouts,
       },
@@ -418,6 +417,12 @@ export async function PATCH(request: NextRequest) {
         if (!swapWithDate) {
           return NextResponse.json({ error: 'swapWithDate is required for swap' }, { status: 400 })
         }
+
+        const targetWorkout = schedule.scheduledWorkouts[targetIdx]
+        if (targetWorkout.status === 'completed' || targetWorkout.status === 'missed') {
+          return NextResponse.json({ error: 'Cannot swap a completed or missed workout' }, { status: 400 })
+        }
+
         const swapDate = new Date(swapWithDate)
         swapDate.setUTCHours(0, 0, 0, 0)
         const swapIdx = schedule.scheduledWorkouts.findIndex((w) => {
@@ -428,6 +433,11 @@ export async function PATCH(request: NextRequest) {
 
         if (swapIdx === -1) {
           return NextResponse.json({ error: 'No workout found on swap date' }, { status: 404 })
+        }
+
+        const swapWorkout = schedule.scheduledWorkouts[swapIdx]
+        if (swapWorkout.status === 'completed' || swapWorkout.status === 'missed') {
+          return NextResponse.json({ error: 'Cannot swap with a completed or missed workout' }, { status: 400 })
         }
 
         // Swap dates

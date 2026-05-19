@@ -23,6 +23,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'programId and trainingDays are required' }, { status: 400 })
     }
 
+    if (!Array.isArray(trainingDays) || trainingDays.length === 0) {
+      return NextResponse.json({ error: 'trainingDays must be a non-empty array of day numbers (0-6)' }, { status: 400 })
+    }
+
     await dbConnect()
 
     const schedule = await Schedule.findOne({ userId: payload.userId, programId })

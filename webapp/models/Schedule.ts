@@ -3,7 +3,6 @@ import mongoose, { Schema, Document, Model, Types } from 'mongoose'
 export interface IScheduleSettings {
   trainingDays: number[]       // 0=Sun, 1=Mon, ..., 6=Sat
   startDate: Date              // When the schedule begins
-  autoAdvance: boolean         // Auto-generate next week's schedule
 }
 
 export interface IScheduledWorkout {
@@ -30,7 +29,6 @@ export interface ISchedule extends Document {
 const ScheduleSettingsSchema = new Schema<IScheduleSettings>({
   trainingDays: [{ type: Number, min: 0, max: 6 }],
   startDate: { type: Date, required: true },
-  autoAdvance: { type: Boolean, default: true },
 }, { _id: false })
 
 const ScheduledWorkoutSchema = new Schema<IScheduledWorkout>({
