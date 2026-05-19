@@ -117,9 +117,21 @@ export default function DashboardClient() {
 
         setCheckInInfo({ daysSinceMood, daysSinceWeight, lastWeight })
 
-        // Show check-in modal if mood or weight is due
+        // Show check-in modal if mood or weight is due, but at most once per 8 hours.
+        // This prevents the modal from appearing on every tab open / refresh.
         if (daysSinceMood > 0 || daysSinceWeight > 0) {
-          setShowCheckInModal(true)
+          const CHECKIN_KEY = 'checkin_last_dismissed'
+          const SUPPRESS_HOURS = 8
+          try {
+            const raw = localStorage.getItem(CHECKIN_KEY)
+            const lastDismissed = raw ? parseInt(raw, 10) : 0
+            const hoursSince = (Date.now() - lastDismissed) / (1000 * 60 * 60)
+            if (hoursSince >= SUPPRESS_HOURS) {
+              setShowCheckInModal(true)
+            }
+          } catch {
+            setShowCheckInModal(true)
+          }
         }
       } catch (error) {
         console.error('Failed to check check-in status:', error)
@@ -258,6 +270,7 @@ export default function DashboardClient() {
 
   const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
     setShowCheckInModal(false)
+    try { localStorage.setItem('checkin_last_dismissed', String(Date.now())) } catch {}
     
     const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     
