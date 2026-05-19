@@ -49,6 +49,8 @@ interface PB {
 
 interface ProgressData {
   weightData: Array<{ date: string; value: number }>
+  bodyFatData?: Array<{ date: string; value: number }>
+  leanMassData?: Array<{ date: string; value: number }>
   stats: {
     streakDays: number
     totalWorkouts: number
@@ -346,6 +348,76 @@ function ActivityCalendar({ workouts }: { workouts: DetailedWorkout[] }) {
   )
 }
 
+// ── Body Composition Chart ─────────────────────────────────────────────────────
+
+function BodyCompChart({
+  bodyFatData,
+  leanMassData,
+}: {
+  bodyFatData: Array<{ date: string; value: number }>
+  leanMassData: Array<{ date: string; value: number }>
+}) {
+  const [tab, setTab] = useState<'body_fat' | 'lean_mass'>('body_fat')
+  const data = tab === 'body_fat' ? bodyFatData : leanMassData
+  const color = tab === 'body_fat' ? '#f97316' : '#8b5cf6'
+  const unit = tab === 'body_fat' ? '%' : 'lbs'
+  const label = tab === 'body_fat' ? 'Body Fat' : 'Lean Mass'
+
+  return (
+    <div className="p-4">
+      <div className="mb-3 flex gap-2">
+        {bodyFatData.length > 0 && (
+          <button
+            onClick={() => setTab('body_fat')}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+              tab === 'body_fat'
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+          >
+            Body Fat %
+          </button>
+        )}
+        {leanMassData.length > 0 && (
+          <button
+            onClick={() => setTab('lean_mass')}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+              tab === 'lean_mass'
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+          >
+            Lean Mass
+          </button>
+        )}
+      </div>
+      {data.length > 0 && (
+        <div className="mb-3 flex items-baseline gap-1.5">
+          <span className="text-2xl font-bold text-zinc-900 dark:text-white">
+            {data[data.length - 1].value.toFixed(1)}
+          </span>
+          <span className="text-sm text-zinc-500 dark:text-zinc-400">{unit}</span>
+        </div>
+      )}
+      <ResponsiveContainer width="100%" height={160}>
+        <AreaChart data={data} margin={{ left: -20, right: 8 }}>
+          <defs>
+            <linearGradient id={`bodycomp-${tab}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.2} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+          <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
+          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'currentColor' }} tickLine={false} axisLine={false} className="text-zinc-400 dark:text-zinc-600" />
+          <Tooltip formatter={(v) => [`${v} ${unit}`, label]} contentStyle={{ fontSize: 12, borderRadius: 12 }} />
+          <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#bodycomp-${tab})`} dot={false} activeDot={{ r: 4 }} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 const WORKOUTS_PAGE = 5
@@ -637,6 +709,22 @@ export default function ProgressClient() {
           </div>
         )}
       </div>
+
+      {/* ── Body Composition ── */}
+      {((data?.bodyFatData?.length ?? 0) > 0 || (data?.leanMassData?.length ?? 0) > 0) && (
+        <div id="body-comp">
+          <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
+            <TrendingUp className="h-4 w-4 text-zinc-400" />
+            Body Composition
+          </h2>
+          <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <BodyCompChart
+              bodyFatData={data?.bodyFatData ?? []}
+              leanMassData={data?.leanMassData ?? []}
+            />
+          </div>
+        </div>
+      )}
 
     </PageTransition>
 

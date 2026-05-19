@@ -32,6 +32,8 @@ export type DashboardTileId =
 export interface UserProgressData {
   weightData: MetricData[]
   bmiData: MetricData[]
+  bodyFatData?: MetricData[]
+  leanMassData?: MetricData[]
   moodData: MetricData[]
   currentProgram: {
     programId: string
