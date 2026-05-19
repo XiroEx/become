@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { weight, skip } = body
+    const { weight, skip, bodyFat } = body
 
     await dbConnect()
 
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       // Create new progress record
       progress = await UserProgress.create({
         userId: authResult.userId,
-        weightHistory: weight ? [{ date: today, weight }] : [],
+        weightHistory: weight ? [{ date: today, weight, ...(bodyFat != null ? { bodyFat } : {}) }] : [],
         weightSkipTracking: {
           lastPromptDate: today,
           lastWeightDate: weight ? today : undefined,
@@ -185,14 +185,11 @@ export async function POST(request: NextRequest) {
         }) ?? -1
 
         if (existingIndex >= 0) {
-          // Update existing entry
           progress.weightHistory[existingIndex].weight = weight
+          if (bodyFat != null) progress.weightHistory[existingIndex].bodyFat = bodyFat
         } else {
-          // Add new entry
-          if (!progress.weightHistory) {
-            progress.weightHistory = []
-          }
-          progress.weightHistory.push({ date: today, weight })
+          if (!progress.weightHistory) progress.weightHistory = []
+          progress.weightHistory.push({ date: today, weight, ...(bodyFat != null ? { bodyFat } : {}) })
         }
 
         // Reset skip tracking

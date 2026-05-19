@@ -437,6 +437,8 @@ export default function DashboardClient() {
       <ProgressChart
         weightData={data.weightData}
         bmiData={data.bmiData}
+        bodyFatData={data.bodyFatData}
+        leanMassData={data.leanMassData}
         moodData={data.moodData}
         fitnessGoal={fitnessGoal}
       />

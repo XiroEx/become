@@ -220,6 +220,20 @@ export function formatProgressData(
     value: Number(calculateBMI(entry.weight, progress.height).toFixed(1))
   }))
 
+  const bodyFatData = progress.weightHistory
+    .filter(entry => entry.bodyFat != null)
+    .map(entry => ({
+      date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: Number((entry.bodyFat as number).toFixed(1))
+    }))
+
+  const leanMassData = progress.weightHistory
+    .filter(entry => entry.bodyFat != null)
+    .map(entry => ({
+      date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: Number((entry.weight * (1 - (entry.bodyFat as number) / 100)).toFixed(1))
+    }))
+
   // Format mood data
   const moodData = (progress.moodHistory || []).map(entry => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -239,6 +253,8 @@ export function formatProgressData(
   return {
     weightData,
     bmiData,
+    bodyFatData,
+    leanMassData,
     moodData,
     currentProgram: progress.currentProgram ? {
       programId: progress.currentProgram.programId,

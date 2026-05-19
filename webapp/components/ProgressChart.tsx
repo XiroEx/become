@@ -26,39 +26,29 @@ export interface MetricData {
 interface ProgressChartProps {
   weightData: MetricData[]
   bmiData: MetricData[]
+  bodyFatData?: MetricData[]
+  leanMassData?: MetricData[]
   moodData: MetricData[]
   fitnessGoal?: FitnessGoal
-  targetWeight?: number   // optional goal line on weight chart (lbs)
+  targetWeight?: number
   defaultChart?: ChartType
 }
 
-type ChartType = 'weight' | 'bmi' | 'mood'
+type ChartType = 'weight' | 'bmi' | 'body_fat' | 'lean_mass' | 'mood'
 
 const chartConfig: Record<ChartType, { label: string; color: string; unit: string }> = {
-  weight: { label: 'Weight', color: '#3b82f6', unit: 'lbs' },
-  bmi: { label: 'BMI', color: '#10b981', unit: '' },
-  mood: { label: 'Mood', color: '#f59e0b', unit: '' }
+  weight:    { label: 'Weight',    color: '#3b82f6', unit: 'lbs' },
+  bmi:       { label: 'BMI',       color: '#10b981', unit: '' },
+  body_fat:  { label: 'Body Fat',  color: '#f97316', unit: '%' },
+  lean_mass: { label: 'Lean Mass', color: '#8b5cf6', unit: 'lbs' },
+  mood:      { label: 'Mood',      color: '#f59e0b', unit: '' },
 }
 
-const moodLabels: Record<number, string> = {
-  1: '😢',
-  2: '😕',
-  3: '😐',
-  4: '🙂',
-  5: '😊'
-}
-
-// Colors for each mood level
+const moodLabels: Record<number, string> = { 1: '😢', 2: '😕', 3: '😐', 4: '🙂', 5: '😊' }
 const moodColors: Record<number, string> = {
-  1: '#f87171', // red-400 for bad
-  2: '#fb923c', // orange-400 for not great
-  3: '#fbbf24', // amber-400 for okay
-  4: '#a3e635', // lime-400 for pretty good
-  5: '#34d399'  // emerald-400 for great
+  1: '#f87171', 2: '#fb923c', 3: '#fbbf24', 4: '#a3e635', 5: '#34d399'
 }
 
-// Given a weight change direction and the user's fitness goal, determine
-// whether the change is positive, negative, or neutral for framing.
 function weightTrendSentiment(trend: 'up' | 'down' | 'neutral', goal?: FitnessGoal): 'positive' | 'warning' | 'neutral' {
   if (trend === 'neutral') return 'neutral'
   if (goal === 'gain_muscle') return trend === 'up' ? 'positive' : 'warning'
@@ -66,42 +56,51 @@ function weightTrendSentiment(trend: 'up' | 'down' | 'neutral', goal?: FitnessGo
   return 'neutral'
 }
 
-export default function ProgressChart({ weightData, bmiData, moodData, fitnessGoal, targetWeight, defaultChart }: ProgressChartProps) {
-  const [activeChart, setActiveChart] = useState<ChartType>(defaultChart ?? 'weight')
+export default function ProgressChart({
+  weightData, bmiData, bodyFatData = [], leanMassData = [], moodData,
+  fitnessGoal, targetWeight, defaultChart
+}: ProgressChartProps) {
+  const allTabs: ChartType[] = ['weight', 'bmi']
+  if (bodyFatData.length > 0) allTabs.push('body_fat')
+  if (leanMassData.length > 0) allTabs.push('lean_mass')
+  allTabs.push('mood')
 
-  const getData = () => {
+  const [activeChart, setActiveChart] = useState<ChartType>(() => {
+    if (defaultChart && allTabs.includes(defaultChart)) return defaultChart
+    return 'weight'
+  })
+
+  const getData = (): MetricData[] => {
     switch (activeChart) {
-      case 'weight':
-        return weightData
-      case 'bmi':
-        return bmiData
-      case 'mood':
-        return moodData
+      case 'weight':    return weightData
+      case 'bmi':       return bmiData
+      case 'body_fat':  return bodyFatData
+      case 'lean_mass': return leanMassData
+      case 'mood':      return moodData
     }
   }
 
   const data = getData()
   const config = chartConfig[activeChart]
 
-  // Calculate stats
   const getStats = () => {
     if (data.length === 0) return { current: 0, change: 0, trend: 'neutral' as const }
-    
     const current = data[data.length - 1]?.value || 0
     const previous = data.length > 1 ? data[data.length - 2]?.value || current : current
     const change = current - previous
     const trend = change > 0 ? 'up' : change < 0 ? 'down' : 'neutral'
-    
     return { current, change, trend }
   }
 
   const stats = getStats()
 
+  const isWeightLike = activeChart === 'weight' || activeChart === 'bmi' || activeChart === 'body_fat' || activeChart === 'lean_mass'
+
   return (
     <Card>
-      {/* Chart Type Selector */}
+      {/* Tab selector */}
       <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 sm:gap-2 sm:mb-6">
-        {(Object.keys(chartConfig) as ChartType[]).map((type) => (
+        {allTabs.map((type) => (
           <button
             key={type}
             onClick={() => setActiveChart(type)}
@@ -116,12 +115,10 @@ export default function ProgressChart({ weightData, bmiData, moodData, fitnessGo
         ))}
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats summary */}
       <div className="mb-4 flex items-baseline gap-3 sm:mb-6">
         {activeChart === 'mood' ? (
-          <span className="text-3xl sm:text-4xl">
-            {moodLabels[stats.current] || '—'}
-          </span>
+          <span className="text-3xl sm:text-4xl">{moodLabels[stats.current] || '—'}</span>
         ) : (
           <>
             <span className="text-3xl font-bold text-zinc-900 dark:text-white sm:text-4xl">
@@ -133,8 +130,6 @@ export default function ProgressChart({ weightData, bmiData, moodData, fitnessGo
           </>
         )}
         {stats.change !== 0 && activeChart !== 'mood' && (() => {
-          // Determine sentiment for weight changes based on goal; BMI follows same logic
-          const isWeightLike = activeChart === 'weight' || activeChart === 'bmi'
           let colorClass: string
           if (isWeightLike) {
             const sentiment = weightTrendSentiment(stats.trend as 'up' | 'down' | 'neutral', fitnessGoal)
@@ -155,107 +150,72 @@ export default function ProgressChart({ weightData, bmiData, moodData, fitnessGo
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               )}
-              {Math.abs(stats.change).toFixed(1)}
+              {Math.abs(stats.change).toFixed(1)}{config.unit}
             </span>
           )
         })()}
       </div>
 
+      {/* Empty state */}
+      {data.length === 0 && (
+        <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 sm:h-64">
+          <p className="text-sm text-zinc-400 dark:text-zinc-500">
+            {activeChart === 'body_fat' || activeChart === 'lean_mass'
+              ? 'Log body fat % with your weight to see this chart'
+              : 'No data yet'}
+          </p>
+        </div>
+      )}
+
       {/* Chart */}
-      <div className="h-48 sm:h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          {activeChart === 'mood' ? (
-            <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-              <XAxis 
-                dataKey="date" 
-                tick={{ fontSize: 11, fill: '#71717a' }}
-                tickLine={false}
-                axisLine={{ stroke: '#e4e4e7' }}
-              />
-              <YAxis 
-                tick={{ fontSize: 11, fill: '#71717a' }}
-                tickLine={false}
-                axisLine={false}
-                domain={[0, 5]}
-                ticks={[1, 2, 3, 4, 5]}
-                tickFormatter={(value) => moodLabels[value] || ''}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#18181b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }}
-                labelStyle={{ color: '#a1a1aa' }}
-                formatter={(value) => [moodLabels[value as number] || value, 'Mood']}
-              />
-              <Bar 
-                dataKey="value" 
-                radius={[4, 4, 0, 0]}
-                name={config.label}
-              >
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={moodColors[entry.value] || config.color}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          ) : (
-            <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-              <defs>
-                <linearGradient id={`gradient-${activeChart}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={config.color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={config.color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-              <XAxis 
-                dataKey="date" 
-                tick={{ fontSize: 11, fill: '#71717a' }}
-                tickLine={false}
-                axisLine={{ stroke: '#e4e4e7' }}
-              />
-              <YAxis 
-                tick={{ fontSize: 11, fill: '#71717a' }}
-                tickLine={false}
-                axisLine={false}
-                domain={['dataMin - 2', 'dataMax + 2']}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#18181b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }}
-                labelStyle={{ color: '#a1a1aa' }}
-                itemStyle={{ color: '#fff' }}
-              />
-              {activeChart === 'weight' && targetWeight && (
-                <ReferenceLine
-                  y={targetWeight}
-                  stroke="#22c55e"
-                  strokeDasharray="4 4"
-                  strokeWidth={1.5}
-                  label={{ value: `Goal ${targetWeight} lbs`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+      {data.length > 0 && (
+        <div className="h-48 sm:h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            {activeChart === 'mood' ? (
+              <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#71717a' }} tickLine={false} axisLine={{ stroke: '#e4e4e7' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickLine={false} axisLine={false} domain={[0, 5]} ticks={[1, 2, 3, 4, 5]} tickFormatter={(v) => moodLabels[v] || ''} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#18181b', border: 'none', borderRadius: '8px', fontSize: '12px' }}
+                  labelStyle={{ color: '#a1a1aa' }}
+                  formatter={(v) => [moodLabels[v as number] || v, 'Mood']}
                 />
-              )}
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke={config.color}
-                strokeWidth={2}
-                fill={`url(#gradient-${activeChart})`}
-                name={config.label}
-              />
-            </AreaChart>
-          )}
-        </ResponsiveContainer>
-      </div>
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  {data.map((entry, i) => <Cell key={i} fill={moodColors[entry.value] || config.color} />)}
+                </Bar>
+              </BarChart>
+            ) : (
+              <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <defs>
+                  <linearGradient id={`gradient-${activeChart}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={config.color} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={config.color} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#71717a' }} tickLine={false} axisLine={{ stroke: '#e4e4e7' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#71717a' }} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#18181b', border: 'none', borderRadius: '8px', fontSize: '12px' }}
+                  labelStyle={{ color: '#a1a1aa' }}
+                  itemStyle={{ color: '#fff' }}
+                />
+                {activeChart === 'weight' && targetWeight && (
+                  <ReferenceLine
+                    y={targetWeight}
+                    stroke="#22c55e"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    label={{ value: `Goal ${targetWeight} lbs`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                  />
+                )}
+                <Area type="monotone" dataKey="value" stroke={config.color} strokeWidth={2} fill={`url(#gradient-${activeChart})`} name={config.label} />
+              </AreaChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
     </Card>
   )
 }
