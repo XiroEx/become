@@ -112,21 +112,37 @@ export async function POST(request: NextRequest) {
           }
         )
 
-        // Sync the schedule slot so the calendar shows 'completed' not 'missed'
+        // Sync the schedule slot so the calendar shows 'completed' not 'missed'.
+        // Use index-based positional update rather than arrayFilters with date equality
+        // to avoid silent mismatches when the Date object serializes differently.
         try {
           const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean<{
             scheduledWorkouts: { date: Date; dayLabel: string; status: string; completedAt?: Date }[]
           }>()
           if (schedule?.scheduledWorkouts?.length) {
             const staleMs = new Date(staleLog.date).getTime()
-            const match = schedule.scheduledWorkouts
-              .filter((w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed'))
-              .sort((a, b) => Math.abs(new Date(a.date).getTime() - staleMs) - Math.abs(new Date(b.date).getTime() - staleMs))[0]
-            if (match) {
+            const WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+            const matchIdx = schedule.scheduledWorkouts
+              .map((w, i) => ({ w, i }))
+              .filter(({ w }) =>
+                w.dayLabel === day &&
+                (w.status === 'scheduled' || w.status === 'missed') &&
+                Math.abs(new Date(w.date).getTime() - staleMs) <= WINDOW_MS
+              )
+              .sort((a, b) =>
+                Math.abs(new Date(a.w.date).getTime() - staleMs) -
+                Math.abs(new Date(b.w.date).getTime() - staleMs)
+              )[0]?.i ?? -1
+
+            if (matchIdx >= 0) {
               await Schedule.updateOne(
                 { userId: payload.userId, programId },
-                { $set: { 'scheduledWorkouts.$[elem].status': 'completed', 'scheduledWorkouts.$[elem].completedAt': new Date() } },
-                { arrayFilters: [{ 'elem.date': match.date, 'elem.dayLabel': day, 'elem.status': { $in: ['scheduled', 'missed'] } }] }
+                {
+                  $set: {
+                    [`scheduledWorkouts.${matchIdx}.status`]: 'completed',
+                    [`scheduledWorkouts.${matchIdx}.completedAt`]: new Date(),
+                  }
+                }
               )
             }
           }
@@ -159,7 +175,8 @@ export async function POST(request: NextRequest) {
         }
       )
 
-      // Sync the schedule slot to 'skipped' so calendar reflects the decision
+      // Sync the schedule slot to 'skipped' so calendar reflects the decision.
+      // Use index-based positional update for reliability (same rationale as count action).
       if (skipLog) {
         try {
           const schedule = await Schedule.findOne({ userId: payload.userId, programId }).lean<{
@@ -167,14 +184,23 @@ export async function POST(request: NextRequest) {
           }>()
           if (schedule?.scheduledWorkouts?.length) {
             const skipMs = new Date(skipLog.date).getTime()
-            const match = schedule.scheduledWorkouts
-              .filter((w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed'))
-              .sort((a, b) => Math.abs(new Date(a.date).getTime() - skipMs) - Math.abs(new Date(b.date).getTime() - skipMs))[0]
-            if (match) {
+            const WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+            const matchIdx = schedule.scheduledWorkouts
+              .map((w, i) => ({ w, i }))
+              .filter(({ w }) =>
+                w.dayLabel === day &&
+                (w.status === 'scheduled' || w.status === 'missed') &&
+                Math.abs(new Date(w.date).getTime() - skipMs) <= WINDOW_MS
+              )
+              .sort((a, b) =>
+                Math.abs(new Date(a.w.date).getTime() - skipMs) -
+                Math.abs(new Date(b.w.date).getTime() - skipMs)
+              )[0]?.i ?? -1
+
+            if (matchIdx >= 0) {
               await Schedule.updateOne(
                 { userId: payload.userId, programId },
-                { $set: { 'scheduledWorkouts.$[elem].status': 'skipped' } },
-                { arrayFilters: [{ 'elem.date': match.date, 'elem.dayLabel': day, 'elem.status': { $in: ['scheduled', 'missed'] } }] }
+                { $set: { [`scheduledWorkouts.${matchIdx}.status`]: 'skipped' } }
               )
             }
           }
