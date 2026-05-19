@@ -456,16 +456,27 @@ export default function ProgramDetailClient({ program }: Props) {
         </div>
 
         <div className="relative px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
-          {/* Back button */}
-          <button
-            onClick={() => router.back()}
-            className="mb-4 flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:mb-6 sm:px-4 sm:py-2"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            All Programs
-          </button>
+          {/* Top nav row */}
+          <div className="mb-4 flex items-center justify-between sm:mb-6">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:px-4 sm:py-2"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              All Programs
+            </button>
+            <Link
+              href="/dashboard/calendar"
+              className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:px-4 sm:py-2"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Calendar
+            </Link>
+          </div>
 
           {/* Program info */}
           <div className="max-w-3xl">
