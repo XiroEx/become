@@ -226,7 +226,9 @@ export default function ExerciseEditor({
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               />
 
-              {/* Autocomplete — DB results (custom first) + static fallback */}
+              {/* Autocomplete — DB results (custom first) + static fallback.
+                  onPointerDown preventDefault stops the input from blurring
+                  before the tap/click registers — critical on iOS. */}
               {showSuggestions && (dbSuggestions.length > 0 || filteredSuggestions.length > 0) && (
                 <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
                   {dbSuggestions.length > 0 ? (
@@ -234,6 +236,7 @@ export default function ExerciseEditor({
                       <button
                         key={s.slug}
                         type="button"
+                        onPointerDown={(e) => e.preventDefault()}
                         onClick={() => {
                           onUpdate({ ...exercise, name: s.name, exerciseSlug: s.slug });
                           setShowSuggestions(false);
@@ -252,6 +255,7 @@ export default function ExerciseEditor({
                       <button
                         key={i}
                         type="button"
+                        onPointerDown={(e) => e.preventDefault()}
                         onClick={() => {
                           updateField("name", suggestion);
                           setShowSuggestions(false);

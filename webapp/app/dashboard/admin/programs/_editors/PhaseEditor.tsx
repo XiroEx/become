@@ -195,9 +195,11 @@ export default function PhaseEditor({
                 </div>
               </div>
 
-              {/* Active Workout Editor */}
+              {/* Active Workout Editor — key resets local state (selectedForGroup,
+                  showGroupMenu) when the active tab changes. */}
               {phase.workouts[activeWorkoutIndex] && (
                 <WorkoutEditor
+                  key={activeWorkoutIndex}
                   workout={phase.workouts[activeWorkoutIndex]}
                   onUpdate={(workout: Workout) => updateWorkout(activeWorkoutIndex, workout)}
                 />

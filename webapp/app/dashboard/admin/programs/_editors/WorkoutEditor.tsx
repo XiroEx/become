@@ -213,6 +213,7 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
           {quickAddExercises.map((exercise, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => addQuickExercise(exercise)}
               className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 shadow-sm transition-all hover:bg-zinc-100 hover:shadow dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
             >
