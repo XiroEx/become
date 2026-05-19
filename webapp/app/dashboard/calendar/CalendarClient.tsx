@@ -516,7 +516,7 @@ export default function CalendarClient() {
             initial="initial"
             animate="animate"
             exit="exit"
-            transition={{ duration: 0.16, ease: 'easeInOut' }}
+            transition={{ duration: 0.08, ease: 'easeInOut' }}
             className="text-center text-base font-semibold text-zinc-900 dark:text-white sm:text-lg"
           >
             {headerText}
@@ -590,7 +590,7 @@ export default function CalendarClient() {
               initial="initial"
               animate="animate"
               exit="exit"
-              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              transition={{ duration: 0.11, ease: [0.4, 0, 0.2, 1] }}
               className={`grid grid-cols-7 ${viewMode === 'week' ? '' : ''}`}
             >
               {days.map((day) => {
