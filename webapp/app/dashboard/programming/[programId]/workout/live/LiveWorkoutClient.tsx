@@ -449,18 +449,28 @@ export default function LiveWorkoutPage() {
     nextDay?: string | null,
   ) => {
     if (action === "continue") {
-      // Re-trigger loadWorkout — the resolve API re-dated the log so isResume will fire
+      // The resolve API re-dated the stale log to now so isResume will fire.
+      // Navigate to the stale day so the user actually resumes that workout —
+      // if we just reload with the current URL (e.g. ?day=Day 2), the user
+      // would see a fresh Day 2 instead of the Day 1 they asked to continue.
+      const staleDay = staleIncomplete?.day;
       setStaleIncomplete(null);
-      setLoadKey((k) => k + 1);
+      if (staleDay && staleDay !== requestedDay) {
+        router.replace(`/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(staleDay)}`);
+      } else {
+        setLoadKey((k) => k + 1);
+      }
     } else if (action === "restart") {
       // Stale log was deleted; workout is already in fresh state, just close modal
       setStaleIncomplete(null);
     } else {
-      // count or skip — clear modal then navigate to the next day
+      // count or skip — go to the workout overview for the next day so the user
+      // must explicitly choose to start it (prevents accidentally completing Day 2
+      // immediately after counting/skipping a stale Day 1).
       setStaleIncomplete(null);
       const target = nextDay
-        ? `/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(nextDay)}`
-        : `/dashboard/programming/${programId}/workout/live`;
+        ? `/dashboard/programming/${programId}/workout?day=${encodeURIComponent(nextDay)}`
+        : `/dashboard`;
       router.replace(target);
     }
   };
