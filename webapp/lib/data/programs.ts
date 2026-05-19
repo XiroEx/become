@@ -52,5 +52,6 @@ export interface Program {
   equipment?: string[];          // Required equipment list
   tags?: string[];               // Searchable tags for filtering
   phases: Phase[];
+  coverImage?: string;
 }
 
