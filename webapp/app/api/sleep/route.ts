@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Sleep from '@/models/Sleep'
 import { verifyAuth } from '@/lib/auth'
-
-// Helper to get start of today (midnight UTC)
-function getStartOfToday(): Date {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return today
-}
+import {
+  readTzOffset,
+  readTzOffsetFromBody,
+  localDateKey,
+  localDayWindowForKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 
 // GET — returns last 14 days of entries + today's entry if any + averages
 export async function GET(request: NextRequest) {
@@ -21,21 +21,32 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
-    const today = getStartOfToday()
-    const fourteenDaysAgo = new Date(today)
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13) // 14 days inclusive
+    const tz = readTzOffset(request.nextUrl.searchParams)
+    const todayKey = localDateKey(null, tz)
+    const { start: todayStart } = localDayWindowForKey(todayKey, tz)
+
+    // 14-day window: start from local midnight 13 days before today
+    const fourteenDaysAgoKey = (() => {
+      const d = new Date(todayStart)
+      d.setUTCDate(d.getUTCDate() - 13)
+      const y = d.getUTCFullYear()
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(d.getUTCDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    })()
+    const { start: windowStart } = localDayWindowForKey(fourteenDaysAgoKey, tz)
 
     const entries = await Sleep.find({
       userId: authResult.userId,
-      date: { $gte: fourteenDaysAgo }
+      date: { $gte: windowStart }
     })
       .sort({ date: -1 })
       .lean()
 
+    const { start: todayWindowStart, end: todayWindowEnd } = localDayWindowForKey(todayKey, tz)
     const todayEntry = entries.find((entry) => {
-      const entryDate = new Date(entry.date)
-      entryDate.setHours(0, 0, 0, 0)
-      return entryDate.getTime() === today.getTime()
+      const d = new Date(entry.date)
+      return d >= todayWindowStart && d <= todayWindowEnd
     }) || null
 
     // Calculate averages across all returned entries
@@ -120,13 +131,16 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const today = getStartOfToday()
+    const tz = readTzOffsetFromBody(body)
+    const todayKey = localDateKey(null, tz)
+    const storageDate = utcMidnightDateKey(todayKey)
+    const { start: todayWindowStart, end: todayWindowEnd } = localDayWindowForKey(todayKey, tz)
 
     const entry = await Sleep.findOneAndUpdate(
-      { userId: authResult.userId, date: today },
+      { userId: authResult.userId, date: { $gte: todayWindowStart, $lte: todayWindowEnd } },
       {
         userId: authResult.userId,
-        date: today,
+        date: storageDate,
         bedtime: bedtimeDate,
         wakeTime: wakeTimeDate,
         durationMinutes,

@@ -908,7 +908,7 @@ export default function MeditationTab() {
     const token = getToken()
     if (!token) { setLoading(false); return }
     try {
-      const res = await fetch('/api/meditation', {
+      const res = await fetch(`/api/meditation?tz=${new Date().getTimezoneOffset()}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) return
@@ -937,6 +937,7 @@ export default function MeditationTab() {
             categoryId: selectedCat.id,
             categoryName: selectedCat.name,
             durationMinutes: selectedDuration,
+            tz: new Date().getTimezoneOffset(),
           }),
         })
         await fetchData() // refresh stats

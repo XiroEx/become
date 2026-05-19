@@ -295,7 +295,7 @@ export default function JournalTab() {
       return
     }
     try {
-      const res = await fetch('/api/journal', {
+      const res = await fetch(`/api/journal?tz=${new Date().getTimezoneOffset()}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error('Failed to load entries')
@@ -365,6 +365,7 @@ export default function JournalTab() {
           content: content.trim(),
           mood: selectedMood,
           prompt: todayPrompt,
+          tz: new Date().getTimezoneOffset(),
         }),
       })
 

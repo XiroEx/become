@@ -319,7 +319,7 @@ export default function WorkoutFormPage() {
           setExerciseProgress(initialProgress);
 
           // Now check for in-progress workout for today (also fetch exercise history)
-          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true`, {
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true&tz=${new Date().getTimezoneOffset()}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
@@ -494,6 +494,7 @@ export default function WorkoutFormPage() {
           day: workout.day,
           exercises,
           completed: isComplete,
+          tz: new Date().getTimezoneOffset(),
           ...(workoutNotes.trim() && { notes: workoutNotes.trim() })
         })
       });
@@ -542,7 +543,7 @@ export default function WorkoutFormPage() {
     const token = localStorage.getItem('token');
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
-    fetch('/api/streak', { headers })
+    fetch(`/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setSummaryStreak({ streakDays: d.streakDays, nextMilestone: d.nextMilestone ?? null }) })
       .catch(() => {});

@@ -6,6 +6,7 @@ import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { recordStreakActivity } from '@/lib/streak'
+import { readTzOffset, readTzOffsetFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
 
 interface SetData {
   setNumber: number
@@ -33,6 +34,7 @@ interface WorkoutSaveRequest {
   completed: boolean
   duration?: number
   notes?: string
+  tz?: number
 }
 
 // GET: Fetch today's workout progress for a program
@@ -56,11 +58,10 @@ export async function GET(request: NextRequest) {
 
     const includeHistory = searchParams.get('includeHistory') === 'true'
 
-    // Find today's date range
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    // Find today's date range in the user's local timezone
+    const tzOffset = readTzOffset(searchParams)
+    const todayKey = localDateKey(null, tzOffset)
+    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
 
     // Find workout log for today
     const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
         .filter((log: { programId: string; date: Date; completed: boolean }) =>
           log.programId === programId &&
           log.completed &&
-          new Date(log.date) < today
+          new Date(log.date) < today  // `today` is start of caller's local day (UTC)
         )
         .sort((a: { date: Date }, b: { date: Date }) =>
           new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
         return log.programId === programId &&
                (!day || log.day === day) &&
                logDate >= today &&
-               logDate < tomorrow
+               logDate <= tomorrow
       }
     )
 
@@ -229,11 +230,10 @@ export async function POST(request: NextRequest) {
       exercises
     }
 
-    // Find today's date range for checking if workout already logged today
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
+    // Find today's date range in the user's local timezone
+    const tzOffset = readTzOffsetFromBody(body)
+    const todayKey = localDateKey(null, tzOffset)
+    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
 
     // Atomic update-if-exists: returns the document state BEFORE this update
     // so we can read wasAlreadyComplete without a separate findOne round-trip.
@@ -241,7 +241,7 @@ export async function POST(request: NextRequest) {
     const docBefore = await UserProgress.findOneAndUpdate(
       {
         userId: payload.userId,
-        workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lt: tomorrow } } }
+        workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } }
       },
       {
         $set: {
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
         }
       },
       {
-        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.date': { $gte: today, $lt: tomorrow } }],
+        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.date': { $gte: today, $lte: tomorrow } }],
         returnDocument: 'before',
         lean: true
       }
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
 
     if (docBefore) {
       const oldLog = docBefore.workoutLogs?.find(
-        (log) => log.programId === programId && log.day === day && log.date >= today && log.date < tomorrow
+        (log) => log.programId === programId && log.day === day && log.date >= today && log.date <= tomorrow
       )
       wasAlreadyComplete = oldLog?.completed === true
     } else {
@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
       await UserProgress.updateOne(
         {
           userId: payload.userId,
-          workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lt: tomorrow } } } }
+          workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } }
         },
         {
           $push: { workoutLogs: workoutLog },
@@ -309,19 +309,35 @@ export async function POST(request: NextRequest) {
         if (schedule?.scheduledWorkouts?.length) {
           // Guard: if a slot with this dayLabel was already marked completed today
           // (by a prior save/retry in the same session), don't mark a second one.
-          const todayStr = new Date().toDateString()
           const alreadyMarkedToday = schedule.scheduledWorkouts.some(
             (w) =>
               w.dayLabel === day &&
               w.status === 'completed' &&
               w.completedAt &&
-              new Date(w.completedAt).toDateString() === todayStr
+              dateKey(new Date(w.completedAt), tzOffset) === todayKey
           )
 
           if (!alreadyMarkedToday) {
+            const nowMs = Date.now()
+            // Only match slots within a 14-day window (7 days past to 7 days future).
+            // Sorting by proximity to now prevents a race condition from grabbing a
+            // distant future slot when an earlier slot is simultaneously being marked.
+            const WINDOW_MS = 7 * 24 * 60 * 60 * 1000
             const match = schedule.scheduledWorkouts
-              .filter((w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed'))
-              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+              .filter((w) => {
+                const slotMs = new Date(w.date).getTime()
+                return (
+                  w.dayLabel === day &&
+                  (w.status === 'scheduled' || w.status === 'missed') &&
+                  slotMs >= nowMs - WINDOW_MS &&
+                  slotMs <= nowMs + WINDOW_MS
+                )
+              })
+              .sort((a, b) => {
+                const da = Math.abs(new Date(a.date).getTime() - nowMs)
+                const db = Math.abs(new Date(b.date).getTime() - nowMs)
+                return da - db
+              })[0]
 
             if (match) {
               await Schedule.updateOne(

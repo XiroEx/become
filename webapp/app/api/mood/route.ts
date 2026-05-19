@@ -3,19 +3,20 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
-
-// Helper to get start of today
-function getStartOfToday(): Date {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return today
-}
+import {
+  readTzOffset,
+  readTzOffsetFromBody,
+  localDateKey,
+  localDayWindowForKey,
+  utcMidnightDateKey,
+  dateKey,
+} from '@/lib/dayWindow'
 
 // Check if mood has been logged today and return today's mood
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
-    
+
     if (!authResult.success) {
       // For unauthenticated users, check localStorage on client side
       return NextResponse.json({ needsMoodCheck: true, todaysMood: null, daysSinceLastEntry: 0 })
@@ -29,24 +30,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ needsMoodCheck: true, todaysMood: null, daysSinceLastEntry: 999 })
     }
 
-    // Check if there's a mood entry for today
-    const today = getStartOfToday()
-    
+    const tzOffset = readTzOffset(request.nextUrl.searchParams)
+    const todayKey = localDateKey(null, tzOffset)
+    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
+
     const todaysMood = progress.moodHistory.find((entry: { date: Date; mood: number }) => {
-      const entryDate = new Date(entry.date)
-      entryDate.setHours(0, 0, 0, 0)
-      return entryDate.getTime() === today.getTime()
+      const t = new Date(entry.date).getTime()
+      return t >= start.getTime() && t <= end.getTime()
     })
 
-    // Calculate days since last entry
+    // Calculate days since last entry using local date keys
     let daysSinceLastEntry = 0
     if (progress.moodHistory.length > 0) {
-      const sortedHistory = [...progress.moodHistory].sort((a: { date: Date }, b: { date: Date }) => 
+      const sortedHistory = [...progress.moodHistory].sort((a: { date: Date }, b: { date: Date }) =>
         new Date(b.date).getTime() - new Date(a.date).getTime()
       )
-      const lastEntryDate = new Date(sortedHistory[0].date)
-      lastEntryDate.setHours(0, 0, 0, 0)
-      daysSinceLastEntry = Math.floor((today.getTime() - lastEntryDate.getTime()) / (1000 * 60 * 60 * 24))
+      const lastEntryKey = dateKey(new Date(sortedHistory[0].date), tzOffset)
+      // Count calendar days between lastEntryKey and todayKey
+      const lastMs = new Date(lastEntryKey + 'T00:00:00.000Z').getTime()
+      const todayMs = new Date(todayKey + 'T00:00:00.000Z').getTime()
+      daysSinceLastEntry = Math.floor((todayMs - lastMs) / (1000 * 60 * 60 * 24))
     }
 
     return NextResponse.json({
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
-    
+
     if (!authResult.success) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -78,7 +81,10 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const today = getStartOfToday()
+    const tzOffset = readTzOffsetFromBody(body)
+    const todayKey = localDateKey(null, tzOffset)
+    const today = utcMidnightDateKey(todayKey)
+    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
     const now = new Date()
 
     // Find or create user progress
@@ -97,11 +103,10 @@ export async function POST(request: NextRequest) {
         }]
       })
     } else {
-      // Check if there's already a mood entry for today
+      // Check if there's already a mood entry for today (using local-day window)
       const existingIndex = progress.moodHistory?.findIndex((entry: { date: Date }) => {
-        const entryDate = new Date(entry.date)
-        entryDate.setHours(0, 0, 0, 0)
-        return entryDate.getTime() === today.getTime()
+        const t = new Date(entry.date).getTime()
+        return t >= start.getTime() && t <= end.getTime()
       }) ?? -1
 
       let previousMood: 1 | 2 | 3 | 4 | 5 | null = null
