@@ -67,6 +67,7 @@ export interface IProgram extends Document {
   phases: IPhase[];
   isCustom?: boolean;
   createdBy?: mongoose.Types.ObjectId | string;
+  coverImage?: string;
 }
 
 const ProgramExerciseSchema = new Schema<IProgramExercise>({
@@ -129,6 +130,7 @@ const ProgramSchema = new Schema<IProgram>({
   phases: [PhaseSchema],
   isCustom: { type: Boolean, default: false, index: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', sparse: true, index: true },
+  coverImage: { type: String },
 });
 
 // Create text index for search
