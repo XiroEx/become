@@ -958,7 +958,7 @@ export default function CalendarClient() {
                 >
                   <ArrowRightLeft className="h-4 w-4 text-blue-500" />
                   <div>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Tomorrow</p>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Next Day</p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">Move only this workout, others stay put</p>
                   </div>
                 </button>
