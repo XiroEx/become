@@ -771,7 +771,6 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
           <div className="grid grid-cols-4 gap-1.5 sm:flex sm:gap-3">
             {dayKeys.map((dayKey) => {
-              const isCompleted = completedDays.has(dayKey);
               return (
               <button
                 key={dayKey}
@@ -779,17 +778,10 @@ export default function ProgramDetailClient({ program }: Props) {
                 className={`relative rounded-lg px-2 py-2.5 text-center text-sm font-semibold transition-all sm:rounded-xl sm:px-4 sm:py-3 ${
                   selectedDayKey === dayKey
                     ? "bg-zinc-900 text-white shadow-lg dark:bg-white dark:text-black"
-                    : isCompleted
-                    ? "border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30"
                     : "border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
                 }`}
               >
                 <div className="flex items-center justify-center gap-1.5">
-                  {isCompleted && (
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
                   <span>{dayKey}</span>
                 </div>
                 {selectedDayKey === dayKey && (
