@@ -74,6 +74,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   const [customTagInput, setCustomTagInput] = useState('')
 
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -285,6 +286,8 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       setError('Add at least one item.')
       return
     }
+    if (savingRef.current) return
+    savingRef.current = true
     setSaving(true)
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -351,6 +354,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
     } catch {
       setError('Network error. Please try again.')
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }

@@ -107,7 +107,7 @@ function LogWeightForm({ onLogged }: { onLogged: (w: number) => void }) {
       const res = await fetch('/api/weight', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ weight: w }),
+        body: JSON.stringify({ weight: w, tz: new Date().getTimezoneOffset() }),
       })
       if (res.ok) { setSaved(true); setValue(''); onLogged(w); setTimeout(() => setSaved(false), 3000) }
     } finally { setSaving(false) }
@@ -364,7 +364,7 @@ export default function ProgressClient() {
     if (!token) { setLoading(false); return }
     try {
       const [progressRes, profileRes] = await Promise.all([
-        fetch('/api/progress?detailed=1', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/progress?detailed=1&tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } }),
       ])
       if (progressRes.ok) {

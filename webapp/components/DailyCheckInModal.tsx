@@ -1,6 +1,6 @@
  "use client"
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLockScroll } from '@/lib/useLockScroll'
 
@@ -250,6 +250,7 @@ export default function DailyCheckInModal({
   const [selectedMood, setSelectedMood] = useState<MoodLevel | null>(null)
   const [weight, setWeight] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const [showWarningConfirm, setShowWarningConfirm] = useState(false)
   const [pendingAction, setPendingAction] = useState<'submit' | 'skip' | null>(null)
 
@@ -328,8 +329,10 @@ export default function DailyCheckInModal({
   }
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
-    
+
     try {
       const token = localStorage.getItem('token')
       const headers: HeadersInit = {
@@ -344,7 +347,7 @@ export default function DailyCheckInModal({
         await fetch('/api/mood', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ mood: selectedMood })
+          body: JSON.stringify({ mood: selectedMood, tz: new Date().getTimezoneOffset() })
         })
       }
 
@@ -353,7 +356,7 @@ export default function DailyCheckInModal({
         await fetch('/api/weight', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ weight: parseFloat(weight) })
+          body: JSON.stringify({ weight: parseFloat(weight), tz: new Date().getTimezoneOffset() })
         })
       }
 
@@ -363,16 +366,19 @@ export default function DailyCheckInModal({
       })
     } catch (error) {
       console.error('Failed to save check-in:', error)
-      onClose({ 
-        mood: selectedMood || undefined, 
-        weight: weight && parseFloat(weight) > 0 ? parseFloat(weight) : undefined 
+      onClose({
+        mood: selectedMood || undefined,
+        weight: weight && parseFloat(weight) > 0 ? parseFloat(weight) : undefined
       })
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }
 
   const handleSkip = async () => {
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
     
     try {
@@ -388,7 +394,7 @@ export default function DailyCheckInModal({
       await fetch('/api/weight', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ skip: true })
+        body: JSON.stringify({ skip: true, tz: new Date().getTimezoneOffset() })
       })
 
       onClose({})
@@ -396,6 +402,7 @@ export default function DailyCheckInModal({
       console.error('Failed to skip check-in:', error)
       onClose({})
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }

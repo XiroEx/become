@@ -184,7 +184,7 @@ export default function SleepTab() {
     setError(null)
     try {
       const token = getToken()
-      const res = await fetch('/api/sleep', {
+      const res = await fetch(`/api/sleep?tz=${new Date().getTimezoneOffset()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
       if (!res.ok) throw new Error('Failed to load sleep data')
@@ -259,7 +259,8 @@ export default function SleepTab() {
           bedtime: bedtimeDate.toISOString(),
           wakeTime: wakeTimeDate.toISOString(),
           quality,
-          notes: notes.trim() || undefined
+          notes: notes.trim() || undefined,
+          tz: new Date().getTimezoneOffset()
         })
       })
 

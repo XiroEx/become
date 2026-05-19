@@ -19,6 +19,8 @@ import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 import { scalePerServingNutrition } from '@/lib/foodMath'
+import { Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 
 interface Variant {
   _id?: string
@@ -107,7 +109,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
   const [deleting, setDeleting] = useState(false)
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [tagsResp, setTagsResp] = useState<TagsResp>({ defaults: [], userTags: [] })
-  const [toast, setToast] = useState<string | null>(null)
+  const { toast, showToast } = useToast(2200)
   // Saved-bridge values keyed by variant index. Only the owner sees the edit UI.
   const [savingBridge, setSavingBridge] = useState<number | null>(null)
 
@@ -188,9 +190,9 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         const res = await fetch(`/api/me/foods/${food._id}`, { method: 'DELETE', headers: getHeaders() })
         if (res.ok) {
           setIsSaved(false)
-          setToast('Removed from favorites')
+          showToast('Removed from favorites', 'neutral')
         } else {
-          setToast('Failed to remove')
+          showToast('Failed to remove', 'error')
         }
       } else {
         const res = await fetch('/api/me/foods', {
@@ -200,16 +202,15 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         })
         if (res.ok) {
           setIsSaved(true)
-          setToast('Added to favorites')
+          showToast('Added to favorites', 'success')
         } else {
-          setToast('Failed to add')
+          showToast('Failed to add', 'error')
         }
       }
     } catch {
-      setToast('Network error')
+      showToast('Network error', 'error')
     } finally {
       setBookmarking(false)
-      setTimeout(() => setToast(null), 2200)
     }
   }
 
@@ -259,18 +260,17 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         if (res.ok) {
           // Optimistically update local state so the readout reflects the save.
           setFood({ ...food, variants: updated })
-          setToast('Bridge saved')
+          showToast('Bridge saved', 'success')
         } else {
-          setToast('Failed to save bridge')
+          showToast('Failed to save bridge', 'error')
         }
       } catch {
-        setToast('Network error')
+        showToast('Network error', 'error')
       } finally {
         setSavingBridge(null)
-        setTimeout(() => setToast(null), 2200)
       }
     },
-    [food, getHeaders]
+    [food, getHeaders, showToast]
   )
 
   const handleDelete = async () => {
@@ -284,13 +284,11 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
       if (res.ok) {
         router.push('/dashboard/meals?tab=foods')
       } else {
-        setToast('Failed to delete')
-        setTimeout(() => setToast(null), 2500)
+        showToast('Failed to delete', 'error')
         setDeleting(false)
       }
     } catch {
-      setToast('Network error')
-      setTimeout(() => setToast(null), 2500)
+      showToast('Network error', 'error')
       setDeleting(false)
     }
   }
@@ -562,8 +560,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         availableTags={tagsResp}
         onClose={() => setLogSheetOpen(false)}
         onLogged={() => {
-          setToast('Logged to your day')
-          setTimeout(() => setToast(null), 2200)
+          showToast('Logged to your day', 'success')
         }}
       />
 
@@ -604,17 +601,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         </motion.div>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-32 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-white dark:text-black"
-        >
-          <Check className="h-4 w-4 shrink-0" />
-          {toast}
-        </motion.div>
-      )}
+      <Toast toast={toast} />
     </PageTransition>
   )
 }

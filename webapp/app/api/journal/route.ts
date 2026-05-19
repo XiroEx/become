@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Journal from '@/models/Journal'
 import { verifyAuth } from '@/lib/auth'
+import {
+  readTzOffset,
+  readTzOffsetFromBody,
+  localDateKey,
+  localDayWindowForKey,
+  utcMidnightDateKey,
+} from '@/lib/dayWindow'
 
-// Helper to get start of today (UTC midnight for consistent storage)
-function getStartOfDay(date: Date = new Date()): Date {
-  const d = new Date(date)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-// GET — returns last 30 entries + today's entry
+// GET - returns last 30 entries + today's entry
 export async function GET(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
-    const today = getStartOfDay()
+    const tzOffset = readTzOffset(request.nextUrl.searchParams)
+    const todayKey = localDateKey(null, tzOffset)
+    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
 
     const entries = await Journal.find({ userId: authResult.userId })
       .sort({ date: -1 })
@@ -29,9 +31,8 @@ export async function GET(request: NextRequest) {
       .lean()
 
     const todayEntry = entries.find((e) => {
-      const entryDate = new Date(e.date)
-      entryDate.setHours(0, 0, 0, 0)
-      return entryDate.getTime() === today.getTime()
+      const t = new Date(e.date).getTime()
+      return t >= start.getTime() && t <= end.getTime()
     }) ?? null
 
     return NextResponse.json({ entries, todayEntry })
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST — create or update today's entry (upsert)
+// POST - create or update today's entry (upsert)
 export async function POST(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)
@@ -67,14 +68,24 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const today = getStartOfDay()
+    const tzOffset = readTzOffsetFromBody(body)
+    const todayKey = localDateKey(null, tzOffset)
+    const today = utcMidnightDateKey(todayKey)
+    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
 
     const updateFields: Record<string, unknown> = { content: content.trim() }
     if (mood !== undefined) updateFields.mood = mood
     if (prompt !== undefined) updateFields.prompt = prompt
 
+    // Use the local-day window to find an existing entry, then upsert keyed by
+    // the canonical UTC-midnight date so storage is consistent across timezones.
+    const existingEntry = await Journal.findOne({
+      userId: authResult.userId,
+      date: { $gte: start, $lte: end },
+    })
+
     const entry = await Journal.findOneAndUpdate(
-      { userId: authResult.userId, date: today },
+      { userId: authResult.userId, date: existingEntry ? existingEntry.date : today },
       { $set: updateFields },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean()

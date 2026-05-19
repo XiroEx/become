@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
@@ -82,7 +82,9 @@ function isMakeupWorkout(scheduledDateStr: string, completedAtStr: string): bool
   const scheduledLocal = localDateFromScheduledIso(scheduledDateStr)
   const c = new Date(completedAtStr)
   const completedLocal = new Date(c.getFullYear(), c.getMonth(), c.getDate())
-  return scheduledLocal.getTime() !== completedLocal.getTime()
+  // Only a makeup if completed AFTER the scheduled date (late completion of a missed workout).
+  // Completing before the scheduled date is an early completion — not a makeup.
+  return completedLocal.getTime() > scheduledLocal.getTime()
 }
 
 /**
@@ -194,6 +196,7 @@ export default function CalendarClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [direction, setDirection] = useState(0)
   const [currentDate, setCurrentDate] = useState(() => {
     const dateParam = searchParams.get('date')
     if (dateParam) {
@@ -328,6 +331,7 @@ export default function CalendarClient() {
 
   // Navigation
   const navigatePrev = () => {
+    setDirection(-1)
     if (viewMode === 'month') {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
     } else {
@@ -338,6 +342,7 @@ export default function CalendarClient() {
   }
 
   const navigateNext = () => {
+    setDirection(1)
     if (viewMode === 'month') {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
     } else {
@@ -350,6 +355,27 @@ export default function CalendarClient() {
   const goToToday = () => {
     setCurrentDate(new Date())
     setSelectedDate(new Date())
+  }
+
+  // Swipe navigation
+  const swipeStartX = useRef<number | null>(null)
+  const swipeStartY = useRef<number | null>(null)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    swipeStartX.current = e.touches[0].clientX
+    swipeStartY.current = e.touches[0].clientY
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (swipeStartX.current === null || swipeStartY.current === null) return
+    const dx = e.changedTouches[0].clientX - swipeStartX.current
+    const dy = e.changedTouches[0].clientY - swipeStartY.current
+    swipeStartX.current = null
+    swipeStartY.current = null
+    // Ignore short swipes or primarily-vertical gestures (scrolling)
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return
+    if (dx < 0) navigateNext()
+    else navigatePrev()
   }
 
   // Schedule actions
@@ -378,7 +404,7 @@ export default function CalendarClient() {
 
       if (res.ok) {
         setActionMenuWorkout(null)
-        fetchSchedules()
+        await fetchSchedules()
       }
     } catch (error) {
       console.error('Action failed:', error)
@@ -410,6 +436,12 @@ export default function CalendarClient() {
   const selectedWorkouts = selectedDate
     ? workoutsByDate.get(toDateKey(selectedDate)) || []
     : []
+
+  const slideVariants = {
+    initial: (dir: number) => ({ x: dir >= 0 ? '100%' : '-100%', opacity: 0 }),
+    animate: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir >= 0 ? '-60%' : '60%', opacity: 0 }),
+  }
 
   return (
     <PageTransition className="pb-6">
@@ -475,9 +507,22 @@ export default function CalendarClient() {
       </div>
 
       {/* Period Label */}
-      <h2 className="mb-3 text-center text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">
-        {headerText}
-      </h2>
+      <div className="relative mb-3 overflow-hidden">
+        <AnimatePresence initial={false} custom={direction} mode="wait">
+          <motion.h2
+            key={headerText}
+            custom={direction}
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.16, ease: 'easeInOut' }}
+            className="text-center text-base font-semibold text-zinc-900 dark:text-white sm:text-lg"
+          >
+            {headerText}
+          </motion.h2>
+        </AnimatePresence>
+      </div>
 
       {/* Program Legend */}
       {schedules.length > 1 && (
@@ -521,7 +566,11 @@ export default function CalendarClient() {
       ) : (
         <>
           {/* Calendar Grid */}
-          <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden">
+          <div
+            className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             {/* Day headers */}
             <div className="grid grid-cols-7 border-b border-zinc-200 dark:border-zinc-800">
               {DAY_LABELS.map((label) => (
@@ -532,7 +581,18 @@ export default function CalendarClient() {
             </div>
 
             {/* Date cells */}
-            <div className={`grid grid-cols-7 ${viewMode === 'week' ? '' : ''}`}>
+            <div className="relative overflow-hidden">
+            <AnimatePresence initial={false} custom={direction} mode="popLayout">
+            <motion.div
+              key={toDateKey(days[0])}
+              custom={direction}
+              variants={slideVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              className={`grid grid-cols-7 ${viewMode === 'week' ? '' : ''}`}
+            >
               {days.map((day) => {
                 const key = toDateKey(day)
                 const isThisMonth = day.getMonth() === currentDate.getMonth()
@@ -596,6 +656,8 @@ export default function CalendarClient() {
                   </button>
                 )
               })}
+            </motion.div>
+            </AnimatePresence>
             </div>
           </div>
 
@@ -713,12 +775,12 @@ export default function CalendarClient() {
                                         if (!token) return
                                         setActionLoading(true)
                                         try {
-                                          await fetch('/api/schedule', {
+                                          const res = await fetch('/api/schedule', {
                                             method: 'PATCH',
                                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                                             body: JSON.stringify({ programId: w.programId, action: 'skip', workoutDate: w.date, tz: new Date().getTimezoneOffset() }),
                                           })
-                                          fetchSchedules()
+                                          if (res.ok) await fetchSchedules()
                                         } finally {
                                           setActionLoading(false)
                                         }
@@ -856,7 +918,7 @@ export default function CalendarClient() {
                 </button>
 
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     // Parse the workout's local date, advance one day, then
                     // emit a fresh local-midnight ISO so the server stores the
                     // intended local YYYY-MM-DD. Using `new Date(iso) + setDate`
@@ -867,24 +929,29 @@ export default function CalendarClient() {
                     const token = localStorage.getItem('token')
                     if (!token) return
                     setActionLoading(true)
-                    fetch('/api/schedule', {
-                      method: 'PATCH',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                      },
-                      body: JSON.stringify({
-                        programId: actionMenuWorkout.programId,
-                        action: 'reschedule',
-                        workoutDate: actionMenuWorkout.date,
-                        newDate: next.toISOString(),
-                        tz: new Date().getTimezoneOffset(),
-                      }),
-                    }).then(() => {
-                      setSelectedDate(next)
-                      setActionMenuWorkout(null)
-                      fetchSchedules()
-                    }).finally(() => setActionLoading(false))
+                    try {
+                      const res = await fetch('/api/schedule', {
+                        method: 'PATCH',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({
+                          programId: actionMenuWorkout.programId,
+                          action: 'reschedule',
+                          workoutDate: actionMenuWorkout.date,
+                          newDate: next.toISOString(),
+                          tz: new Date().getTimezoneOffset(),
+                        }),
+                      })
+                      if (res.ok) {
+                        setSelectedDate(next)
+                        setActionMenuWorkout(null)
+                        await fetchSchedules()
+                      }
+                    } finally {
+                      setActionLoading(false)
+                    }
                   }}
                   disabled={actionLoading}
                   className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
@@ -937,29 +1004,34 @@ export default function CalendarClient() {
                           <button
                             key={toDateKey(day)}
                             disabled={isPast || isWorkoutDay || actionLoading}
-                            onClick={() => {
+                            onClick={async () => {
                               const token = localStorage.getItem('token')
                               if (!token) return
                               setActionLoading(true)
-                              fetch('/api/schedule', {
-                                method: 'PATCH',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({
-                                  programId: actionMenuWorkout.programId,
-                                  action: 'reschedule',
-                                  workoutDate: actionMenuWorkout.date,
-                                  newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
-                                  tz: new Date().getTimezoneOffset(),
-                                }),
-                              }).then(() => {
-                                setSelectedDate(day)
-                                setActionMenuWorkout(null)
-                                setShowDatePicker(false)
-                                fetchSchedules()
-                              }).finally(() => setActionLoading(false))
+                              try {
+                                const res = await fetch('/api/schedule', {
+                                  method: 'PATCH',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`,
+                                  },
+                                  body: JSON.stringify({
+                                    programId: actionMenuWorkout.programId,
+                                    action: 'reschedule',
+                                    workoutDate: actionMenuWorkout.date,
+                                    newDate: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0).toISOString(),
+                                    tz: new Date().getTimezoneOffset(),
+                                  }),
+                                })
+                                if (res.ok) {
+                                  setSelectedDate(day)
+                                  setActionMenuWorkout(null)
+                                  setShowDatePicker(false)
+                                  await fetchSchedules()
+                                }
+                              } finally {
+                                setActionLoading(false)
+                              }
                             }}
                             className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] transition-colors mx-auto ${
                               !isPickerMonth ? 'text-zinc-300 dark:text-zinc-700' :

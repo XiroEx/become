@@ -210,7 +210,7 @@ export default function OnboardingPage() {
         fetch('/api/weight', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ weight: payload.currentWeightKg }),
+          body: JSON.stringify({ weight: payload.currentWeightKg, tz: new Date().getTimezoneOffset() }),
         }).catch(() => {}) // fire-and-forget
       }
 

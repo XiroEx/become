@@ -13,7 +13,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  AlertCircle,
   ChevronDown,
   ChefHat,
   Tag as TagIcon,
@@ -28,6 +27,8 @@ import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import DateOnlyPicker from '@/components/ui/DateOnlyPicker'
+import { Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/models/NutritionLog'
@@ -289,7 +290,7 @@ function TimelineClient() {
   })
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [errorToast, setErrorToast] = useState<string | null>(null)
+  const { toast, showToast } = useToast(4000)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
   // Plan-edit entry — opened when a user taps Edit on a plan item.
   const [editPlanEntry, setEditPlanEntry] = useState<{
@@ -627,10 +628,7 @@ function TimelineClient() {
 
   // ── Mutations ────────────────────────────────────────────────────────────
 
-  const showErrorToast = (msg: string) => {
-    setErrorToast(msg)
-    setTimeout(() => setErrorToast(null), 4000)
-  }
+  const showErrorToast = (msg: string) => showToast(msg, 'error')
 
   const handleDeleteLog = async (logId: string) => {
     try {
@@ -699,11 +697,7 @@ function TimelineClient() {
   }, [addFoodFor])
 
   // A non-error positive feedback toast — used to confirm plan create/merge.
-  const [successToast, setSuccessToast] = useState<string | null>(null)
-  const showSuccessToast = (msg: string) => {
-    setSuccessToast(msg)
-    setTimeout(() => setSuccessToast(null), 3000)
-  }
+  const showSuccessToast = (msg: string) => showToast(msg, 'success')
 
   // Adds a food directly to a specific day's timeline OR creates a plan for
   // a future day. Routes by `pickerMode`.
@@ -1347,27 +1341,15 @@ function TimelineClient() {
         )}
       </AnimatePresence>
 
-      {/* Error toast */}
-      {errorToast && (
-        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {errorToast}
-        </div>
-      )}
-
-      {/* Success toast (plan create/merge) */}
-      {successToast && !errorToast && (
-        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          <Check className="h-4 w-4 shrink-0" />
-          {successToast}
-        </div>
-      )}
+      {/* Error / success feedback toast (plan create/merge, delete failures) */}
+      <Toast toast={toast} />
 
       {/* Auto-promote undo toast — appears after a successful sweep. The
           parent's effect fires PROMOTE for every active plan today, then
-          presents Undo for ~8s. */}
+          presents Undo for ~8s. Kept bespoke because it carries an
+          interactive Undo affordance the passive shared Toast can't render. */}
       {undoBatch && (
-        <div className="fixed bottom-24 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-3 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+        <div className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 flex items-center gap-3 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
           <Check className="h-4 w-4 shrink-0" />
           <span>{undoBatch.logIds.length} plan{undoBatch.logIds.length === 1 ? '' : 's'} logged</span>
           <button

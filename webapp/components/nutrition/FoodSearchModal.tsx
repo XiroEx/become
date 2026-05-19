@@ -255,6 +255,7 @@ export default function FoodSearchModal({
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
+  const addingRef = useRef(false)
   // User-picked log date as YYYY-MM-DD — null means "Now" (today @ current
   // wall-clock time). Lets users backdate to yesterday / earlier. No time
   // component — see combineDateWithNowTime() at submit.
@@ -326,6 +327,7 @@ export default function FoodSearchModal({
       setActiveTab('all')
       setScannerOpen(false)
       setBarcodeError(null)
+      addingRef.current = false
       setAdding(false)
       setTagDropdownOpen(false)
       setCustomTagInput('')
@@ -756,8 +758,9 @@ export default function FoodSearchModal({
   }
 
   const handleAddFood = async () => {
-    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0 || adding) return
-
+    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0) return
+    if (addingRef.current) return
+    addingRef.current = true
     setAdding(true)
     try {
       const { foodId, variants: importedVariants } = await importExternalIfNeeded(selectedFood)
@@ -856,6 +859,7 @@ export default function FoodSearchModal({
       setRepeatOpen(false)
       setRepeatCount(6)
     } finally {
+      addingRef.current = false
       setAdding(false)
     }
   }

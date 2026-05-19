@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
@@ -222,12 +222,14 @@ const moodOptions = [
 export default function MoodModal({ isOpen, onClose }: MoodModalProps) {
   const [selectedMood, setSelectedMood] = useState<MoodLevel | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   
   const timeGreeting = useMemo(() => getTimeBasedGreeting(), [])
 
   const handleSubmit = async () => {
     if (!selectedMood) return
-    
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
     
     try {
@@ -242,11 +244,12 @@ export default function MoodModal({ isOpen, onClose }: MoodModalProps) {
       await fetch('/api/mood', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ mood: selectedMood })
+        body: JSON.stringify({ mood: selectedMood, tz: new Date().getTimezoneOffset() })
       })
     } catch (error) {
       console.error('Failed to save mood:', error)
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
       onClose(selectedMood)
     }

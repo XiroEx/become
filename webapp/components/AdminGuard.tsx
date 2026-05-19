@@ -36,7 +36,7 @@ export default function AdminGuard({ children }: AdminGuardProps) {
 
       // Verify admin access by calling admin stats endpoint
       try {
-        const res = await fetch('/api/admin/stats', {
+        const res = await fetch(`/api/admin/stats?tz=${new Date().getTimezoneOffset()}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
 
