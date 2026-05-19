@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
+import { readTzOffsetFromBody, localDateKey, localDayWindowForKey } from '@/lib/dayWindow'
 
 type ResolveAction = 'continue' | 'restart' | 'count' | 'skip'
 
@@ -31,8 +32,9 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const tz = readTzOffsetFromBody(body as unknown as Record<string, unknown>)
+    const todayKey = localDateKey(null, tz)
+    const { start: today } = localDayWindowForKey(todayKey, tz)
 
     if (action === 'continue') {
       // Re-date the stale log to now so GET /api/workouts picks it up as today's in-progress

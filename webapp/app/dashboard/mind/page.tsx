@@ -14,7 +14,7 @@ export default function MindPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
-    fetch('/api/streak', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data?.streakDays != null) setStreak(data.streakDays) })
       .catch(() => {})

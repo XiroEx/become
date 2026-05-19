@@ -95,7 +95,7 @@ export default function DashboardClient() {
         }
 
         // Fetch mood status
-        const moodRes = await fetch('/api/mood', { headers })
+        const moodRes = await fetch(`/api/mood?tz=${new Date().getTimezoneOffset()}`, { headers })
         let daysSinceMood = 0
         if (moodRes.ok) {
           const { daysSinceLastEntry, todaysMood: moodFromApi } = await moodRes.json()
@@ -106,7 +106,7 @@ export default function DashboardClient() {
         }
 
         // Fetch weight status
-        const weightRes = await fetch('/api/weight', { headers })
+        const weightRes = await fetch(`/api/weight?tz=${new Date().getTimezoneOffset()}`, { headers })
         let daysSinceWeight = 0
         let lastWeight: number | undefined = undefined
         if (weightRes.ok) {
@@ -135,7 +135,7 @@ export default function DashboardClient() {
           headers['Authorization'] = `Bearer ${token}`
         }
 
-        const res = await fetch('/api/progress', { headers })
+        const res = await fetch(`/api/progress?tz=${new Date().getTimezoneOffset()}`, { headers })
         if (res.ok) {
           const progressData = await res.json()
           setData(progressData)
@@ -192,7 +192,7 @@ export default function DashboardClient() {
       try {
         const token = localStorage.getItem('token')
         if (!token) return
-        const res = await fetch('/api/streak', { headers: { Authorization: `Bearer ${token}` } })
+        const res = await fetch(`/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
         if (res.ok) {
           const data = await res.json()
           setStreakData(data)
@@ -296,7 +296,7 @@ export default function DashboardClient() {
       const res = await fetch('/api/mood', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ mood })
+        body: JSON.stringify({ mood, tz: new Date().getTimezoneOffset() })
       })
 
       if (res.ok) {

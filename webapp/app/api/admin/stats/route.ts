@@ -4,6 +4,7 @@ import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
 import MindProgress from '@/models/MindProgress'
 import { verifyAdmin } from '@/lib/adminAuth'
+import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,16 +18,26 @@ export async function GET(request: NextRequest) {
 
     await connectDB()
 
-    const now = new Date()
-    const startOfThisWeek = new Date(now)
-    startOfThisWeek.setDate(now.getDate() - now.getDay())
-    startOfThisWeek.setHours(0, 0, 0, 0)
+    const tz = readTzOffset(request.nextUrl.searchParams)
+    const todayKey = localDateKey(null, tz)
+    const { start: todayStart } = localDayWindowForKey(todayKey, tz)
 
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    // Start of this week (Sunday) in user's local zone
+    const [ty, tm, td] = todayKey.split('-').map(Number)
+    const todayDow = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay() // 0=Sun
+    const sundayKey = (() => {
+      const d = new Date(Date.UTC(ty, tm - 1, td - todayDow))
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+    })()
+    const { start: startOfThisWeek } = localDayWindowForKey(sundayKey, tz)
 
-    const thirtyDaysAgo = new Date(now)
-    thirtyDaysAgo.setDate(now.getDate() - 30)
-    thirtyDaysAgo.setHours(0, 0, 0, 0)
+    const startOfThisMonth = new Date(Date.UTC(ty, tm - 1, 1))
+
+    // 30 days ago: UTC midnight of (todayKey minus 30 days)
+    const thirtyDaysAgoDate = new Date(todayStart)
+    thirtyDaysAgoDate.setUTCDate(thirtyDaysAgoDate.getUTCDate() - 30)
+    const thirtyDaysAgoKey = `${thirtyDaysAgoDate.getUTCFullYear()}-${String(thirtyDaysAgoDate.getUTCMonth() + 1).padStart(2, '0')}-${String(thirtyDaysAgoDate.getUTCDate()).padStart(2, '0')}`
+    const thirtyDaysAgo = utcMidnightDateKey(thirtyDaysAgoKey)
 
     // --- User stats ---
     const [

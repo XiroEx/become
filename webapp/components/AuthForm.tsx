@@ -14,6 +14,7 @@ export default function AuthForm({ mode }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const submittingRef = useRef(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   // Poll for verification status
@@ -65,6 +66,8 @@ export default function AuthForm({ mode }: Props) {
 
   async function handleSendLink(e: React.FormEvent) {
     e.preventDefault()
+    if (submittingRef.current) return
+    submittingRef.current = true
     setError(null)
     setLoading(true)
 
@@ -86,6 +89,7 @@ export default function AuthForm({ mode }: Props) {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to send email')
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }

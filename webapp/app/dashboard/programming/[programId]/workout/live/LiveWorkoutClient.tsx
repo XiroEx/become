@@ -140,6 +140,8 @@ export default function LiveWorkoutPage() {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Stable ref for exerciseData — used in visibilitychange handler to avoid stale closure
   const exerciseDataRef = useRef<SetData[][]>([]);
+  // Re-entrant lock: prevents double-tap / concurrent saves from firing two POSTs
+  const savingRef = useRef(false);
 
   // Derive current position from the flow
   const currentStep = workoutFlow[currentStepIndex];
@@ -284,7 +286,7 @@ export default function LiveWorkoutPage() {
           setWorkoutFlow(flow);
 
           // Check for in-progress workout to resume (also fetch exercise history)
-          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true`, {
+          const progressRes = await fetch(`/api/workouts?programId=${programId}&day=${encodeURIComponent(workoutData.day)}&includeHistory=true&tz=${new Date().getTimezoneOffset()}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
@@ -469,7 +471,7 @@ export default function LiveWorkoutPage() {
     const token = localStorage.getItem('token')
     if (!token) return
     const headers = { Authorization: `Bearer ${token}` }
-    fetch('/api/streak', { headers })
+    fetch(`/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setSummaryStreak({ streakDays: d.streakDays, nextMilestone: d.nextMilestone ?? null }) })
       .catch(() => {})
@@ -537,7 +539,9 @@ export default function LiveWorkoutPage() {
   // Save workout progress
   const saveWorkout = useCallback(async (exerciseDataToSave: SetData[][], isComplete: boolean) => {
     if (!workout) return;
-
+    // Re-entrant guard: prevent double-tap / concurrent auto-save from firing two POSTs
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
@@ -562,7 +566,7 @@ export default function LiveWorkoutPage() {
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ programId, phase: currentPhase, day: workout.day, exercises: exercisesToSave, completed: isComplete })
+        body: JSON.stringify({ programId, phase: currentPhase, day: workout.day, exercises: exercisesToSave, completed: isComplete, tz: new Date().getTimezoneOffset() })
       });
       if (isComplete && res.ok) {
         const data = await res.json();
@@ -576,6 +580,7 @@ export default function LiveWorkoutPage() {
     } catch (error) {
       console.error("Error saving workout:", error);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [programId, workout, exercises, currentPhase, swappedExercises]);
@@ -1475,7 +1480,7 @@ export default function LiveWorkoutPage() {
 
               <button
                 onClick={handleCompleteOrSkipSet}
-                disabled={isResting}
+                disabled={isResting || saving}
                 className={`flex-1 rounded-full py-4 text-lg font-bold shadow-lg transition-all disabled:opacity-50 ${
                   isSkipping
                     ? "bg-zinc-600 shadow-zinc-600/30 hover:bg-zinc-500"

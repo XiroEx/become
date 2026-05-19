@@ -131,7 +131,7 @@ export default function NutritionGoalsPage() {
 
         const [goalsRes, progressRes, profileRes] = await Promise.all([
           fetch('/api/nutrition/goals', { headers }),
-          fetch('/api/progress', { headers }),
+          fetch(`/api/progress?tz=${new Date().getTimezoneOffset()}`, { headers }),
           fetch('/api/profile', { headers }),
         ])
 

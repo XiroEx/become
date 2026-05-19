@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { STREAK_MILESTONES } from '@/lib/streak'
+import { readTzOffset, localDateKey, dateKey } from '@/lib/dayWindow'
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,15 +27,14 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const tzOffset = readTzOffset(request.nextUrl.searchParams)
+    const todayKey = localDateKey(null, tzOffset)
 
-    const lastActivity = progress.lastActivityDate
-      ? new Date(progress.lastActivityDate)
+    const lastActivityKey = progress.lastActivityDate
+      ? dateKey(new Date(progress.lastActivityDate), tzOffset)
       : null
-    if (lastActivity) lastActivity.setHours(0, 0, 0, 0)
 
-    const activityToday = lastActivity?.getTime() === today.getTime()
+    const activityToday = lastActivityKey === todayKey
 
     const streakDays = progress.streakDays ?? 0
     const milestonesReached: number[] = progress.milestonesReached ?? []

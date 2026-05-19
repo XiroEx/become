@@ -49,6 +49,7 @@ export default function IncompleteWorkoutModal({ stale, programId, onResolve, on
           day: stale.day,
           phase: stale.phase,
           action,
+          tz: new Date().getTimezoneOffset(),
         }),
       });
 

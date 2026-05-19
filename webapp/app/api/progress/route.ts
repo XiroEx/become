@@ -5,6 +5,7 @@ import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
 import { verifyAuth } from '@/lib/auth'
+import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 
 export async function GET(request: NextRequest) {
   try {
@@ -130,9 +131,8 @@ export async function GET(request: NextRequest) {
 
       if (schedule) {
         // Mirror NextWorkoutCard logic: first upcoming status=scheduled entry
-        const now = new Date()
-        now.setHours(0, 0, 0, 0)
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        const tz = readTzOffset(request.nextUrl.searchParams)
+        const todayStr = localDateKey(null, tz)
 
         const nextScheduled = (schedule.scheduledWorkouts || [])
           .filter(w => {
@@ -289,17 +289,19 @@ export async function GET(request: NextRequest) {
       })
 
     // Weekly volume — last 12 weeks (for bar chart)
+    const tz = readTzOffset(request.nextUrl.searchParams)
     let totalVolumeLbs = 0
     const weekMap = new Map<string, { volume: number; workouts: number; display: string }>()
     for (const l of allLogs) {
       if (!l.completed) continue
       const d = new Date(l.date)
-      const dow = d.getDay()
-      const monday = new Date(d)
-      monday.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1))
-      monday.setHours(0, 0, 0, 0)
-      const key = monday.toISOString().split('T')[0]
-      const display = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const localKey = dateKey(d, tz)
+      const [ly, lm, ld] = localKey.split('-').map(Number)
+      const dow = new Date(Date.UTC(ly, lm - 1, ld)).getUTCDay() // 0=Sun
+      const daysFromMon = dow === 0 ? 6 : dow - 1
+      const monday = new Date(Date.UTC(ly, lm - 1, ld - daysFromMon))
+      const key = `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`
+      const display = utcMidnightDateKey(key).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       let vol = 0
       for (const ex of (l.exercises || [])) {
         for (const set of (ex.sets || [])) {

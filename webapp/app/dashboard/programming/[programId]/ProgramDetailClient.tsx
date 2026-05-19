@@ -326,7 +326,7 @@ export default function ProgramDetailClient({ program }: Props) {
             
             // Check for in-progress workout using the actual current day
             const currentDay = found.currentDay || 'Day 1';
-            const progressRes = await fetch(`/api/workouts?programId=${program.program_id}&day=${currentDay}`, {
+            const progressRes = await fetch(`/api/workouts?programId=${program.program_id}&day=${currentDay}&tz=${new Date().getTimezoneOffset()}`, {
               headers: { Authorization: `Bearer ${token}` }
             });
 

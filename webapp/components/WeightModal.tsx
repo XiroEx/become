@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface WeightModalProps {
@@ -63,12 +63,14 @@ function getTimeBasedGreeting() {
 export default function WeightModal({ isOpen, onClose, isMandatory = false, consecutiveSkips = 0 }: WeightModalProps) {
   const [weight, setWeight] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   
   const timeGreeting = useMemo(() => getTimeBasedGreeting(), [])
 
   const handleSubmit = async () => {
     if (!weight || parseFloat(weight) <= 0) return
-    
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
     
     try {
@@ -83,7 +85,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
       await fetch('/api/weight', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ weight: parseFloat(weight) })
+        body: JSON.stringify({ weight: parseFloat(weight), tz: new Date().getTimezoneOffset() })
       })
 
       onClose(parseFloat(weight))
@@ -91,13 +93,15 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
       console.error('Failed to save weight:', error)
       onClose(parseFloat(weight))
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }
 
   const handleSkip = async () => {
     if (isMandatory) return // Can't skip if mandatory
-    
+    if (submittingRef.current) return
+    submittingRef.current = true
     setIsSubmitting(true)
     
     try {
@@ -112,7 +116,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
       await fetch('/api/weight', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ skip: true })
+        body: JSON.stringify({ skip: true, tz: new Date().getTimezoneOffset() })
       })
 
       onClose()
@@ -120,6 +124,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
       console.error('Failed to skip weight:', error)
       onClose()
     } finally {
+      submittingRef.current = false
       setIsSubmitting(false)
     }
   }
