@@ -130,34 +130,159 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* FEATURES */}
-      <section className="w-full py-20 px-6">
-        <div className="mx-auto max-w-4xl">
-          <div className="grid gap-12 sm:grid-cols-3">
-            {[
-              {
-                accent: "bg-green-500",
-                label: "Programming",
-                text: "Multi-phase programs built for strength, hypertrophy, and conditioning. Progressive overload built in — no guesswork.",
-              },
-              {
-                accent: "bg-blue-500",
-                label: "Progress Tracking",
-                text: "Log every lift, weigh-in, and mood check-in. Charts show the arc of your transformation over time.",
-              },
-              {
-                accent: "bg-orange-500",
-                label: "Coaching Access",
-                text: "Direct chat when you need it. Form checks, program questions, accountability — fast answers from someone who actually knows your data.",
-              },
-            ].map((f) => (
-              <div key={f.label}>
-                <div className={`h-0.5 w-8 rounded-full ${f.accent} mb-5`} />
-                <h3 className="text-base font-bold text-white">{f.label}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-500">{f.text}</p>
+      {/* FEATURE SHOWCASE */}
+      <section className="w-full py-20 overflow-hidden">
+        <div className="mx-auto max-w-5xl px-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-600 text-center mb-10">
+            Inside the app
+          </p>
+          {/* Snap carousel on mobile → 2×2 grid on sm+ */}
+          <div className="flex sm:grid sm:grid-cols-2 gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none pb-4 sm:pb-0 -mx-6 px-6 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+
+            {/* TILE 1: Live Workout Tracker */}
+            <div className="snap-center shrink-0 w-[82vw] sm:w-auto rounded-2xl bg-zinc-900 overflow-hidden">
+              <div className="h-1 bg-green-500" />
+              <div className="p-5">
+                <p className="text-xs text-zinc-500 mb-1">Live Workout</p>
+                <p className="font-bold text-white mb-4">Bench Press — Set 3 of 4</p>
+                <div className="space-y-2">
+                  {[
+                    { done: true, label: "Set 1", weight: "185", reps: "8" },
+                    { done: true, label: "Set 2", weight: "185", reps: "8" },
+                    { done: false, label: "Set 3", weight: "185", reps: "8", active: true },
+                    { done: false, label: "Set 4", weight: "185", reps: "8" },
+                  ].map((set, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${set.active ? "bg-green-500/10" : "bg-zinc-800/60"}`}
+                    >
+                      <div className={`h-5 w-5 rounded-full shrink-0 flex items-center justify-center ${set.done ? "bg-green-500" : set.active ? "border-2 border-green-500" : "border border-zinc-700"}`}>
+                        {set.done && (
+                          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-sm text-zinc-400">{set.label}</span>
+                      <span className="ml-auto text-sm font-semibold text-white">{set.weight} lbs · {set.reps} reps</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs text-zinc-600">Exercise 3 of 6 · Chest Day</p>
               </div>
-            ))}
+            </div>
+
+            {/* TILE 2: Streak System */}
+            <div className="snap-center shrink-0 w-[82vw] sm:w-auto rounded-2xl bg-zinc-900 overflow-hidden">
+              <div className="h-1 bg-orange-500" />
+              <div className="p-5">
+                <p className="text-xs text-zinc-500 mb-1">Current Streak</p>
+                <div className="flex items-end gap-2 mb-4">
+                  <span className="text-6xl font-black text-white leading-none">23</span>
+                  <span className="text-zinc-500 pb-1">days in a row</span>
+                </div>
+                <div className="grid grid-cols-7 gap-1 mb-5">
+                  {Array.from({ length: 28 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`aspect-square rounded-sm transition-colors ${
+                        i < 23
+                          ? i < 7 ? "bg-orange-400" : i < 14 ? "bg-orange-500" : "bg-orange-600"
+                          : "bg-zinc-800"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between">
+                  {[7, 14, 30, 60, 100].map((m) => (
+                    <div key={m} className="flex flex-col items-center gap-1">
+                      <div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold ${23 >= m ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20" : "bg-zinc-800 text-zinc-600"}`}>
+                        {m}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-zinc-700 text-center">Earn freezes · Hit milestones · Stay consistent</p>
+              </div>
+            </div>
+
+            {/* TILE 3: Progress */}
+            <div className="snap-center shrink-0 w-[82vw] sm:w-auto rounded-2xl bg-zinc-900 overflow-hidden">
+              <div className="h-1 bg-blue-500" />
+              <div className="p-5">
+                <p className="text-xs text-zinc-500 mb-4">Your Progress</p>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  {[
+                    { stat: "-12", label: "lbs body weight", color: "text-blue-400" },
+                    { stat: "+45", label: "lbs on squat", color: "text-green-400" },
+                    { stat: "+2\"", label: "arms", color: "text-purple-400" },
+                    { stat: "-4\"", label: "waist", color: "text-orange-400" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-xl bg-zinc-800/80 p-3">
+                      <div className={`text-2xl font-black ${item.color}`}>{item.stat}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Mini bar chart */}
+                <div className="flex items-end gap-1 h-14">
+                  {[38, 52, 44, 61, 50, 67, 62, 74, 70, 82, 80, 100].map((h, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-sm"
+                      style={{
+                        height: `${h}%`,
+                        background: i === 11 ? "#3b82f6" : `rgba(59,130,246,${0.15 + (i / 11) * 0.45})`,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between mt-1.5">
+                  <span className="text-xs text-zinc-700">8 weeks ago</span>
+                  <span className="text-xs text-zinc-700">Today</span>
+                </div>
+              </div>
+            </div>
+
+            {/* TILE 4: Coaching Chat */}
+            <div className="snap-center shrink-0 w-[82vw] sm:w-auto rounded-2xl bg-zinc-900 overflow-hidden">
+              <div className="h-1 bg-purple-500" />
+              <div className="p-5">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+                    <Image src={profileImage} alt="Jon Don" fill className="object-cover" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Jon Don</p>
+                    <p className="text-xs text-green-400">Online</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-zinc-700 px-3.5 py-2.5">
+                      <p className="text-sm text-white">Should I bump the weight? Hit all 4 sets clean.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div className="relative h-7 w-7 shrink-0 overflow-hidden rounded-full">
+                      <Image src={profileImage} alt="Jon Don" fill className="object-cover" />
+                    </div>
+                    <div className="max-w-[80%] rounded-2xl rounded-bl-sm bg-zinc-800 px-3.5 py-2.5">
+                      <p className="text-sm text-zinc-200">Yes — go up 5 lbs. Bar path looked solid. Tighten your retraction before unracking.</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-zinc-700 px-3.5 py-2.5">
+                      <p className="text-sm text-white">Let&apos;s get it 💪</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
+          {/* Mobile swipe hint */}
+          <p className="text-center text-xs text-zinc-700 mt-4 sm:hidden">swipe to explore →</p>
         </div>
       </section>
 
