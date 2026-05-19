@@ -194,6 +194,7 @@ export default function CalendarClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [viewMode, setViewMode] = useState<ViewMode>('month')
+  const [direction, setDirection] = useState(0)
   const [currentDate, setCurrentDate] = useState(() => {
     const dateParam = searchParams.get('date')
     if (dateParam) {
@@ -328,6 +329,7 @@ export default function CalendarClient() {
 
   // Navigation
   const navigatePrev = () => {
+    setDirection(-1)
     if (viewMode === 'month') {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
     } else {
@@ -338,6 +340,7 @@ export default function CalendarClient() {
   }
 
   const navigateNext = () => {
+    setDirection(1)
     if (viewMode === 'month') {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
     } else {
@@ -432,6 +435,12 @@ export default function CalendarClient() {
     ? workoutsByDate.get(toDateKey(selectedDate)) || []
     : []
 
+  const slideVariants = {
+    initial: (dir: number) => ({ x: dir >= 0 ? '100%' : '-100%', opacity: 0 }),
+    animate: { x: 0, opacity: 1 },
+    exit: (dir: number) => ({ x: dir >= 0 ? '-60%' : '60%', opacity: 0 }),
+  }
+
   return (
     <PageTransition className="pb-6">
       {/* Header */}
@@ -496,9 +505,22 @@ export default function CalendarClient() {
       </div>
 
       {/* Period Label */}
-      <h2 className="mb-3 text-center text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">
-        {headerText}
-      </h2>
+      <div className="relative mb-3 overflow-hidden">
+        <AnimatePresence initial={false} custom={direction} mode="wait">
+          <motion.h2
+            key={headerText}
+            custom={direction}
+            variants={slideVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={{ duration: 0.16, ease: 'easeInOut' }}
+            className="text-center text-base font-semibold text-zinc-900 dark:text-white sm:text-lg"
+          >
+            {headerText}
+          </motion.h2>
+        </AnimatePresence>
+      </div>
 
       {/* Program Legend */}
       {schedules.length > 1 && (
@@ -557,7 +579,18 @@ export default function CalendarClient() {
             </div>
 
             {/* Date cells */}
-            <div className={`grid grid-cols-7 ${viewMode === 'week' ? '' : ''}`}>
+            <div className="relative overflow-hidden">
+            <AnimatePresence initial={false} custom={direction} mode="popLayout">
+            <motion.div
+              key={toDateKey(days[0])}
+              custom={direction}
+              variants={slideVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              className={`grid grid-cols-7 ${viewMode === 'week' ? '' : ''}`}
+            >
               {days.map((day) => {
                 const key = toDateKey(day)
                 const isThisMonth = day.getMonth() === currentDate.getMonth()
@@ -621,6 +654,8 @@ export default function CalendarClient() {
                   </button>
                 )
               })}
+            </motion.div>
+            </AnimatePresence>
             </div>
           </div>
 
