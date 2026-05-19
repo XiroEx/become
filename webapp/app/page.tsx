@@ -385,6 +385,92 @@ export default function Home() {
         </div>
       </section>
 
+      {/* COACHING */}
+      <section className="w-full bg-black py-20 px-6">
+        <div className="mx-auto max-w-5xl">
+          <div className="flex flex-col gap-12 lg:flex-row-reverse lg:items-center lg:gap-16">
+            <div className="flex-1">
+              <span className="text-xs font-semibold uppercase tracking-widest text-blue-500">Coaching</span>
+              <h2 className="mt-3 text-3xl font-black sm:text-4xl leading-tight">
+                Direct access.<br />Real answers.
+              </h2>
+              <p className="mt-4 text-sm text-zinc-400 leading-relaxed">
+                Questions come up. Form breaks down. Life throws curveballs. Get direct chat access to Jon — not a bot, not a generic FAQ. Someone who knows your program, your history, and exactly what you need to hear.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {[
+                  "Ask about form, technique, or program adjustments anytime",
+                  "Submit workout video clips for direct technique feedback",
+                  "Weekly check-ins to keep you honest and on track",
+                  "Coaching that knows your data — not starting from scratch every time",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-3 text-sm text-zinc-400">
+                    <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Chat mockup */}
+            <div className="flex-1 flex justify-center">
+              <div className="w-full max-w-sm rounded-2xl bg-zinc-900 overflow-hidden shadow-2xl">
+                <div className="h-1 bg-blue-500" />
+                <div className="px-4 py-3 border-b border-zinc-800 flex items-center gap-3">
+                  <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+                    <Image src={profileImage} alt="Jon Don" fill className="object-cover" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Jon Don</p>
+                    <p className="text-xs text-green-400">Online</p>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex justify-end">
+                    <div className="max-w-[78%] rounded-2xl rounded-tr-sm bg-zinc-700 px-3.5 py-2.5">
+                      <p className="text-sm text-white">Should I bump the weight? Hit all 4 sets at 185 clean.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full">
+                      <Image src={profileImage} alt="Jon Don" fill className="object-cover" />
+                    </div>
+                    <div className="max-w-[78%] rounded-2xl rounded-bl-sm bg-zinc-800 px-3.5 py-2.5">
+                      <p className="text-sm text-zinc-200">Yes — go to 190. Bar path looked solid. Tighten your retraction before you unrack and you&apos;re good.</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="max-w-[78%] rounded-2xl rounded-tr-sm bg-zinc-700 px-3.5 py-2.5">
+                      <p className="text-sm text-white">Let&apos;s get it 💪</p>
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <div className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full">
+                      <Image src={profileImage} alt="Jon Don" fill className="object-cover" />
+                    </div>
+                    <div className="max-w-[78%] rounded-2xl rounded-bl-sm bg-zinc-800 px-3.5 py-2.5">
+                      <p className="text-sm text-zinc-200">Also — protein&apos;s been low this week. Hit 180g today going into the session. Makes a real difference.</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-4 pb-4">
+                  <div className="rounded-xl bg-zinc-800 px-3.5 py-2.5 flex items-center gap-2">
+                    <span className="text-sm text-zinc-600 flex-1">Message Jon...</span>
+                    <div className="h-6 w-6 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
+                      <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* WHY BECOME */}
       <section className="w-full bg-black py-20 px-6">
         <div className="mx-auto max-w-5xl">
