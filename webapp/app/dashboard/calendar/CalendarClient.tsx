@@ -82,7 +82,9 @@ function isMakeupWorkout(scheduledDateStr: string, completedAtStr: string): bool
   const scheduledLocal = localDateFromScheduledIso(scheduledDateStr)
   const c = new Date(completedAtStr)
   const completedLocal = new Date(c.getFullYear(), c.getMonth(), c.getDate())
-  return scheduledLocal.getTime() !== completedLocal.getTime()
+  // Only a makeup if completed AFTER the scheduled date (late completion of a missed workout).
+  // Completing before the scheduled date is an early completion — not a makeup.
+  return completedLocal.getTime() > scheduledLocal.getTime()
 }
 
 /**
