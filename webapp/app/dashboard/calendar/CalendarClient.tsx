@@ -438,9 +438,9 @@ export default function CalendarClient() {
     : []
 
   const slideVariants = {
-    initial: (dir: number) => ({ x: dir >= 0 ? '100%' : '-100%', opacity: 0 }),
-    animate: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir >= 0 ? '-60%' : '60%', opacity: 0 }),
+    initial: (dir: number) => ({ x: dir >= 0 ? '100%' : '-100%' }),
+    animate: { x: 0 },
+    exit: (dir: number) => ({ x: dir >= 0 ? '-100%' : '100%' }),
   }
 
   return (
@@ -508,7 +508,7 @@ export default function CalendarClient() {
 
       {/* Period Label */}
       <div className="relative mb-3 overflow-hidden">
-        <AnimatePresence initial={false} custom={direction} mode="wait">
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
           <motion.h2
             key={headerText}
             custom={direction}
