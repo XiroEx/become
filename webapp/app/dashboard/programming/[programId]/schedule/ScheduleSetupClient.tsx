@@ -42,7 +42,7 @@ function toISODateString(date: Date): string {
 }
 
 interface ExistingSchedule {
-  settings: { trainingDays: number[]; startDate: string; autoAdvance: boolean }
+  settings: { trainingDays: number[]; startDate: string }
   scheduledWorkouts: Array<{ date: string; dayLabel: string; workoutTitle: string; status: string }>
   programName: string
 }

@@ -44,7 +44,6 @@ interface ScheduleData {
   settings: {
     trainingDays: number[]
     startDate: string
-    autoAdvance: boolean
   }
   scheduledWorkouts: ScheduledWorkout[]
 }
@@ -971,7 +970,8 @@ export default function CalendarClient() {
                     <div className="mb-2 flex items-center justify-between">
                       <button
                         onClick={() => setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() - 1, 1))}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        disabled={pickerMonth <= today}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white disabled:opacity-30 disabled:cursor-default dark:text-zinc-400 dark:hover:bg-zinc-800"
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
                       </button>
@@ -980,7 +980,8 @@ export default function CalendarClient() {
                       </span>
                       <button
                         onClick={() => setPickerMonth(new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + 1, 1))}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        disabled={pickerMonth >= new Date(today.getFullYear() + 2, today.getMonth(), 1)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-500 hover:bg-white disabled:opacity-30 disabled:cursor-default dark:text-zinc-400 dark:hover:bg-zinc-800"
                       >
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>

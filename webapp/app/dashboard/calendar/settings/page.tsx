@@ -12,7 +12,6 @@ interface ScheduleData {
   settings: {
     trainingDays: number[]
     startDate: string
-    autoAdvance: boolean
   }
   scheduledWorkouts: Array<{
     status: string
