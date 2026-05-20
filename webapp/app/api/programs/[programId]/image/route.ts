@@ -74,8 +74,12 @@ export async function POST(
     await dbConnect()
     const { programId } = await params
 
-    const program = await ProgramModel.findOne({ program_id: programId })
-    if (!program) {
+    // Use exists() instead of fetching the full document — we don't need to
+    // load (and later re-validate) every phase/workout/exercise just to write
+    // one field. Many legacy programs have exercises missing the required
+    // exerciseSlug, which would make `program.save()` reject the whole upload.
+    const programExists = await ProgramModel.exists({ program_id: programId })
+    if (!programExists) {
       return NextResponse.json({ error: 'Program not found' }, { status: 404 })
     }
 
@@ -130,10 +134,16 @@ export async function POST(
       { upsert: true, new: true, setDefaultsOnInsert: true },
     )
 
-    program.coverImage = `/api/programs/${programId}/image?v=${Date.now()}`
-    await program.save()
+    const coverImage = `/api/programs/${programId}/image?v=${Date.now()}`
+    // updateOne bypasses full-document validation — only the coverImage
+    // field is written. Required-field validators on phases/workouts/
+    // exercises do not fire here.
+    await ProgramModel.updateOne(
+      { program_id: programId },
+      { $set: { coverImage } },
+    )
 
-    return NextResponse.json({ success: true, coverImage: program.coverImage })
+    return NextResponse.json({ success: true, coverImage })
   } catch (error) {
     console.error('Error uploading program image:', error)
     return NextResponse.json({
@@ -158,14 +168,18 @@ export async function DELETE(
     await dbConnect()
     const { programId } = await params
 
-    const program = await ProgramModel.findOne({ program_id: programId })
-    if (!program) {
+    const programExists = await ProgramModel.exists({ program_id: programId })
+    if (!programExists) {
       return NextResponse.json({ error: 'Program not found' }, { status: 404 })
     }
 
     await ProgramImage.deleteOne({ programId })
-    program.coverImage = undefined
-    await program.save()
+    // Same rationale as POST — use $unset to avoid re-validating the
+    // entire program document just to clear a single field.
+    await ProgramModel.updateOne(
+      { program_id: programId },
+      { $unset: { coverImage: '' } },
+    )
 
     return NextResponse.json({ success: true })
   } catch (error) {
