@@ -169,7 +169,7 @@ function StatusBadge({ status }: { status: string }) {
     case 'missed':
       return (
         <span className="flex items-center gap-0.5 rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white dark:bg-red-600 dark:text-white">
-          <X className="h-2.5 w-2.5" /> Missed
+          <X className="h-2.5 w-2.5" /> Incomplete
         </span>
       )
     case 'skipped':
@@ -676,7 +676,7 @@ export default function CalendarClient() {
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-red-600" />
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Missed</span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Incomplete</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="h-2 w-2 rounded-full bg-amber-400" />
