@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import ExerciseAccordion from "@/components/ExerciseAccordion";
@@ -24,14 +24,14 @@ function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
-// Cover image that drifts at a different speed than the hero's own scroll.
-// Scoped to the hero element so progress is 0 when the hero's top hits the
-// container top, and 1 when the hero's bottom hits the container top —
-// across exactly the range the hero is on-screen.
+// Cover image that drifts as the user scrolls. Drives the translate by
+// reading container.scrollTop on rAF directly — the hero is `sticky`, so
+// its getBoundingClientRect doesn't move while sticky is active and
+// framer's `useScroll({ target })` would never progress past 0. Updates the
+// DOM imperatively via a ref to avoid React re-renders during scroll.
 //
 // Image is overscaled (h-[130%], -top-[15%]) so the ±10% translation never
-// reveals empty edges, no matter the hero's actual height. Admin-set zoom
-// and object-position further refine framing.
+// reveals empty edges. Admin-set zoom + object-position refine framing.
 function ParallaxCover({
   src,
   heroRef,
@@ -45,28 +45,37 @@ function ParallaxCover({
   posX: number
   posY: number
 }) {
-  // Hold the actual scroll container in state so useScroll can pick it up
-  // on the second render (refs resolve after first mount).
-  const [container, setContainer] = useState<HTMLElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    setContainer(findScrollContainer(heroRef.current));
+    const container = findScrollContainer(heroRef.current);
+    if (!container) return;
+
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const h = heroRef.current?.offsetHeight ?? 1;
+      const p = Math.min(1, Math.max(0, container.scrollTop / h));
+      const yPct = -10 + p * 20; // -10% → +10% over the hero's height
+      if (wrapRef.current) {
+        wrapRef.current.style.transform = `translate3d(0, ${yPct}%, 0)`;
+      }
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(apply);
+    };
+    apply();
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [heroRef]);
 
-  const containerRef = useRef<HTMLElement | null>(null);
-  containerRef.current = container;
-
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    container: containerRef as RefObject<HTMLElement>,
-    offset: ['start start', 'end start'],
-  });
-  const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%']);
-  // Outer motion.div owns the parallax transform; inner <img> owns the
-  // scale/object-position. Keeping them on separate elements avoids the
-  // framer-motion `y` transform fighting with a plain `transform` style.
   return (
-    <motion.div
-      style={{ y }}
+    <div
+      ref={wrapRef}
       className="pointer-events-none absolute left-0 right-0 -top-[15%] h-[130%] w-full will-change-transform"
     >
       <img
@@ -79,7 +88,7 @@ function ParallaxCover({
           transformOrigin: `${posX}% ${posY}%`,
         }}
       />
-    </motion.div>
+    </div>
   );
 }
 
