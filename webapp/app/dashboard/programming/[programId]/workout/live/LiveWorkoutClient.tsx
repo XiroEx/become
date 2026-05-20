@@ -38,6 +38,8 @@ interface SavedExercise {
 interface SavedWorkout {
   exercises: SavedExercise[];
   completed: boolean;
+  activeSeconds?: number;
+  startedAt?: string;
 }
 
 interface Exercise {
@@ -106,7 +108,15 @@ export default function LiveWorkoutPage() {
   const [showExerciseList, setShowExerciseList] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeIndicator, setShowResumeIndicator] = useState(false);
-  const [workoutStartTime] = useState(Date.now());
+  // Active-seconds tracking: time persists across resume sessions.
+  // - activeSecondsBaseline: total active seconds accumulated in prior sessions
+  //   (loaded from the server when resuming an in-progress workout)
+  // - sessionStartTime: when THIS view instance opened
+  // - elapsedTime (display) = baseline + (now - sessionStart) seconds
+  // The timer keeps ticking while the view is open and persists `activeSeconds`
+  // on every save, so resuming yesterday's workout picks up where it left off.
+  const [sessionStartTime, setSessionStartTime] = useState(Date.now());
+  const [activeSecondsBaseline, setActiveSecondsBaseline] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [exerciseData, setExerciseData] = useState<SetData[][]>([]);
   const [currentReps, setCurrentReps] = useState("");
@@ -363,6 +373,13 @@ export default function LiveWorkoutPage() {
               setIsResuming(true);
               setShowResumeIndicator(true);
 
+              // Restore active-seconds baseline so the timer continues from
+              // where it left off rather than restarting at 0.
+              if (typeof savedWorkout.activeSeconds === 'number' && savedWorkout.activeSeconds > 0) {
+                setActiveSecondsBaseline(savedWorkout.activeSeconds);
+                setSessionStartTime(Date.now());
+              }
+
               // Find first incomplete step (fixed: uses flow with early return)
               const resumeIdx = findFirstIncompleteStep(flow, restoredData);
               setCurrentStepIndex(resumeIdx);
@@ -521,13 +538,17 @@ export default function LiveWorkoutPage() {
   // Elapsed timer — freezes once the summary screen is shown so the
   // congratulations card displays the duration at completion, not a
   // counter that keeps climbing after the workout is done.
+  // Computes baseline (from prior sessions) + current session elapsed.
   useEffect(() => {
     if (showSummary) return;
-    const interval = setInterval(() => {
-      setElapsedTime(Math.floor((Date.now() - workoutStartTime) / 1000));
-    }, 1000);
+    const tick = () => {
+      const sessionElapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+      setElapsedTime(activeSecondsBaseline + sessionElapsed);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [workoutStartTime, showSummary]);
+  }, [sessionStartTime, activeSecondsBaseline, showSummary]);
 
   // Cleanup auto-save timeout on unmount
   useEffect(() => {
@@ -576,10 +597,22 @@ export default function LiveWorkoutPage() {
           ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
       });
+      // Snapshot active seconds now so the server stores the time at the
+      // moment of save, not the time the request lands.
+      const activeSecondsAtSave = activeSecondsBaseline + Math.floor((Date.now() - sessionStartTime) / 1000);
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ programId, phase: currentPhase, day: workout.day, exercises: exercisesToSave, completed: isComplete, tz: new Date().getTimezoneOffset() })
+        body: JSON.stringify({
+          programId,
+          phase: currentPhase,
+          day: workout.day,
+          exercises: exercisesToSave,
+          completed: isComplete,
+          activeSeconds: activeSecondsAtSave,
+          ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+          tz: new Date().getTimezoneOffset(),
+        }),
       });
       if (isComplete && res.ok) {
         const data = await res.json();
@@ -596,7 +629,7 @@ export default function LiveWorkoutPage() {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase, swappedExercises]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime]);
 
   // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
   // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension

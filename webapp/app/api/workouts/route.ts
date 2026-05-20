@@ -33,6 +33,7 @@ interface WorkoutSaveRequest {
   exercises: ExerciseData[]
   completed: boolean
   duration?: number
+  activeSeconds?: number
   notes?: string
   tz?: number
 }
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
     const payload = { userId: authResult.userId!, email: authResult.email! }
 
     const body: WorkoutSaveRequest = await request.json()
-    const { programId, phase, day, exercises, completed, duration, notes } = body
+    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes } = body
 
     if (!programId || phase === undefined || !day) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -226,6 +227,8 @@ export async function POST(request: NextRequest) {
       day,
       completed,
       duration,
+      startedAt: new Date(),
+      activeSeconds: activeSeconds ?? 0,
       ...(notes && { notes }),
       exercises
     }
@@ -248,6 +251,7 @@ export async function POST(request: NextRequest) {
           'workoutLogs.$[elem].exercises': exercises,
           'workoutLogs.$[elem].completed': completed,
           'workoutLogs.$[elem].duration': duration,
+          ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
           updatedAt: new Date()
         }
       },

@@ -46,7 +46,9 @@ export interface IWorkoutLog {
   phase: number
   day: string
   completed: boolean
-  duration?: number // in minutes
+  duration?: number // in minutes (final, set on completion)
+  startedAt?: Date // First time the live view was opened / first set saved
+  activeSeconds?: number // Accumulated active seconds across all sessions
   notes?: string
   exercises: IExerciseLog[]
 }
@@ -158,6 +160,8 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   day: { type: String, required: true },
   completed: { type: Boolean, default: false },
   duration: { type: Number },
+  startedAt: { type: Date },
+  activeSeconds: { type: Number, default: 0 },
   notes: { type: String },
   exercises: [ExerciseLogSchema]
 }, { _id: false })
