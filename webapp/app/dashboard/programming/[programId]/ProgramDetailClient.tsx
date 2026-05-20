@@ -30,8 +30,21 @@ function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
 // across exactly the range the hero is on-screen.
 //
 // Image is overscaled (h-[130%], -top-[15%]) so the ±10% translation never
-// reveals empty edges, no matter the hero's actual height.
-function ParallaxCover({ src, heroRef }: { src: string; heroRef: RefObject<HTMLDivElement | null> }) {
+// reveals empty edges, no matter the hero's actual height. Admin-set zoom
+// and object-position further refine framing.
+function ParallaxCover({
+  src,
+  heroRef,
+  zoom,
+  posX,
+  posY,
+}: {
+  src: string
+  heroRef: RefObject<HTMLDivElement | null>
+  zoom: number
+  posX: number
+  posY: number
+}) {
   // Hold the actual scroll container in state so useScroll can pick it up
   // on the second render (refs resolve after first mount).
   const [container, setContainer] = useState<HTMLElement | null>(null);
@@ -48,13 +61,25 @@ function ParallaxCover({ src, heroRef }: { src: string; heroRef: RefObject<HTMLD
     offset: ['start start', 'end start'],
   });
   const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%']);
+  // Outer motion.div owns the parallax transform; inner <img> owns the
+  // scale/object-position. Keeping them on separate elements avoids the
+  // framer-motion `y` transform fighting with a plain `transform` style.
   return (
-    <motion.img
-      src={src}
-      alt=""
+    <motion.div
       style={{ y }}
-      className="absolute left-0 right-0 -top-[15%] h-[130%] w-full object-cover object-center will-change-transform"
-    />
+      className="pointer-events-none absolute left-0 right-0 -top-[15%] h-[130%] w-full will-change-transform"
+    >
+      <img
+        src={src}
+        alt=""
+        className="h-full w-full object-cover"
+        style={{
+          objectPosition: `${posX}% ${posY}%`,
+          transform: `scale(${zoom})`,
+          transformOrigin: `${posX}% ${posY}%`,
+        }}
+      />
+    </motion.div>
   );
 }
 
@@ -562,12 +587,23 @@ export default function ProgramDetailClient({ program }: Props) {
         {program.coverImage ? (
           <>
             {program.coverParallax ? (
-              <ParallaxCover src={program.coverImage} heroRef={heroRef} />
+              <ParallaxCover
+                src={program.coverImage}
+                heroRef={heroRef}
+                zoom={program.coverZoom ?? 1}
+                posX={program.coverPositionX ?? 50}
+                posY={program.coverPositionY ?? 50}
+              />
             ) : (
               <img
                 src={program.coverImage}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover object-center"
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{
+                  objectPosition: `${program.coverPositionX ?? 50}% ${program.coverPositionY ?? 50}%`,
+                  transform: `scale(${program.coverZoom ?? 1})`,
+                  transformOrigin: `${program.coverPositionX ?? 50}% ${program.coverPositionY ?? 50}%`,
+                }}
               />
             )}
             {/* Gradient overlay: lighter at top so the image breathes,
