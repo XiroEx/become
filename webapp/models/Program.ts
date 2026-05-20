@@ -69,6 +69,9 @@ export interface IProgram extends Document {
   createdBy?: mongoose.Types.ObjectId | string;
   coverImage?: string;
   coverParallax?: boolean;
+  coverZoom?: number;       // 1.0 = no zoom, 2.0 = 2x in
+  coverPositionX?: number;  // object-position X, 0-100 (default 50)
+  coverPositionY?: number;  // object-position Y, 0-100 (default 50)
 }
 
 const ProgramExerciseSchema = new Schema<IProgramExercise>({
@@ -133,6 +136,9 @@ const ProgramSchema = new Schema<IProgram>({
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', sparse: true, index: true },
   coverImage: { type: String },
   coverParallax: { type: Boolean, default: false },
+  coverZoom: { type: Number, default: 1, min: 1, max: 3 },
+  coverPositionX: { type: Number, default: 50, min: 0, max: 100 },
+  coverPositionY: { type: Number, default: 50, min: 0, max: 100 },
 });
 
 // Create text index for search

@@ -26,24 +26,38 @@ interface RawProgram {
   phases?: Phase[]
   coverImage?: string
   coverParallax?: boolean
+  coverZoom?: number
+  coverPositionX?: number
+  coverPositionY?: number
 }
 
 function CoverImageEditor({
   programId,
   initialUrl,
   initialParallax,
+  initialZoom,
+  initialPositionX,
+  initialPositionY,
 }: {
   programId: string
   initialUrl?: string
   initialParallax?: boolean
+  initialZoom?: number
+  initialPositionX?: number
+  initialPositionY?: number
 }) {
   const [coverUrl, setCoverUrl] = useState<string | undefined>(initialUrl)
   const [parallax, setParallax] = useState<boolean>(!!initialParallax)
   const [parallaxSaving, setParallaxSaving] = useState(false)
+  const [zoom, setZoom] = useState<number>(initialZoom ?? 1)
+  const [posX, setPosX] = useState<number>(initialPositionX ?? 50)
+  const [posY, setPosY] = useState<number>(initialPositionY ?? 50)
+  const [framingSaving, setFramingSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const framingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   async function toggleParallax(next: boolean) {
     setParallax(next)
@@ -66,6 +80,40 @@ function CoverImageEditor({
     } finally {
       setParallaxSaving(false)
     }
+  }
+
+  // Debounced PATCH of zoom + position (sliders fire constantly during drag)
+  function scheduleFramingSave(next: { zoom: number; x: number; y: number }) {
+    if (framingTimer.current) clearTimeout(framingTimer.current)
+    framingTimer.current = setTimeout(async () => {
+      setFramingSaving(true)
+      setError(null)
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/programs/${encodeURIComponent(programId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({
+            coverZoom: next.zoom,
+            coverPositionX: next.x,
+            coverPositionY: next.y,
+          }),
+        })
+        if (!res.ok) {
+          const parsed = await res.json().catch(() => ({}))
+          throw new Error(parsed.error || `Save failed (HTTP ${res.status})`)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Save failed')
+      } finally {
+        setFramingSaving(false)
+      }
+    }, 400)
+  }
+
+  function resetFraming() {
+    setZoom(1); setPosX(50); setPosY(50)
+    scheduleFramingSave({ zoom: 1, x: 50, y: 50 })
   }
 
   async function handleUpload(file: File) {
@@ -131,9 +179,10 @@ function CoverImageEditor({
         Displayed as the hero background on the program overview page.
       </p>
 
-      {/* Preview */}
+      {/* Preview — reflects current zoom/position so the admin can frame it
+          before saving. Aspect ratio matches the program hero (roughly). */}
       <div
-        className="relative mb-4 flex h-44 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-100 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600"
+        className="relative mb-4 flex h-56 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-100 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600"
         onClick={() => inputRef.current?.click()}
       >
         {coverUrl ? (
@@ -142,9 +191,14 @@ function CoverImageEditor({
               src={coverUrl}
               alt="Program cover"
               className="absolute inset-0 h-full w-full object-cover"
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: `${posX}% ${posY}%`,
+                objectPosition: `${posX}% ${posY}%`,
+              }}
             />
-            <div className="absolute inset-0 bg-black/30" />
-            <span className="relative text-sm font-medium text-white">Click to replace</span>
+            <div className="absolute inset-0 bg-black/20" />
+            <span className="relative rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white">Click to replace</span>
           </>
         ) : (
           <div className="flex flex-col items-center gap-2 text-zinc-400 dark:text-zinc-500">
@@ -188,25 +242,100 @@ function CoverImageEditor({
         )}
       </div>
 
-      {/* Parallax toggle — only meaningful when an image is set */}
+      {/* Framing controls — only meaningful when an image is set */}
       {coverUrl && (
-        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
-          <input
-            type="checkbox"
-            checked={parallax}
-            disabled={parallaxSaving}
-            onChange={(e) => toggleParallax(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-zinc-900 dark:accent-white"
-          />
-          <div>
-            <div className="text-sm font-medium text-zinc-900 dark:text-white">
-              Parallax scroll {parallaxSaving && <span className="ml-1 text-xs text-zinc-400">saving…</span>}
+        <div className="mt-4 space-y-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-zinc-900 dark:text-white">
+              Framing {framingSaving && <span className="ml-1 text-xs font-normal text-zinc-400">saving…</span>}
             </div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
-              The cover image drifts at a different speed as the user scrolls down the program page.
-            </div>
+            <button
+              type="button"
+              onClick={resetFraming}
+              className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+            >
+              Reset
+            </button>
           </div>
-        </label>
+
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+              <span>Zoom</span>
+              <span className="font-mono tabular-nums">{zoom.toFixed(2)}×</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={2.5}
+              step={0.05}
+              value={zoom}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                setZoom(v)
+                scheduleFramingSave({ zoom: v, x: posX, y: posY })
+              }}
+              className="w-full accent-zinc-900 dark:accent-white"
+            />
+          </div>
+
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+              <span>Horizontal</span>
+              <span className="font-mono tabular-nums">{Math.round(posX)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={posX}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                setPosX(v)
+                scheduleFramingSave({ zoom, x: v, y: posY })
+              }}
+              className="w-full accent-zinc-900 dark:accent-white"
+            />
+          </div>
+
+          <div>
+            <div className="mb-1 flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
+              <span>Vertical</span>
+              <span className="font-mono tabular-nums">{Math.round(posY)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={posY}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value)
+                setPosY(v)
+                scheduleFramingSave({ zoom, x: posX, y: v })
+              }}
+              className="w-full accent-zinc-900 dark:accent-white"
+            />
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+            <input
+              type="checkbox"
+              checked={parallax}
+              disabled={parallaxSaving}
+              onChange={(e) => toggleParallax(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-zinc-900 dark:accent-white"
+            />
+            <div>
+              <div className="text-sm font-medium text-zinc-900 dark:text-white">
+                Parallax scroll {parallaxSaving && <span className="ml-1 text-xs text-zinc-400">saving…</span>}
+              </div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                The cover image drifts at a different speed as the user scrolls down the program page.
+              </div>
+            </div>
+          </label>
+        </div>
       )}
 
       {error && (
@@ -220,6 +349,9 @@ export default function EditProgramClient({ programId }: { programId: string }) 
   const [initial, setInitial] = useState<InitialProgram | null>(null)
   const [coverImage, setCoverImage] = useState<string | undefined>(undefined)
   const [coverParallax, setCoverParallax] = useState<boolean>(false)
+  const [coverZoom, setCoverZoom] = useState<number>(1)
+  const [coverPositionX, setCoverPositionX] = useState<number>(50)
+  const [coverPositionY, setCoverPositionY] = useState<number>(50)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -247,6 +379,9 @@ export default function EditProgramClient({ programId }: { programId: string }) 
         })
         setCoverImage(data.coverImage)
         setCoverParallax(!!data.coverParallax)
+        setCoverZoom(typeof data.coverZoom === 'number' ? data.coverZoom : 1)
+        setCoverPositionX(typeof data.coverPositionX === 'number' ? data.coverPositionX : 50)
+        setCoverPositionY(typeof data.coverPositionY === 'number' ? data.coverPositionY : 50)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load')
       }
@@ -275,7 +410,14 @@ export default function EditProgramClient({ programId }: { programId: string }) 
 
   return (
     <>
-      <CoverImageEditor programId={programId} initialUrl={coverImage} initialParallax={coverParallax} />
+      <CoverImageEditor
+        programId={programId}
+        initialUrl={coverImage}
+        initialParallax={coverParallax}
+        initialZoom={coverZoom}
+        initialPositionX={coverPositionX}
+        initialPositionY={coverPositionY}
+      />
       <ProgramCreator mode="edit" programId={programId} initialProgram={initial} />
     </>
   )

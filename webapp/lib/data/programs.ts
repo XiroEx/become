@@ -54,5 +54,8 @@ export interface Program {
   phases: Phase[];
   coverImage?: string;
   coverParallax?: boolean;
+  coverZoom?: number;
+  coverPositionX?: number;
+  coverPositionY?: number;
 }
 
