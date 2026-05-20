@@ -3,11 +3,28 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import ExerciseAccordion from "@/components/ExerciseAccordion";
 import { Card } from "@/components/ui";
+
+// Cover image that drifts at a different scroll speed than the page.
+// The image container is overscaled so the translation never reveals
+// the background; we move it from -12% to +12% across the page scroll.
+function ParallaxCover({ src }: { src: string }) {
+  const { scrollY } = useScroll();
+  // 0px scroll → -8%, 600px scroll → +8% (covers the visible hero region)
+  const y = useTransform(scrollY, [0, 600], ['-8%', '8%']);
+  return (
+    <motion.img
+      src={src}
+      alt=""
+      style={{ y }}
+      className="absolute inset-0 h-[120%] w-full -top-[10%] object-cover will-change-transform"
+    />
+  );
+}
 
 interface Props {
   program: Program;
@@ -451,11 +468,15 @@ export default function ProgramDetailClient({ program }: Props) {
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
           <>
-            <img
-              src={program.coverImage}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            {program.coverParallax ? (
+              <ParallaxCover src={program.coverImage} />
+            ) : (
+              <img
+                src={program.coverImage}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
             <div className="absolute inset-0 bg-black/55" />
           </>
         ) : (

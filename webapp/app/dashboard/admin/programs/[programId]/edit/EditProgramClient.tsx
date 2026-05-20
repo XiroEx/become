@@ -25,14 +25,48 @@ interface RawProgram {
   equipment?: string[]
   phases?: Phase[]
   coverImage?: string
+  coverParallax?: boolean
 }
 
-function CoverImageEditor({ programId, initialUrl }: { programId: string; initialUrl?: string }) {
+function CoverImageEditor({
+  programId,
+  initialUrl,
+  initialParallax,
+}: {
+  programId: string
+  initialUrl?: string
+  initialParallax?: boolean
+}) {
   const [coverUrl, setCoverUrl] = useState<string | undefined>(initialUrl)
+  const [parallax, setParallax] = useState<boolean>(!!initialParallax)
+  const [parallaxSaving, setParallaxSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  async function toggleParallax(next: boolean) {
+    setParallax(next)
+    setParallaxSaving(true)
+    setError(null)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/programs/${encodeURIComponent(programId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ coverParallax: next }),
+      })
+      if (!res.ok) {
+        const parsed = await res.json().catch(() => ({}))
+        throw new Error(parsed.error || `Save failed (HTTP ${res.status})`)
+      }
+    } catch (err) {
+      setParallax(!next) // revert
+      setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setParallaxSaving(false)
+    }
+  }
 
   async function handleUpload(file: File) {
     if (file.size === 0) {
@@ -154,6 +188,27 @@ function CoverImageEditor({ programId, initialUrl }: { programId: string; initia
         )}
       </div>
 
+      {/* Parallax toggle — only meaningful when an image is set */}
+      {coverUrl && (
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+          <input
+            type="checkbox"
+            checked={parallax}
+            disabled={parallaxSaving}
+            onChange={(e) => toggleParallax(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-zinc-900 dark:accent-white"
+          />
+          <div>
+            <div className="text-sm font-medium text-zinc-900 dark:text-white">
+              Parallax scroll {parallaxSaving && <span className="ml-1 text-xs text-zinc-400">saving…</span>}
+            </div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+              The cover image drifts at a different speed as the user scrolls down the program page.
+            </div>
+          </div>
+        </label>
+      )}
+
       {error && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
@@ -164,6 +219,7 @@ function CoverImageEditor({ programId, initialUrl }: { programId: string; initia
 export default function EditProgramClient({ programId }: { programId: string }) {
   const [initial, setInitial] = useState<InitialProgram | null>(null)
   const [coverImage, setCoverImage] = useState<string | undefined>(undefined)
+  const [coverParallax, setCoverParallax] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -190,6 +246,7 @@ export default function EditProgramClient({ programId }: { programId: string }) 
           phases: data.phases ?? [],
         })
         setCoverImage(data.coverImage)
+        setCoverParallax(!!data.coverParallax)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load')
       }
@@ -218,7 +275,7 @@ export default function EditProgramClient({ programId }: { programId: string }) 
 
   return (
     <>
-      <CoverImageEditor programId={programId} initialUrl={coverImage} />
+      <CoverImageEditor programId={programId} initialUrl={coverImage} initialParallax={coverParallax} />
       <ProgramCreator mode="edit" programId={programId} initialProgram={initial} />
     </>
   )
