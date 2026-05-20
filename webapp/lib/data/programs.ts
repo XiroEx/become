@@ -53,5 +53,6 @@ export interface Program {
   tags?: string[];               // Searchable tags for filtering
   phases: Phase[];
   coverImage?: string;
+  coverParallax?: boolean;
 }
 

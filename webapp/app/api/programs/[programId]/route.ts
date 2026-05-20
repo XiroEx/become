@@ -70,6 +70,7 @@ async function applyUpdate(request: NextRequest, programId: string) {
     'equipment',
     'tags',
     'phases',
+    'coverParallax',
   ] as const;
   for (const key of allowed) {
     if (key in dehydrated) update[key] = (dehydrated as Record<string, unknown>)[key];
