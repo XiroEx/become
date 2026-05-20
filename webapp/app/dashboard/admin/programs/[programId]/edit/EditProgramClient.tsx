@@ -35,6 +35,14 @@ function CoverImageEditor({ programId, initialUrl }: { programId: string; initia
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function handleUpload(file: File) {
+    if (file.size === 0) {
+      setError('That file is empty (0 bytes). Pick a different image.')
+      return
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setError(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 25MB.`)
+      return
+    }
     setUploading(true)
     setError(null)
     try {
@@ -46,9 +54,14 @@ function CoverImageEditor({ programId, initialUrl }: { programId: string; initia
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-      setCoverUrl(data.coverImage)
+      // Server may return non-JSON on framework errors — parse defensively.
+      const text = await res.text()
+      let parsed: { error?: string; coverImage?: string } = {}
+      try { parsed = JSON.parse(text) } catch { /* ignore */ }
+      if (!res.ok) {
+        throw new Error(parsed.error || `Upload failed (HTTP ${res.status})`)
+      }
+      if (parsed.coverImage) setCoverUrl(parsed.coverImage)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {

@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
       // addressed objects) keep their own long-lived immutable caching;
       // they're scoped out by the exclusion below.
       {
-        source: '/((?!_next/static|_next/image|api/blob|favicon.ico|icons/|logo.png|profile.png|manifest.json|exercises/).*)',
+        source: '/((?!_next/static|_next/image|api/blob|favicon.ico|icons/|logo.png|profile.png|manifest.json|exercises/|api/programs/.+/image|api/meals/.+/image).*)',
         headers: [
           {
             key: 'Cache-Control',

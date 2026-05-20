@@ -23,14 +23,32 @@ export async function GET(
 
     const img = await MealImage.findOne({ mealId: id }).lean<{
       contentType: string
-      data: Buffer
+      data: unknown
     } | null>()
 
     if (!img) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
 
-    return new NextResponse(new Uint8Array(img.data), {
+    // Mongoose `.lean()` on a Buffer field can return a MongoDB Binary object
+    // rather than a Node Buffer; `new Uint8Array(binary)` silently yields an
+    // empty array. Unwrap defensively.
+    let bytes: Uint8Array | null = null
+    if (Buffer.isBuffer(img.data)) {
+      bytes = new Uint8Array(img.data.buffer, img.data.byteOffset, img.data.byteLength)
+    } else if (img.data instanceof Uint8Array) {
+      bytes = img.data
+    } else {
+      const b = (img.data as { buffer?: Buffer })?.buffer
+      if (b && Buffer.isBuffer(b)) {
+        bytes = new Uint8Array(b.buffer, b.byteOffset, b.byteLength)
+      }
+    }
+    if (!bytes || bytes.byteLength === 0) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+    }
+
+    return new NextResponse(bytes as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': img.contentType || 'image/jpeg',

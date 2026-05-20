@@ -7,6 +7,22 @@ import { verifyAuth } from '@/lib/auth'
 
 const MAX_RAW_BYTES = 25 * 1024 * 1024
 
+// Read a Mongoose Buffer field reliably whether the driver returns a Node
+// Buffer or a MongoDB Binary object. `new Uint8Array(binary)` silently
+// produces an empty array, which is what broke this endpoint in production.
+function toBytes(data: unknown): Uint8Array | null {
+  if (!data) return null
+  if (Buffer.isBuffer(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+  // MongoDB Binary type — has a .buffer (Node Buffer) property
+  const maybeBinary = data as { buffer?: Buffer; _bsontype?: string }
+  if (maybeBinary.buffer && Buffer.isBuffer(maybeBinary.buffer)) {
+    const b = maybeBinary.buffer
+    return new Uint8Array(b.buffer, b.byteOffset, b.byteLength)
+  }
+  if (data instanceof Uint8Array) return data
+  return null
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ programId: string }> }
@@ -17,14 +33,19 @@ export async function GET(
 
     const img = await ProgramImage.findOne({ programId }).lean<{
       contentType: string
-      data: Buffer
+      data: unknown
     } | null>()
 
     if (!img) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
 
-    return new NextResponse(new Uint8Array(img.data), {
+    const bytes = toBytes(img.data)
+    if (!bytes || bytes.byteLength === 0) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+    }
+
+    return new NextResponse(bytes as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': img.contentType || 'image/jpeg',
@@ -86,11 +107,22 @@ export async function POST(
       return NextResponse.json({ error: 'Empty image' }, { status: 400 })
     }
 
-    const processed = await sharp(raw)
-      .rotate()
-      .resize(1600, 900, { fit: 'cover', withoutEnlargement: true })
-      .jpeg({ quality: 85, mozjpeg: true })
-      .toBuffer()
+    let processed: Buffer
+    try {
+      processed = await sharp(raw)
+        .rotate()
+        .resize(1600, 900, { fit: 'cover', withoutEnlargement: true })
+        .jpeg({ quality: 85, mozjpeg: true })
+        .toBuffer()
+    } catch (err) {
+      return NextResponse.json({
+        error: `Could not decode image. Try a JPG or PNG. (${err instanceof Error ? err.message : 'unknown'})`,
+      }, { status: 415 })
+    }
+
+    if (!processed || processed.length === 0) {
+      return NextResponse.json({ error: 'Image processing produced empty output' }, { status: 500 })
+    }
 
     await ProgramImage.findOneAndUpdate(
       { programId },
