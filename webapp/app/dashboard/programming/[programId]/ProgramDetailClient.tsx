@@ -577,12 +577,13 @@ export default function ProgramDetailClient({ program }: Props) {
 
   return (
     <PageTransition className="pb-6">
-      {/* Hero Header — ~52vh tall (was 75vh, reduced ~30%) so the image
-          has room without dominating the page. Nav pins top, program info
-          pins bottom via the flex-1 spacer below. */}
+      {/* Hero Header — sticky to the dashboard scroll container so it stays
+          fixed in place while the content panel below scrolls UP and OVER
+          it. Fixed h-[52vh]; content wrapper carries the rounded top corners
+          so they reveal as the panel slides up. */}
       <div
         ref={heroRef}
-        className="relative flex min-h-[52vh] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0 sm:rounded-t-2xl"
+        className="sticky top-0 z-0 flex h-[52vh] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0"
       >
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
@@ -619,7 +620,7 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
         )}
 
-        <div className="relative flex flex-1 flex-col px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
+        <div className="relative flex h-full flex-col px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
           {/* Top nav row */}
           <div className="mb-4 flex items-center justify-between sm:mb-6">
             <button
@@ -892,8 +893,12 @@ export default function ProgramDetailClient({ program }: Props) {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="mx-auto max-w-4xl py-2 px-0 sm:px-6">
+      {/* Content panel — slides UP and OVER the sticky hero on scroll.
+          Solid page bg + z-10 so it visually covers the hero. Rounded top
+          edge is on this panel (not the hero) so it appears as the panel
+          rises into view. */}
+      <div className="relative z-10 -mx-3 sm:mx-0 bg-zinc-50 dark:bg-zinc-950 sm:rounded-t-2xl">
+      <div className="mx-auto max-w-4xl py-2 px-3 sm:px-6">
         {/* Phase Selector */}
         <div className="-mt-4 relative z-10">
           <Card>
@@ -1070,6 +1075,7 @@ export default function ProgramDetailClient({ program }: Props) {
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
       </div>
 
       {/* Abandon Program Confirmation Dialog */}
