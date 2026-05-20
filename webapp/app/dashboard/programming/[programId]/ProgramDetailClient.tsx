@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
@@ -9,21 +9,79 @@ import PageTransition from "@/components/PageTransition";
 import ExerciseAccordion from "@/components/ExerciseAccordion";
 import { Card } from "@/components/ui";
 
-// Cover image that drifts at a different scroll speed than the page.
-// The image container is overscaled so the translation never reveals
-// the background; we move it from -12% to +12% across the page scroll.
-function ParallaxCover({ src }: { src: string }) {
-  const { scrollY } = useScroll();
-  // 0px scroll → -8%, 600px scroll → +8% (covers the visible hero region)
-  const y = useTransform(scrollY, [0, 600], ['-8%', '8%']);
+// Cover image that drifts at a different speed than the hero's own scroll.
+// Scoped to the hero element so progress is 0 when the hero's top hits the
+// viewport top, and 1 when the hero's bottom hits the viewport top — i.e.
+// across exactly the range during which the hero is on-screen.
+//
+// Image is overscaled (h-[130%], -top-[15%]) so the ±10% translation never
+// reveals empty edges, no matter the hero's actual height.
+function ParallaxCover({ src, heroRef }: { src: string; heroRef: RefObject<HTMLDivElement | null> }) {
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%']);
   return (
     <motion.img
       src={src}
       alt=""
       style={{ y }}
-      className="absolute inset-0 h-[120%] w-full -top-[10%] object-cover will-change-transform"
+      className="absolute left-0 right-0 -top-[15%] h-[130%] w-full object-cover object-center will-change-transform"
     />
   );
+}
+
+// One-way snap toward the bottom of the hero (when scrolling DOWN past a
+// threshold) and back to the top of the hero (when scrolling UP past the
+// same threshold from below). After the snap, the user is in "normal scroll"
+// territory; subsequent scroll events don't snap until they cross the
+// threshold again in either direction.
+function useHeroSnap(heroRef: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const reduce = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return;
+
+    let locked = false;
+    let lastY = window.scrollY;
+    let raf = 0;
+
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (locked || !heroRef.current) return;
+        const heroH = heroRef.current.offsetHeight;
+        const y = window.scrollY;
+        const dir = y > lastY ? 'down' : 'up';
+        const threshold = heroH * 0.25; // 25% of hero height
+
+        // Scrolling DOWN past the threshold but still inside the hero region
+        // → snap UP so the hero is fully out of view.
+        if (dir === 'down' && y > threshold && y < heroH) {
+          locked = true;
+          window.scrollTo({ top: heroH, behavior: 'smooth' });
+          window.setTimeout(() => { locked = false; lastY = window.scrollY; }, 700);
+          return;
+        }
+        // Scrolling UP past the (mirrored) threshold while still inside the
+        // hero region → snap back to the very top.
+        if (dir === 'up' && y < heroH - threshold && y > 0) {
+          locked = true;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          window.setTimeout(() => { locked = false; lastY = window.scrollY; }, 700);
+          return;
+        }
+        lastY = y;
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [heroRef]);
 }
 
 interface Props {
@@ -170,6 +228,8 @@ function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'd
 
 export default function ProgramDetailClient({ program }: Props) {
   const router = useRouter();
+  const heroRef = useRef<HTMLDivElement>(null);
+  useHeroSnap(heroRef);
   const [selectedPhaseIndex, setSelectedPhaseIndex] = useState(0);
   const [selectedDayKey, setSelectedDayKey] = useState("Day 1");
   const [enrolling, setEnrolling] = useState(false);
@@ -463,21 +523,27 @@ export default function ProgramDetailClient({ program }: Props) {
 
   return (
     <PageTransition className="pb-6">
-      {/* Hero Header */}
-      <div className="relative overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0 sm:rounded-t-2xl">
+      {/* Hero Header — min 75vh so the image gets room to breathe. Nav pins
+          top, program info pins bottom via flex-1 spacer. */}
+      <div
+        ref={heroRef}
+        className="relative flex min-h-[75vh] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0 sm:rounded-t-2xl"
+      >
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
           <>
             {program.coverParallax ? (
-              <ParallaxCover src={program.coverImage} />
+              <ParallaxCover src={program.coverImage} heroRef={heroRef} />
             ) : (
               <img
                 src={program.coverImage}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover object-center"
               />
             )}
-            <div className="absolute inset-0 bg-black/55" />
+            {/* Gradient overlay: lighter at top so the image breathes,
+                darker at the bottom so program text stays legible. */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/45 to-black/80" />
           </>
         ) : (
           <div className="absolute inset-0 opacity-10">
@@ -487,7 +553,7 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
         )}
 
-        <div className="relative px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
+        <div className="relative flex flex-1 flex-col px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
           {/* Top nav row */}
           <div className="mb-4 flex items-center justify-between sm:mb-6">
             <button
@@ -509,6 +575,10 @@ export default function ProgramDetailClient({ program }: Props) {
               Calendar
             </Link>
           </div>
+
+          {/* Spacer pushes the program info down so the image dominates the
+              upper portion of the hero. */}
+          <div className="flex-1" />
 
           {/* Program info */}
           <div className="max-w-3xl">
