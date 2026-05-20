@@ -577,11 +577,12 @@ export default function ProgramDetailClient({ program }: Props) {
 
   return (
     <PageTransition className="pb-6">
-      {/* Hero Header — min 75vh so the image gets room to breathe. Nav pins
-          top, program info pins bottom via flex-1 spacer. */}
+      {/* Hero Header — ~52vh tall (was 75vh, reduced ~30%) so the image
+          has room without dominating the page. Nav pins top, program info
+          pins bottom via the flex-1 spacer below. */}
       <div
         ref={heroRef}
-        className="relative flex min-h-[75vh] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0 sm:rounded-t-2xl"
+        className="relative flex min-h-[52vh] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0 sm:rounded-t-2xl"
       >
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
