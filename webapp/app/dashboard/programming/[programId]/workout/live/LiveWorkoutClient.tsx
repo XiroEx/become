@@ -518,13 +518,16 @@ export default function LiveWorkoutPage() {
     return () => clearInterval(interval);
   }, [isResting, restTimeRemaining]);
 
-  // Elapsed timer
+  // Elapsed timer — freezes once the summary screen is shown so the
+  // congratulations card displays the duration at completion, not a
+  // counter that keeps climbing after the workout is done.
   useEffect(() => {
+    if (showSummary) return;
     const interval = setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - workoutStartTime) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [workoutStartTime]);
+  }, [workoutStartTime, showSummary]);
 
   // Cleanup auto-save timeout on unmount
   useEffect(() => {

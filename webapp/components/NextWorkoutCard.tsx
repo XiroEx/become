@@ -147,7 +147,7 @@ export default function NextWorkoutCard() {
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-red-500" />
               <span className="text-sm font-semibold text-red-700 dark:text-red-400">
-                {missedWorkouts.length} Missed {missedWorkouts.length === 1 ? 'Workout' : 'Workouts'}
+                {missedWorkouts.length} Incomplete {missedWorkouts.length === 1 ? 'Workout' : 'Workouts'}
               </span>
             </div>
             <Link
