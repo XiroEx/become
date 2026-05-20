@@ -1,6 +1,7 @@
 import dbConnect from "@/lib/mongodb";
 import ProgramModel from "@/models/Program";
 import { Program } from "@/lib/data/programs";
+import { hydrateProgram } from "@/lib/hydrateExercises";
 import ProgramDetailClient from "./ProgramDetailClient";
 import { notFound } from "next/navigation";
 
@@ -10,7 +11,10 @@ async function getProgram(programId: string): Promise<Program | null> {
   await dbConnect();
   const program = await ProgramModel.findOne({ program_id: programId }).lean();
   if (!program) return null;
-  return JSON.parse(JSON.stringify(program));
+  // Exercises are stored by slug only — hydrate names/details from the
+  // Exercise collection so the UI can render exercise titles.
+  const hydrated = await hydrateProgram(program);
+  return JSON.parse(JSON.stringify(hydrated));
 }
 
 interface Props {
