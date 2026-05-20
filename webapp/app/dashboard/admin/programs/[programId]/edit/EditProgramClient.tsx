@@ -4,6 +4,135 @@ import { useEffect, useRef, useState } from 'react'
 import ProgramCreator from '../../_editors/ProgramCreator'
 import type { Phase, TargetUserLevel } from '@/lib/data/programs'
 
+// Mobile-ish hero aspect ratio used to draw the viewport rectangle on the
+// framing preview. Roughly the ratio of full-width × 52vh on a typical phone.
+const HERO_ASPECT = 0.89
+
+// Renders the FULL uploaded image inside a canvas-style box, with a dark
+// mask covering everything outside the hero's visible region and a bright
+// outline showing exactly what will be cropped to. Reflects the current
+// zoom / posX / posY values live.
+function FramingPreview({
+  src,
+  zoom,
+  posX,
+  posY,
+  onClick,
+}: {
+  src?: string
+  zoom: number
+  posX: number
+  posY: number
+  onClick: () => void
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState({ w: 0, h: 0 })
+  const [img, setImg] = useState({ w: 0, h: 0 })
+
+  useEffect(() => {
+    if (!wrapRef.current) return
+    const ro = new ResizeObserver(() => {
+      const r = wrapRef.current!.getBoundingClientRect()
+      setBox({ w: r.width, h: r.height })
+    })
+    ro.observe(wrapRef.current)
+    return () => ro.disconnect()
+  }, [])
+
+  const ready = !!src && box.w > 0 && box.h > 0 && img.w > 0 && img.h > 0
+
+  let rectX = 0, rectY = 0, rectW = 0, rectH = 0
+  if (ready) {
+    const imgAspect = img.w / img.h
+    const wider = imgAspect >= HERO_ASPECT
+    let visW: number, visH: number
+    if (wider) {
+      // image wider than the hero: the hero crop's HEIGHT spans (up to) the
+      // image's full height, and width is determined by hero aspect.
+      visH = img.h / zoom
+      visW = visH * HERO_ASPECT
+    } else {
+      // image taller (or square-ish): width spans (up to) full image width,
+      // height determined by hero aspect.
+      visW = img.w / zoom
+      visH = visW / HERO_ASPECT
+    }
+    visW = Math.min(visW, img.w)
+    visH = Math.min(visH, img.h)
+    const visLeft = (img.w - visW) * (posX / 100)
+    const visTop = (img.h - visH) * (posY / 100)
+    const imgScale = Math.min(box.w / img.w, box.h / img.h)
+    const dispW = img.w * imgScale
+    const dispH = img.h * imgScale
+    const offX = (box.w - dispW) / 2
+    const offY = (box.h - dispH) / 2
+    rectX = offX + visLeft * imgScale
+    rectY = offY + visTop * imgScale
+    rectW = visW * imgScale
+    rectH = visH * imgScale
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      onClick={onClick}
+      className="relative mb-4 flex aspect-[16/10] w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-100 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600"
+    >
+      {src ? (
+        <>
+          {/* Subtle checkerboard so letterbox areas read as "outside the image" */}
+          <div
+            className="absolute inset-0 opacity-40"
+            style={{
+              backgroundImage:
+                'linear-gradient(45deg, #a1a1aa 25%, transparent 25%), linear-gradient(-45deg, #a1a1aa 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #a1a1aa 75%), linear-gradient(-45deg, transparent 75%, #a1a1aa 75%)',
+              backgroundSize: '12px 12px',
+              backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0',
+            }}
+          />
+          <img
+            src={src}
+            alt="Full uploaded cover"
+            className="absolute inset-0 h-full w-full object-contain"
+            onLoad={(e) =>
+              setImg({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+            }
+          />
+          {ready && (
+            <svg
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              viewBox={`0 0 ${box.w} ${box.h}`}
+              preserveAspectRatio="none"
+            >
+              {/* Darken everything outside the visible crop */}
+              <rect x={0} y={0} width={box.w} height={rectY} fill="rgba(0,0,0,0.6)" />
+              <rect x={0} y={rectY + rectH} width={box.w} height={Math.max(0, box.h - (rectY + rectH))} fill="rgba(0,0,0,0.6)" />
+              <rect x={0} y={rectY} width={rectX} height={rectH} fill="rgba(0,0,0,0.6)" />
+              <rect x={rectX + rectW} y={rectY} width={Math.max(0, box.w - (rectX + rectW))} height={rectH} fill="rgba(0,0,0,0.6)" />
+              {/* Bright outline of the visible crop */}
+              <rect x={rectX} y={rectY} width={rectW} height={rectH} fill="none" stroke="#fff" strokeWidth={2} />
+            </svg>
+          )}
+          <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-[10px] font-medium text-white">
+            Outlined area = what shows on the hero
+          </span>
+          <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
+            Click to replace
+          </span>
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-2 text-zinc-400 dark:text-zinc-500">
+          <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span className="text-sm">Click to upload cover image</span>
+          <span className="text-xs">Recommended: 1600×900, JPG/PNG/HEIC</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface InitialProgram {
   name: string
   description: string
@@ -179,37 +308,15 @@ function CoverImageEditor({
         Displayed as the hero background on the program overview page.
       </p>
 
-      {/* Preview — reflects current zoom/position so the admin can frame it
-          before saving. Aspect ratio matches the program hero (roughly). */}
-      <div
-        className="relative mb-4 flex h-56 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-100 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600"
+      {/* Canvas-style preview: shows the full uploaded image with the hero's
+          visible crop outlined. Lets admins see exactly what's getting cut off. */}
+      <FramingPreview
+        src={coverUrl}
+        zoom={zoom}
+        posX={posX}
+        posY={posY}
         onClick={() => inputRef.current?.click()}
-      >
-        {coverUrl ? (
-          <>
-            <img
-              src={coverUrl}
-              alt="Program cover"
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{
-                transform: `scale(${zoom})`,
-                transformOrigin: `${posX}% ${posY}%`,
-                objectPosition: `${posX}% ${posY}%`,
-              }}
-            />
-            <div className="absolute inset-0 bg-black/20" />
-            <span className="relative rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white">Click to replace</span>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-zinc-400 dark:text-zinc-500">
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span className="text-sm">Click to upload cover image</span>
-            <span className="text-xs">Recommended: 1600×900, JPG/PNG/HEIC</span>
-          </div>
-        )}
-      </div>
+      />
 
       <input
         ref={inputRef}
