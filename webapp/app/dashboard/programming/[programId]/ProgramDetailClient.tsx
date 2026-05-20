@@ -9,16 +9,42 @@ import PageTransition from "@/components/PageTransition";
 import ExerciseAccordion from "@/components/ExerciseAccordion";
 import { Card } from "@/components/ui";
 
+// The dashboard layout uses a `<main>` element with overflow-y-auto as the
+// scroll container — window.scrollY is always 0 inside the dashboard. Walk
+// up from `el` to find the nearest scrolling ancestor.
+function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
+  let node: HTMLElement | null = el?.parentElement ?? null;
+  while (node) {
+    const overflowY = window.getComputedStyle(node).overflowY;
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 // Cover image that drifts at a different speed than the hero's own scroll.
 // Scoped to the hero element so progress is 0 when the hero's top hits the
-// viewport top, and 1 when the hero's bottom hits the viewport top — i.e.
-// across exactly the range during which the hero is on-screen.
+// container top, and 1 when the hero's bottom hits the container top —
+// across exactly the range the hero is on-screen.
 //
 // Image is overscaled (h-[130%], -top-[15%]) so the ±10% translation never
 // reveals empty edges, no matter the hero's actual height.
 function ParallaxCover({ src, heroRef }: { src: string; heroRef: RefObject<HTMLDivElement | null> }) {
+  // Hold the actual scroll container in state so useScroll can pick it up
+  // on the second render (refs resolve after first mount).
+  const [container, setContainer] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setContainer(findScrollContainer(heroRef.current));
+  }, [heroRef]);
+
+  const containerRef = useRef<HTMLElement | null>(null);
+  containerRef.current = container;
+
   const { scrollYProgress } = useScroll({
     target: heroRef,
+    container: containerRef as RefObject<HTMLElement>,
     offset: ['start start', 'end start'],
   });
   const y = useTransform(scrollYProgress, [0, 1], ['-10%', '10%']);
@@ -34,16 +60,19 @@ function ParallaxCover({ src, heroRef }: { src: string; heroRef: RefObject<HTMLD
 
 // One-way snap toward the bottom of the hero (when scrolling DOWN past a
 // threshold) and back to the top of the hero (when scrolling UP past the
-// same threshold from below). After the snap, the user is in "normal scroll"
-// territory; subsequent scroll events don't snap until they cross the
-// threshold again in either direction.
+// same threshold from below). Listens on the actual scroll container, not
+// window — the dashboard layout scrolls a child `<main>`, not the document.
 function useHeroSnap(heroRef: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
-    const reduce = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof window === 'undefined') return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduce) return;
 
+    const container = findScrollContainer(heroRef.current);
+    if (!container) return;
+
     let locked = false;
-    let lastY = window.scrollY;
+    let lastY = container.scrollTop;
     let raf = 0;
 
     const onScroll = () => {
@@ -52,33 +81,33 @@ function useHeroSnap(heroRef: RefObject<HTMLDivElement | null>) {
         raf = 0;
         if (locked || !heroRef.current) return;
         const heroH = heroRef.current.offsetHeight;
-        const y = window.scrollY;
+        const y = container.scrollTop;
         const dir = y > lastY ? 'down' : 'up';
         const threshold = heroH * 0.25; // 25% of hero height
 
         // Scrolling DOWN past the threshold but still inside the hero region
-        // → snap UP so the hero is fully out of view.
+        // → snap so the hero is fully out of view.
         if (dir === 'down' && y > threshold && y < heroH) {
           locked = true;
-          window.scrollTo({ top: heroH, behavior: 'smooth' });
-          window.setTimeout(() => { locked = false; lastY = window.scrollY; }, 700);
+          container.scrollTo({ top: heroH, behavior: 'smooth' });
+          window.setTimeout(() => { locked = false; lastY = container.scrollTop; }, 700);
           return;
         }
         // Scrolling UP past the (mirrored) threshold while still inside the
         // hero region → snap back to the very top.
         if (dir === 'up' && y < heroH - threshold && y > 0) {
           locked = true;
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          window.setTimeout(() => { locked = false; lastY = window.scrollY; }, 700);
+          container.scrollTo({ top: 0, behavior: 'smooth' });
+          window.setTimeout(() => { locked = false; lastY = container.scrollTop; }, 700);
           return;
         }
         lastY = y;
       });
     };
 
-    window.addEventListener('scroll', onScroll, { passive: true });
+    container.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      container.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [heroRef]);
