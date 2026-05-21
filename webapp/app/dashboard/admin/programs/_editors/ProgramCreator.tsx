@@ -195,6 +195,11 @@ export default function ProgramCreator({
   // Remove a phase
   const removePhase = (index: number) => {
     if (formData.phases.length <= 1) return;
+    const target = formData.phases[index];
+    const label = target?.phase || `Phase ${index + 1}`;
+    const wkCount = target?.workouts?.length ?? 0;
+    const detail = wkCount > 0 ? ` and its ${wkCount} workout${wkCount === 1 ? '' : 's'}` : '';
+    if (typeof window !== 'undefined' && !window.confirm(`Remove ${label}${detail}?`)) return;
     setFormData((prev) => ({
       ...prev,
       phases: prev.phases.filter((_, i) => i !== index).map((phase, i) => ({
