@@ -323,10 +323,18 @@ export default function LiveWorkoutPage() {
 
               savedWorkout.exercises?.forEach((savedEx, idx) => {
                 if (idx < updatedExercises.length && savedEx.originalExerciseSlug) {
+                  // Clear video fields too: the program data still has the
+                  // ORIGINAL exercise's video URL/dimensions, which would
+                  // play the wrong video for the swap. Falling them back to
+                  // undefined makes the resolver look up by the new name.
                   updatedExercises[idx] = {
                     ...updatedExercises[idx],
                     name: savedEx.name,
                     exerciseSlug: savedEx.exerciseSlug || updatedExercises[idx].exerciseSlug,
+                    videoUrl: undefined,
+                    videoWidth: null,
+                    videoHeight: null,
+                    videoFraming: null,
                   };
                   restoredSwaps[idx] = {
                     originalSlug: savedEx.originalExerciseSlug,
@@ -838,7 +846,10 @@ export default function LiveWorkoutPage() {
       [exIdx]: { originalSlug, originalName }
     }));
 
-    // Replace the exercise, preserving programming prescription
+    // Replace the exercise, preserving programming prescription. CRITICAL:
+    // clear any video-specific fields from the prior exercise so the video
+    // resolver looks up by the NEW exercise name instead of replaying the
+    // stale URL/dimensions/framing of the original.
     const updatedExercises = [...exercises];
     updatedExercises[exIdx] = {
       ...oldExercise,
@@ -846,6 +857,10 @@ export default function LiveWorkoutPage() {
       name: alternative.name,
       type: alternative.category,
       trackingType: alternative.trackingType,
+      videoUrl: undefined,
+      videoWidth: null,
+      videoHeight: null,
+      videoFraming: null,
     };
     setExercises(updatedExercises);
 
