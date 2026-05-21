@@ -592,7 +592,7 @@ export default function ProgramDetailClient({ program }: Props) {
           so they reveal as the panel slides up. */}
       <div
         ref={heroRef}
-        className="sticky top-0 z-0 flex h-[52vh] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 sm:mx-0"
+        className="sticky top-0 z-0 flex h-[calc(52vh+1rem)] sm:h-[calc(52vh+1.5rem)] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 -mt-4 sm:mx-0 sm:-mt-6"
       >
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
