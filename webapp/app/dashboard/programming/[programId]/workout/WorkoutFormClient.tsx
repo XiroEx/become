@@ -342,11 +342,18 @@ export default function WorkoutFormPage() {
 
               savedWorkout.exercises?.forEach((savedEx, idx) => {
                 if (idx < updatedExercises.length && savedEx.originalExerciseSlug) {
-                  // This exercise was swapped — restore the swapped identity
+                  // This exercise was swapped — restore the swapped identity.
+                  // Clear the video fields so the resolver looks up by the
+                  // NEW name, otherwise the original exercise's video would
+                  // keep playing.
                   updatedExercises[idx] = {
                     ...updatedExercises[idx],
                     name: savedEx.name,
                     exerciseSlug: savedEx.exerciseSlug || updatedExercises[idx].exerciseSlug,
+                    videoUrl: undefined,
+                    videoWidth: null,
+                    videoHeight: null,
+                    videoFraming: null,
                   };
                   restoredSwaps[idx] = {
                     originalSlug: savedEx.originalExerciseSlug,
@@ -678,13 +685,20 @@ export default function WorkoutFormPage() {
       [exerciseIndex]: { originalSlug, originalName }
     }));
 
-    // Replace the exercise in the workout, preserving sets/reps/rest prescription
+    // Replace the exercise in the workout, preserving sets/reps/rest
+    // prescription. Clear any video-specific fields from the original so
+    // the video lookup resolves by the NEW exercise name on next render
+    // (otherwise the prior exercise's URL/dimensions/framing would play).
     const updatedExercises = [...workout.exercises];
     updatedExercises[exerciseIndex] = {
       ...oldExercise,
       exerciseSlug: alternative.slug,
       name: alternative.name,
       type: alternative.category,
+      videoUrl: undefined,
+      videoWidth: null,
+      videoHeight: null,
+      videoFraming: null,
     };
 
     setWorkout({ ...workout, exercises: updatedExercises });
