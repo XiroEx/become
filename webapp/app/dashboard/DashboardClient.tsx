@@ -15,6 +15,7 @@ import ProgramNudgeModal, {
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
+import ResumeWorkoutButton from '@/components/ResumeWorkoutButton'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import type { FitnessGoal } from '@/models/User'
 import { Card } from '@/components/ui'
@@ -429,6 +430,10 @@ export default function DashboardClient() {
           </button>
         </div>
       </div>
+
+      {/* Resume Active Workout — only renders when there's an in-progress
+          workout log for today; quietly disappears once it's completed. */}
+      <ResumeWorkoutButton />
 
       {/* Next Workout */}
       <NextWorkoutCard />
