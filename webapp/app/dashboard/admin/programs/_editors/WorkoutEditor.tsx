@@ -55,6 +55,9 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
 
   const removeExercise = (index: number) => {
     if (workout.exercises.length <= 1) return;
+    const target = workout.exercises[index];
+    const label = target?.name?.trim() || `Exercise ${index + 1}`;
+    if (typeof window !== 'undefined' && !window.confirm(`Remove "${label}" from this workout?`)) return;
     onUpdate({
       ...workout,
       exercises: workout.exercises.filter((_, i) => i !== index),
