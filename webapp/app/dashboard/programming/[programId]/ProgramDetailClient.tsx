@@ -629,7 +629,7 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
         )}
 
-        <div className="relative flex h-full flex-col px-4 pb-6 pt-4 sm:px-6 sm:pb-8 sm:pt-6">
+        <div className="relative flex h-full flex-col px-4 pb-6 pt-1 sm:px-6 sm:pb-8 sm:pt-2">
           {/* Top nav row */}
           <div className="mb-4 flex items-center justify-between sm:mb-6">
             <button
