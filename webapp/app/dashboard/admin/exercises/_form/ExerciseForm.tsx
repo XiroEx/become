@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import VideosEditor from './VideosEditor'
@@ -114,6 +114,16 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [slugTouched, setSlugTouched] = useState(isEdit)
+  // Unsaved-changes indicator: flips true on the first value change after mount.
+  const [isDirty, setIsDirty] = useState(false)
+  const firstValuePass = useRef(true)
+  useEffect(() => {
+    if (firstValuePass.current) {
+      firstValuePass.current = false
+      return
+    }
+    setIsDirty(true)
+  }, [value])
 
   // Auto-derive slug from name in create mode until user touches it
   useEffect(() => {
@@ -158,6 +168,7 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(data.error ?? 'Failed to save exercise')
       }
+      setIsDirty(false)
       router.push('/dashboard/admin/exercises')
       router.refresh()
     } catch (err) {
@@ -666,15 +677,20 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
         </div>
       </div>
 
-      {/* Floating Save — long form, always reachable. Sits above the bottom nav. */}
+      {/* Floating Save — long form, always reachable. Sits above the bottom nav.
+          - dirty + valid     → amber w/ pulse dot ("Save changes")
+          - clean (edit mode) → gray "Saved"
+          - saving / invalid  → gray disabled */}
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={!canSubmit || saving}
+        disabled={!canSubmit || saving || (isEdit && !isDirty)}
         aria-label={isEdit ? 'Update exercise' : 'Create exercise'}
         className={`fixed right-4 z-30 flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition-all ${
-          !canSubmit || saving
+          !canSubmit || saving || (isEdit && !isDirty)
             ? 'cursor-not-allowed bg-zinc-300 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
+            : isDirty
+            ? 'bg-amber-500 text-white hover:bg-amber-600 active:scale-95'
             : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
         }`}
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
@@ -689,10 +705,18 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
           </>
         ) : (
           <>
+            {isDirty && (
+              <span aria-hidden className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+              </span>
+            )}
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            {isEdit ? 'Update' : 'Save'}
+            {isEdit
+              ? (isDirty ? 'Save changes' : 'Saved')
+              : (isDirty ? 'Save changes' : 'Save')}
           </>
         )}
       </button>

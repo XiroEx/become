@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
@@ -102,6 +102,9 @@ export default function ProgramCreator({
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Track unsaved edits so the Save button can signal "you have changes".
+  const [isDirty, setIsDirty] = useState(false);
+  const firstFormDataPass = useRef(true);
 
   const [formData, setFormData] = useState<ProgramFormData>({
     name: initialProgram?.name ?? "",
@@ -143,6 +146,17 @@ export default function ProgramCreator({
       // Ignore storage errors (e.g. private browsing quota)
     }
   }, [formData, draftKey, isEdit]);
+
+  // Mark the form dirty on any formData change after the initial mount /
+  // initial-program load. Skips the very first render so the indicator
+  // doesn't flash on page open.
+  useEffect(() => {
+    if (firstFormDataPass.current) {
+      firstFormDataPass.current = false;
+      return;
+    }
+    setIsDirty(true);
+  }, [formData]);
 
   const steps = [
     { id: "basics", title: "Program Basics", icon: "📋" },
@@ -276,6 +290,7 @@ export default function ProgramCreator({
       if (!isEdit) {
         try { localStorage.removeItem(draftKey); } catch {}
       }
+      setIsDirty(false);
 
       // Where to send the user after save.
       if (isUserMode) {
@@ -731,16 +746,22 @@ export default function ProgramCreator({
       </div>
 
       {/* Floating Save — always reachable so admins don't have to click
-          through every step just to save. Disabled until the minimum
-          required fields are filled. Sits above the bottom nav. */}
+          through every step just to save. Visual state:
+          - dirty + valid     → green w/ amber pulse dot ("Save changes")
+          - clean (no edits)  → gray "Saved" (in edit mode) / "Save" disabled
+          - saving            → spinner
+          - invalid           → gray disabled
+          Sits above the bottom nav. */}
       <button
         type="button"
         onClick={saveProgram}
-        disabled={isSaving || !isStep1Valid}
+        disabled={isSaving || !isStep1Valid || (isEdit && !isDirty)}
         aria-label={isEdit ? 'Update program' : 'Save program'}
         className={`fixed right-4 z-30 flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition-all ${
-          isSaving || !isStep1Valid
+          isSaving || !isStep1Valid || (isEdit && !isDirty)
             ? 'cursor-not-allowed bg-zinc-300 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
+            : isDirty
+            ? 'bg-amber-500 text-white hover:bg-amber-600 active:scale-95'
             : 'bg-green-600 text-white hover:bg-green-700 active:scale-95'
         }`}
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
@@ -755,10 +776,21 @@ export default function ProgramCreator({
           </>
         ) : (
           <>
+            {isDirty && (
+              <span
+                aria-hidden
+                className="relative flex h-2 w-2"
+              >
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+              </span>
+            )}
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            {isEdit ? 'Update' : 'Save'}
+            {isEdit
+              ? (isDirty ? 'Save changes' : 'Saved')
+              : (isDirty ? 'Save changes' : 'Save')}
           </>
         )}
       </button>
