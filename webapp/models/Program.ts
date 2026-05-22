@@ -19,6 +19,14 @@ export type TargetUserLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Beginn
 export interface IProgramExercise {
   exerciseSlug: string;      // references Exercise.slug — required
 
+  // Per-program overrides for display name and category. Stored so admin edits
+  // (renaming an exercise, switching its type) persist instead of being
+  // overwritten by the canonical Exercise document on hydrate, AND so custom
+  // exercise names (no matching Exercise doc) keep their type instead of
+  // falling back to the hardcoded "strength" default.
+  name?: string;
+  category?: string;
+
   // Programming prescription (how it's performed HERE)
   sets?: number;
   reps?: string;             // "5", "8-12", "AMRAP"
@@ -76,6 +84,10 @@ export interface IProgram extends Document {
 
 const ProgramExerciseSchema = new Schema<IProgramExercise>({
   exerciseSlug: { type: String, required: true },
+
+  // Per-program overrides (see interface comment)
+  name: { type: String },
+  category: { type: String },
 
   // Programming prescription
   sets: { type: Number },
