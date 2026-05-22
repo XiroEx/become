@@ -2,13 +2,18 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ClipboardList, Brain, Home, UtensilsCrossed, MessageCircle } from 'lucide-react'
+import { ClipboardList, Brain, Home, UtensilsCrossed, UsersRound } from 'lucide-react'
 
 export default function BottomNav() {
   const pathname = usePathname()
   const [unreadCount, setUnreadCount] = useState(0)
 
   const isActive = (path: string) => pathname?.startsWith(path)
+  const communityActive =
+    pathname?.startsWith('/dashboard/community') ||
+    pathname?.startsWith('/dashboard/chat') ||
+    pathname?.startsWith('/dashboard/groups') ||
+    pathname?.startsWith('/dashboard/events')
 
   const fetchUnread = useCallback(async () => {
     try {
@@ -27,17 +32,15 @@ export default function BottomNav() {
   }, [])
 
   useEffect(() => {
-    fetchUnread()
+    const initial = setTimeout(fetchUnread, 0)
     const interval = setInterval(fetchUnread, 10000)
-    return () => clearInterval(interval)
+    return () => {
+      clearTimeout(initial)
+      clearInterval(interval)
+    }
   }, [fetchUnread])
 
-  // Clear badge when on chat page
-  useEffect(() => {
-    if (pathname?.startsWith('/dashboard/chat')) {
-      setUnreadCount(0)
-    }
-  }, [pathname])
+  const displayedUnreadCount = communityActive ? 0 : unreadCount
 
   return (
     <nav
@@ -98,22 +101,22 @@ export default function BottomNav() {
         </li>
         <li className="flex-1">
           <Link
-            href="/dashboard/chat"
+            href="/dashboard/community"
             className={`relative flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
-              isActive('/dashboard/chat')
+              communityActive
                 ? 'text-black dark:text-white'
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
             }`}
           >
             <div className="relative">
-              <MessageCircle className="h-5 w-5" />
-              {unreadCount > 0 && (
+              <UsersRound className="h-5 w-5" />
+              {displayedUnreadCount > 0 && (
                 <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-green-500 px-1 text-[10px] font-bold leading-none text-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
+                  {displayedUnreadCount > 99 ? '99+' : displayedUnreadCount}
                 </span>
               )}
             </div>
-            Chat
+            Community
           </Link>
         </li>
       </ul>
