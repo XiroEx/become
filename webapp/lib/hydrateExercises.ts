@@ -98,6 +98,11 @@ function hydrateExercise(
 
   if (!slug) return exercise; // truly unknown — keep as-is
 
+  // Per-program admin overrides win over canonical Exercise data so renames
+  // and type switches in the program editor persist across reloads.
+  const overrideName: string | undefined = exercise.name;
+  const overrideCategory: string | undefined = exercise.category;
+
   const info = map.get(slug);
   if (!info) {
     // Protocol entries (__protocol__*) or unknown slugs — derive name from slug
@@ -108,15 +113,16 @@ function hydrateExercise(
 
     return {
       ...exercise,
-      name: derivedName,
-      type: exercise.exerciseSlug?.startsWith('__protocol__') ? 'conditioning' : 'strength',
+      name: overrideName || derivedName,
+      type: overrideCategory
+        || (exercise.exerciseSlug?.startsWith('__protocol__') ? 'conditioning' : 'strength'),
     };
   }
 
   return {
     ...exercise,
-    name: info.name,
-    type: info.category, // maps Exercise.category → client-side "type"
+    name: overrideName || info.name,
+    type: overrideCategory || info.category, // maps Exercise.category → client-side "type"
     ...(info.trackingType && { trackingType: info.trackingType }),
     ...(info.videoUrl && { videoUrl: info.videoUrl }),
     ...(info.thumbnailUrl && { thumbnailUrl: info.thumbnailUrl }),
@@ -246,14 +252,22 @@ export async function dehydrateProgram(program: Record<string, any>): Promise<Re
     for (const workout of phase.workouts as any[]) {
       if (!workout.exercises) continue;
       workout.exercises = workout.exercises.map((ex: AnyExercise) => {
-        // If already has exerciseSlug, keep it
-        if (ex.exerciseSlug) return ex;
+        // Determine the slug: prefer the existing one, then a name match in the
+        // canonical DB, then a slugified version of the name.
+        const name: string = ex.name || '';
+        const slug: string =
+          ex.exerciseSlug
+          || map.get(name.toLowerCase())
+          || slugify(name);
 
-        const name = ex.name || '';
-        const slug = map.get(name.toLowerCase()) || slugify(name);
-
-        // Build clean exercise entry
+        // Build clean exercise entry. Always persist `name` and `category` so
+        // admin renames + type switches survive across hydrate cycles. The
+        // form sends `type` (matching ExerciseType); we store it as `category`
+        // to match the canonical Exercise schema.
         const result: AnyExercise = { exerciseSlug: slug };
+        if (name) result.name = name;
+        const category = ex.category ?? ex.type;
+        if (category) result.category = category;
         if (ex.sets != null) result.sets = ex.sets;
         if (ex.reps != null) result.reps = ex.reps;
         if (ex.rest != null) result.rest = ex.rest;
