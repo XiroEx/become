@@ -12,6 +12,7 @@ const tabs = [
   { label: 'Programs', href: '/dashboard/admin/programs' },
   { label: 'Exercises', href: '/dashboard/admin/exercises' },
   { label: 'Foods', href: '/dashboard/admin/foods' },
+  { label: 'Community', href: '/dashboard/admin/community' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
