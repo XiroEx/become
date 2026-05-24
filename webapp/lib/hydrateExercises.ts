@@ -262,11 +262,12 @@ export async function dehydrateProgram(program: Record<string, any>): Promise<Re
 
         // Build clean exercise entry. Always persist `name` and `category` so
         // admin renames + type switches survive across hydrate cycles. The
-        // form sends `type` (matching ExerciseType); we store it as `category`
-        // to match the canonical Exercise schema.
+        // form's editable field is `type`; the legacy/storage field is
+        // `category`. Prefer `type` because that's what the editor actually
+        // mutates — `category` is leftover from the previous hydrate spread.
         const result: AnyExercise = { exerciseSlug: slug };
         if (name) result.name = name;
-        const category = ex.category ?? ex.type;
+        const category = ex.type ?? ex.category;
         if (category) result.category = category;
         if (ex.sets != null) result.sets = ex.sets;
         if (ex.reps != null) result.reps = ex.reps;

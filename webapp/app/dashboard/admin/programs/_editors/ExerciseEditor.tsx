@@ -226,46 +226,57 @@ export default function ExerciseEditor({
                 className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               />
 
-              {/* Autocomplete — DB results (custom first) + static fallback.
-                  onPointerDown preventDefault stops the input from blurring
-                  before the tap/click registers — critical on iOS. */}
+              {/* Autocomplete — DB results first, then static fallback
+                  suggestions that aren't already covered. Previously the
+                  static list only showed when DB returned zero, so common
+                  picks like "Rowing Sprints" got hidden behind unrelated
+                  Row* matches. onPointerDown preventDefault stops the
+                  input from blurring before the tap registers (iOS). */}
               {showSuggestions && (dbSuggestions.length > 0 || filteredSuggestions.length > 0) && (
                 <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
-                  {dbSuggestions.length > 0 ? (
-                    dbSuggestions.map((s) => (
+                  {dbSuggestions.map((s) => (
+                    <button
+                      key={s.slug}
+                      type="button"
+                      onPointerDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        onUpdate({ ...exercise, name: s.name, exerciseSlug: s.slug });
+                        setShowSuggestions(false);
+                        setDbSuggestions([]);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    >
+                      <span className="font-medium text-zinc-900 dark:text-white">{s.name}</span>
+                      <span className="ml-2 shrink-0 text-[10px] text-zinc-400 dark:text-zinc-500">
+                        {s.isCustom ? "★ Custom" : s.trackingType?.replace(/_/g, " ")}
+                      </span>
+                    </button>
+                  ))}
+                  {filteredSuggestions
+                    .filter(
+                      (s) =>
+                        !dbSuggestions.some(
+                          (db) => db.name.toLowerCase() === s.toLowerCase()
+                        )
+                    )
+                    .slice(0, 5)
+                    .map((suggestion, i) => (
                       <button
-                        key={s.slug}
-                        type="button"
-                        onPointerDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                          onUpdate({ ...exercise, name: s.name, exerciseSlug: s.slug });
-                          setShowSuggestions(false);
-                          setDbSuggestions([]);
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                      >
-                        <span className="font-medium text-zinc-900 dark:text-white">{s.name}</span>
-                        <span className="ml-2 shrink-0 text-[10px] text-zinc-400 dark:text-zinc-500">
-                          {s.isCustom ? "★ Custom" : s.trackingType?.replace(/_/g, " ")}
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    filteredSuggestions.slice(0, 5).map((suggestion, i) => (
-                      <button
-                        key={i}
+                        key={`static-${i}`}
                         type="button"
                         onPointerDown={(e) => e.preventDefault()}
                         onClick={() => {
                           updateField("name", suggestion);
                           setShowSuggestions(false);
                         }}
-                        className="block w-full px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
                       >
-                        {suggestion}
+                        <span className="text-zinc-700 dark:text-zinc-300">{suggestion}</span>
+                        <span className="ml-2 shrink-0 text-[10px] text-zinc-400 dark:text-zinc-500">
+                          suggestion
+                        </span>
                       </button>
-                    ))
-                  )}
+                    ))}
                 </div>
               )}
             </div>
