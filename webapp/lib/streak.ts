@@ -131,6 +131,24 @@ export async function recordStreakActivity(
     }
   )
 
+  // Fire-and-forget push when a freeze just got consumed so the user
+  // understands the missed day didn't break their streak.
+  if (freezeUsed) {
+    import('@/lib/pushNotification')
+      .then(({ sendPushToUser }) =>
+        sendPushToUser(userId, {
+          title: 'Streak freeze used ❄',
+          body:
+            freezes > 0
+              ? `Yesterday slipped — your freeze saved your ${newStreak}-day streak. ${freezes} freeze${freezes === 1 ? '' : 's'} left.`
+              : `Yesterday slipped — your last freeze saved your ${newStreak}-day streak. Earn another at every 7-day milestone.`,
+          url: '/dashboard',
+          tag: 'streak-freeze-used',
+        }),
+      )
+      .catch(() => {})
+  }
+
   // Send milestone email fire-and-forget
   if (newMilestone && email) {
     const lastEmailDate = progress.lastStreakEmailDate
