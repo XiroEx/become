@@ -23,6 +23,7 @@ interface RecipeSummary {
   tags: string[]
   createdBy?: string
   isPublic: boolean
+  imageUrl?: string
 }
 
 const FILTER_TABS = [
@@ -200,7 +201,15 @@ export default function RecipesPage() {
               variant="compact"
               className="group w-full cursor-pointer text-left transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
             >
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-3">
+                {recipe.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={recipe.imageUrl}
+                    alt=""
+                    className="h-16 w-16 shrink-0 rounded-lg object-cover sm:h-20 sm:w-20"
+                  />
+                )}
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-zinc-900 group-hover:text-black dark:text-white dark:group-hover:text-white">
