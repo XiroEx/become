@@ -111,6 +111,10 @@ export interface IUserProgress {
     workoutReminder?: Date
     reEngagement?: Date
   }
+  // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
+  // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
+  // requests so the cron can send notifications at a reasonable LOCAL hour.
+  timezoneOffset?: number
   createdAt?: Date
   updatedAt?: Date
 }
@@ -228,6 +232,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     workoutReminder: { type: Date },
     reEngagement: { type: Date },
   },
+  timezoneOffset: { type: Number },
 }, {
   timestamps: true
 })

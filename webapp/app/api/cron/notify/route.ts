@@ -6,19 +6,35 @@ import { sendPushToUser } from '@/lib/pushNotification'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function utcHour(date: Date) {
-  return date.getUTCHours()
-}
-
 /** Returns the UTC calendar date string "YYYY-MM-DD" for comparison */
 function utcDateKey(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
-function hoursSince(date: Date | null | undefined, now: Date): number {
-  if (!date) return Infinity
-  return (now.getTime() - new Date(date).getTime()) / (1000 * 60 * 60)
+/**
+ * Convert a UTC time to the user's local hour given their stored offset.
+ * `tzOffsetMinutes` matches Date.getTimezoneOffset(): positive when local is
+ * BEHIND UTC (e.g. 300 for EST). Defaults to UTC when offset is unknown.
+ */
+function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number {
+  const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
+  const utcMs = now.getTime()
+  const localMs = utcMs - offset * 60 * 1000
+  return new Date(localMs).getUTCHours()
 }
+
+/** Local-date key (YYYY-MM-DD) for a user given their stored offset. */
+function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): string {
+  const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
+  const localMs = now.getTime() - offset * 60 * 1000
+  return new Date(localMs).toISOString().slice(0, 10)
+}
+
+// Local-hour windows (in user's local time)
+const WORKOUT_REMINDER_START_HOUR = 7   // 7am local
+const WORKOUT_REMINDER_END_HOUR = 11    // up to 10:59am local
+const REENGAGEMENT_START_HOUR = 12      // 12pm local
+const REENGAGEMENT_END_HOUR = 18        // up to 5:59pm local
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -34,8 +50,6 @@ export async function GET(request: NextRequest) {
   await dbConnect()
 
   const now = new Date()
-  const hour = utcHour(now)
-  const todayKey = utcDateKey(now)
 
   const results = {
     streakAtRisk: 0,
@@ -83,123 +97,127 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── 2. Workout reminder (7am–1pm UTC only) ────────────────────────────────
-  // Only runs during a reasonable morning window so reminders don't arrive at
-  // midnight. Gate: one reminder per UTC calendar day per user.
+  // ── 2. Workout reminder (7am–11am LOCAL per user) ─────────────────────────
+  // Cron runs hourly; for each user we compute their local hour from their
+  // stored timezoneOffset and only send if it's morning for them. Users with
+  // no captured tz default to UTC, preserving prior behavior.
+  // Gate: one reminder per user per LOCAL calendar day.
+  //
+  // Find any user with a workout scheduled across a wide UTC window (covers
+  // every timezone), then per-user filter to "today in their local time".
+  const wideStart = new Date(now.getTime() - 36 * 60 * 60 * 1000)
+  const wideEnd = new Date(now.getTime() + 36 * 60 * 60 * 1000)
 
-  if (hour >= 7 && hour < 13) {
-    const todayStart = new Date(now)
-    todayStart.setUTCHours(0, 0, 0, 0)
-    const todayEnd = new Date(now)
-    todayEnd.setUTCHours(23, 59, 59, 999)
-
-    const schedulesWithToday = await Schedule.find({
-      scheduledWorkouts: {
-        $elemMatch: {
-          date: { $gte: todayStart, $lte: todayEnd },
-          status: 'scheduled',
-        },
+  const schedulesWithRecent = await Schedule.find({
+    scheduledWorkouts: {
+      $elemMatch: {
+        date: { $gte: wideStart, $lte: wideEnd },
+        status: 'scheduled',
       },
-    }).select('userId scheduledWorkouts').lean()
+    },
+  }).select('userId scheduledWorkouts').lean()
 
-    if (schedulesWithToday.length > 0) {
-      // Bulk-fetch progress for all matched users (avoid N+1)
-      const userIds = schedulesWithToday.map((s) => s.userId)
-      const progressDocs = await UserProgress.find({ userId: { $in: userIds } })
-        .select('userId notificationPrefs lastPushSentAt')
-        .lean()
+  if (schedulesWithRecent.length > 0) {
+    const userIds = schedulesWithRecent.map((s) => s.userId)
+    const progressDocs = await UserProgress.find({ userId: { $in: userIds } })
+      .select('userId notificationPrefs lastPushSentAt timezoneOffset')
+      .lean()
 
-      const progressByUserId = new Map(
-        progressDocs.map((p) => [String(p.userId), p]),
-      )
+    const progressByUserId = new Map(
+      progressDocs.map((p) => [String(p.userId), p]),
+    )
 
-      for (const sched of schedulesWithToday) {
-        const progress = progressByUserId.get(String(sched.userId))
+    for (const sched of schedulesWithRecent) {
+      const progress = progressByUserId.get(String(sched.userId))
 
-        // Respect opt-out
-        if (progress?.notificationPrefs?.workoutReminder === false) continue
+      if (progress?.notificationPrefs?.workoutReminder === false) continue
 
-        // Skip if already sent today
-        const lastSent = progress?.lastPushSentAt?.workoutReminder
-        if (lastSent && utcDateKey(new Date(lastSent)) === todayKey) continue
-
-        const todayWorkout = (sched.scheduledWorkouts as Array<{
-          date: Date; status: string; dayLabel?: string; workoutTitle?: string
-        }>).find((w) => {
-          const d = new Date(w.date)
-          return d >= todayStart && d <= todayEnd && w.status === 'scheduled'
-        })
-        if (!todayWorkout) continue
-
-        try {
-          await sendPushToUser(String(sched.userId), {
-            title: "Today's workout is ready 💪",
-            body: todayWorkout.workoutTitle || todayWorkout.dayLabel || 'Tap to start your session.',
-            url: '/dashboard/calendar',
-            tag: 'workout-reminder',
-          })
-          UserProgress.updateOne(
-            { userId: sched.userId },
-            { $set: { 'lastPushSentAt.workoutReminder': now } },
-          ).catch(() => {})
-          results.workoutReminder++
-        } catch {
-          results.errors++
-        }
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+      if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) {
+        continue
       }
-    }
-  } else {
-    results.skippedByWindow++
-  }
 
-  // ── 3. Re-engagement (12pm–6pm UTC, 7-day rate limit) ────────────────────
-  // Targets users with no streak who've been inactive 3+ days.
-  // Only sends during afternoon UTC so it hits a reasonable time globally.
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+      const lastSent = progress?.lastPushSentAt?.workoutReminder
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) {
+        continue
+      }
 
-  if (hour >= 12 && hour < 18) {
-    const reEngageCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-    const reEngageRateLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+      // Find the workout scheduled for the user's local today. Each slot's
+      // date field is UTC midnight of the local day, so compare date keys.
+      const todayWorkout = (sched.scheduledWorkouts as Array<{
+        date: Date; status: string; dayLabel?: string; workoutTitle?: string
+      }>).find((w) => {
+        if (w.status !== 'scheduled') return false
+        return localDateKeyForUser(new Date(w.date), progress?.timezoneOffset) === userLocalDateKey
+      })
+      if (!todayWorkout) continue
 
-    const lapsedUsers = await UserProgress.find({
-      streakDays: 0,
-      'notificationPrefs.reEngagement': { $ne: false },
-      $and: [
-        {
-          $or: [
-            { lastActivityDate: { $exists: false } },
-            { lastActivityDate: { $lte: reEngageCutoff } },
-          ],
-        },
-        {
-          $or: [
-            { 'lastPushSentAt.reEngagement': { $exists: false } },
-            { 'lastPushSentAt.reEngagement': null },
-            { 'lastPushSentAt.reEngagement': { $lte: reEngageRateLimit } },
-          ],
-        },
-      ],
-    }).select('userId').lean()
-
-    for (const u of lapsedUsers) {
       try {
-        await sendPushToUser(String(u.userId), {
-          title: 'We miss you 👋',
-          body: 'Come back and keep building your best self.',
-          url: '/dashboard',
-          tag: 're-engagement',
+        await sendPushToUser(String(sched.userId), {
+          title: "Today's workout is ready 💪",
+          body: todayWorkout.workoutTitle || todayWorkout.dayLabel || 'Tap to start your session.',
+          url: '/dashboard/calendar',
+          tag: 'workout-reminder',
         })
         UserProgress.updateOne(
-          { userId: u.userId },
-          { $set: { 'lastPushSentAt.reEngagement': now } },
+          { userId: sched.userId },
+          { $set: { 'lastPushSentAt.workoutReminder': now } },
         ).catch(() => {})
-        results.reEngagement++
+        results.workoutReminder++
       } catch {
         results.errors++
       }
     }
-  } else {
-    results.skippedByWindow++
   }
 
-  return NextResponse.json({ success: true, hour, ...results })
+  // ── 3. Re-engagement (12pm–5:59pm LOCAL per user, 7-day rate limit) ──────
+  // Same per-user local-hour gating as workout reminder.
+  const reEngageCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+  const reEngageRateLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+  const lapsedUsers = await UserProgress.find({
+    streakDays: 0,
+    'notificationPrefs.reEngagement': { $ne: false },
+    $and: [
+      {
+        $or: [
+          { lastActivityDate: { $exists: false } },
+          { lastActivityDate: { $lte: reEngageCutoff } },
+        ],
+      },
+      {
+        $or: [
+          { 'lastPushSentAt.reEngagement': { $exists: false } },
+          { 'lastPushSentAt.reEngagement': null },
+          { 'lastPushSentAt.reEngagement': { $lte: reEngageRateLimit } },
+        ],
+      },
+    ],
+  }).select('userId timezoneOffset').lean()
+
+  for (const u of lapsedUsers) {
+    const userLocalHour = localHourForUser(now, u.timezoneOffset)
+    if (userLocalHour < REENGAGEMENT_START_HOUR || userLocalHour > REENGAGEMENT_END_HOUR) {
+      results.skippedByWindow++
+      continue
+    }
+    try {
+      await sendPushToUser(String(u.userId), {
+        title: 'We miss you 👋',
+        body: 'Come back and keep building your best self.',
+        url: '/dashboard',
+        tag: 're-engagement',
+      })
+      UserProgress.updateOne(
+        { userId: u.userId },
+        { $set: { 'lastPushSentAt.reEngagement': now } },
+      ).catch(() => {})
+      results.reEngagement++
+    } catch {
+      results.errors++
+    }
+  }
+
+  return NextResponse.json({ success: true, ...results })
 }

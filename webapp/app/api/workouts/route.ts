@@ -7,6 +7,7 @@ import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { recordStreakActivity } from '@/lib/streak'
 import { readTzOffset, readTzOffsetFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
+import { captureUserTimezone } from '@/lib/captureUserTimezone'
 
 interface SetData {
   setNumber: number
@@ -235,6 +236,7 @@ export async function POST(request: NextRequest) {
 
     // Find today's date range in the user's local timezone
     const tzOffset = readTzOffsetFromBody(body)
+    captureUserTimezone(payload.userId, tzOffset)
     const todayKey = localDateKey(null, tzOffset)
     const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
 
