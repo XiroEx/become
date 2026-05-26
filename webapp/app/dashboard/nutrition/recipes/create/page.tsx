@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
-import { ArrowLeft, Plus, X, Search, ChevronUp, ChevronDown, Save } from 'lucide-react'
+import { ArrowLeft, Plus, X, Search, ChevronUp, ChevronDown, Save, Camera, Trash2 } from 'lucide-react'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
+import { resizeImageToBlob } from '@/lib/imageResize'
 
 interface FoodResult {
   _id: string
@@ -55,6 +56,14 @@ export default function CreateRecipePage() {
   // Optional per-serving bridge values. Lets the resulting Food (if the
   // recipe is later saved-as-food) carry sensible cross-domain conversions.
   const [bridge, setBridge] = useState<BridgeValues>({})
+
+  // Image upload. Held as a resized blob until the Recipe doc exists (the
+  // image POST needs a recipeId), then uploaded right after Recipe.create
+  // and before navigation.
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [pendingImageBlob, setPendingImageBlob] = useState<Blob | null>(null)
+  const [imageBusy, setImageBusy] = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   // Food search state
   const [showFoodSearch, setShowFoodSearch] = useState(false)
@@ -206,6 +215,29 @@ export default function CreateRecipePage() {
     fats: servings > 0 ? Math.round((totalNutrition.fats / servings) * 10) / 10 : 0
   }
 
+  const handlePickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking same file
+    if (!file) return
+    setImageBusy(true)
+    try {
+      const blob = await resizeImageToBlob(file, { maxDim: 1600, quality: 0.82 })
+      if (imagePreview) URL.revokeObjectURL(imagePreview)
+      setImagePreview(URL.createObjectURL(blob))
+      setPendingImageBlob(blob)
+    } catch (err) {
+      console.error('image resize failed', err)
+    } finally {
+      setImageBusy(false)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview)
+    setImagePreview(null)
+    setPendingImageBlob(null)
+  }
+
   const handleSave = async () => {
     if (!name.trim()) return
     if (ingredients.length === 0) return
@@ -255,6 +287,21 @@ export default function CreateRecipePage() {
       if (res.ok) {
         const data = await res.json()
         const recipeId = data.recipe?._id
+        // Upload pending image now that we have a recipeId. Errors here are
+        // non-fatal — the recipe saved fine, image can be added later.
+        if (recipeId && pendingImageBlob) {
+          try {
+            const fd = new FormData()
+            fd.append('image', pendingImageBlob, 'recipe.jpg')
+            await fetch(`/api/nutrition/recipes/${recipeId}/image`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: fd,
+            })
+          } catch (err) {
+            console.warn('recipe image upload after create failed', err)
+          }
+        }
         if (recipeId) {
           router.push(`/dashboard/nutrition/recipes/${recipeId}`)
         } else {
@@ -282,6 +329,50 @@ export default function CreateRecipePage() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Create Recipe</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Build a new recipe from ingredients</p>
         </div>
+      </div>
+
+      {/* Image */}
+      <div className="mb-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:mb-6">
+        <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Photo (optional)
+        </label>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePickImage}
+        />
+        {imagePreview ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imagePreview}
+              alt="Recipe preview"
+              className="aspect-video w-full rounded-lg object-cover"
+            />
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="absolute right-2 top-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+              aria-label="Remove photo"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={imageBusy}
+            className="flex aspect-video w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 transition-colors hover:border-zinc-400 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+          >
+            <div className="flex flex-col items-center gap-1 text-zinc-500 dark:text-zinc-400">
+              <Camera className="h-6 w-6" />
+              <span className="text-xs font-medium">{imageBusy ? 'Processing…' : 'Tap to add a photo'}</span>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* Basic Info */}

@@ -217,6 +217,16 @@ export default function RecipeDetailPage() {
 
   return (
     <PageTransition className="pb-6">
+      {/* Hero image */}
+      {recipe.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={recipe.imageUrl}
+          alt=""
+          className="mb-4 aspect-video w-full rounded-xl object-cover sm:mb-6"
+        />
+      )}
+
       {/* Header */}
       <div className="mb-4 flex items-start justify-between sm:mb-6">
         <div className="flex items-start gap-3">
