@@ -55,8 +55,30 @@ export async function GET(request: NextRequest) {
     streakAtRisk: 0,
     workoutReminder: 0,
     reEngagement: 0,
+    missedSlotsSynced: 0,
     skippedByWindow: 0,
     errors: 0,
+  }
+
+  // ── 0. Mark past-scheduled slots as missed in the DB ─────────────────────
+  // Slot dates are stored as UTC midnight of the user's local day, so a slot
+  // dated 2026-05-22T00:00Z represents local day 2026-05-22 for that user.
+  // For the westernmost timezone (UTC-12), local 2026-05-22 ends at
+  // 2026-05-23T12:00Z. A 48h cutoff is safe across every timezone — any slot
+  // dated >48h ago is definitively in the past for the user, so flip it from
+  // 'scheduled' to 'missed' so completion-rollup queries see consistent data
+  // instead of relying on client-side display logic alone.
+  const missedCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+  try {
+    const missedSync = await Schedule.updateMany(
+      { 'scheduledWorkouts': { $elemMatch: { status: 'scheduled', date: { $lt: missedCutoff } } } },
+      { $set: { 'scheduledWorkouts.$[elem].status': 'missed' } },
+      { arrayFilters: [{ 'elem.status': 'scheduled', 'elem.date': { $lt: missedCutoff } }] },
+    )
+    results.missedSlotsSynced = missedSync.modifiedCount ?? 0
+  } catch (err) {
+    console.error('missed-slot sync failed:', err)
+    results.errors++
   }
 
   // ── 1. Streak at-risk (any hour — urgent) ─────────────────────────────────
