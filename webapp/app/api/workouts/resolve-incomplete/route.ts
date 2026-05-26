@@ -6,6 +6,7 @@ import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { readTzOffsetFromBody, localDateKey, localDayWindowForKey } from '@/lib/dayWindow'
+import { recordStreakActivity } from '@/lib/streak'
 
 type ResolveAction = 'continue' | 'restart' | 'count' | 'skip'
 
@@ -149,6 +150,36 @@ export async function POST(request: NextRequest) {
         } catch (scheduleError) {
           console.error('Error syncing schedule for counted workout:', scheduleError)
         }
+
+        // Mirror the normal workout-completion flow: check program completion
+        // from the fresh schedule and record streak activity. Without these,
+        // counted stale workouts didn't roll up into program-completed status
+        // or count toward the user's daily streak.
+        try {
+          const freshSchedule = await Schedule.findOne(
+            { userId: payload.userId, programId },
+            { 'scheduledWorkouts.status': 1 }
+          ).lean<{ scheduledWorkouts: { status: string }[] }>()
+          if (freshSchedule?.scheduledWorkouts?.length) {
+            const sessions = freshSchedule.scheduledWorkouts.filter((w) => w.status !== 'rest')
+            const completedCount = sessions.filter((w) => w.status === 'completed').length
+            const totalCount = sessions.length
+            await UserProgress.updateOne(
+              { userId: payload.userId, 'activePrograms.programId': programId },
+              { $set: { 'activePrograms.$.totalWorkouts': totalCount } }
+            )
+            if (totalCount > 0 && completedCount >= totalCount) {
+              await UserProgress.updateOne(
+                { userId: payload.userId, 'activePrograms.programId': programId },
+                { $set: { 'activePrograms.$.status': 'completed' } }
+              )
+            }
+          }
+        } catch (completionError) {
+          console.error('Error checking program completion on count:', completionError)
+        }
+
+        await recordStreakActivity(payload.userId, payload.email).catch(() => null)
       }
     }
 
