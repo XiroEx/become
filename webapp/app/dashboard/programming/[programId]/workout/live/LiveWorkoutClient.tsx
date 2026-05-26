@@ -171,6 +171,17 @@ export default function LiveWorkoutPage() {
   const isIntervalExercise = tracking === "intervals";
   const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
 
+  // Per-bell weight convention: when the exercise name implies a dumbbell or
+  // kettlebell, the user logs the per-bell weight (e.g. "90" for a pair of
+  // 90s — saying "I dumbbell benched 180" is awkward). We surface this by
+  // adjusting the label and showing a small "= total" helper below the input.
+  const bellStyle: 'dumbbell' | 'kettlebell' | null = (() => {
+    const n = (currentExercise?.name || '').toLowerCase()
+    if (/\bkettlebell|\bkb\b/.test(n)) return 'kettlebell'
+    if (/\bdumbbell|\bdb\b/.test(n)) return 'dumbbell'
+    return null
+  })()
+
   // Check if inputs are empty (for skip button text)
   // Interval exercises are always "complete" (no required input) — user marks done and moves on
   const isSkipping = isIntervalExercise ? false : (showWeightInput ? !currentReps && !currentWeight : !currentReps);
@@ -1418,7 +1429,11 @@ export default function LiveWorkoutPage() {
                     {showWeightInput && (
                       <div className="flex-1">
                         <div className="mb-1 flex items-center justify-between">
-                          <label className="text-xs text-white/60">Weight (lbs)</label>
+                          <label className="text-xs text-white/60">
+                            {bellStyle === 'dumbbell' ? 'Weight per DB (lbs)'
+                              : bellStyle === 'kettlebell' ? 'Weight per KB (lbs)'
+                              : 'Weight (lbs)'}
+                          </label>
                           {currentExercise && exercisePRs[currentExercise.name] &&
                             exercisePRs[currentExercise.name].weight > 0 &&
                             Number(currentWeight) > exercisePRs[currentExercise.name].weight && (
@@ -1433,6 +1448,11 @@ export default function LiveWorkoutPage() {
                           placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
+                        {bellStyle === 'dumbbell' && Number(currentWeight) > 0 && (
+                          <div className="mt-1 text-center text-[10px] text-white/40">
+                            = {Number(currentWeight) * 2} lbs total
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Reps input — for reps_weight, reps_bodyweight, reps_only */}
