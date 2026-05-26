@@ -1,7 +1,12 @@
 import dbConnect from '@/lib/mongodb'
 import User from '@/models/User'
-import { createMagicLink } from '@/models/MagicLink'
+import MagicLink, { createMagicLink } from '@/models/MagicLink'
 import { sendVerificationEmail } from '@/lib/email'
+
+// Per-email throttle window. Blocks email-spam abuse and accidental
+// double-submits without inconveniencing real users — 30s is short enough
+// they'll just check their inbox.
+const SEND_LINK_COOLDOWN_MS = 30 * 1000
 
 // Email validation regex (RFC 5322 simplified)
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/
@@ -44,6 +49,27 @@ export async function POST(req: Request) {
 
     // For login mode, we'll create the user if they don't exist (passwordless flow)
     // This provides a seamless experience
+
+    // Throttle: don't allow another send-link for the same email within the
+    // cooldown window. Stops attackers spamming verification emails to a
+    // victim's inbox and stops legitimate double-submits from sending two.
+    const cooldownStart = new Date(Date.now() - SEND_LINK_COOLDOWN_MS)
+    const recent = await MagicLink.findOne(
+      { email: trimmedEmail, createdAt: { $gt: cooldownStart } },
+      { createdAt: 1 },
+    ).lean<{ createdAt: Date } | null>()
+    if (recent) {
+      const retryAfterSec = Math.max(
+        1,
+        Math.ceil((SEND_LINK_COOLDOWN_MS - (Date.now() - new Date(recent.createdAt).getTime())) / 1000),
+      )
+      return new Response(
+        JSON.stringify({
+          message: `A link was just sent. Check your inbox or try again in ${retryAfterSec}s.`,
+        }),
+        { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
+      )
+    }
 
     // Create magic link
     const magicLink = await createMagicLink(trimmedEmail, mode, name)
