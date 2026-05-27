@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
 import { verifyToken, verifyAuth } from '../../../../lib/auth'
+import type { MeResponse } from '../../../../lib/sharedApiTypes'
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,11 +37,14 @@ export async function GET(req: NextRequest) {
       .lean()
     if (!user) return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 })
 
-    // If token came from cookie, include it in response so client can sync to localStorage
-    return new Response(JSON.stringify({
-      user,
-      ...(fromCookie && { token })
-    }), { status: 200 })
+    // If token came from cookie, include it in response so client can sync to localStorage.
+    // The response shape is the shared MeResponse contract — webapp and the Expo
+    // sibling consume the same zod schema (see shared/api-client/src/schemas/auth.ts).
+    const responseBody: MeResponse = {
+      user: user as unknown as MeResponse['user'],
+      ...(fromCookie && token ? { token } : {}),
+    }
+    return new Response(JSON.stringify(responseBody), { status: 200 })
   } catch (err: unknown) {
     console.error('me error', err)
     const message = err instanceof Error ? err.message : 'Server error'

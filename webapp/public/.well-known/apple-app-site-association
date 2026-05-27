@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "TEAM_ID_PLACEHOLDER.io.redbtn.become"
+        ],
+        "components": [
+          {
+            "/": "/verify",
+            "comment": "Universal Link target for magic-link verification"
+          }
+        ]
+      }
+    ]
+  }
+}
