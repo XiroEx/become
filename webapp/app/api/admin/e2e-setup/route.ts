@@ -44,10 +44,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Clear active programs and workout logs so user starts fresh
+    // Clear active programs, workout logs, and persisted PRs so user starts fresh
     await UserProgress.updateOne(
       { userId },
-      { $set: { activePrograms: [], workoutLogs: [] } }
+      { $set: { activePrograms: [], workoutLogs: [], exercisePRs: [] } }
     )
 
     // 24-hour JWT for e2e test sessions
