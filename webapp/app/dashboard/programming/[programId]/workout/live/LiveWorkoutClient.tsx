@@ -447,11 +447,47 @@ export default function LiveWorkoutPage() {
             }
           }
         } else {
-          setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
-          setExercises(fallbackExercises);
-          const { data: d, flow: f } = initializeExercises(fallbackExercises);
-          setExerciseData(d);
-          setWorkoutFlow(f);
+          // current-workout returns 404 when the user isn't enrolled in this
+          // specific program. Instead of dropping them into generic hardcoded
+          // exercises (which read as "random workout from another program"),
+          // load THIS program directly and use its first day so the user
+          // actually previews the program they clicked on.
+          let loadedFromProgram = false
+          try {
+            const programRes = await fetch(`/api/programs/${encodeURIComponent(programId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (programRes.ok) {
+              const programData = await programRes.json()
+              const phases = programData?.phases || []
+              const firstPhase = phases[0]
+              const workoutsArr = Array.isArray(firstPhase?.workouts)
+                ? firstPhase.workouts
+                : Object.values(firstPhase?.workouts ?? {})
+              const firstWorkout = workoutsArr?.[0]
+              if (firstWorkout?.exercises?.length) {
+                const wd: WorkoutData = {
+                  day: firstWorkout.day || 'Day 1',
+                  title: firstWorkout.title || 'Training',
+                  exercises: firstWorkout.exercises,
+                }
+                setWorkout(wd)
+                setExercises(wd.exercises)
+                setCurrentPhase(1)
+                const { data: d, flow: f } = initializeExercises(wd.exercises)
+                setExerciseData(d)
+                setWorkoutFlow(f)
+                loadedFromProgram = true
+              }
+            }
+          } catch { /* fall through to generic fallback */ }
+          if (!loadedFromProgram) {
+            setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
+            setExercises(fallbackExercises);
+            const { data: d, flow: f } = initializeExercises(fallbackExercises);
+            setExerciseData(d);
+            setWorkoutFlow(f);
+          }
         }
       } catch (error) {
         console.error("Error loading workout:", error);
