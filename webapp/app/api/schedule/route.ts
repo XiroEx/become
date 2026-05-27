@@ -408,6 +408,13 @@ export async function PATCH(request: NextRequest) {
         const nd = new Date(newDate)
         nd.setUTCHours(0, 0, 0, 0)
         schedule.scheduledWorkouts[targetIdx].date = nd
+        // Rescheduling a missed workout to a new date is the user explicitly
+        // saying "I want to do this on the new date" — clear the missed flag.
+        // The missed-slot-db-sync cron will re-flip it on the next hourly pass
+        // if the new date is also in the past (>48h ago UTC), so this is safe.
+        if (schedule.scheduledWorkouts[targetIdx].status === 'missed') {
+          schedule.scheduledWorkouts[targetIdx].status = 'scheduled'
+        }
         // Re-sort by date
         schedule.scheduledWorkouts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         break
@@ -419,8 +426,8 @@ export async function PATCH(request: NextRequest) {
         }
 
         const targetWorkout = schedule.scheduledWorkouts[targetIdx]
-        if (targetWorkout.status === 'completed' || targetWorkout.status === 'missed') {
-          return NextResponse.json({ error: 'Cannot swap a completed or missed workout' }, { status: 400 })
+        if (targetWorkout.status === 'completed') {
+          return NextResponse.json({ error: 'Cannot swap a completed workout' }, { status: 400 })
         }
 
         const swapDate = new Date(swapWithDate)
@@ -436,14 +443,23 @@ export async function PATCH(request: NextRequest) {
         }
 
         const swapWorkout = schedule.scheduledWorkouts[swapIdx]
-        if (swapWorkout.status === 'completed' || swapWorkout.status === 'missed') {
-          return NextResponse.json({ error: 'Cannot swap with a completed or missed workout' }, { status: 400 })
+        if (swapWorkout.status === 'completed') {
+          return NextResponse.json({ error: 'Cannot swap with a completed workout' }, { status: 400 })
         }
 
-        // Swap dates
+        // Swap dates. Missed status is treated as a derived "this slot is past
+        // and uncompleted" — after a swap, status should reflect the NEW date,
+        // not the old one. Reset both sides to 'scheduled'; the missed-slot-
+        // db-sync cron re-flips any still-past slot within the hour.
         const tempDate = schedule.scheduledWorkouts[targetIdx].date
         schedule.scheduledWorkouts[targetIdx].date = schedule.scheduledWorkouts[swapIdx].date
         schedule.scheduledWorkouts[swapIdx].date = tempDate
+        if (schedule.scheduledWorkouts[targetIdx].status === 'missed') {
+          schedule.scheduledWorkouts[targetIdx].status = 'scheduled'
+        }
+        if (schedule.scheduledWorkouts[swapIdx].status === 'missed') {
+          schedule.scheduledWorkouts[swapIdx].status = 'scheduled'
+        }
         // Re-sort
         schedule.scheduledWorkouts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         break
