@@ -403,7 +403,7 @@ export async function searchUSDA(query: string, limit: number = 15): Promise<Map
  *   foodNutrients: [{ nutrientId, value, unitName, nutrientName }]
  * We normalize to the flat shape so mapUSDAFood / getNutrient work.
  */
-interface USDADetailNutrient {
+export interface USDADetailNutrient {
   nutrient?: { id?: number; name?: string; unitName?: string }
   amount?: number
   nutrientId?: number
@@ -412,7 +412,7 @@ interface USDADetailNutrient {
   nutrientName?: string
 }
 
-function normalizeNutrients(raw: USDADetailNutrient[] | undefined): USDANutrient[] {
+export function normalizeNutrients(raw: USDADetailNutrient[] | undefined): USDANutrient[] {
   if (!Array.isArray(raw)) return []
   return raw
     .map((n): USDANutrient | null => {
