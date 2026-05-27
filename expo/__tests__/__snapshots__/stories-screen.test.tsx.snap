@@ -1,0 +1,621 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
+<RNCSafeAreaView
+  edges={
+    {
+      "bottom": "additive",
+      "left": "off",
+      "right": "off",
+      "top": "additive",
+    }
+  }
+  style={
+    {
+      "backgroundColor": "#0a0a0a",
+      "flex": 1,
+    }
+  }
+  testID="stories-screen"
+>
+  <RCTScrollView
+    contentContainerStyle={
+      {
+        "gap": 16,
+        "padding": 16,
+      }
+    }
+    testID="stories-scroll"
+  >
+    <View>
+      <Text
+        className="text-foreground text-2xl font-bold"
+      >
+        Become — Stories
+      </Text>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-default"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          testID="card-default-title"
+        >
+          Card
+        </Text>
+        <Text
+          className="text-muted-foreground text-sm mb-2"
+          testID="card-default-subtitle"
+        >
+          Surface for grouped content
+        </Text>
+        <Text
+          className="text-foreground"
+        >
+          Default card content goes here.
+        </Text>
+      </View>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-buttons"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          testID="card-buttons-title"
+        >
+          Buttons
+        </Text>
+        <View
+          style={
+            {
+              "gap": 8,
+            }
+          }
+        >
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-primary px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-primary"
+          >
+            <Text
+              className="font-semibold text-primary-foreground text-base"
+            >
+              Primary
+            </Text>
+          </View>
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-muted px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-secondary"
+          >
+            <Text
+              className="font-semibold text-foreground text-base"
+            >
+              Secondary
+            </Text>
+          </View>
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-destructive px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-destructive"
+          >
+            <Text
+              className="font-semibold text-destructive-foreground text-base"
+            >
+              Destructive
+            </Text>
+          </View>
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-transparent border border-border px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-ghost"
+          >
+            <Text
+              className="font-semibold text-foreground text-base"
+            >
+              Ghost
+            </Text>
+          </View>
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": true,
+                "checked": undefined,
+                "disabled": true,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-primary px-4 py-2.5 opacity-50"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-loading"
+          >
+            <View
+              testID="btn-loading-spinner"
+            >
+              <ActivityIndicator
+                color="rgb(255 255 255)"
+                size="small"
+              />
+            </View>
+          </View>
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": true,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-primary px-4 py-2.5 opacity-50"
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-disabled"
+          >
+            <Text
+              className="font-semibold text-primary-foreground text-base"
+            >
+              Disabled
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-inputs"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          testID="card-inputs-title"
+        >
+          Input
+        </Text>
+        <View
+          testID="input-name-container"
+        >
+          <Text
+            className="text-foreground text-sm font-medium mb-1"
+            testID="input-name-label"
+          >
+            Display name
+          </Text>
+          <TextInput
+            accessibilityLabel="Display name"
+            className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-border"
+            onChangeText={[Function]}
+            placeholder="Jon"
+            placeholderTextColor="rgb(161 161 170)"
+            testID="input-name"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "height": 8,
+            }
+          }
+        />
+        <View
+          testID="input-error-container"
+        >
+          <Text
+            className="text-foreground text-sm font-medium mb-1"
+            testID="input-error-label"
+          >
+            Email
+          </Text>
+          <TextInput
+            accessibilityLabel="Email"
+            className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-destructive"
+            editable={false}
+            placeholderTextColor="rgb(161 161 170)"
+            testID="input-error"
+            value="not-an-email"
+          />
+          <Text
+            className="text-destructive text-xs mt-1"
+            testID="input-error-error"
+          >
+            Enter a valid email
+          </Text>
+        </View>
+      </View>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-toggle"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          testID="card-toggle-title"
+        >
+          Toggle
+        </Text>
+        <View
+          accessibilityLabel="Toggle feature"
+          accessibilityRole="switch"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": true,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          className="w-12 h-7 rounded-full justify-center px-1 bg-primary "
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          testID="toggle-feature"
+        >
+          <View
+            className="w-5 h-5 rounded-full bg-card self-end"
+            testID="toggle-feature-thumb"
+          />
+        </View>
+      </View>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-badges"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          testID="card-badges-title"
+        >
+          Badges
+        </Text>
+        <View
+          style={
+            {
+              "flexDirection": "row",
+              "flexWrap": "wrap",
+              "gap": 8,
+            }
+          }
+        >
+          <View
+            accessibilityRole="text"
+            className="rounded-full px-2 py-0.5 self-start bg-card border border-border"
+            testID="badge-default"
+          >
+            <Text
+              className="text-xs font-medium text-foreground"
+              testID="badge-default-text"
+            >
+              Default
+            </Text>
+          </View>
+          <View
+            accessibilityRole="text"
+            className="rounded-full px-2 py-0.5 self-start bg-primary"
+            testID="badge-primary"
+          >
+            <Text
+              className="text-xs font-medium text-primary-foreground"
+              testID="badge-primary-text"
+            >
+              Primary
+            </Text>
+          </View>
+          <View
+            accessibilityRole="text"
+            className="rounded-full px-2 py-0.5 self-start bg-muted"
+            testID="badge-muted"
+          >
+            <Text
+              className="text-xs font-medium text-foreground"
+              testID="badge-muted-text"
+            >
+              Muted
+            </Text>
+          </View>
+          <View
+            accessibilityRole="text"
+            className="rounded-full px-2 py-0.5 self-start bg-destructive"
+            testID="badge-destructive"
+          >
+            <Text
+              className="text-xs font-medium text-destructive-foreground"
+              testID="badge-destructive-text"
+            >
+              Destructive
+            </Text>
+          </View>
+          <View
+            accessibilityRole="text"
+            className="rounded-full px-2 py-0.5 self-start bg-accent"
+            testID="badge-accent"
+          >
+            <Text
+              className="text-xs font-medium text-accent-foreground"
+              testID="badge-accent-text"
+            >
+              Accent
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-overlays"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          testID="card-overlays-title"
+        >
+          Overlays
+        </Text>
+        <View
+          style={
+            {
+              "gap": 8,
+            }
+          }
+        >
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-primary px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-open-modal"
+          >
+            <Text
+              className="font-semibold text-primary-foreground text-base"
+            >
+              Open modal
+            </Text>
+          </View>
+          <View
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-muted px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="btn-open-sheet"
+          >
+            <Text
+              className="font-semibold text-foreground text-base"
+            >
+              Open bottom sheet
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  </RCTScrollView>
+</RNCSafeAreaView>
+`;

@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@become/api-client": ["../shared/api-client/src/index"],
+      "@become/api-client/*": ["../shared/api-client/src/*"]
     }
   },
   "include": [
@@ -28,7 +30,8 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "../shared/api-client/src/**/*.ts"
   ],
   "exclude": ["node_modules"]
 }

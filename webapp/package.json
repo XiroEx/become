@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint",
     "gen-test-token": "node scripts/gen-test-token.mjs",
-    "test:e2e": "playwright test"
+    "test:unit": "tsx --test tests/unit/*.test.ts",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

@@ -34,6 +34,7 @@ import {
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui/Card'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
+import { paginateVariants, VARIANTS_PAGE_SIZE } from '@/lib/foodVariantPagination'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -446,6 +447,28 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
   }>>([])
   const [mergeSearching, setMergeSearching] = useState(false)
   const [merging, setMerging] = useState(false)
+
+  // Variant pagination + filter (scales the list past the 12-cap and any
+  // admin-added overflow). Page index is 0-based.
+  const [variantFilter, setVariantFilter] = useState('')
+  const [variantPage, setVariantPage] = useState(0)
+
+  // Related-foods lazy-load: siblings live in their own collapsible section.
+  // We don't fetch the list until the admin opens it (the search API is
+  // cheap, but every byte counts on the heaviest admin page).
+  const [siblingsOpen, setSiblingsOpen] = useState(false)
+  const [siblingsLoading, setSiblingsLoading] = useState(false)
+  const [siblings, setSiblings] = useState<Array<{
+    _id: string
+    name: string
+    brand?: string
+    source?: string
+    externalDataType?: string
+    variants?: { _id?: string }[]
+  }>>([])
+  const [expandedSiblingId, setExpandedSiblingId] = useState<string | null>(null)
+  const [expandedSiblingDetail, setExpandedSiblingDetail] = useState<unknown>(null)
+  const [expandedSiblingLoading, setExpandedSiblingLoading] = useState(false)
 
   const headers = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -938,65 +961,237 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
         )}
       </Card>
 
-      {/* Variants */}
+      {/* Variants — paginated + filtered for scale.
+        * Page size: VARIANTS_PAGE_SIZE (20). visibleIndices map back to the
+        * original food.variants array so edit/remove callbacks still target
+        * the right row when the filter narrows the visible set. */}
       <Card variant="default">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-            Variants ({food.variants.length})
-          </p>
-          <button
-            type="button"
-            onClick={() =>
-              setFood({
-                ...food,
-                variants: [
-                  ...food.variants,
-                  {
-                    name: 'New variant',
-                    isDefault: false,
-                    servingSize: 100,
-                    servingUnit: 'g',
-                    alternateServings: [],
-                    nutrition: { calories: 0, protein: 0, carbs: 0, fats: 0 },
-                  },
-                ],
-              })
-            }
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            <Plus className="h-3 w-3" />
-            Add variant
-          </button>
-        </div>
-        <div className="space-y-3">
-          {food.variants.map((v, idx) => (
-            <VariantEditor
-              key={v._id ?? `new-${idx}`}
-              index={idx}
-              variant={v}
-              canRemove={food.variants.length > 1}
-              canSplit={food.variants.length > 1 && !!v._id && !dirty}
-              splitting={splittingVariantId === v._id}
-              onSplit={v._id ? () => splitVariant(v._id!) : undefined}
-              onRemove={() =>
-                setFood({
-                  ...food,
-                  variants: food.variants.filter((_, i) => i !== idx),
-                })
-              }
-              onChange={next => {
-                const variants = food.variants.slice()
-                // Enforce single-default invariant.
-                if (next.isDefault && !food.variants[idx].isDefault) {
-                  for (let i = 0; i < variants.length; i++) variants[i] = { ...variants[i], isDefault: false }
-                }
-                variants[idx] = next
-                setFood({ ...food, variants })
-              }}
-            />
-          ))}
-        </div>
+        {(() => {
+          const paged = paginateVariants(food.variants, {
+            filter: variantFilter,
+            page: variantPage,
+            pageSize: VARIANTS_PAGE_SIZE,
+          })
+          return (
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                  Variants ({food.variants.length})
+                  {variantFilter ? <> · {paged.filteredTotal} match{paged.filteredTotal === 1 ? '' : 'es'}</> : null}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFood({
+                      ...food,
+                      variants: [
+                        ...food.variants,
+                        {
+                          name: 'New variant',
+                          isDefault: false,
+                          servingSize: 100,
+                          servingUnit: 'g',
+                          alternateServings: [],
+                          nutrition: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+                        },
+                      ],
+                    })
+                  }
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add variant
+                </button>
+              </div>
+
+              {food.variants.length > VARIANTS_PAGE_SIZE && (
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={variantFilter}
+                    onChange={e => {
+                      setVariantFilter(e.target.value)
+                      setVariantPage(0)
+                    }}
+                    placeholder="Filter variants by name, externalId, or dataType..."
+                    data-testid="variant-filter"
+                    className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-8 pr-2.5 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3" data-testid="variants-list">
+                {paged.visible.map((v, displayIdx) => {
+                  const idx = paged.visibleIndices[displayIdx]
+                  return (
+                    <VariantEditor
+                      key={v._id ?? `new-${idx}`}
+                      index={idx}
+                      variant={v}
+                      canRemove={food.variants.length > 1}
+                      canSplit={food.variants.length > 1 && !!v._id && !dirty}
+                      splitting={splittingVariantId === v._id}
+                      onSplit={v._id ? () => splitVariant(v._id!) : undefined}
+                      onRemove={() =>
+                        setFood({
+                          ...food,
+                          variants: food.variants.filter((_, i) => i !== idx),
+                        })
+                      }
+                      onChange={next => {
+                        const variants = food.variants.slice()
+                        if (next.isDefault && !food.variants[idx].isDefault) {
+                          for (let i = 0; i < variants.length; i++) variants[i] = { ...variants[i], isDefault: false }
+                        }
+                        variants[idx] = next
+                        setFood({ ...food, variants })
+                      }}
+                    />
+                  )
+                })}
+                {paged.visible.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-zinc-200 px-3 py-4 text-center text-xs text-zinc-500 dark:border-zinc-700">
+                    No variants match the filter.
+                  </p>
+                )}
+              </div>
+
+              {paged.totalPages > 1 && (
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                  <button
+                    type="button"
+                    onClick={() => setVariantPage(p => Math.max(0, p - 1))}
+                    disabled={!paged.hasPrev}
+                    data-testid="variants-prev"
+                    className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-[11px] text-zinc-500" data-testid="variants-page-indicator">
+                    Page {paged.page + 1} of {paged.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setVariantPage(p => p + 1)}
+                    disabled={!paged.hasNext}
+                    data-testid="variants-next"
+                    className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          )
+        })()}
       </Card>
+
+      {/* Related foods (siblings by groupKey) — lazy-loaded on expand */}
+      {food.groupKey && (
+        <Card variant="default">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+              Related foods
+            </p>
+            <button
+              type="button"
+              data-testid="siblings-toggle"
+              onClick={async () => {
+                const opening = !siblingsOpen
+                setSiblingsOpen(opening)
+                if (opening && siblings.length === 0 && !siblingsLoading) {
+                  setSiblingsLoading(true)
+                  try {
+                    const res = await fetch(
+                      `/api/admin/foods?groupKey=${encodeURIComponent(food.groupKey!)}&limit=50`,
+                      { headers: headers() },
+                    )
+                    if (res.ok) {
+                      const data = await res.json()
+                      const list = Array.isArray(data.foods) ? data.foods : []
+                      setSiblings(list.filter((f: { _id: string }) => f._id !== food._id))
+                    }
+                  } catch {
+                    /* swallow — admin can retry */
+                  } finally {
+                    setSiblingsLoading(false)
+                  }
+                }
+              }}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              {siblingsOpen ? 'Hide siblings' : 'Show siblings'}
+            </button>
+          </div>
+
+          {siblingsOpen && (
+            <div className="mt-3" data-testid="siblings-list">
+              {siblingsLoading && <p className="text-xs text-zinc-500">Loading…</p>}
+              {!siblingsLoading && siblings.length === 0 && (
+                <p className="text-xs text-zinc-500">No other foods share this groupKey.</p>
+              )}
+              {siblings.length > 0 && (
+                <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+                  {siblings.map(s => (
+                    <li key={s._id} data-testid="sibling-row">
+                      <button
+                        type="button"
+                        data-testid="sibling-expand"
+                        onClick={async () => {
+                          const opening = expandedSiblingId !== s._id
+                          setExpandedSiblingId(opening ? s._id : null)
+                          setExpandedSiblingDetail(null)
+                          if (opening) {
+                            setExpandedSiblingLoading(true)
+                            try {
+                              const res = await fetch(`/api/admin/foods/${s._id}`, { headers: headers() })
+                              if (res.ok) setExpandedSiblingDetail(await res.json())
+                            } catch {
+                              /* swallow */
+                            } finally {
+                              setExpandedSiblingLoading(false)
+                            }
+                          }
+                        }}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            {s.name}
+                          </p>
+                          <p className="truncate text-[11px] text-zinc-500">
+                            {s.brand && <>{s.brand} · </>}
+                            {s.source && <span className="uppercase">{s.source}</span>}
+                            {s.externalDataType && <> · {s.externalDataType}</>}
+                            {Array.isArray(s.variants) && (
+                              <> · {s.variants.length} variant{s.variants.length === 1 ? '' : 's'}</>
+                            )}
+                          </p>
+                        </div>
+                      </button>
+                      {expandedSiblingId === s._id && (
+                        <div className="border-t border-zinc-100 bg-zinc-50/40 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/40" data-testid="sibling-detail">
+                          {expandedSiblingLoading && 'Loading details…'}
+                          {!expandedSiblingLoading && expandedSiblingDetail != null && (
+                            <Link
+                              href={`/dashboard/admin/foods/${s._id}`}
+                              className="font-medium text-zinc-700 underline dark:text-zinc-200"
+                            >
+                              Open detail page →
+                            </Link>
+                          )}
+                          {!expandedSiblingLoading && expandedSiblingDetail == null && 'Failed to load details.'}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Sticky save bar */}
       <div className="fixed bottom-20 left-0 right-0 z-30 px-3 sm:px-6">

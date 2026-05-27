@@ -14,6 +14,8 @@ import {
 } from '@/lib/foodImport'
 import { parseQuantityString, convert } from '@/lib/units'
 import { synthMergeUsdaResults } from '@/lib/usdaSynthMerge'
+import { dedupeBySource, type CustomFoodForDedupe } from '@/lib/foodSearchDedupe'
+import { fetchUSDAFoodsBatch } from '@/lib/usdaBatchFetch'
 
 // ---------------------------------------------------------------------------
 // Map an OpenFoodFact document to the same shape as a flattened Food
@@ -338,27 +340,25 @@ export async function GET(request: NextRequest) {
     // state uniformly. (Saved external foods would have been imported into our DB
     // and surface via customFoods above with isSaved:true.)
     //
-    // Merged-variant dedup: USDA results whose fdcId matches any *variant's*
-    // externalId on a Food we've already surfaced (via customFoods) are
+    // Merged-variant dedup: USDA / OFF results whose external id matches any
+    // *parent or variant* externalId on a Food we've already imported are
     // already represented in our DB — the parent owns them. Drop those from
-    // the live USDA list so we don't show e.g. "Tea" + "Tea, hot, herbal" +
-    // "Tea, hot, leaf, black" as three separate hits.
-    const knownVariantExternalIds = new Set<string>()
-    for (const f of customFoods) {
-      if (f.source !== 'usda') continue
-      // Top-level externalId — the primary variant's fdcId for both legacy
-      // single-variant docs and merged docs.
-      if (typeof f.externalId === 'string' && f.externalId) {
-        knownVariantExternalIds.add(f.externalId)
-      }
-      // Variant-level externalIds — set on every merged-in variant.
-      const variants = Array.isArray(f.variants) ? f.variants : []
-      for (const v of variants) {
-        if (typeof v?.externalId === 'string' && v.externalId) {
-          knownVariantExternalIds.add(v.externalId)
-        }
-      }
-    }
+    // the live external list so we don't show e.g. "Tea" + "Tea, hot, herbal"
+    // + "Tea, hot, leaf, black" as three separate hits.
+    //
+    // We must seed the seen-set from the *full* match pool — not just the
+    // top-N customFoods that fit on the displayed page — or a USDA dup whose
+    // owning customFood ranks past the page cap will still leak through.
+    // Light projection keeps this cheap; cap at 200 as a sanity guard.
+    const DEDUPE_POOL_LIMIT = 200
+    const dedupePool = await Food.find(regexFilter)
+      .select('source externalId variants.externalId')
+      .limit(DEDUPE_POOL_LIMIT)
+      .lean<CustomFoodForDedupe[]>()
+
+    // Always include the customFoods we already surfaced (saved-food splice
+    // can push them past the pool's regex match in edge cases).
+    const dedupeInput: CustomFoodForDedupe[] = [...customFoods, ...dedupePool]
 
     // Synthetic-merge the live USDA results before sending. This collapses
     // same-`groupKey` non-Branded entries (e.g. 10 separate "Beverages,
@@ -369,17 +369,34 @@ export async function GET(request: NextRequest) {
     // synthetic primary — passed to the background queue so every member
     // gets imported (and merged into the same parent via importFromUSDA's
     // groupKey logic).
-    const synth = synthMergeUsdaResults(usdaResults, knownVariantExternalIds)
+    //
+    // synthMergeUsdaResults still needs the bare USDA-id set (it treats it
+    // as "owned fdcIds we shouldn't fold into a synthetic primary"), so we
+    // derive a flat fdcId set from the seenKeys returned by dedupeBySource.
+    const { usda: dedupedUsda, off: dedupedOff, seenKeys } = dedupeBySource(
+      dedupeInput,
+      // Synth-merge happens AFTER initial filter; pass full USDA list with
+      // synthetic _id placeholders. We re-filter the synth output below.
+      usdaResults,
+      offFoods,
+    )
+    const knownUsdaFdcIds = new Set<string>()
+    for (const key of seenKeys) {
+      if (key.startsWith('usda:')) knownUsdaFdcIds.add(key.slice('usda:'.length))
+    }
+    // Synthetic merge over the already-deduped USDA list, then re-dedupe in
+    // case synth picked an fdcId we own as the primary. dedupedOff is final.
+    const synth = synthMergeUsdaResults(dedupedUsda, knownUsdaFdcIds)
     const usdaWithFlag = synth.entries
       .filter(r => {
         const fdcId = typeof r._id === 'string' && r._id.startsWith('usda-')
           ? r._id.slice('usda-'.length)
           : ''
         if (!fdcId) return true
-        return !knownVariantExternalIds.has(fdcId)
+        return !knownUsdaFdcIds.has(fdcId)
       })
       .map(r => ({ ...r, isSaved: false }))
-    const offWithFlag = offFoods.map(r => ({ ...r, isSaved: false }))
+    const offWithFlag = dedupedOff.map(r => ({ ...r, isSaved: false }))
 
     const combined = [...customFoods, ...usdaWithFlag, ...offWithFlag]
     combined.sort((a, b) => {
@@ -444,9 +461,11 @@ interface BackgroundImportItem {
  * logged — a failed import must NOT cause the user-facing search to fail.
  *
  * Notes:
- *  - USDA import calls `fetchUSDAById` to get the full nutrient + portion
- *    set. Acceptable cost in the background path; the response has already
- *    been delivered. Each fetch has its own 12s timeout.
+ *  - USDA imports are pre-fetched in a single batched `POST /v1/foods` call
+ *    (chunked at 20 per USDA's documented cap) via `fetchUSDAFoodsBatch`.
+ *    Each `importFromUSDA` then runs with the cached detail payload — zero
+ *    additional HTTP round-trips. Previously this loop fired one
+ *    `GET /v1/food/{id}` per fdcId (up to ~10 per typical search).
  *  - Items already imported (their `_id` is an ObjectId, not a synthetic
  *    string) are skipped here.
  *  - `extraFdcIds` are USDA fdcIds NOT directly returned to the client —
@@ -459,47 +478,64 @@ async function backgroundImportExternals(
   userId?: string,
   extraFdcIds: string[] = [],
 ): Promise<void> {
-  const queue: Array<() => Promise<void>> = []
-  const queuedFdcIds = new Set<string>()
+  // Collect every USDA fdcId we need to import; one set so the batch fetch
+  // covers both primary results and synth-merge secondaries with no dup
+  // HTTP work.
+  const usdaFdcIds: string[] = []
+  const offCodes: string[] = []
+  const seenFdcIds = new Set<string>()
 
   for (const r of results) {
     const id = typeof r._id === 'string' ? r._id : ''
     if (!id) continue
-
     if (id.startsWith('usda-')) {
       const fdcId = id.slice('usda-'.length)
-      if (!fdcId) continue
-      if (queuedFdcIds.has(fdcId)) continue
-      queuedFdcIds.add(fdcId)
-      queue.push(async () => {
-        try {
-          await importFromUSDA(fdcId, userId)
-        } catch (err) {
-          console.warn(`bg-import USDA fdcId=${fdcId} failed:`, err instanceof Error ? err.message : String(err))
-        }
-      })
+      if (!fdcId || seenFdcIds.has(fdcId)) continue
+      seenFdcIds.add(fdcId)
+      usdaFdcIds.push(fdcId)
     } else if (id.startsWith('off-')) {
       const code = id.slice('off-'.length)
       if (!code) continue
-      queue.push(async () => {
-        try {
-          await importFromOpenFoodFacts(code, userId)
-        } catch (err) {
-          console.warn(`bg-import OFF code=${code} failed:`, err instanceof Error ? err.message : String(err))
-        }
-      })
+      offCodes.push(code)
     }
   }
-
-  // Tack on the synth-merge secondary members.
   for (const fdcId of extraFdcIds) {
-    if (!fdcId || queuedFdcIds.has(fdcId)) continue
-    queuedFdcIds.add(fdcId)
+    if (!fdcId || seenFdcIds.has(fdcId)) continue
+    seenFdcIds.add(fdcId)
+    usdaFdcIds.push(fdcId)
+  }
+
+  // Batched USDA detail fetch — one POST per ≤20 fdcIds (vs N GETs before).
+  // Errors per id are passed through in the result map; importFromUSDA is
+  // skipped for those (logged below).
+  const usdaBatch = usdaFdcIds.length > 0
+    ? await fetchUSDAFoodsBatch(usdaFdcIds)
+    : new Map()
+
+  const queue: Array<() => Promise<void>> = []
+
+  for (const fdcId of usdaFdcIds) {
+    const entry = usdaBatch.get(fdcId)
+    if (entry instanceof Error) {
+      console.warn(`bg-import USDA fdcId=${fdcId} batch-fetch failed: ${entry.message}`)
+      continue
+    }
+    if (!entry) continue
     queue.push(async () => {
       try {
-        await importFromUSDA(fdcId, userId)
+        await importFromUSDA(fdcId, userId, entry)
       } catch (err) {
-        console.warn(`bg-import USDA fdcId=${fdcId} (synth-secondary) failed:`, err instanceof Error ? err.message : String(err))
+        console.warn(`bg-import USDA fdcId=${fdcId} failed:`, err instanceof Error ? err.message : String(err))
+      }
+    })
+  }
+
+  for (const code of offCodes) {
+    queue.push(async () => {
+      try {
+        await importFromOpenFoodFacts(code, userId)
+      } catch (err) {
+        console.warn(`bg-import OFF code=${code} failed:`, err instanceof Error ? err.message : String(err))
       }
     })
   }
