@@ -6,6 +6,7 @@ import Schedule from '@/models/Schedule'
 import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
 import { verifyAuth } from '@/lib/auth'
 import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
+import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
 
 export async function GET(request: NextRequest) {
   try {
@@ -210,26 +211,16 @@ export async function GET(request: NextRequest) {
     if (!detailed) return NextResponse.json(formattedData)
 
     // ── Detailed extras: PBs, recent workouts, profile data ──────────────────
-    // Personal bests — max weight per exercise across all completed sets
+    // Personal bests — read from the persisted `exercisePRs` subdoc populated
+    // by the POST /api/workouts save path. No on-the-fly recomputation.
+    const pbsRaw = formatPRsForProgressDetail((progress as { exercisePRs?: IExercisePR[] }).exercisePRs)
     const pbs: Record<string, { name: string; weight: number; reps: number; date: string }> = {}
-    for (const log of (progress.workoutLogs || [])) {
-      if (!log.completed) continue
-      for (const exercise of (log.exercises || [])) {
-        const key = (exercise.exerciseSlug || exercise.name) as string
-        for (const set of (exercise.sets || [])) {
-          if (!set.completed || !(set.weight) || (set.weight as number) <= 0) continue
-          const w = set.weight as number
-          const r = (set.reps as number) || 0
-          const existing = pbs[key]
-          if (!existing || w > existing.weight || (w === existing.weight && r > existing.reps)) {
-            pbs[key] = {
-              name: exercise.name as string,
-              weight: w,
-              reps: r,
-              date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            }
-          }
-        }
+    for (const [key, rec] of Object.entries(pbsRaw)) {
+      pbs[key] = {
+        name: rec.name,
+        weight: rec.weight,
+        reps: rec.reps,
+        date: new Date(rec.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       }
     }
 

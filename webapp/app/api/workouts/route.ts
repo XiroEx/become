@@ -8,6 +8,8 @@ import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { recordStreakActivity } from '@/lib/streak'
 import { readTzOffset, readTzOffsetFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
+import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
+import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
 
 interface SetData {
   setNumber: number
@@ -72,9 +74,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ workout: null, isResume: false, exerciseHistory: {} })
     }
 
-    // Build exercise history from past completed workouts (before today)
-    let exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {}
-    let exercisePRs: Record<string, { weight: number; reps: number }> = {}
+    // Build exercise history from past completed workouts (before today).
+    // PRs are read from the persisted `exercisePRs` subdoc, populated by the
+    // POST save path — no on-the-fly recomputation here.
+    const exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {}
+    const exercisePRs: Record<string, { weight: number; reps: number }> = includeHistory
+      ? formatPRsForLiveWorkout((userProgress as { exercisePRs?: IExercisePR[] }).exercisePRs)
+      : {}
     if (includeHistory) {
       // Get all completed workout logs for this program, sorted newest first
       const pastLogs = userProgress.workoutLogs
@@ -89,9 +95,10 @@ export async function GET(request: NextRequest) {
 
       type AnySet = { completed: boolean; reps?: number; weight?: number; duration?: number; distance?: number }
 
-      // For each exercise, find the most recent completed set and all-time best
+      // For each exercise, find the most recent completed set (history only)
       for (const log of pastLogs) {
         for (const exercise of (log.exercises || [])) {
+          if (exerciseHistory[exercise.name]) continue
           const completedSets = (exercise.sets || []).filter(
             (s: AnySet) => s.completed && ((s.reps ?? 0) > 0 || (s.duration ?? 0) > 0)
           )
@@ -111,22 +118,11 @@ export async function GET(request: NextRequest) {
             completedSets[0]
           )
 
-          // Most recent session (first occurrence since logs are newest-first)
-          if (!exerciseHistory[exercise.name]) {
-            exerciseHistory[exercise.name] = {
-              weight: bestSet.weight ?? 0,
-              reps: bestSet.reps ?? 0,
-              duration: bestSet.duration,
-              date: new Date(log.date).toISOString()
-            }
-          }
-
-          // All-time best (highest weight across all sessions)
-          const pr = exercisePRs[exercise.name]
-          const sw = bestSet.weight ?? 0
-          const sr = bestSet.reps ?? 0
-          if (!pr || sw > pr.weight || (sw === pr.weight && sr > pr.reps)) {
-            exercisePRs[exercise.name] = { weight: sw, reps: sr }
+          exerciseHistory[exercise.name] = {
+            weight: bestSet.weight ?? 0,
+            reps: bestSet.reps ?? 0,
+            duration: bestSet.duration,
+            date: new Date(log.date).toISOString()
           }
         }
       }
@@ -414,6 +410,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Update persisted personal records on first-time completion. Skips re-saves
+    // of an already-complete workout (wasAlreadyComplete) so the same sets
+    // don't double-trigger newPR notifications. PR errors are swallowed by the
+    // helper so a bookkeeping hiccup never blocks the underlying workout save.
+    const newPRsAchieved = await maybePersistWorkoutPRs({
+      store: {
+        readCurrentPRs: async (uid) => {
+          const cur = await UserProgress.findOne(
+            { userId: uid },
+            { exercisePRs: 1 },
+          ).lean<{ exercisePRs?: IExercisePR[] } | null>()
+          return cur?.exercisePRs ?? []
+        },
+        writePRs: async (uid, prs) => {
+          await UserProgress.updateOne(
+            { userId: uid },
+            { $set: { exercisePRs: prs } },
+          )
+        },
+      },
+      userId: payload.userId,
+      exercises,
+      date: workoutLog.date,
+      programId,
+      completed,
+      wasAlreadyComplete,
+    })
+
     // Record streak activity on workout completion
     let streakResult = null
     if (completed) {
@@ -425,6 +449,7 @@ export async function POST(request: NextRequest) {
       completed,
       programCompleted,
       ...(programCompleted && { programName }),
+      ...(newPRsAchieved.length > 0 && { newPRsAchieved }),
       ...(streakResult && {
         streak: {
           streakDays: streakResult.streakDays,

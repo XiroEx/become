@@ -1,4 +1,5 @@
 import mongoose, { Schema, Types } from 'mongoose'
+import type { IExercisePR, IPRDimension } from '@/lib/exercisePRs'
 
 export interface IWeightEntry {
   date: Date
@@ -115,6 +116,10 @@ export interface IUserProgress {
   // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
   // requests so the cron can send notifications at a reasonable LOCAL hour.
   timezoneOffset?: number
+  // Persisted personal records, kept in lockstep with workoutLogs by the
+  // POST /api/workouts save path. Read by GET endpoints instead of recomputing
+  // from workoutLogs on every request.
+  exercisePRs: IExercisePR[]
   createdAt?: Date
   updatedAt?: Date
 }
@@ -168,6 +173,22 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   activeSeconds: { type: Number, default: 0 },
   notes: { type: String },
   exercises: [ExerciseLogSchema]
+}, { _id: false })
+
+const PRDimensionSchema = new Schema<IPRDimension>({
+  weight: { type: Number, required: true },
+  reps:   { type: Number, required: true },
+  e1rm:   { type: Number },
+  date:   { type: Date, required: true },
+  programId: { type: String },
+}, { _id: false })
+
+const ExercisePRSchema = new Schema<IExercisePR>({
+  exerciseSlug: { type: String, required: true },
+  exerciseName: { type: String, required: true },
+  maxWeight: { type: PRDimensionSchema, default: null },
+  maxReps:   { type: PRDimensionSchema, default: null },
+  maxE1RM:   { type: PRDimensionSchema, default: null },
 }, { _id: false })
 
 const ExerciseSwapSchema = new Schema({
@@ -233,6 +254,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     reEngagement: { type: Date },
   },
   timezoneOffset: { type: Number },
+  exercisePRs: { type: [ExercisePRSchema], default: [] },
 }, {
   timestamps: true
 })
@@ -240,6 +262,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
 // Indexes for common queries
 UserProgressSchema.index({ 'activePrograms.programId': 1 })
 UserProgressSchema.index({ 'workoutLogs.programId': 1, 'workoutLogs.date': -1 })
+UserProgressSchema.index({ userId: 1, 'exercisePRs.exerciseSlug': 1 })
 
 // Calculate BMI from weight and height
 UserProgressSchema.methods.calculateBMI = function(weight: number): number | null {

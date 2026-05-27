@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: '../playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'https://become.redbtn.io',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://become.redbtn.io',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -16,6 +16,12 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
   projects: [
+    {
+      name: 'exercise-prs-persisted',
+      testMatch: '**/exercise-prs-persisted.spec.ts',
+      timeout: 60_000,
+      use: { ...devices['Desktop Chrome'], video: 'off' },
+    },
     {
       name: 'swap-mobile',
       testMatch: '**/swap-debug.spec.ts',
