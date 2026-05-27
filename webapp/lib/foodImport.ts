@@ -4,7 +4,9 @@ import OpenFoodFact, { IOpenFoodFact } from '@/models/OpenFoodFact'
 import { fetchUSDAById, mapUSDAFood, MappedFoodResult, USDAFood, USDAFoodPortion } from '@/lib/usda'
 import { baseSlug, generateUniqueFoodSlug } from '@/lib/foodSlug'
 import { parseQuantityString, convert, familyOf } from '@/lib/units'
-import { baseGroupKey, prettifyGroupKey } from '@/lib/foodGrouping'
+import { baseGroupKey } from '@/lib/foodGrouping'
+import { canonicalFoodName } from '@/lib/foodCanonicalName'
+import { canAutoMergeAsVariant, type VariantMergeParent, type VariantMergeCandidate } from '@/lib/foodVariantMerge'
 import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
 
 const VALID_CATEGORIES: FoodCategory[] = [
@@ -73,6 +75,37 @@ export const MAX_VARIANTS_PER_FOOD = 12
  * could collect dozens of strings.
  */
 const MAX_ALIASES = 30
+
+/**
+ * Pull the default variant's macros from a Food doc so the variant-merge
+ * helper can compare nutrient profiles. Returns null if no usable shape.
+ */
+function extractFoodNutritionProfile(food: IFood) {
+  const v = Array.isArray(food.variants) ? food.variants.find(x => x.isDefault) ?? food.variants[0] : null
+  if (!v?.nutrition) return null
+  const n = v.nutrition
+  return {
+    calories: typeof n.calories === 'number' ? n.calories : null,
+    protein: typeof n.protein === 'number' ? n.protein : null,
+    carbs: typeof n.carbs === 'number' ? n.carbs : null,
+    fats: typeof n.fats === 'number' ? n.fats : null,
+  }
+}
+
+/**
+ * Pull macros from a freshly mapped USDA / OFF result for use as the
+ * candidate side of `canAutoMergeAsVariant`.
+ */
+function extractMappedNutritionProfile(mapped: MappedFoodResult) {
+  if (!mapped.nutrition) return null
+  const n = mapped.nutrition
+  return {
+    calories: typeof n.calories === 'number' ? n.calories : null,
+    protein: typeof n.protein === 'number' ? n.protein : null,
+    carbs: typeof n.carbs === 'number' ? n.carbs : null,
+    fats: typeof n.fats === 'number' ? n.fats : null,
+  }
+}
 
 /**
  * Derive a tidy variant name from a USDA description and the parent food's
@@ -325,6 +358,13 @@ function variantNameFromUSDA(food: USDAFood): string {
 export async function importFromUSDA(
   fdcId: string,
   createdBy?: mongoose.Types.ObjectId | string,
+  /**
+   * Optional pre-fetched USDA detail payload. When provided, the function
+   * skips the per-id `GET /food/{fdcId}` round-trip. The background-import
+   * worker uses this with `fetchUSDAFoodsBatch` to fold up to 20 imports
+   * into a single batched HTTP call.
+   */
+  preFetched?: USDAFood,
 ): Promise<{ food: IFood; created: boolean }> {
   // Already imported as the primary externalId?
   const existing = await Food.findOne({ source: 'usda', externalId: String(fdcId) })
@@ -338,7 +378,7 @@ export async function importFromUSDA(
   })
   if (existingAsVariant) return { food: existingAsVariant, created: false }
 
-  const usda = await fetchUSDAById(String(fdcId))
+  const usda = preFetched ?? (await fetchUSDAById(String(fdcId)))
   if (!usda) throw new Error(`USDA food not found for fdcId=${fdcId}`)
 
   const baseMapped = mapUSDAFood(usda)
@@ -353,41 +393,60 @@ export async function importFromUSDA(
   const baseName = mapped.name.replace(/,\s*[a-z][a-z\s\-/]*$/i, '').trim() || mapped.name
   const groupKey = baseGroupKey(baseName)
 
-  // Merge eligibility:
-  //   - Branded products are inherently distinct SKUs → never merge.
-  //   - Empty / single-char groupKey doesn't merge (too vague).
+  // Merge eligibility is delegated to canAutoMergeAsVariant (source-aware).
+  // The groupKey precheck is a cheap short-circuit before the DB lookup.
   // ---------------------------------------------------------------
-  const eligibleForMerge =
-    usda.dataType !== 'Branded' &&
-    !!groupKey &&
-    groupKey.length >= 2
+  const hasUsableGroupKey = !!groupKey && groupKey.length >= 2
 
-  if (eligibleForMerge) {
-    // Look for an existing parent food with the same groupKey that's NOT
-    // verified (verified parents are admin-curated and locked) and isn't
-    // a Branded entry. We use findOneAndUpdate with a $expr filter so the
-    // push is atomic — no lost-update race when two concurrent imports
-    // hit the same groupKey.
-    //
-    // Two attempts:
-    //   1. Try to push as a non-default variant onto an existing parent
-    //      (size < cap, not verified).
-    //   2. If that fails (no candidate, or candidate filled up), fall back
-    //      to creating a fresh standalone Food.
+  if (hasUsableGroupKey) {
+    // Look up a candidate parent with the same source + groupKey. We drop
+    // the old externalDataType filter; the helper decides whether the
+    // Branded-vs-non-Branded combination is mergeable. For Branded inputs
+    // we narrow by brandOwner up-front (otherwise we'd often pick a
+    // different-brand candidate and immediately reject it).
     const variantName = deriveVariantName(usda.description, baseName)
 
-    // Look up a candidate to compute the merged name + alias additions.
-    // We do a non-atomic findOne first to read the current state and decide
-    // whether to rename the parent. The atomic update below verifies the
-    // parent is still mergeable at write time.
-    const candidate = await Food.findOne({
-      source: 'usda',
-      groupKey,
-      externalDataType: { $ne: 'Branded' },
-      isVerified: { $ne: true },
-    })
+    const candidateQuery: Record<string, unknown> = { source: 'usda', groupKey }
+    if (usda.dataType === 'Branded') {
+      const incomingBrand = usda.brandOwner || usda.brandName
+      if (incomingBrand) {
+        candidateQuery.externalDataType = 'Branded'
+        candidateQuery.brand = incomingBrand
+      } else {
+        // Branded item with no brand info — helper will reject anyway, skip lookup.
+        candidateQuery._id = null
+      }
+    } else {
+      // Non-Branded: stay within non-Branded parents.
+      candidateQuery.externalDataType = { $ne: 'Branded' }
+    }
 
-    if (candidate && candidate.variants.length < MAX_VARIANTS_PER_FOOD) {
+    const candidate = await Food.findOne(candidateQuery)
+
+    const candidateParent: VariantMergeParent | null = candidate
+      ? {
+          source: 'usda',
+          externalDataType: candidate.externalDataType,
+          groupKey: candidate.groupKey,
+          brand: candidate.brand,
+          barcode: candidate.barcode,
+          isVerified: candidate.isVerified,
+          variantsCount: candidate.variants.length,
+          nutritionProfile: extractFoodNutritionProfile(candidate),
+        }
+      : null
+
+    const incomingCandidate: VariantMergeCandidate = {
+      source: 'usda',
+      externalDataType: usda.dataType,
+      groupKey,
+      brand: usda.brandOwner ?? usda.brandName ?? null,
+      nutritionProfile: extractMappedNutritionProfile(mapped),
+    }
+
+    const decision = canAutoMergeAsVariant(candidateParent, incomingCandidate)
+
+    if (candidate && decision.ok) {
       const merged = await tryMergeIntoCandidate({
         candidateId: candidate._id as mongoose.Types.ObjectId,
         candidateCurrentName: candidate.name,
@@ -407,9 +466,18 @@ export async function importFromUSDA(
 
   // ---------------------------------------------------------------
   // No-merge path: create a fresh single-variant Food.
+  //
+  // When this branch fires because the merge candidate hit the 12-variant
+  // cap, the resulting "overflow sibling" Food.name must use the same
+  // canonical form as the in-cap parent (e.g. "Cheese Cheddar"), not the
+  // raw USDA description ("CHEESE,CHEDDAR,SHARP,BRANDED 1234"). The
+  // canonical helper handles both cases; we fall back to baseName only if
+  // canonicalization collapses to empty.
   // ---------------------------------------------------------------
   const variantName = variantNameFromUSDA(usda)
-  const slug = await generateUniqueFoodSlug(Food, baseName, mapped.brand)
+  const canonical = canonicalFoodName(usda.description, 'usda')
+  const finalName = canonical || baseName
+  const slug = await generateUniqueFoodSlug(Food, finalName, mapped.brand)
   const variant = buildVariantFromMapped(mapped, variantName)
 
   // Stamp the variant with its own externalId/dataType so future merges
@@ -424,7 +492,7 @@ export async function importFromUSDA(
   } as FoodForReview).length > 0
 
   const food = await Food.create({
-    name: baseName,
+    name: finalName,
     slug,
     brand: mapped.brand,
     category: coerceCategory(mapped.category),
@@ -499,20 +567,20 @@ async function tryMergeIntoCandidate(opts: {
 
   // Decide if the parent should be renamed. If the parent's current name is
   // still the original USDA description (i.e. it has comma-qualifiers and
-  // matches the cooked baseName equivalent), rename it to the prettified
-  // groupKey. We detect "still original" heuristically: parent name contains
-  // a comma OR parent.name matches the new import's baseName plus a
-  // qualifier; in both cases switching to prettifyGroupKey(groupKey)
-  // produces a tidier display.
-  const prettifiedGroup = prettifyGroupKey(groupKey)
+  // matches the cooked baseName equivalent), rename it to the canonical
+  // form. Detection is heuristic: parent name contains a comma OR parent
+  // name already matches the canonical form; in both cases switching to
+  // `canonicalFoodName(usdaDescription, 'usda')` produces a tidier display
+  // that matches the overflow-sibling path.
+  const canonical = canonicalFoodName(usdaDescription, 'usda')
   const lowerName = candidateCurrentName.toLowerCase().trim()
-  const lowerPretty = prettifiedGroup.toLowerCase()
-  const looksRenamedAlready = lowerName === lowerPretty || !lowerName.includes(',')
+  const lowerCanonical = canonical.toLowerCase()
+  const looksRenamedAlready = lowerName === lowerCanonical || !lowerName.includes(',')
 
   let newParentName: string | undefined
   let aliasToAdd: string | undefined
-  if (!looksRenamedAlready && prettifiedGroup) {
-    newParentName = prettifiedGroup
+  if (!looksRenamedAlready && canonical) {
+    newParentName = canonical
     aliasToAdd = candidateCurrentName.trim()
   }
   // Always preserve the new USDA description as an alias too — search needs it.
@@ -551,7 +619,9 @@ async function tryMergeIntoCandidate(opts: {
     {
       _id: candidateId,
       isVerified: { $ne: true },
-      externalDataType: { $ne: 'Branded' },
+      // externalDataType filter dropped here intentionally — canAutoMergeAsVariant
+      // now decides Branded-vs-non-Branded eligibility upstream. The atomic
+      // filter only guards against races on cap/verified/groupKey/fdcId.
       groupKey,
       $expr: { $lt: [{ $size: '$variants' }, MAX_VARIANTS_PER_FOOD] },
       // Don't merge if a variant with this fdcId is already there (race
@@ -732,6 +802,68 @@ export async function importFromOpenFoodFacts(
   if (!off) throw new Error(`OpenFoodFacts entry not found for code=${code}`)
 
   const variant = mapOffToVariant(off)
+  const offGroupKey = baseGroupKey(off.product_name)
+
+  // Attempt to merge into an existing OFF parent with the same source +
+  // groupKey + brand. The helper decides eligibility (different-brand and
+  // conflicting-barcode cases are rejected). If approved, we push the new
+  // variant atomically and return the merged parent without creating a
+  // standalone Food.
+  if (offGroupKey && offGroupKey.length >= 2 && off.brands) {
+    const offCandidate = await Food.findOne({
+      source: 'openfoodfacts',
+      groupKey: offGroupKey,
+      brand: off.brands,
+    })
+
+    if (offCandidate) {
+      const parentSide: VariantMergeParent = {
+        source: 'openfoodfacts',
+        groupKey: offCandidate.groupKey,
+        brand: offCandidate.brand,
+        barcode: offCandidate.barcode,
+        isVerified: offCandidate.isVerified,
+        variantsCount: offCandidate.variants.length,
+      }
+      const candidateSide: VariantMergeCandidate = {
+        source: 'openfoodfacts',
+        groupKey: offGroupKey,
+        brand: off.brands,
+        barcode: off.code,
+      }
+      const decision = canAutoMergeAsVariant(parentSide, candidateSide)
+      if (decision.ok) {
+        // Atomic push — same race-protection pattern as tryMergeIntoCandidate
+        // (cap check via $expr, not verified, groupKey unchanged, externalId
+        // not already a variant). We leave parent name + brand untouched.
+        const newVariant: IFoodVariant = {
+          ...variant,
+          isDefault: false,
+          externalId: code,
+        }
+        const pushOps: Record<string, unknown> = { variants: newVariant }
+        if (
+          off.product_name &&
+          (offCandidate.aliases as string[]).every((a: string) => a.toLowerCase() !== off.product_name.toLowerCase())
+        ) {
+          pushOps.aliases = { $each: [off.product_name], $slice: -MAX_ALIASES }
+        }
+        const updated = await Food.findOneAndUpdate(
+          {
+            _id: offCandidate._id,
+            isVerified: { $ne: true },
+            groupKey: offGroupKey,
+            $expr: { $lt: [{ $size: '$variants' }, MAX_VARIANTS_PER_FOOD] },
+            'variants.externalId': { $ne: code },
+            externalId: { $ne: code },
+          },
+          { $push: pushOps },
+          { new: true },
+        )
+        if (updated) return { food: updated, created: false }
+      }
+    }
+  }
 
   const slug = await generateUniqueFoodSlug(Food, off.product_name, off.brands)
 
