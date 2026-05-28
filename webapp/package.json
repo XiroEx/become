@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "gen-test-token": "node scripts/gen-test-token.mjs",
-    "test:unit": "tsx --test tests/unit/*.test.ts",
+    "test:unit": "tsx --test tests/unit/*.test.ts tests/unit/**/*.test.ts tests/unit/**/*.test.tsx",
     "test:e2e": "playwright test",
     "test": "npm run test:unit"
   },

@@ -120,8 +120,29 @@ export interface IUserProgress {
   // POST /api/workouts save path. Read by GET endpoints instead of recomputing
   // from workoutLogs on every request.
   exercisePRs: IExercisePR[]
+  // Suggestion-engine dismissals. Each entry silences a suggestion by id
+  // until its source's cooldownDays elapse (or permanently when cooldownDays
+  // is undefined). Defaults to [] for legacy documents — no migration needed.
+  dismissedSuggestions: IDismissedSuggestion[]
+  // Dashboard rotator pins — ids that always appear first in the dashboard
+  // tile list, in this exact order. Defaults to [].
+  pinnedTiles: string[]
+  // Dashboard rotator history: per-id last-shown timestamps. Stored as an
+  // array of { id, at } subdocs (not a Map) so .lean() queries return plain
+  // JSON arrays that downstream code can iterate without Mongoose Map APIs.
+  tileLastShownAt: ITileLastShown[]
   createdAt?: Date
   updatedAt?: Date
+}
+
+export interface IDismissedSuggestion {
+  id: string
+  dismissedAt: Date
+}
+
+export interface ITileLastShown {
+  id: string
+  at: Date
 }
 
 const WeightEntrySchema = new Schema<IWeightEntry>({
@@ -198,6 +219,16 @@ const ExerciseSwapSchema = new Schema({
   swappedAt: { type: Date, default: Date.now }
 }, { _id: false })
 
+const DismissedSuggestionSchema = new Schema<IDismissedSuggestion>({
+  id: { type: String, required: true },
+  dismissedAt: { type: Date, required: true, default: Date.now },
+}, { _id: false })
+
+const TileLastShownSchema = new Schema<ITileLastShown>({
+  id: { type: String, required: true },
+  at: { type: Date, required: true, default: Date.now },
+}, { _id: false })
+
 const ActiveProgramSchema = new Schema<IActiveProgram>({
   programId: { type: String, required: true },
   programName: { type: String, required: true },
@@ -255,6 +286,9 @@ const UserProgressSchema = new Schema<IUserProgress>({
   },
   timezoneOffset: { type: Number },
   exercisePRs: { type: [ExercisePRSchema], default: [] },
+  dismissedSuggestions: { type: [DismissedSuggestionSchema], default: [] },
+  pinnedTiles: { type: [String], default: [] },
+  tileLastShownAt: { type: [TileLastShownSchema], default: [] },
 }, {
   timestamps: true
 })
