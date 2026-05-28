@@ -74,18 +74,31 @@ export async function GET(request: NextRequest) {
     // The workout POST handler keeps schedule slot statuses accurate when workouts
     // are logged via the app. We trust the DB directly — no positional log matching —
     // to avoid orphan pre-schedule logs bleeding into future/missed slots.
+    // Self-heal: any slot stored as 'missed' but dated today or in the
+    // future can't logically be missed (the user hasn't reached that day
+    // yet). This catches stale data from reschedule/swap flows that didn't
+    // clear the missed flag before that logic shipped — the GET corrects
+    // both the response and the DB on the fly.
+    const futureMissedIndices: Array<{ schedule: typeof schedules[number]; index: number }> = []
+
     const processedSchedules = schedules.map((schedule) => {
       type SW = { date: Date; programId: string; dayLabel: string; status: string; phase: number; workoutTitle: string; completedAt?: Date; notes?: string }
       const allWorkouts: SW[] = schedule.scheduledWorkouts || []
 
       const statusByDate: Record<string, { status: string; completedAt?: Date }> = {}
 
-      for (const w of allWorkouts) {
+      for (let idx = 0; idx < allWorkouts.length; idx++) {
+        const w = allWorkouts[idx]
         const wDate = new Date(w.date)
         wDate.setUTCHours(0, 0, 0, 0)
         const dateKey = wDate.getTime().toString()
 
-        if (w.status === 'completed' || w.status === 'skipped' || w.status === 'missed') {
+        if (w.status === 'missed' && wDate >= now) {
+          // Stale missed flag on a future slot — treat as scheduled and
+          // queue a write-back so the DB matches what we just rendered.
+          statusByDate[dateKey] = { status: 'scheduled' }
+          futureMissedIndices.push({ schedule, index: idx })
+        } else if (w.status === 'completed' || w.status === 'skipped' || w.status === 'missed') {
           // Trust the DB — these were set by the workout handler or admin correction
           statusByDate[dateKey] = { status: w.status, completedAt: w.completedAt }
         } else if (wDate < now && w.status === 'scheduled') {
@@ -125,6 +138,24 @@ export async function GET(request: NextRequest) {
         scheduledWorkouts: updatedWorkouts,
       }
     })
+
+    // Persist the self-healing so the DB matches what we rendered. Best-
+    // effort — failure here doesn't affect the response. Group by schedule
+    // doc to issue one updateOne per schedule with all the index $set ops.
+    if (futureMissedIndices.length > 0) {
+      const byScheduleId = new Map<string, { schedule: typeof schedules[number]; indices: number[] }>()
+      for (const { schedule, index } of futureMissedIndices) {
+        const key = String(schedule._id)
+        const bucket = byScheduleId.get(key) ?? { schedule, indices: [] }
+        bucket.indices.push(index)
+        byScheduleId.set(key, bucket)
+      }
+      for (const { schedule, indices } of byScheduleId.values()) {
+        const $set: Record<string, string> = {}
+        for (const i of indices) $set[`scheduledWorkouts.${i}.status`] = 'scheduled'
+        Schedule.updateOne({ _id: schedule._id }, { $set }).catch(() => {})
+      }
+    }
 
     return NextResponse.json({ schedules: processedSchedules })
   } catch (error) {
