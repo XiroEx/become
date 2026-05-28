@@ -139,10 +139,18 @@ export function recentActivityFromProgress(
         .map((e) => e.exerciseSlug)
         .filter((s): s is string => !!s),
     }))
+  const exercisePRs = (progress.exercisePRs ?? []).map((pr) => ({
+    exerciseSlug: pr.exerciseSlug,
+    exerciseName: pr.exerciseName,
+    dates: [pr.maxWeight?.date, pr.maxReps?.date, pr.maxE1RM?.date]
+      .filter((d): d is Date => !!d)
+      .map((d) => new Date(d)),
+  }))
   return {
     weightHistory,
     moodHistory,
     workoutLogs,
+    exercisePRs,
     streak: {
       count: progress.streakDays ?? 0,
       lastLogDate: progress.lastActivityDate

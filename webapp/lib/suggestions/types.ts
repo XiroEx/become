@@ -54,6 +54,11 @@ export interface RecentActivity {
     programId?: string
     exerciseSlugs: string[]
   }>
+  exercisePRs?: Array<{
+    exerciseSlug: string
+    exerciseName: string
+    dates: Date[]
+  }>
   streak?: { count: number; lastLogDate: Date | null }
   [extension: string]: unknown
 }

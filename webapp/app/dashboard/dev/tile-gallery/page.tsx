@@ -38,11 +38,32 @@ export default async function TileGalleryPage() {
           <LineTile metricId="_dev_line_workouts" window={WINDOW} />
         </section>
 
+        <section data-testid="gallery-strength-curve" className="mb-6">
+          <h2 className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+            LineTile — strength curve (bench press)
+          </h2>
+          <LineTile metricId="_dev_line_strength_curve" window={WINDOW} />
+        </section>
+
         <section data-testid="gallery-bar" className="mb-6">
           <h2 className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
             BarTile
           </h2>
           <BarTile metricId="_dev_bar_volume" window={WINDOW} />
+        </section>
+
+        <section data-testid="gallery-bar-volume-by-muscle" className="mb-6">
+          <h2 className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+            BarTile — weekly volume by muscle
+          </h2>
+          <BarTile metricId="_dev_bar_volume_by_muscle" window={WINDOW} />
+        </section>
+
+        <section data-testid="gallery-prs-timeline" className="mb-6">
+          <h2 className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+            LineTile — PRs timeline
+          </h2>
+          <LineTile metricId="_dev_line_prs_timeline" window={WINDOW} />
         </section>
 
         <section data-testid="gallery-number" className="mb-6">

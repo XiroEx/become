@@ -6,6 +6,7 @@ import { headers } from 'next/headers'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { ensureWorkoutMetricsRegistered } from '@/lib/metrics/workout'
 import { listAllMetrics } from '@/lib/metrics/registry'
 import {
   CustomizeTilesClient,
@@ -32,6 +33,8 @@ async function loadInitialPinned(): Promise<string[]> {
 }
 
 export default async function CustomizeTilesPage() {
+  ensureWorkoutMetricsRegistered()
+
   const [pinned, metrics] = await Promise.all([
     loadInitialPinned(),
     Promise.resolve(listAllMetrics()),
