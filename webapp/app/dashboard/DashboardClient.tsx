@@ -20,6 +20,7 @@ import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import type { FitnessGoal } from '@/models/User'
 import { Card } from '@/components/ui'
 import CustomizeTilesModal from '@/components/dashboard/CustomizeTilesModal'
+import { IntelligenceRotator } from '@/components/intelligence/IntelligenceRotator'
 import {
   TILE_DEFS,
   DEFAULT_TILE_IDS,
@@ -430,6 +431,11 @@ export default function DashboardClient() {
           </button>
         </div>
       </div>
+
+      {/* Intelligence rotator — server-picked metric tiles + suggestion
+          cards. Replaces the hardcoded tile list for this section. Empty
+          for users with no activity (silently rendered as a hint). */}
+      <IntelligenceRotator className="grid grid-cols-1 gap-3 sm:grid-cols-2" />
 
       {/* Resume Active Workout — only renders when there's an in-progress
           workout log for today; quietly disappears once it's completed. */}
