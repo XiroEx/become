@@ -112,7 +112,19 @@ test('recentActivityFromProgress: drops entries older than 30 days', () => {
     streakFreezes: 0,
     milestonesReached: [],
     totalWorkouts: 0,
-    exercisePRs: [],
+    exercisePRs: [
+      {
+        exerciseSlug: 'bench-press',
+        exerciseName: 'Bench Press',
+        maxWeight: {
+          weight: 225,
+          reps: 1,
+          date: new Date('2026-05-25T00:00:00Z'),
+        },
+        maxReps: null,
+        maxE1RM: null,
+      },
+    ],
     dismissedSuggestions: [],
     pinnedTiles: [],
     tileLastShownAt: [],
@@ -122,6 +134,8 @@ test('recentActivityFromProgress: drops entries older than 30 days', () => {
   const activity = recentActivityFromProgress(prog, NOW)
   assert.equal(activity.weightHistory?.length, 1)
   assert.equal(activity.weightHistory?.[0].value, 180)
+  assert.equal(activity.exercisePRs?.[0].exerciseSlug, 'bench-press')
+  assert.equal(activity.exercisePRs?.[0].dates[0].toISOString(), '2026-05-25T00:00:00.000Z')
   assert.equal(activity.streak?.count, 7)
 })
 
