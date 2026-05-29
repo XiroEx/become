@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Bell,
   Send,
+  LayoutGrid,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -443,6 +444,13 @@ export default function AdminOverviewPage() {
             className="flex-1 rounded-xl border border-zinc-200 px-4 py-2.5 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             View Analytics
+          </Link>
+          <Link
+            href="/dashboard/dev/tile-gallery"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Tile Gallery
           </Link>
           <button
             onClick={() => setShowConfirm(true)}
