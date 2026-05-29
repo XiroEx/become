@@ -51,6 +51,15 @@ test('metricsToAvailableTiles: respects defaultFreshness / defaultSignalStrength
   assert.equal(tiles[0].signalStrength, 0.4)
 })
 
+test('metricsToAvailableTiles: excludes dev fixture metrics from production candidates', () => {
+  const metrics: Metric[] = [
+    { id: '_dev_line_workouts', label: 'Dev', unit: 'x', domain: 'workout', trendDirection: 'up-good', compute: async () => [] },
+    { id: 'workout.prs-timeline', label: 'PRs', unit: 'lb', domain: 'workout', trendDirection: 'up-good', compute: async () => [] },
+  ]
+  const tiles = metricsToAvailableTiles(metrics)
+  assert.deepEqual(tiles.map((tile) => tile.tileId), ['workout.prs-timeline'])
+})
+
 // --- suggestionsToActive ----------------------------------------------
 
 test('suggestionsToActive: maps id+severity+source-tag', () => {
