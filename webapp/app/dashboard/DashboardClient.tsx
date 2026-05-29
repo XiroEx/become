@@ -435,7 +435,7 @@ export default function DashboardClient() {
       {/* Intelligence rotator — server-picked metric tiles + suggestion
           cards. Replaces the hardcoded tile list for this section. Empty
           for users with no activity (silently rendered as a hint). */}
-      <IntelligenceRotator className="grid grid-cols-1 gap-3 sm:grid-cols-2" />
+      <IntelligenceRotator className="grid grid-cols-1 gap-2 sm:grid-cols-2" />
 
       {/* Resume Active Workout — only renders when there's an in-progress
           workout log for today; quietly disappears once it's completed. */}

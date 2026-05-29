@@ -84,14 +84,14 @@ export function SuggestionCard({
       data-suggestion-id={suggestion.id}
       data-severity={suggestion.severity}
       className={cn(
-        'rounded-2xl ring-1 p-4',
+        'rounded-xl ring-1 p-3',
         styles.wrapper,
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-1.5 flex items-center gap-2">
             <span
               data-testid="suggestion-badge"
               className={cn(
@@ -110,7 +110,7 @@ export function SuggestionCard({
             <Link
               href={suggestion.primaryAction.href}
               data-testid="suggestion-primary-action"
-              className="mt-3 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-900 hover:bg-white"
+              className="mt-2 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-900 hover:bg-white"
             >
               {suggestion.primaryAction.label}
             </Link>
