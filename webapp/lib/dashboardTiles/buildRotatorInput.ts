@@ -45,13 +45,15 @@ export function metricsToAvailableTiles(
 ): AvailableTile[] {
   const freshness = opts.defaultFreshness ?? 1
   const signalStrength = opts.defaultSignalStrength ?? 0.7
-  return metrics.map((m) => ({
-    tileId: m.id,
-    freshness,
-    signalStrength,
-    // Tag with domain so goal weighting can apply.
-    tags: [m.domain],
-  }))
+  return metrics
+    .filter((m) => !m.id.startsWith('_dev_'))
+    .map((m) => ({
+      tileId: m.id,
+      freshness,
+      signalStrength,
+      // Tag with domain so goal weighting can apply.
+      tags: [m.domain],
+    }))
 }
 
 export function suggestionsToActive(
