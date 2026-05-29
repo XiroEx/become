@@ -151,15 +151,12 @@ export function IntelligenceRotator({
                   key={`m-${c.tileId}`}
                   data-testid="rotator-metric-summary"
                   data-tile-id={c.tileId}
-                  className="rounded-2xl bg-zinc-900/60 p-4 text-zinc-100 ring-1 ring-white/10"
+                  className="rounded-xl bg-zinc-900/60 p-3 text-zinc-100 ring-1 ring-white/10"
                 >
-                  <div className="text-xs uppercase tracking-wide text-zinc-500">
-                    {summary.domain}
-                  </div>
-                  <div className="mt-1 text-sm font-semibold">
+                  <div className="text-[11px] uppercase tracking-wide text-zinc-500">
                     {summary.label}
                   </div>
-                  <div className="mt-3 text-2xl font-semibold">
+                  <div className="mt-0.5 text-2xl font-semibold leading-tight">
                     {summary.latest
                       ? `${formatValue(summary.latest.value)} ${summary.unit}`.trim()
                       : 'No data yet'}
@@ -177,7 +174,7 @@ export function IntelligenceRotator({
                 key={`m-${c.tileId}`}
                 data-testid="rotator-missing-metric"
                 data-tile-id={c.tileId}
-                className="rounded-2xl bg-zinc-900/60 p-4 text-xs text-zinc-500"
+                className="rounded-xl bg-zinc-900/60 p-3 text-xs text-zinc-500"
               >
                 Tile {c.tileId} unavailable.
               </div>
@@ -200,7 +197,7 @@ export function IntelligenceRotator({
               key={`s-${c.suggestionId}`}
               data-testid="rotator-missing-suggestion"
               data-suggestion-id={c.suggestionId}
-              className="rounded-2xl bg-zinc-900/60 p-4 text-xs text-zinc-500"
+              className="rounded-xl bg-zinc-900/60 p-3 text-xs text-zinc-500"
             >
               Suggestion {c.suggestionId} unavailable.
             </div>
