@@ -7,7 +7,7 @@ import {
   isActiveProgramForSchedule,
   localDateKeyForUser,
   localHourForUser,
-} from '../../app/api/cron/notify/route'
+} from '../../lib/notifications/cronNotify'
 
 test('localHourForUser returns null when timezone offset is missing', () => {
   assert.equal(localHourForUser(new Date('2026-05-30T07:00:00Z'), undefined), null)
