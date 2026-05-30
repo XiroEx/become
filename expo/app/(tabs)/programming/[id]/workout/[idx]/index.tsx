@@ -1,15 +1,37 @@
 import { useLocalSearchParams } from "expo-router";
 import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ProgramDetailResponseSchema } from "@become/api-client";
 import { WorkoutOverview } from "@/components/programs/WorkoutOverview";
 import type { WorkoutOverviewViewModel } from "@/components/programs/WorkoutOverview";
+import { WEBAPP_BASE_URL } from "@/lib/config";
+import { useAuth } from "@/lib/auth/useAuth";
+import { useFetch } from "@/lib/hooks/useFetch";
+import { toWorkoutOverview } from "@/lib/programs/programDetail";
 
 export default function WorkoutOverviewRoute() {
-  const params = useLocalSearchParams<{ id?: string; idx?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    idx?: string;
+    phase?: string;
+  }>();
   const id = typeof params.id === "string" ? params.id : "";
   const idx = Number(params.idx ?? -1);
+  const phaseIndex = Number(params.phase ?? 0);
+  const { token } = useAuth();
 
-  if (!id || !Number.isFinite(idx) || idx < 0) {
+  const valid = !!id && Number.isFinite(idx) && idx >= 0;
+
+  const { data } = useFetch(
+    valid ? `/api/programs/${encodeURIComponent(id)}` : null,
+    ProgramDetailResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+    },
+  );
+
+  if (!valid) {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
@@ -22,9 +44,11 @@ export default function WorkoutOverviewRoute() {
     );
   }
 
-  const workout: WorkoutOverviewViewModel = {
+  const resolvedPhase = Number.isFinite(phaseIndex) && phaseIndex >= 0 ? phaseIndex : 0;
+  const workout: WorkoutOverviewViewModel = (data &&
+    toWorkoutOverview(data, resolvedPhase, idx)) || {
     programId: id,
-    phaseIndex: 0,
+    phaseIndex: resolvedPhase,
     workoutIndex: idx,
     title: "Loading…",
     exercises: [],

@@ -53,7 +53,14 @@ export function CheckInModal({
       weightLbs = parsed;
     }
     setError(null);
-    await onSubmit({ mood, weightLbs });
+    // Surface a submit failure inline so the user knows the check-in didn't
+    // save. On success the parent closes the modal; on rejection it stays open
+    // with this message so they can retry.
+    try {
+      await onSubmit({ mood, weightLbs });
+    } catch {
+      setError("Couldn't save your check-in. Please try again.");
+    }
   };
 
   return (

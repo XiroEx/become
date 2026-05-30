@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
 import { resolveToken } from "@/lib/theme/tokens";
+import { WEBAPP_BASE_URL } from "@/lib/config";
+import { useAuth } from "@/lib/auth/useAuth";
 import type { VerifyMode } from "@/lib/auth";
 
 export interface VerifyScreenProps {
@@ -15,7 +18,20 @@ export interface VerifyScreenProps {
   onFailure?: (error: unknown) => void;
 }
 
-export default function VerifyScreen({
+/**
+ * Default verify-link caller: POSTs the magic-link token to the real webapp
+ * backend. The server reads only `{ token }` (mode is implied by the link), and
+ * returns `{ token, user }`.
+ */
+function defaultVerifyFn(token: string): Promise<{ token: string }> {
+  return apiFetch("/api/auth/verify-link", VerifyLinkResponseSchema, {
+    method: "POST",
+    body: { token },
+    baseUrl: WEBAPP_BASE_URL,
+  });
+}
+
+export function VerifyScreen({
   verifyFn,
   onSuccess,
   onFailure,
@@ -47,18 +63,7 @@ export default function VerifyScreen({
     }
     /* eslint-enable react-hooks/set-state-in-effect */
     const fn =
-      verifyFn ??
-      (async (token: string, mode: VerifyMode) => {
-        const response = await fetch("/api/auth/verify-link", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, mode }),
-        });
-        if (!response.ok) {
-          throw new Error(`Verify failed (${response.status})`);
-        }
-        return (await response.json()) as { token: string };
-      });
+      verifyFn ?? ((token: string, _mode: VerifyMode) => defaultVerifyFn(token));
     let cancelled = false;
     (async () => {
       try {
@@ -66,7 +71,11 @@ export default function VerifyScreen({
         if (cancelled) return;
         setStatus("success");
         onSuccess?.(result.token);
-        router.replace("/");
+        // Land the user in the app. Mirrors login.tsx's post-auth target;
+        // navigating to "/" would strand them on the cold-open scaffold, which
+        // only redirects *unauthed* users (to /login) and never routes an
+        // authed user onward.
+        router.replace("/(tabs)/dashboard");
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
@@ -110,5 +119,21 @@ export default function VerifyScreen({
         )}
       </View>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Route entry point. Binds onSuccess to useAuth().setToken so a successful
+ * verify persists the JWT to SecureStore (and hydrates the user) — previously
+ * the route rendered VerifyScreen with no onSuccess, dropping the token.
+ */
+export default function VerifyRoute() {
+  const { setToken } = useAuth();
+  return (
+    <VerifyScreen
+      onSuccess={(jwt) => {
+        void setToken(jwt);
+      }}
+    />
   );
 }
