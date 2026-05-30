@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, Clock, Star, ChefHat, Loader2 } from 'lucide-react'
+import { Search, X, Plus, Clock, Star, ChefHat, Loader2, Globe } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 
 interface FoodSearchModalProps {
@@ -12,12 +12,18 @@ interface FoodSearchModalProps {
   onSelectFood: (food: IFoodEntry) => void
 }
 
+interface AlternateServing {
+  label: string
+  multiplier: number
+}
+
 interface FoodResult {
   _id: string
   name: string
   brand?: string
   servingSize: number
   servingUnit: string
+  alternateServings?: AlternateServing[]
   nutrition: {
     calories: number
     protein: number
@@ -27,6 +33,9 @@ interface FoodResult {
     sugar?: number
     sodium?: number
   }
+  source?: 'custom' | 'openfoodfacts'
+  image_url?: string
+  nutriscore_grade?: string
 }
 
 type TabId = 'all' | 'recent' | 'frequent' | 'custom'
@@ -50,6 +59,8 @@ export default function FoodSearchModal({
   const [loading, setLoading] = useState(false)
   const [selectedFood, setSelectedFood] = useState<FoodResult | null>(null)
   const [servings, setServings] = useState('1')
+  // Index into serving options: 0 = default serving, 1+ = alternate servings
+  const [selectedServingIdx, setSelectedServingIdx] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
@@ -63,6 +74,7 @@ export default function FoodSearchModal({
       setResults([])
       setSelectedFood(null)
       setServings('1')
+      setSelectedServingIdx(0)
       setActiveTab('all')
     }
   }, [isOpen])
@@ -126,24 +138,74 @@ export default function FoodSearchModal({
     }
   }, [query, activeTab, isOpen, fetchResults])
 
+  // Build serving options for the selected food
+  const servingOptions = useMemo(() => {
+    if (!selectedFood) return []
+
+    const options: { label: string; multiplier: number; servingSize: number; servingUnit: string }[] = [
+      {
+        label: `${selectedFood.servingSize} ${selectedFood.servingUnit}`,
+        multiplier: 1,
+        servingSize: selectedFood.servingSize,
+        servingUnit: selectedFood.servingUnit,
+      },
+    ]
+
+    if (selectedFood.alternateServings) {
+      for (const alt of selectedFood.alternateServings) {
+        options.push({
+          label: alt.label,
+          multiplier: alt.multiplier,
+          servingSize: Math.round(selectedFood.servingSize * alt.multiplier * 10) / 10,
+          servingUnit: selectedFood.servingUnit,
+        })
+      }
+    }
+
+    return options
+  }, [selectedFood])
+
+  // Current serving option
+  const currentServing = servingOptions[selectedServingIdx] || servingOptions[0]
+  const servingMultiplier = currentServing?.multiplier ?? 1
+
   const handleAddFood = () => {
-    if (!selectedFood) return
+    if (!selectedFood || !currentServing) return
 
     const numServings = Number(servings) || 1
+    const mult = servingMultiplier
+
+    // Scale nutrition by the serving option multiplier
+    const scaledNutrition = {
+      calories: Math.round(selectedFood.nutrition.calories * mult * 10) / 10,
+      protein: Math.round(selectedFood.nutrition.protein * mult * 10) / 10,
+      carbs: Math.round(selectedFood.nutrition.carbs * mult * 10) / 10,
+      fats: Math.round(selectedFood.nutrition.fats * mult * 10) / 10,
+      fiber: selectedFood.nutrition.fiber != null
+        ? Math.round(selectedFood.nutrition.fiber * mult * 10) / 10
+        : undefined,
+      sugar: selectedFood.nutrition.sugar != null
+        ? Math.round(selectedFood.nutrition.sugar * mult * 10) / 10
+        : undefined,
+      sodium: selectedFood.nutrition.sodium != null
+        ? Math.round(selectedFood.nutrition.sodium * mult * 10000) / 10000
+        : undefined,
+    }
 
     const entry: IFoodEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: selectedFood.name,
       brand: selectedFood.brand,
-      servingSize: selectedFood.servingSize,
-      servingUnit: selectedFood.servingUnit,
+      servingSize: currentServing.servingSize,
+      servingUnit: currentServing.servingUnit,
       servings: numServings,
-      nutrition: { ...selectedFood.nutrition },
+      nutrition: scaledNutrition,
     }
 
     onSelectFood(entry)
     setSelectedFood(null)
     setServings('1')
+    setSelectedServingIdx(0)
   }
 
   const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1)
@@ -247,6 +309,7 @@ export default function FoodSearchModal({
                           } else {
                             setSelectedFood(food)
                             setServings('1')
+                            setSelectedServingIdx(0)
                           }
                         }}
                         className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
@@ -256,9 +319,14 @@ export default function FoodSearchModal({
                         }`}
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
-                            {food.name}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
+                              {food.name}
+                            </p>
+                            {food.source === 'openfoodfacts' && (
+                              <Globe className="h-3 w-3 shrink-0 text-emerald-500" title="Open Food Facts" />
+                            )}
+                          </div>
                           <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
                             {food.brand && (
                               <span className="text-zinc-400 dark:text-zinc-500">
@@ -284,6 +352,25 @@ export default function FoodSearchModal({
                             className="overflow-hidden"
                           >
                             <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                              {/* Serving option selector (shown when alternate servings exist) */}
+                              {servingOptions.length > 1 && (
+                                <div className="mb-2.5 flex flex-wrap gap-1.5">
+                                  {servingOptions.map((opt, idx) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() => setSelectedServingIdx(idx)}
+                                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                                        selectedServingIdx === idx
+                                          ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                          : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+
                               <div className="flex items-center gap-3">
                                 <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                                   Servings
@@ -299,15 +386,15 @@ export default function FoodSearchModal({
                                 <div className="flex-1 text-right">
                                   <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
                                     <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {Math.round(food.nutrition.calories * (Number(servings) || 1))} cal
+                                      {Math.round(food.nutrition.calories * servingMultiplier * (Number(servings) || 1))} cal
                                     </span>
                                   </p>
                                   <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                    P: {Math.round(food.nutrition.protein * (Number(servings) || 1))}g
+                                    P: {Math.round(food.nutrition.protein * servingMultiplier * (Number(servings) || 1))}g
                                     {' '}&middot;{' '}
-                                    C: {Math.round(food.nutrition.carbs * (Number(servings) || 1))}g
+                                    C: {Math.round(food.nutrition.carbs * servingMultiplier * (Number(servings) || 1))}g
                                     {' '}&middot;{' '}
-                                    F: {Math.round(food.nutrition.fats * (Number(servings) || 1))}g
+                                    F: {Math.round(food.nutrition.fats * servingMultiplier * (Number(servings) || 1))}g
                                   </p>
                                 </div>
                               </div>
