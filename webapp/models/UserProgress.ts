@@ -131,6 +131,10 @@ export interface IUserProgress {
   // array of { id, at } subdocs (not a Map) so .lean() queries return plain
   // JSON arrays that downstream code can iterate without Mongoose Map APIs.
   tileLastShownAt: ITileLastShown[]
+  // Unified dashboard tile layout (supersedes pinnedTiles). Ordered list of
+  // stat/metric/smart-rotating tiles with size + lock. Defaults to [] for
+  // legacy docs; the layout API migrates from pinnedTiles on first GET.
+  dashboardLayout: IDashboardTile[]
   createdAt?: Date
   updatedAt?: Date
 }
@@ -143,6 +147,15 @@ export interface IDismissedSuggestion {
 export interface ITileLastShown {
   id: string
   at: Date
+}
+
+// Unified dashboard tile (see lib/dashboardLayout/types.ts for the canonical
+// shape + validators). Persisted in document order; max 20 enforced at the API.
+export interface IDashboardTile {
+  id: string
+  kind: 'stat' | 'metric' | 'smart-rotating'
+  size: '1x1' | '2x1'
+  locked?: string | null
 }
 
 const WeightEntrySchema = new Schema<IWeightEntry>({
@@ -224,6 +237,13 @@ const DismissedSuggestionSchema = new Schema<IDismissedSuggestion>({
   dismissedAt: { type: Date, required: true, default: Date.now },
 }, { _id: false })
 
+const DashboardTileSchema = new Schema<IDashboardTile>({
+  id: { type: String, required: true },
+  kind: { type: String, required: true, enum: ['stat', 'metric', 'smart-rotating'] },
+  size: { type: String, required: true, enum: ['1x1', '2x1'], default: '1x1' },
+  locked: { type: String, default: null },
+}, { _id: false })
+
 const TileLastShownSchema = new Schema<ITileLastShown>({
   id: { type: String, required: true },
   at: { type: Date, required: true, default: Date.now },
@@ -289,6 +309,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
   dismissedSuggestions: { type: [DismissedSuggestionSchema], default: [] },
   pinnedTiles: { type: [String], default: [] },
   tileLastShownAt: { type: [TileLastShownSchema], default: [] },
+  dashboardLayout: { type: [DashboardTileSchema], default: [] },
 }, {
   timestamps: true
 })
