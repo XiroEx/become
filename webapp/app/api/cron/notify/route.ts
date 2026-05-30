@@ -14,10 +14,14 @@ function utcDateKey(date: Date) {
 /**
  * Convert a UTC time to the user's local hour given their stored offset.
  * `tzOffsetMinutes` matches Date.getTimezoneOffset(): positive when local is
- * BEHIND UTC (e.g. 300 for EST). Defaults to UTC when offset is unknown.
+ * BEHIND UTC (e.g. 300 for EST). Returns null when the offset is unknown —
+ * callers MUST NOT send time-windowed notifications in that case, otherwise a
+ * user with no captured timezone gets pushes at the wrong local hour (this was
+ * the cause of 3am workout reminders: missing offset silently meant UTC).
  */
-function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number {
-  const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
+function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number | null {
+  if (!Number.isFinite(tzOffsetMinutes as number)) return null
+  const offset = tzOffsetMinutes as number
   const utcMs = now.getTime()
   const localMs = utcMs - offset * 60 * 1000
   return new Date(localMs).getUTCHours()
@@ -31,7 +35,7 @@ function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): st
 }
 
 // Local-hour windows (in user's local time)
-const WORKOUT_REMINDER_START_HOUR = 7   // 7am local
+const WORKOUT_REMINDER_START_HOUR = 6   // 6am local
 const WORKOUT_REMINDER_END_HOUR = 11    // up to 10:59am local
 const REENGAGEMENT_START_HOUR = 12      // 12pm local
 const REENGAGEMENT_END_HOUR = 18        // up to 5:59pm local
@@ -142,7 +146,7 @@ export async function GET(request: NextRequest) {
   if (schedulesWithRecent.length > 0) {
     const userIds = schedulesWithRecent.map((s) => s.userId)
     const progressDocs = await UserProgress.find({ userId: { $in: userIds } })
-      .select('userId notificationPrefs lastPushSentAt timezoneOffset')
+      .select('userId notificationPrefs lastPushSentAt timezoneOffset activePrograms')
       .lean()
 
     const progressByUserId = new Map(
@@ -154,7 +158,23 @@ export async function GET(request: NextRequest) {
 
       if (progress?.notificationPrefs?.workoutReminder === false) continue
 
+      // Only remind for programs the user is actively running. A paused or
+      // completed program (e.g. an abandoned split) still has scheduled slots
+      // in its Schedule doc, so without this guard each one fired its own
+      // "today's workout" push. Match the schedule's program against the
+      // user's activePrograms by programId and require active/in-progress.
+      const activeProgram = (progress?.activePrograms as
+        | Array<{ programId: string; status?: string }>
+        | undefined)?.find((ap) => ap.programId === sched.programId)
+      if (!activeProgram) continue
+      if (activeProgram.status && activeProgram.status !== 'active' && activeProgram.status !== 'in-progress') {
+        continue
+      }
+
+      // Skip when we don't know the user's timezone — otherwise the UTC
+      // fallback fires reminders in the small hours of their local day.
       const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+      if (userLocalHour === null) continue
       if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) {
         continue
       }
@@ -220,6 +240,10 @@ export async function GET(request: NextRequest) {
 
   for (const u of lapsedUsers) {
     const userLocalHour = localHourForUser(now, u.timezoneOffset)
+    if (userLocalHour === null) {
+      results.skippedByWindow++
+      continue
+    }
     if (userLocalHour < REENGAGEMENT_START_HOUR || userLocalHour > REENGAGEMENT_END_HOUR) {
       results.skippedByWindow++
       continue
