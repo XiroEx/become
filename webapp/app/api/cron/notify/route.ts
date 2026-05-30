@@ -6,11 +6,6 @@ import { sendPushToUser } from '@/lib/pushNotification'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Returns the UTC calendar date string "YYYY-MM-DD" for comparison */
-function utcDateKey(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
 /**
  * Convert a UTC time to the user's local hour given their stored offset.
  * `tzOffsetMinutes` matches Date.getTimezoneOffset(): positive when local is
@@ -19,7 +14,7 @@ function utcDateKey(date: Date) {
  * user with no captured timezone gets pushes at the wrong local hour (this was
  * the cause of 3am workout reminders: missing offset silently meant UTC).
  */
-function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number | null {
+export function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number | null {
   if (!Number.isFinite(tzOffsetMinutes as number)) return null
   const offset = tzOffsetMinutes as number
   const utcMs = now.getTime()
@@ -28,17 +23,28 @@ function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): numbe
 }
 
 /** Local-date key (YYYY-MM-DD) for a user given their stored offset. */
-function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): string {
+export function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): string {
   const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
   const localMs = now.getTime() - offset * 60 * 1000
   return new Date(localMs).toISOString().slice(0, 10)
 }
 
+export function isActiveProgramForSchedule(
+  activePrograms: Array<{ programId: string; status?: string }> | undefined,
+  scheduleProgramId: string | undefined,
+): boolean {
+  if (!scheduleProgramId) return false
+  const activeProgram = activePrograms?.find((ap) => ap.programId === scheduleProgramId)
+  if (!activeProgram) return false
+  return !activeProgram.status || activeProgram.status === 'active' || activeProgram.status === 'in-progress'
+}
+
 // Local-hour windows (in user's local time)
-const WORKOUT_REMINDER_START_HOUR = 6   // 6am local
+export const WORKOUT_REMINDER_START_HOUR = 7   // 7am local
 const WORKOUT_REMINDER_END_HOUR = 11    // up to 10:59am local
 const REENGAGEMENT_START_HOUR = 12      // 12pm local
 const REENGAGEMENT_END_HOUR = 18        // up to 5:59pm local
+export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -126,7 +132,7 @@ export async function GET(request: NextRequest) {
   // ── 2. Workout reminder (7am–11am LOCAL per user) ─────────────────────────
   // Cron runs hourly; for each user we compute their local hour from their
   // stored timezoneOffset and only send if it's morning for them. Users with
-  // no captured tz default to UTC, preserving prior behavior.
+  // no captured timezone are skipped until the client records an offset.
   // Gate: one reminder per user per LOCAL calendar day.
   //
   // Find any user with a workout scheduled across a wide UTC window (covers
@@ -141,7 +147,7 @@ export async function GET(request: NextRequest) {
         status: 'scheduled',
       },
     },
-  }).select('userId scheduledWorkouts').lean()
+  }).select(WORKOUT_SCHEDULE_SELECT).lean()
 
   if (schedulesWithRecent.length > 0) {
     const userIds = schedulesWithRecent.map((s) => s.userId)
@@ -163,13 +169,7 @@ export async function GET(request: NextRequest) {
       // in its Schedule doc, so without this guard each one fired its own
       // "today's workout" push. Match the schedule's program against the
       // user's activePrograms by programId and require active/in-progress.
-      const activeProgram = (progress?.activePrograms as
-        | Array<{ programId: string; status?: string }>
-        | undefined)?.find((ap) => ap.programId === sched.programId)
-      if (!activeProgram) continue
-      if (activeProgram.status && activeProgram.status !== 'active' && activeProgram.status !== 'in-progress') {
-        continue
-      }
+      if (!isActiveProgramForSchedule(progress?.activePrograms, sched.programId)) continue
 
       // Skip when we don't know the user's timezone — otherwise the UTC
       // fallback fires reminders in the small hours of their local day.
