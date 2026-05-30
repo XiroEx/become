@@ -118,9 +118,9 @@ function MetricTileCard({ metric }: { metric: MetricSummary }) {
             </div>
             <div className="-mx-1">
               {kind === 'bar' ? (
-                <BarTileChart data={metric.data} unit={metric.unit} />
+                <BarTileChart data={metric.data} />
               ) : (
-                <LineTileChart data={metric.data} unit={metric.unit} />
+                <LineTileChart data={metric.data} />
               )}
             </div>
           </>
