@@ -1,4 +1,4 @@
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { act, render, fireEvent, waitFor } from "@testing-library/react-native";
 import {
   LiveWorkoutClient,
   type LiveWorkoutViewModel,
@@ -134,5 +134,147 @@ describe("LiveWorkoutClient", () => {
       <LiveWorkoutClient workout={baseWorkout} />,
     );
     expect(queryByTestId("live-workout-group-nav")).toBeNull();
+  });
+});
+
+function mockInterval() {
+  let fn: (() => void) | null = null;
+  const setI = ((f: () => void) => {
+    fn = f;
+    return 1 as unknown as ReturnType<typeof setInterval>;
+  }) as unknown as typeof setInterval;
+  const clearI = (() => {
+    fn = null;
+  }) as unknown as typeof clearInterval;
+  return { setI, clearI, tick: (n: number) => { for (let i = 0; i < n; i++) fn?.(); } };
+}
+
+describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
+  const grouped: LiveWorkoutViewModel = {
+    programId: "p",
+    workoutTitle: "Circuit Day",
+    exercises: [
+      { slug: "a", name: "A", sets: 1, groupId: "g1", groupLabel: "Superset 1", notes: "go slow" },
+      { slug: "b", name: "B", sets: 1, groupId: "g1", groupLabel: "Superset 1" },
+      { slug: "c", name: "C", sets: 1 },
+    ],
+  };
+
+  it("renders a group header once per group, in exercise order", () => {
+    const { getByTestId, getAllByTestId } = render(
+      <LiveWorkoutClient workout={grouped} />,
+    );
+    // Header appears for the first member of g1 only.
+    expect(getByTestId("live-workout-group-g1")).toBeTruthy();
+    expect(getAllByTestId("live-workout-group-g1")).toHaveLength(1);
+    // Exercises render in order a, b, c.
+    expect(getByTestId("live-workout-exercise-a")).toBeTruthy();
+    expect(getByTestId("live-workout-exercise-b")).toBeTruthy();
+    expect(getByTestId("live-workout-exercise-c")).toBeTruthy();
+  });
+
+  it("renders per-exercise notes", () => {
+    const { getByTestId } = render(<LiveWorkoutClient workout={grouped} />);
+    expect(getByTestId("live-workout-a-notes").props.children).toBe("go slow");
+  });
+
+  it("fires onRequestSwap with the slug when Swap is tapped", () => {
+    const onRequestSwap = jest.fn();
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={grouped} onRequestSwap={onRequestSwap} />,
+    );
+    fireEvent.press(getByTestId("live-workout-a-swap"));
+    expect(onRequestSwap).toHaveBeenCalledWith("a");
+  });
+
+  it("starts a rest timer that ticks down when a set is completed", () => {
+    const { setI, clearI, tick } = mockInterval();
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutClient
+        workout={{
+          programId: "p",
+          workoutTitle: "W",
+          exercises: [{ slug: "a", name: "A", sets: 1, restSec: 5 }],
+        }}
+        restTimerSetInterval={setI}
+        restTimerClearInterval={clearI}
+      />,
+    );
+    expect(queryByTestId("live-workout-rest")).toBeNull();
+    // Complete set 0.
+    fireEvent.press(getByTestId("live-workout-a-set-0-complete"));
+    expect(getByTestId("live-workout-rest")).toBeTruthy();
+    expect(getByTestId("live-workout-rest-time").props.children).toBe("0:05");
+    act(() => tick(2));
+    expect(getByTestId("live-workout-rest-time").props.children).toBe("0:03");
+  });
+});
+
+describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate", () => {
+  const trackedWorkout: LiveWorkoutViewModel = {
+    programId: "p",
+    workoutTitle: "Conditioning",
+    exercises: [
+      { slug: "plank", name: "Plank", sets: 1, trackingType: "time" },
+      { slug: "run", name: "Treadmill Run", sets: 1, trackingType: "time_distance" },
+      { slug: "pushup", name: "Push-up", sets: 1, trackingType: "reps" },
+    ],
+  };
+
+  it("renders only the inputs each trackingType needs", () => {
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutClient workout={trackedWorkout} />,
+    );
+    // time → duration only (no weight, no reps, no distance)
+    expect(getByTestId("live-workout-plank-set-0-duration")).toBeTruthy();
+    expect(queryByTestId("live-workout-plank-set-0-weight")).toBeNull();
+    expect(queryByTestId("live-workout-plank-set-0-reps")).toBeNull();
+    expect(queryByTestId("live-workout-plank-set-0-distance")).toBeNull();
+    // time_distance → duration + distance
+    expect(getByTestId("live-workout-run-set-0-duration")).toBeTruthy();
+    expect(getByTestId("live-workout-run-set-0-distance")).toBeTruthy();
+    expect(queryByTestId("live-workout-run-set-0-weight")).toBeNull();
+    // reps → reps only
+    expect(getByTestId("live-workout-pushup-set-0-reps")).toBeTruthy();
+    expect(queryByTestId("live-workout-pushup-set-0-weight")).toBeNull();
+    expect(queryByTestId("live-workout-pushup-set-0-duration")).toBeNull();
+  });
+
+  it("logging a duration set persists durationSec to the grid (onGridChange)", () => {
+    const onGridChange = jest.fn();
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
+    );
+    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "45");
+    const lastGrid = onGridChange.mock.calls.at(-1)![0];
+    expect(lastGrid.plank[0].durationSec).toBe(45);
+  });
+
+  it("logging a time_distance set captures both duration and distance", () => {
+    const onGridChange = jest.fn();
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
+    );
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "600");
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-distance"), "1500");
+    const lastGrid = onGridChange.mock.calls.at(-1)![0];
+    expect(lastGrid.run[0].durationSec).toBe(600);
+    expect(lastGrid.run[0].distance).toBe(1500);
+  });
+
+  it("rehydrates logged duration/distance from a restored grid across remount", () => {
+    // Simulate the SecureStore cache returning a prior snapshot on re-entry.
+    const restoredGrid = {
+      run: [{ reps: null, weight: null, durationSec: 600, distance: 1500, completed: true }],
+    };
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={trackedWorkout} restoredGrid={restoredGrid} />,
+    );
+    expect(
+      getByTestId("live-workout-run-set-0-duration").props.value,
+    ).toBe("600");
+    expect(
+      getByTestId("live-workout-run-set-0-distance").props.value,
+    ).toBe("1500");
   });
 });
