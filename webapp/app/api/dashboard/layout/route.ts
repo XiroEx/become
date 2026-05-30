@@ -22,7 +22,7 @@ import {
   resolveLayoutForGet,
   parseStatPrefParam,
 } from '@/lib/dashboardLayout/migrate'
-import { validateLayoutPayload } from '@/lib/dashboardTiles/validatePinnedTiles'
+import { validateLayoutPayload } from '@/lib/dashboardLayout/validateLayout'
 import type { DashboardTile } from '@/lib/dashboardLayout/types'
 import type { IDashboardTile } from '@/models/UserProgress'
 
