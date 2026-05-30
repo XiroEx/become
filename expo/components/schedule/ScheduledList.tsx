@@ -1,5 +1,6 @@
 import { View, Text, Pressable } from "react-native";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
 import {
   sortSlotsByDate,
   type ScheduledSlot,
@@ -17,12 +18,15 @@ const STATUS_LABEL: Record<SlotStatus, string> = {
 export interface ScheduledListProps {
   slots: ScheduledSlot[];
   onSelectSlot?: (slot: ScheduledSlot) => void;
+  /** When provided, a Reschedule button is shown on each scheduled slot. */
+  onReschedule?: (slot: ScheduledSlot) => void;
   testID?: string;
 }
 
 export function ScheduledList({
   slots,
   onSelectSlot,
+  onReschedule,
   testID = "scheduled-list",
 }: ScheduledListProps) {
   const sorted = sortSlotsByDate(slots);
@@ -55,6 +59,17 @@ export function ScheduledList({
             >
               {STATUS_LABEL[slot.status]}
             </Text>
+            {onReschedule && slot.status === "scheduled" ? (
+              <View style={{ marginTop: 8 }}>
+                <Button
+                  testID={`${testID}-reschedule-${slot.date}-${slot.workoutIndex}`}
+                  variant="secondary"
+                  onPress={() => onReschedule(slot)}
+                >
+                  Reschedule
+                </Button>
+              </View>
+            ) : null}
           </Card>
         </Pressable>
       ))}

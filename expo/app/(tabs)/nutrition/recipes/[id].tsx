@@ -1,14 +1,29 @@
 import { useLocalSearchParams } from "expo-router";
 import { Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { RecipeDetailResponseSchema } from "@become/api-client";
 import {
   RecipeDetail,
   type RecipeDetailViewModel,
 } from "@/components/recipes/RecipeDetail";
+import { WEBAPP_BASE_URL } from "@/lib/config";
+import { useAuth } from "@/lib/auth/useAuth";
+import { useFetch } from "@/lib/hooks/useFetch";
+import { toRecipeDetailViewModel } from "@/lib/nutrition/recipes";
 
 export default function RecipeDetailRoute() {
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
+  const { token } = useAuth();
+
+  const { data } = useFetch(
+    id ? `/api/nutrition/recipes/${encodeURIComponent(id)}` : null,
+    RecipeDetailResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+    },
+  );
 
   if (!id) {
     return (
@@ -23,16 +38,17 @@ export default function RecipeDetailRoute() {
     );
   }
 
-  // Placeholder hydrate — real /api/nutrition/recipes/[id] wiring lands later.
-  const placeholder: RecipeDetailViewModel = {
-    id,
-    name: "Loading…",
-    description: "",
-    ingredients: [],
-    instructions: [],
-    perServing: { kcal: 0, protein: 0, carbs: 0, fat: 0 },
-    servings: 1,
-  };
+  const recipe: RecipeDetailViewModel = data
+    ? toRecipeDetailViewModel(data)
+    : {
+        id,
+        name: "Loading…",
+        description: "",
+        ingredients: [],
+        instructions: [],
+        perServing: { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+        servings: 1,
+      };
 
   return (
     <SafeAreaView
@@ -41,9 +57,9 @@ export default function RecipeDetailRoute() {
       testID="recipe-detail-route"
     >
       <RecipeDetail
-        recipe={placeholder}
+        recipe={recipe}
         onSaveAsMeal={() => {
-          /* mutation lands in follow-up */
+          /* save-as-meal mutation is covered by the food-log phase */
         }}
       />
     </SafeAreaView>
