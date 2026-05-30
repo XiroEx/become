@@ -7,3 +7,8 @@ export * from './schemas/mood';
 export * from './schemas/workouts';
 export * from './schemas/schedule';
 export * from './schemas/programs';
+export * from './schemas/streak';
+export * from './schemas/exercises';
+export * from './schemas/nutrition';
+export * from './schemas/chat';
+export * from './schemas/admin';

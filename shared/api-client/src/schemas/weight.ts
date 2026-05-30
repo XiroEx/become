@@ -22,6 +22,27 @@ export const LogWeightResponseSchema = z.object({
   entry: WeightEntrySchema.optional(),
 });
 
+// GET /api/weight returns skip-tracking + prompt state (not the history).
+// Mirrors webapp/app/api/weight/route.ts GET. The POST body uses `skip`
+// (boolean) + `weight` (nullable) — see webapp POST.
+export const WeightCheckResponseSchema = z
+  .object({
+    needsWeightCheck: z.boolean().optional(),
+    consecutiveSkips: z.number().optional(),
+    daysSinceLastEntry: z.number().optional(),
+    lastWeight: z.number().nullable().optional(),
+    todaysWeight: z.number().nullable().optional(),
+  })
+  .passthrough();
+
+export const WeightPostRequestSchema = z.object({
+  weight: z.number().positive().nullable(),
+  skip: z.boolean().optional(),
+  bodyFat: z.number().optional(),
+});
+
+export type WeightCheckResponse = z.infer<typeof WeightCheckResponseSchema>;
+export type WeightPostRequest = z.infer<typeof WeightPostRequestSchema>;
 export type WeightEntry = z.infer<typeof WeightEntrySchema>;
 export type WeightHistoryResponse = z.infer<typeof WeightHistoryResponseSchema>;
 export type LogWeightRequest = z.infer<typeof LogWeightRequestSchema>;

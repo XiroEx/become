@@ -39,6 +39,14 @@ export interface ProgramDetailProps {
   program: ProgramDetailViewModel;
   onPhasePress?: (phaseIndex: number) => void;
   onStart?: () => void;
+  /** Enroll in this program. When provided, drives the primary action button. */
+  onEnroll?: () => void;
+  /** Adjust the enrolled start date. Button renders only when provided. */
+  onSetStartDate?: () => void;
+  /** Abandon the program. Button renders only when provided. */
+  onAbandon?: () => void;
+  /** Disables the action buttons while a mutation is in flight. */
+  actionPending?: boolean;
   /** Tier-3 'Edit in browser' launcher — defaults to expo-web-browser. */
   browserLauncher?: BrowserLauncher;
   testID?: string;
@@ -48,6 +56,10 @@ export function ProgramDetail({
   program,
   onPhasePress,
   onStart,
+  onEnroll,
+  onSetStartDate,
+  onAbandon,
+  actionPending = false,
   browserLauncher = defaultBrowserLauncher,
   testID = "program-detail",
 }: ProgramDetailProps) {
@@ -77,9 +89,35 @@ export function ProgramDetail({
         </View>
       </View>
 
-      <Button testID={`${testID}-start`} onPress={onStart ?? (() => {})}>
-        Start program
+      <Button
+        testID={`${testID}-start`}
+        onPress={onEnroll ?? onStart ?? (() => {})}
+        disabled={actionPending}
+      >
+        {onEnroll ? "Enroll in program" : "Start program"}
       </Button>
+
+      {onSetStartDate ? (
+        <Button
+          testID={`${testID}-set-start-date`}
+          variant="secondary"
+          onPress={onSetStartDate}
+          disabled={actionPending}
+        >
+          Change start date
+        </Button>
+      ) : null}
+
+      {onAbandon ? (
+        <Button
+          testID={`${testID}-abandon`}
+          variant="secondary"
+          onPress={onAbandon}
+          disabled={actionPending}
+        >
+          Abandon program
+        </Button>
+      ) : null}
 
       <View style={{ gap: 12 }}>
         {program.phases.map((phase) => (

@@ -7,11 +7,19 @@ import {
   totalWeightHelper,
   weightLabel,
 } from "@/lib/live/bellStyle";
+import {
+  setInputsForTrackingType,
+  type SetInputs,
+} from "@/lib/live/trackingInputs";
 
 export interface LiveSetState {
   reps: number | null;
   weight: number | null;
   completed: boolean;
+  /** Seconds — for time / time_distance / intervals tracking types. */
+  durationSec?: number | null;
+  /** Meters — for time_distance / distance tracking types. */
+  distance?: number | null;
 }
 
 export interface LiveSetRowProps {
@@ -20,8 +28,17 @@ export interface LiveSetRowProps {
   state: LiveSetState;
   /** Last completed performance of this set (prefill source). */
   prefill?: LiveSetState | null;
+  /** Canonical exercise trackingType — selects which inputs render. */
+  trackingType?: string | null;
   onChange: (next: LiveSetState) => void;
   testID?: string;
+}
+
+/** Parse an input string to a number-or-null, ignoring non-finite garbage. */
+function parseNum(text: string): number | null {
+  if (text === "") return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function LiveSetRow({
@@ -29,10 +46,12 @@ export function LiveSetRow({
   bellStyle,
   state,
   prefill,
+  trackingType,
   onChange,
   testID,
 }: LiveSetRowProps) {
   const tid = testID ?? `live-set-${setIndex}`;
+  const inputs: SetInputs = setInputsForTrackingType(trackingType);
   const helper = totalWeightHelper(bellStyle, state.weight ?? prefill?.weight);
 
   return (
@@ -46,62 +65,96 @@ export function LiveSetRow({
       >
         {setIndex + 1}
       </Text>
-      <View style={{ flex: 1 }}>
-        <Input
-          testID={`${tid}-weight`}
-          label={weightLabel(bellStyle)}
-          keyboardType="decimal-pad"
-          value={state.weight !== null ? String(state.weight) : ""}
-          onChangeText={(text) => {
-            const parsed = text === "" ? null : Number(text);
-            onChange({
-              ...state,
-              weight: Number.isFinite(parsed) ? (parsed as number) : null,
-            });
-          }}
-          placeholder={
-            prefill?.weight !== null && prefill?.weight !== undefined
-              ? String(prefill.weight)
-              : "0"
-          }
-        />
-        {helper ? (
-          <Text
-            testID={`${tid}-helper`}
-            className="text-muted-foreground text-xs mt-1"
-          >
-            {helper}
-          </Text>
-        ) : null}
-        {prefill ? (
-          <Text
-            testID={`${tid}-prefill`}
-            className="text-muted-foreground text-xs mt-1"
-          >
-            Last: {prefill.weight ?? "—"} × {prefill.reps ?? "—"}
-          </Text>
-        ) : null}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Input
-          testID={`${tid}-reps`}
-          label="Reps"
-          keyboardType="number-pad"
-          value={state.reps !== null ? String(state.reps) : ""}
-          onChangeText={(text) => {
-            const parsed = text === "" ? null : Number(text);
-            onChange({
-              ...state,
-              reps: Number.isFinite(parsed) ? (parsed as number) : null,
-            });
-          }}
-          placeholder={
-            prefill?.reps !== null && prefill?.reps !== undefined
-              ? String(prefill.reps)
-              : "0"
-          }
-        />
-      </View>
+      {inputs.weight ? (
+        <View style={{ flex: 1 }}>
+          <Input
+            testID={`${tid}-weight`}
+            label={weightLabel(bellStyle)}
+            keyboardType="decimal-pad"
+            value={state.weight !== null ? String(state.weight) : ""}
+            onChangeText={(text) =>
+              onChange({ ...state, weight: parseNum(text) })
+            }
+            placeholder={
+              prefill?.weight !== null && prefill?.weight !== undefined
+                ? String(prefill.weight)
+                : "0"
+            }
+          />
+          {helper ? (
+            <Text
+              testID={`${tid}-helper`}
+              className="text-muted-foreground text-xs mt-1"
+            >
+              {helper}
+            </Text>
+          ) : null}
+          {prefill ? (
+            <Text
+              testID={`${tid}-prefill`}
+              className="text-muted-foreground text-xs mt-1"
+            >
+              Last: {prefill.weight ?? "—"} × {prefill.reps ?? "—"}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+      {inputs.reps ? (
+        <View style={{ flex: 1 }}>
+          <Input
+            testID={`${tid}-reps`}
+            label="Reps"
+            keyboardType="number-pad"
+            value={state.reps !== null ? String(state.reps) : ""}
+            onChangeText={(text) => onChange({ ...state, reps: parseNum(text) })}
+            placeholder={
+              prefill?.reps !== null && prefill?.reps !== undefined
+                ? String(prefill.reps)
+                : "0"
+            }
+          />
+        </View>
+      ) : null}
+      {inputs.duration ? (
+        <View style={{ flex: 1 }}>
+          <Input
+            testID={`${tid}-duration`}
+            label="Time (s)"
+            keyboardType="number-pad"
+            value={
+              state.durationSec !== null && state.durationSec !== undefined
+                ? String(state.durationSec)
+                : ""
+            }
+            onChangeText={(text) =>
+              onChange({ ...state, durationSec: parseNum(text) })
+            }
+            placeholder={
+              prefill?.durationSec != null ? String(prefill.durationSec) : "0"
+            }
+          />
+        </View>
+      ) : null}
+      {inputs.distance ? (
+        <View style={{ flex: 1 }}>
+          <Input
+            testID={`${tid}-distance`}
+            label="Dist (m)"
+            keyboardType="decimal-pad"
+            value={
+              state.distance !== null && state.distance !== undefined
+                ? String(state.distance)
+                : ""
+            }
+            onChangeText={(text) =>
+              onChange({ ...state, distance: parseNum(text) })
+            }
+            placeholder={
+              prefill?.distance != null ? String(prefill.distance) : "0"
+            }
+          />
+        </View>
+      ) : null}
       <Pressable
         testID={`${tid}-complete`}
         onPress={() => onChange({ ...state, completed: !state.completed })}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -27,6 +27,13 @@ export interface DashboardScreenProps {
   /** Controls modal externally for testability. Defaults to internal state. */
   checkInOpen?: boolean;
   onCheckInOpenChange?: (open: boolean) => void;
+  /** Initial-load skeleton (no data yet). Distinct from pull-to-refresh. */
+  loading?: boolean;
+  /** Inline error banner text; null/undefined hides it. */
+  errorText?: string | null;
+  /** Pull-to-refresh wiring. */
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export function DashboardScreen({
@@ -39,6 +46,10 @@ export function DashboardScreen({
   submittingCheckIn = false,
   checkInOpen,
   onCheckInOpenChange,
+  loading = false,
+  errorText,
+  refreshing = false,
+  onRefresh,
 }: DashboardScreenProps) {
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const isControlled = checkInOpen !== undefined;
@@ -48,13 +59,64 @@ export function DashboardScreen({
     else setInternalOpen(value);
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView
+        edges={["top", "bottom"]}
+        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        testID="dashboard-screen"
+      >
+        <View
+          testID="dashboard-skeleton"
+          style={{ padding: 16, gap: 16 }}
+          accessibilityLabel="Loading your dashboard"
+        >
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={{
+                height: i === 0 ? 32 : 96,
+                borderRadius: 12,
+                backgroundColor: "#1a1a1a",
+              }}
+            />
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
       style={{ flex: 1, backgroundColor: "#0a0a0a" }}
       testID="dashboard-screen"
     >
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <ScrollView
+        testID="dashboard-scroll"
+        contentContainerStyle={{ padding: 16, gap: 16 }}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              testID="dashboard-refresh"
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+            />
+          ) : undefined
+        }
+      >
+        {errorText ? (
+          <View
+            testID="dashboard-error"
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: "#3a1212",
+            }}
+          >
+            <Text className="text-destructive text-sm">{errorText}</Text>
+          </View>
+        ) : null}
         <View>
           <Text
             testID="dashboard-greeting"

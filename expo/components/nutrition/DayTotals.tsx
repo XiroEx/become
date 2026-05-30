@@ -1,4 +1,4 @@
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import {
   totalForDay,
   totalsByMeal,
@@ -10,6 +10,12 @@ export interface DayTotalsProps {
   date: string;
   entries: MealEntry[];
   kcalTarget?: number;
+  /**
+   * When provided, each logged food renders with a remove (×) control wired to
+   * this callback. Omitted on the compact dashboard/overview, supplied on the
+   * detailed day-log screen.
+   */
+  onRemoveEntry?: (entry: MealEntry) => void;
   testID?: string;
 }
 
@@ -24,6 +30,7 @@ export function DayTotals({
   date,
   entries,
   kcalTarget,
+  onRemoveEntry,
   testID = "day-totals",
 }: DayTotalsProps) {
   const totals = totalForDay(entries, date);
@@ -72,17 +79,47 @@ export function DayTotals({
       </View>
       <View style={{ marginTop: 12, gap: 4 }}>
         {(["breakfast", "lunch", "dinner", "snack"] as MealType[]).map((m) => (
-          <View
-            key={m}
-            testID={`${testID}-meal-${m}`}
-            style={{ flexDirection: "row", justifyContent: "space-between" }}
-          >
-            <Text className="text-muted-foreground text-xs">
-              {MEAL_LABELS[m]}
-            </Text>
-            <Text className="text-muted-foreground text-xs">
-              {Math.round(perMeal[m].kcal)} kcal
-            </Text>
+          <View key={m} testID={`${testID}-meal-${m}`}>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <Text className="text-muted-foreground text-xs">
+                {MEAL_LABELS[m]}
+              </Text>
+              <Text className="text-muted-foreground text-xs">
+                {Math.round(perMeal[m].kcal)} kcal
+              </Text>
+            </View>
+            {/* Per-food rows with a remove control, only on the detailed log. */}
+            {onRemoveEntry
+              ? entries
+                  .filter((e) => e.mealType === m)
+                  .map((e) => (
+                    <View
+                      key={e.id}
+                      testID={`${testID}-entry-${e.id}`}
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        paddingLeft: 8,
+                      }}
+                    >
+                      <Text className="text-foreground text-sm">
+                        {e.foodName}
+                      </Text>
+                      <Pressable
+                        testID={`${testID}-entry-${e.id}-remove`}
+                        onPress={() => onRemoveEntry(e)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${e.foodName}`}
+                        hitSlop={8}
+                      >
+                        <Text className="text-destructive text-sm">Remove</Text>
+                      </Pressable>
+                    </View>
+                  ))
+              : null}
           </View>
         ))}
       </View>

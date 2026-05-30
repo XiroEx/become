@@ -34,3 +34,22 @@ export type MoodEntry = z.infer<typeof MoodEntrySchema>;
 export type MoodHistoryResponse = z.infer<typeof MoodHistoryResponseSchema>;
 export type LogMoodRequest = z.infer<typeof LogMoodRequestSchema>;
 export type LogMoodResponse = z.infer<typeof LogMoodResponseSchema>;
+
+// GET /api/progress returns the mood history as `moodData`, each point a
+// pre-formatted date label + numeric value. Mirrors
+// webapp/lib/data/userProgress.ts formatProgressData().
+export const ProgressMoodPointSchema = z
+  .object({
+    date: z.string(),
+    value: MoodScale,
+  })
+  .passthrough();
+
+export const ProgressMoodResponseSchema = z
+  .object({
+    moodData: z.array(ProgressMoodPointSchema).default([]),
+  })
+  .passthrough();
+
+export type ProgressMoodPoint = z.infer<typeof ProgressMoodPointSchema>;
+export type ProgressMoodResponse = z.infer<typeof ProgressMoodResponseSchema>;
