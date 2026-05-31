@@ -10,10 +10,17 @@ import {
   type DashboardTileKind,
   MAX_DASHBOARD_TILES,
 } from './types'
-import { isStatTileId, defaultLayout } from './defaults'
+import { isStatTileId, defaultLayout, richDefaultLayout, isLegacyDefaultLayout } from './defaults'
 
 // Single import surface for migration concerns.
-export { defaultLayout, STAT_TILE_IDS, DEFAULT_STAT_TILE_IDS } from './defaults'
+export {
+  defaultLayout,
+  richDefaultLayout,
+  isLegacyDefaultLayout,
+  STAT_TILE_IDS,
+  DEFAULT_STAT_TILE_IDS,
+  SMART_ROTATING_TILE_ID,
+} from './defaults'
 
 /** A legacy pin/stat id maps to a stat tile if it's a known stat id, else metric. */
 function kindForLegacyId(id: string): DashboardTileKind {
@@ -73,17 +80,24 @@ export interface ResolveLayoutResult {
 
 /**
  * Decide what GET /api/dashboard/layout returns and whether to persist.
- *  - non-empty persisted layout → return as-is, migrated=false (second GET stable)
- *  - else synthesize from legacy (or default), migrated=true (persist once)
+ *  - persisted layout that is the EXACT stale legacy 4-stat default → heal it to
+ *    the rich default, migrated=true (persist the upgrade once). Any layout the
+ *    user has actually customized is left untouched.
+ *  - other non-empty persisted layout → return as-is, migrated=false (stable)
+ *  - else synthesize from legacy pins/statPref, or fall back to the rich
+ *    default, migrated=true (persist once)
  * Pure: persistence is the route's responsibility.
  */
 export function resolveLayoutForGet(args: ResolveLayoutArgs): ResolveLayoutResult {
   const existing = args.existingLayout ?? []
   if (existing.length > 0) {
+    if (isLegacyDefaultLayout(existing)) {
+      return { layout: richDefaultLayout(), migrated: true }
+    }
     return { layout: existing, migrated: false }
   }
   const synth = synthesizeLayout(args.pinnedTiles ?? [], args.statPref ?? [])
-  const layout = synth.length > 0 ? synth : defaultLayout()
+  const layout = synth.length > 0 ? synth : richDefaultLayout()
   return { layout, migrated: true }
 }
 
