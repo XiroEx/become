@@ -16,7 +16,14 @@ export function LineTileChart({
   height = 96,
   color = '#22d3ee',
 }: LineTileChartProps) {
-  const rows = data.map((p) => ({ x: p.t.getTime(), y: p.value, label: p.label }))
+  // `t` is typed Date but arrives as an ISO string over JSON (from
+  // /api/dashboard/tiles), so coerce defensively. Drop any unparseable points.
+  const rows = data
+    .map((p) => {
+      const ms = p.t instanceof Date ? p.t.getTime() : new Date(p.t as unknown as string).getTime()
+      return { x: ms, y: p.value, label: p.label }
+    })
+    .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.y))
   return (
     <div data-testid="line-tile-chart" className="overflow-hidden">
       <LineChart

@@ -28,6 +28,7 @@ import type { DashboardTile } from '@/lib/dashboardLayout/types'
 import { LineTileChart } from '@/components/intelligence/tiles/LineTileChart'
 import { BarTileChart } from '@/components/intelligence/tiles/BarTileChart'
 import { SuggestionCard } from '@/components/intelligence/SuggestionCard'
+import TileErrorBoundary from '@/components/dashboard/TileErrorBoundary'
 import type { DataPoint } from '@/lib/metrics/types'
 import type { Suggestion } from '@/lib/suggestions/types'
 
@@ -276,7 +277,9 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
           if (!isStatId(tile.id)) return null
           return (
             <div key={key} className={span}>
-              {TILE_DEFS[tile.id].render(statContext)}
+              <TileErrorBoundary label={TILE_DEFS[tile.id].label}>
+                {TILE_DEFS[tile.id].render(statContext)}
+              </TileErrorBoundary>
             </div>
           )
         }
@@ -285,11 +288,13 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
           const metric = metricsById.get(tile.id)
           return (
             <div key={key} className={span}>
-              {metric ? (
-                <MetricTileCard metric={metric} />
-              ) : (
-                <MissingTileCard label={tile.id} />
-              )}
+              <TileErrorBoundary label={metric?.label ?? tile.id}>
+                {metric ? (
+                  <MetricTileCard metric={metric} />
+                ) : (
+                  <MissingTileCard label={tile.id} />
+                )}
+              </TileErrorBoundary>
             </div>
           )
         }
@@ -299,11 +304,13 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
         const metric = chosenId ? metricsById.get(chosenId) : undefined
         return (
           <div key={key} className={span}>
-            {metric ? (
-              <MetricTileCard metric={metric} />
-            ) : (
-              <MissingTileCard label="Keep logging — smart tile coming" />
-            )}
+            <TileErrorBoundary label={metric?.label}>
+              {metric ? (
+                <MetricTileCard metric={metric} />
+              ) : (
+                <MissingTileCard label="Keep logging — smart tile coming" />
+              )}
+            </TileErrorBoundary>
           </div>
         )
       })}
