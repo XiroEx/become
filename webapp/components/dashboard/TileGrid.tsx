@@ -111,7 +111,14 @@ function MetricTileCard({ metric, size }: { metric: MetricSummary; size: Dashboa
   const showChart = size === '2x1' && !metric.error && kind !== 'number'
   return (
     <Card variant="compact" className="h-full overflow-hidden">
-      <div className="flex h-full flex-col gap-1">
+      {/* Number-only (square) centers vertically so it matches a stat tile's
+          visual weight; the wide variant keeps label-top / chart-bottom. */}
+      <div
+        className={cn(
+          'flex h-full flex-col gap-1',
+          !showChart && 'justify-center',
+        )}
+      >
         <div className="truncate text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           {metric.label}
         </div>
@@ -281,13 +288,21 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
       <div
         data-testid="tilegrid"
         className={cn(
-          'grid grid-cols-2 gap-2 auto-rows-[7rem] sm:grid-cols-4 sm:gap-3 sm:auto-rows-[7.5rem]',
+          'grid grid-cols-2 gap-2 auto-rows-[6rem] sm:grid-cols-4 sm:gap-3 sm:auto-rows-[6.25rem]',
           className,
         )}
       >
         {layout.map((tile, idx) => {
           const span = tile.size === '2x1' ? 'col-span-2' : 'col-span-1'
-          const cellClass = cn(span, 'min-w-0 overflow-hidden')
+          // Cell is a flex column with a definite (grid-row) height, and its
+          // single child (the Card, whatever tile kind) is forced to fill both
+          // dimensions. This is what makes every tile render at EXACTLY the row
+          // height — a plain block grid-item doesn't give % heights a definite
+          // parent, so cards collapsed to their content height before.
+          const cellClass = cn(
+            span,
+            'flex min-w-0 flex-col overflow-hidden [&>*]:h-full [&>*]:w-full',
+          )
           const key = `${tile.kind}-${tile.id}-${idx}`
 
           if (tile.kind === 'stat') {
