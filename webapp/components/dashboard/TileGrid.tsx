@@ -225,10 +225,7 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
     return m
   }, [tilesData])
 
-  // Smart-rotating selection: the tiles API already returns metrics in
-  // rotator-scored order. Walk that order, skipping ids already placed and
-  // those locked by other tiles, so multiple rotating tiles don't collide.
-  const rotationPool = useMemo(
+  const rotationMetricIds = useMemo(
     () => (tilesData?.metrics ?? []).map((m) => m.id),
     [tilesData],
   )
@@ -252,23 +249,13 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
     )
   }
 
-  const usedMetricIds = new Set<string>()
-  // Pre-reserve locked metric ids so rotation doesn't reuse them.
-  for (const t of layout) {
-    if (t.kind === 'smart-rotating' && t.locked) usedMetricIds.add(t.locked)
-    if (t.kind === 'metric') usedMetricIds.add(t.id)
-  }
-  let rotationCursor = 0
-  function nextRotationMetric(): string | undefined {
-    while (rotationCursor < rotationPool.length) {
-      const id = rotationPool[rotationCursor++]
-      if (!usedMetricIds.has(id)) {
-        usedMetricIds.add(id)
-        return id
-      }
-    }
-    return undefined
-  }
+  // Smart-rotating tiles cycle through ALL card types (every stat + every
+  // resolved metric), reusing the standard renderers so a rotated card looks
+  // identical to a pinned one. Built once per render; each tile owns its timer.
+  const rotationItems = buildRotationItems(statContext, rotationMetricIds, (id, size) => {
+    const metric = metricsById.get(id)
+    return metric ? <MetricTileCard metric={metric} size={size} /> : <MissingTileCard label={id} />
+  })
 
   const dashboardSuggestions = (tilesData?.suggestions ?? []).filter(
     // Only show suggestions explicitly targeted at the dashboard surface. When
@@ -332,17 +319,11 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
             )
           }
 
-          // smart-rotating
-          const chosenId = tile.locked ?? nextRotationMetric()
-          const metric = chosenId ? metricsById.get(chosenId) : undefined
+          // smart-rotating — auto-cycles through all card types
           return (
             <div key={key} className={cellClass}>
-              <TileErrorBoundary label={metric?.label}>
-                {metric ? (
-                  <MetricTileCard metric={metric} size={tile.size} />
-                ) : (
-                  <MissingTileCard label="Keep logging — smart tile coming" />
-                )}
+              <TileErrorBoundary label="Smart tile">
+                <SmartRotatingTile items={rotationItems} size={tile.size} />
               </TileErrorBoundary>
             </div>
           )
