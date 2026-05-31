@@ -8,7 +8,7 @@
 // (TILE_DEFS[id].render for stats, MetricTileCard for metrics) so a rotated
 // card is visually identical to a pinned one. A subtle "live" dot marks it.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ALL_TILE_IDS, TILE_DEFS, type DashboardTileContext, type DashboardTileId } from '@/lib/dashboardTiles'
 import type { DashboardTileSize } from '@/lib/dashboardLayout/types'
 
@@ -23,15 +23,17 @@ export interface SmartRotatingTileProps {
   size: DashboardTileSize
   /** Cycle interval in ms. */
   intervalMs?: number
+  /** Initial offset so multiple smart tiles don't all show the same card. */
+  startIndex?: number
 }
 
 const DEFAULT_INTERVAL = 6000
 
-export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL }: SmartRotatingTileProps) {
-  const [index, setIndex] = useState(0)
+export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, startIndex = 0 }: SmartRotatingTileProps) {
+  const [index, setIndex] = useState(startIndex)
 
   // Clamp when the pool size changes (data loads in).
-  const safeIndex = items.length > 0 ? index % items.length : 0
+  const safeIndex = items.length > 0 ? ((index % items.length) + items.length) % items.length : 0
 
   useEffect(() => {
     if (items.length <= 1) return
