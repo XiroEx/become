@@ -365,7 +365,7 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
         exit={{ scale: 0.95, opacity: 0, y: 30 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex max-h-[88dvh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-zinc-900 sm:max-h-[85dvh] sm:rounded-2xl"
+        className="relative flex h-[80dvh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
