@@ -151,6 +151,28 @@ npm run dev          # starts MongoDB via docker compose (../db/compose.yml) + N
 
 Dev MongoDB is spun up from `../db/compose.yml`. Production uses the remote MongoDB on `server.georgeanthony.net`.
 
+## Shell & Background Jobs (CRITICAL)
+
+**Never write an unbounded wait.** Patterns like `until [ -f /tmp/report.txt ]; do sleep 2; done`
+block *forever* if the file never appears. When this agent runs as the Become Discord agent
+(Claude Code over SSH), a forever-blocked bash call means the run never returns — it hangs the
+parent graph run indefinitely and the thinking-indicator keeps spamming a Discord typing
+indicator (this caused ~14.7h typing loops + dozens of zombie graph runs on 2026-05-31).
+
+Rules:
+- **Always bound a wait** with both a max-iteration cap *and* a not-found fallback. Replace
+  `until [ -f F ]; do sleep 2; done` with:
+  ```bash
+  for i in $(seq 1 60); do [ -f F ] && break; sleep 2; done
+  [ -f F ] || { echo "TIMED OUT waiting for F"; exit 1; }
+  ```
+- **Wrap any potentially-long command in `timeout`**, e.g. `timeout 180 node test.cjs`.
+- **Prefer running Playwright synchronously** (foreground, with its own `timeout` and an explicit
+  page/navigation timeout) over backgrounding a job and polling for a report file. If you must
+  background, the poll loop MUST have a hard cap and must report failure when the cap is hit.
+- Never leave a process that can outlive your turn waiting on a condition that may never become
+  true.
+
 ## Git Workflow
 
 - **`main`** — production, protected
