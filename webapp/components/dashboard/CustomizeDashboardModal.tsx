@@ -365,7 +365,7 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
         exit={{ scale: 0.95, opacity: 0, y: 30 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-zinc-900 sm:rounded-2xl"
+        className="relative flex max-h-[88dvh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-zinc-900 sm:max-h-[85dvh] sm:rounded-2xl"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 border-b border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
@@ -456,7 +456,7 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
 
         {/* Footer actions (hidden while the picker is open) */}
         {!picker && (
-          <div className="flex gap-3 border-t border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
+          <div className="flex shrink-0 gap-3 border-t border-zinc-200 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] dark:border-zinc-800 sm:p-6">
             <button onClick={onClose} className="flex-1 rounded-xl border border-zinc-200 py-2.5 font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:py-3">
               Cancel
             </button>
