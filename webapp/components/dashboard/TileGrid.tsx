@@ -29,6 +29,7 @@ import { LineTileChart } from '@/components/intelligence/tiles/LineTileChart'
 import { BarTileChart } from '@/components/intelligence/tiles/BarTileChart'
 import { SuggestionCard } from '@/components/intelligence/SuggestionCard'
 import TileErrorBoundary from '@/components/dashboard/TileErrorBoundary'
+import { SmartRotatingTile, buildRotationItems } from '@/components/dashboard/SmartRotatingTile'
 import type { DataPoint } from '@/lib/metrics/types'
 import type { Suggestion } from '@/lib/suggestions/types'
 
