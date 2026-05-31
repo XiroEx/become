@@ -16,7 +16,7 @@
 // client components, fed by data the tiles API already resolves server-side —
 // so there's no async-server-component-in-client-tree problem.
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import {
@@ -24,7 +24,7 @@ import {
   type DashboardTileId,
   type DashboardTileContext,
 } from '@/lib/dashboardTiles'
-import type { DashboardTile } from '@/lib/dashboardLayout/types'
+import type { DashboardTile, DashboardTileSize } from '@/lib/dashboardLayout/types'
 import { LineTileChart } from '@/components/intelligence/tiles/LineTileChart'
 import { BarTileChart } from '@/components/intelligence/tiles/BarTileChart'
 import { SuggestionCard } from '@/components/intelligence/SuggestionCard'
@@ -102,36 +102,42 @@ function formatValue(value: number): string {
 
 // ── Themed metric card (replaces the dark intelligence tiles) ───────────────
 
-function MetricTileCard({ metric }: { metric: MetricSummary }) {
+function MetricTileCard({ metric, size }: { metric: MetricSummary; size: DashboardTileSize }) {
   const kind = chartKindFor(metric)
   const latestText =
     metric.latest == null ? '—' : `${formatValue(metric.latest.value)} ${metric.unit}`.trim()
+  // Charts only render in the wide (2x1) slot — a square tile shows the number
+  // only so its height matches the stat tiles exactly (uniform grid).
+  const showChart = size === '2x1' && !metric.error && kind !== 'number'
   return (
-    <Card variant="compact" className="h-full">
-      <div className="flex flex-col gap-1.5">
-        <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+    <Card variant="compact" className="h-full overflow-hidden">
+      <div className="flex h-full flex-col gap-1">
+        <div className="truncate text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           {metric.label}
         </div>
         {metric.error ? (
           <div className="text-sm text-amber-600 dark:text-amber-400">
             Data temporarily unavailable.
           </div>
-        ) : kind === 'number' ? (
-          <div className="text-2xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
-            {latestText}
-          </div>
         ) : (
           <>
-            <div className="text-lg font-bold leading-none text-zinc-900 dark:text-white">
+            <div
+              className={cn(
+                'font-bold leading-none text-zinc-900 dark:text-white',
+                showChart ? 'text-lg' : 'text-2xl font-extrabold tracking-tight',
+              )}
+            >
               {latestText}
             </div>
-            <div className="-mx-1">
-              {kind === 'bar' ? (
-                <BarTileChart data={metric.data} />
-              ) : (
-                <LineTileChart data={metric.data} />
-              )}
-            </div>
+            {showChart && (
+              <div className="-mx-1 mt-auto min-h-0 flex-1">
+                {kind === 'bar' ? (
+                  <BarTileChart data={metric.data} height={48} />
+                ) : (
+                  <LineTileChart data={metric.data} height={48} />
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -141,8 +147,10 @@ function MetricTileCard({ metric }: { metric: MetricSummary }) {
 
 function MissingTileCard({ label }: { label: string }) {
   return (
-    <Card variant="compact" className="h-full">
-      <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
+    <Card variant="compact" className="h-full overflow-hidden">
+      <div className="flex h-full items-center text-xs text-zinc-400 dark:text-zinc-500">
+        {label}
+      </div>
     </Card>
   )
 }
@@ -265,64 +273,76 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
   )
 
   return (
-    <div
-      data-testid="tilegrid"
-      className={cn('grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3', className)}
-    >
-      {layout.map((tile, idx) => {
-        const span = tile.size === '2x1' ? 'col-span-2' : 'col-span-1'
-        const key = `${tile.kind}-${tile.id}-${idx}`
+    <>
+      {/* Fixed-height square cells so every tile is the SAME size. A 1x1 tile is
+          one cell; a 2x1 tile spans two columns but the same single row height —
+          so square and wide are the only two footprints and heights always
+          match. */}
+      <div
+        data-testid="tilegrid"
+        className={cn(
+          'grid grid-cols-2 gap-2 auto-rows-[7rem] sm:grid-cols-4 sm:gap-3 sm:auto-rows-[7.5rem]',
+          className,
+        )}
+      >
+        {layout.map((tile, idx) => {
+          const span = tile.size === '2x1' ? 'col-span-2' : 'col-span-1'
+          const cellClass = cn(span, 'min-w-0 overflow-hidden')
+          const key = `${tile.kind}-${tile.id}-${idx}`
 
-        if (tile.kind === 'stat') {
-          if (!isStatId(tile.id)) return null
-          return (
-            <div key={key} className={span}>
-              <TileErrorBoundary label={TILE_DEFS[tile.id].label}>
-                {TILE_DEFS[tile.id].render(statContext)}
-              </TileErrorBoundary>
-            </div>
-          )
-        }
+          if (tile.kind === 'stat') {
+            if (!isStatId(tile.id)) return null
+            return (
+              <div key={key} className={cellClass}>
+                <TileErrorBoundary label={TILE_DEFS[tile.id].label}>
+                  {TILE_DEFS[tile.id].render(statContext)}
+                </TileErrorBoundary>
+              </div>
+            )
+          }
 
-        if (tile.kind === 'metric') {
-          const metric = metricsById.get(tile.id)
+          if (tile.kind === 'metric') {
+            const metric = metricsById.get(tile.id)
+            return (
+              <div key={key} className={cellClass}>
+                <TileErrorBoundary label={metric?.label ?? tile.id}>
+                  {metric ? (
+                    <MetricTileCard metric={metric} size={tile.size} />
+                  ) : (
+                    <MissingTileCard label={tile.id} />
+                  )}
+                </TileErrorBoundary>
+              </div>
+            )
+          }
+
+          // smart-rotating
+          const chosenId = tile.locked ?? nextRotationMetric()
+          const metric = chosenId ? metricsById.get(chosenId) : undefined
           return (
-            <div key={key} className={span}>
-              <TileErrorBoundary label={metric?.label ?? tile.id}>
+            <div key={key} className={cellClass}>
+              <TileErrorBoundary label={metric?.label}>
                 {metric ? (
-                  <MetricTileCard metric={metric} />
+                  <MetricTileCard metric={metric} size={tile.size} />
                 ) : (
-                  <MissingTileCard label={tile.id} />
+                  <MissingTileCard label="Keep logging — smart tile coming" />
                 )}
               </TileErrorBoundary>
             </div>
           )
-        }
+        })}
+      </div>
 
-        // smart-rotating
-        const chosenId = tile.locked ?? nextRotationMetric()
-        const metric = chosenId ? metricsById.get(chosenId) : undefined
-        return (
-          <div key={key} className={span}>
-            <TileErrorBoundary label={metric?.label}>
-              {metric ? (
-                <MetricTileCard metric={metric} />
-              ) : (
-                <MissingTileCard label="Keep logging — smart tile coming" />
-              )}
-            </TileErrorBoundary>
-          </div>
-        )
-      })}
-
-      {dashboardSuggestions.map((s) => (
-        <Fragment key={`sug-${s.id}`}>
-          <div className="col-span-2 sm:col-span-4">
-            <SuggestionCard suggestion={s} />
-          </div>
-        </Fragment>
-      ))}
-    </div>
+      {/* Suggestion banners live OUTSIDE the fixed-row grid so their natural
+          height isn't clipped to a tile cell. */}
+      {dashboardSuggestions.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {dashboardSuggestions.map((s) => (
+            <SuggestionCard key={`sug-${s.id}`} suggestion={s} />
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 
