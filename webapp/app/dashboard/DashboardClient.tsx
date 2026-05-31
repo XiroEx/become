@@ -19,15 +19,13 @@ import ResumeWorkoutButton from '@/components/ResumeWorkoutButton'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import type { FitnessGoal } from '@/models/User'
 import { Card } from '@/components/ui'
-import CustomizeTilesModal from '@/components/dashboard/CustomizeTilesModal'
+import CustomizeDashboardModal from '@/components/dashboard/CustomizeDashboardModal'
 import TileGrid from '@/components/dashboard/TileGrid'
 import {
-  DEFAULT_TILE_IDS,
-  loadTilePreference,
-  type DashboardTileId,
   type DashboardTileContext,
   type UserProgressData,
 } from '@/lib/dashboardTiles'
+import type { DashboardTile } from '@/lib/dashboardLayout/types'
 
 // Empty initial state — real data loads from /api/progress
 const emptyData: UserProgressData = {
@@ -74,13 +72,8 @@ export default function DashboardClient() {
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
-  const [tileIds, setTileIds] = useState<DashboardTileId[]>(DEFAULT_TILE_IDS)
+  const [layout, setLayout] = useState<DashboardTile[] | null>(null)
   const [showCustomize, setShowCustomize] = useState(false)
-
-  // Load saved tile preference on mount (client only)
-  useEffect(() => {
-    setTileIds(loadTilePreference())
-  }, [])
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -238,6 +231,26 @@ export default function DashboardClient() {
       }
     }
 
+    // Fetch the unified dashboard tile layout (source of truth for the grid).
+    // Owned here so a save in the customizer can update it in place without a
+    // full reload.
+    async function fetchLayout() {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/dashboard/layout', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+        if (res.ok) {
+          const json = await res.json()
+          setLayout(json.layout ?? [])
+        } else {
+          setLayout([])
+        }
+      } catch {
+        setLayout([])
+      }
+    }
+
     // Check whether to show the program nudge modal
     function checkProgramNudge(hasProgram: boolean) {
       if (hasProgram) return // already enrolled — never show
@@ -253,7 +266,13 @@ export default function DashboardClient() {
     // Initialize dashboard
     async function init() {
       await checkCheckInStatus()
-      const [progressData] = await Promise.all([fetchProgress(), fetchNutrition(), fetchStreak(), fetchProfile()])
+      const [progressData] = await Promise.all([
+        fetchProgress(),
+        fetchNutrition(),
+        fetchStreak(),
+        fetchProfile(),
+        fetchLayout(),
+      ])
       checkProgramNudge(!!progressData?.currentProgram)
     }
 
@@ -372,12 +391,12 @@ export default function DashboardClient() {
 
   return (
     <>
-      <CustomizeTilesModal
+      <CustomizeDashboardModal
         open={showCustomize}
-        selectedIds={tileIds}
+        layout={layout ?? []}
         onClose={() => setShowCustomize(false)}
-        onSave={(ids) => {
-          setTileIds(ids)
+        onSaved={(nextLayout) => {
+          setLayout(nextLayout)
           setShowCustomize(false)
         }}
       />
@@ -415,7 +434,7 @@ export default function DashboardClient() {
           the user's saved layout. Replaces the old separate StatTile grid and
           the dark IntelligenceRotator block. */}
       <div>
-        <TileGrid statContext={tileCtx} />
+        <TileGrid layout={layout} statContext={tileCtx} />
         <div className="mt-2 flex justify-end">
           <button
             type="button"

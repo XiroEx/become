@@ -8,6 +8,8 @@ import assert from 'node:assert/strict'
 import {
   synthesizeLayout,
   defaultLayout,
+  richDefaultLayout,
+  isLegacyDefaultLayout,
   resolveLayoutForGet,
   parseStatPrefParam,
   STAT_TILE_IDS,
@@ -86,16 +88,41 @@ describe('resolveLayoutForGet', () => {
     ])
   })
 
-  it('falls back to the default layout for a fresh user with no legacy data', () => {
+  it('falls back to the RICH default layout for a fresh user with no legacy data', () => {
     const res = resolveLayoutForGet({ existingLayout: [] })
     assert.equal(res.migrated, true)
-    assert.deepEqual(res.layout, defaultLayout())
+    assert.deepEqual(res.layout, richDefaultLayout())
   })
 
-  it('treats a null existingLayout as empty (fresh user) → default', () => {
+  it('treats a null existingLayout as empty (fresh user) → rich default', () => {
     const res = resolveLayoutForGet({ existingLayout: null })
     assert.equal(res.migrated, true)
-    assert.deepEqual(res.layout, defaultLayout())
+    assert.deepEqual(res.layout, richDefaultLayout())
+  })
+
+  it('heals the stale legacy 4-stat default → rich default (and persists)', () => {
+    const res = resolveLayoutForGet({ existingLayout: defaultLayout() })
+    assert.equal(res.migrated, true)
+    assert.deepEqual(res.layout, richDefaultLayout())
+  })
+
+  it('does NOT clobber a customized layout that merely starts with the default ids', () => {
+    // Same 4 ids but one is resized — a real customization, must be preserved.
+    const customized = [
+      { id: 'streak', kind: 'stat' as const, size: '2x1' as const },
+      { id: 'mood', kind: 'stat' as const, size: '1x1' as const },
+      { id: 'weekly', kind: 'stat' as const, size: '1x1' as const },
+      { id: 'goal', kind: 'stat' as const, size: '1x1' as const },
+    ]
+    const res = resolveLayoutForGet({ existingLayout: customized })
+    assert.equal(res.migrated, false)
+    assert.deepEqual(res.layout, customized)
+  })
+
+  it('does NOT treat the rich default as stale (no heal loop)', () => {
+    const res = resolveLayoutForGet({ existingLayout: richDefaultLayout() })
+    assert.equal(res.migrated, false)
+    assert.deepEqual(res.layout, richDefaultLayout())
   })
 
   it('is idempotent: feeding a migrated layout back in does NOT re-migrate', () => {
@@ -104,6 +131,44 @@ describe('resolveLayoutForGet', () => {
     const second = resolveLayoutForGet({ existingLayout: first.layout, pinnedTiles: ['streak', 'strength-curve'] })
     assert.equal(second.migrated, false)
     assert.deepEqual(second.layout, first.layout)
+  })
+})
+
+describe('richDefaultLayout', () => {
+  it('returns all 8 stat tiles plus a smart-rotating tile', () => {
+    const layout = richDefaultLayout()
+    const statIds = layout.filter((t) => t.kind === 'stat').map((t) => t.id)
+    assert.deepEqual([...statIds].sort(), [...STAT_TILE_IDS].sort())
+    const smart = layout.filter((t) => t.kind === 'smart-rotating')
+    assert.equal(smart.length, 1)
+    assert.equal(smart[0].size, '2x1')
+    assert.equal(smart[0].locked, null)
+  })
+
+  it('includes size variety (at least one 2x1 stat tile)', () => {
+    const layout = richDefaultLayout()
+    assert.ok(layout.some((t) => t.kind === 'stat' && t.size === '2x1'))
+  })
+
+  it('returns a fresh array each call (safe to mutate)', () => {
+    assert.notEqual(richDefaultLayout(), richDefaultLayout())
+  })
+})
+
+describe('isLegacyDefaultLayout', () => {
+  it('is true for the exact legacy default', () => {
+    assert.equal(isLegacyDefaultLayout(defaultLayout()), true)
+  })
+  it('is false for the rich default', () => {
+    assert.equal(isLegacyDefaultLayout(richDefaultLayout()), false)
+  })
+  it('is false when a tile is resized', () => {
+    const l = defaultLayout()
+    l[0].size = '2x1'
+    assert.equal(isLegacyDefaultLayout(l), false)
+  })
+  it('is false for a different-length layout', () => {
+    assert.equal(isLegacyDefaultLayout(defaultLayout().slice(0, 3)), false)
   })
 })
 

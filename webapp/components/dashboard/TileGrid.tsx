@@ -57,6 +57,14 @@ interface TilesResponse {
 export interface TileGridProps {
   /** Live stat-tile context (weight/mood/streak/etc.) built by DashboardClient. */
   statContext: DashboardTileContext
+  /**
+   * Controlled layout. When provided (incl. null while the parent is still
+   * loading), the grid renders this layout and does NOT self-fetch
+   * /api/dashboard/layout — so a save in the customizer reflects immediately
+   * once the parent updates the prop. When omitted, the grid self-fetches the
+   * layout (legacy/standalone behavior).
+   */
+  layout?: DashboardTile[] | null
   className?: string
 }
 
@@ -140,18 +148,36 @@ function MissingTileCard({ label }: { label: string }) {
 
 // ── Grid ────────────────────────────────────────────────────────────────────
 
-export function TileGrid({ statContext, className }: TileGridProps) {
-  const [layout, setLayout] = useState<DashboardTile[] | null>(null)
+export function TileGrid({ statContext, layout: layoutProp, className }: TileGridProps) {
+  const controlled = layoutProp !== undefined
+  const [fetchedLayout, setFetchedLayout] = useState<DashboardTile[] | null>(null)
   const [tilesData, setTilesData] = useState<TilesResponse | null>(null)
   const [errored, setErrored] = useState(false)
+
+  const layout = controlled ? layoutProp : fetchedLayout
 
   useEffect(() => {
     let cancelled = false
     async function load() {
+      // Metric/suggestion data — non-fatal: if this fails, metric and
+      // smart-rotating tiles degrade to their placeholders while stat tiles
+      // (which render from statContext) keep working.
+      try {
+        const tilesRes = await fetch('/api/dashboard/tiles', { headers: authHeaders() })
+        if (tilesRes.ok && !cancelled) {
+          setTilesData((await tilesRes.json()) as TilesResponse)
+        }
+      } catch {
+        // ignore — metric tiles show placeholders
+      }
+
+      // In controlled mode the parent owns the layout — don't self-fetch.
+      if (controlled) return
+
       try {
         const statPref = (() => {
           try {
-            const raw = window.localStorage?.getItem('dashboard-tile-preference')
+            const raw = window.localStorage?.getItem('dashboard.tiles.v1')
             if (!raw) return ''
             const arr = JSON.parse(raw)
             return Array.isArray(arr) ? arr.join(',') : ''
@@ -159,18 +185,13 @@ export function TileGrid({ statContext, className }: TileGridProps) {
             return ''
           }
         })()
-        const [layoutRes, tilesRes] = await Promise.all([
-          fetch(`/api/dashboard/layout${statPref ? `?statPref=${encodeURIComponent(statPref)}` : ''}`, {
-            headers: authHeaders(),
-          }),
-          fetch('/api/dashboard/tiles', { headers: authHeaders() }),
-        ])
+        const layoutRes = await fetch(
+          `/api/dashboard/layout${statPref ? `?statPref=${encodeURIComponent(statPref)}` : ''}`,
+          { headers: authHeaders() },
+        )
         if (!layoutRes.ok) throw new Error(`layout ${layoutRes.status}`)
         const layoutJson = (await layoutRes.json()) as { layout: DashboardTile[] }
-        const tilesJson = tilesRes.ok ? ((await tilesRes.json()) as TilesResponse) : null
-        if (cancelled) return
-        setLayout(layoutJson.layout ?? [])
-        setTilesData(tilesJson)
+        if (!cancelled) setFetchedLayout(layoutJson.layout ?? [])
       } catch {
         if (!cancelled) setErrored(true)
       }
@@ -179,7 +200,7 @@ export function TileGrid({ statContext, className }: TileGridProps) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [controlled])
 
   const metricsById = useMemo(() => {
     const m = new Map<string, MetricSummary>()
