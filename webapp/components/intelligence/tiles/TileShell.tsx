@@ -38,11 +38,11 @@ export function TileShell({
       data-metric-id={metric.id}
       data-trend={trend}
       className={cn(
-        'block rounded-2xl bg-zinc-900/60 ring-1 ring-white/5 p-4 hover:ring-white/15 transition',
+        'block rounded-xl bg-zinc-900/60 ring-1 ring-white/5 p-3 hover:ring-white/15 transition',
         className,
       )}
     >
-      <div className="mb-2 flex items-baseline justify-between">
+      <div className="mb-1 flex items-baseline justify-between">
         <span className="text-xs uppercase tracking-wide text-zinc-400">
           {metric.label}
         </span>
@@ -68,12 +68,12 @@ export function TileShellSkeleton({ className }: TileShellSkeletonProps) {
       aria-busy="true"
       aria-label="Loading tile"
       className={cn(
-        'block rounded-2xl bg-zinc-900/60 ring-1 ring-white/5 p-4 animate-pulse',
+        'block rounded-xl bg-zinc-900/60 ring-1 ring-white/5 p-3 animate-pulse',
         className,
       )}
     >
-      <div className="mb-3 h-3 w-24 rounded bg-zinc-700/60" />
-      <div className="h-24 w-full rounded bg-zinc-800/60" />
+      <div className="mb-2 h-3 w-24 rounded bg-zinc-700/60" />
+      <div className="h-16 w-full rounded bg-zinc-800/60" />
     </div>
   )
 }
@@ -94,7 +94,7 @@ export function TileShellError({
       role="alert"
       data-metric-id={metricId}
       className={cn(
-        'block rounded-2xl bg-rose-950/40 ring-1 ring-rose-500/30 p-4 text-rose-200',
+        'block rounded-xl bg-rose-950/40 ring-1 ring-rose-500/30 p-3 text-rose-200',
         className,
       )}
     >

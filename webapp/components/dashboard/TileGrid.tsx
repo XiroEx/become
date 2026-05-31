@@ -1,0 +1,301 @@
+'use client'
+
+// Unified dashboard tile grid — the single grid that renders every tile kind.
+//
+// Replaces the two previously-separate sections in DashboardClient (the
+// StatTile 2x2/4-up grid AND the dark <IntelligenceRotator> block). Driven by
+// the user's saved layout from GET /api/dashboard/layout (kind + size + lock +
+// order), with metric data resolved from GET /api/dashboard/tiles.
+//
+// All tiles render through the SAME themed shell (bg-white dark:bg-zinc-900),
+// fixing the hardcoded-dark styling of the old intelligence tiles. Tiles span
+// 1x1 (square) or 2x1 (two columns) on the responsive 2-col (mobile) /
+// 4-col (desktop) grid.
+//
+// Pure-client: the chart bodies reuse the existing LineTileChart / BarTileChart
+// client components, fed by data the tiles API already resolves server-side —
+// so there's no async-server-component-in-client-tree problem.
+
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Card } from '@/components/ui'
+import { cn } from '@/lib/cn'
+import {
+  TILE_DEFS,
+  type DashboardTileId,
+  type DashboardTileContext,
+} from '@/lib/dashboardTiles'
+import type { DashboardTile } from '@/lib/dashboardLayout/types'
+import { LineTileChart } from '@/components/intelligence/tiles/LineTileChart'
+import { BarTileChart } from '@/components/intelligence/tiles/BarTileChart'
+import { SuggestionCard } from '@/components/intelligence/SuggestionCard'
+import type { DataPoint } from '@/lib/metrics/types'
+import type { Suggestion } from '@/lib/suggestions/types'
+
+// ── API payload shapes (mirror the route responses) ────────────────────────
+
+interface MetricSummary {
+  id: string
+  label: string
+  unit: string
+  domain: 'workout' | 'nutrition' | 'mindset'
+  trendDirection: 'up-good' | 'down-good' | 'neutral'
+  latest: DataPoint | null
+  data: DataPoint[]
+  error?: string
+}
+
+interface TilesResponse {
+  tiles: Array<
+    | { kind: 'metric'; tileId: string }
+    | { kind: 'suggestion'; suggestionId: string }
+  >
+  metrics: MetricSummary[]
+  suggestions: Suggestion[]
+  now: string
+}
+
+export interface TileGridProps {
+  /** Live stat-tile context (weight/mood/streak/etc.) built by DashboardClient. */
+  statContext: DashboardTileContext
+  className?: string
+}
+
+const STAT_IDS = new Set<DashboardTileId>([
+  'streak', 'mood', 'weekly', 'goal', 'calories', 'water', 'weight', 'workouts',
+])
+
+function isStatId(id: string): id is DashboardTileId {
+  return STAT_IDS.has(id as DashboardTileId)
+}
+
+function token(): string | null {
+  return typeof window !== 'undefined' ? window.localStorage?.getItem('token') : null
+}
+
+function authHeaders(): HeadersInit | undefined {
+  const t = token()
+  return t ? { Authorization: `Bearer ${t}` } : undefined
+}
+
+// Chart type from metric meta — bar for volume-ish, line for time series,
+// number for single/empty. Avoids the old fragile id-substring heuristics by
+// preferring data shape.
+function chartKindFor(m: MetricSummary): 'bar' | 'line' | 'number' {
+  if (m.data.length < 2) return 'number'
+  if (m.id.includes('volume') || m.id.includes('bar')) return 'bar'
+  return 'line'
+}
+
+function formatValue(value: number): string {
+  if (Number.isInteger(value)) return String(value)
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+// ── Themed metric card (replaces the dark intelligence tiles) ───────────────
+
+function MetricTileCard({ metric }: { metric: MetricSummary }) {
+  const kind = chartKindFor(metric)
+  const latestText =
+    metric.latest == null ? '—' : `${formatValue(metric.latest.value)} ${metric.unit}`.trim()
+  return (
+    <Card variant="compact" className="h-full">
+      <div className="flex flex-col gap-1.5">
+        <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {metric.label}
+        </div>
+        {metric.error ? (
+          <div className="text-sm text-amber-600 dark:text-amber-400">
+            Data temporarily unavailable.
+          </div>
+        ) : kind === 'number' ? (
+          <div className="text-2xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
+            {latestText}
+          </div>
+        ) : (
+          <>
+            <div className="text-lg font-bold leading-none text-zinc-900 dark:text-white">
+              {latestText}
+            </div>
+            <div className="-mx-1">
+              {kind === 'bar' ? (
+                <BarTileChart data={metric.data} />
+              ) : (
+                <LineTileChart data={metric.data} />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function MissingTileCard({ label }: { label: string }) {
+  return (
+    <Card variant="compact" className="h-full">
+      <div className="text-xs text-zinc-400 dark:text-zinc-500">{label}</div>
+    </Card>
+  )
+}
+
+// ── Grid ────────────────────────────────────────────────────────────────────
+
+export function TileGrid({ statContext, className }: TileGridProps) {
+  const [layout, setLayout] = useState<DashboardTile[] | null>(null)
+  const [tilesData, setTilesData] = useState<TilesResponse | null>(null)
+  const [errored, setErrored] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const statPref = (() => {
+          try {
+            const raw = window.localStorage?.getItem('dashboard-tile-preference')
+            if (!raw) return ''
+            const arr = JSON.parse(raw)
+            return Array.isArray(arr) ? arr.join(',') : ''
+          } catch {
+            return ''
+          }
+        })()
+        const [layoutRes, tilesRes] = await Promise.all([
+          fetch(`/api/dashboard/layout${statPref ? `?statPref=${encodeURIComponent(statPref)}` : ''}`, {
+            headers: authHeaders(),
+          }),
+          fetch('/api/dashboard/tiles', { headers: authHeaders() }),
+        ])
+        if (!layoutRes.ok) throw new Error(`layout ${layoutRes.status}`)
+        const layoutJson = (await layoutRes.json()) as { layout: DashboardTile[] }
+        const tilesJson = tilesRes.ok ? ((await tilesRes.json()) as TilesResponse) : null
+        if (cancelled) return
+        setLayout(layoutJson.layout ?? [])
+        setTilesData(tilesJson)
+      } catch {
+        if (!cancelled) setErrored(true)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const metricsById = useMemo(() => {
+    const m = new Map<string, MetricSummary>()
+    for (const s of tilesData?.metrics ?? []) m.set(s.id, s)
+    return m
+  }, [tilesData])
+
+  // Smart-rotating selection: the tiles API already returns metrics in
+  // rotator-scored order. Walk that order, skipping ids already placed and
+  // those locked by other tiles, so multiple rotating tiles don't collide.
+  const rotationPool = useMemo(
+    () => (tilesData?.metrics ?? []).map((m) => m.id),
+    [tilesData],
+  )
+
+  if (errored) {
+    // Fail soft: render nothing rather than a broken dashboard. The rest of the
+    // page (next workout, progress chart, etc.) still renders.
+    return null
+  }
+  if (!layout) {
+    return (
+      <div
+        data-testid="tilegrid-loading"
+        className={cn('grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3', className)}
+        aria-busy="true"
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i} variant="compact" className="h-20 animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
+  const usedMetricIds = new Set<string>()
+  // Pre-reserve locked metric ids so rotation doesn't reuse them.
+  for (const t of layout) {
+    if (t.kind === 'smart-rotating' && t.locked) usedMetricIds.add(t.locked)
+    if (t.kind === 'metric') usedMetricIds.add(t.id)
+  }
+  let rotationCursor = 0
+  function nextRotationMetric(): string | undefined {
+    while (rotationCursor < rotationPool.length) {
+      const id = rotationPool[rotationCursor++]
+      if (!usedMetricIds.has(id)) {
+        usedMetricIds.add(id)
+        return id
+      }
+    }
+    return undefined
+  }
+
+  const dashboardSuggestions = (tilesData?.suggestions ?? []).filter(
+    // Only show suggestions explicitly targeted at the dashboard surface. When
+    // a suggestion has no context (legacy), default to showing it so nothing
+    // silently disappears before the alert-routing task lands.
+    (s) => {
+      const ctx = (s as Suggestion & { context?: { surface?: string } }).context
+      return !ctx?.surface || ctx.surface === 'dashboard'
+    },
+  )
+
+  return (
+    <div
+      data-testid="tilegrid"
+      className={cn('grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3', className)}
+    >
+      {layout.map((tile, idx) => {
+        const span = tile.size === '2x1' ? 'col-span-2' : 'col-span-1'
+        const key = `${tile.kind}-${tile.id}-${idx}`
+
+        if (tile.kind === 'stat') {
+          if (!isStatId(tile.id)) return null
+          return (
+            <div key={key} className={span}>
+              {TILE_DEFS[tile.id].render(statContext)}
+            </div>
+          )
+        }
+
+        if (tile.kind === 'metric') {
+          const metric = metricsById.get(tile.id)
+          return (
+            <div key={key} className={span}>
+              {metric ? (
+                <MetricTileCard metric={metric} />
+              ) : (
+                <MissingTileCard label={tile.id} />
+              )}
+            </div>
+          )
+        }
+
+        // smart-rotating
+        const chosenId = tile.locked ?? nextRotationMetric()
+        const metric = chosenId ? metricsById.get(chosenId) : undefined
+        return (
+          <div key={key} className={span}>
+            {metric ? (
+              <MetricTileCard metric={metric} />
+            ) : (
+              <MissingTileCard label="Keep logging — smart tile coming" />
+            )}
+          </div>
+        )
+      })}
+
+      {dashboardSuggestions.map((s) => (
+        <Fragment key={`sug-${s.id}`}>
+          <div className="col-span-2 sm:col-span-4">
+            <SuggestionCard suggestion={s} />
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+export default TileGrid

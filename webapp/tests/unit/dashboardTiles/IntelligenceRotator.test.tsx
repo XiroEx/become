@@ -78,6 +78,72 @@ test('IntelligenceRotator: missing-metric placeholder when tileId not in registr
   assert.match(html, /data-tile-id="never-registered"/)
 })
 
+test('IntelligenceRotator: API metric summary renders when client registry is empty', () => {
+  const tiles: import('../../../lib/dashboardTiles/rotator').TileCandidate[] = [
+    {
+      kind: 'metric',
+      tileId: 'workout.prs-timeline',
+      score: 0.9,
+      pinned: false,
+      breakdown: { freshness: 1, signalStrength: 1, recencySinceLastShown: 1, goalWeight: 1 },
+    },
+  ]
+  const html = renderToStaticMarkup(
+    <IntelligenceRotator
+      initialResponse={{
+        tiles,
+        now: NOW_ISO,
+        metrics: [
+          {
+            id: 'workout.prs-timeline',
+            label: 'PRs timeline',
+            unit: 'lb',
+            domain: 'workout',
+            trendDirection: 'up-good',
+            latest: { t: new Date('2026-05-27T00:00:00Z'), value: 225 },
+            data: [{ t: new Date('2026-05-27T00:00:00Z'), value: 225 }],
+          },
+        ],
+      }}
+    />,
+  )
+  assert.match(html, /data-testid="rotator-metric-summary"/)
+  assert.match(html, />PRs timeline</)
+  assert.match(html, />225 lb</)
+})
+
+test('IntelligenceRotator: API suggestion payload renders without injected resolver', () => {
+  const tiles: import('../../../lib/dashboardTiles/rotator').TileCandidate[] = [
+    {
+      kind: 'suggestion',
+      suggestionId: 'workout.fatigue-flag',
+      score: 0.8,
+      pinned: false,
+      breakdown: { freshness: 1, signalStrength: 1, recencySinceLastShown: 1, goalWeight: 1 },
+    },
+  ]
+  const html = renderToStaticMarkup(
+    <IntelligenceRotator
+      initialResponse={{
+        tiles,
+        now: NOW_ISO,
+        suggestions: [
+          {
+            id: 'workout.fatigue-flag',
+            severity: 'warning',
+            title: 'Watch recovery this week',
+            body: 'Keep the next session crisp.',
+            dismissible: true,
+            source: 'workout',
+          },
+        ],
+      }}
+    />,
+  )
+  assert.match(html, /data-testid="suggestion-card"/)
+  assert.match(html, />Watch recovery this week</)
+})
+
 test('IntelligenceRotator: suggestion tile renders via SuggestionCard when resolver provides', () => {
   const tiles: import('../../../lib/dashboardTiles/rotator').TileCandidate[] = [
     {

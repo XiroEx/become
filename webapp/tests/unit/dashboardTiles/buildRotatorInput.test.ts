@@ -51,6 +51,15 @@ test('metricsToAvailableTiles: respects defaultFreshness / defaultSignalStrength
   assert.equal(tiles[0].signalStrength, 0.4)
 })
 
+test('metricsToAvailableTiles: excludes dev fixture metrics from production candidates', () => {
+  const metrics: Metric[] = [
+    { id: '_dev_line_workouts', label: 'Dev', unit: 'x', domain: 'workout', trendDirection: 'up-good', compute: async () => [] },
+    { id: 'workout.prs-timeline', label: 'PRs', unit: 'lb', domain: 'workout', trendDirection: 'up-good', compute: async () => [] },
+  ]
+  const tiles = metricsToAvailableTiles(metrics)
+  assert.deepEqual(tiles.map((tile) => tile.tileId), ['workout.prs-timeline'])
+})
+
 // --- suggestionsToActive ----------------------------------------------
 
 test('suggestionsToActive: maps id+severity+source-tag', () => {
@@ -112,7 +121,19 @@ test('recentActivityFromProgress: drops entries older than 30 days', () => {
     streakFreezes: 0,
     milestonesReached: [],
     totalWorkouts: 0,
-    exercisePRs: [],
+    exercisePRs: [
+      {
+        exerciseSlug: 'bench-press',
+        exerciseName: 'Bench Press',
+        maxWeight: {
+          weight: 225,
+          reps: 1,
+          date: new Date('2026-05-25T00:00:00Z'),
+        },
+        maxReps: null,
+        maxE1RM: null,
+      },
+    ],
     dismissedSuggestions: [],
     pinnedTiles: [],
     tileLastShownAt: [],
@@ -122,6 +143,8 @@ test('recentActivityFromProgress: drops entries older than 30 days', () => {
   const activity = recentActivityFromProgress(prog, NOW)
   assert.equal(activity.weightHistory?.length, 1)
   assert.equal(activity.weightHistory?.[0].value, 180)
+  assert.equal(activity.exercisePRs?.[0].exerciseSlug, 'bench-press')
+  assert.equal(activity.exercisePRs?.[0].dates[0].toISOString(), '2026-05-25T00:00:00.000Z')
   assert.equal(activity.streak?.count, 7)
 })
 

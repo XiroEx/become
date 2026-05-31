@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import NotificationOptIn from '@/components/NotificationOptIn'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
@@ -20,9 +20,8 @@ import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
 import type { FitnessGoal } from '@/models/User'
 import { Card } from '@/components/ui'
 import CustomizeTilesModal from '@/components/dashboard/CustomizeTilesModal'
-import { IntelligenceRotator } from '@/components/intelligence/IntelligenceRotator'
+import TileGrid from '@/components/dashboard/TileGrid'
 import {
-  TILE_DEFS,
   DEFAULT_TILE_IDS,
   loadTilePreference,
   type DashboardTileId,
@@ -411,15 +410,12 @@ export default function DashboardClient() {
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Track your fitness journey</p>
       </header>
 
-      {/* Quick Stats — 2x2 mobile / 4-up desktop. Tiles come from the
-          dashboardTiles registry; user selection persists to localStorage
-          and reorders via the Customize modal. */}
+      {/* Unified tile grid — one themed grid rendering stat + metric +
+          smart-rotating tiles (and dashboard-surface suggestion cards) from
+          the user's saved layout. Replaces the old separate StatTile grid and
+          the dark IntelligenceRotator block. */}
       <div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-          {tileIds.map((id) => (
-            <Fragment key={id}>{TILE_DEFS[id].render(tileCtx)}</Fragment>
-          ))}
-        </div>
+        <TileGrid statContext={tileCtx} />
         <div className="mt-2 flex justify-end">
           <button
             type="button"
@@ -431,11 +427,6 @@ export default function DashboardClient() {
           </button>
         </div>
       </div>
-
-      {/* Intelligence rotator — server-picked metric tiles + suggestion
-          cards. Replaces the hardcoded tile list for this section. Empty
-          for users with no activity (silently rendered as a hint). */}
-      <IntelligenceRotator className="grid grid-cols-1 gap-3 sm:grid-cols-2" />
 
       {/* Resume Active Workout — only renders when there's an in-progress
           workout log for today; quietly disappears once it's completed. */}

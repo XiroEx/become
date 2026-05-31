@@ -13,6 +13,9 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { ensureWorkoutMetricsRegistered } from '@/lib/metrics/workout'
+import { resolveMetric } from '@/lib/metrics/registry'
+import { ensureWorkoutSuggestionsRegistered } from '@/lib/suggestions/workout'
 import { runSuggestions } from '@/lib/suggestions/engine'
 import {
   buildRotatorInputFromProgress,
@@ -24,23 +27,27 @@ import { pickTopNTiles, candidateId } from '@/lib/dashboardTiles/rotator'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  ensureWorkoutMetricsRegistered()
+  ensureWorkoutSuggestionsRegistered()
+
   const auth = await verifyAuth(request)
   if (!auth.success || !auth.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  const userId = auth.userId
 
   await dbConnect()
 
   const [progress, user] = await Promise.all([
-    UserProgress.findOne({ userId: auth.userId }),
-    User.findById(auth.userId).select('profile').lean<{
+    UserProgress.findOne({ userId }),
+    User.findById(userId).select('profile').lean<{
       profile?: { primaryGoal?: string }
     }>(),
   ])
 
   const now = new Date()
   const recentActivity = recentActivityFromProgress(progress, now)
-  const suggestions = await runSuggestions(auth.userId, recentActivity, {
+  const suggestions = await runSuggestions(userId, recentActivity, {
     now,
     dismissed: progress?.dismissedSuggestions ?? [],
   })
@@ -53,6 +60,42 @@ export async function GET(request: NextRequest) {
   )
   const picked = pickTopNTiles(input)
   const servedIds = picked.map(candidateId)
+  const metricSummaries = await Promise.all(
+    picked
+      .filter((tile) => tile.kind === 'metric')
+      .map(async (tile) => {
+        if (tile.kind !== 'metric') return null
+        const metric = resolveMetric(tile.tileId)
+        if (!metric) return null
+        try {
+          const data = await metric.compute(userId, {
+            start: new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000),
+            end: now,
+          })
+          const latest = data[data.length - 1] ?? null
+          return {
+            id: metric.id,
+            label: metric.label,
+            unit: metric.unit,
+            domain: metric.domain,
+            trendDirection: metric.trendDirection,
+            latest,
+            data,
+          }
+        } catch (error) {
+          return {
+            id: metric.id,
+            label: metric.label,
+            unit: metric.unit,
+            domain: metric.domain,
+            trendDirection: metric.trendDirection,
+            latest: null,
+            data: [],
+            error: error instanceof Error ? error.message : String(error),
+          }
+        }
+      }),
+  )
 
   // Persist tileLastShownAt for served ids. We only write when there's
   // actually something to record.
@@ -67,6 +110,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     tiles: picked,
+    metrics: metricSummaries.filter((metric) => metric !== null),
+    suggestions,
     now: now.toISOString(),
   })
 }

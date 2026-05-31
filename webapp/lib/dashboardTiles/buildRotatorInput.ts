@@ -45,13 +45,15 @@ export function metricsToAvailableTiles(
 ): AvailableTile[] {
   const freshness = opts.defaultFreshness ?? 1
   const signalStrength = opts.defaultSignalStrength ?? 0.7
-  return metrics.map((m) => ({
-    tileId: m.id,
-    freshness,
-    signalStrength,
-    // Tag with domain so goal weighting can apply.
-    tags: [m.domain],
-  }))
+  return metrics
+    .filter((m) => !m.id.startsWith('_dev_'))
+    .map((m) => ({
+      tileId: m.id,
+      freshness,
+      signalStrength,
+      // Tag with domain so goal weighting can apply.
+      tags: [m.domain],
+    }))
 }
 
 export function suggestionsToActive(
@@ -139,10 +141,18 @@ export function recentActivityFromProgress(
         .map((e) => e.exerciseSlug)
         .filter((s): s is string => !!s),
     }))
+  const exercisePRs = (progress.exercisePRs ?? []).map((pr) => ({
+    exerciseSlug: pr.exerciseSlug,
+    exerciseName: pr.exerciseName,
+    dates: [pr.maxWeight?.date, pr.maxReps?.date, pr.maxE1RM?.date]
+      .filter((d): d is Date => !!d)
+      .map((d) => new Date(d)),
+  }))
   return {
     weightHistory,
     moodHistory,
     workoutLogs,
+    exercisePRs,
     streak: {
       count: progress.streakDays ?? 0,
       lastLogDate: progress.lastActivityDate

@@ -6,11 +6,9 @@ import { headers } from 'next/headers'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { ensureWorkoutMetricsRegistered } from '@/lib/metrics/workout'
 import { listAllMetrics } from '@/lib/metrics/registry'
-import {
-  CustomizeTilesClient,
-  metricsToSummary,
-} from '@/components/intelligence/CustomizeTilesClient'
+import { CustomizeTilesClient } from '@/components/intelligence/CustomizeTilesClient'
 import type { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -32,11 +30,20 @@ async function loadInitialPinned(): Promise<string[]> {
 }
 
 export default async function CustomizeTilesPage() {
+  ensureWorkoutMetricsRegistered()
+
   const [pinned, metrics] = await Promise.all([
     loadInitialPinned(),
     Promise.resolve(listAllMetrics()),
   ])
-  const summaries = metricsToSummary(metrics)
+  const summaries = metrics
+    .filter((metric) => !metric.id.startsWith('_dev_'))
+    .map((metric) => ({
+      id: metric.id,
+      label: metric.label,
+      unit: metric.unit,
+      domain: metric.domain,
+    }))
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
