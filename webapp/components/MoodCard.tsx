@@ -202,14 +202,15 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
   })()
 
   return (
-    <div className="relative">
+    <div className="relative h-full">
       {/* Main Card - clickable to expand. Matches StatTile shape (h-9 icon
           badge, xs label, 2xl extrabold value) so the four dashboard stat
-          tiles share one visual language. */}
+          tiles share one visual language. h-full so it fills the fixed-height
+          dashboard grid cell and matches the other tiles exactly. */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         disabled={isUpdating}
-        className={`w-full flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 ${
+        className={`h-full w-full flex flex-col gap-1.5 rounded-xl border border-zinc-200 bg-white p-3 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 ${
           isUpdating ? 'opacity-60 cursor-wait' : 'cursor-pointer'
         }`}
       >
