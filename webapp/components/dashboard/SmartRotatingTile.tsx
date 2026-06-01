@@ -9,6 +9,7 @@
 // card is visually identical to a pinned one. A subtle "live" dot marks it.
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ALL_TILE_IDS, TILE_DEFS, type DashboardTileContext, type DashboardTileId } from '@/lib/dashboardTiles'
 import type { DashboardTileSize } from '@/lib/dashboardLayout/types'
 
@@ -56,12 +57,27 @@ export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, 
 
   const item = items[safeIndex]
   return (
-    <div className="relative h-full w-full">
-      {item.render(size)}
-      {/* "Live/rotating" affordance — small pulsing dot, non-interactive. */}
+    // overflow-hidden so the sliding cards are clipped to the tile bounds; the
+    // inner layers are absolutely stacked so the outgoing + incoming cards
+    // occupy the same box during the cross-slide.
+    <div className="relative h-full w-full overflow-hidden rounded-xl">
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.div
+          key={item.key}
+          className="absolute inset-0"
+          initial={{ x: '100%', opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: '-100%', opacity: 0 }}
+          transition={{ x: { type: 'spring', stiffness: 320, damping: 34 }, opacity: { duration: 0.18 } }}
+        >
+          {item.render(size)}
+        </motion.div>
+      </AnimatePresence>
+      {/* "Live/rotating" affordance — small pulsing dot, non-interactive. Sits
+          above the sliding layers so it stays put while cards move under it. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute right-2 top-2 flex h-1.5 w-1.5"
+        className="pointer-events-none absolute right-2 top-2 z-10 flex h-1.5 w-1.5"
         title="Smart tile — rotating"
       >
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
