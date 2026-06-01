@@ -10,7 +10,8 @@ import {
   Dumbbell,
   Utensils,
 } from 'lucide-react'
-import { Card, StatTile, type StatTileAccent } from '@/components/ui'
+import { Card, StatTile, type StatTileAccent, type StatTileSize } from '@/components/ui'
+import { cn } from '@/lib/cn'
 import MoodCard, { type MoodLevel } from '@/components/MoodCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
 import type { MetricData } from '@/components/ProgressChart'
@@ -96,7 +97,8 @@ export interface DashboardTileDef {
   accent: StatTileAccent
   /** Icon component used by the customize-modal preview badge. */
   Icon: React.ComponentType<{ className?: string }>
-  render: (ctx: DashboardTileContext) => React.ReactNode
+  /** Render the tile for the given grid footprint (defaults to square 1x1). */
+  render: (ctx: DashboardTileContext, size?: StatTileSize) => React.ReactNode
 }
 
 /* -------------------------------------------------------------------------- */
@@ -126,15 +128,21 @@ function PlaceholderFooter({ label }: { label: string }) {
  * footer bar) at identical dimensions so swapping it for the real tile causes
  * no layout shift. Uses `animate-pulse` like the rest of the app.
  */
-function StatTileSkeleton(): React.ReactNode {
+function StatTileSkeleton({ size = '1x1' }: { size?: StatTileSize }): React.ReactNode {
+  const wide = size === '2x1'
   return (
     <Card variant="compact" className="h-full" aria-hidden="true">
-      <div className="flex flex-col gap-1.5">
+      <div className="flex h-full flex-col justify-center gap-2">
         <div className="flex items-center gap-3">
-          <span className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
+          <span
+            className={cn(
+              'shrink-0 animate-pulse bg-zinc-100 dark:bg-zinc-800',
+              wide ? 'h-11 w-11 rounded-xl' : 'h-9 w-9 rounded-full',
+            )}
+          />
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
-            <div className="h-5 w-1/2 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+            <div className={cn('animate-pulse rounded bg-zinc-100 dark:bg-zinc-800', wide ? 'h-7 w-1/2' : 'h-5 w-1/2')} />
           </div>
         </div>
         <div className="h-1 w-full animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
@@ -147,8 +155,8 @@ function StatTileSkeleton(): React.ReactNode {
 /* Tile renders                                                               */
 /* -------------------------------------------------------------------------- */
 
-function renderStreak(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderStreak(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
   const { streakData, data } = ctx
   const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
   const next = streakData?.nextMilestone
@@ -174,9 +182,10 @@ function renderStreak(ctx: DashboardTileContext): React.ReactNode {
 
   return (
     <StatTile
+      size={size}
       href="/dashboard/progress"
       accent="amber"
-      icon={<Flame className={`h-4 w-4 ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
+      icon={<Flame className={`${size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
       label="Day Streak"
       labelExtra={streakData && streakData.streakFreezes > 0 ? (
         <span className="ml-1.5 text-blue-500 dark:text-blue-400">
@@ -189,8 +198,8 @@ function renderStreak(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderMood(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderMood(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
   return (
     <MoodCard
       currentMood={ctx.todaysMood}
@@ -201,8 +210,8 @@ function renderMood(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderWeekly(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
   const { data, weeklyAvailability } = ctx
   const pct = weeklyAvailability > 0
     ? Math.min(100, Math.round((data.stats.thisWeekWorkouts / weeklyAvailability) * 100))
@@ -210,9 +219,10 @@ function renderWeekly(ctx: DashboardTileContext): React.ReactNode {
   const remaining = Math.max(0, weeklyAvailability - data.stats.thisWeekWorkouts)
   return (
     <StatTile
+      size={size}
       href="/dashboard/progress#workouts"
       accent="green"
-      icon={<TrendingUp className="h-4 w-4" />}
+      icon={<TrendingUp className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="This Week"
       value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
       footer={(
@@ -232,14 +242,15 @@ function renderWeekly(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderGoal(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
   const { data } = ctx
   const pct = Math.min(100, Math.max(0, data.stats.goalProgress))
   return (
     <StatTile
+      size={size}
       accent="purple"
-      icon={<Target className="h-4 w-4" />}
+      icon={<Target className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="Goal"
       value={`${data.stats.goalProgress}%`}
       footer={(
@@ -259,15 +270,17 @@ function renderGoal(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderCalories(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderCalories(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  const calIcon = <Utensils className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />
   const cal = ctx.nutritionData?.calories
   if (!cal || !cal.goal) {
     return (
       <StatTile
+        size={size}
         href="/dashboard/nutrition"
         accent="red"
-        icon={<Utensils className="h-4 w-4" />}
+        icon={calIcon}
         label="Calories"
         value="0/--"
         footer={<PlaceholderFooter label="Set a calorie goal" />}
@@ -293,9 +306,10 @@ function renderCalories(ctx: DashboardTileContext): React.ReactNode {
 
   return (
     <StatTile
+      size={size}
       href="/dashboard/nutrition"
       accent={accent}
-      icon={<Utensils className="h-4 w-4" />}
+      icon={calIcon}
       label="Calories"
       value={`${consumed}/${goal}`}
       footer={(
@@ -315,15 +329,17 @@ function renderCalories(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderWater(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderWater(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  const waterIcon = <Droplets className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />
   const water = ctx.nutritionData?.water
   if (!water || !water.goal) {
     return (
       <StatTile
+        size={size}
         href="/dashboard/nutrition"
         accent="blue"
-        icon={<Droplets className="h-4 w-4" />}
+        icon={waterIcon}
         label="Water"
         value="0/-- oz"
         footer={<PlaceholderFooter label="Set a water goal" />}
@@ -337,9 +353,10 @@ function renderWater(ctx: DashboardTileContext): React.ReactNode {
   const hit = current >= goal
   return (
     <StatTile
+      size={size}
       href="/dashboard/nutrition"
       accent="blue"
-      icon={<Droplets className="h-4 w-4" />}
+      icon={waterIcon}
       label="Water"
       value={`${current}/${goal} oz`}
       footer={(
@@ -359,15 +376,17 @@ function renderWater(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderWeight(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderWeight(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  const weightIcon = <Scale className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />
   const entries = ctx.data.weightData
   if (entries.length === 0) {
     return (
       <StatTile
+        size={size}
         href="/dashboard/progress"
         accent="zinc"
-        icon={<Scale className="h-4 w-4" />}
+        icon={weightIcon}
         label="Weight"
         value="—"
         footer={<PlaceholderFooter label="Log your first weigh-in" />}
@@ -402,9 +421,10 @@ function renderWeight(ctx: DashboardTileContext): React.ReactNode {
 
   return (
     <StatTile
+      size={size}
       href="/dashboard/progress"
       accent="zinc"
-      icon={<Scale className="h-4 w-4" />}
+      icon={weightIcon}
       label="Weight"
       value={`${latest.toFixed(1)} ${ctx.weightUnit}`}
       footer={(
@@ -422,14 +442,15 @@ function renderWeight(ctx: DashboardTileContext): React.ReactNode {
   )
 }
 
-function renderWorkouts(ctx: DashboardTileContext): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton />
+function renderWorkouts(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
   const total = ctx.data.stats.totalWorkouts ?? 0
   return (
     <StatTile
+      size={size}
       href="/dashboard/progress#workouts"
       accent="zinc"
-      icon={<Dumbbell className="h-4 w-4" />}
+      icon={<Dumbbell className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="Total Workouts"
       value={total}
       footer={(
