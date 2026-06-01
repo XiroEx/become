@@ -13,6 +13,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ALL_TILE_IDS, TILE_DEFS, type DashboardTileContext, type DashboardTileId } from '@/lib/dashboardTiles'
 import type { DashboardTileSize } from '@/lib/dashboardLayout/types'
+import type { StatTileId } from '@/lib/dashboardLayout/defaults'
+import { rankedRotationKeys } from '@/lib/dashboardTiles/smartRotation'
 
 export interface SmartRotatingItem {
   key: string
@@ -128,12 +130,14 @@ export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, 
 }
 
 /**
- * Build the rotation pool: every stat card (rendered from live statContext) plus
- * every resolved metric card — EXCLUDING anything already pinned on the
- * dashboard (so the smart tile surfaces only the cards you don't already see).
- * Item keys are `stat:<id>` / `metric:<id>`; pass the matching keys for pinned
- * tiles in `excludeKeys`. Caller supplies a renderer for metrics so this module
- * stays free of the metric-card implementation.
+ * Build the rotation pool, ORDERED BY RELEVANCE (not a fixed linear cycle):
+ * every stat card (rendered from live statContext) plus every resolved metric
+ * card, EXCLUDING anything already pinned on the dashboard. Stats are scored by
+ * actionability (e.g. mood not logged today, streak at risk) and metrics by
+ * their incoming rank; see lib/dashboardTiles/smartRotation. Item keys are
+ * `stat:<id>` / `metric:<id>`; pass pinned-tile keys in `excludeKeys`. The
+ * caller supplies a renderer for metrics so this module stays free of the
+ * metric-card implementation.
  */
 export function buildRotationItems(
   statContext: DashboardTileContext,
@@ -142,18 +146,21 @@ export function buildRotationItems(
   excludeKeys?: ReadonlySet<string>,
 ): SmartRotatingItem[] {
   const exclude = excludeKeys ?? new Set<string>()
-  const items: SmartRotatingItem[] = []
-  for (const id of ALL_TILE_IDS as DashboardTileId[]) {
-    const key = `stat:${id}`
-    if (exclude.has(key)) continue
-    items.push({ key, render: () => TILE_DEFS[id].render(statContext) })
-  }
-  for (const id of metricIds) {
-    const key = `metric:${id}`
-    if (exclude.has(key)) continue
-    items.push({ key, render: (size) => renderMetric(id, size) })
-  }
-  return items
+  const statIds = (ALL_TILE_IDS as DashboardTileId[]).filter(
+    (id) => !exclude.has(`stat:${id}`),
+  ) as unknown as StatTileId[]
+  const metrics = metricIds.filter((id) => !exclude.has(`metric:${id}`))
+
+  // Relevance-ordered keys; build renderers keyed off the id prefix.
+  const order = rankedRotationKeys({ statIds, metricIds: metrics, ctx: statContext })
+  return order.map((key) => {
+    if (key.startsWith('stat:')) {
+      const id = key.slice(5) as DashboardTileId
+      return { key, render: () => TILE_DEFS[id].render(statContext) }
+    }
+    const id = key.slice(7) // 'metric:'.length
+    return { key, render: (size: DashboardTileSize) => renderMetric(id, size) }
+  })
 }
 
 export default SmartRotatingTile
