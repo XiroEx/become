@@ -22,6 +22,12 @@ class MemoryStorage {
   clear(): void {
     this.store.clear()
   }
+  get length(): number {
+    return this.store.size
+  }
+  key(i: number): string | null {
+    return Array.from(this.store.keys())[i] ?? null
+  }
   /** Direct accessor used by tests to plant corrupt / legacy entries. */
   raw(k: string): string | null {
     return this.getItem(k)
@@ -39,6 +45,7 @@ import {
   readCache,
   writeCache,
   clearCache,
+  clearAllCache,
   CACHE_VERSION,
   DEFAULT_MAX_AGE_MS,
 } from '../../lib/clientCache'
@@ -155,5 +162,25 @@ describe('SSR / no-storage safety', () => {
     assert.equal(readCache('ssr'), null)
     // restore
     ;(globalThis as unknown as { window?: unknown }).window = saved
+  })
+})
+
+describe('clearAllCache', () => {
+  it('removes every become.cache.* entry but leaves other keys intact', () => {
+    writeCache('progress', { a: 1 })
+    writeCache('dashboard.tiles', { b: 2 })
+    memory.setItem('token', 'keep-me')
+    memory.setItem('become.cache.v0.legacy', 'old-version-entry')
+
+    clearAllCache()
+
+    assert.equal(readCache('progress'), null)
+    assert.equal(readCache('dashboard.tiles'), null)
+    assert.equal(memory.raw('become.cache.v0.legacy'), null) // cross-version wipe
+    assert.equal(memory.getItem('token'), 'keep-me') // unrelated key preserved
+  })
+
+  it('is a no-op (never throws) when there is nothing cached', () => {
+    assert.doesNotThrow(() => clearAllCache())
   })
 })

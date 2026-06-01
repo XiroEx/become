@@ -104,3 +104,23 @@ export function clearCache(key: string): void {
     // ignore
   }
 }
+
+/**
+ * Remove ALL of our cached entries (every `become.cache.*` key, across
+ * versions). Call on logout so a different user on the same device never sees
+ * the previous user's cached data. Never throws.
+ */
+export function clearAllCache(): void {
+  const storage = getStorage()
+  if (!storage) return
+  try {
+    const toRemove: string[] = []
+    for (let i = 0; i < storage.length; i++) {
+      const k = storage.key(i)
+      if (k && k.startsWith('become.cache.')) toRemove.push(k)
+    }
+    for (const k of toRemove) storage.removeItem(k)
+  } catch {
+    // ignore
+  }
+}
