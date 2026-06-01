@@ -112,6 +112,12 @@ export async function GET(request: NextRequest) {
     tiles: picked,
     metrics: metricSummaries.filter((metric) => metric !== null),
     suggestions,
+    // Adaptive smart-tile signal: per-key tap history drives the relevance boost.
+    engagement: (progress?.tileEngagement ?? []).map((e: { key: string; taps: number; lastTapAt?: Date | null }) => ({
+      key: e.key,
+      taps: e.taps,
+      lastTapAt: e.lastTapAt ?? null,
+    })),
     now: now.toISOString(),
   })
 }

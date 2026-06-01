@@ -14,7 +14,7 @@ import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { ALL_TILE_IDS, TILE_DEFS, type DashboardTileContext, type DashboardTileId } from '@/lib/dashboardTiles'
 import type { DashboardTileSize } from '@/lib/dashboardLayout/types'
 import type { StatTileId } from '@/lib/dashboardLayout/defaults'
-import { rankedRotationKeys } from '@/lib/dashboardTiles/smartRotation'
+import { rankedRotationKeys, type TileEngagement } from '@/lib/dashboardTiles/smartRotation'
 
 export interface SmartRotatingItem {
   key: string
@@ -29,7 +29,13 @@ export interface SmartRotatingTileProps {
   intervalMs?: number
   /** Initial offset so multiple smart tiles don't all show the same card. */
   startIndex?: number
+  /** Fired with the item key when a card is tapped (not dragged) — feeds the
+   *  adaptive engagement signal. */
+  onTap?: (key: string) => void
 }
+
+// A drag that moves less than this many px is treated as a tap.
+const TAP_SLOP = 6
 
 const DEFAULT_INTERVAL = 6000
 // How long to pause auto-rotation after a manual swipe.
@@ -46,11 +52,12 @@ const slideVariants = {
   exit: (direction: number) => ({ x: direction >= 0 ? '-100%' : '100%', opacity: 0 }),
 }
 
-export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, startIndex = 0 }: SmartRotatingTileProps) {
+export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, startIndex = 0, onTap }: SmartRotatingTileProps) {
   // Track an unbounded index + the direction of the last change so the slide
   // animates the correct way for both auto-rotate and manual swipe.
   const [[index, direction], setState] = useState<[number, number]>([startIndex, 1])
   const pausedUntilRef = useRef(0)
+  const draggedRef = useRef(false)
 
   const count = items.length
   const safeIndex = count > 0 ? ((index % count) + count) % count : 0
@@ -77,10 +84,23 @@ export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, 
   const handleDragEnd = useCallback(
     (_e: unknown, info: PanInfo) => {
       const { offset, velocity } = info
+      if (Math.abs(offset.x) > TAP_SLOP) draggedRef.current = true
       if (offset.x <= -SWIPE_DISTANCE || velocity.x <= -SWIPE_VELOCITY) step(1, true)
       else if (offset.x >= SWIPE_DISTANCE || velocity.x >= SWIPE_VELOCITY) step(-1, true)
     },
     [step],
+  )
+
+  const handleClick = useCallback(
+    (key: string) => {
+      // A drag fires onDragEnd before click; ignore the click that follows a drag.
+      if (draggedRef.current) {
+        draggedRef.current = false
+        return
+      }
+      onTap?.(key)
+    },
+    [onTap],
   )
 
   if (count === 0) {
@@ -110,7 +130,9 @@ export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, 
           dragSnapToOrigin
           dragElastic={0.18}
           dragConstraints={{ left: 0, right: 0 }}
+          onDragStart={() => { draggedRef.current = false }}
           onDragEnd={handleDragEnd}
+          onClick={() => handleClick(item.key)}
         >
           {item.render(size)}
         </motion.div>
@@ -144,6 +166,8 @@ export function buildRotationItems(
   metricIds: string[],
   renderMetric: (id: string, size: DashboardTileSize) => ReactNode,
   excludeKeys?: ReadonlySet<string>,
+  engagement?: TileEngagement[],
+  now?: Date,
 ): SmartRotatingItem[] {
   const exclude = excludeKeys ?? new Set<string>()
   const statIds = (ALL_TILE_IDS as DashboardTileId[]).filter(
@@ -151,8 +175,9 @@ export function buildRotationItems(
   ) as unknown as StatTileId[]
   const metrics = metricIds.filter((id) => !exclude.has(`metric:${id}`))
 
-  // Relevance-ordered keys; build renderers keyed off the id prefix.
-  const order = rankedRotationKeys({ statIds, metricIds: metrics, ctx: statContext })
+  // Relevance-ordered keys (with adaptive engagement boost); renderers keyed
+  // off the id prefix.
+  const order = rankedRotationKeys({ statIds, metricIds: metrics, ctx: statContext, engagement, now })
   return order.map((key) => {
     if (key.startsWith('stat:')) {
       const id = key.slice(5) as DashboardTileId
