@@ -52,10 +52,9 @@ test('LineTile: renders TileShell with link + aria-label + Recharts wrapper, no 
   const html = renderToStaticMarkup(jsx)
   assert.match(html, /href="\/dashboard\/insights\/totalWorkoutsThisWeek"/)
   assert.match(html, /aria-label="Workouts this week: 3 workouts — trending up \(good\)"/)
+  // Chart is responsive now (fills its tile): the wrapper is present on SSR; the
+  // Recharts <svg> is sized + hydrated on mount once it can measure the box.
   assert.match(html, /data-testid="line-tile-chart"/)
-  // Recharts emits its wrapper div on SSR; the <svg> is hydrated on mount.
-  assert.match(html, /class="recharts-wrapper"/)
-  assert.match(html, /width:280px;height:96px/)
   assert.doesNotMatch(html, /role="alert"/)
 })
 
@@ -82,10 +81,9 @@ test('BarTile: renders TileShell + Recharts wrapper, aria-label includes trend',
   const html = renderToStaticMarkup(jsx)
   assert.match(html, /href="\/dashboard\/insights\/weeklyVolume"/)
   assert.match(html, /aria-label="Weekly volume: 200 kg — trending up \(good\)"/)
+  // Chart is responsive now (fills its tile): the wrapper is present on SSR; the
+  // Recharts <svg> is sized + hydrated on mount once it can measure the box.
   assert.match(html, /data-testid="bar-tile-chart"/)
-  // Recharts emits its wrapper div on SSR; the <svg> is hydrated on mount.
-  assert.match(html, /class="recharts-wrapper"/)
-  assert.match(html, /width:280px;height:96px/)
   assert.doesNotMatch(html, /role="alert"/)
 })
 
