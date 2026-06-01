@@ -135,19 +135,33 @@ describe('resolveLayoutForGet', () => {
 })
 
 describe('richDefaultLayout', () => {
-  it('returns all 8 stat tiles plus a smart-rotating tile', () => {
+  it('is a 5-tile / 3-row default: 4 square stats + 1 wide smart tile', () => {
     const layout = richDefaultLayout()
-    const statIds = layout.filter((t) => t.kind === 'stat').map((t) => t.id)
-    assert.deepEqual([...statIds].sort(), [...STAT_TILE_IDS].sort())
+    assert.equal(layout.length, 5)
+    const stats = layout.filter((t) => t.kind === 'stat')
     const smart = layout.filter((t) => t.kind === 'smart-rotating')
+    assert.equal(stats.length, 4)
     assert.equal(smart.length, 1)
+    // All four stat tiles are squares; the smart tile is the wide "long" one.
+    assert.ok(stats.every((t) => t.size === '1x1'))
     assert.equal(smart[0].size, '2x1')
     assert.equal(smart[0].locked, null)
   })
 
-  it('includes size variety (at least one 2x1 stat tile)', () => {
+  it('leads with the four most-actionable stats in order', () => {
     const layout = richDefaultLayout()
-    assert.ok(layout.some((t) => t.kind === 'stat' && t.size === '2x1'))
+    assert.deepEqual(
+      layout.slice(0, 4).map((t) => t.id),
+      ['streak', 'mood', 'weekly', 'goal'],
+    )
+    assert.equal(layout[4].kind, 'smart-rotating')
+  })
+
+  it('only uses known stat ids', () => {
+    const layout = richDefaultLayout()
+    for (const t of layout.filter((x) => x.kind === 'stat')) {
+      assert.ok((STAT_TILE_IDS as readonly string[]).includes(t.id), `unknown stat id ${t.id}`)
+    }
   })
 
   it('returns a fresh array each call (safe to mutate)', () => {
