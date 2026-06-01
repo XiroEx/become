@@ -82,18 +82,25 @@ describe('chooseStrategy', () => {
     }
   })
 
-  describe('GET /api/** -> network-first', () => {
-    it('GET api is network-first', () => {
+  describe('GET /api/** -> passthrough (authed per-user data is never SW-cached)', () => {
+    it('GET api is passthrough', () => {
       assert.equal(
         chooseStrategy(req({ url: `${ORIGIN}/api/programs` })),
-        'network-first'
+        'passthrough'
       )
     })
 
-    it('GET api with query is network-first', () => {
+    it('GET api with query is passthrough', () => {
       assert.equal(
         chooseStrategy(req({ url: `${ORIGIN}/api/exercises/alternatives?slug=squat` })),
-        'network-first'
+        'passthrough'
+      )
+    })
+
+    it('GET /api/dashboard/tiles (authed user data) is passthrough', () => {
+      assert.equal(
+        chooseStrategy(req({ url: `${ORIGIN}/api/dashboard/tiles` })),
+        'passthrough'
       )
     })
   })

@@ -27,9 +27,12 @@
  *   - /_next/static/**    -> CACHE-FIRST (stale-while-revalidate). These URLs
  *                            are content-addressed, so caching them forever is
  *                            safe — a new build is a new URL, never a stale hit.
- *   - GET /api/**         -> NETWORK-FIRST, GET ONLY. Cache is a best-effort
- *                            offline fallback only. Non-GET API calls are never
- *                            touched (see below).
+ *   - /api/**             -> PASSTHROUGH. We never cache authed per-user API
+ *                            data in the SW (cache is keyed by URL, so an
+ *                            offline hit could serve one user's data to another
+ *                            on a shared browser). Dashboard offline + instant
+ *                            repaint is handled by the in-app localStorage SWR
+ *                            layer, which is cleared on logout.
  *   - Static assets       -> CACHE-FIRST (icons, manifest, logo, fonts, images).
  *   - Non-GET requests    -> PASSTHROUGH (never cached, never intercepted).
  *   - Cross-origin        -> PASSTHROUGH (we don't touch other origins).
@@ -161,7 +164,9 @@ function chooseStrategy(request) {
   if (isImmutableStatic(pathname)) return 'cache-first'
   if (isStaticAsset(pathname)) return 'cache-first'
 
-  if (pathname.startsWith('/api/')) return 'network-first'
+  // API: passthrough — never cache authed per-user data in the SW (URL-keyed
+  // cache could leak across users offline). localStorage SWR handles offline.
+  if (pathname.startsWith('/api/')) return 'passthrough'
 
   return 'passthrough'
 }
@@ -215,22 +220,6 @@ async function navigationNetworkFirst(request) {
   }
 }
 
-// Network-first for GET /api. Cache is a best-effort offline fallback only.
-async function apiNetworkFirst(request) {
-  const cache = await caches.open(RUNTIME_CACHE)
-  try {
-    const response = await fetch(request)
-    if (response && response.ok) {
-      cache.put(request, response.clone()).catch(() => {})
-    }
-    return response
-  } catch (err) {
-    const cached = await cache.match(request)
-    if (cached) return cached
-    throw err
-  }
-}
-
 /* --------------------------------- fetch ----------------------------------- */
 
 self.addEventListener('fetch', (event) => {
@@ -249,22 +238,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  const isNav = (() => {
-    try {
-      return isNavigation(request)
-    } catch {
-      return false
-    }
-  })()
-
-  let handler
-  if (strategy === 'cache-first') {
-    handler = cacheFirst
-  } else if (isNav) {
-    handler = navigationNetworkFirst
-  } else {
-    handler = apiNetworkFirst
-  }
+  // After passthrough is excluded, only two strategies remain: cache-first
+  // (static assets) and network-first (navigations only — /api is passthrough).
+  const handler = strategy === 'cache-first' ? cacheFirst : navigationNetworkFirst
 
   event.respondWith(
     // Final safety net: if the strategy ever throws, fall back to plain fetch.

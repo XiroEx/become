@@ -65,7 +65,11 @@ function isNavigation(info: RequestInfo): boolean {
  *  - Navigation / HTML  → network-first (fresh chunk refs; cache = offline only)
  *  - /_next/static/**   → cache-first (immutable, content-hashed → safe forever)
  *  - static assets      → cache-first (icons, manifest, logo, fonts, images)
- *  - GET /api/**        → network-first (fresh data; cache = best-effort offline)
+ *  - /api/**            → passthrough (NEVER cached — authed per-user data; the
+ *                         SW caches by URL, so an offline cache hit could serve
+ *                         one user's data to another on a shared browser.
+ *                         Dashboard offline is handled by the in-app localStorage
+ *                         SWR layer, which is cleared on logout.)
  *  - everything else    → passthrough
  */
 export function chooseStrategy(info: RequestInfo): Strategy {
@@ -94,8 +98,11 @@ export function chooseStrategy(info: RequestInfo): Strategy {
   // Stable static assets.
   if (isStaticAsset(pathname)) return 'cache-first'
 
-  // GET API requests — network-first, cache only as an offline fallback.
-  if (pathname.startsWith('/api/')) return 'network-first'
+  // API requests — passthrough. We deliberately do NOT cache authed per-user
+  // data in the SW (cache is keyed by URL, so an offline hit could leak one
+  // user's data to another on a shared browser). The in-app localStorage SWR
+  // layer handles dashboard offline + instant repaint, and clears on logout.
+  if (pathname.startsWith('/api/')) return 'passthrough'
 
   // Anything else we don't explicitly handle: let it pass through to network.
   return 'passthrough'
