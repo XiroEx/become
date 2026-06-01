@@ -135,6 +135,10 @@ export interface IUserProgress {
   // stat/metric/smart-rotating tiles with size + lock. Defaults to [] for
   // legacy docs; the layout API migrates from pinnedTiles on first GET.
   dashboardLayout: IDashboardTile[]
+  // Adaptive smart-tile engagement: per-key tap counts driving the smart tile's
+  // relevance boost (cards the user opens drift toward the front). Keyed by
+  // `stat:<id>` / `metric:<id>`. Defaults to [] for legacy docs.
+  tileEngagement: ITileEngagement[]
   createdAt?: Date
   updatedAt?: Date
 }
@@ -147,6 +151,12 @@ export interface IDismissedSuggestion {
 export interface ITileLastShown {
   id: string
   at: Date
+}
+
+export interface ITileEngagement {
+  key: string // `stat:<id>` / `metric:<id>`
+  taps: number
+  lastTapAt?: Date | null
 }
 
 // Unified dashboard tile (see lib/dashboardLayout/types.ts for the canonical
@@ -249,6 +259,12 @@ const TileLastShownSchema = new Schema<ITileLastShown>({
   at: { type: Date, required: true, default: Date.now },
 }, { _id: false })
 
+const TileEngagementSchema = new Schema<ITileEngagement>({
+  key: { type: String, required: true },
+  taps: { type: Number, required: true, default: 0 },
+  lastTapAt: { type: Date, default: null },
+}, { _id: false })
+
 const ActiveProgramSchema = new Schema<IActiveProgram>({
   programId: { type: String, required: true },
   programName: { type: String, required: true },
@@ -310,6 +326,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
   pinnedTiles: { type: [String], default: [] },
   tileLastShownAt: { type: [TileLastShownSchema], default: [] },
   dashboardLayout: { type: [DashboardTileSchema], default: [] },
+  tileEngagement: { type: [TileEngagementSchema], default: [] },
 }, {
   timestamps: true
 })
