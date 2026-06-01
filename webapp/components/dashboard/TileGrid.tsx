@@ -16,7 +16,7 @@
 // client components, fed by data the tiles API already resolves server-side —
 // so there's no async-server-component-in-client-tree problem.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import {
@@ -53,6 +53,7 @@ interface TilesResponse {
   >
   metrics: MetricSummary[]
   suggestions: Suggestion[]
+  engagement?: Array<{ key: string; taps: number; lastTapAt: string | null }>
   now: string
 }
 
@@ -173,6 +174,29 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
 
   const layout = controlled ? layoutProp : fetchedLayout
 
+  // Record a smart-tile card tap: optimistically bump the in-memory engagement
+  // so the boost applies immediately, and persist server-side (fire-and-forget).
+  const recordTileTap = useCallback((tappedKey: string) => {
+    const nowIso = new Date().toISOString()
+    setTilesData((prev) => {
+      if (!prev) return prev
+      const list = prev.engagement ? [...prev.engagement] : []
+      const i = list.findIndex((e) => e.key === tappedKey)
+      if (i >= 0) list[i] = { ...list[i], taps: list[i].taps + 1, lastTapAt: nowIso }
+      else list.push({ key: tappedKey, taps: 1, lastTapAt: nowIso })
+      return { ...prev, engagement: list }
+    })
+    try {
+      void fetch('/api/dashboard/tile-tap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(authHeaders() ?? {}) },
+        body: JSON.stringify({ key: tappedKey }),
+      })
+    } catch {
+      // non-critical — the optimistic bump still tunes this session
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -259,6 +283,13 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
     if (t.kind === 'stat') pinnedKeys.add(`stat:${t.id}`)
     else if (t.kind === 'metric') pinnedKeys.add(`metric:${t.id}`)
   }
+  // Adaptive signal: per-key tap history boosts cards the user actually opens.
+  const engagement = (tilesData?.engagement ?? []).map((e) => ({
+    key: e.key,
+    taps: e.taps,
+    lastTapAt: e.lastTapAt,
+  }))
+  const rotationNow = tilesData?.now ? new Date(tilesData.now) : undefined
   const rotationItems = buildRotationItems(
     statContext,
     rotationMetricIds,
@@ -267,6 +298,8 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
       return metric ? <MetricTileCard metric={metric} size={size} /> : <MissingTileCard label={id} />
     },
     pinnedKeys,
+    engagement,
+    rotationNow,
   )
 
   const dashboardSuggestions = (tilesData?.suggestions ?? []).filter(
@@ -352,7 +385,12 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
           return (
             <div key={key} className={cellClass}>
               <TileErrorBoundary label="Smart tile">
-                <SmartRotatingTile items={rotationItems} size={tile.size} startIndex={startIndex} />
+                <SmartRotatingTile
+                  items={rotationItems}
+                  size={tile.size}
+                  startIndex={startIndex}
+                  onTap={recordTileTap}
+                />
               </TileErrorBoundary>
             </div>
           )
