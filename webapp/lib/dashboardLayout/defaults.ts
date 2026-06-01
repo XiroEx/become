@@ -46,21 +46,21 @@ export function defaultLayout(): DashboardLayout {
 export const SMART_ROTATING_TILE_ID = 'smart'
 
 /**
- * The rich first-run default: all eight stat tiles with size variety (mood +
- * weight render well as wide 2x1 cards), plus one smart-rotating tile so the
- * intelligence surface is visible by default. New array of new objects each
- * call so callers can freely mutate the result.
+ * The first-run default: a clean 5-tile / 3-row grid for the 2-column mobile
+ * layout —
+ *   Row 1:  Day Streak (1x1) | Today's Mood (1x1)
+ *   Row 2:  This Week  (1x1) | Goal         (1x1)
+ *   Row 3:  Smart tile (2x1, full-width "long" tile)
+ * Four most-actionable stats as squares, plus one wide smart-rotating tile that
+ * surfaces everything else (calories, water, weight, workouts, metrics) so
+ * nothing is lost. New array of new objects each call so callers may mutate it.
  */
 export function richDefaultLayout(): DashboardLayout {
   return [
     { id: 'streak', kind: 'stat', size: '1x1' },
-    { id: 'mood', kind: 'stat', size: '2x1' },
+    { id: 'mood', kind: 'stat', size: '1x1' },
     { id: 'weekly', kind: 'stat', size: '1x1' },
     { id: 'goal', kind: 'stat', size: '1x1' },
-    { id: 'calories', kind: 'stat', size: '1x1' },
-    { id: 'water', kind: 'stat', size: '1x1' },
-    { id: 'weight', kind: 'stat', size: '2x1' },
-    { id: 'workouts', kind: 'stat', size: '1x1' },
     { id: SMART_ROTATING_TILE_ID, kind: 'smart-rotating', size: '2x1', locked: null },
   ]
 }
