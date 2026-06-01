@@ -77,8 +77,12 @@ export function StatTile({
   const wide = size === "2x1";
 
   const body = wide ? (
-    <div className="flex h-full flex-col justify-center gap-2">
-      <div className="flex items-center gap-3">
+    // WIDE: two columns that fill the whole tile. Left = identity (badge +
+    // label + big value). Right = the footer (progress bar + caption) stretched
+    // across the remaining width and vertically centered — so the horizontal
+    // space is actually used instead of leaving the right half empty.
+    <div className="flex h-full items-center gap-4">
+      <div className="flex min-w-0 shrink-0 items-center gap-3">
         <span
           className={cn(
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
@@ -87,7 +91,7 @@ export function StatTile({
         >
           {icon}
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
             {label}
             {labelExtra}
@@ -97,7 +101,7 @@ export function StatTile({
           </div>
         </div>
       </div>
-      {footer ? <div className="px-0.5">{footer}</div> : null}
+      {footer ? <div className="min-w-0 flex-1">{footer}</div> : null}
     </div>
   ) : (
     <div className="flex h-full flex-col justify-center gap-1.5">
