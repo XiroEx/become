@@ -279,6 +279,16 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
     },
   )
 
+  // Ordinal of each smart-rotating tile among smart tiles only, so adjacent
+  // smart tiles can stagger their start (and thus never show the same card).
+  const smartOrdinal = new Map<number, number>()
+  {
+    let n = 0
+    layout.forEach((t, i) => {
+      if (t.kind === 'smart-rotating') smartOrdinal.set(i, n++)
+    })
+  }
+
   return (
     <>
       {/* Fixed-height square cells so every tile is the SAME size. A 1x1 tile is
@@ -331,11 +341,18 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
             )
           }
 
-          // smart-rotating — auto-cycles through all card types
+          // smart-rotating — relevance-ordered pool; stagger by ordinal so two
+          // side-by-side smart tiles start on different cards instead of mirroring.
+          const ordinal = smartOrdinal.get(idx) ?? 0
+          const startIndex =
+            rotationItems.length > 0
+              ? Math.round((ordinal * rotationItems.length) / Math.max(1, smartOrdinal.size)) %
+                rotationItems.length
+              : 0
           return (
             <div key={key} className={cellClass}>
               <TileErrorBoundary label="Smart tile">
-                <SmartRotatingTile items={rotationItems} size={tile.size} />
+                <SmartRotatingTile items={rotationItems} size={tile.size} startIndex={startIndex} />
               </TileErrorBoundary>
             </div>
           )
