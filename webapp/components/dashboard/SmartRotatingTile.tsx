@@ -129,20 +129,29 @@ export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, 
 
 /**
  * Build the rotation pool: every stat card (rendered from live statContext) plus
- * every resolved metric card. Caller supplies a renderer for metrics so this
- * module stays free of the metric-card implementation.
+ * every resolved metric card — EXCLUDING anything already pinned on the
+ * dashboard (so the smart tile surfaces only the cards you don't already see).
+ * Item keys are `stat:<id>` / `metric:<id>`; pass the matching keys for pinned
+ * tiles in `excludeKeys`. Caller supplies a renderer for metrics so this module
+ * stays free of the metric-card implementation.
  */
 export function buildRotationItems(
   statContext: DashboardTileContext,
   metricIds: string[],
   renderMetric: (id: string, size: DashboardTileSize) => ReactNode,
+  excludeKeys?: ReadonlySet<string>,
 ): SmartRotatingItem[] {
+  const exclude = excludeKeys ?? new Set<string>()
   const items: SmartRotatingItem[] = []
   for (const id of ALL_TILE_IDS as DashboardTileId[]) {
-    items.push({ key: `stat:${id}`, render: () => TILE_DEFS[id].render(statContext) })
+    const key = `stat:${id}`
+    if (exclude.has(key)) continue
+    items.push({ key, render: () => TILE_DEFS[id].render(statContext) })
   }
   for (const id of metricIds) {
-    items.push({ key: `metric:${id}`, render: (size) => renderMetric(id, size) })
+    const key = `metric:${id}`
+    if (exclude.has(key)) continue
+    items.push({ key, render: (size) => renderMetric(id, size) })
   }
   return items
 }

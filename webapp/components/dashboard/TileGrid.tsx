@@ -249,13 +249,25 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
     )
   }
 
-  // Smart-rotating tiles cycle through ALL card types (every stat + every
-  // resolved metric), reusing the standard renderers so a rotated card looks
-  // identical to a pinned one. Built once per render; each tile owns its timer.
-  const rotationItems = buildRotationItems(statContext, rotationMetricIds, (id, size) => {
-    const metric = metricsById.get(id)
-    return metric ? <MetricTileCard metric={metric} size={size} /> : <MissingTileCard label={id} />
-  })
+  // Smart-rotating tiles cycle through card types the user hasn't already
+  // pinned — surfacing what's NOT on the grid rather than repeating it. Build
+  // the exclude-set from the current layout's stat + metric tiles (keyed the
+  // same way buildRotationItems keys its items). Reusing the standard renderers
+  // keeps a rotated card visually identical to a pinned one.
+  const pinnedKeys = new Set<string>()
+  for (const t of layout) {
+    if (t.kind === 'stat') pinnedKeys.add(`stat:${t.id}`)
+    else if (t.kind === 'metric') pinnedKeys.add(`metric:${t.id}`)
+  }
+  const rotationItems = buildRotationItems(
+    statContext,
+    rotationMetricIds,
+    (id, size) => {
+      const metric = metricsById.get(id)
+      return metric ? <MetricTileCard metric={metric} size={size} /> : <MissingTileCard label={id} />
+    },
+    pinnedKeys,
+  )
 
   const dashboardSuggestions = (tilesData?.suggestions ?? []).filter(
     // Only show suggestions explicitly targeted at the dashboard surface. When
