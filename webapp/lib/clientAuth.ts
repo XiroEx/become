@@ -1,3 +1,5 @@
+import { clearAllCache } from '@/lib/clientCache'
+
 export async function register(payload: { name: string; email: string; password: string }) {
   const res = await fetch('/api/auth/register', {
     method: 'POST',
@@ -24,4 +26,6 @@ export function getToken() {
 export function logout() {
   if (typeof window === 'undefined') return
   localStorage.removeItem('token')
+  // Wipe cached dashboard data so the next user on this device can't see it.
+  clearAllCache()
 }

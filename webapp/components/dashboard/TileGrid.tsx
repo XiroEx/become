@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { readCache, writeCache } from '@/lib/clientCache'
 import {
   TILE_DEFS,
   type DashboardTileId,
@@ -164,15 +165,43 @@ function MissingTileCard({ label }: { label: string }) {
   )
 }
 
+// Shimmer placeholder for a metric / smart tile while /api/dashboard/tiles is
+// still loading for the first time. Matches MetricTileCard's label-over-value
+// shape at the same height so there's no layout shift when real data lands.
+function TileSkeletonCard(): React.ReactNode {
+  return (
+    <Card variant="compact" className="h-full overflow-hidden" aria-hidden="true">
+      <div className="flex h-full flex-col justify-center gap-2">
+        <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-6 w-1/2 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+      </div>
+    </Card>
+  )
+}
+
 // ── Grid ────────────────────────────────────────────────────────────────────
+
+// Cache keys for the SWR-style instant repaint on reopen.
+const TILES_CACHE_KEY = 'dashboard.tiles'
+const LAYOUT_CACHE_KEY = 'dashboard.layout'
 
 export function TileGrid({ statContext, layout: layoutProp, className }: TileGridProps) {
   const controlled = layoutProp !== undefined
-  const [fetchedLayout, setFetchedLayout] = useState<DashboardTile[] | null>(null)
-  const [tilesData, setTilesData] = useState<TilesResponse | null>(null)
+  // Seed both layout and tiles synchronously from cache so a reopen paints the
+  // last-known grid instantly (no skeleton) and only revalidates in the
+  // background. A true cold first-ever load has no cache → skeletons show.
+  const [fetchedLayout, setFetchedLayout] = useState<DashboardTile[] | null>(
+    () => (controlled ? null : readCache<DashboardTile[]>(LAYOUT_CACHE_KEY)),
+  )
+  const [tilesData, setTilesData] = useState<TilesResponse | null>(
+    () => readCache<TilesResponse>(TILES_CACHE_KEY),
+  )
   const [errored, setErrored] = useState(false)
 
   const layout = controlled ? layoutProp : fetchedLayout
+  // Metric/smart tiles skeleton until tiles data has arrived at least once
+  // (from cache or network). Once we have any tilesData, real cards render.
+  const tilesLoading = tilesData === null
 
   // Record a smart-tile card tap: optimistically bump the in-memory engagement
   // so the boost applies immediately, and persist server-side (fire-and-forget).
@@ -206,7 +235,9 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
       try {
         const tilesRes = await fetch('/api/dashboard/tiles', { headers: authHeaders() })
         if (tilesRes.ok && !cancelled) {
-          setTilesData((await tilesRes.json()) as TilesResponse)
+          const fresh = (await tilesRes.json()) as TilesResponse
+          setTilesData(fresh)
+          writeCache(TILES_CACHE_KEY, fresh)
         }
       } catch {
         // ignore — metric tiles show placeholders
@@ -232,7 +263,11 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
         )
         if (!layoutRes.ok) throw new Error(`layout ${layoutRes.status}`)
         const layoutJson = (await layoutRes.json()) as { layout: DashboardTile[] }
-        if (!cancelled) setFetchedLayout(layoutJson.layout ?? [])
+        if (!cancelled) {
+          const nextLayout = layoutJson.layout ?? []
+          setFetchedLayout(nextLayout)
+          writeCache(LAYOUT_CACHE_KEY, nextLayout)
+        }
       } catch {
         if (!cancelled) setErrored(true)
       }
@@ -360,6 +395,16 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
           }
 
           if (tile.kind === 'metric') {
+            // While tiles data is still loading for the first time, show a
+            // skeleton rather than the "missing" placeholder — the metric isn't
+            // missing, it just hasn't arrived yet.
+            if (tilesLoading) {
+              return (
+                <div key={key} className={cellClass}>
+                  <TileSkeletonCard />
+                </div>
+              )
+            }
             const metric = metricsById.get(tile.id)
             return (
               <div key={key} className={cellClass}>
@@ -374,8 +419,18 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
             )
           }
 
-          // smart-rotating — relevance-ordered pool; stagger by ordinal so two
-          // side-by-side smart tiles start on different cards instead of mirroring.
+          // smart-rotating — skeleton until tiles data lands (the rotation pool
+          // is built from metric data we don't have yet on a cold load).
+          if (tilesLoading) {
+            return (
+              <div key={key} className={cellClass}>
+                <TileSkeletonCard />
+              </div>
+            )
+          }
+
+          // relevance-ordered pool; stagger by ordinal so two side-by-side
+          // smart tiles start on different cards instead of mirroring.
           const ordinal = smartOrdinal.get(idx) ?? 0
           const startIndex =
             rotationItems.length > 0

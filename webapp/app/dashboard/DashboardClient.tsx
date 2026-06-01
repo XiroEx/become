@@ -26,6 +26,12 @@ import {
   type UserProgressData,
 } from '@/lib/dashboardTiles'
 import type { DashboardTile } from '@/lib/dashboardLayout/types'
+import { readCache, writeCache } from '@/lib/clientCache'
+
+// Cache keys for the stale-while-revalidate instant repaint on reopen. Stat
+// tiles read from `data` (progress); the grid layout is owned here too.
+const PROGRESS_CACHE_KEY = 'progress'
+const LAYOUT_CACHE_KEY = 'dashboard.layout'
 
 // Empty initial state — real data loads from /api/progress
 const emptyData: UserProgressData = {
@@ -42,8 +48,15 @@ const emptyData: UserProgressData = {
 }
 
 export default function DashboardClient() {
-  const [data, setData] = useState<UserProgressData>(emptyData)
-  const [loading, setLoading] = useState(true)
+  // Seed progress synchronously from cache so stat tiles paint last-known
+  // values instantly on a reopen; only a cold first-ever load (no cache) shows
+  // the loading skeleton.
+  const [data, setData] = useState<UserProgressData>(
+    () => readCache<UserProgressData>(PROGRESS_CACHE_KEY) ?? emptyData,
+  )
+  const [loading, setLoading] = useState(
+    () => readCache<UserProgressData>(PROGRESS_CACHE_KEY) === null,
+  )
   const [showCheckInModal, setShowCheckInModal] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
@@ -72,7 +85,9 @@ export default function DashboardClient() {
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
-  const [layout, setLayout] = useState<DashboardTile[] | null>(null)
+  const [layout, setLayout] = useState<DashboardTile[] | null>(
+    () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
+  )
   const [showCustomize, setShowCustomize] = useState(false)
 
   useEffect(() => {
@@ -145,6 +160,7 @@ export default function DashboardClient() {
         if (res.ok) {
           const progressData = await res.json()
           setData(progressData)
+          writeCache(PROGRESS_CACHE_KEY, progressData)
           return progressData
         }
         return null
@@ -242,12 +258,16 @@ export default function DashboardClient() {
         })
         if (res.ok) {
           const json = await res.json()
-          setLayout(json.layout ?? [])
+          const nextLayout = json.layout ?? []
+          setLayout(nextLayout)
+          writeCache(LAYOUT_CACHE_KEY, nextLayout)
         } else {
-          setLayout([])
+          // Keep any cached layout rather than blanking the grid on a transient
+          // failure; only fall back to empty if we have nothing cached.
+          setLayout((prev) => prev ?? [])
         }
       } catch {
-        setLayout([])
+        setLayout((prev) => prev ?? [])
       }
     }
 
@@ -387,7 +407,11 @@ export default function DashboardClient() {
     todaysMood,
     isMoodUpdating,
     onMoodChange: handleMoodCardChange,
-  }), [data, streakData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange])
+    // Stat tiles render a shimmer instead of zeros/dashes while the first
+    // progress load is in flight. A cache hit clears `loading` synchronously on
+    // mount, so reopens never show the skeleton.
+    loading,
+  }), [data, streakData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange, loading])
 
   return (
     <>

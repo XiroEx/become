@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { User, LogOut, MessageSquareText, Settings, ShieldCheck } from 'lucide-react'
 import FeedbackModal from './FeedbackModal'
+import { clearAllCache } from '@/lib/clientCache'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME";
 
@@ -41,6 +42,8 @@ export default function TopNav() {
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     localStorage.removeItem('token')
+    // Clear cached dashboard data so the next user on this device can't see it.
+    clearAllCache()
     router.push('/login')
   }
 
