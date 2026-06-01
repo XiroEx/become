@@ -27,6 +27,8 @@ const ACCENT_BADGE_CLASSES: Record<StatTileAccent, string> = {
   zinc: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
 };
 
+export type StatTileSize = "1x1" | "2x1";
+
 export type StatTileProps = {
   icon: React.ReactNode;
   label: string;
@@ -38,17 +40,28 @@ export type StatTileProps = {
   footer?: React.ReactNode;
   /** Optional inline supplemental info (e.g. ❄ freeze count after the label). */
   labelExtra?: React.ReactNode;
+  /**
+   * Grid footprint. `1x1` = square (icon-row over footer). `2x1` = wide: a
+   * larger badge on the left, label + big value stacked, and the footer given
+   * the full width to breathe. Both fill the fixed-height grid cell exactly.
+   */
+  size?: StatTileSize;
   className?: string;
 };
 
 /**
- * Compact stat tile used in dashboard 2x2 grid (Day Streak, Mood, Weekly,
- * Goal). Wraps the `Card` primitive with `compact` variant. See
- * UI_CONSISTENCY_PLAN.md §4.3.
+ * Compact stat tile used across the dashboard grid (Day Streak, This Week,
+ * Goal, Calories, Water, Weight, Total Workouts…). Wraps the `Card` primitive.
  *
- * Supports an optional `footer` slot (used by the streak tile to render its
- * progress-bar to next milestone) so the four tiles share the same outer
- * shape. The footer sits below the icon-badge row inside the same card.
+ * Two deliberately-different layouts:
+ *  - SQUARE (1x1): icon-badge + label + value on top, optional footer (progress
+ *    bar + caption) beneath. Vertically centered as a group.
+ *  - WIDE (2x1): a bigger badge anchored left, label + an enlarged value, and
+ *    the footer stretched across the full width below — uses the extra
+ *    horizontal room instead of just being a stretched square.
+ *
+ * The footer slot (progress bar + caption) is shared by both; callers pass the
+ * same node and it adapts. Everything is `h-full` so it fills the grid cell.
  */
 export function StatTile({
   icon,
@@ -58,10 +71,36 @@ export function StatTile({
   href,
   footer,
   labelExtra,
+  size = "1x1",
   className,
 }: StatTileProps) {
-  const body = (
-    <div className="flex flex-col gap-1.5">
+  const wide = size === "2x1";
+
+  const body = wide ? (
+    <div className="flex h-full flex-col justify-center gap-2">
+      <div className="flex items-center gap-3">
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+            ACCENT_BADGE_CLASSES[accent],
+          )}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+            {label}
+            {labelExtra}
+          </div>
+          <div className="text-3xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
+            {value}
+          </div>
+        </div>
+      </div>
+      {footer ? <div className="px-0.5">{footer}</div> : null}
+    </div>
+  ) : (
+    <div className="flex h-full flex-col justify-center gap-1.5">
       <div className="flex items-center gap-3">
         <span
           className={cn(
@@ -72,7 +111,7 @@ export function StatTile({
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">
             {label}
             {labelExtra}
           </div>
@@ -92,7 +131,7 @@ export function StatTile({
         href={href}
         variant="compact"
         className={cn(
-          "block transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
+          "block h-full transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
           className,
         )}
       >
@@ -102,7 +141,7 @@ export function StatTile({
   }
 
   return (
-    <Card variant="compact" className={className}>
+    <Card variant="compact" className={cn("h-full", className)}>
       {body}
     </Card>
   );

@@ -109,47 +109,62 @@ function MetricTileCard({ metric, size }: { metric: MetricSummary; size: Dashboa
   const kind = chartKindFor(metric)
   const latestText =
     metric.latest == null ? '—' : `${formatValue(metric.latest.value)} ${metric.unit}`.trim()
-  // Charts only render in the wide (2x1) slot — a square tile shows the number
-  // only so its height matches the stat tiles exactly (uniform grid).
+  // Charts render in the wide (2x1) slot, filling the remaining height
+  // responsively so they never overflow + get clipped. Square (1x1) is number-
+  // only so its height/weight matches the stat tiles in the uniform grid.
   const showChart = size === '2x1' && !metric.error && kind !== 'number'
-  return (
-    <Card variant="compact" className="h-full overflow-hidden">
-      {/* Number-only (square) centers vertically so it matches a stat tile's
-          visual weight; the wide variant keeps label-top / chart-bottom. */}
-      <div
-        className={cn(
-          'flex h-full flex-col gap-1',
-          !showChart && 'justify-center',
-        )}
-      >
-        <div className="truncate text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          {metric.label}
-        </div>
-        {metric.error ? (
+
+  if (metric.error) {
+    return (
+      <Card variant="compact" className="h-full overflow-hidden">
+        <div className="flex h-full flex-col justify-center gap-1">
+          <div className="truncate text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            {metric.label}
+          </div>
           <div className="text-sm text-amber-600 dark:text-amber-400">
             Data temporarily unavailable.
           </div>
-        ) : (
-          <>
-            <div
-              className={cn(
-                'font-bold leading-none text-zinc-900 dark:text-white',
-                showChart ? 'text-lg' : 'text-2xl font-extrabold tracking-tight',
-              )}
-            >
+        </div>
+      </Card>
+    )
+  }
+
+  if (showChart) {
+    // Wide: compact label + value on ONE row, chart fills the rest. Putting the
+    // header inline frees vertical room so the responsive chart has real height.
+    return (
+      <Card variant="compact" className="h-full overflow-hidden">
+        <div className="flex h-full flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              {metric.label}
+            </span>
+            <span className="shrink-0 text-base font-bold leading-none text-zinc-900 dark:text-white">
               {latestText}
-            </div>
-            {showChart && (
-              <div className="-mx-1 mt-auto min-h-0 flex-1">
-                {kind === 'bar' ? (
-                  <BarTileChart data={metric.data} height={48} />
-                ) : (
-                  <LineTileChart data={metric.data} height={48} />
-                )}
-              </div>
+            </span>
+          </div>
+          <div className="-mx-1 min-h-0 flex-1">
+            {kind === 'bar' ? (
+              <BarTileChart data={metric.data} />
+            ) : (
+              <LineTileChart data={metric.data} />
             )}
-          </>
-        )}
+          </div>
+        </div>
+      </Card>
+    )
+  }
+
+  // Square: centered number, matches a stat tile's visual weight.
+  return (
+    <Card variant="compact" className="h-full overflow-hidden">
+      <div className="flex h-full flex-col justify-center gap-1">
+        <div className="truncate text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {metric.label}
+        </div>
+        <div className="text-2xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
+          {latestText}
+        </div>
       </div>
     </Card>
   )
@@ -388,7 +403,7 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
             return (
               <div key={key} className={cellClass}>
                 <TileErrorBoundary label={TILE_DEFS[tile.id].label}>
-                  {TILE_DEFS[tile.id].render(statContext)}
+                  {TILE_DEFS[tile.id].render(statContext, tile.size)}
                 </TileErrorBoundary>
               </div>
             )
