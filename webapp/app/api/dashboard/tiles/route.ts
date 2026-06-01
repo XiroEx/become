@@ -23,6 +23,12 @@ import {
   updateLastShown,
 } from '@/lib/dashboardTiles/buildRotatorInput'
 import { pickTopNTiles, candidateId } from '@/lib/dashboardTiles/rotator'
+import {
+  cacheGetJson,
+  cacheSetJson,
+  tilesCacheKey,
+  TILES_CACHE_TTL_SECONDS,
+} from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +41,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const userId = auth.userId
+
+  // Fast path: serve a cached payload if present. Fail-soft — a Redis miss /
+  // outage just falls through to the full compute below. Note: a cache HIT
+  // intentionally skips the tileLastShownAt side-effect write (recency is a
+  // minor rotator factor and the 60s TTL window is acceptable staleness).
+  const cacheKey = tilesCacheKey(userId)
+  const cached = await cacheGetJson<unknown>(cacheKey)
+  if (cached !== null) {
+    return NextResponse.json(cached)
+  }
 
   await dbConnect()
 
@@ -108,7 +124,7 @@ export async function GET(request: NextRequest) {
     await progress.save()
   }
 
-  return NextResponse.json({
+  const responseBody = {
     tiles: picked,
     metrics: metricSummaries.filter((metric) => metric !== null),
     suggestions,
@@ -119,5 +135,10 @@ export async function GET(request: NextRequest) {
       lastTapAt: e.lastTapAt ?? null,
     })),
     now: now.toISOString(),
-  })
+  }
+
+  // Best-effort cache write. Fail-soft — never blocks/throws on Redis trouble.
+  await cacheSetJson(cacheKey, responseBody, TILES_CACHE_TTL_SECONDS)
+
+  return NextResponse.json(responseBody)
 }

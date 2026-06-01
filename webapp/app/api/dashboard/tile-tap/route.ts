@@ -8,6 +8,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
 import { recordTileTap, isValidTileKey } from '@/lib/dashboardTiles/recordTileTap'
+import { bustTilesCache } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +40,10 @@ export async function POST(request: NextRequest) {
   } else {
     await UserProgress.create({ userId: auth.userId, tileEngagement: next })
   }
+
+  // Engagement ordering changed — invalidate the tiles cache so the next load
+  // reflects the new ordering rather than waiting out the TTL.
+  await bustTilesCache(auth.userId)
 
   return NextResponse.json({ success: true })
 }
