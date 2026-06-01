@@ -10,7 +10,7 @@ import {
   Dumbbell,
   Utensils,
 } from 'lucide-react'
-import { StatTile, type StatTileAccent } from '@/components/ui'
+import { Card, StatTile, type StatTileAccent } from '@/components/ui'
 import MoodCard, { type MoodLevel } from '@/components/MoodCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
 import type { MetricData } from '@/components/ProgressChart'
@@ -78,6 +78,14 @@ export interface DashboardTileContext {
   todaysMood: MoodLevel | null
   isMoodUpdating: boolean
   onMoodChange: (mood: MoodLevel) => void
+  /**
+   * True while the backing data for stat tiles is still loading for the first
+   * time (no value has arrived yet and there's no cached value to show). When
+   * true, renderers emit a shimmer placeholder instead of zeros/dashes so the
+   * grid never flashes "0" / "—" on a cold open. Defaults to false (treated as
+   * loaded) when omitted.
+   */
+  loading?: boolean
 }
 
 export interface DashboardTileDef {
@@ -109,10 +117,38 @@ function PlaceholderFooter({ label }: { label: string }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Loading skeleton                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Shimmer placeholder shown while a stat tile's backing data is still loading
+ * for the first time. Mirrors the StatTile layout (badge + label + value +
+ * footer bar) at identical dimensions so swapping it for the real tile causes
+ * no layout shift. Uses `animate-pulse` like the rest of the app.
+ */
+function StatTileSkeleton(): React.ReactNode {
+  return (
+    <Card variant="compact" className="h-full" aria-hidden="true">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3">
+          <span className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="h-3 w-2/3 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+            <div className="h-5 w-1/2 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
+          </div>
+        </div>
+        <div className="h-1 w-full animate-pulse rounded-full bg-zinc-100 dark:bg-zinc-800" />
+      </div>
+    </Card>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* Tile renders                                                               */
 /* -------------------------------------------------------------------------- */
 
 function renderStreak(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const { streakData, data } = ctx
   const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
   const next = streakData?.nextMilestone
@@ -154,6 +190,7 @@ function renderStreak(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderMood(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   return (
     <MoodCard
       currentMood={ctx.todaysMood}
@@ -165,6 +202,7 @@ function renderMood(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderWeekly(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const { data, weeklyAvailability } = ctx
   const pct = weeklyAvailability > 0
     ? Math.min(100, Math.round((data.stats.thisWeekWorkouts / weeklyAvailability) * 100))
@@ -195,6 +233,7 @@ function renderWeekly(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderGoal(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const { data } = ctx
   const pct = Math.min(100, Math.max(0, data.stats.goalProgress))
   return (
@@ -221,6 +260,7 @@ function renderGoal(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderCalories(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const cal = ctx.nutritionData?.calories
   if (!cal || !cal.goal) {
     return (
@@ -276,6 +316,7 @@ function renderCalories(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderWater(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const water = ctx.nutritionData?.water
   if (!water || !water.goal) {
     return (
@@ -319,6 +360,7 @@ function renderWater(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderWeight(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const entries = ctx.data.weightData
   if (entries.length === 0) {
     return (
@@ -381,6 +423,7 @@ function renderWeight(ctx: DashboardTileContext): React.ReactNode {
 }
 
 function renderWorkouts(ctx: DashboardTileContext): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton />
   const total = ctx.data.stats.totalWorkouts ?? 0
   return (
     <StatTile
