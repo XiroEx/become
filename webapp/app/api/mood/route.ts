@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 import {
   readTzOffset,
   readTzOffsetFromBody,
@@ -139,6 +140,9 @@ export async function POST(request: NextRequest) {
     }
 
     const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
+
+    // Mood feeds dashboard tiles — invalidate so the change shows immediately.
+    await bustTilesCache(authResult.userId!)
 
     return NextResponse.json({
       success: true,

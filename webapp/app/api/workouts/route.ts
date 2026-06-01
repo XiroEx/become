@@ -6,6 +6,7 @@ import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 import { readTzOffset, readTzOffsetFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
@@ -443,6 +444,9 @@ export async function POST(request: NextRequest) {
     if (completed) {
       streakResult = await recordStreakActivity(payload.userId, payload.email).catch(() => null)
     }
+
+    // Workout logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(payload.userId)
 
     return NextResponse.json({
       message: 'Workout saved successfully',

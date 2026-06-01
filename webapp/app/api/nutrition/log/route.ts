@@ -7,6 +7,7 @@ import { IMealItem } from '@/models/Meal'
 import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 import { resolveItemFromInput } from '@/lib/mealItems'
 import {
   readTzOffset,
@@ -380,6 +381,9 @@ export async function POST(request: NextRequest) {
     )
 
     const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
+
+    // Nutrition feeds dashboard tiles — invalidate so it shows immediately.
+    await bustTilesCache(authResult.userId!)
 
     // Return the legacy-shaped day to keep the existing frontend happy.
     const fullResponse = await buildLegacyDayResponse(authResult.userId!, dateKey, tzOffsetMinutes)
