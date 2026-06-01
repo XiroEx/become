@@ -112,8 +112,8 @@ export interface DashboardTileDef {
 function PlaceholderFooter({ label }: { label: string }) {
   return (
     <div>
-      <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800" />
-      <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{label}</p>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800" />
+      <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{label}</p>
     </div>
   )
 }
@@ -167,13 +167,13 @@ function renderStreak(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
     const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
     footer = (
       <div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
             className="h-full rounded-full bg-amber-500 transition-all duration-500"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{next - days}d to 🏆</p>
+        <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{next - days}d to 🏆</p>
       </div>
     )
   } else {
@@ -227,13 +227,13 @@ function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
       value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
       footer={(
         <div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
               className="h-full rounded-full bg-green-500 transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
             {remaining === 0 ? 'Weekly goal hit 🎉' : `${remaining} to weekly goal`}
           </p>
         </div>
@@ -255,13 +255,13 @@ function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Reac
       value={`${data.stats.goalProgress}%`}
       footer={(
         <div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
               className="h-full rounded-full bg-purple-500 transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
             {pct >= 100 ? 'Annual goal hit 🎯' : 'Annual goal'}
           </p>
         </div>
@@ -314,13 +314,13 @@ function renderCalories(ctx: DashboardTileContext, size: StatTileSize = '1x1'): 
       value={`${consumed}/${goal}`}
       footer={(
         <div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
               className={`h-full rounded-full ${barClass} transition-all duration-500`}
               style={{ width: `${barPct}%` }}
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
             {over ? `${overBy} over` : `${remaining} cal left`}
           </p>
         </div>
@@ -361,13 +361,13 @@ function renderWater(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Rea
       value={`${current}/${goal} oz`}
       footer={(
         <div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
               className="h-full rounded-full bg-blue-500 transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
             {hit ? 'Hydration goal hit 💧' : `${remaining} oz to goal`}
           </p>
         </div>
@@ -429,13 +429,13 @@ function renderWeight(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
       value={`${latest.toFixed(1)} ${ctx.weightUnit}`}
       footer={(
         <div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
               className={`h-full rounded-full ${barColor} transition-all duration-500`}
               style={{ width: '50%' }}
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">{label}</p>
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{label}</p>
         </div>
       )}
     />
@@ -455,13 +455,13 @@ function renderWorkouts(ctx: DashboardTileContext, size: StatTileSize = '1x1'): 
       value={total}
       footer={(
         <div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
               className="h-full rounded-full bg-zinc-400 dark:bg-zinc-500"
               style={{ width: '100%' }}
             />
           </div>
-          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
             {total === 0 ? 'Keep going' : 'Lifetime'}
           </p>
         </div>
