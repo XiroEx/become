@@ -10,8 +10,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ArrowRight, Sparkles, Check } from 'lucide-react'
+import { X, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
+import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import {
   BREATH_PROTOCOLS,
   breathForState,
@@ -32,6 +33,13 @@ interface CompleteResult {
   xpAwarded: number
   alreadyComplete: boolean
   readyToLevelUp: boolean
+  streak?: number
+}
+
+interface LevelUpResult {
+  chapter: number
+  newlyUnlocked: string[]
+  currentChapter: { name?: string; theme?: string }
 }
 
 export interface SessionPlayerProps {
@@ -40,7 +48,7 @@ export interface SessionPlayerProps {
   onExit: () => void
 }
 
-type Stage = 'intro' | 'move' | 'payoff'
+type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
 
 function authHeaders(): HeadersInit {
   return {
@@ -55,6 +63,8 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
   const [index, setIndex] = useState(0)
   const [liveState, setLiveState] = useState<MindState | null>(null)
   const [result, setResult] = useState<CompleteResult | null>(null)
+  const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
+  const [advancing, setAdvancing] = useState(false)
 
   const total = plan.moves.length
   const move = plan.moves[index]
@@ -86,6 +96,24 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
       setIndex((i) => i + 1)
     }
   }, [index, total, complete])
+
+  const handleLevelUp = useCallback(async () => {
+    if (advancing) return
+    setAdvancing(true)
+    try {
+      const res = await fetch('/api/mind/progress/levelup', { method: 'POST', headers: authHeaders() })
+      if (res.ok) {
+        setLevelUp((await res.json()) as LevelUpResult)
+        setStage('levelup')
+      } else {
+        onExit() // gracefully bail if it can't advance
+      }
+    } catch {
+      onExit()
+    } finally {
+      setAdvancing(false)
+    }
+  }, [advancing, onExit])
 
   // Resolve the breath protocol from the live state-check answer ('auto').
   const resolvedProtocol = useMemo<BreathProtocol | undefined>(() => {
@@ -214,21 +242,103 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
                   +{result.xpAwarded} XP
                 </motion.p>
               )}
-              {result?.readyToLevelUp && (
-                <p className="mt-3 text-sm font-semibold text-amber-300">A new chapter is ready to unlock.</p>
+              {result && typeof result.streak === 'number' && result.streak > 1 && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-300"
+                >
+                  <Flame className="h-4 w-4" />
+                  {result.streak}-day streak
+                </motion.p>
               )}
+
+              {result?.readyToLevelUp ? (
+                <>
+                  <button
+                    onClick={handleLevelUp}
+                    disabled={advancing}
+                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 py-4 text-base font-bold text-black transition-transform active:scale-95 disabled:opacity-70"
+                  >
+                    {advancing ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChevronUp className="h-5 w-5" strokeWidth={3} />}
+                    Unlock next chapter
+                  </button>
+                  <button onClick={onExit} className="mt-3 text-sm font-medium text-white/50 transition-colors hover:text-white">
+                    Later
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={onExit}
+                    className="mt-10 w-full max-w-xs rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
+                  >
+                    Done
+                  </button>
+                  <button
+                    onClick={() => router.push('/dashboard/mind/arsenal')}
+                    className="mt-3 flex items-center gap-1 text-sm font-medium text-white/60 transition-colors hover:text-white"
+                  >
+                    Explore your arsenal
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+            </motion.div>
+          )}
+
+          {stage === 'levelup' && levelUp && (
+            <motion.div
+              key="levelup"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex h-full w-full flex-col items-center justify-center px-6 text-center"
+            >
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-300"
+              >
+                Chapter {levelUp.chapter} unlocked
+              </motion.p>
+              <motion.h1
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 18, delay: 0.15 }}
+                className="mt-3 bg-gradient-to-br from-amber-200 to-amber-400 bg-clip-text text-4xl font-extrabold text-transparent"
+              >
+                {levelUp.currentChapter?.name ?? CHAPTERS[levelUp.chapter - 1]?.name}
+              </motion.h1>
+              <p className="mt-3 max-w-xs text-white/60">
+                {levelUp.currentChapter?.theme ?? CHAPTERS[levelUp.chapter - 1]?.theme}
+              </p>
+
+              {levelUp.newlyUnlocked.length > 0 && (
+                <div className="mt-8 w-full max-w-xs">
+                  <p className="mb-3 text-xs uppercase tracking-widest text-white/40">New tools</p>
+                  <div className="space-y-2">
+                    {levelUp.newlyUnlocked.map((id, i) => (
+                      <motion.div
+                        key={id}
+                        initial={{ opacity: 0, x: -12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.4 + i * 0.12 }}
+                        className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold"
+                      >
+                        <Sparkles className="h-4 w-4 text-amber-300" />
+                        {SYSTEM_INFO[id]?.label ?? id}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={onExit}
                 className="mt-10 w-full max-w-xs rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
               >
-                Done
-              </button>
-              <button
-                onClick={() => router.push('/dashboard/mind/arsenal')}
-                className="mt-3 flex items-center gap-1 text-sm font-medium text-white/60 transition-colors hover:text-white"
-              >
-                Explore your arsenal
-                <ArrowRight className="h-4 w-4" />
+                Enter
               </button>
             </motion.div>
           )}
