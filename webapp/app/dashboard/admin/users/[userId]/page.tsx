@@ -119,6 +119,9 @@ export default function AdminUserDetailPage() {
   const [deleteInput, setDeleteInput] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [roleUpdating, setRoleUpdating] = useState(false)
+  const [mindChapter, setMindChapter] = useState(1)
+  const [mindXp, setMindXp] = useState(0)
+  const [mindSaving, setMindSaving] = useState(false)
 
   useEffect(() => {
     setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -155,6 +158,37 @@ export default function AdminUserDetailPage() {
     const t = setTimeout(() => setToast(null), 3000)
     return () => clearTimeout(t)
   }, [toast])
+
+  // Sync editable Mind controls when the user's data loads.
+  useEffect(() => {
+    if (mind) {
+      setMindChapter(mind.chapter)
+      setMindXp(mind.xp)
+    }
+  }, [mind])
+
+  async function saveMind() {
+    setMindSaving(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/mind-progress', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, chapter: mindChapter, xp: mindXp }),
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { chapter: number; xp: number }
+        setMind((prev) => (prev ? { ...prev, chapter: data.chapter, xp: data.xp } : prev))
+        setToast({ message: `Set Ch.${data.chapter} · ${data.xp} XP`, type: 'success' })
+      } else {
+        setToast({ message: 'Failed to update Mind progress', type: 'error' })
+      }
+    } catch {
+      setToast({ message: 'Failed to update Mind progress', type: 'error' })
+    } finally {
+      setMindSaving(false)
+    }
+  }
 
   async function patchUser(body: Record<string, unknown>) {
     const token = localStorage.getItem('token')
@@ -511,6 +545,39 @@ export default function AdminUserDetailPage() {
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">{s.label}</p>
               </div>
             ))}
+          </div>
+
+          {/* Editable XP / level (admin) */}
+          <div className="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+            <label className="flex flex-col text-xs text-zinc-500 dark:text-zinc-400">
+              Chapter
+              <select
+                value={mindChapter}
+                onChange={(e) => setMindChapter(Number(e.target.value))}
+                className="mt-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              >
+                {[1, 2, 3, 4, 5].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-1 flex-col text-xs text-zinc-500 dark:text-zinc-400">
+              XP
+              <input
+                type="number"
+                min={0}
+                value={mindXp}
+                onChange={(e) => setMindXp(Math.max(0, Number(e.target.value)))}
+                className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              />
+            </label>
+            <button
+              onClick={saveMind}
+              disabled={mindSaving}
+              className="rounded-lg bg-violet-600 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-violet-700 disabled:opacity-60"
+            >
+              {mindSaving ? 'Saving…' : 'Set'}
+            </button>
           </div>
           {mind.identityStatement && (
             <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2.5">
