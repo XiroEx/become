@@ -10,9 +10,9 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, ChevronRight, X, Wand2, Route, MessageCircle } from 'lucide-react'
 
 const CAPABILITIES = [
-  { Icon: Route, title: 'Sessions built for you', body: 'Your daily moves, sequenced from how you actually feel and where you are.' },
+  { Icon: Route, title: 'Built around you', body: 'Your daily moves, sequenced from how you actually feel and where you are.' },
   { Icon: Wand2, title: 'Written for you', body: 'Challenges, affirmations, and prompts in your language — not a static library.' },
-  { Icon: MessageCircle, title: 'Responds to you', body: 'Reflect in a scene and your coach answers — guidance, not a wall of text.' },
+  { Icon: MessageCircle, title: 'Responds to you', body: 'Reflect in a scene and it answers — guidance, not a wall of text.' },
 ]
 
 export default function MindCoachTeaser() {
@@ -31,13 +31,13 @@ export default function MindCoachTeaser() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-              Your AI coach
+              Sessions that adapt to you
               <span className="rounded-full bg-violet-600/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
                 Coming soon
               </span>
             </p>
             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-              Sessions that adapt to you — written for you.
+              Shaped around your mood, wins, and mission.
             </p>
           </div>
           <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400" />
@@ -71,7 +71,7 @@ export default function MindCoachTeaser() {
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-green-500 text-white">
                     <Sparkles className="h-4 w-4" />
                   </span>
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Your AI coach</h2>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Sessions that adapt to you</h2>
                 </div>
                 <button
                   onClick={() => setOpen(false)}
@@ -84,8 +84,8 @@ export default function MindCoachTeaser() {
 
               <div className="space-y-5 px-5 pt-2">
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  Right now your sessions are built from a deep, structured playbook. Soon, a coach will
-                  shape them around <span className="font-semibold text-zinc-900 dark:text-white">you</span> —
+                  Right now your sessions are built from a deep, structured playbook. Soon they&apos;ll shape
+                  themselves around <span className="font-semibold text-zinc-900 dark:text-white">you</span> —
                   your mood, your wins, your mission — and grow with you.
                 </p>
 
@@ -111,7 +111,7 @@ export default function MindCoachTeaser() {
                   <textarea
                     disabled
                     rows={2}
-                    placeholder="Tell your coach what you're working through…"
+                    placeholder="Note what you're working through…"
                     className="w-full cursor-not-allowed resize-none rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-400 placeholder-zinc-400 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-500"
                   />
                 </div>
