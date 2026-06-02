@@ -31,7 +31,7 @@ import SocialScene from './scenes/SocialScene'
 
 interface CompleteResult {
   xpAwarded: number
-  alreadyComplete: boolean
+  completions?: number
   readyToLevelUp: boolean
   streak?: number
 }
@@ -225,11 +225,11 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
                 <Check className="h-10 w-10" strokeWidth={3} />
               </motion.span>
               <h1 className="text-2xl font-extrabold">
-                {result && result.alreadyComplete ? 'Done again. Respect.' : 'You showed up.'}
+                {result && (result.completions ?? 1) > 1 ? 'Another rep in.' : 'You showed up.'}
               </h1>
               <p className="mt-2 text-white/60">
-                {result && result.alreadyComplete
-                  ? 'You already trained your mind today.'
+                {result && result.xpAwarded === 0
+                  ? "You've maxed today's XP — but reps still count."
                   : "That's how it's built — one rep at a time."}
               </p>
               {result && result.xpAwarded > 0 && (

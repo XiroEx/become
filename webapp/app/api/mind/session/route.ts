@@ -12,7 +12,9 @@ import MindProgress from '@/models/MindProgress'
 import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
 import { getXpToNextChapter, isReadyToLevelUp } from '@/lib/mindXP'
 
-const SESSION_REWARD_XP = 15
+// XP per completion within a local day — diminishing so replays still move you
+// forward without farming a whole chapter in one sitting. completion 4+ = 0.
+const XP_BY_COMPLETION: Record<number, number> = { 1: 15, 2: 8, 3: 5 }
 
 // Consecutive-day streak of completed Mind sessions, anchored to the caller's
 // local day. Counts today if done, otherwise starts from yesterday (so the

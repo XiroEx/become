@@ -8,7 +8,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Brain, ArrowRight, Sparkles, Check, ChevronRight, Flame } from 'lucide-react'
+import { Brain, ArrowRight, Check, ChevronRight, Flame } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
@@ -57,6 +57,8 @@ export default function MindJourney() {
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
+  // Fresh seed per launch so replays compose a varied set (not the same items).
+  const [sessionSeed, setSessionSeed] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -115,8 +117,14 @@ export default function MindJourney() {
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       dayOfYear: dayOfYear(),
+      seed: sessionSeed ?? undefined,
     })
-  }, [progress, recentState, missionAction])
+  }, [progress, recentState, missionAction, sessionSeed])
+
+  const begin = useCallback(() => {
+    setSessionSeed(Date.now())
+    setPlaying(true)
+  }, [])
 
   // ── Immersive session overlay ──
   if (playing && plan) {
@@ -216,45 +224,34 @@ export default function MindJourney() {
       {/* The next move */}
       {plan && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          {!completedToday ? (
-            <button
-              onClick={() => setPlaying(true)}
-              className="group relative w-full overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-green-600 p-6 text-left text-white shadow-lg transition-transform active:scale-[0.98]"
-            >
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/70">Today</p>
-              <h2 className="mt-2 text-3xl font-extrabold">{plan.intro.title}</h2>
-              <p className="mt-2 max-w-xs text-sm text-white/80">{plan.intro.subtitle}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {plan.moves.map((m) => (
-                  <span key={m.id} className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
-                    {MOVE_CHIP[m.kind]}
-                  </span>
-                ))}
-              </div>
-              <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 text-base font-bold text-zinc-900 transition-transform group-active:scale-95">
-                Begin
-                <ArrowRight className="h-5 w-5" />
-              </span>
-            </button>
-          ) : (
-            <div className="rounded-3xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">
-              <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-green-500 text-white">
-                <Check className="h-7 w-7" strokeWidth={3} />
-              </span>
-              <h2 className="text-xl font-bold text-zinc-900 dark:text-white">You showed up today</h2>
-              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-                Come back tomorrow for your next move.
-              </p>
-              <button
-                onClick={() => setPlaying(true)}
-                className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-violet-600 dark:text-violet-400"
-              >
-                <Sparkles className="h-4 w-4" />
-                Train again
-              </button>
+          <button
+            onClick={begin}
+            className="group relative w-full overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-green-600 p-6 text-left text-white shadow-lg transition-transform active:scale-[0.98]"
+          >
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
+              {completedToday ? 'Go again' : 'Today'}
+            </p>
+            <h2 className="mt-2 text-3xl font-extrabold">{plan.intro.title}</h2>
+            <p className="mt-2 max-w-xs text-sm text-white/80">{plan.intro.subtitle}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {plan.moves.map((m) => (
+                <span key={m.id} className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
+                  {MOVE_CHIP[m.kind]}
+                </span>
+              ))}
             </div>
-          )}
+            <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 text-base font-bold text-zinc-900 transition-transform group-active:scale-95">
+              {completedToday ? 'Train again' : 'Begin'}
+              <ArrowRight className="h-5 w-5" />
+            </span>
+            {completedToday && (
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-white/70">
+                <Check className="h-3.5 w-3.5" />
+                Done today{streak > 0 ? ` · ${streak}-day streak` : ''}
+              </p>
+            )}
+          </button>
         </motion.div>
       )}
 
