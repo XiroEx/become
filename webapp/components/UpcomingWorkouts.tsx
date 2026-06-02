@@ -3,8 +3,13 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Calendar, ChevronRight, Check, X, Clock, Dumbbell } from 'lucide-react'
+import { Calendar, ChevronRight, Check, X, Clock, Dumbbell, Zap } from 'lucide-react'
 import { Card } from '@/components/ui'
+
+interface UpcomingWorkoutsProps {
+  /** Opens the Quick Session modal — surfaced as a button in the header. */
+  onQuickSession?: () => void
+}
 
 interface ScheduledWorkout {
   date: string
@@ -68,7 +73,7 @@ function StatusIcon({ status }: { status: string }) {
   }
 }
 
-export default function UpcomingWorkouts() {
+export default function UpcomingWorkouts({ onQuickSession }: UpcomingWorkoutsProps = {}) {
   const router = useRouter()
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,6 +130,16 @@ export default function UpcomingWorkouts() {
             <Calendar className="h-4 w-4 text-blue-500" />
             <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">This Week</h2>
           </div>
+          {onQuickSession && (
+            <button
+              type="button"
+              onClick={onQuickSession}
+              className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Quick Session
+            </button>
+          )}
         </div>
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -164,13 +179,25 @@ export default function UpcomingWorkouts() {
           <Calendar className="h-4 w-4 text-blue-500" />
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">This Week</h2>
         </div>
-        <Link
-          href="/dashboard/calendar"
-          className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
-        >
-          View Calendar
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex items-center gap-2">
+          {onQuickSession && (
+            <button
+              type="button"
+              onClick={onQuickSession}
+              className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Quick Session
+            </button>
+          )}
+          <Link
+            href="/dashboard/calendar"
+            className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
+          >
+            View Calendar
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-7 gap-1.5">

@@ -11,6 +11,7 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
+import { readQuickSession, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 
 interface SetData {
   reps: string;
@@ -91,6 +92,13 @@ export default function LiveWorkoutPage() {
   const searchParams = useSearchParams();
   const programId = params.programId as string;
   const requestedDay = searchParams.get("day");
+  // Quick (program-less) session mode — routed through this same component via
+  // the sentinel programId `quick` + a sessionStorage-stashed draft keyed by
+  // ?session=<id>. In quick mode we skip program/current-workout/schedule
+  // plumbing entirely and save with kind:'quick'.
+  const quickSessionId = searchParams.get("session");
+  const isQuick = programId === QUICK_PROGRAM_ID || !!quickSessionId;
+  const [quickMeta, setQuickMeta] = useState<{ title: string; focus?: string } | null>(null);
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>(fallbackExercises);
   const [currentPhase, setCurrentPhase] = useState(1);
@@ -269,6 +277,51 @@ export default function LiveWorkoutPage() {
   useEffect(() => {
     const loadWorkout = async () => {
       try {
+        // ── Quick-session mode: load the stashed draft, no program fetches ──
+        if (isQuick) {
+          const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
+          const draftExercises = stored?.exercises ?? [];
+          const exs: Exercise[] = draftExercises.map((d) => ({
+            exerciseSlug: d.exerciseSlug,
+            name: d.name,
+            trackingType: d.trackingType,
+            sets: d.sets,
+            reps: d.reps,
+            ...(d.rest && { rest: d.rest }),
+            ...(d.duration && { duration: d.duration }),
+            ...(d.primaryMuscles && { primaryMuscles: d.primaryMuscles }),
+          }));
+          const title = stored?.title || "Quick Session";
+          setQuickMeta({ title, focus: stored?.focus });
+
+          if (exs.length === 0) {
+            // No stashed session (e.g. hard refresh cleared sessionStorage) —
+            // fall back so the screen isn't stuck loading.
+            const fb: WorkoutData = { day: title, title, exercises: fallbackExercises };
+            setWorkout(fb);
+            setExercises(fallbackExercises);
+            const { data, flow } = initializeExercises(fallbackExercises);
+            setExerciseData(data);
+            setWorkoutFlow(flow);
+            setLoading(false);
+            return;
+          }
+
+          const wd: WorkoutData = { day: title, title, exercises: exs };
+          setWorkout(wd);
+          setExercises(exs);
+          setCurrentPhase(1);
+
+          // Prefill last-time numbers (slug-based — works without a program).
+          const token = localStorage.getItem("token");
+          const lastPerformance = token ? await fetchLastPerformance(token, exs) : {};
+          const { data, flow } = initializeExercises(exs, lastPerformance);
+          setExerciseData(data);
+          setWorkoutFlow(flow);
+          setLoading(false);
+          return;
+        }
+
         const token = localStorage.getItem("token");
         if (!token) {
           setWorkout({ day: "Day 1", title: "Training", exercises: fallbackExercises });
@@ -503,7 +556,7 @@ export default function LiveWorkoutPage() {
 
     loadWorkout();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [programId, requestedDay, loadKey]);
+  }, [programId, requestedDay, loadKey, isQuick, quickSessionId]);
 
   // Find the first incomplete step in the flow
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
@@ -655,19 +708,34 @@ export default function LiveWorkoutPage() {
       // Snapshot active seconds now so the server stores the time at the
       // moment of save, not the time the request lands.
       const activeSecondsAtSave = activeSecondsBaseline + Math.floor((Date.now() - sessionStartTime) / 1000);
+      // Quick sessions post a kind:'quick' body (matched server-side by
+      // sessionId); program sessions post the program/phase/day body.
+      const saveBody = isQuick && quickSessionId
+        ? {
+            kind: "quick" as const,
+            sessionId: quickSessionId,
+            title: workout.title,
+            ...(quickMeta?.focus && { focus: quickMeta.focus }),
+            exercises: exercisesToSave,
+            completed: isComplete,
+            activeSeconds: activeSecondsAtSave,
+            ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+            tz: new Date().getTimezoneOffset(),
+          }
+        : {
+            programId,
+            phase: currentPhase,
+            day: workout.day,
+            exercises: exercisesToSave,
+            completed: isComplete,
+            activeSeconds: activeSecondsAtSave,
+            ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+            tz: new Date().getTimezoneOffset(),
+          };
       const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          programId,
-          phase: currentPhase,
-          day: workout.day,
-          exercises: exercisesToSave,
-          completed: isComplete,
-          activeSeconds: activeSecondsAtSave,
-          ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
-          tz: new Date().getTimezoneOffset(),
-        }),
+        body: JSON.stringify(saveBody),
       });
       if (isComplete && res.ok) {
         const data = await res.json();
@@ -684,7 +752,7 @@ export default function LiveWorkoutPage() {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta]);
 
   // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
   // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension
@@ -911,8 +979,9 @@ export default function LiveWorkoutPage() {
     };
     setExercises(updatedExercises);
 
-    // Save permanent swap if scope is 'program'
-    if (scope === 'program') {
+    // Save permanent swap if scope is 'program' (never for quick sessions —
+    // they have no program to persist a swap against).
+    if (scope === 'program' && !isQuick) {
       const token = localStorage.getItem("token");
       if (token) {
         fetch("/api/programs/swap", {
@@ -956,7 +1025,7 @@ export default function LiveWorkoutPage() {
 
     setShowSwapModal(false);
     setShowSkipModal(false);
-  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId]);
+  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId, isQuick]);
 
   const handleCompleteOrSkipSet = () => {
     // On the final step, empty inputs just finish the workout — don't prompt to skip
