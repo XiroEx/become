@@ -83,41 +83,50 @@ export const BREATH_PROTOCOLS: Record<string, BreathProtocol> = {
       { label: 'Exhale', durationMs: 8000, instruction: 'Slow exhale through the mouth' },
     ],
   },
+  coherence: {
+    id: 'coherence',
+    name: 'Coherence',
+    bestFor: 'Balance & steady nerves',
+    description:
+      'Slow, even breaths at about 5.5 per minute — the rhythm that brings your heart rate and nervous system into balance. Calm, without going sleepy.',
+    rounds: 6,
+    phases: [
+      { label: 'Inhale', durationMs: 5500, instruction: 'Smooth inhale through the nose' },
+      { label: 'Exhale', durationMs: 5500, instruction: 'Smooth, even exhale' },
+    ],
+  },
+  energize: {
+    id: 'energize',
+    name: 'Energizing Breath',
+    bestFor: 'Wake up & power on',
+    description:
+      "Brisk, even breaths to raise alertness and shake off the fog. Use it when you're flat and need to come online fast.",
+    rounds: 12,
+    phases: [
+      { label: 'Inhale', durationMs: 1600, instruction: 'Quick, full inhale through the nose' },
+      { label: 'Exhale', durationMs: 1600, instruction: 'Sharp exhale through the mouth' },
+    ],
+  },
 }
 
 /** Pick the breath protocol that best fits the user's current state. */
 export function breathForState(state: MindState | null | undefined): BreathProtocol {
   switch (state) {
     case 'stressed':
-    case 'low_energy':
       return BREATH_PROTOCOLS.sigh
     case 'distracted':
-    case 'locked_in':
       return BREATH_PROTOCOLS.box
+    case 'low_energy':
+      return BREATH_PROTOCOLS.energize
+    case 'locked_in':
+      return BREATH_PROTOCOLS.coherence
     default:
       return BREATH_PROTOCOLS.sigh
   }
 }
 
-// ─── Identity statements (decoupled from the old SelfImageTab) ────────────────
-
-export const IDENTITY_POOL: string[] = [
-  "I am someone who does the work even when I don't feel like it.",
-  'I am disciplined, focused, and consistent.',
-  'I am becoming stronger every single day.',
-  'I am the type of person who shows up.',
-  'I am in control of my choices and my outcomes.',
-  'I am a high performer who protects my standards.',
-  "I am building a body and mind I'm proud of.",
-  'I am mentally tough.',
-  'I am exactly where I need to be to become what I want.',
-  'I am someone who finishes what they start.',
-  "I am not driven by comfort — I'm driven by purpose.",
-  'I am the hardest worker in any room I enter.',
-  'I am capable of far more than I currently believe.',
-  'I am growing through every challenge placed in front of me.',
-  "I am not defined by how I feel — I'm defined by what I do.",
-]
+// ─── Identity statements — sourced from the central content library. ──────────
+export { IDENTITY_POOL } from './library'
 
 // ─── Move + session shapes ────────────────────────────────────────────────────
 

@@ -4,21 +4,23 @@
 // that's active right now and get its override (reframe). A reflective interrupt,
 // no persistence. Renders inside the player's black full-screen stage.
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Shield, ArrowRight } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
+import { SABOTAGE_PATTERNS } from '@/lib/mind/library'
 
-const PATTERNS = [
-  { pattern: 'All-or-nothing thinking', override: 'Progress is not linear. One miss changes nothing unless you let it.' },
-  { pattern: 'Waiting to feel ready', override: 'Do it now. Even 10%. The feeling comes after you start.' },
-  { pattern: 'Perfectionism as avoidance', override: 'A mediocre plan executed beats a perfect plan in your notes app.' },
-  { pattern: 'Comparing your start to their finish', override: 'Your only competition is who you were yesterday.' },
-  { pattern: 'Comfort over growth', override: "The moment you're about to take the easy path is exactly where the growth is." },
-]
+const WINDOW = 6
 
 export default function PatternScene({ move, onDone }: SceneProps) {
   const [selected, setSelected] = useState<number | null>(null)
+  // Show a fresh rotating window of patterns each time the scene mounts.
+  const PATTERNS = useMemo(() => {
+    const start = Math.floor(Math.random() * SABOTAGE_PATTERNS.length)
+    return Array.from({ length: Math.min(WINDOW, SABOTAGE_PATTERNS.length) }, (_, i) =>
+      SABOTAGE_PATTERNS[(start + i) % SABOTAGE_PATTERNS.length],
+    )
+  }, [])
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
