@@ -107,7 +107,7 @@ export default function JourneyPage() {
       {/* Header */}
       <div className="mb-6 flex items-center gap-3">
         <button
-          onClick={() => router.push('/dashboard/programming')}
+          onClick={() => router.push('/dashboard/workout')}
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 bg-white transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <ArrowLeft className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
@@ -231,7 +231,7 @@ export default function JourneyPage() {
         className="space-y-2"
       >
         <button
-          onClick={() => router.push('/dashboard/programming')}
+          onClick={() => router.push('/dashboard/workout')}
           className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-white py-4 text-sm font-bold text-zinc-950 transition-all hover:bg-zinc-100 active:scale-95 dark:bg-zinc-100"
         >
           <Dumbbell className="h-4 w-4" /> Find My Next Challenge

@@ -513,7 +513,7 @@ export default function DashboardClient() {
               </p>
             </div>
             <Link
-              href="/dashboard/programming"
+              href="/dashboard/workout"
               className="flex shrink-0 items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
             >
               Browse
@@ -531,7 +531,7 @@ export default function DashboardClient() {
             <div className="mb-3 flex items-center justify-between sm:mb-4">
               <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Current Program</h2>
               <Link
-                href={`/dashboard/programming/${data.currentProgram.programId}`}
+                href={`/dashboard/workout/${data.currentProgram.programId}`}
                 className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
               >
                 View
@@ -560,7 +560,7 @@ export default function DashboardClient() {
             </div>
 
             <Link
-              href={`/dashboard/programming/${data.currentProgram.programId}/workout${data.currentProgram.nextWorkoutDay ? `?day=${encodeURIComponent(data.currentProgram.nextWorkoutDay)}` : ''}`}
+              href={`/dashboard/workout/${data.currentProgram.programId}/workout${data.currentProgram.nextWorkoutDay ? `?day=${encodeURIComponent(data.currentProgram.nextWorkoutDay)}` : ''}`}
               className="flex w-full items-center justify-between gap-2 rounded-lg bg-zinc-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               <span className="text-left">Continue: {data.currentProgram.nextWorkout}</span>
@@ -648,7 +648,7 @@ export default function DashboardClient() {
       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
         {[
           {
-            href: '/dashboard/programming',
+            href: '/dashboard/workout',
             icon: <ClipboardList className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
             title: 'All Programs',
             description: 'Browse training plans',

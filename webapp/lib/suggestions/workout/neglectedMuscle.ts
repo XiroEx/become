@@ -118,7 +118,7 @@ export function neglectedToSuggestion(r: NeglectedMuscleResult): Suggestion {
       `${worst.daysSince} days ago. Work ${names.length === 1 ? 'it' : 'them'} back in this week to keep your split balanced.`,
     primaryAction: {
       label: 'Browse exercises',
-      href: '/dashboard/programming/library',
+      href: '/dashboard/workout/library',
     },
     dismissible: true,
     cooldownDays: 7,

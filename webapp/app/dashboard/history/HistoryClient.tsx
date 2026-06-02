@@ -196,7 +196,7 @@ export default function HistoryClient() {
             // Program sessions deep-link to their program; quick sessions have
             // nowhere to navigate yet, so they render as a static card.
             return log.kind === 'program' && log.programId ? (
-              <Link key={`${log.sessionId ?? log.date}-${i}`} href={`/dashboard/programming/${log.programId}`} className="block">
+              <Link key={`${log.sessionId ?? log.date}-${i}`} href={`/dashboard/workout/${log.programId}`} className="block">
                 {Inner}
               </Link>
             ) : (

@@ -122,7 +122,7 @@ export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Prop
             {/* CTAs */}
             <div className="mt-6 space-y-3">
               <Link
-                href="/dashboard/programming"
+                href="/dashboard/workout"
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3.5 text-sm font-bold text-white transition-colors hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
                 onClick={onExplore} // clear modal on navigate too
               >
@@ -141,7 +141,7 @@ export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Prop
 
             {/* Dismissal context */}
             <p className="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-600">
-              You can always start a program later from Programming
+              You can always start a program later from Workout
             </p>
           </motion.div>
         </motion.div>
