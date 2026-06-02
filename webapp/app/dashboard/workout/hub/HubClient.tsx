@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Dumbbell, Zap, Sparkles, Calendar, Clock } from 'lucide-react'
+import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
@@ -58,6 +58,7 @@ function formatDate(iso: string): string {
 function SessionsTab() {
   const [sessions, setSessions] = useState<SessionLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [building, setBuilding] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -85,10 +86,35 @@ function SessionsTab() {
 
   return (
     <div className="pb-6">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      {/* Header + create toggle (mirrors the Exercises tab) */}
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Your sessions</h2>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">One-off workouts</span>
+        {!building && (
+          <button
+            onClick={() => setBuilding(true)}
+            className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-700 active:bg-green-800"
+          >
+            <Plus className="h-4 w-4" />
+            Build
+          </button>
+        )}
       </div>
+
+      {/* Inline builder (revealed on demand) */}
+      {building && (
+        <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Build a session</h3>
+            <button
+              onClick={() => setBuilding(false)}
+              className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              Cancel
+            </button>
+          </div>
+          <SessionBuilder onLaunch={() => setBuilding(false)} />
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-3">
@@ -100,7 +126,7 @@ function SessionsTab() {
         <EmptyState
           icon={<Zap className="h-7 w-7" />}
           title="No sessions yet"
-          description="Build your first session below."
+          description={building ? 'Add exercises above to build one.' : 'Tap Build to create your first session.'}
         />
       ) : (
         <div className="space-y-3">
@@ -137,12 +163,6 @@ function SessionsTab() {
           ))}
         </div>
       )}
-
-      {/* Build a session */}
-      <div className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-white">Build a session</h2>
-        <SessionBuilder />
-      </div>
     </div>
   )
 }
