@@ -30,6 +30,9 @@ import PatternScene from './scenes/PatternScene'
 import SocialScene from './scenes/SocialScene'
 import MirrorScene from './scenes/MirrorScene'
 import ChoiceScene from './scenes/ChoiceScene'
+import TypeScene from './scenes/TypeScene'
+import SpeakScene from './scenes/SpeakScene'
+import AssembleScene from './scenes/AssembleScene'
 
 interface CompleteResult {
   xpAwarded: number
@@ -209,6 +212,9 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
               {move.kind === 'social' && <SocialScene move={move} onDone={next} />}
               {move.kind === 'mirror' && <MirrorScene move={move} onDone={next} />}
               {move.kind === 'choice' && <ChoiceScene move={move} onDone={next} />}
+              {move.kind === 'type' && <TypeScene move={move} onDone={next} />}
+              {move.kind === 'speak' && <SpeakScene move={move} onDone={next} />}
+              {move.kind === 'assemble' && <AssembleScene move={move} onDone={next} />}
             </motion.div>
           )}
 

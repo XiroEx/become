@@ -38,6 +38,9 @@ const MOVE_CHIP: Record<MoveKind, string> = {
   social: 'Connect',
   mirror: 'Mirror',
   choice: 'Reflect',
+  type: 'Type it',
+  speak: 'Say it',
+  assemble: 'Build it',
 }
 
 function dayOfYear(): number {

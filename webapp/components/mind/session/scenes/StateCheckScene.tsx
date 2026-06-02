@@ -127,6 +127,7 @@ export default function StateCheckScene({ move, onState, onDone }: SceneProps) {
 
   const submitState = async (state: MindState, opts?: { note?: string; previousState?: MindState }) => {
     setChosen(state)
+    setPendingState(null) // clear the "what changed?" gate so the reveal can show
     onState?.(state)
     setMessage(FALLBACK_MESSAGES[state]) // optimistic
     try {
