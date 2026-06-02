@@ -25,29 +25,34 @@ const TINT: Record<MindState, string> = {
   locked_in: 'text-green-300',
 }
 
-// 20 feelings, each mapped to a canonical state. Order interleaves so the grid
-// reads as a spectrum rather than four labeled blocks.
+// 20 feelings, each mapped to a canonical state. Ordered by color as a spectrum
+// from green (best / locked-in) → blue (low) → amber (distracted) → red
+// (stressed), so the grid reads top-to-bottom good → rough.
 const FEELINGS: { label: string; value: MindState; Icon: LucideIcon }[] = [
-  { label: 'Stressed', value: 'stressed', Icon: CloudRain },
-  { label: 'Distracted', value: 'distracted', Icon: Waves },
-  { label: 'Low energy', value: 'low_energy', Icon: BatteryLow },
+  // green — locked in / positive
   { label: 'Locked in', value: 'locked_in', Icon: Target },
-  { label: 'Anxious', value: 'stressed', Icon: CloudLightning },
-  { label: 'Scattered', value: 'distracted', Icon: Shuffle },
-  { label: 'Tired', value: 'low_energy', Icon: Moon },
-  { label: 'Calm', value: 'locked_in', Icon: Leaf },
-  { label: 'Overwhelmed', value: 'stressed', Icon: Layers },
-  { label: 'Restless', value: 'distracted', Icon: Wind },
-  { label: 'Drained', value: 'low_energy', Icon: BatteryWarning },
-  { label: 'Motivated', value: 'locked_in', Icon: Rocket },
-  { label: 'Frustrated', value: 'stressed', Icon: Flame },
-  { label: 'Foggy', value: 'distracted', Icon: CloudFog },
-  { label: 'Unmotivated', value: 'low_energy', Icon: CloudOff },
   { label: 'Energized', value: 'locked_in', Icon: Zap },
-  { label: 'Angry', value: 'stressed', Icon: Angry },
-  { label: 'Bored', value: 'distracted', Icon: Meh },
-  { label: 'Down', value: 'low_energy', Icon: Frown },
+  { label: 'Motivated', value: 'locked_in', Icon: Rocket },
+  { label: 'Calm', value: 'locked_in', Icon: Leaf },
   { label: 'Grateful', value: 'locked_in', Icon: Heart },
+  // blue — low energy
+  { label: 'Low energy', value: 'low_energy', Icon: BatteryLow },
+  { label: 'Tired', value: 'low_energy', Icon: Moon },
+  { label: 'Drained', value: 'low_energy', Icon: BatteryWarning },
+  { label: 'Unmotivated', value: 'low_energy', Icon: CloudOff },
+  { label: 'Down', value: 'low_energy', Icon: Frown },
+  // amber — distracted
+  { label: 'Distracted', value: 'distracted', Icon: Waves },
+  { label: 'Scattered', value: 'distracted', Icon: Shuffle },
+  { label: 'Restless', value: 'distracted', Icon: Wind },
+  { label: 'Foggy', value: 'distracted', Icon: CloudFog },
+  { label: 'Bored', value: 'distracted', Icon: Meh },
+  // red — stressed
+  { label: 'Stressed', value: 'stressed', Icon: CloudRain },
+  { label: 'Anxious', value: 'stressed', Icon: CloudLightning },
+  { label: 'Overwhelmed', value: 'stressed', Icon: Layers },
+  { label: 'Frustrated', value: 'stressed', Icon: Flame },
+  { label: 'Angry', value: 'stressed', Icon: Angry },
 ]
 
 const FALLBACK_MESSAGES: Record<MindState, string> = {
