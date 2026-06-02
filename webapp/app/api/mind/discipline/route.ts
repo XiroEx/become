@@ -9,39 +9,7 @@ import {
   localDateKey,
   utcMidnightDateKey,
 } from '@/lib/dayWindow'
-
-const CHALLENGES = [
-  'No complaining — not once — for the next 24 hours.',
-  'No social media before 10am. Protect your first hours.',
-  'Cold shower. End on cold. No negotiating.',
-  'Write 5 minutes of uncensored thoughts immediately after waking.',
-  'Zero processed food or alcohol today. Whole foods only.',
-  'Reach out to someone you\'ve been putting off. Text, call, meet.',
-  'Wake up 45 minutes earlier than your alarm. Use the time intentionally.',
-  '100 push-ups before you leave the house. Any rep scheme.',
-  'No phone for the first 60 minutes of your day.',
-  'Sit in silence for 10 minutes. No music, no podcast, no distraction.',
-  'Write down 10 things you\'re grateful for — specific, not generic.',
-  'Prepare all your meals for tomorrow before you go to sleep.',
-  'Be in bed with lights off by 10:30pm. Sleep is the weapon.',
-  'Do something today that makes you slightly uncomfortable.',
-  'Drink 3 liters of water. Track it.',
-  'Write your mission statement from memory. Then read it twice.',
-  'No complaining, no excuses. Own everything that happens today.',
-  'Make your bed the moment you get up. Start with a win.',
-  'Go for a 30-minute walk outside. No phone, no music.',
-  'Identify your one most important task today and do it first.',
-  'Send a genuine thank-you to someone who has helped you.',
-  'Read for 30 minutes — a real book, not an article.',
-  'Track every calorie you eat today. Awareness is the first step.',
-  'Cut out caffeine after noon. Test your energy management.',
-  'Write down three fears you\'ve been avoiding. Expose them.',
-  'Do your workout even if you don\'t feel like it. Especially then.',
-  'Have one difficult conversation you\'ve been avoiding.',
-  'Log off social media entirely until tomorrow morning.',
-  'Spend 10 minutes visualizing your ideal day in detail.',
-  'Say no to something that doesn\'t align with your goals.',
-]
+import { DISCIPLINE_CHALLENGES as CHALLENGES } from '@/lib/mind/library'
 
 // Pick the challenge for a given YYYY-MM-DD (caller's local day). Using the
 // local YYYY-MM-DD ensures evening users in non-UTC zones see the SAME
