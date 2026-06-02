@@ -343,26 +343,24 @@ export async function POST(request: NextRequest) {
           )
 
           if (!alreadyMarkedToday) {
-            const nowMs = Date.now()
-            // Only match slots within a 14-day window (7 days past to 7 days future).
-            // Sorting by proximity to now prevents a race condition from grabbing a
-            // distant future slot when an earlier slot is simultaneously being marked.
-            const WINDOW_MS = 7 * 24 * 60 * 60 * 1000
-            const match = schedule.scheduledWorkouts
-              .filter((w) => {
-                const slotMs = new Date(w.date).getTime()
-                return (
-                  w.dayLabel === day &&
-                  (w.status === 'scheduled' || w.status === 'missed') &&
-                  slotMs >= nowMs - WINDOW_MS &&
-                  slotMs <= nowMs + WINDOW_MS
-                )
-              })
-              .sort((a, b) => {
-                const da = Math.abs(new Date(a.date).getTime() - nowMs)
-                const db = Math.abs(new Date(b.date).getTime() - nowMs)
-                return da - db
-              })[0]
+            // Resolve the OLDEST outstanding slot for this day first, so a
+            // completion clears the overdue backlog in order and never grabs a
+            // FUTURE slot of the same day while an earlier one stays "missed"
+            // (the bug: with Day 1 on both an overdue and an upcoming date, a
+            // by-absolute-proximity match picked the upcoming one). Falls back
+            // to the soonest upcoming slot when the user trains ahead.
+            const candidates = schedule.scheduledWorkouts.filter(
+              (w) => w.dayLabel === day && (w.status === 'scheduled' || w.status === 'missed')
+            )
+            const byDateAsc = (a: { date: Date }, b: { date: Date }) =>
+              new Date(a.date).getTime() - new Date(b.date).getTime()
+            const overdue = candidates
+              .filter((w) => dateKey(new Date(w.date), tzOffset) <= todayKey)
+              .sort(byDateAsc)
+            const upcoming = candidates
+              .filter((w) => dateKey(new Date(w.date), tzOffset) > todayKey)
+              .sort(byDateAsc)
+            const match = overdue[0] ?? upcoming[0]
 
             if (match) {
               await Schedule.updateOne(
