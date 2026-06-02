@@ -9,6 +9,7 @@ import { verifyAuth } from '@/lib/auth'
 import { ensureWorkoutMetricsRegistered } from '@/lib/metrics/workout'
 import { listAllMetrics } from '@/lib/metrics/registry'
 import { CustomizeTilesClient } from '@/components/intelligence/CustomizeTilesClient'
+import { BackButton } from '@/components/ui/BackButton'
 import type { NextRequest } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -47,9 +48,12 @@ export default async function CustomizeTilesPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
-      <h1 className="mb-4 text-2xl font-semibold text-zinc-100">
-        Customize tiles
-      </h1>
+      <div className="mb-4 flex items-center gap-3">
+        <BackButton />
+        <h1 className="text-2xl font-semibold text-zinc-100">
+          Customize tiles
+        </h1>
+      </div>
       <p className="mb-6 text-sm text-zinc-400">
         Pin the tiles you want to keep at the top of your dashboard. Drag
         pinned tiles to reorder them. Unpinned tiles still appear when the

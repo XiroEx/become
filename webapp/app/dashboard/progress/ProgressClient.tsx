@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import { BackButton } from '@/components/ui/BackButton'
 import Link from 'next/link'
 import { getToken } from '@/lib/clientAuth'
 import type { FitnessGoal } from '@/models/User'
@@ -494,7 +495,10 @@ export default function ProgressClient() {
 
       {/* ── Header ── */}
       <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Training Log</h1>
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Training Log</h1>
+        </div>
         {data && data.stats.totalWorkouts > 0 ? (
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {data.stats.totalWorkouts} workouts

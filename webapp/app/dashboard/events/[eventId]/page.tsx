@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { CalendarDays, MapPin, Video } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
+import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, formatEventTime, getToken } from '@/components/community/types'
 
 export default function EventDetailPage() {
@@ -52,7 +53,10 @@ export default function EventDetailPage() {
     <PageTransition>
       <div className="mb-5">
         <Link href="/dashboard/events" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">Events</Link>
-        <h1 className="mt-2 text-2xl font-extrabold text-zinc-900 dark:text-white">{event.title}</h1>
+        <div className="mt-2 flex items-center gap-3">
+          <BackButton />
+          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">{event.title}</h1>
+        </div>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{event.description}</p>
       </div>
 

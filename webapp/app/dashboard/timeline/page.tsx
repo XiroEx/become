@@ -27,6 +27,7 @@ import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import DateOnlyPicker from '@/components/ui/DateOnlyPicker'
+import { BackButton } from '@/components/ui/BackButton'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import FeatureGuard from '@/components/FeatureGuard'
@@ -926,11 +927,14 @@ function TimelineClient() {
         {/* Header */}
         <header className="mb-2 sm:mb-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Timeline</h1>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-                Your eating history, in chronological order
-              </p>
+            <div className="flex items-center gap-3">
+              <BackButton />
+              <div>
+                <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Timeline</h1>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
+                  Your eating history, in chronological order
+                </p>
+              </div>
             </div>
             <Link
               href={`/dashboard/nutrition?date=${formatDateParam(selectedDate)}`}
