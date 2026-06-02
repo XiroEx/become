@@ -12,7 +12,9 @@ import MindProgress from '@/models/MindProgress'
 import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
 import { getXpToNextChapter, isReadyToLevelUp } from '@/lib/mindXP'
 
-const SESSION_REWARD_XP = 15
+// XP per completion within a local day — diminishing so replays still move you
+// forward without farming a whole chapter in one sitting. completion 4+ = 0.
+const XP_BY_COMPLETION: Record<number, number> = { 1: 15, 2: 8, 3: 5 }
 
 // Consecutive-day streak of completed Mind sessions, anchored to the caller's
 // local day. Counts today if done, otherwise starts from yesterday (so the
@@ -86,24 +88,28 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    // Atomic upsert: when a new doc is inserted, findOneAndUpdate with new:false
-    // returns null — that's how we detect (and gate XP to) the first completion.
-    const prior = await MindSession.findOneAndUpdate(
+    // Replays are allowed — users can train more than once a day. XP diminishes
+    // per completion (and stops) so extra reps still move you forward without
+    // letting you farm a level in one sitting. Atomic $inc gives the completion #.
+    const doc = await MindSession.findOneAndUpdate(
       { userId: auth.userId, dateKey },
-      { $setOnInsert: { userId: auth.userId, dateKey, moves, xpAwarded: SESSION_REWARD_XP, completedAt: new Date() } },
-      { upsert: true, new: false },
+      {
+        $inc: { completions: 1 },
+        $setOnInsert: { userId: auth.userId, dateKey },
+        $set: { moves, completedAt: new Date() },
+      },
+      { upsert: true, new: true },
     )
+    const n = doc?.completions ?? 1
+    const xpAwarded = XP_BY_COMPLETION[n] ?? 0
 
-    const firstToday = prior === null
-    let xpAwarded = 0
-
-    if (firstToday) {
-      xpAwarded = SESSION_REWARD_XP
+    if (xpAwarded > 0) {
       await MindProgress.findOneAndUpdate(
         { userId: auth.userId },
-        { $inc: { xp: SESSION_REWARD_XP } },
+        { $inc: { xp: xpAwarded } },
         { upsert: true, setDefaultsOnInsert: true },
       ).catch(() => {})
+      await MindSession.updateOne({ userId: auth.userId, dateKey }, { $inc: { xpAwarded } }).catch(() => {})
     }
 
     const progress = await MindProgress.findOne({ userId: auth.userId }).lean<{ chapter?: number; xp?: number } | null>()
@@ -112,7 +118,7 @@ export async function POST(request: NextRequest) {
     const streak = await streakFor(auth.userId!, dateKey)
 
     return NextResponse.json({
-      alreadyComplete: !firstToday,
+      completions: n,
       xpAwarded,
       chapter,
       xp,

@@ -15,7 +15,9 @@ export interface IMindSession extends Document {
   userId: Types.ObjectId
   dateKey: string // YYYY-MM-DD in the user's local timezone
   moves: IMindSessionMove[]
-  xpAwarded: number
+  /** How many sessions completed this day (replays allowed; XP diminishes). */
+  completions: number
+  xpAwarded: number // cumulative XP granted across the day's completions
   completedAt: Date
   createdAt: Date
   updatedAt: Date
@@ -29,6 +31,7 @@ const MindSessionSchema = new Schema<IMindSession>(
       type: [new Schema<IMindSessionMove>({ kind: String, completedAt: Date }, { _id: false })],
       default: [],
     },
+    completions: { type: Number, default: 0 },
     xpAwarded: { type: Number, default: 0 },
     completedAt: { type: Date, default: Date.now },
   },
