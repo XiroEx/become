@@ -12,6 +12,7 @@ import { Brain, ArrowRight, Sparkles, Check, ChevronRight, Flame } from 'lucide-
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
+import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import { composeSession } from '@/lib/mind/composeSession'
 import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
@@ -268,6 +269,9 @@ export default function MindJourney() {
         </div>
         <ChevronRight className="h-5 w-5 text-zinc-400" />
       </Link>
+
+      {/* AI coach — scaffolded (drops into the MoveEngine via redbtn later) */}
+      <MindCoachTeaser />
     </PageTransition>
   )
 }
