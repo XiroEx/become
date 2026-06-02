@@ -166,6 +166,8 @@ export interface IDashboardTile {
   kind: 'stat' | 'metric' | 'smart-rotating'
   size: '1x1' | '2x1'
   locked?: string | null
+  /** Optional per-tile settings (smart tile: pool + intervalMs). */
+  settings?: { pool?: string[]; intervalMs?: number } | null
 }
 
 const WeightEntrySchema = new Schema<IWeightEntry>({
@@ -252,6 +254,13 @@ const DashboardTileSchema = new Schema<IDashboardTile>({
   kind: { type: String, required: true, enum: ['stat', 'metric', 'smart-rotating'] },
   size: { type: String, required: true, enum: ['1x1', '2x1'], default: '1x1' },
   locked: { type: String, default: null },
+  settings: {
+    type: new Schema<{ pool?: string[]; intervalMs?: number }>({
+      pool: { type: [String], default: undefined },
+      intervalMs: { type: Number, default: undefined },
+    }, { _id: false }),
+    default: undefined,
+  },
 }, { _id: false })
 
 const TileLastShownSchema = new Schema<ITileLastShown>({

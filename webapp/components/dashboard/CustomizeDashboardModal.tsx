@@ -33,9 +33,11 @@ import {
   TILE_DEFS,
   type DashboardTileId,
 } from '@/lib/dashboardTiles'
-import type { DashboardTile, DashboardTileSize } from '@/lib/dashboardLayout/types'
-import { SMART_ROTATING_TILE_ID } from '@/lib/dashboardLayout/defaults'
+import type { DashboardTile, DashboardTileSize, DashboardTileSettings } from '@/lib/dashboardLayout/types'
+import { SMART_INTERVAL_OPTIONS_MS, DEFAULT_SMART_INTERVAL_MS } from '@/lib/dashboardLayout/types'
+import { SMART_ROTATING_TILE_ID, DEFAULT_SMART_POOL } from '@/lib/dashboardLayout/defaults'
 import { useLockScroll } from '@/lib/useLockScroll'
+import { Settings2 } from 'lucide-react'
 
 const MAX_TILES = 20
 const SMART_KEY = 'smart'
@@ -83,6 +85,8 @@ interface Row {
   kind: 'stat' | 'smart-rotating' | 'metric'
   id: string
   size: DashboardTileSize
+  /** Per-tile settings (smart tile: pool + intervalMs). */
+  settings?: DashboardTileSettings
 }
 
 function optionKeyForRow(row: Row): string {
@@ -103,6 +107,7 @@ function buildRows(layout: DashboardTile[]): Row[] {
     kind: t.kind,
     id: t.id,
     size: t.size,
+    settings: t.settings,
   }))
 }
 
@@ -251,6 +256,119 @@ function TilePicker({
   )
 }
 
+// ── Smart-tile settings panel (pool picker + frequency) ──────────────────────
+
+const FREQ_LABELS: Record<number, string> = {
+  4000: 'Fast · 4s',
+  6000: 'Normal · 6s',
+  10000: 'Relaxed · 10s',
+  30000: 'Slow · 30s',
+}
+
+/** All cards a smart tile can rotate through (stats only — the original set). */
+const POOL_OPTIONS = ALL_TILE_IDS.map((id) => ({
+  key: `stat:${id}`,
+  label: TILE_DEFS[id].label,
+  id,
+}))
+
+function SmartSettingsPanel({
+  settings,
+  onChange,
+  onCancel,
+}: {
+  settings: DashboardTileSettings | undefined
+  onChange: (next: DashboardTileSettings) => void
+  onCancel: () => void
+}) {
+  // Default pool = original stats only (no workout metrics).
+  const pool = new Set(settings?.pool ?? DEFAULT_SMART_POOL)
+  const intervalMs = settings?.intervalMs ?? DEFAULT_SMART_INTERVAL_MS
+
+  const togglePool = (key: string) => {
+    const next = new Set(pool)
+    if (next.has(key)) {
+      if (next.size <= 1) return // keep at least one card
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+    // Persist in POOL_OPTIONS order for stable display.
+    onChange({ ...settings, pool: POOL_OPTIONS.filter((o) => next.has(o.key)).map((o) => o.key) })
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="mb-3 flex items-center gap-2">
+        <button onClick={onCancel} aria-label="Back" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Smart tile settings</h3>
+      </div>
+
+      <div className="-mx-1 flex-1 space-y-4 overflow-y-auto px-1">
+        {/* Frequency */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Rotation speed</p>
+          <div className="grid grid-cols-2 gap-2">
+            {SMART_INTERVAL_OPTIONS_MS.map((ms) => {
+              const active = intervalMs === ms
+              return (
+                <button
+                  key={ms}
+                  onClick={() => onChange({ ...settings, intervalMs: ms })}
+                  className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
+                      : 'border-zinc-200 text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600'
+                  }`}
+                >
+                  {FREQ_LABELS[ms] ?? `${Math.round(ms / 1000)}s`}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Pool */}
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Cards to rotate through
+          </p>
+          <div className="space-y-1.5">
+            {POOL_OPTIONS.map((o) => {
+              const on = pool.has(o.key)
+              return (
+                <button
+                  key={o.key}
+                  onClick={() => togglePool(o.key)}
+                  aria-pressed={on}
+                  className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-2.5 text-left transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-600"
+                >
+                  <TileBadge kind="stat" id={o.id} />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900 dark:text-white">{o.label}</span>
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                      on
+                        ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-zinc-900'
+                        : 'border-zinc-300 text-transparent dark:border-zinc-600'
+                    }`}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">
+            The smart tile cycles through the selected cards (excluding ones already pinned).
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal shell ──────────────────────────────────────────────────────────────
 
 export default function CustomizeDashboardModal({ open, layout, onClose, onSaved }: CustomizeDashboardModalProps) {
@@ -262,7 +380,11 @@ export default function CustomizeDashboardModal({ open, layout, onClose, onSaved
   )
 }
 
-type PickerState = null | { mode: 'add' } | { mode: 'change'; rowId: string }
+type PickerState =
+  | null
+  | { mode: 'add' }
+  | { mode: 'change'; rowId: string }
+  | { mode: 'settings'; rowId: string }
 
 function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardModalProps, 'open'>) {
   const [rows, setRows] = useState<Row[]>(() => buildRows(layout))
@@ -296,6 +418,9 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
   const setSize = (rowId: string, size: DashboardTileSize) =>
     setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, size } : r)))
 
+  const setRowSettings = (rowId: string, settings: DashboardTileSettings) =>
+    setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, settings } : r)))
+
   const deleteRow = (rowId: string) =>
     setRows((prev) => (prev.length <= 1 ? prev : prev.filter((r) => r.rowId !== rowId)))
 
@@ -323,11 +448,16 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
 
   const handleSave = async () => {
     if (!canSave) return
-    const next: DashboardTile[] = rows.map((r) =>
-      r.kind === 'smart-rotating'
-        ? { id: r.id, kind: 'smart-rotating' as const, size: r.size, locked: null }
-        : { id: r.id, kind: r.kind, size: r.size },
-    )
+    const next: DashboardTile[] = rows.map((r) => {
+      if (r.kind === 'smart-rotating') {
+        const tile: DashboardTile = { id: r.id, kind: 'smart-rotating', size: r.size, locked: null }
+        if (r.settings && (r.settings.pool?.length || r.settings.intervalMs)) {
+          tile.settings = r.settings
+        }
+        return tile
+      }
+      return { id: r.id, kind: r.kind, size: r.size }
+    })
     setSaving(true)
     setError(null)
     try {
@@ -350,6 +480,7 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
   }
 
   const changingRow = picker?.mode === 'change' ? rows.find((r) => r.rowId === picker.rowId) : undefined
+  const settingsRow = picker?.mode === 'settings' ? rows.find((r) => r.rowId === picker.rowId) : undefined
 
   return (
     <motion.div
@@ -382,7 +513,13 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-          {picker ? (
+          {picker?.mode === 'settings' && settingsRow ? (
+            <SmartSettingsPanel
+              settings={settingsRow.settings}
+              onChange={(next) => setRowSettings(settingsRow.rowId, next)}
+              onCancel={() => setPicker(null)}
+            />
+          ) : picker && picker.mode !== 'settings' ? (
             <TilePicker
               title={picker.mode === 'add' ? 'Add a tile' : 'Change tile'}
               disabledKeys={usedKeys(picker.mode === 'change' ? picker.rowId : undefined)}
@@ -421,6 +558,16 @@ function CustomizerBody({ layout, onClose, onSaved }: Omit<CustomizeDashboardMod
                                   <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">Tap to change</p>
                                 </button>
                                 <SizeControl size={row.size} onChange={(s) => setSize(row.rowId, s)} />
+                                {row.kind === 'smart-rotating' && (
+                                  <button
+                                    onClick={() => setPicker({ mode: 'settings', rowId: row.rowId })}
+                                    aria-label="Smart tile settings"
+                                    title="Settings"
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                                  >
+                                    <Settings2 className="h-4 w-4" />
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => deleteRow(row.rowId)}
                                   disabled={rows.length <= 1}

@@ -151,29 +151,47 @@ export function SmartRotatingTile({ items, size, intervalMs = DEFAULT_INTERVAL, 
   )
 }
 
+export interface BuildRotationOptions {
+  /** Cards already pinned on the grid — excluded so the smart tile doesn't repeat them. */
+  excludeKeys?: ReadonlySet<string>
+  /** Adaptive tap history (engagement boost). */
+  engagement?: TileEngagement[]
+  /** Injected `now` for deterministic relevance ordering. */
+  now?: Date
+  /**
+   * Allowed card keys for THIS smart tile (from its settings.pool). When
+   * provided, only these keys are eligible (still minus pinned). When omitted,
+   * all stats + all resolved metrics are eligible (legacy behavior). The
+   * grid passes the user's chosen pool, defaulting to the original stat cards.
+   */
+  poolKeys?: ReadonlySet<string>
+}
+
 /**
  * Build the rotation pool, ORDERED BY RELEVANCE (not a fixed linear cycle):
- * every stat card (rendered from live statContext) plus every resolved metric
- * card, EXCLUDING anything already pinned on the dashboard. Stats are scored by
- * actionability (e.g. mood not logged today, streak at risk) and metrics by
- * their incoming rank; see lib/dashboardTiles/smartRotation. Item keys are
- * `stat:<id>` / `metric:<id>`; pass pinned-tile keys in `excludeKeys`. The
- * caller supplies a renderer for metrics so this module stays free of the
- * metric-card implementation.
+ * eligible stat cards (rendered from live statContext) plus eligible metric
+ * cards, EXCLUDING anything already pinned. Eligibility is the smart tile's
+ * configured `poolKeys` when given (defaults to all). Stats are scored by
+ * actionability and metrics by incoming rank (see lib/dashboardTiles/
+ * smartRotation). Item keys are `stat:<id>` / `metric:<id>`; the caller supplies
+ * a metric renderer so this module stays free of the metric-card implementation.
  */
 export function buildRotationItems(
   statContext: DashboardTileContext,
   metricIds: string[],
   renderMetric: (id: string, size: DashboardTileSize) => ReactNode,
-  excludeKeys?: ReadonlySet<string>,
-  engagement?: TileEngagement[],
-  now?: Date,
+  opts: BuildRotationOptions = {},
 ): SmartRotatingItem[] {
+  const { excludeKeys, engagement, now, poolKeys } = opts
   const exclude = excludeKeys ?? new Set<string>()
+  const allowed = (key: string) => (poolKeys ? poolKeys.has(key) : true)
+
   const statIds = (ALL_TILE_IDS as DashboardTileId[]).filter(
-    (id) => !exclude.has(`stat:${id}`),
+    (id) => !exclude.has(`stat:${id}`) && allowed(`stat:${id}`),
   ) as unknown as StatTileId[]
-  const metrics = metricIds.filter((id) => !exclude.has(`metric:${id}`))
+  const metrics = metricIds.filter(
+    (id) => !exclude.has(`metric:${id}`) && allowed(`metric:${id}`),
+  )
 
   // Relevance-ordered keys (with adaptive engagement boost); renderers keyed
   // off the id prefix.
