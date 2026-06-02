@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wind, Play, Pause, Eye, ArrowRight, ArrowDown, ArrowUp, Minus, RotateCcw } from 'lucide-react'
+import { Wind, Play, Pause, Eye, ArrowRight, ArrowDown, ArrowUp, Minus, RotateCcw, Check } from 'lucide-react'
 import { BREATH_PROTOCOLS, type BreathPhase, type SceneProps } from '@/lib/mind/moves'
 
 const SMALL = 0.55
@@ -126,7 +126,7 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
   useEffect(() => {
     if (!done || doneRef.current) return
     doneRef.current = true
-    const t = setTimeout(onDone, 1000)
+    const t = setTimeout(onDone, 1900) // let the completion visual land
     return () => clearTimeout(t)
   }, [done, onDone])
 
@@ -188,96 +188,136 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center px-6 text-center">
-      <p className="mb-1 text-xs uppercase tracking-widest text-white/40">{p.name}</p>
-      <p className="mb-10 text-sm text-white/40">
-        {isPreview ? 'Preview' : done ? `${p.rounds} rounds complete` : `Round ${round} of ${p.rounds}`}
-      </p>
-
-      <div className="relative flex h-72 w-72 items-center justify-center">
-        {/* Ambient rotating glow — keeps the scene alive even during holds */}
-        {!reduce && (
-          <motion.div
-            aria-hidden
-            className="absolute h-64 w-64 rounded-full opacity-50 blur-2xl"
-            style={{ background: `conic-gradient(from 0deg, ${style.ring}55, transparent 60%, ${style.ring}55)` }}
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, ease: 'linear', duration: 10 }}
-          />
-        )}
-
-        {/* Breathing orb (scales for inhale/exhale, steady on holds) */}
-        <motion.div
-          className={`absolute h-56 w-56 rounded-full bg-gradient-to-br ${done ? 'from-white/20 to-white/5' : style.orb}`}
-          animate={{ scale: done ? 0.7 : reduce ? 0.8 : phaseScales[phaseIdx] }}
-          transition={{ duration: paused || reduce ? 0 : phase.durationMs / 1000, ease: 'easeInOut' }}
-        />
-
-        {/* Progress ring — sweeps through the current phase (incl. holds) */}
-        <svg className="absolute h-72 w-72 -rotate-90" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r={RING_R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
-          {!done && (
-            <circle
-              cx="50"
-              cy="50"
-              r={RING_R}
-              fill="none"
-              stroke={style.ring}
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={RING_C}
-              strokeDashoffset={RING_C * (1 - (paused ? 0 : progress))}
-              style={{ transition: 'stroke 0.6s ease' }}
-            />
-          )}
-        </svg>
-
-        {/* Center text */}
-        <div className="relative z-10 flex flex-col items-center">
-          <span className="text-2xl font-bold">{done ? 'Nice.' : paused ? 'Paused' : phase.label}</span>
-          {!done && !paused && (
-            <>
-              <span className="mt-1 text-3xl font-extrabold tabular-nums text-white/90">{secondsLeft}</span>
-              <span className="mt-1 max-w-[10rem] text-xs text-white/50">{phase.instruction}</span>
-            </>
-          )}
-        </div>
+    // Three flex regions (header / orb / controls) so the orb sits at the TRUE
+    // vertical center of the stage — the header and controls balance each other.
+    <div className="relative flex h-full w-full flex-col items-center px-6 text-center">
+      {/* Header — anchored just above the orb */}
+      <div className="flex flex-1 flex-col items-center justify-end pb-8">
+        <p className="text-xs uppercase tracking-widest text-white/40">{p.name}</p>
+        <p className="mt-1 text-sm text-white/40">
+          {isPreview ? 'Preview' : done ? `${p.rounds} rounds complete` : `Round ${round} of ${p.rounds}`}
+        </p>
       </div>
 
-      {/* Controls */}
-      {!done && (
-        <div className="absolute bottom-8 flex w-full flex-col items-center gap-3">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => setPaused((v) => !v)}
-              className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/20"
+      {/* Orb / completion visual — centered */}
+      <div className="relative flex h-72 w-72 shrink-0 items-center justify-center">
+        {done ? (
+          <>
+            {/* Expanding success burst */}
+            {!reduce && (
+              <motion.div
+                aria-hidden
+                className="absolute h-56 w-56 rounded-full"
+                style={{ background: 'radial-gradient(circle, rgba(74,222,128,0.35), transparent 70%)' }}
+                initial={{ scale: 0.4, opacity: 0.9 }}
+                animate={{ scale: 1.7, opacity: 0 }}
+                transition={{ duration: 1.4, ease: 'easeOut' }}
+              />
+            )}
+            <motion.div
+              initial={{ scale: 0, rotate: -18 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 15 }}
+              className="relative z-10 flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500/40 to-green-500/15 ring-1 ring-green-400/40"
             >
-              {paused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4" />}
-              {paused ? 'Resume' : 'Pause'}
-            </button>
-            <button
-              onClick={() => begin(isPreview ? 'preview' : 'run')}
-              className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/20"
+              <Check className="h-16 w-16 text-green-300" strokeWidth={2.5} />
+            </motion.div>
+            <motion.span
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="absolute -bottom-3 text-lg font-bold text-white"
             >
-              <RotateCcw className="h-4 w-4" />
-              Restart
-            </button>
+              Nice.
+            </motion.span>
+          </>
+        ) : (
+          <>
+            {/* Ambient rotating glow — keeps the scene alive even during holds */}
+            {!reduce && (
+              <motion.div
+                aria-hidden
+                className="absolute h-64 w-64 rounded-full opacity-50 blur-2xl"
+                style={{ background: `conic-gradient(from 0deg, ${style.ring}55, transparent 60%, ${style.ring}55)` }}
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, ease: 'linear', duration: 10 }}
+              />
+            )}
+
+            {/* Breathing orb (scales for inhale/exhale, steady on holds) */}
+            <motion.div
+              className={`absolute h-56 w-56 rounded-full bg-gradient-to-br ${style.orb}`}
+              animate={{ scale: reduce ? 0.8 : phaseScales[phaseIdx] }}
+              transition={{ duration: paused || reduce ? 0 : phase.durationMs / 1000, ease: 'easeInOut' }}
+            />
+
+            {/* Progress ring — sweeps through the current phase (incl. holds) */}
+            <svg className="absolute h-72 w-72 -rotate-90" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r={RING_R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
+              <circle
+                cx="50"
+                cy="50"
+                r={RING_R}
+                fill="none"
+                stroke={style.ring}
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray={RING_C}
+                strokeDashoffset={RING_C * (1 - (paused ? 0 : progress))}
+                style={{ transition: 'stroke 0.6s ease' }}
+              />
+            </svg>
+
+            {/* Center text */}
+            <div className="relative z-10 flex flex-col items-center">
+              <span className="text-2xl font-bold">{paused ? 'Paused' : phase.label}</span>
+              {!paused && (
+                <>
+                  <span className="mt-1 text-3xl font-extrabold tabular-nums text-white/90">{secondsLeft}</span>
+                  <span className="mt-1 max-w-[10rem] text-xs text-white/50">{phase.instruction}</span>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Controls — anchored just below the orb */}
+      <div className="flex flex-1 flex-col items-center justify-start pt-8">
+        {!done && (
+          <div className="flex w-full flex-col items-center gap-3">
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => setPaused((v) => !v)}
+                className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/20"
+              >
+                {paused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4" />}
+                {paused ? 'Resume' : 'Pause'}
+              </button>
+              <button
+                onClick={() => begin(isPreview ? 'preview' : 'run')}
+                className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/20"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Restart
+              </button>
+            </div>
+            {isPreview ? (
+              <button
+                onClick={() => { setMode('ready'); setRound(1); setPhaseIdx(0); setPaused(false); setProgress(0) }}
+                className="text-sm font-medium text-white/40 transition-colors hover:text-white/70"
+              >
+                Back
+              </button>
+            ) : (
+              <button onClick={onDone} className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+                Skip
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          {isPreview ? (
-            <button
-              onClick={() => { setMode('ready'); setRound(1); setPhaseIdx(0); setPaused(false); setProgress(0) }}
-              className="text-sm font-medium text-white/40 transition-colors hover:text-white/70"
-            >
-              Back
-            </button>
-          ) : (
-            <button onClick={onDone} className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
-              Skip
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

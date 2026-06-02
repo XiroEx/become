@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, ArrowRight, Loader2, Check } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
+import RevealText from '../RevealText'
 
 interface Vision {
   identityStatement?: string
@@ -36,6 +37,7 @@ export default function VisionScene({ move, onDone }: SceneProps) {
   const [vision, setVision] = useState<Vision | null>(null)
   const [loading, setLoading] = useState(true)
   const [locked, setLocked] = useState(false)
+  const [ready, setReady] = useState(false) // statement fully revealed → can lock in
 
   useEffect(() => {
     let cancelled = false
@@ -82,7 +84,7 @@ export default function VisionScene({ move, onDone }: SceneProps) {
           Build your vision <ArrowRight className="h-4 w-4" />
         </Link>
         <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
-          Continue
+          Skip
         </button>
       </div>
     )
@@ -100,31 +102,44 @@ export default function VisionScene({ move, onDone }: SceneProps) {
         <Sparkles className="h-6 w-6 text-amber-300" />
       </span>
       <p className="text-xs uppercase tracking-widest text-white/40">See your future self</p>
-      {statement && <p className="mt-4 max-w-sm text-2xl font-bold leading-snug text-white">&ldquo;{statement}&rdquo;</p>}
+      {statement ? (
+        <RevealText
+          text={`“${statement}”`}
+          onComplete={() => setReady(true)}
+          className="mt-4 max-w-sm text-2xl font-bold leading-snug text-white"
+        />
+      ) : null}
 
-      {dims.length > 0 && (
-        <div className="mt-6 w-full max-w-sm space-y-1.5 text-left">
-          {dims.slice(0, 3).map((d) => (
-            <p key={d.key} className="text-sm text-white/55">
-              <span className="font-semibold text-white/80">{d.label}:</span> {vision?.[d.key] as string}
-            </p>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {(ready || !statement) && (
+          <motion.div
+            key="vision-action"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="flex w-full flex-col items-center"
+          >
+            {dims.length > 0 && (
+              <div className="mt-6 w-full max-w-sm space-y-1.5 text-left">
+                {dims.slice(0, 3).map((d) => (
+                  <p key={d.key} className="text-sm text-white/55">
+                    <span className="font-semibold text-white/80">{d.label}:</span> {vision?.[d.key] as string}
+                  </p>
+                ))}
+              </div>
+            )}
 
-      <AnimatePresence mode="wait">
-        <motion.button
-          key={locked ? 'locked' : 'lock'}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          onClick={lockIn}
-          className={`mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold transition-colors active:scale-95 ${
-            locked ? 'bg-gradient-to-r from-amber-500 to-green-500 text-white' : 'bg-white text-black'
-          }`}
-        >
-          <Check className="h-5 w-5" strokeWidth={3} />
-          {locked ? "That's who I'm becoming." : "I can see it"}
-        </motion.button>
+            <button
+              onClick={lockIn}
+              className={`mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold transition-colors active:scale-95 ${
+                locked ? 'bg-gradient-to-r from-amber-500 to-green-500 text-white' : 'bg-white text-black'
+              }`}
+            >
+              <Check className="h-5 w-5" strokeWidth={3} />
+              {locked ? "That's who I'm becoming." : 'I can see it'}
+            </button>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )
