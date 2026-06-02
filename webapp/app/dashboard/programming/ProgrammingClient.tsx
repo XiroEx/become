@@ -96,6 +96,19 @@ export default function ProgrammingClient() {
   const [showQuickSession, setShowQuickSession] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
 
+  // Reused Quick Session launcher button (shown on the Continue Training line,
+  // or standalone when the user isn't on a program).
+  const quickSessionButton = (
+    <button
+      type="button"
+      onClick={() => setShowQuickSession(true)}
+      className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+    >
+      <Zap className="h-3.5 w-3.5" />
+      Quick Session
+    </button>
+  );
+
   // User profile for recommendations
   const [userFitnessGoal, setUserFitnessGoal] = useState<FitnessGoal | undefined>(undefined);
   const [userExperienceLevel, setUserExperienceLevel] = useState<ExperienceLevel | undefined>(undefined);
@@ -354,9 +367,18 @@ export default function ProgrammingClient() {
     <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 sm:mb-8">
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-          Programs
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
+            Programs
+          </h1>
+          <Link
+            href="/dashboard/history"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          >
+            <History className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+            History
+          </Link>
+        </div>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Choose your training path and start building.
         </p>
@@ -377,41 +399,29 @@ export default function ProgrammingClient() {
           </Link>
           <button
             type="button"
-            onClick={() => setShowQuickSession(true)}
-            className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            Quick Session
-          </button>
-          <button
-            type="button"
             onClick={() => setShowGenerate(true)}
             className="flex items-center gap-1.5 rounded-full bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800 dark:bg-purple-500 dark:hover:bg-purple-600"
           >
             <Wand2 className="h-3.5 w-3.5" />
             Generate
           </button>
-          <Link
-            href="/dashboard/history"
-            className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-          >
-            <History className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
-            History
-          </Link>
         </div>
       </div>
 
       {/* Schedule / Calendar Widget */}
       <div className="mb-6">
-        <UpcomingWorkouts onQuickSession={() => setShowQuickSession(true)} />
+        <UpcomingWorkouts />
       </div>
 
       {/* Active Programs Section */}
       {!loadingActive && activePrograms.length > 0 && (
         <div className="mb-6">
-          <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-white">
-            Continue Training
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+              Continue Training
+            </h2>
+            {quickSessionButton}
+          </div>
           <div className="space-y-3">
             {activePrograms.map((program) => {
               const { label: startLabel, isFuture } = formatStartLabel(program.startDate)
@@ -501,6 +511,22 @@ export default function ProgrammingClient() {
         <div className="mb-6">
           <div className="mb-3 h-6 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
           <div className="h-24 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />
+        </div>
+      )}
+
+      {/* Not on a program — Quick Session lives where Continue Training would.
+          Coexists with browsing/starting a program below. */}
+      {!loadingActive && activePrograms.length === 0 && (
+        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+              Not on a program?
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Just train — log a one-off session.
+            </p>
+          </div>
+          {quickSessionButton}
         </div>
       )}
 
