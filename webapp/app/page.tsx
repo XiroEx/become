@@ -113,7 +113,7 @@ export default function Home() {
       <section className="w-full bg-zinc-950 py-20 px-6">
         <div className="mx-auto max-w-4xl flex flex-col gap-12 lg:flex-row lg:items-center lg:gap-20">
           <div className="lg:flex-1">
-            <p className="text-xs font-semibold uppercase tracking-widest text-green-500 mb-4">Programming</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-green-500 mb-4">Workout</p>
             <h2 className="text-3xl font-black tracking-tight sm:text-4xl">Programs that actually work.</h2>
             <p className="mt-4 text-zinc-500 leading-relaxed text-sm">
               Not cookie-cutter templates. Every program is built around real training methodology — structured phases, progressive overload baked in, and workouts that deliver results when you show up consistently.

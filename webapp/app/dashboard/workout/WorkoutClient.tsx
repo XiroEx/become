@@ -62,7 +62,7 @@ function formatStartLabel(startDate: string | undefined): { label: string; isFut
   return { label: '', isFuture: false }
 }
 
-export default function ProgrammingClient() {
+export default function WorkoutClient() {
   const [activePrograms, setActivePrograms] = useState<ActiveProgram[]>([]);
   const [savedPrograms, setSavedPrograms] = useState<SavedProgram[]>([]);
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
