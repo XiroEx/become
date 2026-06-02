@@ -41,7 +41,7 @@ become/
 │   │   │   ├── progress/        # Progress summary
 │   │   │   └── exercise-videos/ # Video lookup
 │   │   ├── dashboard/           # Protected pages
-│   │   │   ├── programming/     # Browse, create, detail, schedule, workout, live workout
+│   │   │   ├── workout/         # Browse, create, detail, schedule, workout, live workout (route: /dashboard/workout)
 │   │   │   ├── calendar/        # Calendar + settings
 │   │   │   ├── progress/        # Charts & stats
 │   │   │   ├── mind/            # Mood tracking
@@ -192,7 +192,7 @@ Rules:
 | `webapp/lib/hydrateExercises.ts` | How exercise slugs become full objects |
 | `webapp/app/api/programs/route.ts` | Program list/create pattern (representative of all API routes) |
 | `webapp/components/AuthGuard.tsx` | How protected routes work |
-| `webapp/app/dashboard/programming/[programId]/workout/live/page.tsx` | Live workout tracking (most complex UI) |
+| `webapp/app/dashboard/workout/[programId]/workout/live/page.tsx` | Live workout tracking (most complex UI) |
 
 ## What's Missing / Incomplete
 
