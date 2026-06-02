@@ -86,6 +86,26 @@ function mirrorMove(ctx: SessionContext): Move {
   return { id: 'mirror', kind: 'mirror', title: 'Mirror', subtitle: 'Look at yourself. Say it.', statement, xp: 5 }
 }
 
+// Resolve the statement these identity-flavored modalities reinforce.
+function resolveStatement(ctx: SessionContext): string {
+  const sd = ctx.seed ?? ctx.dayOfYear
+  return ctx.identityStatement && ctx.identityStatement.trim().length > 0
+    ? ctx.identityStatement.trim()
+    : IDENTITY_POOL[sd % IDENTITY_POOL.length]
+}
+
+function typeMove(ctx: SessionContext): Move {
+  return { id: 'type', kind: 'type', title: 'Type it', subtitle: 'Write it out, word for word.', statement: resolveStatement(ctx), xp: 5 }
+}
+
+function speakMove(ctx: SessionContext): Move {
+  return { id: 'speak', kind: 'speak', title: 'Say it out loud', subtitle: 'Hold to record. Hear yourself.', statement: resolveStatement(ctx), xp: 5 }
+}
+
+function assembleMove(ctx: SessionContext): Move {
+  return { id: 'assemble', kind: 'assemble', title: 'Build it', subtitle: 'Tap the words in order.', statement: resolveStatement(ctx), xp: 5 }
+}
+
 // Multiple-choice reflections come from the central library (CHOICE_POOL).
 function choiceMove(ctx: SessionContext): Move {
   const item = CHOICE_POOL[(ctx.seed ?? ctx.dayOfYear) % CHOICE_POOL.length]
@@ -105,6 +125,9 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
     case 'social': return socialMove()
     case 'mirror': return mirrorMove(ctx)
     case 'choice': return choiceMove(ctx)
+    case 'type': return typeMove(ctx)
+    case 'speak': return speakMove(ctx)
+    case 'assemble': return assembleMove(ctx)
     default: return stateCheckMove()
   }
 }
@@ -125,6 +148,7 @@ export class DeterministicMoveEngine implements MoveEngine {
     if (ctx.chapter >= 3) corePool.push('challenge') // discipline
     if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
     if (ctx.chapter >= 2) corePool.push('vision') // foundation: see it
+    if (ctx.chapter >= 2) corePool.push('type', 'speak', 'assemble') // self-image: active reinforcement modalities
     if (ctx.chapter >= 2 && ctx.missionAction?.trim()) corePool.push('mission')
     if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
     if (ctx.chapter >= 5) corePool.push('social') // architect: environment
@@ -184,13 +208,13 @@ export function singleMovePlan(systemId: string, ctx: SessionContext): MindSessi
 // on-theme. Not "click one item" — a real little session.
 
 const THEME_CONFIG: Record<string, { title: string; subtitle: string; core: MoveKind; pool: MoveKind[] }> = {
-  'state-shift':   { title: 'Reset',       subtitle: 'Drop the stress, find your center.',     core: 'breath',       pool: ['state-check', 'identity', 'mirror', 'choice'] },
-  'self-image':    { title: 'Identity',    subtitle: "Reinforce who you're becoming.",         core: 'identity',     pool: ['mirror', 'choice', 'win'] },
-  vision:          { title: 'Vision',      subtitle: 'See it. Become it.',                      core: 'vision',       pool: ['identity', 'mirror', 'win', 'choice'] },
-  mission:         { title: 'Mission',     subtitle: 'Lock into your why.',                     core: 'mission',      pool: ['identity', 'win', 'choice'] },
-  discipline:      { title: 'Discipline',  subtitle: 'Do the hard thing.',                      core: 'challenge',    pool: ['identity', 'choice', 'win'] },
-  'anti-sabotage': { title: 'Defense',     subtitle: 'Catch the pattern before it runs you.',   core: 'antisabotage', pool: ['choice', 'identity', 'mirror'] },
-  social:          { title: 'Environment', subtitle: 'Engineer your circle.',                   core: 'social',       pool: ['identity', 'win', 'choice'] },
+  'state-shift':   { title: 'Reset',       subtitle: 'Drop the stress, find your center.',     core: 'breath',       pool: ['state-check', 'identity', 'mirror', 'choice', 'speak'] },
+  'self-image':    { title: 'Identity',    subtitle: "Reinforce who you're becoming.",         core: 'identity',     pool: ['mirror', 'type', 'speak', 'assemble', 'choice', 'win'] },
+  vision:          { title: 'Vision',      subtitle: 'See it. Become it.',                      core: 'vision',       pool: ['identity', 'mirror', 'type', 'speak', 'win', 'choice'] },
+  mission:         { title: 'Mission',     subtitle: 'Lock into your why.',                     core: 'mission',      pool: ['identity', 'type', 'win', 'choice'] },
+  discipline:      { title: 'Discipline',  subtitle: 'Do the hard thing.',                      core: 'challenge',    pool: ['identity', 'choice', 'assemble', 'win'] },
+  'anti-sabotage': { title: 'Defense',     subtitle: 'Catch the pattern before it runs you.',   core: 'antisabotage', pool: ['choice', 'identity', 'mirror', 'type'] },
+  social:          { title: 'Environment', subtitle: 'Engineer your circle.',                   core: 'social',       pool: ['identity', 'win', 'choice', 'speak'] },
 }
 
 /** True if a system can be played as a focused session (all 7 now can). */

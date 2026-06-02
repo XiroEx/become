@@ -23,6 +23,9 @@ export type MoveKind =
   | 'social'
   | 'mirror'
   | 'choice'
+  | 'type' // type the declaration yourself (active recall)
+  | 'speak' // say it out loud — record + hear yourself back
+  | 'assemble' // rebuild the declaration from a shuffled word bank
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
