@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Dumbbell, Sparkles, Search, Wand2 } from "lucide-react";
+import { Dumbbell, Sparkles, Search, Wand2, History, Zap } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
+import QuickSessionModal from "@/components/QuickSessionModal";
+import GenerateModal from "@/components/GenerateModal";
 import { Card, EmptyState, Toast } from "@/components/ui";
 import { useToast } from "@/hooks/useToast";
 import type { FitnessGoal, ExperienceLevel } from "@/models/User";
@@ -88,11 +90,11 @@ export default function ProgrammingClient() {
   // Per-program loading state for save/unsave
   const [savingProgramId, setSavingProgramId] = useState<string | null>(null);
 
-  // "Generate program" — feature coming soon; clicking shows a brief toast
-  const { toast, showToast } = useToast();
-  function handleGenerateClick() {
-    showToast('Coming soon', 'info');
-  }
+  const { toast } = useToast();
+
+  // Quick Session + Generate modals
+  const [showQuickSession, setShowQuickSession] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   // User profile for recommendations
   const [userFitnessGoal, setUserFitnessGoal] = useState<FitnessGoal | undefined>(undefined);
@@ -375,18 +377,33 @@ export default function ProgrammingClient() {
           </Link>
           <button
             type="button"
-            onClick={handleGenerateClick}
+            onClick={() => setShowQuickSession(true)}
+            className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Quick Session
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowGenerate(true)}
             className="flex items-center gap-1.5 rounded-full bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-700 active:bg-purple-800 dark:bg-purple-500 dark:hover:bg-purple-600"
           >
             <Wand2 className="h-3.5 w-3.5" />
             Generate
           </button>
+          <Link
+            href="/dashboard/history"
+            className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          >
+            <History className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+            History
+          </Link>
         </div>
       </div>
 
       {/* Schedule / Calendar Widget */}
       <div className="mb-6">
-        <UpcomingWorkouts />
+        <UpcomingWorkouts onQuickSession={() => setShowQuickSession(true)} />
       </div>
 
       {/* Active Programs Section */}
@@ -951,7 +968,10 @@ export default function ProgrammingClient() {
         />
       )}
 
-      {/* Coming soon toast for Generate button */}
+      {/* Quick Session + Generate modals */}
+      <QuickSessionModal open={showQuickSession} onClose={() => setShowQuickSession(false)} />
+      <GenerateModal open={showGenerate} onClose={() => setShowGenerate(false)} />
+
       <Toast toast={toast} />
     </PageTransition>
   );

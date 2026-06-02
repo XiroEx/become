@@ -42,6 +42,19 @@ interface WorkoutSaveRequest {
   tz?: number
 }
 
+interface QuickSessionSaveRequest {
+  kind: 'quick'
+  sessionId: string
+  title?: string
+  focus?: string
+  exercises: ExerciseData[]
+  completed: boolean
+  duration?: number
+  activeSeconds?: number
+  notes?: string
+  tz?: number
+}
+
 // GET: Fetch today's workout progress for a program
 export async function GET(request: NextRequest) {
   try {
@@ -205,7 +218,16 @@ export async function POST(request: NextRequest) {
     }
     const payload = { userId: authResult.userId!, email: authResult.email! }
 
-    const body: WorkoutSaveRequest = await request.json()
+    const rawBody = await request.json()
+
+    // Quick (ad-hoc) session path — no program attached. Identified by
+    // kind:'quick'. Logged like any workout (feeds streak / PRs / calendar /
+    // history) but skips all program-day-advance + schedule-sync logic.
+    if (rawBody?.kind === 'quick') {
+      return await handleQuickSessionSave(rawBody as QuickSessionSaveRequest, payload)
+    }
+
+    const body: WorkoutSaveRequest = rawBody
     const { programId, phase, day, exercises, completed, duration, activeSeconds, notes } = body
 
     if (!programId || phase === undefined || !day) {
@@ -469,4 +491,128 @@ export async function POST(request: NextRequest) {
     console.error('Error saving workout:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+
+// Save an ad-hoc "quick session" — a workout not attached to any program.
+// Incremental saves within one live session share a client-generated
+// `sessionId`: the first save inserts the log, subsequent saves update it in
+// place (matched by sessionId). No day-advance, no schedule sync — quick
+// sessions are standalone. Still feeds streak, PRs, dashboard tiles, calendar
+// and history exactly like a program workout.
+async function handleQuickSessionSave(
+  body: QuickSessionSaveRequest,
+  payload: { userId: string; email: string },
+) {
+  const { sessionId, title, focus, exercises, completed, duration, activeSeconds, notes } = body
+
+  if (!sessionId || !Array.isArray(exercises)) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  await dbConnect()
+
+  const tzOffset = readTzOffsetFromBody(body)
+  captureUserTimezone(payload.userId, tzOffset)
+
+  // Update-if-exists (matched by sessionId), capturing the prior state so we
+  // can tell whether this completion is the first one (gates streak/PR side
+  // effects, mirroring the program path's wasAlreadyComplete guard).
+  type QuickProgressDoc = { workoutLogs: Array<{ sessionId?: string; completed: boolean }> }
+  const docBefore = await UserProgress.findOneAndUpdate(
+    { userId: payload.userId, workoutLogs: { $elemMatch: { sessionId, kind: 'quick' } } },
+    {
+      $set: {
+        'workoutLogs.$[elem].exercises': exercises,
+        'workoutLogs.$[elem].completed': completed,
+        'workoutLogs.$[elem].duration': duration,
+        ...(title !== undefined && { 'workoutLogs.$[elem].title': title }),
+        ...(focus !== undefined && { 'workoutLogs.$[elem].focus': focus }),
+        ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
+        ...(notes !== undefined && { 'workoutLogs.$[elem].notes': notes }),
+        updatedAt: new Date(),
+      },
+    },
+    {
+      arrayFilters: [{ 'elem.sessionId': sessionId, 'elem.kind': 'quick' }],
+      returnDocument: 'before',
+      lean: true,
+    },
+  ) as QuickProgressDoc | null
+
+  let wasAlreadyComplete = false
+  const workoutDate = new Date()
+
+  if (docBefore) {
+    const oldLog = docBefore.workoutLogs?.find((log) => log.sessionId === sessionId)
+    wasAlreadyComplete = oldLog?.completed === true
+  } else {
+    // First save for this session — insert only if still absent (guards a
+    // concurrent double-save from inserting two logs for the same sessionId).
+    await UserProgress.updateOne(
+      {
+        userId: payload.userId,
+        workoutLogs: { $not: { $elemMatch: { sessionId, kind: 'quick' } } },
+      },
+      {
+        $push: {
+          workoutLogs: {
+            date: workoutDate,
+            kind: 'quick',
+            sessionId,
+            ...(title && { title }),
+            ...(focus && { focus }),
+            completed,
+            duration,
+            startedAt: workoutDate,
+            activeSeconds: activeSeconds ?? 0,
+            ...(notes && { notes }),
+            exercises,
+          },
+        },
+        $set: { updatedAt: new Date() },
+      },
+      { upsert: true },
+    )
+  }
+
+  // Personal records — quick sessions count too (it's still real lifting).
+  const newPRsAchieved = await maybePersistWorkoutPRs({
+    store: {
+      readCurrentPRs: async (uid) => {
+        const cur = await UserProgress.findOne({ userId: uid }, { exercisePRs: 1 })
+          .lean<{ exercisePRs?: IExercisePR[] } | null>()
+        return cur?.exercisePRs ?? []
+      },
+      writePRs: async (uid, prs) => {
+        await UserProgress.updateOne({ userId: uid }, { $set: { exercisePRs: prs } })
+      },
+    },
+    userId: payload.userId,
+    exercises,
+    date: workoutDate,
+    completed,
+    wasAlreadyComplete,
+  })
+
+  let streakResult = null
+  if (completed && !wasAlreadyComplete) {
+    streakResult = await recordStreakActivity(payload.userId, payload.email).catch(() => null)
+  }
+
+  await bustTilesCache(payload.userId)
+
+  return NextResponse.json({
+    message: 'Quick session saved successfully',
+    completed,
+    ...(newPRsAchieved.length > 0 && { newPRsAchieved }),
+    ...(streakResult && {
+      streak: {
+        streakDays: streakResult.streakDays,
+        streakExtended: streakResult.streakExtended,
+        freezeUsed: streakResult.freezeUsed,
+        newMilestone: streakResult.newMilestone,
+        longestStreak: streakResult.longestStreak,
+      },
+    }),
+  })
 }

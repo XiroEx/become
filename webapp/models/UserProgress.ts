@@ -43,9 +43,22 @@ export interface IExerciseLog {
 
 export interface IWorkoutLog {
   date: Date
-  programId: string
-  phase: number
-  day: string
+  // Program-bound logs carry programId/phase/day. Quick (ad-hoc) sessions have
+  // no program — programId/phase/day are absent and `kind` is 'quick'.
+  programId?: string
+  phase?: number
+  day?: string
+  // 'program' (default, legacy) = part of an enrolled program; 'quick' = an
+  // ad-hoc session not attached to any program.
+  kind?: 'program' | 'quick'
+  // Display title for quick sessions (e.g. "Push Day", "Quick Legs").
+  title?: string
+  // Client-generated id used to match-for-update a quick session across
+  // incremental saves within the same live session (program logs use
+  // programId+day+today instead).
+  sessionId?: string
+  // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
+  focus?: string
   completed: boolean
   duration?: number // in minutes (final, set on completion)
   startedAt?: Date // First time the live view was opened / first set saved
@@ -210,9 +223,15 @@ const ExerciseLogSchema = new Schema<IExerciseLog>({
 
 const WorkoutLogSchema = new Schema<IWorkoutLog>({
   date: { type: Date, required: true },
-  programId: { type: String, required: true },
-  phase: { type: Number, required: true },
-  day: { type: String, required: true },
+  // Optional so ad-hoc quick sessions (no program) can be logged. Program logs
+  // still always set these.
+  programId: { type: String },
+  phase: { type: Number },
+  day: { type: String },
+  kind: { type: String, enum: ['program', 'quick'], default: 'program' },
+  title: { type: String },
+  sessionId: { type: String },
+  focus: { type: String },
   completed: { type: Boolean, default: false },
   duration: { type: Number },
   startedAt: { type: Date },
