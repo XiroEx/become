@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import { BackButton } from '@/components/ui/BackButton'
 import {
     ChevronLeft,
     ChevronRight,
@@ -447,6 +448,7 @@ export default function CalendarClient() {
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <BackButton />
           <Calendar className="h-5 w-5 text-blue-500" />
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Calendar</h1>
         </div>

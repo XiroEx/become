@@ -14,6 +14,7 @@ import { Card, EmptyState } from '@/components/ui'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
 import MyProgramsClient from '../../programs/mine/MyProgramsClient'
 import SessionBuilder from '@/components/SessionBuilder'
+import { BackButton } from '@/components/ui/BackButton'
 
 type TabKey = 'exercises' | 'sessions' | 'programs'
 
@@ -193,7 +194,8 @@ export default function HubClient() {
 
   return (
     <PageTransition className="pb-6">
-      <header className="mb-4">
+      <header className="mb-4 flex items-center gap-3">
+        <BackButton />
         <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
           My Workout
         </h1>
