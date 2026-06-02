@@ -34,10 +34,11 @@ function breathMove(): Move {
 }
 
 function identityMove(ctx: SessionContext): Move {
+  const sd = ctx.seed ?? ctx.dayOfYear
   const statement =
     ctx.identityStatement && ctx.identityStatement.trim().length > 0
       ? ctx.identityStatement.trim()
-      : IDENTITY_POOL[ctx.dayOfYear % IDENTITY_POOL.length]
+      : IDENTITY_POOL[sd % IDENTITY_POOL.length]
   return { id: 'identity', kind: 'identity', title: 'Affirm it', subtitle: 'Hold to lock it in.', statement, xp: 5 }
 }
 
@@ -97,7 +98,7 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
 
 export class DeterministicMoveEngine implements MoveEngine {
   composeSession(ctx: SessionContext): MindSessionPlan {
-    const seed = ctx.dayOfYear
+    const seed = ctx.seed ?? ctx.dayOfYear
     const intro = INTROS[seed % INTROS.length]
 
     // Anchors: always open by checking in (grounds the session, grants XP via

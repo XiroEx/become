@@ -13,6 +13,7 @@ import {
   Bell,
   Send,
   LayoutGrid,
+  Brain,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -451,6 +452,13 @@ export default function AdminOverviewPage() {
           >
             <LayoutGrid className="h-3.5 w-3.5" />
             Tile Gallery
+          </Link>
+          <Link
+            href="/dashboard/admin/mind"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            <Brain className="h-3.5 w-3.5" />
+            Mind XP
           </Link>
           <button
             onClick={() => setShowConfirm(true)}
