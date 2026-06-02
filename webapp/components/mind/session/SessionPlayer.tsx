@@ -24,6 +24,9 @@ import IdentityScene from './scenes/IdentityScene'
 import ChallengeScene from './scenes/ChallengeScene'
 import WinScene from './scenes/WinScene'
 import MissionScene from './scenes/MissionScene'
+import VisionScene from './scenes/VisionScene'
+import PatternScene from './scenes/PatternScene'
+import SocialScene from './scenes/SocialScene'
 
 interface CompleteResult {
   xpAwarded: number
@@ -171,6 +174,9 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
               {move.kind === 'challenge' && <ChallengeScene move={move} onDone={next} />}
               {move.kind === 'win' && <WinScene move={move} onDone={next} />}
               {move.kind === 'mission' && <MissionScene move={move} onDone={next} />}
+              {move.kind === 'vision' && <VisionScene move={move} onDone={next} />}
+              {move.kind === 'antisabotage' && <PatternScene move={move} onDone={next} />}
+              {move.kind === 'social' && <SocialScene move={move} onDone={next} />}
             </motion.div>
           )}
 
