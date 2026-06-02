@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Play, ArrowLeft } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import { Card, EmptyState } from "@/components/ui";
+import NewProgramClient from "@/app/dashboard/programs/new/NewProgramClient";
 
 interface CustomProgramSummary {
   program_id: string;
@@ -28,6 +29,8 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
   const [loading, setLoading] = useState(true);
   const [programs, setPrograms] = useState<CustomProgramSummary[]>([]);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
+  // Embedded (hub) only: reveal the program creator inline instead of navigating.
+  const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -107,13 +110,13 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
     <>
       {embedded ? (
         <div className="mb-4 flex justify-end">
-          <Link
-            href="/dashboard/programs/new"
+          <button
+            onClick={() => setShowCreate(true)}
             className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
             <Plus className="h-4 w-4" />
             Create
-          </Link>
+          </button>
         </div>
       ) : (
         <div className="mb-6 flex items-center gap-3">
@@ -230,6 +233,25 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
     </>
   );
 
-  if (embedded) return <div className="pb-6">{content}</div>;
+  if (embedded) {
+    // Inline program creator (reveals NewProgramClient, which self-gates on the
+    // custom-programs entitlement) — keeps "create" built into the tab rather
+    // than navigating away, consistent with the Exercises + Sessions tabs.
+    if (showCreate) {
+      return (
+        <div className="pb-6">
+          <button
+            onClick={() => setShowCreate(false)}
+            className="mb-2 flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to my programs
+          </button>
+          <NewProgramClient />
+        </div>
+      );
+    }
+    return <div className="pb-6">{content}</div>;
+  }
   return <PageTransition className="pb-6">{content}</PageTransition>;
 }
