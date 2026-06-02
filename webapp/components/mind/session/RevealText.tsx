@@ -23,10 +23,13 @@ export default function RevealText({
   text,
   onComplete,
   className = '',
+  speed = 1,
 }: {
   text: string
   onComplete?: () => void
   className?: string
+  /** Multiplier on every delay — >1 reveals more slowly (e.g. 4 = 4× slower). */
+  speed?: number
 }) {
   const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text])
   const [shown, setShown] = useState(0)
@@ -42,12 +45,13 @@ export default function RevealText({
       return
     }
     const justShown = shown > 0 ? words[shown - 1] : ''
-    const delay = shown === 0 ? 320 : WORD_MS + pauseAfter(justShown)
+    const base = shown === 0 ? 320 : WORD_MS + pauseAfter(justShown)
+    const delay = base * speed
     const t = setTimeout(() => setShown((n) => n + 1), delay)
     return () => clearTimeout(t)
     // onComplete intentionally omitted — fires once when the line finishes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, words])
+  }, [shown, words, speed])
 
   return (
     <p className={className}>
