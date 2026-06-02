@@ -1,9 +1,9 @@
 'use client'
 
-// The Arsenal — the user's unlocked Mind tools. Tools that have an interactive
-// scene launch a standalone one-move session (the immersive player); the rest
-// link to their existing section page. The daily ritual stays primary; this is
-// the "use any of it, anytime" library.
+// Focused Sessions — the "More" destination. Each unlocked system launches a
+// SHORT, DYNAMIC themed session (varies every time) in the immersive player.
+// The daily ritual stays primary; this is the "need a state shift? here's a
+// session for that" library.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -15,7 +15,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { SYSTEM_INFO, getUnlockedSystems } from '@/lib/mindXP'
-import { singleMovePlan, systemHasScene } from '@/lib/mind/composeSession'
+import { composeThemedSession, systemHasScene } from '@/lib/mind/composeSession'
 import type { MindSessionPlan, SessionContext } from '@/lib/mind/moves'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 
@@ -81,7 +81,7 @@ export default function ArsenalClient() {
   )
 
   const launch = (systemId: string) => {
-    const plan = singleMovePlan(systemId, ctx)
+    const plan = composeThemedSession(systemId, ctx)
     if (plan) setActivePlan(plan)
   }
 
@@ -96,10 +96,10 @@ export default function ArsenalClient() {
     <PageTransition className="pb-6">
       <header className="mb-2 flex items-center gap-3">
         <BackButton fallbackHref="/dashboard/mind" />
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">Your Arsenal</h1>
+        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">Focused Sessions</h1>
       </header>
       <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
-        Everything you&apos;ve unlocked. Use any of it, anytime.
+        Need a reset? Vision work? Pick a focus — each one&apos;s a short, fresh session.
       </p>
 
       {loading ? (

@@ -33,10 +33,17 @@ function authHeaders(): HeadersInit {
 
 export default function StateCheckScene({ move, onState, onDone }: SceneProps) {
   const [chosen, setChosen] = useState<MindState | null>(null)
+  const [other, setOther] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
+  const pickOther = () => {
+    if (chosen || other) return
+    setOther(true)
+    setMessage("That's okay — you don't have to name it. Let's just begin.")
+  }
+
   const pick = async (state: MindState) => {
-    if (chosen) return
+    if (chosen || other) return
     setChosen(state)
     onState?.(state)
     setMessage(FALLBACK_MESSAGES[state]) // optimistic
@@ -58,7 +65,7 @@ export default function StateCheckScene({ move, onState, onDone }: SceneProps) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
       <AnimatePresence mode="wait">
-        {!chosen ? (
+        {!chosen && !other ? (
           <motion.div
             key="pick"
             initial={{ opacity: 0 }}
@@ -80,6 +87,12 @@ export default function StateCheckScene({ move, onState, onDone }: SceneProps) {
                 </button>
               ))}
             </div>
+            <button
+              onClick={pickOther}
+              className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70"
+            >
+              Something else / not sure
+            </button>
           </motion.div>
         ) : (
           <motion.div
