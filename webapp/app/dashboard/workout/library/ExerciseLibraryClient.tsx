@@ -92,7 +92,12 @@ const EMPTY_FORM: CreateForm = {
 
 const EXERCISES_PAGE = 5
 
-export default function ExerciseLibraryClient() {
+interface ExerciseLibraryClientProps {
+  /** Embedded inside the Workout hub — drop the page chrome (wrapper + header). */
+  embedded?: boolean;
+}
+
+export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClientProps = {}) {
   const router = useRouter();
   const [exercises, setExercises] = useState<CustomExercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,34 +183,48 @@ export default function ExerciseLibraryClient() {
       )
     : exercises;
 
-  return (
-    <PageTransition className="pb-6">
+  const content = (
+    <>
       {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
-            My Exercises
-          </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Your custom exercises — use them in any workout or program.
-          </p>
-        </div>
-        {!showForm && (
+      {embedded ? (
+        !showForm && (
+          <div className="mb-4 flex justify-end">
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          </div>
+        )
+      ) : (
+        <div className="mb-6 flex items-center gap-3">
           <button
-            onClick={() => setShowForm(true)}
-            className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+            onClick={() => router.back()}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
-            <Plus className="h-4 w-4" />
-            Add
+            <ArrowLeft className="h-4 w-4" />
           </button>
-        )}
-      </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">
+              My Exercises
+            </h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Your custom exercises — use them in any workout or program.
+            </p>
+          </div>
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Create Form */}
       <AnimatePresence>
@@ -471,6 +490,9 @@ export default function ExerciseLibraryClient() {
           )}
         </div>
       )}
-    </PageTransition>
+    </>
   );
+
+  if (embedded) return <div className="pb-6">{content}</div>;
+  return <PageTransition className="pb-6">{content}</PageTransition>;
 }
