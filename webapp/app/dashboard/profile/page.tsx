@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import PageTransition from '@/components/PageTransition'
+import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
@@ -453,7 +454,10 @@ export default function ProfilePage() {
     <PageTransition className="pb-10 space-y-4">
       {/* Header */}
       <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Profile</h1>
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Profile</h1>
+        </div>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Manage your account and fitness preferences.
         </p>

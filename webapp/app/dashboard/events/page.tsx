@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { CalendarDays, MapPin, Video } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
+import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, formatEventTime, getToken } from '@/components/community/types'
 
 function eventPlace(event: CommunityEvent) {
@@ -49,7 +50,10 @@ export default function EventsPage() {
   return (
     <PageTransition>
       <div className="mb-5">
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Events</h1>
+        <div className="flex items-center gap-3">
+          <BackButton />
+          <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Events</h1>
+        </div>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Live sessions, workshops, and community check-ins.</p>
       </div>
 
