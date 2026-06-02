@@ -21,7 +21,6 @@ export type MoveKind =
   | 'vision'
   | 'antisabotage'
   | 'social'
-  | 'speech'
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
