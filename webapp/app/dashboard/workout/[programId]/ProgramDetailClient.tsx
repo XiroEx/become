@@ -348,7 +348,7 @@ export default function ProgramDetailClient({ program }: Props) {
         setActiveProgram(null);
         setShowAbandonDialog(false);
         // Navigate back to programs list
-        router.push("/dashboard/programming");
+        router.push("/dashboard/workout");
       } else {
         const error = await res.json();
         console.error("Failed to abandon program:", error);
@@ -489,7 +489,7 @@ export default function ProgramDetailClient({ program }: Props) {
   const handleStartProgram = async () => {
     // If already enrolled, just navigate to workout
     if (activeProgram) {
-      router.push(`/dashboard/programming/${program.program_id}/workout`);
+      router.push(`/dashboard/workout/${program.program_id}/workout`);
       return;
     }
 
@@ -564,7 +564,7 @@ export default function ProgramDetailClient({ program }: Props) {
           setActiveProgram(data.activeProgram);
         }
         // Redirect to schedule setup for new enrollments
-        router.push(`/dashboard/programming/${program.program_id}/schedule`);
+        router.push(`/dashboard/workout/${program.program_id}/schedule`);
       } else {
         const error = await res.json();
         console.error("Enrollment failed:", error);
@@ -573,12 +573,12 @@ export default function ProgramDetailClient({ program }: Props) {
           setActiveProgram(error.activeProgram);
         }
         // Still navigate even if enrollment fails
-        router.push(`/dashboard/programming/${program.program_id}/workout?day=${encodeURIComponent(selectedDayKey)}`);
+        router.push(`/dashboard/workout/${program.program_id}/workout?day=${encodeURIComponent(selectedDayKey)}`);
       }
     } catch (error) {
       console.error("Error enrolling:", error);
       // Still navigate even if enrollment fails
-      router.push(`/dashboard/programming/${program.program_id}/workout?day=${encodeURIComponent(selectedDayKey)}`);
+      router.push(`/dashboard/workout/${program.program_id}/workout?day=${encodeURIComponent(selectedDayKey)}`);
     } finally {
       setEnrolling(false);
     }
@@ -696,7 +696,7 @@ export default function ProgramDetailClient({ program }: Props) {
               {enrolling ? "Starting..." : activeProgram ? "Continue Program" : "Start Program"}
             </button>
             <button 
-              onClick={() => router.push(`/dashboard/programming/${program.program_id}/workout/live`)}
+              onClick={() => router.push(`/dashboard/workout/${program.program_id}/workout/live`)}
               className={`flex items-center gap-2 rounded-full px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all sm:px-6 sm:py-3 ${
                 hasInProgressWorkout 
                   ? "bg-yellow-500/20 hover:bg-yellow-500/30 ring-1 ring-yellow-500/50" 
@@ -803,7 +803,7 @@ export default function ProgramDetailClient({ program }: Props) {
               {/* Links row */}
               <div className="mt-3 flex items-center gap-4">
                 <button
-                  onClick={() => router.push(`/dashboard/programming/${program.program_id}/schedule`)}
+                  onClick={() => router.push(`/dashboard/workout/${program.program_id}/schedule`)}
                   className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

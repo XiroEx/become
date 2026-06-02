@@ -220,7 +220,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
       if (res.status === 201) {
         const created = (await res.json()) as CreatedProgram;
         setSaved(true);
-        router.push(`/dashboard/programming/${created.program_id}`);
+        router.push(`/dashboard/workout/${created.program_id}`);
         onClose();
         return;
       }

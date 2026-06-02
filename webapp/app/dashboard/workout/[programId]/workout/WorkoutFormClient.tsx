@@ -573,7 +573,7 @@ export default function WorkoutFormPage() {
     if (action === "continue") {
       // Navigate to live workout — the resolve API re-dated the log so it will resume
       router.push(
-        `/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(staleIncomplete!.day)}`
+        `/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(staleIncomplete!.day)}`
       );
     } else if (action === "restart") {
       // Stale log deleted, close modal and proceed to the current workout fresh
@@ -582,8 +582,8 @@ export default function WorkoutFormPage() {
       // count or skip — clear modal then go to next day
       setStaleIncomplete(null);
       const target = nextDay
-        ? `/dashboard/programming/${programId}/workout?day=${encodeURIComponent(nextDay)}`
-        : `/dashboard/programming/${programId}/workout`;
+        ? `/dashboard/workout/${programId}/workout?day=${encodeURIComponent(nextDay)}`
+        : `/dashboard/workout/${programId}/workout`;
       router.replace(target);
     }
   };
@@ -807,7 +807,7 @@ export default function WorkoutFormPage() {
             </div>
 
             <button
-              onClick={() => router.push(`/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(workout.day)}`)}
+              onClick={() => router.push(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}`)}
               className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-sm font-medium text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-600"
             >
               <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
@@ -1392,7 +1392,7 @@ export default function WorkoutFormPage() {
             summaryStreak={summaryStreak}
             summaryGoal={summaryGoal}
             formatTime={formatTime}
-            onDone={() => router.push("/dashboard/programming")}
+            onDone={() => router.push("/dashboard/workout")}
           />
         )}
       </AnimatePresence>

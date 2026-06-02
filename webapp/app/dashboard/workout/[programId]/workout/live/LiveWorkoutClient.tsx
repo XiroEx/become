@@ -581,7 +581,7 @@ export default function LiveWorkoutPage() {
       const staleDay = staleIncomplete?.day;
       setStaleIncomplete(null);
       if (staleDay && staleDay !== requestedDay) {
-        router.replace(`/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(staleDay)}`);
+        router.replace(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(staleDay)}`);
       } else {
         setLoadKey((k) => k + 1);
       }
@@ -594,7 +594,7 @@ export default function LiveWorkoutPage() {
       // immediately after counting/skipping a stale Day 1).
       setStaleIncomplete(null);
       const target = nextDay
-        ? `/dashboard/programming/${programId}/workout?day=${encodeURIComponent(nextDay)}`
+        ? `/dashboard/workout/${programId}/workout?day=${encodeURIComponent(nextDay)}`
         : `/dashboard`;
       router.replace(target);
     }
@@ -1895,7 +1895,7 @@ export default function LiveWorkoutPage() {
             summaryStreak={summaryStreak}
             summaryGoal={summaryGoal}
             formatTime={formatTime}
-            onDone={() => router.push("/dashboard/programming")}
+            onDone={() => router.push("/dashboard/workout")}
           />
         )}
       </AnimatePresence>

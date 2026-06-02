@@ -14,7 +14,7 @@ import { Play } from 'lucide-react'
 //   1. GET /api/programs/active → pick the first 'in-progress' program
 //   2. GET /api/workouts?programId=X&day=Y&tz=... → if isResume === true
 //      AND the workout is not completed, render the pill.
-//   3. CTA → /dashboard/programming/<id>/workout/live?day=<dayLabel>
+//   3. CTA → /dashboard/workout/<id>/workout/live?day=<dayLabel>
 
 interface ActiveProgram {
   programId: string
@@ -87,7 +87,7 @@ export default function ResumeWorkoutButton() {
 
   if (!resume) return null
 
-  const href = `/dashboard/programming/${encodeURIComponent(resume.programId)}/workout/live?day=${encodeURIComponent(resume.day)}`
+  const href = `/dashboard/workout/${encodeURIComponent(resume.programId)}/workout/live?day=${encodeURIComponent(resume.day)}`
 
   return (
     <motion.div

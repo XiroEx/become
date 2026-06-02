@@ -17,6 +17,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    // The /dashboard/programming route was renamed to /dashboard/workout.
+    // Keep old bookmarks / PWA-cached links working.
+    return [
+      {
+        source: '/dashboard/programming',
+        destination: '/dashboard/workout',
+        permanent: false,
+      },
+      {
+        source: '/dashboard/programming/:path*',
+        destination: '/dashboard/workout/:path*',
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       // HTML responses MUST NOT be cached on the CDN. Next.js's default

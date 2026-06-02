@@ -90,7 +90,7 @@ export default function MyProgramsClient() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to enroll');
       }
-      router.push(`/dashboard/programming/${programId}`);
+      router.push(`/dashboard/workout/${programId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to enroll');
     } finally {
@@ -157,7 +157,7 @@ export default function MyProgramsClient() {
             <Card key={p.program_id}>
               <div className="flex items-start justify-between gap-3">
                 <Link
-                  href={`/dashboard/programming/${p.program_id}`}
+                  href={`/dashboard/workout/${p.program_id}`}
                   className="min-w-0 flex-1"
                 >
                   <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">

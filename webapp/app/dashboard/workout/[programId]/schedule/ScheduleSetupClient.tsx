@@ -176,7 +176,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
       })
 
       if (res.ok) {
-        router.push(`/dashboard/programming/${programId}`)
+        router.push(`/dashboard/workout/${programId}`)
       } else {
         const data = await res.json()
         setError(data.error || 'Failed to create schedule')
@@ -189,7 +189,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
   }
 
   const handleSkip = () => {
-    router.push(`/dashboard/programming/${programId}`)
+    router.push(`/dashboard/workout/${programId}`)
   }
 
   const handleRecreate = () => {

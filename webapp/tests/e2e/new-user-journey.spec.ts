@@ -208,7 +208,7 @@ test.describe('New User Journey', () => {
     console.log('\n=== PHASE 3: Program Enrollment ===')
 
     // Navigate to Jon Don Split program detail
-    await page.goto(`${BASE_URL}/dashboard/programming/${PROGRAM_ID}`)
+    await page.goto(`${BASE_URL}/dashboard/workout/${PROGRAM_ID}`)
     await page.waitForLoadState('domcontentloaded')
 
     // Wait for program page to load (button appears)
@@ -295,7 +295,7 @@ test.describe('New User Journey', () => {
     }
 
     // Verify enrolled state
-    await page.goto(`${BASE_URL}/dashboard/programming/${PROGRAM_ID}`)
+    await page.goto(`${BASE_URL}/dashboard/workout/${PROGRAM_ID}`)
     await page.waitForLoadState('domcontentloaded')
     await page.waitForSelector(
       'button:has-text("Continue Program"), button:has-text("Abandon program")',
@@ -311,7 +311,7 @@ test.describe('New User Journey', () => {
     console.log('\n=== PHASE 4: Live Workout ===')
 
     // Navigate to live workout (Day 1)
-    const liveUrl = `${BASE_URL}/dashboard/programming/${PROGRAM_ID}/workout/live?day=${encodeURIComponent('Day 1')}`
+    const liveUrl = `${BASE_URL}/dashboard/workout/${PROGRAM_ID}/workout/live?day=${encodeURIComponent('Day 1')}`
     await page.goto(liveUrl)
     await page.waitForLoadState('domcontentloaded')
 
