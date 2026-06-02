@@ -29,7 +29,9 @@ const MOVE_CHIP: Record<MoveKind, string> = {
   'state-check': 'Check in',
   breath: 'Breathe',
   identity: 'Affirm',
-  win: 'Reflect',
+  win: 'Win',
+  challenge: 'Discipline',
+  mission: 'Lock in',
 }
 
 function dayOfYear(): number {
@@ -48,16 +50,18 @@ export default function MindJourney() {
   const [progress, setProgress] = useState<ProgressData | null>(null)
   const [completedToday, setCompletedToday] = useState(false)
   const [recentState, setRecentState] = useState<MindState | null>(null)
+  const [missionAction, setMissionAction] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const h = authHeaders()
-      const [identityRes, progressRes, sessionRes, stateRes] = await Promise.all([
+      const [identityRes, progressRes, sessionRes, stateRes, missionRes] = await Promise.all([
         fetch('/api/mind/identity', { headers: h }),
         fetch('/api/mind/progress', { headers: h }),
         fetch(`/api/mind/session?tz=${new Date().getTimezoneOffset()}`, { headers: h }),
         fetch('/api/mind/state', { headers: h }),
+        fetch('/api/mind/mission', { headers: h }),
       ])
       const identity = identityRes.ok ? await identityRes.json() : null
       setOnboarded(!!identity?.profile?.onboardingCompleted)
@@ -81,6 +85,10 @@ export default function MindJourney() {
         const last = Array.isArray(st.logs) && st.logs.length > 0 ? st.logs[0] : null
         if (last?.state) setRecentState(last.state as MindState)
       }
+      if (missionRes.ok) {
+        const m = await missionRes.json()
+        setMissionAction(m?.mission?.dailyAction ?? null)
+      }
     } catch (error) {
       console.error('Error loading mind home:', error)
     } finally {
@@ -98,11 +106,11 @@ export default function MindJourney() {
       chapter: progress.chapter,
       unlockedSystems: progress.unlockedSystems,
       recentState,
-      missionAction: null,
+      missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       dayOfYear: dayOfYear(),
     })
-  }, [progress, recentState])
+  }, [progress, recentState, missionAction])
 
   // ── Immersive session overlay ──
   if (playing && plan) {

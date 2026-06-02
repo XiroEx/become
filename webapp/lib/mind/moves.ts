@@ -11,7 +11,7 @@
 
 import type { MindState } from '@/lib/mindContent'
 
-export type MoveKind = 'state-check' | 'breath' | 'identity' | 'win'
+export type MoveKind = 'state-check' | 'breath' | 'identity' | 'win' | 'challenge' | 'mission'
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
