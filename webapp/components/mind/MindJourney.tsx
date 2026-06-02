@@ -32,6 +32,9 @@ const MOVE_CHIP: Record<MoveKind, string> = {
   win: 'Win',
   challenge: 'Discipline',
   mission: 'Lock in',
+  vision: 'Vision',
+  antisabotage: 'Pattern',
+  social: 'Connect',
 }
 
 function dayOfYear(): number {

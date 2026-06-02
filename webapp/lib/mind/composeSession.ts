@@ -61,6 +61,25 @@ function missionMove(ctx: SessionContext): Move {
   }
 }
 
+function visionMove(ctx: SessionContext): Move {
+  return {
+    id: 'vision',
+    kind: 'vision',
+    title: 'See it',
+    subtitle: 'Lock in your vision.',
+    statement: ctx.identityStatement?.trim() || undefined,
+    xp: 5,
+  }
+}
+
+function antisabotageMove(): Move {
+  return { id: 'antisabotage', kind: 'antisabotage', title: 'Pattern check', subtitle: 'Catch it before it runs you.', xp: 5 }
+}
+
+function socialMove(): Move {
+  return { id: 'social', kind: 'social', title: 'Accountability', subtitle: 'Pull someone into your progress.', xp: 5 }
+}
+
 /** Build a single move of the given kind (used by the Arsenal launcher). */
 export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
   switch (kind) {
@@ -69,6 +88,9 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
     case 'win': return winMove()
     case 'challenge': return challengeMove()
     case 'mission': return missionMove(ctx)
+    case 'vision': return visionMove(ctx)
+    case 'antisabotage': return antisabotageMove()
+    case 'social': return socialMove()
     default: return stateCheckMove()
   }
 }
@@ -88,7 +110,10 @@ export class DeterministicMoveEngine implements MoveEngine {
     const corePool: MoveKind[] = []
     if (ctx.chapter >= 3) corePool.push('challenge') // discipline
     if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
+    if (ctx.chapter >= 2) corePool.push('vision') // foundation: see it
     if (ctx.chapter >= 2 && ctx.missionAction?.trim()) corePool.push('mission')
+    if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
+    if (ctx.chapter >= 5) corePool.push('social') // architect: environment
 
     if (corePool.length > 0) {
       moves.push(buildMove(corePool[seed % corePool.length], ctx))
@@ -118,6 +143,9 @@ const SYSTEM_TO_MOVE: Partial<Record<string, MoveKind>> = {
   'self-image': 'identity',
   discipline: 'challenge',
   mission: 'mission',
+  vision: 'vision',
+  'anti-sabotage': 'antisabotage',
+  social: 'social',
 }
 
 /** True if tapping this Arsenal system should launch an interactive session. */
