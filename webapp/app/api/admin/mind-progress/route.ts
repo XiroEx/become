@@ -1,7 +1,7 @@
-// Admin-only Mind progress controls (acts on the calling admin's OWN account)
-// for retesting the Mind journey.
+// Admin-only Mind progress controls. Targets the admin's OWN account by default,
+// or any user via `userId` in the body (used by the admin user-detail page).
 //   GET   → current { chapter, xp }
-//   POST  → { chapter?, xp?, reset? }
+//   POST  → { userId?, chapter?, xp?, reset? }
 //           reset:true → chapter 1, xp 0, fresh history, delete MindSession docs
 //           (so the daily session replays + streak resets)
 
@@ -23,18 +23,21 @@ export async function POST(request: NextRequest) {
   const gate = await requireAdmin(request)
   if (!gate.ok) return gate.response
 
-  let body: { chapter?: number; xp?: number; reset?: boolean } = {}
+  let body: { userId?: string; chapter?: number; xp?: number; reset?: boolean } = {}
   try {
     body = await request.json()
   } catch {
     /* empty body ok */
   }
 
+  // Target any user when `userId` is supplied (admin); otherwise act on self.
+  const targetUserId = (typeof body.userId === 'string' && body.userId) || gate.userId
+
   await dbConnect()
 
   if (body.reset) {
     await MindProgress.findOneAndUpdate(
-      { userId: gate.userId },
+      { userId: targetUserId },
       {
         $set: {
           chapter: 1,
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest) {
       },
       { upsert: true, setDefaultsOnInsert: true },
     )
-    await MindSession.deleteMany({ userId: gate.userId })
+    await MindSession.deleteMany({ userId: targetUserId })
     return NextResponse.json({ chapter: 1, xp: 0, reset: true })
   }
 
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
   }
 
   const updated = await MindProgress.findOneAndUpdate(
-    { userId: gate.userId },
+    { userId: targetUserId },
     { $set: set },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   ).lean<{ chapter?: number; xp?: number } | null>()
