@@ -31,6 +31,7 @@ import { BarTileChart } from '@/components/intelligence/tiles/BarTileChart'
 import { SuggestionCard } from '@/components/intelligence/SuggestionCard'
 import TileErrorBoundary from '@/components/dashboard/TileErrorBoundary'
 import { SmartRotatingTile, buildRotationItems } from '@/components/dashboard/SmartRotatingTile'
+import { DEFAULT_SMART_POOL } from '@/lib/dashboardLayout/defaults'
 import type { DataPoint } from '@/lib/metrics/types'
 import type { Suggestion } from '@/lib/suggestions/types'
 
@@ -340,17 +341,21 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
     lastTapAt: e.lastTapAt,
   }))
   const rotationNow = tilesData?.now ? new Date(tilesData.now) : undefined
-  const rotationItems = buildRotationItems(
-    statContext,
-    rotationMetricIds,
-    (id, size) => {
-      const metric = metricsById.get(id)
-      return metric ? <MetricTileCard metric={metric} size={size} /> : <MissingTileCard label={id} />
-    },
-    pinnedKeys,
-    engagement,
-    rotationNow,
-  )
+  const renderRotationMetric = (id: string, size: DashboardTileSize) => {
+    const metric = metricsById.get(id)
+    return metric ? <MetricTileCard metric={metric} size={size} /> : <MissingTileCard label={id} />
+  }
+  // Build a smart tile's rotation pool, honoring its per-tile settings.pool
+  // (defaults to the original stat cards — no workout metrics).
+  const buildSmartItems = (tile: DashboardTile) => {
+    const poolList = tile.settings?.pool ?? DEFAULT_SMART_POOL
+    return buildRotationItems(statContext, rotationMetricIds, renderRotationMetric, {
+      excludeKeys: pinnedKeys,
+      engagement,
+      now: rotationNow,
+      poolKeys: new Set(poolList),
+    })
+  }
 
   const dashboardSuggestions = (tilesData?.suggestions ?? []).filter(
     // Only show suggestions explicitly targeted at the dashboard surface. When
@@ -444,21 +449,23 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
             )
           }
 
-          // relevance-ordered pool; stagger by ordinal so two side-by-side
-          // smart tiles start on different cards instead of mirroring.
+          // Per-tile pool (honors settings.pool) + relevance order; stagger by
+          // ordinal so two side-by-side smart tiles start on different cards.
+          const smartItems = buildSmartItems(tile)
           const ordinal = smartOrdinal.get(idx) ?? 0
           const startIndex =
-            rotationItems.length > 0
-              ? Math.round((ordinal * rotationItems.length) / Math.max(1, smartOrdinal.size)) %
-                rotationItems.length
+            smartItems.length > 0
+              ? Math.round((ordinal * smartItems.length) / Math.max(1, smartOrdinal.size)) %
+                smartItems.length
               : 0
           return (
             <div key={key} className={cellClass}>
               <TileErrorBoundary label="Smart tile">
                 <SmartRotatingTile
-                  items={rotationItems}
+                  items={smartItems}
                   size={tile.size}
                   startIndex={startIndex}
+                  intervalMs={tile.settings?.intervalMs}
                   onTap={recordTileTap}
                 />
               </TileErrorBoundary>
