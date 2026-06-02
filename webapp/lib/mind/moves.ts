@@ -21,6 +21,7 @@ export type MoveKind =
   | 'vision'
   | 'antisabotage'
   | 'social'
+  | 'speech'
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
@@ -136,6 +137,8 @@ export interface SessionContext {
   identityStatement?: string | null
   /** Deterministic rotation seed (day-of-year) so the same day is stable. */
   dayOfYear: number
+  /** Optional explicit seed — overrides dayOfYear so replays vary run-to-run. */
+  seed?: number
 }
 
 export interface MindSessionPlan {

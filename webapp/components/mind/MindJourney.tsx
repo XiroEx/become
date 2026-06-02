@@ -159,7 +159,7 @@ export default function MindJourney() {
   const unlockedCount = progress?.unlockedSystems.length ?? 1
 
   return (
-    <PageTransition className="pb-6">
+    <PageTransition className="flex min-h-[78vh] flex-col pb-6">
       {/* Header — calm, minimal */}
       <header className="mb-5">
         <div className="flex items-center justify-between">
@@ -211,6 +211,8 @@ export default function MindJourney() {
         </div>
       </header>
 
+      {/* Centered focus area — fills the space below the header */}
+      <div className="flex flex-1 flex-col justify-center">
       {/* The next move */}
       {plan && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -272,6 +274,7 @@ export default function MindJourney() {
 
       {/* AI coach — scaffolded (drops into the MoveEngine via redbtn later) */}
       <MindCoachTeaser />
+      </div>
     </PageTransition>
   )
 }
