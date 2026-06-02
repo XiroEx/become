@@ -32,6 +32,12 @@ export const dynamic = 'force-dynamic'
 function toPlainTile(t: IDashboardTile): DashboardTile {
   const tile: DashboardTile = { id: t.id, kind: t.kind, size: t.size }
   if (t.locked != null) tile.locked = t.locked
+  if (t.settings) {
+    const s: { pool?: string[]; intervalMs?: number } = {}
+    if (Array.isArray(t.settings.pool)) s.pool = [...t.settings.pool]
+    if (typeof t.settings.intervalMs === 'number') s.intervalMs = t.settings.intervalMs
+    if (s.pool !== undefined || s.intervalMs !== undefined) tile.settings = s
+  }
   return tile
 }
 

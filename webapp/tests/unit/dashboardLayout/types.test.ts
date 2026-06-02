@@ -145,3 +145,45 @@ describe('safeParseDashboardLayout', () => {
     if (!res.ok) assert.match(res.error, /array/)
   })
 })
+
+describe('per-tile settings (smart tile)', () => {
+  it('accepts a smart tile with pool + intervalMs', () => {
+    const t = parseDashboardTile({
+      id: 'smart', kind: 'smart-rotating', size: '2x1', locked: null,
+      settings: { pool: ['stat:streak', 'stat:mood'], intervalMs: 10000 },
+    })
+    assert.deepEqual(t.settings, { pool: ['stat:streak', 'stat:mood'], intervalMs: 10000 })
+  })
+
+  it('dedupes pool keys and preserves order', () => {
+    const t = parseDashboardTile({
+      id: 'smart', kind: 'smart-rotating', size: '2x1',
+      settings: { pool: ['stat:streak', 'stat:streak', 'metric:foo'] },
+    })
+    assert.deepEqual(t.settings?.pool, ['stat:streak', 'metric:foo'])
+  })
+
+  it('rejects malformed pool keys', () => {
+    assert.throws(
+      () => parseDashboardTile({ id: 'smart', kind: 'smart-rotating', size: '2x1', settings: { pool: ['bogus'] } }),
+      DashboardLayoutError,
+    )
+  })
+
+  it('rejects a non-positive intervalMs', () => {
+    assert.throws(
+      () => parseDashboardTile({ id: 'smart', kind: 'smart-rotating', size: '2x1', settings: { intervalMs: 0 } }),
+      DashboardLayoutError,
+    )
+  })
+
+  it('drops empty settings (no pool, no interval) to undefined', () => {
+    const t = parseDashboardTile({ id: 'smart', kind: 'smart-rotating', size: '2x1', settings: {} })
+    assert.equal(t.settings, undefined)
+  })
+
+  it('round-trips a tile with no settings (back-compat)', () => {
+    const t = parseDashboardTile({ id: 'streak', kind: 'stat', size: '1x1' })
+    assert.equal(t.settings, undefined)
+  })
+})

@@ -27,6 +27,14 @@ export function isStatTileId(v: unknown): v is StatTileId {
   return typeof v === 'string' && (STAT_TILE_IDS as readonly string[]).includes(v)
 }
 
+/**
+ * Default smart-tile rotation pool: the ORIGINAL stat cards only (no workout
+ * metrics like PRS Timeline / Strength Curve / Volume). A smart tile with no
+ * `settings.pool` rotates exactly these. Users opt metrics in explicitly via
+ * the smart tile's settings panel.
+ */
+export const DEFAULT_SMART_POOL: string[] = STAT_TILE_IDS.map((id) => `stat:${id}`)
+
 /** Minimal placeholder default (mirror of legacy DEFAULT_TILE_IDS). */
 export const DEFAULT_STAT_TILE_IDS = ['streak', 'mood', 'weekly', 'goal'] as const
 
