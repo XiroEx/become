@@ -15,12 +15,7 @@ import {
   type MoveKind,
   type SessionContext,
 } from './moves'
-
-const INTROS = [
-  { title: 'Reset', subtitle: 'A few focused minutes. One move at a time.' },
-  { title: "Let's lock in", subtitle: 'Clear the noise. Become who you said you would.' },
-  { title: 'Show up', subtitle: 'The work is small. The compounding is not.' },
-]
+import { INTROS, CHOICE_POOL, WIN_PROMPTS } from './library'
 
 // ─── Move builders (so the daily composer + the Arsenal single-move launcher
 //     produce identical, consistent moves) ──────────────────────────────────
@@ -42,8 +37,9 @@ function identityMove(ctx: SessionContext): Move {
   return { id: 'identity', kind: 'identity', title: 'Affirm it', subtitle: 'Hold to lock it in.', statement, xp: 5 }
 }
 
-function winMove(): Move {
-  return { id: 'win', kind: 'win', title: 'Bank a win', subtitle: 'Name one thing you did.', prompt: "What's one win from today — big or small?", xp: 5 }
+function winMove(ctx: SessionContext): Move {
+  const prompt = WIN_PROMPTS[(ctx.seed ?? ctx.dayOfYear) % WIN_PROMPTS.length]
+  return { id: 'win', kind: 'win', title: 'Bank a win', subtitle: 'Name one thing you did.', prompt, xp: 5 }
 }
 
 function challengeMove(): Move {
@@ -90,37 +86,7 @@ function mirrorMove(ctx: SessionContext): Move {
   return { id: 'mirror', kind: 'mirror', title: 'Mirror', subtitle: 'Look at yourself. Say it.', statement, xp: 5 }
 }
 
-// Multiple-choice reflections — a different modality from read/affirm. Each
-// option carries a short reframe shown on pick.
-const CHOICE_POOL: { q: string; options: { label: string; response: string }[] }[] = [
-  {
-    q: "What's actually pulling you off course right now?",
-    options: [
-      { label: 'Comfort', response: "Comfort is the enemy of who you're becoming. Choose the harder right." },
-      { label: 'Fear', response: 'Fear means it matters. Move toward it — one small step, now.' },
-      { label: 'Other people', response: "Their noise isn't your mission. Get back in your lane." },
-      { label: 'No clear plan', response: 'Clarity comes from action. Pick the one next move.' },
-    ],
-  },
-  {
-    q: 'Finishing today strong takes what, exactly?',
-    options: [
-      { label: 'Starting now', response: 'Then start. Momentum is built, not found.' },
-      { label: 'Saying no', response: 'Protect the standard. No is a complete sentence.' },
-      { label: 'Asking for help', response: 'Strength asks. Reach out today.' },
-      { label: 'Just showing up', response: "Showing up is the whole game. You're here." },
-    ],
-  },
-  {
-    q: 'Which version of you shows up in the next hour?',
-    options: [
-      { label: 'The one who follows through', response: 'Good. Let the action prove it.' },
-      { label: 'The one who makes excuses', response: 'Name it — then do the opposite.' },
-      { label: 'Not sure yet', response: 'You decide. Choose on purpose.' },
-    ],
-  },
-]
-
+// Multiple-choice reflections come from the central library (CHOICE_POOL).
 function choiceMove(ctx: SessionContext): Move {
   const item = CHOICE_POOL[(ctx.seed ?? ctx.dayOfYear) % CHOICE_POOL.length]
   return { id: 'choice', kind: 'choice', title: item.q, subtitle: 'No wrong answer.', options: item.options, xp: 5 }
@@ -131,7 +97,7 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
   switch (kind) {
     case 'breath': return breathMove()
     case 'identity': return identityMove(ctx)
-    case 'win': return winMove()
+    case 'win': return winMove(ctx)
     case 'challenge': return challengeMove()
     case 'mission': return missionMove(ctx)
     case 'vision': return visionMove(ctx)

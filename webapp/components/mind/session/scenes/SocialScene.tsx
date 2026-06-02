@@ -4,28 +4,19 @@
 // progress. Rotates daily; commit to it. Renders inside the player's black
 // full-screen stage.
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Users, Check } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
-
-const ACCOUNTABILITY = [
-  'Text someone your plan for today — before you have the option not to.',
-  "Tell one person about a goal you've been keeping to yourself.",
-  'Find one person who has what you want. Ask them one specific question this week.',
-  'Schedule a check-in with someone who will ask the hard question about your progress.',
-  'Be honest with someone about where you actually are — not where you want to appear to be.',
-]
-
-function dayOfYear(): number {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), 0, 0)
-  return Math.floor((now.getTime() - start.getTime()) / 86_400_000)
-}
+import { ACCOUNTABILITY_ACTIONS } from '@/lib/mind/library'
 
 export default function SocialScene({ move, onDone }: SceneProps) {
   const [committed, setCommitted] = useState(false)
-  const action = ACCOUNTABILITY[dayOfYear() % ACCOUNTABILITY.length]
+  // Fresh action each time the scene mounts.
+  const action = useMemo(
+    () => ACCOUNTABILITY_ACTIONS[Math.floor(Math.random() * ACCOUNTABILITY_ACTIONS.length)],
+    [],
+  )
 
   const commit = () => {
     if (committed) return

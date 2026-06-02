@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()
-    const { state } = body as { state: MindState }
+    const { state, note, previousState } = body as { state: MindState; note?: string; previousState?: MindState }
 
     const valid: MindState[] = ['stressed', 'distracted', 'low_energy', 'locked_in']
     if (!valid.includes(state)) {
@@ -61,7 +61,12 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const log = await StateLog.create({ userId: auth.userId, state })
+    const log = await StateLog.create({
+      userId: auth.userId,
+      state,
+      ...(typeof note === 'string' && note.trim() && { note: note.trim().slice(0, 500) }),
+      ...(valid.includes(previousState as MindState) && { previousState }),
+    })
 
     // Grant XP — fire and forget
     MindProgress.findOneAndUpdate(
