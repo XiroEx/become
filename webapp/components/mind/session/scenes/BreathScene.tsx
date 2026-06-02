@@ -1,17 +1,19 @@
 'use client'
 
-// Breath scene — an animated breathing pacer. Opens with a brief "get ready"
-// intro (name + what it's for + Start) so it never drops you mid-breath, then
-// runs the protocol with a pause/resume + skip. Renders inside the player's
-// black full-screen stage.
+// Breath scene — an animated breathing pacer. Opens with a "get ready" intro
+// (name + what it's for) offering Start (full protocol) and Preview (one demo
+// round, then back to the intro) so it never drops you mid-breath. Runs with
+// pause/resume + skip. Renders inside the player's black full-screen stage.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Wind, Play, Pause, ArrowRight } from 'lucide-react'
+import { Wind, Play, Pause, Eye, ArrowRight } from 'lucide-react'
 import { BREATH_PROTOCOLS, type SceneProps } from '@/lib/mind/moves'
 
 const SMALL = 0.55
 const LARGE = 1
+
+type Mode = 'ready' | 'preview' | 'run'
 
 function prefersReducedMotion(): boolean {
   return (
@@ -33,7 +35,7 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
     })
   }, [p])
 
-  const [started, setStarted] = useState(false)
+  const [mode, setMode] = useState<Mode>('ready')
   const [paused, setPaused] = useState(false)
   const [round, setRound] = useState(1)
   const [phaseIdx, setPhaseIdx] = useState(0)
@@ -41,24 +43,43 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
   const doneRef = useRef(false)
 
   const phase = p.phases[phaseIdx]
+  const isPreview = mode === 'preview'
 
-  // Step through phases on a timer — only while started, not paused, not done.
+  const begin = (m: 'preview' | 'run') => {
+    setRound(1)
+    setPhaseIdx(0)
+    setPaused(false)
+    setDone(false)
+    doneRef.current = false
+    setMode(m)
+  }
+
+  // Step through phases on a timer — only while running/previewing, not paused.
   useEffect(() => {
-    if (!started || paused || done) return
+    if (mode === 'ready' || paused || done) return
     const t = setTimeout(() => {
       const lastPhase = phaseIdx >= p.phases.length - 1
       if (!lastPhase) {
         setPhaseIdx((i) => i + 1)
-      } else if (round < p.rounds) {
+        return
+      }
+      const totalRounds = isPreview ? 1 : p.rounds
+      if (round < totalRounds) {
         setRound((r) => r + 1)
+        setPhaseIdx(0)
+      } else if (isPreview) {
+        // Preview is one round — return to the intro.
+        setMode('ready')
+        setRound(1)
         setPhaseIdx(0)
       } else {
         setDone(true)
       }
     }, phase.durationMs)
     return () => clearTimeout(t)
-  }, [started, paused, phaseIdx, round, phase.durationMs, p.phases.length, p.rounds, done])
+  }, [mode, isPreview, paused, phaseIdx, round, phase.durationMs, p.phases.length, p.rounds, done])
 
+  // Finish shortly after the last real round completes.
   useEffect(() => {
     if (!done || doneRef.current) return
     doneRef.current = true
@@ -67,7 +88,7 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
   }, [done, onDone])
 
   // ── Intro / "get ready" ──
-  if (!started) {
+  if (mode === 'ready') {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
         <span className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/30 to-green-500/30">
@@ -78,11 +99,18 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
         <p className="mt-2 max-w-xs text-white/60">{p.bestFor}</p>
         <p className="mt-5 text-xs uppercase tracking-widest text-white/40">{p.rounds} rounds · follow the circle</p>
         <button
-          onClick={() => setStarted(true)}
+          onClick={() => begin('run')}
           className="mt-9 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
         >
           <Play className="h-5 w-5 fill-current" />
           Start
+        </button>
+        <button
+          onClick={() => begin('preview')}
+          className="mt-3 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl border border-white/15 py-3 text-sm font-semibold text-white/80 transition-colors hover:bg-white/5"
+        >
+          <Eye className="h-4 w-4" />
+          Preview one round
         </button>
         <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
           Skip
@@ -95,7 +123,7 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
     <div className="relative flex h-full w-full flex-col items-center justify-center px-6 text-center">
       <p className="mb-1 text-xs uppercase tracking-widest text-white/40">{p.name}</p>
       <p className="mb-10 text-sm text-white/40">
-        {done ? `${p.rounds} rounds complete` : `Round ${round} of ${p.rounds}`}
+        {isPreview ? 'Preview' : done ? `${p.rounds} rounds complete` : `Round ${round} of ${p.rounds}`}
       </p>
 
       <div className="relative flex h-64 w-64 items-center justify-center">
@@ -121,10 +149,19 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
             {paused ? <Play className="h-4 w-4 fill-current" /> : <Pause className="h-4 w-4" />}
             {paused ? 'Resume' : 'Pause'}
           </button>
-          <button onClick={onDone} className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
-            Skip
-            <ArrowRight className="h-4 w-4" />
-          </button>
+          {isPreview ? (
+            <button
+              onClick={() => { setMode('ready'); setRound(1); setPhaseIdx(0); setPaused(false) }}
+              className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70"
+            >
+              Back
+            </button>
+          ) : (
+            <button onClick={onDone} className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+              Skip
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          )}
         </div>
       )}
     </div>
