@@ -36,6 +36,8 @@ export interface BreathProtocol {
   id: string
   name: string
   bestFor: string
+  /** A fuller explanation shown on the breath ready screen. */
+  description: string
   rounds: number
   phases: BreathPhase[]
 }
@@ -45,6 +47,8 @@ export const BREATH_PROTOCOLS: Record<string, BreathProtocol> = {
     id: 'sigh',
     name: 'Physiological Sigh',
     bestFor: 'Fastest stress drop',
+    description:
+      'A double inhale then a long, slow exhale — the quickest way to calm your nervous system. Offloads CO₂ fast and downshifts stress in about a minute.',
     rounds: 3,
     phases: [
       { label: 'Inhale', durationMs: 2200, instruction: 'Inhale through your nose' },
@@ -55,7 +59,9 @@ export const BREATH_PROTOCOLS: Record<string, BreathProtocol> = {
   box: {
     id: 'box',
     name: 'Box Breathing',
-    bestFor: 'Calm focus',
+    bestFor: 'Calm, locked-in focus',
+    description:
+      'Equal counts — in, hold, out, hold. Steadies your heart rate and sharpens focus under pressure. A favorite of Navy SEALs before high-stakes moments.',
     rounds: 4,
     phases: [
       { label: 'Inhale', durationMs: 4000, instruction: 'In through the nose' },
@@ -68,6 +74,8 @@ export const BREATH_PROTOCOLS: Record<string, BreathProtocol> = {
     id: '478',
     name: '4-7-8',
     bestFor: 'Wind down',
+    description:
+      'A long hold and an even longer exhale to put the body in rest mode. Best for unwinding tension or settling down before sleep.',
     rounds: 4,
     phases: [
       { label: 'Inhale', durationMs: 4000, instruction: 'In through the nose' },
