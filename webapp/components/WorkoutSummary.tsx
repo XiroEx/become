@@ -378,7 +378,7 @@ export default function WorkoutSummary({
         </button>
         {programCompleted && programId ? (
           <Link
-            href={`/dashboard/programming/${programId}/journey`}
+            href={`/dashboard/workout/${programId}/journey`}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-yellow-500/40 py-3.5 text-sm font-semibold text-yellow-700 transition-all hover:border-yellow-500/70 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-300"
           >
             <Trophy className="h-4 w-4" /> See Your Full Journey

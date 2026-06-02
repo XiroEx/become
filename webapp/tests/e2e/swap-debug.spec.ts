@@ -19,7 +19,7 @@ test('Swap modal — mobile screenshot', async ({ page, context }) => {
   await page.goto(`${BASE_URL}/login`);
   await page.evaluate((t) => localStorage.setItem('token', t), AUTH_TOKEN);
 
-  await page.goto(`${BASE_URL}/dashboard/programming/program_jon_don_split/workout/live?day=Day%201`);
+  await page.goto(`${BASE_URL}/dashboard/workout/program_jon_don_split/workout/live?day=Day%201`);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForFunction(() => !document.querySelector('.animate-spin'), { timeout: 15000 }).catch(() => {});
 

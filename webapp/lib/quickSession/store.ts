@@ -56,5 +56,5 @@ export function readQuickSession(sessionId: string): StoredQuickSession | null {
 
 /** The live route URL for a stashed quick session. */
 export function quickSessionLiveHref(sessionId: string): string {
-  return `/dashboard/programming/${QUICK_PROGRAM_ID}/workout/live?session=${encodeURIComponent(sessionId)}`
+  return `/dashboard/workout/${QUICK_PROGRAM_ID}/workout/live?session=${encodeURIComponent(sessionId)}`
 }

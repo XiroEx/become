@@ -18,7 +18,7 @@ export function canAccessRoute(role: UserRole, route: string): boolean {
     return role === 'admin';
   }
   // Legacy program-create path now redirects into admin
-  if (route.startsWith('/dashboard/programming/create')) {
+  if (route.startsWith('/dashboard/workout/create')) {
     return role === 'admin';
   }
   return true;

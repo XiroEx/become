@@ -556,7 +556,7 @@ export default function CalendarClient() {
             </p>
           </div>
           <Link
-            href="/dashboard/programming#browse-programs"
+            href="/dashboard/workout#browse-programs"
             className="rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
             Browse Programs
@@ -734,7 +734,7 @@ export default function CalendarClient() {
                           <div className="mt-3 flex flex-wrap gap-2">
                             {isProgramPaused ? (
                               <Link
-                                href={`/dashboard/programming/${w.programId}`}
+                                href={`/dashboard/workout/${w.programId}`}
                                 className="flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
                               >
                                 Resume Program
@@ -744,7 +744,7 @@ export default function CalendarClient() {
                                 {w.status === 'scheduled' && (
                                   <>
                                     <Link
-                                      href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
                                       className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                     >
                                       <Dumbbell className="h-3 w-3" />
@@ -762,7 +762,7 @@ export default function CalendarClient() {
                                 {w.status === 'missed' && (
                                   <>
                                     <Link
-                                      href={`/dashboard/programming/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
                                       className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                     >
                                       <Dumbbell className="h-3 w-3" />

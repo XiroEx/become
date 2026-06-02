@@ -16,7 +16,7 @@ import { authenticate, BASE_URL, AUTH_TOKEN } from './test-auth';
 // ─── Enrollment helper ───────────────────────────────────────────────────────
 
 async function ensureEnrolledAndScheduled(page: Page, programId: string) {
-  await page.goto(`${BASE_URL}/dashboard/programming/${programId}`);
+  await page.goto(`${BASE_URL}/dashboard/workout/${programId}`);
   await page.waitForLoadState('domcontentloaded');
 
   // Wait for any of the key buttons to appear (indicating page loaded)
@@ -122,7 +122,7 @@ async function runLiveWorkout(page: Page, programId: string, day: string): Promi
     finalButtonText: '',
   };
 
-  const liveUrl = `${BASE_URL}/dashboard/programming/${programId}/workout/live?day=${encodeURIComponent(day)}`;
+  const liveUrl = `${BASE_URL}/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(day)}`;
   await page.goto(liveUrl);
   await page.waitForLoadState('domcontentloaded');
 
@@ -436,7 +436,7 @@ test.describe('Live Workout Completability', () => {
     await ensureEnrolledAndScheduled(page, programId);
 
     // Go to program detail
-    await page.goto(`${BASE_URL}/dashboard/programming/${programId}`);
+    await page.goto(`${BASE_URL}/dashboard/workout/${programId}`);
     await page.waitForLoadState('domcontentloaded');
 
     // Wait for Continue Program button

@@ -49,15 +49,15 @@ export default function BottomNav() {
       <ul className="mx-auto flex max-w-2xl items-center justify-around px-2 py-1 sm:px-4 sm:py-1.5">
         <li className="flex-1">
           <Link
-            href="/dashboard/programming"
+            href="/dashboard/workout"
             className={`flex flex-col items-center gap-0.5 pt-1 pb-0.5 text-[10px] font-medium transition-colors sm:text-xs ${
-              isActive('/dashboard/programming')
+              isActive('/dashboard/workout')
                 ? 'text-black dark:text-white'
                 : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
             }`}
           >
             <ClipboardList className="h-5 w-5" />
-            Programs
+            Workout
           </Link>
         </li>
         <li className="flex-1">

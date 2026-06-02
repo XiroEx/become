@@ -119,7 +119,7 @@ export default function NewProgramClient() {
 
             <div className="mt-4">
               <Link
-                href="/dashboard/programming"
+                href="/dashboard/workout"
                 className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
               >
                 Back to Programs

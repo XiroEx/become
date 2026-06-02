@@ -369,7 +369,7 @@ export default function ProgrammingClient() {
       <div className="mb-4 sm:mb-8">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
-            Programs
+            Workout
           </h1>
           <Link
             href="/dashboard/history"
@@ -384,7 +384,7 @@ export default function ProgrammingClient() {
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Link
-            href="/dashboard/programming/library"
+            href="/dashboard/workout/library"
             className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
             <Dumbbell className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
@@ -432,7 +432,7 @@ export default function ProgrammingClient() {
                 accent={isPaused ? 'warning' : isFuture ? 'info' : 'success'}
                 className="group transition-colors duration-200 hover:border-zinc-300 dark:hover:border-zinc-700"
               >
-                <Link href={`/dashboard/programming/${program.programId}`} className="block">
+                <Link href={`/dashboard/workout/${program.programId}`} className="block">
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
@@ -480,7 +480,7 @@ export default function ProgrammingClient() {
                 </Link>
                 {isPaused ? (
                   <Link
-                    href={`/dashboard/programming/${program.programId}`}
+                    href={`/dashboard/workout/${program.programId}`}
                     className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition-transform duration-200 hover:scale-110 hover:bg-amber-600 active:scale-95"
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -488,7 +488,7 @@ export default function ProgrammingClient() {
                   </Link>
                 ) : (
                   <Link
-                    href={`/dashboard/programming/${program.programId}/workout`}
+                    href={`/dashboard/workout/${program.programId}/workout`}
                     className={`absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition-transform duration-200 hover:scale-110 active:scale-95 ${
                       isFuture ? 'bg-blue-500 hover:bg-blue-600' : 'bg-green-500 hover:bg-green-600'
                     }`}
@@ -570,7 +570,7 @@ export default function ProgrammingClient() {
 
                 {/* Content - Clickable Link */}
                 <Link 
-                  href={`/dashboard/programming/${program.program_id}`}
+                  href={`/dashboard/workout/${program.program_id}`}
                   className="min-w-0 flex-1"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -684,7 +684,7 @@ export default function ProgrammingClient() {
                 </button>
 
                 {/* Content */}
-                <Link href={`/dashboard/programming/${program.program_id}`} className="min-w-0 flex-1">
+                <Link href={`/dashboard/workout/${program.program_id}`} className="min-w-0 flex-1">
                   <div className="flex items-center gap-3">
                     <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
                       {program.name}
@@ -901,7 +901,7 @@ export default function ProgrammingClient() {
 
                 {/* Content - Link */}
                 <Link
-                  href={`/dashboard/programming/${program.program_id}`}
+                  href={`/dashboard/workout/${program.program_id}`}
                   className="min-w-0 flex-1"
                 >
                   <div className="flex items-center gap-3">

@@ -296,7 +296,7 @@ export default function ProgramCreator({
       if (isUserMode) {
         const newId = saved?.program_id || programId;
         if (newId) {
-          router.push(`/dashboard/programming/${newId}`);
+          router.push(`/dashboard/workout/${newId}`);
         } else {
           router.push('/dashboard/programs/mine');
         }

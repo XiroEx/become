@@ -139,7 +139,7 @@ export const neglectedMuscleSource: SuggestionSourceFn = async (
     severity: 'nudge',
     title: `Bring ${missing.label} back in`,
     body: `Your recent logs do not show much ${missing.label} work. Add one focused movement this week to keep the plan balanced.`,
-    primaryAction: { label: 'Browse exercises', href: '/dashboard/programming/library' },
+    primaryAction: { label: 'Browse exercises', href: '/dashboard/workout/library' },
     dismissible: true,
     cooldownDays: 7,
     source: 'workout',
