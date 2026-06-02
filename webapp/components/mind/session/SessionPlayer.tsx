@@ -21,6 +21,9 @@ import {
 import StateCheckScene from './scenes/StateCheckScene'
 import BreathScene from './scenes/BreathScene'
 import IdentityScene from './scenes/IdentityScene'
+import ChallengeScene from './scenes/ChallengeScene'
+import WinScene from './scenes/WinScene'
+import MissionScene from './scenes/MissionScene'
 
 interface CompleteResult {
   xpAwarded: number
@@ -165,6 +168,9 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
                 <BreathScene move={move} protocol={resolvedProtocol} onDone={next} />
               )}
               {move.kind === 'identity' && <IdentityScene move={move} onDone={next} />}
+              {move.kind === 'challenge' && <ChallengeScene move={move} onDone={next} />}
+              {move.kind === 'win' && <WinScene move={move} onDone={next} />}
+              {move.kind === 'mission' && <MissionScene move={move} onDone={next} />}
             </motion.div>
           )}
 
