@@ -21,6 +21,8 @@ export type MoveKind =
   | 'vision'
   | 'antisabotage'
   | 'social'
+  | 'mirror'
+  | 'choice'
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
@@ -121,6 +123,8 @@ export interface Move {
   protocolId?: string // breath  → key in BREATH_PROTOCOLS ('auto' = resolve from live state)
   statement?: string // identity → the affirmation
   prompt?: string // win        → the reflection prompt
+  /** choice → multiple-choice options, each with an optional reframe shown on pick. */
+  options?: { label: string; response?: string }[]
   source?: string // attribution (e.g. a book) when drawn from the content library
   /** XP this move contributes to the session payoff (display only; server is source of truth). */
   xp: number

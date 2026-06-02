@@ -81,6 +81,51 @@ function socialMove(): Move {
   return { id: 'social', kind: 'social', title: 'Accountability', subtitle: 'Pull someone into your progress.', xp: 5 }
 }
 
+function mirrorMove(ctx: SessionContext): Move {
+  const sd = ctx.seed ?? ctx.dayOfYear
+  const statement =
+    ctx.identityStatement && ctx.identityStatement.trim().length > 0
+      ? ctx.identityStatement.trim()
+      : IDENTITY_POOL[sd % IDENTITY_POOL.length]
+  return { id: 'mirror', kind: 'mirror', title: 'Mirror', subtitle: 'Look at yourself. Say it.', statement, xp: 5 }
+}
+
+// Multiple-choice reflections — a different modality from read/affirm. Each
+// option carries a short reframe shown on pick.
+const CHOICE_POOL: { q: string; options: { label: string; response: string }[] }[] = [
+  {
+    q: "What's actually pulling you off course right now?",
+    options: [
+      { label: 'Comfort', response: "Comfort is the enemy of who you're becoming. Choose the harder right." },
+      { label: 'Fear', response: 'Fear means it matters. Move toward it — one small step, now.' },
+      { label: 'Other people', response: "Their noise isn't your mission. Get back in your lane." },
+      { label: 'No clear plan', response: 'Clarity comes from action. Pick the one next move.' },
+    ],
+  },
+  {
+    q: 'Finishing today strong takes what, exactly?',
+    options: [
+      { label: 'Starting now', response: 'Then start. Momentum is built, not found.' },
+      { label: 'Saying no', response: 'Protect the standard. No is a complete sentence.' },
+      { label: 'Asking for help', response: 'Strength asks. Reach out today.' },
+      { label: 'Just showing up', response: "Showing up is the whole game. You're here." },
+    ],
+  },
+  {
+    q: 'Which version of you shows up in the next hour?',
+    options: [
+      { label: 'The one who follows through', response: 'Good. Let the action prove it.' },
+      { label: 'The one who makes excuses', response: 'Name it — then do the opposite.' },
+      { label: 'Not sure yet', response: 'You decide. Choose on purpose.' },
+    ],
+  },
+]
+
+function choiceMove(ctx: SessionContext): Move {
+  const item = CHOICE_POOL[(ctx.seed ?? ctx.dayOfYear) % CHOICE_POOL.length]
+  return { id: 'choice', kind: 'choice', title: item.q, subtitle: 'No wrong answer.', options: item.options, xp: 5 }
+}
+
 /** Build a single move of the given kind (used by the Arsenal launcher). */
 export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
   switch (kind) {
@@ -92,6 +137,8 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
     case 'vision': return visionMove(ctx)
     case 'antisabotage': return antisabotageMove()
     case 'social': return socialMove()
+    case 'mirror': return mirrorMove(ctx)
+    case 'choice': return choiceMove(ctx)
     default: return stateCheckMove()
   }
 }
@@ -149,11 +196,6 @@ const SYSTEM_TO_MOVE: Partial<Record<string, MoveKind>> = {
   social: 'social',
 }
 
-/** True if tapping this Arsenal system should launch an interactive session. */
-export function systemHasScene(systemId: string): boolean {
-  return systemId in SYSTEM_TO_MOVE
-}
-
 /**
  * A one-move session for an Arsenal tool. Returns null for systems without a
  * scene yet (caller links to the section page instead).
@@ -165,5 +207,51 @@ export function singleMovePlan(systemId: string, ctx: SessionContext): MindSessi
     intro: { title: 'One move', subtitle: 'A focused rep — whenever you need it.' },
     moves: [buildMove(kind, ctx)],
     rewardXp: 0, // standalone reps don't grant the daily ritual XP
+  }
+}
+
+// ─── Focused (themed) sessions — the "More" destination ───────────────────────
+//
+// Each unlocked system can be played as a SHORT, DYNAMIC session: a fixed core
+// move for the theme + a couple extras sampled (and rotated by seed) from a
+// relevant pool — different every time, Duolingo-replay style, while staying
+// on-theme. Not "click one item" — a real little session.
+
+const THEME_CONFIG: Record<string, { title: string; subtitle: string; core: MoveKind; pool: MoveKind[] }> = {
+  'state-shift':   { title: 'Reset',       subtitle: 'Drop the stress, find your center.',     core: 'breath',       pool: ['state-check', 'identity', 'mirror', 'choice'] },
+  'self-image':    { title: 'Identity',    subtitle: "Reinforce who you're becoming.",         core: 'identity',     pool: ['mirror', 'choice', 'win'] },
+  vision:          { title: 'Vision',      subtitle: 'See it. Become it.',                      core: 'vision',       pool: ['identity', 'mirror', 'win', 'choice'] },
+  mission:         { title: 'Mission',     subtitle: 'Lock into your why.',                     core: 'mission',      pool: ['identity', 'win', 'choice'] },
+  discipline:      { title: 'Discipline',  subtitle: 'Do the hard thing.',                      core: 'challenge',    pool: ['identity', 'choice', 'win'] },
+  'anti-sabotage': { title: 'Defense',     subtitle: 'Catch the pattern before it runs you.',   core: 'antisabotage', pool: ['choice', 'identity', 'mirror'] },
+  social:          { title: 'Environment', subtitle: 'Engineer your circle.',                   core: 'social',       pool: ['identity', 'win', 'choice'] },
+}
+
+/** True if a system can be played as a focused session (all 7 now can). */
+export function systemHasScene(systemId: string): boolean {
+  return systemId in THEME_CONFIG
+}
+
+/**
+ * A short, varied, on-theme session for an Arsenal tile. Returns null for an
+ * unknown system. Standalone reps grant no daily ritual XP (rewardXp 0), but
+ * their moves still hit their own endpoints (state / discipline / wins).
+ */
+export function composeThemedSession(systemId: string, ctx: SessionContext): MindSessionPlan | null {
+  const cfg = THEME_CONFIG[systemId]
+  if (!cfg) return null
+  const seed = ctx.seed ?? ctx.dayOfYear
+  // Rotate the pool by seed, take 2 distinct extras → a 3-move set that varies.
+  const rotated = cfg.pool.map((_, i) => cfg.pool[(i + seed) % cfg.pool.length])
+  const extras: MoveKind[] = []
+  for (const k of rotated) {
+    if (extras.length >= 2) break
+    if (k !== cfg.core && !extras.includes(k)) extras.push(k)
+  }
+  const kinds: MoveKind[] = [cfg.core, ...extras]
+  return {
+    intro: { title: cfg.title, subtitle: cfg.subtitle },
+    moves: kinds.map((k) => buildMove(k, ctx)),
+    rewardXp: 0,
   }
 }

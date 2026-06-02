@@ -28,6 +28,8 @@ import MissionScene from './scenes/MissionScene'
 import VisionScene from './scenes/VisionScene'
 import PatternScene from './scenes/PatternScene'
 import SocialScene from './scenes/SocialScene'
+import MirrorScene from './scenes/MirrorScene'
+import ChoiceScene from './scenes/ChoiceScene'
 
 interface CompleteResult {
   xpAwarded: number
@@ -205,6 +207,8 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
               {move.kind === 'vision' && <VisionScene move={move} onDone={next} />}
               {move.kind === 'antisabotage' && <PatternScene move={move} onDone={next} />}
               {move.kind === 'social' && <SocialScene move={move} onDone={next} />}
+              {move.kind === 'mirror' && <MirrorScene move={move} onDone={next} />}
+              {move.kind === 'choice' && <ChoiceScene move={move} onDone={next} />}
             </motion.div>
           )}
 

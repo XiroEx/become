@@ -36,6 +36,8 @@ const MOVE_CHIP: Record<MoveKind, string> = {
   vision: 'Vision',
   antisabotage: 'Pattern',
   social: 'Connect',
+  mirror: 'Mirror',
+  choice: 'Reflect',
 }
 
 function dayOfYear(): number {
@@ -261,9 +263,9 @@ export default function MindJourney() {
         className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
       >
         <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white">More</p>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-white">Focused sessions</p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Your arsenal — {unlockedCount} {unlockedCount === 1 ? 'tool' : 'tools'} unlocked
+            Reset, vision, discipline &amp; more — {unlockedCount} unlocked
           </p>
         </div>
         <ChevronRight className="h-5 w-5 text-zinc-400" />
