@@ -5,10 +5,10 @@
 // ritual) is THE thing on screen; a quiet "More →" leads to the Arsenal of
 // unlocked tools. Begin → launches the immersive SessionPlayer.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Brain, ArrowRight, Sparkles, Check, ChevronRight } from 'lucide-react'
+import { Brain, ArrowRight, Sparkles, Check, ChevronRight, Flame } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
@@ -52,6 +52,7 @@ export default function MindJourney() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
   const [completedToday, setCompletedToday] = useState(false)
+  const [streak, setStreak] = useState(0)
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
@@ -82,6 +83,7 @@ export default function MindJourney() {
       if (sessionRes.ok) {
         const s = await sessionRes.json()
         setCompletedToday(!!s.completedToday)
+        setStreak(s.streak ?? 0)
       }
       if (stateRes.ok) {
         const st = await stateRes.json()
@@ -159,17 +161,52 @@ export default function MindJourney() {
     <PageTransition className="pb-6">
       {/* Header — calm, minimal */}
       <header className="mb-5">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
-          <Brain className="h-6 w-6 text-violet-500" />
-          Mindset
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
+            <Brain className="h-6 w-6 text-violet-500" />
+            Mindset
+          </h1>
+          {streak > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-sm font-bold text-orange-600 dark:bg-orange-500/15 dark:text-orange-300">
+              <Flame className="h-4 w-4" />
+              {streak}
+            </span>
+          )}
+        </div>
         <div className="mt-3 flex items-center gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
             Ch.{chapter} · {chapterName}
           </span>
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
             <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${pct}%` }} />
           </div>
+        </div>
+
+        {/* Visual chapter path */}
+        <div className="mt-4 flex items-center">
+          {CHAPTERS.map((c, i) => {
+            const done = c.id < chapter
+            const current = c.id === chapter
+            return (
+              <Fragment key={c.id}>
+                {i > 0 && (
+                  <div className={`h-0.5 flex-1 ${c.id <= chapter ? 'bg-violet-500' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
+                )}
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                    done
+                      ? 'bg-violet-500 text-white'
+                      : current
+                        ? 'bg-white text-violet-600 ring-2 ring-violet-500 dark:bg-zinc-900'
+                        : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                  }`}
+                  title={c.name}
+                >
+                  {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : c.id}
+                </div>
+              </Fragment>
+            )
+          })}
         </div>
       </header>
 

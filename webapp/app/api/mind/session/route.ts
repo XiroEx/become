@@ -14,6 +14,44 @@ import { getXpToNextChapter, isReadyToLevelUp } from '@/lib/mindXP'
 
 const SESSION_REWARD_XP = 15
 
+// Consecutive-day streak of completed Mind sessions, anchored to the caller's
+// local day. Counts today if done, otherwise starts from yesterday (so the
+// streak holds until the day actually lapses).
+function computeStreak(dateKeys: string[], todayKey: string): number {
+  const set = new Set(dateKeys)
+  const toDate = (k: string) => {
+    const [y, m, d] = k.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+  const fmt = (dt: Date) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+
+  const today = toDate(todayKey)
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+
+  let cursor: Date
+  if (set.has(todayKey)) cursor = today
+  else if (set.has(fmt(yesterday))) cursor = yesterday
+  else return 0
+
+  let streak = 0
+  while (set.has(fmt(cursor))) {
+    streak++
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
+}
+
+async function streakFor(userId: string, todayKey: string): Promise<number> {
+  const docs = await MindSession.find({ userId })
+    .select('dateKey')
+    .sort({ dateKey: -1 })
+    .limit(120)
+    .lean<{ dateKey: string }[]>()
+  return computeStreak(docs.map((d) => d.dateKey), todayKey)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
@@ -25,8 +63,9 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
     const doc = await MindSession.findOne({ userId: auth.userId, dateKey }).lean()
+    const streak = await streakFor(auth.userId!, dateKey)
 
-    return NextResponse.json({ dateKey, completedToday: !!doc })
+    return NextResponse.json({ dateKey, completedToday: !!doc, streak })
   } catch (err) {
     console.error('GET /api/mind/session error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -70,12 +109,14 @@ export async function POST(request: NextRequest) {
     const progress = await MindProgress.findOne({ userId: auth.userId }).lean<{ chapter?: number; xp?: number } | null>()
     const chapter = progress?.chapter ?? 1
     const xp = progress?.xp ?? 0
+    const streak = await streakFor(auth.userId!, dateKey)
 
     return NextResponse.json({
       alreadyComplete: !firstToday,
       xpAwarded,
       chapter,
       xp,
+      streak,
       xpProgress: getXpToNextChapter(chapter, xp),
       readyToLevelUp: isReadyToLevelUp(chapter, xp),
     })
