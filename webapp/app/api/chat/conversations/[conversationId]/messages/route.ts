@@ -89,8 +89,19 @@ export async function POST(
   const { text, imageUrl } = body as { text?: string; imageUrl?: string };
 
   const hasText = typeof text === 'string' && text.trim().length > 0;
-  // Only accept our own blob URLs as attachments (no arbitrary external URLs).
-  const hasImage = typeof imageUrl === 'string' && imageUrl.startsWith('/api/blob/');
+  // Accept our own blob URLs (uploads) or GIPHY CDN URLs (the GIF picker) only —
+  // never arbitrary external URLs.
+  const isAllowedImageUrl = (u?: string): boolean => {
+    if (typeof u !== 'string') return false;
+    if (u.startsWith('/api/blob/')) return true;
+    try {
+      const h = new URL(u).hostname;
+      return h === 'giphy.com' || h.endsWith('.giphy.com');
+    } catch {
+      return false;
+    }
+  };
+  const hasImage = isAllowedImageUrl(imageUrl);
 
   if (!hasText && !hasImage) {
     return NextResponse.json({ error: 'Message text or image is required' }, { status: 400 });
