@@ -66,6 +66,21 @@ export async function bridgeToBecomeSession(identity: BridgeIdentity): Promise<B
   return { token, user: { id: String(user._id), name: user.name, email: user.email }, isNew }
 }
 
+/**
+ * The PUBLIC origin to build redirects from. Behind Traefik, `req.url`/Host is
+ * the container's internal bind address (0.0.0.0:PORT), which the browser can't
+ * load ("restricted network port"). Prefer the forwarded host, then the
+ * configured app URL; never fall back to an internal/loopback host.
+ */
+export function publicOrigin(req: { headers: Headers }): string {
+  const fwdHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || ''
+  const host = fwdHost.split(',')[0].trim()
+  const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()
+  const bad = !host || host.startsWith('0.0.0.0') || host.startsWith('localhost') || host.startsWith('127.')
+  if (!bad) return `${proto}://${host}`
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://become.redbtn.io'
+}
+
 /** Build the Become auth cookie header (mirrors verify-link's 7-day HttpOnly cookie). */
 export function authCookie(token: string): string {
   const maxAge = 7 * 24 * 60 * 60
