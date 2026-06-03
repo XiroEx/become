@@ -350,7 +350,7 @@ export default function NutritionGoalsPage() {
           <div className="mt-4 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50">
             <p className="mb-3 text-xs font-medium text-zinc-500 dark:text-zinc-400">
               Fill in missing info for TDEE calculation{' '}
-              <a href="/dashboard/profile" className="text-blue-600 underline dark:text-blue-400">or update your profile</a>
+              <a href="/dashboard/settings" className="text-blue-600 underline dark:text-blue-400">or update your details</a>
             </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {!userAge && (
