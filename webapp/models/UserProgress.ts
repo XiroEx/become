@@ -119,6 +119,7 @@ export interface IUserProgress {
     streakAtRisk?: boolean
     workoutReminder?: boolean
     reEngagement?: boolean
+    chatMessage?: boolean
   }
   lastPushSentAt?: {
     streakAtRisk?: Date
@@ -342,6 +343,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     streakAtRisk: { type: Boolean },
     workoutReminder: { type: Boolean },
     reEngagement: { type: Boolean },
+    chatMessage: { type: Boolean },
   },
   lastPushSentAt: {
     streakAtRisk: { type: Date },
