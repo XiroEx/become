@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     await dbConnect();
     const user = await User.findById(authResult.userId)
-      .select('name email profile onboardingCompleted profileIcon avatarUrl')
+      .select('name email profile onboardingCompleted profileIcon avatarUrl createdAt')
       .lean();
 
     if (!user) {
@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
       email: user.email,
       profileIcon: user.profileIcon ?? null,
       avatarUrl: user.avatarUrl ?? null,
+      createdAt: user.createdAt ?? null,
     });
   } catch (error) {
     console.error('Error fetching profile:', error);
@@ -103,7 +104,7 @@ export async function PATCH(request: NextRequest) {
       { $set: update },
       { new: true }
     )
-      .select('name email profile onboardingCompleted profileIcon avatarUrl')
+      .select('name email profile onboardingCompleted profileIcon avatarUrl createdAt')
       .lean();
 
     if (!updatedUser) {
