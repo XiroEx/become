@@ -68,7 +68,7 @@ export default function IdentityScene({ move, onDone }: SceneProps) {
       <RevealText
         text={`“${move.statement}”`}
         onComplete={() => setReady(true)}
-        speed={4}
+        speed={2}
         className="mt-6 max-w-sm text-2xl font-bold leading-snug text-white"
       />
 
