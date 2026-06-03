@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Loader2, Upload } from 'lucide-react'
 import Avatar from '@/components/Avatar'
+import AvatarCropModal from '@/components/profile/AvatarCropModal'
 import { PRESET_ICONS } from '@/lib/reward/icons'
 import { getToken } from '@/lib/clientAuth'
 
@@ -18,6 +19,7 @@ export default function IconPicker() {
   const [loaded, setLoaded] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -56,15 +58,22 @@ export default function IconPicker() {
     }
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  // Pick a file → open the crop/zoom editor (don't upload raw).
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-selecting the same file
     if (!file) return
     setError(null)
+    setCropSrc(URL.createObjectURL(file))
+  }
+
+  // Receive the cropped 512×512 JPEG from the editor and upload it.
+  async function uploadCropped(blob: Blob) {
     setUploading(true)
+    setError(null)
     try {
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', new File([blob], 'avatar.jpg', { type: 'image/jpeg' }))
       const res = await fetch('/api/profile/avatar', {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken() ?? ''}` },
@@ -77,11 +86,17 @@ export default function IconPicker() {
       }
       setAvatarUrl(data.avatarUrl)
       setCurrent('custom')
+      closeCrop()
     } catch {
       setError('Upload failed')
     } finally {
       setUploading(false)
     }
+  }
+
+  function closeCrop() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc)
+    setCropSrc(null)
   }
 
   return (
@@ -138,9 +153,13 @@ export default function IconPicker() {
         </button>
       </div>
 
-      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onFile} className="hidden" />
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
       {error && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">Or upload your own — JPG, PNG, WebP or GIF, up to 5MB.</p>
+      <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">Or upload your own — position and zoom it to fit.</p>
+
+      {cropSrc && (
+        <AvatarCropModal src={cropSrc} saving={uploading} onCancel={closeCrop} onSave={uploadCropped} />
+      )}
     </section>
   )
 }

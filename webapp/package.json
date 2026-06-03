@@ -37,6 +37,7 @@
     "nodemailer": "^7.0.12",
     "react": "19.2.1",
     "react-dom": "19.2.1",
+    "react-easy-crop": "^5.5.7",
     "recharts": "^3.6.0",
     "web-push": "^3.6.7"
   },
