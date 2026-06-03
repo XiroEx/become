@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
+import PasskeySetupButton from '@/components/PasskeySetupButton'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
@@ -507,6 +508,7 @@ export default function ProfilePage() {
                 />
                 <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Email cannot be changed.</p>
               </div>
+              <PasskeySetupButton />
             </div>
           </section>
 
