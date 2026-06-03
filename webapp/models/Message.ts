@@ -5,6 +5,8 @@ export interface IMessage {
   conversationId: mongoose.Types.ObjectId;
   senderId: mongoose.Types.ObjectId;
   text: string;
+  /** Same-origin blob URL (/api/blob/...) for an image or GIF attachment. */
+  imageUrl?: string;
   readBy: mongoose.Types.ObjectId[];
   createdAt?: Date;
 }
@@ -12,7 +14,9 @@ export interface IMessage {
 const MessageSchema = new Schema<IMessage>({
   conversationId: { type: Schema.Types.ObjectId, ref: 'Conversation', required: true, index: true },
   senderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  text: { type: String, required: true, maxlength: 5000 },
+  // text is optional — a message may be image-only (route enforces text || imageUrl).
+  text: { type: String, default: '', maxlength: 5000 },
+  imageUrl: { type: String },
   readBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
 

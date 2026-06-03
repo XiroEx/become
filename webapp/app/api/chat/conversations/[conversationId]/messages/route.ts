@@ -86,27 +86,34 @@ export async function POST(
   }
 
   const body = await request.json();
-  const { text } = body;
+  const { text, imageUrl } = body as { text?: string; imageUrl?: string };
 
-  if (!text || typeof text !== 'string' || text.trim().length === 0) {
-    return NextResponse.json({ error: 'Message text is required' }, { status: 400 });
+  const hasText = typeof text === 'string' && text.trim().length > 0;
+  // Only accept our own blob URLs as attachments (no arbitrary external URLs).
+  const hasImage = typeof imageUrl === 'string' && imageUrl.startsWith('/api/blob/');
+
+  if (!hasText && !hasImage) {
+    return NextResponse.json({ error: 'Message text or image is required' }, { status: 400 });
   }
-
-  if (text.length > 5000) {
+  if (hasText && text!.length > 5000) {
     return NextResponse.json({ error: 'Message too long (max 5000 characters)' }, { status: 400 });
   }
+
+  const cleanText = hasText ? text!.trim() : '';
 
   // Create the message
   const message = await Message.create({
     conversationId: new mongoose.Types.ObjectId(conversationId),
     senderId: userId,
-    text: text.trim(),
+    text: cleanText,
+    ...(hasImage ? { imageUrl } : {}),
     readBy: [userId], // sender has read their own message
   });
 
-  // Update conversation's lastMessage
+  // Update conversation's lastMessage (photo placeholder when image-only)
+  const lastText = cleanText ? cleanText.substring(0, 100) : '📷 Photo';
   conversation.lastMessage = {
-    text: text.trim().substring(0, 100),
+    text: lastText,
     senderId: userId,
     sentAt: new Date(),
   };
@@ -134,7 +141,9 @@ export async function POST(
         .lean()
       const optedOutIds = new Set(optedOut.map((p: { userId: unknown }) => String(p.userId)))
       const targets = recipientIds.filter((id: string) => !optedOutIds.has(id))
-      const preview = text.trim().length > 120 ? text.trim().slice(0, 117) + '…' : text.trim()
+      const preview = cleanText
+        ? (cleanText.length > 120 ? cleanText.slice(0, 117) + '…' : cleanText)
+        : '📷 Photo'
       await Promise.allSettled(
         targets.map((id: string) =>
           sendPushToUser(id, {
