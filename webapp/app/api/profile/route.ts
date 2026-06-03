@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     await dbConnect();
     const user = await User.findById(authResult.userId)
-      .select('name email profile onboardingCompleted')
+      .select('name email profile onboardingCompleted profileIcon avatarUrl')
       .lean();
 
     if (!user) {
@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
       onboardingCompleted: user.onboardingCompleted,
       name: user.name,
       email: user.email,
+      profileIcon: user.profileIcon ?? null,
+      avatarUrl: user.avatarUrl ?? null,
     });
   } catch (error) {
     console.error('Error fetching profile:', error);
@@ -48,6 +50,8 @@ export async function PATCH(request: NextRequest) {
       profile?: Partial<IUserProfile>;
       onboardingCompleted?: boolean;
       name?: string;
+      profileIcon?: string;
+      avatarUrl?: string;
     };
 
     // Allowed profile sub-keys. Keep this list explicit so a malformed body
@@ -77,6 +81,12 @@ export async function PATCH(request: NextRequest) {
     if (body.onboardingCompleted !== undefined) {
       update['onboardingCompleted'] = body.onboardingCompleted;
     }
+    if (body.profileIcon !== undefined) {
+      update['profileIcon'] = body.profileIcon;
+    }
+    if (body.avatarUrl !== undefined) {
+      update['avatarUrl'] = body.avatarUrl;
+    }
     if (body.profile !== undefined) {
       for (const [key, value] of Object.entries(body.profile)) {
         if (!ALLOWED_PROFILE_KEYS.includes(key as keyof IUserProfile)) continue;
@@ -93,7 +103,7 @@ export async function PATCH(request: NextRequest) {
       { $set: update },
       { new: true }
     )
-      .select('name email profile onboardingCompleted')
+      .select('name email profile onboardingCompleted profileIcon avatarUrl')
       .lean();
 
     if (!updatedUser) {
@@ -105,6 +115,8 @@ export async function PATCH(request: NextRequest) {
       onboardingCompleted: updatedUser.onboardingCompleted,
       name: updatedUser.name,
       email: updatedUser.email,
+      profileIcon: updatedUser.profileIcon ?? null,
+      avatarUrl: updatedUser.avatarUrl ?? null,
     });
   } catch (error) {
     console.error('Error updating profile:', error);

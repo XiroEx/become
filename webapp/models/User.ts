@@ -61,8 +61,11 @@ export interface IUser {
    *  redauth-backed login (Google / passkey); backfilled by email for existing
    *  magic-link/password users. */
   authId?: string;
-  /** Profile picture from a social provider (e.g. Google), if any. */
+  /** Profile picture from a social provider (e.g. Google) or a custom upload. */
   avatarUrl?: string;
+  /** Equipped profile icon: a PRESET_ICONS id, or 'custom' to use avatarUrl.
+   *  Default is derived from the onboarding fitness goal. */
+  profileIcon?: string;
   createdAt?: Date
   updatedAt?: Date
 }
@@ -126,6 +129,7 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   onboardingCompleted: { type: Boolean, default: false },
   authId: { type: String, default: null },
   avatarUrl: { type: String },
+  profileIcon: { type: String },
 }, {
   timestamps: true,
 })
