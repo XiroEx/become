@@ -14,6 +14,7 @@ import {
   Check,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { defaultIconForGoal } from '@/lib/reward/icons'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -202,7 +203,12 @@ export default function OnboardingPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ profile: payload, onboardingCompleted: true }),
+        body: JSON.stringify({
+          profile: payload,
+          onboardingCompleted: true,
+          // Give every new user a starter profile icon matched to their goal.
+          profileIcon: defaultIconForGoal(payload.fitnessGoal),
+        }),
       })
 
       // Seed the first weight log entry from the body stats step

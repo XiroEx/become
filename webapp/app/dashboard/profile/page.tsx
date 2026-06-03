@@ -5,6 +5,7 @@ import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
+import IconPicker from '@/components/profile/IconPicker'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
@@ -463,6 +464,9 @@ export default function ProfilePage() {
           Manage your account and fitness preferences.
         </p>
       </header>
+
+      {/* Profile icon chooser */}
+      <IconPicker />
 
       {/* Tab bar */}
       <div className="flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60">
