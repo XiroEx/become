@@ -2,8 +2,10 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { User, LogOut, MessageSquareText, Settings, ShieldCheck } from 'lucide-react'
+import { LogOut, MessageSquareText, Settings, ShieldCheck } from 'lucide-react'
 import FeedbackModal from './FeedbackModal'
+import Avatar from './Avatar'
+import { getToken } from '@/lib/clientAuth'
 import { clearAllCache } from '@/lib/clientCache'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME";
@@ -12,6 +14,8 @@ export default function TopNav() {
   const [isOpen, setIsOpen] = useState(false)
   const [userName, setUserName] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [profileIcon, setProfileIcon] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -27,6 +31,19 @@ export default function TopNav() {
         setUserName('User')
       }
     }
+    // Pull the equipped profile icon for the avatar.
+    ;(async () => {
+      try {
+        const res = await fetch('/api/profile', { headers: { Authorization: `Bearer ${getToken() ?? ''}` } })
+        if (res.ok) {
+          const data = await res.json()
+          setProfileIcon(data.profileIcon ?? null)
+          setAvatarUrl(data.avatarUrl ?? null)
+        }
+      } catch {
+        /* fall back to default preset */
+      }
+    })()
   }, [])
 
   useEffect(() => {
@@ -58,10 +75,10 @@ export default function TopNav() {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-transparent transition-all hover:ring-zinc-200 dark:hover:ring-zinc-700"
               aria-label="User menu"
             >
-              <User className="h-4 w-4" />
+              <Avatar icon={profileIcon} imageUrl={avatarUrl} size={32} />
             </button>
 
             {isOpen && (
