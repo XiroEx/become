@@ -146,6 +146,10 @@ export interface Move {
   /** choice → multiple-choice options, each with an optional reframe shown on pick. */
   options?: { label: string; response?: string }[]
   source?: string // attribution (e.g. a book) when drawn from the content library
+  /** Adaptive swap: if the live state-check answer is positive ('locked_in'), the
+   *  player uses THIS move instead — so a good mood isn't forced into a breath.
+   *  Set on the "regulate" beat: breath by default, amplify when locked-in. */
+  altPositive?: Move
   /** XP this move contributes to the session payoff (display only; server is source of truth). */
   xp: number
 }
