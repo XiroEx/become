@@ -72,7 +72,12 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
   const [advancing, setAdvancing] = useState(false)
 
   const total = plan.moves.length
-  const move = plan.moves[index]
+  const rawMove = plan.moves[index]
+  // State-adaptive swap: a positive check-in ('locked_in') turns the regulate
+  // beat from a breath into its amplify alternative — no forced breathing when
+  // you're already on. Negative/off states keep the realignment breath.
+  const move =
+    rawMove?.altPositive && liveState === 'locked_in' ? rawMove.altPositive : rawMove
 
   const complete = useCallback(async () => {
     setStage('payoff')
