@@ -94,8 +94,20 @@ function resolveStatement(ctx: SessionContext): string {
     : IDENTITY_POOL[sd % IDENTITY_POOL.length]
 }
 
+// A SHORT affirmation for the "reconstruct it" modalities (Build it / Type it):
+// reassembling or typing a long mission/vision paragraph is overwhelming and full
+// of confusing duplicate words (multiple "I", "and", "my"…). Use the user's own
+// line only when it's genuinely short; otherwise fall back to a concise pool line.
+const MAX_SHORT_WORDS = 9
+function shortStatement(ctx: SessionContext): string {
+  const sd = ctx.seed ?? ctx.dayOfYear
+  const own = ctx.identityStatement?.trim()
+  if (own && own.split(/\s+/).filter(Boolean).length <= MAX_SHORT_WORDS) return own
+  return IDENTITY_POOL[sd % IDENTITY_POOL.length]
+}
+
 function typeMove(ctx: SessionContext): Move {
-  return { id: 'type', kind: 'type', title: 'Type it', subtitle: 'Write it out, word for word.', statement: resolveStatement(ctx), xp: 5 }
+  return { id: 'type', kind: 'type', title: 'Type it', subtitle: 'Write it out, word for word.', statement: shortStatement(ctx), xp: 5 }
 }
 
 function speakMove(ctx: SessionContext): Move {
@@ -103,7 +115,7 @@ function speakMove(ctx: SessionContext): Move {
 }
 
 function assembleMove(ctx: SessionContext): Move {
-  return { id: 'assemble', kind: 'assemble', title: 'Build it', subtitle: 'Tap the words in order.', statement: resolveStatement(ctx), xp: 5 }
+  return { id: 'assemble', kind: 'assemble', title: 'Build it', subtitle: 'Tap the words in order.', statement: shortStatement(ctx), xp: 5 }
 }
 
 // Multiple-choice reflections come from the central library (CHOICE_POOL).
