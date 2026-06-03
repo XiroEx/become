@@ -56,6 +56,13 @@ export interface IUser {
   savedFoods?: ISavedFood[];
   profile?: IUserProfile;
   onboardingCompleted?: boolean;
+  /** Stable id of this user's identity in the redauth auth store (the join key
+   *  between Become's user data and the shared auth layer). Set on first
+   *  redauth-backed login (Google / passkey); backfilled by email for existing
+   *  magic-link/password users. */
+  authId?: string;
+  /** Profile picture from a social provider (e.g. Google), if any. */
+  avatarUrl?: string;
   createdAt?: Date
   updatedAt?: Date
 }
@@ -117,12 +124,16 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   savedFoods: [SavedFoodSchema],
   profile: { type: UserProfileSchema, default: {} },
   onboardingCompleted: { type: Boolean, default: false },
+  authId: { type: String, default: null },
+  avatarUrl: { type: String },
 }, {
   timestamps: true,
 })
 
 // Index to support fast lookups of users by saved food (and basic membership tests)
 UserSchema.index({ 'savedFoods.foodId': 1 })
+// Stable link to the redauth identity (sparse: legacy users without one are fine).
+UserSchema.index({ authId: 1 }, { unique: true, sparse: true })
 
 // Hash password before saving
 UserSchema.pre('save', async function() {
