@@ -144,18 +144,30 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
   }
 }
 
+// The "regulate" beat (move 2). Defaults to a realignment breath (resolved from
+// the live state at play time), but carries an amplify alternative the player
+// swaps in when the check-in is positive ('locked_in') — so a good mood channels
+// momentum (bank a win / see your vision / a quick reflection) instead of being
+// forced into a breath. Amplify rotates by seed for variety.
+function regulateMove(ctx: SessionContext): Move {
+  const seed = ctx.seed ?? ctx.dayOfYear
+  const amplifyPool: MoveKind[] = ['win', 'vision', 'choice', 'mirror']
+  const breath = breathMove()
+  breath.altPositive = buildMove(amplifyPool[seed % amplifyPool.length], ctx)
+  return breath
+}
+
 export class DeterministicMoveEngine implements MoveEngine {
   composeSession(ctx: SessionContext): MindSessionPlan {
     const seed = ctx.seed ?? ctx.dayOfYear
     const intro = INTROS[seed % INTROS.length]
 
-    // Anchors: always open by checking in (grounds the session, grants XP via
-    // /api/mind/state) and breathe.
-    const moves: Move[] = [stateCheckMove(), breathMove()]
+    // Open by checking in (grounds the session, grants XP via /api/mind/state),
+    // then a state-adaptive regulate beat (breath if off / amplify if locked-in).
+    const moves: Move[] = [stateCheckMove(), regulateMove(ctx)]
 
     // A rotating "core" move drawn from what the user's chapter has unlocked, so
-    // the daily session varies day-to-day and grows as they progress. As more
-    // systems gain scenes (vision/anti-sabotage/social), add them to this pool.
+    // the session varies run-to-run and grows as they progress.
     const corePool: MoveKind[] = []
     if (ctx.chapter >= 3) corePool.push('challenge') // discipline
     if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
@@ -169,8 +181,11 @@ export class DeterministicMoveEngine implements MoveEngine {
       moves.push(buildMove(corePool[seed % corePool.length], ctx))
     }
 
-    // Always close on identity — the strongest reinforcement beat.
-    moves.push(identityMove(ctx))
+    // Close on an identity-reinforcing beat — but rotate the MODALITY so repeat
+    // visits feel different (read / mirror / type / say it / build it).
+    const closePool: MoveKind[] = ['identity']
+    if (ctx.chapter >= 2) closePool.push('mirror', 'type', 'speak', 'assemble')
+    moves.push(buildMove(closePool[(seed + 1) % closePool.length], ctx))
 
     return { intro, moves, rewardXp: 15 }
   }
