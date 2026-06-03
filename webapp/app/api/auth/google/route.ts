@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedAuth } from '@/lib/redauth'
+import { publicOrigin } from '@/lib/authBridge'
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,6 +15,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(url)
   } catch (err) {
     console.error('GET /api/auth/google error:', err)
-    return NextResponse.redirect(new URL('/login?error=google', req.url))
+    return NextResponse.redirect(new URL('/login?error=google', publicOrigin(req)))
   }
 }
