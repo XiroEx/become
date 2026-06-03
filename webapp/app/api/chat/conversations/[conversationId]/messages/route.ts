@@ -4,6 +4,8 @@ import dbConnect from '@/lib/mongodb';
 import { verifyAuth } from '@/lib/auth';
 import Conversation from '@/models/Conversation';
 import Message from '@/models/Message';
+import UserProgress from '@/models/UserProgress';
+import { sendPushToUser } from '@/lib/pushNotification';
 
 // GET /api/chat/conversations/[conversationId]/messages
 export async function GET(
@@ -114,6 +116,39 @@ export async function POST(
   const populated = await Message.findById(message._id)
     .populate('senderId', 'name email')
     .lean();
+
+  // Notify the other participants (push), respecting their chatMessage pref.
+  try {
+    const senderName =
+      (populated?.senderId as unknown as { name?: string })?.name || 'New message'
+    const recipientIds: string[] = conversation.participants
+      .map((p: mongoose.Types.ObjectId) => String(p))
+      .filter((id: string) => id !== String(auth.userId))
+    if (recipientIds.length > 0) {
+      // chatMessage defaults ON — only skip users who explicitly opted out.
+      const optedOut = await UserProgress.find({
+        userId: { $in: recipientIds },
+        'notificationPrefs.chatMessage': false,
+      })
+        .select('userId')
+        .lean()
+      const optedOutIds = new Set(optedOut.map((p: { userId: unknown }) => String(p.userId)))
+      const targets = recipientIds.filter((id: string) => !optedOutIds.has(id))
+      const preview = text.trim().length > 120 ? text.trim().slice(0, 117) + '…' : text.trim()
+      await Promise.allSettled(
+        targets.map((id: string) =>
+          sendPushToUser(id, {
+            title: senderName,
+            body: preview,
+            url: '/dashboard/chat',
+            tag: `chat-${conversationId}`,
+          }),
+        ),
+      )
+    }
+  } catch (err) {
+    console.error('chat push error:', err) // best-effort; never block the send
+  }
 
   return NextResponse.json({ message: populated }, { status: 201 });
 }
