@@ -56,6 +56,7 @@ interface NotificationPrefs {
   streakAtRisk: boolean
   workoutReminder: boolean
   reEngagement: boolean
+  chatMessage: boolean
 }
 
 type NotificationPrefKey = keyof NotificationPrefs
@@ -68,6 +69,7 @@ const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel:
   { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
   { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
   { key: 'reEngagement', label: 'Re-engagement', sublabel: "When you've been inactive for a few days" },
+  { key: 'chatMessage', label: 'Chat messages', sublabel: 'When someone sends you a message' },
 ]
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
@@ -139,6 +141,7 @@ export default function SettingsPage() {
     streakAtRisk: true,
     workoutReminder: true,
     reEngagement: true,
+    chatMessage: true,
   })
   const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
   const [enablingNotifications, setEnablingNotifications] = useState(false)
@@ -212,6 +215,7 @@ export default function SettingsPage() {
         streakAtRisk: p.streakAtRisk ?? true,
         workoutReminder: p.workoutReminder ?? true,
         reEngagement: p.reEngagement ?? true,
+        chatMessage: p.chatMessage ?? true,
       })
     } catch {
       // ignore — defaults remain
