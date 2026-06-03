@@ -55,3 +55,47 @@ const GOAL_TO_ICON: Record<FitnessGoal, string> = {
 export function defaultIconForGoal(goal: FitnessGoal | undefined | null): string {
   return (goal && GOAL_TO_ICON[goal]) || 'spark'
 }
+
+// ---------------------------------------------------------------------------
+// redReward render-side resolver (Phase B1).
+//
+// The catalog (lib/reward/catalog.ts) stores only serializable descriptors:
+// `asset.icon` is a lucide export NAME (string), not a live component. This map
+// turns that name back into the component at render time. Keep it in sync with
+// the lucide imports above — every name used in catalog `asset.icon` must appear
+// here (icons + badges).
+// ---------------------------------------------------------------------------
+
+import type { Collectible } from '@redbtn/redreward/types'
+
+/** lucide export name (as stored in catalog `asset.icon`) → component. */
+export const iconByName: Record<string, LucideIcon> = {
+  Flame,
+  Dumbbell,
+  Zap,
+  Heart,
+  Mountain,
+  Sunrise,
+  Target,
+  Sparkles,
+  Leaf,
+  Trophy,
+}
+
+/** Resolved render data for a redReward icon collectible. */
+export interface ResolvedIcon {
+  Icon: LucideIcon
+  gradient: string
+}
+
+/**
+ * Resolve a catalog icon collectible → { Icon, gradient } for rendering.
+ * Falls back to the first preset (Flame) if the descriptor is missing/unknown,
+ * mirroring presetIcon()'s never-null contract.
+ */
+export function resolveIconCollectible(c: Collectible | null | undefined): ResolvedIcon {
+  const asset = (c?.asset ?? {}) as { icon?: string; gradient?: string }
+  const Icon = (asset.icon && iconByName[asset.icon]) || PRESET_ICONS[0].Icon
+  const gradient = asset.gradient || PRESET_ICONS[0].gradient
+  return { Icon, gradient }
+}
