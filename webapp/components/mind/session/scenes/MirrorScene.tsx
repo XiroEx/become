@@ -45,10 +45,9 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
           return
         }
         streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          await videoRef.current.play().catch(() => {})
-        }
+        // Flip to 'on' FIRST so the <video> element mounts; the effect below
+        // then attaches the stream once the ref exists. (Assigning srcObject
+        // here would no-op — videoRef is still null while cam==='pending'.)
         setCam('on')
       } catch {
         if (!cancelled) setCam('off')
@@ -61,6 +60,16 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
       streamRef.current = null
     }
   }, [])
+
+  // Attach the stream once the <video> is actually mounted (cam === 'on').
+  useEffect(() => {
+    if (cam !== 'on') return
+    const v = videoRef.current
+    const s = streamRef.current
+    if (!v || !s) return
+    v.srcObject = s
+    v.play().catch(() => {})
+  }, [cam])
 
   const stopHold = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
@@ -107,11 +116,12 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
         <video
           ref={videoRef}
           playsInline
+          autoPlay
           muted
-          className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-60"
+          className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90"
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/70" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/15 to-black/75" />
 
       {/* Foreground */}
       <div className="relative z-10 flex w-full max-w-sm flex-col items-center">
