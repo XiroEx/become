@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Camera } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
+import WriteAffirm from './WriteAffirm'
+import SpeakScene from './SpeakScene'
 
 const HOLD_MS = 1800
 const RADIUS = 52
@@ -20,6 +22,7 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [cam, setCam] = useState<CamState>('pending')
+  const [altMode, setAltMode] = useState<null | 'write' | 'speak'>(null) // switch modality
 
   const [progress, setProgress] = useState(0)
   const [affirmed, setAffirmed] = useState(false)
@@ -109,6 +112,16 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
 
   useEffect(() => () => stopHold(), [stopHold])
 
+  // Switch modality (Duolingo-style): release the camera, then write or speak.
+  const switchTo = (mode: 'write' | 'speak') => {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    setCam('off')
+    setAltMode(mode)
+  }
+  if (altMode === 'write') return <WriteAffirm statement={move.statement} onDone={onDone} />
+  if (altMode === 'speak') return <SpeakScene move={move} onDone={onDone} />
+
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden px-6 text-center">
       {/* Camera background (mirrored) */}
@@ -168,6 +181,17 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
           </motion.span>
         </button>
         <p className="mt-6 text-sm text-white/60">{affirmed ? 'Locked in.' : 'Say it like you mean it.'}</p>
+        {!affirmed && (
+          <div className="mt-5 flex items-center gap-4 text-xs font-medium text-white/50">
+            <button onClick={() => switchTo('write')} className="underline-offset-2 hover:text-white/80 hover:underline">
+              Write instead
+            </button>
+            <span className="text-white/20">·</span>
+            <button onClick={() => switchTo('speak')} className="underline-offset-2 hover:text-white/80 hover:underline">
+              Speak instead
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

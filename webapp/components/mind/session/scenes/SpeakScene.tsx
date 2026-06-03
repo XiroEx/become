@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Mic, Check, Play, RotateCcw } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
+import WriteAffirm from './WriteAffirm'
 
 type Phase = 'idle' | 'recording' | 'review' | 'fallback' | 'fallback-hold'
 const MIN_RECORD_MS = 900
@@ -19,6 +20,7 @@ const BARS = 5
 
 export default function SpeakScene({ move, onDone }: SceneProps) {
   const [phase, setPhase] = useState<Phase>('idle')
+  const [writeMode, setWriteMode] = useState(false) // "prefer to write it?" escape
   const [level, setLevel] = useState(0) // 0..1 live mic level
   const [holdPct, setHoldPct] = useState(0) // fallback hold progress
 
@@ -186,6 +188,14 @@ export default function SpeakScene({ move, onDone }: SceneProps) {
   const recording = phase === 'recording'
   const scale = recording ? 1 + level * 0.22 : 1
 
+  // "Prefer to write it?" — release the mic and switch to the typed alternative.
+  const goWrite = () => {
+    teardown()
+    audioRef.current?.pause()
+    setWriteMode(true)
+  }
+  if (writeMode) return <WriteAffirm statement={move.statement} onDone={onDone} />
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
       <p className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-white/40">
@@ -290,6 +300,11 @@ export default function SpeakScene({ move, onDone }: SceneProps) {
           {!supported && phase === 'idle' && (
             <button onClick={() => setPhase('fallback')} className="mt-3 text-xs font-medium text-white/40 underline-offset-2 hover:underline">
               No mic? Say it out loud instead
+            </button>
+          )}
+          {phase === 'idle' && (
+            <button onClick={goWrite} className="mt-3 text-xs font-medium text-white/40 underline-offset-2 hover:underline">
+              Prefer to write it?
             </button>
           )}
         </div>
