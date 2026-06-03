@@ -3,17 +3,22 @@
 // We bridge that verified email into a Become session (cookie + JWT), then hand
 // the JWT to the client via the URL fragment (never sent to the server / logs)
 // so the SPA can stash it in localStorage the same way magic-link login does.
+//
+// All redirects are built from the PUBLIC origin (publicOrigin), NOT req.url:
+// behind Traefik req.url is the container's internal 0.0.0.0:PORT, which the
+// browser refuses to load ("restricted network port").
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedAuth } from '@/lib/redauth'
-import { bridgeToBecomeSession, authCookie } from '@/lib/authBridge'
+import { bridgeToBecomeSession, authCookie, publicOrigin } from '@/lib/authBridge'
 
 export async function GET(req: NextRequest) {
+  const origin = publicOrigin(req)
   const code = req.nextUrl.searchParams.get('code')
   const state = req.nextUrl.searchParams.get('state')
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL('/login?error=google', req.url))
+    return NextResponse.redirect(new URL('/login?error=google', origin))
   }
 
   try {
@@ -23,7 +28,7 @@ export async function GET(req: NextRequest) {
     const name = result.profile?.name || result.user?.name
 
     if (!email) {
-      return NextResponse.redirect(new URL('/login?error=google_email', req.url))
+      return NextResponse.redirect(new URL('/login?error=google_email', origin))
     }
 
     const { token } = await bridgeToBecomeSession({
@@ -34,7 +39,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Token goes in the fragment so it never reaches the server / access logs.
-    const finishUrl = new URL('/auth/finish', req.url)
+    const finishUrl = new URL('/auth/finish', origin)
     finishUrl.hash = encodeURIComponent(token)
 
     const res = NextResponse.redirect(finishUrl)
@@ -42,6 +47,6 @@ export async function GET(req: NextRequest) {
     return res
   } catch (err) {
     console.error('GET /auth/callback/google error:', err)
-    return NextResponse.redirect(new URL('/login?error=google', req.url))
+    return NextResponse.redirect(new URL('/login?error=google', origin))
   }
 }
