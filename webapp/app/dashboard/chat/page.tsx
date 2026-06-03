@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Send, MessageCircle } from "lucide-react";
+import { ArrowLeft, Send, MessageCircle, ImagePlus, Loader2 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import FeatureGuard from "@/components/FeatureGuard";
 
@@ -32,6 +32,7 @@ interface MessageData {
   conversationId: string;
   senderId: { _id: string; name: string; email: string } | string;
   text: string;
+  imageUrl?: string;
   readBy: string[];
   createdAt: string;
 }
@@ -81,12 +82,14 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("user");
   const [trainerId, setTrainerId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const scrollToBottom = useCallback((smooth = true) => {
@@ -237,57 +240,81 @@ export default function ChatPage() {
     }
   }, [messages.length, scrollToBottom]);
 
-  // Send message
+  // POST a message (text and/or image) and reconcile local state.
+  const postMessage = async (payload: { text?: string; imageUrl?: string }): Promise<boolean> => {
+    if (!selectedConversation) return false;
+    const token = getToken();
+    if (!token) return false;
+    const res = await fetch(
+      `/api/chat/conversations/${selectedConversation._id}/messages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!res.ok) return false;
+    const data = await res.json();
+    setMessages((prev) => [...prev, data.message]);
+    const preview = payload.text?.trim() ? payload.text.trim().substring(0, 100) : "📷 Photo";
+    setConversations((prev) =>
+      prev.map((c) =>
+        c._id === selectedConversation._id
+          ? {
+              ...c,
+              lastMessage: { text: preview, senderId: currentUserId, sentAt: new Date().toISOString() },
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+    return true;
+  };
+
+  // Send a text message
   const sendMessage = async () => {
     if (!messageText.trim() || !selectedConversation || sending) return;
-
     const text = messageText.trim();
     setMessageText("");
     setSending(true);
-
-    const token = getToken();
-    if (!token) return;
-
     try {
-      const res = await fetch(
-        `/api/chat/conversations/${selectedConversation._id}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ text }),
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setMessages((prev) => [...prev, data.message]);
-
-        // Update conversation's last message in the list
-        setConversations((prev) =>
-          prev.map((c) =>
-            c._id === selectedConversation._id
-              ? {
-                  ...c,
-                  lastMessage: {
-                    text: text.substring(0, 100),
-                    senderId: currentUserId,
-                    sentAt: new Date().toISOString(),
-                  },
-                  updatedAt: new Date().toISOString(),
-                }
-              : c
-          )
-        );
-      }
+      const ok = await postMessage({ text });
+      if (!ok) setMessageText(text); // restore on failure
     } catch (err) {
       console.error("Error sending message:", err);
-      // Restore the text on error
       setMessageText(text);
     } finally {
       setSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  // Pick an image/GIF → upload → send as a message
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file || !selectedConversation || uploading) return;
+    setUploading(true);
+    try {
+      const token = getToken();
+      if (!token) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/chat/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await up.json();
+      if (!up.ok) {
+        console.error("Image upload failed:", data.error);
+        return;
+      }
+      await postMessage({ imageUrl: data.imageUrl });
+    } catch (err) {
+      console.error("Error sending image:", err);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -528,9 +555,22 @@ export default function ChatPage() {
                               {senderName}
                             </p>
                           )}
-                          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                            {msg.text}
-                          </p>
+                          {msg.imageUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={msg.imageUrl}
+                                alt="attachment"
+                                loading="lazy"
+                                className={`max-h-72 w-auto max-w-full rounded-xl object-cover ${msg.text ? "mb-1.5" : ""}`}
+                              />
+                            </a>
+                          )}
+                          {msg.text && (
+                            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                              {msg.text}
+                            </p>
+                          )}
                           <p
                             className={`mt-1 text-right text-[10px] ${
                               isMe
@@ -557,6 +597,21 @@ export default function ChatPage() {
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}
       >
         <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={onPickImage}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            aria-label="Send a photo or GIF"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+          </button>
           <input
             ref={inputRef}
             type="text"
