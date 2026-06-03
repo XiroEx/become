@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
       currentChapter: currentChapterData,
       nextChapter: nextChapterData,
       vision: progress?.vision ?? null,
+      lastBreathAt: progress?.lastBreathAt ?? null,
       chapterHistory: progress?.chapterHistory ?? [],
       currentMilestone,
       nextMilestone,
