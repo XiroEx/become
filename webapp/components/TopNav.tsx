@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, MessageSquareText, Settings, ShieldCheck } from 'lucide-react'
+import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound } from 'lucide-react'
 import FeedbackModal from './FeedbackModal'
 import Avatar from './Avatar'
 import { getToken } from '@/lib/clientAuth'
@@ -103,8 +103,16 @@ export default function TopNav() {
                   onClick={() => setIsOpen(false)}
                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 >
+                  <UserRound className="h-4 w-4" />
+                  Profile
+                </Link>
+                <Link
+                  href="/dashboard/settings"
+                  onClick={() => setIsOpen(false)}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                >
                   <Settings className="h-4 w-4" />
-                  Profile &amp; Settings
+                  Settings
                 </Link>
                 <button
                   onClick={() => {
