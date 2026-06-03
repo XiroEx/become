@@ -82,12 +82,18 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
   const complete = useCallback(async () => {
     setStage('payoff')
     try {
+      // Report the EFFECTIVE kinds the player actually showed — so a locked-in
+      // amplify (breath swapped out) isn't recorded as breath. Drives recency
+      // (breath spacing) accurately on the server.
+      const effectiveKinds = plan.moves.map((m) =>
+        m.altPositive && liveState === 'locked_in' ? m.altPositive.kind : m.kind,
+      )
       const res = await fetch('/api/mind/session', {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           tz: new Date().getTimezoneOffset(),
-          moves: plan.moves.map((m) => ({ kind: m.kind })),
+          moves: effectiveKinds.map((kind) => ({ kind })),
         }),
       })
       if (res.ok) {
@@ -97,7 +103,7 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
     } catch {
       /* payoff still shows; XP is best-effort */
     }
-  }, [plan.moves])
+  }, [plan.moves, liveState])
 
   const next = useCallback(() => {
     if (index >= total - 1) {

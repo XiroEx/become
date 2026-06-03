@@ -144,16 +144,31 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
   }
 }
 
-// The "regulate" beat (move 2). Defaults to a realignment breath (resolved from
-// the live state at play time), but carries an amplify alternative the player
-// swaps in when the check-in is positive ('locked_in') — so a good mood channels
-// momentum (bank a win / see your vision / a quick reflection) instead of being
-// forced into a breath. Amplify rotates by seed for variety.
+// Breath is spaced out: once it's been done, it goes on cooldown so back-to-back
+// sessions within the same few hours don't repeat the same breathing. Spaced
+// sessions (first of the day, a midday one, one in the evening) can include it
+// again.
+const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000 // ~4h
+
+// The "regulate" beat (move 2):
+//  • If breath was done recently → SKIP breath entirely; ground/amplify with a
+//    non-breath beat instead (no repetitive breathing).
+//  • Otherwise → a realignment breath, but carrying an amplify alternative the
+//    player swaps in when the live check-in is positive ('locked_in') — a good
+//    mood channels momentum instead of being forced into a breath.
+// Amplify rotates by seed for variety.
 function regulateMove(ctx: SessionContext): Move {
   const seed = ctx.seed ?? ctx.dayOfYear
   const amplifyPool: MoveKind[] = ['win', 'vision', 'choice', 'mirror']
+  const amplify = buildMove(amplifyPool[seed % amplifyPool.length], ctx)
+
+  const now = ctx.now ?? 0
+  const onCooldown =
+    ctx.lastBreathAt != null && now > 0 && now - ctx.lastBreathAt < BREATH_COOLDOWN_MS
+  if (onCooldown) return amplify // recent breath → no repeat; ground without breathing
+
   const breath = breathMove()
-  breath.altPositive = buildMove(amplifyPool[seed % amplifyPool.length], ctx)
+  breath.altPositive = amplify
   return breath
 }
 

@@ -166,6 +166,11 @@ export interface SessionContext {
   dayOfYear: number
   /** Optional explicit seed — overrides dayOfYear so replays vary run-to-run. */
   seed?: number
+  /** Current time (ms) — used with lastBreathAt to space out breath work. */
+  now?: number
+  /** When the user last did breath work (ms). Breath is put on cooldown so
+   *  back-to-back sessions don't repeat it; spaced sessions can include it again. */
+  lastBreathAt?: number | null
 }
 
 export interface MindSessionPlan {
