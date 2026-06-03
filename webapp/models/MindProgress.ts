@@ -24,6 +24,12 @@ export interface IMindProgress extends Document {
   vision?: IVision
   chapterHistory: { chapter: number; unlockedAt: Date }[]
   selfDeclaredChapters: number[]  // chapters where user self-declared readiness (one per chapter)
+  /** Last time a session actually ran a breath move — used to SPACE breath out so
+   *  back-to-back sessions don't repeat it. */
+  lastBreathAt?: Date
+  /** Effective move kinds from the most recent session — used to avoid repeating
+   *  the same modalities on a subsequent session in the same window. */
+  recentKinds?: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -63,6 +69,8 @@ const MindProgressSchema = new Schema<IMindProgress>(
       _id: false,
     },
     selfDeclaredChapters: { type: [Number], default: [] },
+    lastBreathAt: { type: Date },
+    recentKinds: { type: [String], default: [] },
   },
   { timestamps: true }
 )

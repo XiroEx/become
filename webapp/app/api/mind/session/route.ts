@@ -66,8 +66,18 @@ export async function GET(request: NextRequest) {
     await dbConnect()
     const doc = await MindSession.findOne({ userId: auth.userId, dateKey }).lean()
     const streak = await streakFor(auth.userId!, dateKey)
+    // Recency for session spacing (breath cooldown + modality variety).
+    const prog = await MindProgress.findOne({ userId: auth.userId })
+      .select('lastBreathAt recentKinds')
+      .lean<{ lastBreathAt?: Date; recentKinds?: string[] } | null>()
 
-    return NextResponse.json({ dateKey, completedToday: !!doc, streak })
+    return NextResponse.json({
+      dateKey,
+      completedToday: !!doc,
+      streak,
+      lastBreathAt: prog?.lastBreathAt ? new Date(prog.lastBreathAt).getTime() : null,
+      recentKinds: prog?.recentKinds ?? [],
+    })
   } catch (err) {
     console.error('GET /api/mind/session error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -103,13 +113,30 @@ export async function POST(request: NextRequest) {
     const n = doc?.completions ?? 1
     const xpAwarded = XP_BY_COMPLETION[n] ?? 0
 
+    // Recency tracking for session spacing: remember when breath last ran (so it
+    // can be spaced out) and the modalities used (so the next session can vary).
+    // `moves` are the EFFECTIVE kinds the player actually showed (post state-swap).
+    const kinds = moves.map((m) => m.kind)
+    const didBreath = kinds.includes('breath')
+    const recencySet: Record<string, unknown> = {
+      recentKinds: kinds.filter((k) => k !== 'state-check'),
+    }
+    if (didBreath) recencySet.lastBreathAt = new Date()
+
     if (xpAwarded > 0) {
       await MindProgress.findOneAndUpdate(
         { userId: auth.userId },
-        { $inc: { xp: xpAwarded } },
+        { $inc: { xp: xpAwarded }, $set: recencySet },
         { upsert: true, setDefaultsOnInsert: true },
       ).catch(() => {})
       await MindSession.updateOne({ userId: auth.userId, dateKey }, { $inc: { xpAwarded } }).catch(() => {})
+    } else {
+      // Still record recency even when XP is maxed for the day.
+      await MindProgress.findOneAndUpdate(
+        { userId: auth.userId },
+        { $set: recencySet },
+        { upsert: true, setDefaultsOnInsert: true },
+      ).catch(() => {})
     }
 
     const progress = await MindProgress.findOne({ userId: auth.userId }).lean<{ chapter?: number; xp?: number } | null>()
