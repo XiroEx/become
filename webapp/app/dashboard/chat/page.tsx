@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Send, MessageCircle, ImagePlus, Loader2 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import FeatureGuard from "@/components/FeatureGuard";
+import GifPicker from "@/components/chat/GifPicker";
 
 interface Participant {
   _id: string;
@@ -83,6 +84,7 @@ export default function ChatPage() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [gifOpen, setGifOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("user");
   const [trainerId, setTrainerId] = useState<string | null>(null);
@@ -315,6 +317,16 @@ export default function ChatPage() {
       console.error("Error sending image:", err);
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Send a GIF chosen from the picker (GIPHY CDN url)
+  const sendGif = async (url: string) => {
+    setGifOpen(false);
+    try {
+      await postMessage({ imageUrl: url });
+    } catch (err) {
+      console.error("Error sending GIF:", err);
     }
   };
 
@@ -607,10 +619,17 @@ export default function ChatPage() {
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            aria-label="Send a photo or GIF"
+            aria-label="Send a photo"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+          </button>
+          <button
+            onClick={() => setGifOpen(true)}
+            aria-label="Send a GIF"
+            className="flex h-10 shrink-0 items-center justify-center rounded-full px-2.5 text-xs font-extrabold tracking-wide text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            GIF
           </button>
           <input
             ref={inputRef}
@@ -631,6 +650,8 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+
+      {gifOpen && <GifPicker onSelect={sendGif} onClose={() => setGifOpen(false)} />}
     </div>
     </FeatureGuard>
   );
