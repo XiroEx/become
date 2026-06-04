@@ -317,3 +317,77 @@ export const DISCIPLINE_CHALLENGES: string[] = [
   'Pick your single most important goal and take one bold step toward it.',
   'Reflect for 5 minutes: who do you want to be tomorrow?',
 ]
+
+// ─── Compose templates (the "Fill it in" modality) ────────────────────────────
+// A mostly-written affirmation with {0},{1}… blanks; each blank has a few POSITIVE
+// word choices. There are no wrong answers — every option finishes a true,
+// empowering sentence; the pick just makes it yours. Replaces the word-scramble.
+export interface ComposeTemplate {
+  template: string // e.g. "I show up {0}, even when {1}."
+  blanks: string[][] // options for {0}, {1}, …
+}
+
+export const COMPOSE_TEMPLATES: ComposeTemplate[] = [
+  {
+    template: 'I show up {0}, even when {1}.',
+    blanks: [
+      ['with intention', 'ready to work', 'fully present', 'like it matters'],
+      ["it's hard", "I'm tired", "no one's watching", "I don't feel like it"],
+    ],
+  },
+  {
+    template: 'Today, I lead with {0}.',
+    blanks: [['discipline', 'courage', 'focus', 'gratitude', 'calm']],
+  },
+  {
+    template: 'I am becoming someone who {0}.',
+    blanks: [
+      ['finishes what they start', 'keeps promises to themselves', 'does the hard thing', 'shows up daily'],
+    ],
+  },
+  {
+    template: 'When it gets tough, I {0}.',
+    blanks: [['dig in', 'breathe and push', 'remember my why', 'stay steady']],
+  },
+  {
+    template: 'My body is {0} and my mind is {1}.',
+    blanks: [
+      ['strong', 'capable', 'resilient', 'getting better'],
+      ['focused', 'steady', 'clear', 'unshakeable'],
+    ],
+  },
+  {
+    template: 'I choose {0} over {1}.',
+    blanks: [
+      ['effort', 'discipline', 'growth', 'courage'],
+      ['comfort', 'excuses', 'doubt', 'the easy way'],
+    ],
+  },
+  {
+    template: 'Right now, I bring {0} to everything I do.',
+    blanks: [['energy', 'focus', 'heart', 'intensity', 'calm']],
+  },
+  {
+    template: 'I do hard things {0}.',
+    blanks: [['on purpose', 'because they grow me', 'without flinching', "and I'm proud of it"]],
+  },
+  {
+    template: "I'm the kind of person who {0}.",
+    blanks: [['never quits', 'stays consistent', 'leads by example', 'earns it daily']],
+  },
+  {
+    template: "This season, I'm building {0}.",
+    blanks: [['unbreakable habits', 'real strength', 'quiet confidence', 'momentum']],
+  },
+  {
+    template: 'I forgive the slip and {0}.',
+    blanks: [['start again', 'keep going', 'reset now', 'move forward']],
+  },
+  {
+    template: 'I am {0}, I am {1}.',
+    blanks: [
+      ['disciplined', 'focused', 'relentless', 'grounded'],
+      ['consistent', 'unshaken', 'capable', 'ready'],
+    ],
+  },
+]

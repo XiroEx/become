@@ -15,7 +15,7 @@ import {
   type MoveKind,
   type SessionContext,
 } from './moves'
-import { INTROS, CHOICE_POOL, WIN_PROMPTS } from './library'
+import { INTROS, CHOICE_POOL, WIN_PROMPTS, COMPOSE_TEMPLATES } from './library'
 
 // ─── Move builders (so the daily composer + the Arsenal single-move launcher
 //     produce identical, consistent moves) ──────────────────────────────────
@@ -118,6 +118,13 @@ function assembleMove(ctx: SessionContext): Move {
   return { id: 'assemble', kind: 'assemble', title: 'Build it', subtitle: 'Tap the words in order.', statement: shortStatement(ctx), xp: 5 }
 }
 
+// Fill-in-the-blank affirmation — a mostly-written line, you choose positive
+// words for the blanks. No wrong answers; each pick just makes it yours.
+function composeMove(ctx: SessionContext): Move {
+  const t = COMPOSE_TEMPLATES[(ctx.seed ?? ctx.dayOfYear) % COMPOSE_TEMPLATES.length]
+  return { id: 'compose', kind: 'compose', title: 'Fill it in', subtitle: 'Choose the words that fit you.', compose: t, xp: 5 }
+}
+
 // Multiple-choice reflections come from the central library (CHOICE_POOL).
 function choiceMove(ctx: SessionContext): Move {
   const item = CHOICE_POOL[(ctx.seed ?? ctx.dayOfYear) % CHOICE_POOL.length]
@@ -140,6 +147,7 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
     case 'type': return typeMove(ctx)
     case 'speak': return speakMove(ctx)
     case 'assemble': return assembleMove(ctx)
+    case 'compose': return composeMove(ctx)
     default: return stateCheckMove()
   }
 }
@@ -187,7 +195,7 @@ export class DeterministicMoveEngine implements MoveEngine {
     if (ctx.chapter >= 3) corePool.push('challenge') // discipline
     if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
     if (ctx.chapter >= 2) corePool.push('vision') // foundation: see it
-    if (ctx.chapter >= 2) corePool.push('type', 'speak', 'assemble') // self-image: active reinforcement modalities
+    if (ctx.chapter >= 2) corePool.push('type', 'speak', 'compose') // self-image: active reinforcement modalities
     if (ctx.chapter >= 2 && ctx.missionAction?.trim()) corePool.push('mission')
     if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
     if (ctx.chapter >= 5) corePool.push('social') // architect: environment
@@ -199,7 +207,7 @@ export class DeterministicMoveEngine implements MoveEngine {
     // Close on an identity-reinforcing beat — but rotate the MODALITY so repeat
     // visits feel different (read / mirror / type / say it / build it).
     const closePool: MoveKind[] = ['identity']
-    if (ctx.chapter >= 2) closePool.push('mirror', 'type', 'speak', 'assemble')
+    if (ctx.chapter >= 2) closePool.push('mirror', 'type', 'speak', 'compose')
     moves.push(buildMove(closePool[(seed + 1) % closePool.length], ctx))
 
     return { intro, moves, rewardXp: 15 }
@@ -251,10 +259,10 @@ export function singleMovePlan(systemId: string, ctx: SessionContext): MindSessi
 
 const THEME_CONFIG: Record<string, { title: string; subtitle: string; core: MoveKind; pool: MoveKind[] }> = {
   'state-shift':   { title: 'Reset',       subtitle: 'Drop the stress, find your center.',     core: 'breath',       pool: ['state-check', 'identity', 'mirror', 'choice', 'speak'] },
-  'self-image':    { title: 'Identity',    subtitle: "Reinforce who you're becoming.",         core: 'identity',     pool: ['mirror', 'type', 'speak', 'assemble', 'choice', 'win'] },
+  'self-image':    { title: 'Identity',    subtitle: "Reinforce who you're becoming.",         core: 'identity',     pool: ['mirror', 'type', 'speak', 'compose', 'choice', 'win'] },
   vision:          { title: 'Vision',      subtitle: 'See it. Become it.',                      core: 'vision',       pool: ['identity', 'mirror', 'type', 'speak', 'win', 'choice'] },
   mission:         { title: 'Mission',     subtitle: 'Lock into your why.',                     core: 'mission',      pool: ['identity', 'type', 'win', 'choice'] },
-  discipline:      { title: 'Discipline',  subtitle: 'Do the hard thing.',                      core: 'challenge',    pool: ['identity', 'choice', 'assemble', 'win'] },
+  discipline:      { title: 'Discipline',  subtitle: 'Do the hard thing.',                      core: 'challenge',    pool: ['identity', 'choice', 'compose', 'win'] },
   'anti-sabotage': { title: 'Defense',     subtitle: 'Catch the pattern before it runs you.',   core: 'antisabotage', pool: ['choice', 'identity', 'mirror', 'type'] },
   social:          { title: 'Environment', subtitle: 'Engineer your circle.',                   core: 'social',       pool: ['identity', 'win', 'choice', 'speak'] },
 }

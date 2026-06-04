@@ -41,6 +41,7 @@ const MOVE_CHIP: Record<MoveKind, string> = {
   type: 'Type it',
   speak: 'Say it',
   assemble: 'Build it',
+  compose: 'Fill it in',
 }
 
 function dayOfYear(): number {
