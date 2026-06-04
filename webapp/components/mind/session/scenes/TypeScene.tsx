@@ -10,11 +10,14 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Keyboard, Check, ArrowRight } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
 
-// Normalize for comparison: lowercase, strip punctuation (keep apostrophes), collapse spaces.
+// Normalize for comparison. Drop ALL apostrophes (straight ' AND curly ' that iOS
+// auto-inserts) so "won't" / "won't" / "wont" all match — otherwise smart quotes
+// silently broke the match and stranded the user. Then strip other punctuation.
 function words(s: string): string[] {
   return s
     .toLowerCase()
-    .replace(/[^\w\s']/g, ' ')
+    .replace(/[‘’ʼ'`]/g, '') // apostrophes → removed (unify variants)
+    .replace(/[^\w\s]/g, ' ') // other punctuation → space
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
@@ -107,6 +110,9 @@ export default function TypeScene({ move, onDone }: SceneProps) {
             <p className="mt-3 text-xs text-white/40">
               {hasError ? 'Almost — check the last word.' : `${matched} / ${targetWords.length}`}
             </p>
+            <button onClick={onDone} className="mt-5 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+              Skip
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
