@@ -25,7 +25,8 @@ export type MoveKind =
   | 'choice'
   | 'type' // type the declaration yourself (active recall)
   | 'speak' // say it out loud — record + hear yourself back
-  | 'assemble' // rebuild the declaration from a shuffled word bank
+  | 'assemble' // rebuild the declaration from a shuffled word bank (legacy; replaced by 'compose')
+  | 'compose' // fill blanks in a mostly-built affirmation with positive words (no wrong answers)
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
@@ -145,6 +146,9 @@ export interface Move {
   prompt?: string // win        → the reflection prompt
   /** choice → multiple-choice options, each with an optional reframe shown on pick. */
   options?: { label: string; response?: string }[]
+  /** compose → a mostly-written affirmation with {0},{1}… blanks + positive word
+   *  choices per blank. Every option is valid — it just personalizes the line. */
+  compose?: { template: string; blanks: string[][] }
   source?: string // attribution (e.g. a book) when drawn from the content library
   /** Adaptive swap: if the live state-check answer is positive ('locked_in'), the
    *  player uses THIS move instead — so a good mood isn't forced into a breath.
