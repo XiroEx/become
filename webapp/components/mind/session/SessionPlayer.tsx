@@ -33,6 +33,7 @@ import ChoiceScene from './scenes/ChoiceScene'
 import TypeScene from './scenes/TypeScene'
 import SpeakScene from './scenes/SpeakScene'
 import AssembleScene from './scenes/AssembleScene'
+import ComposeScene from './scenes/ComposeScene'
 
 interface CompleteResult {
   xpAwarded: number
@@ -226,6 +227,7 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
               {move.kind === 'type' && <TypeScene move={move} onDone={next} />}
               {move.kind === 'speak' && <SpeakScene move={move} onDone={next} />}
               {move.kind === 'assemble' && <AssembleScene move={move} onDone={next} />}
+              {move.kind === 'compose' && <ComposeScene move={move} onDone={next} />}
             </motion.div>
           )}
 
