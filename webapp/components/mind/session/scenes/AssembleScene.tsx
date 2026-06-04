@@ -5,7 +5,7 @@
 // correct it locks in. A playful, memory-reinforcing modality. Renders inside the
 // player's black full-screen stage.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Blocks, Check } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
@@ -35,6 +35,7 @@ export default function AssembleScene({ move, onDone }: SceneProps) {
   const [bank, setBank] = useState<Tile[]>(initialBank)
   const [placed, setPlaced] = useState<Tile[]>([])
   const [locked, setLocked] = useState(false)
+  const advancedRef = useRef(false)
 
   const place = (tile: Tile) => {
     if (locked) return
@@ -52,12 +53,16 @@ export default function AssembleScene({ move, onDone }: SceneProps) {
   // First placed word that's out of position → flag for self-correction.
   const firstWrong = placed.findIndex((t, i) => t.word !== target[i])
 
+  // Auto-advance once; depend only on `correct` so setting `locked` can't re-run
+  // this and clear the timer (the stranding bug).
   useEffect(() => {
-    if (!correct || locked) return
+    if (!correct || advancedRef.current) return
+    advancedRef.current = true
     setLocked(true)
     const t = setTimeout(onDone, 1100)
     return () => clearTimeout(t)
-  }, [correct, locked, onDone])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [correct])
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
