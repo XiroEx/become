@@ -15,7 +15,7 @@ import {
   type MoveKind,
   type SessionContext,
 } from './moves'
-import { INTROS, CHOICE_POOL, WIN_PROMPTS, COMPOSE_TEMPLATES } from './library'
+import { INTROS, CHOICE_POOL, WIN_PROMPTS, COMPOSE_TEMPLATES, ACKNOWLEDGE_POOL, INTERROGATIVE_POOL } from './library'
 
 // ─── Move builders (so the daily composer + the Arsenal single-move launcher
 //     produce identical, consistent moves) ──────────────────────────────────
@@ -131,6 +131,25 @@ function choiceMove(ctx: SessionContext): Move {
   return { id: 'choice', kind: 'choice', title: item.q, subtitle: 'No wrong answer.', options: item.options, xp: 5 }
 }
 
+// ─── Non-affirm registers (choice-shaped → reuse the Choice scene) ─────────────
+
+// Acknowledge + self-compassion — validate the hard feeling instead of denying it.
+function acknowledgeMove(ctx: SessionContext): Move {
+  const item = ACKNOWLEDGE_POOL[(ctx.seed ?? ctx.dayOfYear) % ACKNOWLEDGE_POOL.length]
+  return { id: 'acknowledge', kind: 'acknowledge', title: item.q, subtitle: 'Honest is allowed.', options: item.options, xp: 5 }
+}
+
+// Interrogative self-talk — ask, don't declare ("Will you?").
+function interrogativeMove(ctx: SessionContext): Move {
+  const item = INTERROGATIVE_POOL[(ctx.seed ?? ctx.dayOfYear) % INTERROGATIVE_POOL.length]
+  return { id: 'interrogative', kind: 'interrogative', title: item.q, subtitle: 'Answer for today.', options: item.options, xp: 5 }
+}
+
+// Mental contrasting (WOOP-lite) — the scene sources its obstacle/plan pools.
+function contrastMove(ctx: SessionContext): Move {
+  return { id: 'contrast', kind: 'contrast', title: 'See it, then plan', subtitle: 'Outcome + the obstacle.', statement: ctx.identityStatement?.trim() || undefined, xp: 5 }
+}
+
 /** Build a single move of the given kind (used by the Arsenal launcher). */
 export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
   switch (kind) {
@@ -148,6 +167,9 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
     case 'speak': return speakMove(ctx)
     case 'assemble': return assembleMove(ctx)
     case 'compose': return composeMove(ctx)
+    case 'acknowledge': return acknowledgeMove(ctx)
+    case 'interrogative': return interrogativeMove(ctx)
+    case 'contrast': return contrastMove(ctx)
     default: return stateCheckMove()
   }
 }
@@ -189,16 +211,27 @@ export class DeterministicMoveEngine implements MoveEngine {
     // then a state-adaptive regulate beat (breath if off / amplify if locked-in).
     const moves: Move[] = [stateCheckMove(), regulateMove(ctx)]
 
-    // A rotating "core" move drawn from what the user's chapter has unlocked, so
-    // the session varies run-to-run and grows as they progress.
+    // The core beat. Tone follows the most recent check-in: a NEGATIVE/off state
+    // gets the non-affirm registers (acknowledge + self-compassion, ask-don't-
+    // declare, mental contrasting) rather than forced positivity — which is what
+    // actually meets someone on a hard day. A positive/unknown state gets the
+    // affirm/evidence registers. Always available from chapter 1 so off days are
+    // supported immediately.
+    const down = ctx.recentState === 'stressed' || ctx.recentState === 'distracted' || ctx.recentState === 'low_energy'
     const corePool: MoveKind[] = []
-    if (ctx.chapter >= 3) corePool.push('challenge') // discipline
-    if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
-    if (ctx.chapter >= 2) corePool.push('vision') // foundation: see it
-    if (ctx.chapter >= 2) corePool.push('type', 'speak', 'compose') // self-image: active reinforcement modalities
-    if (ctx.chapter >= 2 && ctx.missionAction?.trim()) corePool.push('mission')
-    if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
-    if (ctx.chapter >= 5) corePool.push('social') // architect: environment
+    if (down) {
+      corePool.push('acknowledge', 'interrogative') // validate + reflective self-talk
+      if (ctx.chapter >= 2) corePool.push('contrast', 'choice')
+    } else {
+      if (ctx.chapter >= 3) corePool.push('challenge') // discipline
+      if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
+      if (ctx.chapter >= 2) corePool.push('vision') // foundation: see it
+      if (ctx.chapter >= 2) corePool.push('type', 'speak', 'compose') // active reinforcement
+      if (ctx.chapter >= 2) corePool.push('interrogative', 'contrast') // mix in non-affirm even on good days
+      if (ctx.chapter >= 2 && ctx.missionAction?.trim()) corePool.push('mission')
+      if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
+      if (ctx.chapter >= 5) corePool.push('social') // architect: environment
+    }
 
     if (corePool.length > 0) {
       moves.push(buildMove(corePool[seed % corePool.length], ctx))
