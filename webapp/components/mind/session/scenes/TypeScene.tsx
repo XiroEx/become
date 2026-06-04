@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Keyboard, Check } from 'lucide-react'
+import { Keyboard, Check, ArrowRight } from 'lucide-react'
 import type { SceneProps } from '@/lib/mind/moves'
 
 // Normalize for comparison: lowercase, strip punctuation (keep apostrophes), collapse spaces.
@@ -29,6 +29,7 @@ export default function TypeScene({ move, onDone }: SceneProps) {
   const [text, setText] = useState('')
   const [locked, setLocked] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const advancedRef = useRef(false) // schedule the auto-advance exactly once
 
   // Count how many leading words match in order.
   const typed = useMemo(() => words(text), [text])
@@ -46,12 +47,17 @@ export default function TypeScene({ move, onDone }: SceneProps) {
     inputRef.current?.focus()
   }, [])
 
+  // Auto-advance once the line is complete. Guarded by a ref + depending ONLY on
+  // `complete` so setting `locked` doesn't re-run this effect and cancel the timer
+  // (that bug stranded users on the "done" screen). Manual Continue below too.
   useEffect(() => {
-    if (!complete || locked) return
+    if (!complete || advancedRef.current) return
+    advancedRef.current = true
     setLocked(true)
     const t = setTimeout(onDone, 1100)
     return () => clearTimeout(t)
-  }, [complete, locked, onDone])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complete])
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
@@ -67,6 +73,12 @@ export default function TypeScene({ move, onDone }: SceneProps) {
             </span>
             <p className="mt-4 text-lg font-bold">In your own hand.</p>
             <p className="mt-1 max-w-xs text-sm text-white/50">You wrote it. Now own it.</p>
+            <button
+              onClick={onDone}
+              className="mt-8 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
+            >
+              Continue <ArrowRight className="h-5 w-5" />
+            </button>
           </motion.div>
         ) : (
           <motion.div key="entry" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex w-full max-w-sm flex-col items-center">
