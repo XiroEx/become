@@ -34,6 +34,7 @@ import TypeScene from './scenes/TypeScene'
 import SpeakScene from './scenes/SpeakScene'
 import AssembleScene from './scenes/AssembleScene'
 import ComposeScene from './scenes/ComposeScene'
+import ContrastScene from './scenes/ContrastScene'
 
 interface CompleteResult {
   xpAwarded: number
@@ -228,6 +229,10 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
               {move.kind === 'speak' && <SpeakScene move={move} onDone={next} />}
               {move.kind === 'assemble' && <AssembleScene move={move} onDone={next} />}
               {move.kind === 'compose' && <ComposeScene move={move} onDone={next} />}
+              {/* Non-affirm registers — acknowledge/interrogative reuse the choice UI. */}
+              {move.kind === 'acknowledge' && <ChoiceScene move={move} onDone={next} />}
+              {move.kind === 'interrogative' && <ChoiceScene move={move} onDone={next} />}
+              {move.kind === 'contrast' && <ContrastScene move={move} onDone={next} />}
             </motion.div>
           )}
 

@@ -391,3 +391,94 @@ export const COMPOSE_TEMPLATES: ComposeTemplate[] = [
     ],
   },
 ]
+
+// ─── Non-affirm registers ─────────────────────────────────────────────────────
+// Pure positivity is limiting (forced affirmation backfires when you don't believe
+// it). These give the Mind rotation other voices — especially for off days:
+// ACKNOWLEDGE (validate + self-compassion, don't deny), INTERROGATIVE (ask, don't
+// declare — Senay-style "Will you?"), and CONTRAST content (vision + obstacle).
+
+// Choice-shaped (q + options{label, response}) so they reuse the Choice scene.
+export const ACKNOWLEDGE_POOL: { q: string; options: { label: string; response: string }[] }[] = [
+  {
+    q: "What's actually here right now?",
+    options: [
+      { label: "I'm tired", response: 'Tired is real, not weakness. Lower the bar, do the next small thing.' },
+      { label: "I'm anxious", response: 'Anxiety is energy without a target. Name one thing you can control.' },
+      { label: "I'm frustrated", response: 'Frustration means you care. Let it sharpen you, not stop you.' },
+      { label: "I'm flat", response: 'Flat days count too. Show up small — that keeps the identity alive.' },
+    ],
+  },
+  {
+    q: 'Rough moment. How do you want to meet it?',
+    options: [
+      { label: 'With patience', response: 'Patience with yourself is still discipline.' },
+      { label: 'With honesty', response: 'You just named it. That was the hard part.' },
+      { label: 'With one small step', response: 'One small step beats a perfect plan. Take it.' },
+    ],
+  },
+  {
+    q: 'You slipped. What now?',
+    options: [
+      { label: 'Forgive and reset', response: 'One miss is data, not identity. Begin again now.' },
+      { label: 'Learn from it', response: 'What was the trigger? Name it — that’s how it loses power.' },
+      { label: 'Just keep going', response: 'Streaks survive misses. The comeback is the rep.' },
+    ],
+  },
+  {
+    q: 'Be honest — how heavy is today?',
+    options: [
+      { label: 'Heavy', response: 'Then today’s win is just showing up. That’s enough.' },
+      { label: 'Manageable', response: 'Good. Use the steadiness — do one thing that future-you thanks you for.' },
+      { label: 'Light', response: 'Ride it. Bank a little extra while it’s easy.' },
+    ],
+  },
+]
+
+export const INTERROGATIVE_POOL: { q: string; options: { label: string; response: string }[] }[] = [
+  {
+    q: 'Will you keep one promise to yourself today?',
+    options: [
+      { label: 'Yes', response: 'Then it’s already different. Name the promise and go.' },
+      { label: "I'll try", response: "Trade 'try' for 'one'. One promise, kept. That’s the whole game." },
+      { label: 'Not sure', response: 'Start smaller than feels worth it. Certainty follows action.' },
+    ],
+  },
+  {
+    q: 'How will you show up when it gets hard today?',
+    options: [
+      { label: 'I dig in', response: 'Decide it now — before the moment tests you.' },
+      { label: 'I pause, then push', response: 'A breath, then a step. That’s a plan.' },
+      { label: 'I ask for help', response: 'Reaching out is strength. Who will you tell?' },
+    ],
+  },
+  {
+    q: 'What kind of person will today’s choices build?',
+    options: [
+      { label: 'A consistent one', response: 'Then let one boring, repeatable action prove it.' },
+      { label: 'A disciplined one', response: 'Discipline is just promises kept. Keep one.' },
+      { label: 'A resilient one', response: 'Resilience is built on resets. Reset well today.' },
+    ],
+  },
+]
+
+// Mental contrasting (WOOP-lite) — used by the Contrast scene directly.
+export const CONTRAST_OBSTACLES: string[] = [
+  'Low energy / tiredness',
+  'Getting distracted',
+  'Putting it off',
+  'Stress or overwhelm',
+  'Other people / interruptions',
+  'Not feeling like it',
+  'Old habit pulling me back',
+]
+
+export const CONTRAST_PLANS: string[] = [
+  'I’ll do just the first 2 minutes.',
+  'I’ll remove the distraction before I start.',
+  'I’ll do it before anything else.',
+  'I’ll take one breath and begin anyway.',
+  'I’ll tell someone I’m doing it.',
+  'I’ll act first; motivation can catch up.',
+  'I’ll notice the pull and choose different.',
+]

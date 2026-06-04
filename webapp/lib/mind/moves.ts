@@ -27,6 +27,9 @@ export type MoveKind =
   | 'speak' // say it out loud — record + hear yourself back
   | 'assemble' // rebuild the declaration from a shuffled word bank (legacy; replaced by 'compose')
   | 'compose' // fill blanks in a mostly-built affirmation with positive words (no wrong answers)
+  | 'acknowledge' // validate the hard feeling + self-compassion (non-affirm; for off days)
+  | 'interrogative' // ask, don't declare — "Will you?" reflective self-talk
+  | 'contrast' // mental contrasting: see the outcome, name the obstacle, make an if-then plan
 
 // ─── Breath protocols (decoupled from the old StateShiftTab) ──────────────────
 
