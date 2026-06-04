@@ -61,6 +61,12 @@ export default function VisionScene({ move, onDone }: SceneProps) {
   const statement = vision?.identityStatement || move.statement
   const dims = DIM_LABELS.filter((d) => (vision?.[d.key] as string | undefined)?.trim())
 
+  // Reveal speed: keep the comfortable default for short visions, but ramp it
+  // faster the longer the statement gets (so a 6+ sentence vision doesn't crawl).
+  // RevealText `speed` is a delay multiplier — <1 is faster.
+  const sentenceCount = (statement || '').split(/[.!?]+/).filter((s) => s.trim()).length
+  const revealSpeed = sentenceCount > 4 ? Math.max(0.45, 1 - (sentenceCount - 4) * 0.15) : 1
+
   if (loading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
@@ -106,6 +112,7 @@ export default function VisionScene({ move, onDone }: SceneProps) {
         <RevealText
           text={`“${statement}”`}
           onComplete={() => setReady(true)}
+          speed={revealSpeed}
           className="mt-4 max-w-sm text-2xl font-bold leading-snug text-white"
         />
       ) : null}
