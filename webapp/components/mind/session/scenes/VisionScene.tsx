@@ -65,7 +65,7 @@ export default function VisionScene({ move, onDone }: SceneProps) {
   // faster the longer the statement gets (so a 6+ sentence vision doesn't crawl).
   // RevealText `speed` is a delay multiplier — <1 is faster.
   const sentenceCount = (statement || '').split(/[.!?]+/).filter((s) => s.trim()).length
-  const revealSpeed = sentenceCount > 4 ? Math.max(0.45, 1 - (sentenceCount - 4) * 0.15) : 1
+  const revealSpeed = sentenceCount > 3 ? Math.max(0.45, 1 - (sentenceCount - 3) * 0.15) : 1
 
   if (loading) {
     return (
