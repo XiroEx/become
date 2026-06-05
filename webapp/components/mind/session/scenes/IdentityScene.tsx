@@ -17,6 +17,12 @@ const RADIUS = 54
 const CIRC = 2 * Math.PI * RADIUS
 
 export default function IdentityScene({ move, onDone }: SceneProps) {
+  // Reveal speed: keep the comfortable 2× pace for short affirmations, but ramp
+  // faster as the statement grows past 3 sentences (same idea as Vision, one
+  // sentence earlier). RevealText `speed` is a delay multiplier — lower = faster.
+  const sentenceCount = (move.statement || '').split(/[.!?]+/).filter((s) => s.trim()).length
+  const revealSpeed = sentenceCount > 3 ? Math.max(0.9, 2 - (sentenceCount - 3) * 0.3) : 2
+
   const [progress, setProgress] = useState(0) // 0..1
   const [affirmed, setAffirmed] = useState(false)
   const [ready, setReady] = useState(false) // statement fully revealed → can affirm
@@ -68,7 +74,7 @@ export default function IdentityScene({ move, onDone }: SceneProps) {
       <RevealText
         text={`“${move.statement}”`}
         onComplete={() => setReady(true)}
-        speed={2}
+        speed={revealSpeed}
         className="mt-6 max-w-sm text-2xl font-bold leading-snug text-white"
       />
 
