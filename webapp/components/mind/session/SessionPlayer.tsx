@@ -53,6 +53,12 @@ export interface SessionPlayerProps {
   plan: MindSessionPlan
   /** Called when the user exits/finishes — the home should refetch + close. */
   onExit: () => void
+  /** Admin lab: when true, completing does NOT post to /api/mind/session (no XP,
+   *  streak, recency) and scenes skip their own writes. For testing modalities. */
+  preview?: boolean
+  /** Admin lab: seed the live state so breath-for-state + the regulate amplify
+   *  swap can be exercised without first playing a state-check. */
+  initialLiveState?: MindState | null
 }
 
 type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
@@ -64,11 +70,11 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
+export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null }: SessionPlayerProps) {
   const router = useRouter()
   const [stage, setStage] = useState<Stage>('intro')
   const [index, setIndex] = useState(0)
-  const [liveState, setLiveState] = useState<MindState | null>(null)
+  const [liveState, setLiveState] = useState<MindState | null>(initialLiveState)
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
   const [advancing, setAdvancing] = useState(false)
@@ -83,6 +89,11 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
 
   const complete = useCallback(async () => {
     setStage('payoff')
+    // Admin lab preview: show the payoff but never write (no XP/streak/recency).
+    if (preview) {
+      setResult({ xpAwarded: 0, readyToLevelUp: false })
+      return
+    }
     try {
       // Report the EFFECTIVE kinds the player actually showed — so a locked-in
       // amplify (breath swapped out) isn't recorded as breath. Drives recency
@@ -105,7 +116,7 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
     } catch {
       /* payoff still shows; XP is best-effort */
     }
-  }, [plan.moves, liveState])
+  }, [plan.moves, liveState, preview])
 
   const next = useCallback(() => {
     if (index >= total - 1) {
@@ -211,14 +222,14 @@ export default function SessionPlayer({ plan, onExit }: SessionPlayerProps) {
               className="absolute inset-0"
             >
               {move.kind === 'state-check' && (
-                <StateCheckScene move={move} onState={setLiveState} onDone={next} />
+                <StateCheckScene move={move} onState={setLiveState} onDone={next} preview={preview} />
               )}
               {move.kind === 'breath' && (
                 <BreathScene move={move} protocol={resolvedProtocol} onDone={next} />
               )}
               {move.kind === 'identity' && <IdentityScene move={move} onDone={next} />}
-              {move.kind === 'challenge' && <ChallengeScene move={move} onDone={next} />}
-              {move.kind === 'win' && <WinScene move={move} onDone={next} />}
+              {move.kind === 'challenge' && <ChallengeScene move={move} onDone={next} preview={preview} />}
+              {move.kind === 'win' && <WinScene move={move} onDone={next} preview={preview} />}
               {move.kind === 'mission' && <MissionScene move={move} onDone={next} />}
               {move.kind === 'vision' && <VisionScene move={move} onDone={next} />}
               {move.kind === 'antisabotage' && <PatternScene move={move} onDone={next} />}

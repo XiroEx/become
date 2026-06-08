@@ -15,7 +15,7 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function WinScene({ move, onDone }: SceneProps) {
+export default function WinScene({ move, onDone, preview }: SceneProps) {
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -24,14 +24,16 @@ export default function WinScene({ move, onDone }: SceneProps) {
   const save = async () => {
     if (!valid || submitting) return
     setSubmitting(true)
-    try {
-      await fetch('/api/mind/wins', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ win: text.trim(), tz: new Date().getTimezoneOffset() }),
-      })
-    } catch {
-      /* best-effort */
+    if (!preview) {
+      try {
+        await fetch('/api/mind/wins', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ win: text.trim(), tz: new Date().getTimezoneOffset() }),
+        })
+      } catch {
+        /* best-effort */
+      }
     }
     setSaved(true)
     setTimeout(onDone, 1100)
