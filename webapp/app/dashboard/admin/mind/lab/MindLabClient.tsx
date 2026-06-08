@@ -14,6 +14,7 @@ import { BREATH_PROTOCOLS } from '@/lib/mind/moves'
 import { buildMove } from '@/lib/mind/composeSession'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import { MODALITIES, type ModalitySpec } from '@/lib/mind/modalities'
+import SpeechMatchTester from './SpeechMatchTester'
 import {
   IDENTITY_POOL, WIN_PROMPTS, INTROS, CHOICE_POOL, SABOTAGE_PATTERNS,
   ACCOUNTABILITY_ACTIONS, DISCIPLINE_CHALLENGES, COMPOSE_TEMPLATES,
@@ -77,7 +78,7 @@ function genSentences(n: number): string {
 }
 
 export default function MindLabClient() {
-  const [tab, setTab] = useState<'test' | 'library' | 'builder'>('test')
+  const [tab, setTab] = useState<'test' | 'library' | 'builder' | 'speech'>('test')
   const [selected, setSelected] = useState<ModalitySpec | null>(null)
   const [inputs, setInputs] = useState<Inputs>(DEFAULT_INPUTS)
   const [plan, setPlan] = useState<MindSessionPlan | null>(null)
@@ -160,7 +161,7 @@ export default function MindLabClient() {
 
       {/* Tabs */}
       <div className="mb-5 flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60">
-        {(['test', 'library', 'builder'] as const).map((t) => (
+        {(['test', 'library', 'builder', 'speech'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 rounded-lg py-2 text-sm font-medium capitalize transition-all ${tab === t ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-white' : 'text-zinc-500 dark:text-zinc-400'}`}>
             {t === 'test' ? 'Modalities' : t}
@@ -310,6 +311,9 @@ export default function MindLabClient() {
           )}
         </div>
       )}
+
+      {/* ── Speech tab ── */}
+      {tab === 'speech' && <SpeechMatchTester />}
 
       {/* Legend */}
       <div className="mt-8 border-t border-zinc-200 pt-4 dark:border-zinc-800">
