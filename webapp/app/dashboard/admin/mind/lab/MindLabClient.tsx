@@ -310,6 +310,16 @@ export default function MindLabClient() {
           )}
         </div>
       )}
+
+      {/* Legend */}
+      <div className="mt-8 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Legend</p>
+        <ul className="space-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <li><span className="mr-1">⚠️</span> Writes to the DB in a real session (XP / wins / state / discipline) — suppressed here in preview.</li>
+          <li><span className="mr-1">📷</span> Requests camera access (Mirror).</li>
+          <li><span className="mr-1">🎤</span> Requests microphone access (Say it out loud).</li>
+        </ul>
+      </div>
     </div>
   )
 }
