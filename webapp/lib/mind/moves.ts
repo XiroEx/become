@@ -202,4 +202,7 @@ export interface SceneProps {
   onDone: () => void
   /** state-check only: report the chosen state up to the player. */
   onState?: (state: MindState) => void
+  /** Admin lab preview: scenes that persist (state/win/discipline) skip their
+   *  network writes so testing never pollutes the account. */
+  preview?: boolean
 }

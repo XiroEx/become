@@ -16,7 +16,7 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function ChallengeScene({ move, onDone }: SceneProps) {
+export default function ChallengeScene({ move, onDone, preview }: SceneProps) {
   const [text, setText] = useState<string | null>(null)
   const [completed, setCompleted] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -49,14 +49,16 @@ export default function ChallengeScene({ move, onDone }: SceneProps) {
   const markDone = async () => {
     if (submitting || completed) return
     setSubmitting(true)
-    try {
-      await fetch('/api/mind/discipline', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ action: 'complete', tz: new Date().getTimezoneOffset() }),
-      })
-    } catch {
-      /* best-effort */
+    if (!preview) {
+      try {
+        await fetch('/api/mind/discipline', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ action: 'complete', tz: new Date().getTimezoneOffset() }),
+        })
+      } catch {
+        /* best-effort */
+      }
     }
     setJustDone(true)
     setTimeout(onDone, 1100)
