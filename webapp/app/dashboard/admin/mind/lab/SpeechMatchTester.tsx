@@ -67,14 +67,18 @@ export default function SpeechMatchTester() {
       <div className="rounded-2xl border border-zinc-200 bg-zinc-950 p-5 dark:border-zinc-800">
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-500">Say it</p>
         <p className="text-xl font-bold leading-relaxed">
-          {words.map((w, i) => (
-            <span
-              key={i}
-              className={`transition-colors duration-200 ${sm.matched[i] ? 'text-green-400' : 'text-white/25'}`}
-            >
-              {w}{i < words.length - 1 ? ' ' : ''}
-            </span>
-          ))}
+          {words.map((w, i) => {
+            const status = sm.statuses[i] ?? 'pending'
+            const color =
+              status === 'matched' ? 'text-green-400'
+              : status === 'missed' ? 'text-amber-400'
+              : 'text-white/25'
+            return (
+              <span key={i} className={`transition-colors duration-100 ${color}`}>
+                {w}{i < words.length - 1 ? ' ' : ''}
+              </span>
+            )
+          })}
         </p>
 
         {/* Progress */}
@@ -136,9 +140,11 @@ export default function SpeechMatchTester() {
       </div>
 
       <p className="text-xs text-zinc-400 dark:text-zinc-500">
-        This is the same engine that will power Speak &amp; Mirror. Forgiving in-order matching
-        (minor mis-hears tolerated), sticky highlight, threshold-based pass. Production scenes
-        keep a hold-to-affirm fallback where speech isn&apos;t supported.
+        Optimistic highlight: <span className="text-green-500">green</span> = said (lights up to
+        your furthest word; whole line greens once you pass),{' '}
+        <span className="text-amber-500">amber</span> = a word behind you that wasn&apos;t caught,
+        dim = not reached yet. Same engine that will power Speak &amp; Mirror; those keep a
+        hold-to-affirm fallback where speech isn&apos;t supported.
       </p>
     </div>
   )

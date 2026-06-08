@@ -10,6 +10,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSpeechRecognition } from './useSpeechRecognition'
 import { matchSpeech, normalizeWords } from '@/lib/mind/speechMatch'
 
+/** Per-word visual state for optimistic highlighting:
+ * - `matched`: spoken (green). Once `passed`, the whole line reads matched.
+ * - `missed`: behind the spoken frontier but never caught (amber) — skipped/flubbed.
+ * - `pending`: not reached yet (dim). */
+export type WordStatus = 'matched' | 'missed' | 'pending'
+
 export interface UseSpeechMatch {
   supported: boolean
   api: 'SpeechRecognition' | 'webkitSpeechRecognition' | null
@@ -18,6 +24,8 @@ export interface UseSpeechMatch {
   transcript: string
   /** Sticky per-word matched flags, aligned to the target's normalized words. */
   matched: boolean[]
+  /** Optimistic per-word status, aligned to the target's normalized words. */
+  statuses: WordStatus[]
   /** The target's normalized words (same length as `matched`). */
   targetWords: string[]
   matchedCount: number
@@ -60,6 +68,15 @@ export function useSpeechMatch(
   const ratio = matched.length ? matchedCount / matched.length : 0
   const passed = ratio >= threshold && matched.length > 0
 
+  // Optimistic statuses: light up to the furthest spoken word; flag only the
+  // genuinely-skipped words behind that frontier; once passed, all green.
+  const frontier = matched.reduce((acc, m, i) => (m ? i : acc), -1)
+  const statuses: WordStatus[] = matched.map((m, i) => {
+    if (passed || m) return 'matched'
+    if (i < frontier) return 'missed'
+    return 'pending'
+  })
+
   // Fire onPassed once when we cross the threshold.
   useEffect(() => {
     if (passed && !passedRef.current) {
@@ -76,7 +93,7 @@ export function useSpeechMatch(
 
   return {
     supported, api, listening, error, transcript,
-    matched, targetWords, matchedCount, ratio, passed,
+    matched, statuses, targetWords, matchedCount, ratio, passed,
     start, stop, reset,
   }
 }
