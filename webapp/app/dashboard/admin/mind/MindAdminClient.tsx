@@ -3,7 +3,8 @@
 // Admin: set/reset your OWN Mind chapter + XP for retesting the journey.
 
 import { useEffect, useState } from 'react'
-import { Brain, RefreshCw, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { Brain, RefreshCw, Loader2, FlaskConical, ChevronRight } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -78,6 +79,20 @@ export default function MindAdminClient() {
       <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
         Set or reset your own Mind chapter + XP for retesting.
       </p>
+
+      <Link
+        href="/dashboard/admin/mind/lab"
+        className="mb-5 flex items-center justify-between rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3.5 transition-colors hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:hover:bg-violet-500/20"
+      >
+        <span className="flex items-center gap-3">
+          <FlaskConical className="h-5 w-5 text-violet-500" />
+          <span>
+            <span className="block text-sm font-semibold text-zinc-900 dark:text-white">Open Mind Lab</span>
+            <span className="block text-xs text-zinc-500 dark:text-zinc-400">Test every modality + browse all content (no writes)</span>
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 text-zinc-400" />
+      </Link>
 
       {loading ? (
         <div className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />

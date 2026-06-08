@@ -78,7 +78,7 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function StateCheckScene({ move, onState, onDone }: SceneProps) {
+export default function StateCheckScene({ move, onState, onDone, preview }: SceneProps) {
   const [chosen, setChosen] = useState<MindState | null>(null)
   const [other, setOther] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -130,6 +130,7 @@ export default function StateCheckScene({ move, onState, onDone }: SceneProps) {
     setPendingState(null) // clear the "what changed?" gate so the reveal can show
     onState?.(state)
     setMessage(FALLBACK_MESSAGES[state]) // optimistic
+    if (preview) return // admin lab: don't log state / grant XP
     try {
       const res = await fetch('/api/mind/state', {
         method: 'POST',
