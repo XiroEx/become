@@ -78,20 +78,9 @@ function socialMove(): Move {
 }
 
 function mirrorMove(ctx: SessionContext): Move {
-  const sd = ctx.seed ?? ctx.dayOfYear
-  const statement =
-    ctx.identityStatement && ctx.identityStatement.trim().length > 0
-      ? ctx.identityStatement.trim()
-      : IDENTITY_POOL[sd % IDENTITY_POOL.length]
-  return { id: 'mirror', kind: 'mirror', title: 'Mirror', subtitle: 'Look at yourself. Say it.', statement, xp: 5 }
-}
-
-// Resolve the statement these identity-flavored modalities reinforce.
-function resolveStatement(ctx: SessionContext): string {
-  const sd = ctx.seed ?? ctx.dayOfYear
-  return ctx.identityStatement && ctx.identityStatement.trim().length > 0
-    ? ctx.identityStatement.trim()
-    : IDENTITY_POOL[sd % IDENTITY_POOL.length]
+  // Spoken out loud at a mirror — keep it to a punchy line, never a long
+  // paragraph (use shortStatement, same as the other say/recite modalities).
+  return { id: 'mirror', kind: 'mirror', title: 'Mirror', subtitle: 'Look at yourself. Say it.', statement: shortStatement(ctx), xp: 5 }
 }
 
 // A SHORT affirmation for the "reconstruct it" modalities (Build it / Type it):
@@ -111,7 +100,8 @@ function typeMove(ctx: SessionContext): Move {
 }
 
 function speakMove(ctx: SessionContext): Move {
-  return { id: 'speak', kind: 'speak', title: 'Say it out loud', subtitle: 'Hold to record. Hear yourself.', statement: resolveStatement(ctx), xp: 5 }
+  // Live speech detection recites this out loud — keep it short, not a paragraph.
+  return { id: 'speak', kind: 'speak', title: 'Say it out loud', subtitle: 'Say it like you mean it.', statement: shortStatement(ctx), xp: 5 }
 }
 
 function assembleMove(ctx: SessionContext): Move {
@@ -180,43 +170,51 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
 // again.
 const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000 // ~4h
 
-// The "regulate" beat (move 2):
-//  • If breath was done recently → SKIP breath entirely; ground/amplify with a
-//    non-breath beat instead (no repetitive breathing).
-//  • Otherwise → a realignment breath, but carrying an amplify alternative the
-//    player swaps in when the live check-in is positive ('locked_in') — a good
-//    mood channels momentum instead of being forced into a breath.
-// Amplify rotates by seed for variety.
-function regulateMove(ctx: SessionContext): Move {
-  const seed = ctx.seed ?? ctx.dayOfYear
-  const amplifyPool: MoveKind[] = ['win', 'vision', 'choice', 'mirror']
-  const amplify = buildMove(amplifyPool[seed % amplifyPool.length], ctx)
-
-  const now = ctx.now ?? 0
-  const onCooldown =
-    ctx.lastBreathAt != null && now > 0 && now - ctx.lastBreathAt < BREATH_COOLDOWN_MS
-  if (onCooldown) return amplify // recent breath → no repeat; ground without breathing
-
-  const breath = breathMove()
-  breath.altPositive = amplify
-  return breath
+// Pick the seed-rotated entry from a pool, skipping any kind already used this
+// session — so a session never shows the same modality twice.
+function pickUnused(pool: MoveKind[], seed: number, used: Set<MoveKind>): MoveKind | undefined {
+  const avail = pool.filter((k) => !used.has(k))
+  if (avail.length === 0) return undefined
+  return avail[seed % avail.length]
 }
 
 export class DeterministicMoveEngine implements MoveEngine {
   composeSession(ctx: SessionContext): MindSessionPlan {
     const seed = ctx.seed ?? ctx.dayOfYear
     const intro = INTROS[seed % INTROS.length]
+    const used = new Set<MoveKind>()
+    const moves: Move[] = []
 
-    // Open by checking in (grounds the session, grants XP via /api/mind/state),
-    // then a state-adaptive regulate beat (breath if off / amplify if locked-in).
-    const moves: Move[] = [stateCheckMove(), regulateMove(ctx)]
+    // 1. Open by checking in (grounds the session, grants XP via /api/mind/state).
+    moves.push(stateCheckMove())
+    used.add('state-check')
 
-    // The core beat. Tone follows the most recent check-in: a NEGATIVE/off state
+    // 2. Regulate beat:
+    //  • If breath was done recently → ground/amplify with a non-breath beat
+    //    instead (no repetitive breathing).
+    //  • Otherwise → a realignment breath carrying an amplify alternative the
+    //    player swaps in when the live check-in is positive ('locked_in').
+    // The amplify kind is RESERVED in `used` either way, so even when the player
+    // swaps it in at runtime it can never collide with the core/close beat.
+    const amplifyPool: MoveKind[] = ['win', 'vision', 'choice', 'mirror']
+    const amplifyKind = pickUnused(amplifyPool, seed, used) ?? 'win'
+    const amplify = buildMove(amplifyKind, ctx)
+    const now = ctx.now ?? 0
+    const onCooldown = ctx.lastBreathAt != null && now > 0 && now - ctx.lastBreathAt < BREATH_COOLDOWN_MS
+    if (onCooldown) {
+      moves.push(amplify)
+    } else {
+      const breath = breathMove()
+      breath.altPositive = amplify
+      moves.push(breath)
+      used.add('breath')
+    }
+    used.add(amplifyKind)
+
+    // 3. Core beat. Tone follows the most recent check-in: a NEGATIVE/off state
     // gets the non-affirm registers (acknowledge + self-compassion, ask-don't-
-    // declare, mental contrasting) rather than forced positivity — which is what
-    // actually meets someone on a hard day. A positive/unknown state gets the
-    // affirm/evidence registers. Always available from chapter 1 so off days are
-    // supported immediately.
+    // declare, mental contrasting) rather than forced positivity. A positive/
+    // unknown state gets the affirm/evidence registers.
     const down = ctx.recentState === 'stressed' || ctx.recentState === 'distracted' || ctx.recentState === 'low_energy'
     const corePool: MoveKind[] = []
     if (down) {
@@ -232,16 +230,19 @@ export class DeterministicMoveEngine implements MoveEngine {
       if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
       if (ctx.chapter >= 5) corePool.push('social') // architect: environment
     }
-
-    if (corePool.length > 0) {
-      moves.push(buildMove(corePool[seed % corePool.length], ctx))
+    const coreKind = pickUnused(corePool, seed, used)
+    if (coreKind) {
+      moves.push(buildMove(coreKind, ctx))
+      used.add(coreKind)
     }
 
-    // Close on an identity-reinforcing beat — but rotate the MODALITY so repeat
-    // visits feel different (read / mirror / type / say it / build it).
+    // 4. Close on an identity-reinforcing beat — rotate the MODALITY (and never
+    // repeat one already used this session) so visits feel different.
     const closePool: MoveKind[] = ['identity']
     if (ctx.chapter >= 2) closePool.push('mirror', 'type', 'speak', 'compose')
-    moves.push(buildMove(closePool[(seed + 1) % closePool.length], ctx))
+    const closeKind = pickUnused(closePool, seed + 1, used) ?? 'identity'
+    moves.push(buildMove(closeKind, ctx))
+    used.add(closeKind)
 
     return { intro, moves, rewardXp: 15 }
   }
