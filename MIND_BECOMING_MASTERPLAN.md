@@ -24,64 +24,65 @@ alone):
 
 | Pillar | What it gives the user | Where it lives |
 |---|---|---|
-| **A. Sourced content** | Relatable, voiced material from books/people | `mindContent.ts` → unified content model |
-| **B. Coursework / curriculum** | A structured arc — "a course in becoming" | chapters → courses |
+| **A. Sourced methods** | Relatable material — book methods, voiced 100% as Become (sources admin-only) | `mindContent.ts` → unified content model |
+| **B. Chapters (as-is)** | XP-gated progression spine; coursework deferred to last | `lib/mindXP.ts` (unchanged) |
 | **C. Pacing model** | Growth that volume can't rush or scarcity starve | session API + new fields |
 | **D. AI MoveEngine** | Endless, personal, never-repetitive content | 2nd `composeSession` impl |
 | **E. Becoming tab** | *Seeing* the change — then → now → next | new surface |
 
 ---
 
-## 2. Pillar A — Resurrect & unify the sourced content (do this FIRST)
+## 2. Pillar A — Resurrect the content as METHODS, voiced 100% as Become (do this FIRST)
 
 **Problem:** the relatable, book-sourced content (`lib/mindContent.ts`, 30 pieces
 with `source:` attribution and a real voice) was orphaned by the redesign; the new
 linear engine reads the generic `lib/mind/library.ts`.
 
-**Fix:** one unified, **sourced** content model that the new engine consumes.
+**The rule (user-locked 2026-06-09):** the books are our *private R&D*, NOT our
+branding. We mine their **inspiration, methods, ideas, and perspective-shifts** —
+but everything a user sees is **pure Become voice**. A user must NEVER see
+"Reality Transurfing", "David Goggins", or any book/person name anywhere in the
+mindset section or while doing a modality. **`source` is admin-only metadata.**
 
-- Introduce a `Source` concept — the inspiration behind a piece:
-  - `Reality Transurfing` / Tufti (Vadim Zeland) — pendulums, importance, the
-    "wave of fortune," outer vs inner intention
-  - `Becoming Supernatural` (Joe Dispenza) — future-self rehearsal, the nervous
-    system can't tell rehearsal from reality, heart-brain coherence
-  - `Psycho-Cybernetics` (Maxwell Maltz) — self-image as the master controller,
-    "the servo-mechanism," 21-day identity change
-  - `How to Win Friends and Influence People` (Carnegie) — the social/architect
-    register (genuine interest, the other person's view) — maps to our `social`
-  - plus the voices already in the file (Goggins, Outwitting the Devil, etc.)
-- Every content item (affirmation, reflection, challenge, prompt, breath, vision)
-  carries: `text`, `source`, `register` (affirm/reflect/regulate/plan/evidence/
-  action/open), `states[]` it suits, and an optional `chapter`/`course` it belongs
-  to. This is the **raw material** both the deterministic engine AND the AI layer
-  draw from — so even AI-generated sessions are *grounded in a real philosophy*
-  and can attribute it ("In the language of Psycho-Cybernetics…").
-- Surface attribution lightly in-scene (a small "— Reality Transurfing" tag) so it
-  feels like wisdom from somewhere, which is what makes it relatable vs generic.
+**Fix:** one unified content model whose *methods* power the modalities.
+
+- The lineage we mine (internal only): Reality Transurfing/Tufti (reduce
+  importance, stop reacting, outer vs inner intention), Becoming Supernatural/
+  Dispenza (future-self rehearsal; the nervous system can't tell rehearsal from
+  real), Psycho-Cybernetics/Maltz (self-image as master controller, identity
+  installation), Goggins / Outwitting the Devil (do it anyway; drift vs choice),
+  Carnegie (genuine interest in others → our `social`).
+- Each content item carries: `text` (Become-voiced), **`source` (ADMIN-ONLY tag)**,
+  `register` (affirm/reflect/regulate/plan/evidence/action/open), `states[]` it
+  suits, optional `chapter`. The *methods* shape what the modalities **ask, offer,
+  and reframe** — the questions, the perspective flips, the prompts.
+- This is the raw material both the deterministic engine AND the AI layer draw
+  from, so even AI sessions are grounded in a real method — but the AI writes in
+  **Become's voice**, never naming a source to the user.
+- **Attribution is admin-only:** the Mind Lab / admin mindset area MAY show
+  "Reality Transurfing–inspired" / "Goggins–inspired" on content + features so we
+  track lineage. Nowhere user-facing.
 
 **Deliverable:** migrate `mindContent.ts` + `library.ts` into one
-`lib/mind/content/` module keyed by source + register; rewire `composeSession`,
-the scenes, and the Mind Lab to it. No behavior change yet — just the soul back.
+`lib/mind/content/` module keyed by register (+ admin `source`); rewire
+`composeSession`, the scenes, and the Mind Lab to it. User-facing strings are
+Become-voiced; strip every source name from anything a user can reach.
 
 ---
 
-## 3. Pillar B — Coursework / curriculum
+## 3. Pillar B — Chapters stay AS-IS; coursework is LATER (post-AI)
 
-Reframe the existing 5 chapters (`lib/mindXP.ts`) as **Courses** — each a themed
-arc anchored to a philosophy, so progression *teaches* something:
+**Keep the existing 5 chapters exactly as they are** (`lib/mindXP.ts`): XP-gated
+unlocking of modalities/features. No restructure, no user-facing "course" framing
+now. The chapters remain the progression spine.
 
-1. **Foundation** — state & awareness (Reality Transurfing: stop reacting,
-   reduce importance)
-2. **Self-Image** — identity installation (Psycho-Cybernetics: become the person
-   first)
-3. **Discipline** — doing it anyway (Goggins / Outwitting the Devil)
-4. **Vision & Rehearsal** — future-self (Becoming Supernatural)
-5. **The Architect** — environment & people (Carnegie / social)
+The 5 chapters still have internal *thematic leanings* that guide which methods/
+content feel right per chapter (state & awareness → self-image → discipline →
+vision/rehearsal → social/architect), but this is just content-mapping guidance,
+not a visible curriculum.
 
-Each course = an ordered set of **lessons** (a lesson ≈ a guided session with a
-teaching beat + practice). Completing a course's lessons is what advances you.
-This is the "coursework we will eventually do" given a concrete spine now, so the
-other pillars have something real to pace and visualize.
+**A real coursework section is explicitly deferred — built AFTER the AI layer is
+done** (user-locked 2026-06-09). Don't build lessons/curriculum yet.
 
 ---
 
@@ -171,9 +172,10 @@ it *visible* as a life changing.
 
 1. Open Mind → **Becoming tab** shows where you are + today's growth moment.
 2. Start a session → **AI MoveEngine** composes it, grounded in your data + the
-   **sourced** content for your current **course**, in a real voice.
+   book *methods* for your current chapter — written entirely in Become's voice
+   (never naming a source).
 3. You do the work (scenes, speech, etc.) → wins/reflections/state logged.
-4. **Pacing** decides: was this a *growth moment* (advance the course / reveal a
+4. **Pacing** decides: was this a *growth moment* (advance a chapter / reveal a
    modality) or *training* (full session, XP banks)?
 5. Progress + evidence flow back to the **Becoming tab** → you *see* the change.
 6. Repeat. Casuals feel steady growth; grinders train endlessly and bank score;
@@ -183,27 +185,32 @@ it *visible* as a life changing.
 
 ## 8. Phasing (build order)
 
-- **P1 — Content reunification (no AI):** unified sourced content model; rewire
-  the engine/scenes/Lab. Immediately makes sessions relatable again. *Low risk,
-  big felt impact, needs no open decision — recommend building first.*
-- **P2 — Coursework spine:** chapters → courses → lessons; map sourced content to
-  courses.
-- **P3 — Pacing + XP bank + data model:** growth-moment gate, bank, modality
+- **P1 — Content reunification (no AI):** unified content model whose *methods*
+  power the modalities; user-facing strings Become-voiced; `source` kept as
+  admin-only metadata; rewire engine/scenes/Lab. Chapters stay as-is.
+  *Low risk, big felt impact, needs no open decision — recommend building first.*
+- **P2 — Pacing + XP bank + data model:** growth-moment gate, bank, modality
   reveal cadence, training-mode framing.
-- **P4 — Becoming tab:** then/now/next, arc path, evidence wall, score.
-- **P5 — AI MoveEngine (a→b→c):** sequencing → authoring → conversational, behind
-  the existing seam, deterministic fallback.
+- **P3 — Becoming tab:** then/now/next, arc path, evidence wall, score.
+- **P4 — AI MoveEngine (a→b→c):** sequencing → authoring → conversational, behind
+  the existing seam, deterministic fallback, Become-voiced (never names a source).
+- **P5 — Coursework (LATER, after AI):** the curriculum/lessons section, built
+  only once the AI layer is done.
 
-P1 + P4 deliver felt value without any AI. P5 is the endgame and the only part
-needing the backend decision.
+P1 + P3 deliver felt value without any AI. P4 is the endgame and the only part
+needing the backend decision. P5 is explicitly last.
 
 ---
 
-## 9. Open decisions (need user input before P5)
+## 9. Open decisions
 
-1. **AI backend:** redbtn graph (recommended) vs direct Claude API.
-2. **Course structure depth:** lightweight (themed chapters) vs full
-   lessons-with-teaching-beats curriculum.
-3. **Attribution display:** how visible are sources in-scene (subtle tag vs a
-   "today's wisdom from…" framing)?
-4. **XP bank meaning:** score-only for now (recommended) vs tie to milestones now.
+- **AI backend (needed before P4):** redbtn graph (recommended) vs direct Claude
+  API.
+- **XP bank meaning (needed before P2):** score-only for now (recommended) vs tie
+  to milestones now.
+
+Resolved (user-locked 2026-06-09):
+- **Attribution:** admin-only ("…–inspired" tags in the Mind Lab/admin); NEVER
+  user-facing. All user-facing copy is pure Become voice.
+- **Chapters:** keep the existing 5 XP-gated chapters as-is; no course restructure.
+- **Coursework:** deferred to P5, after the AI layer.
