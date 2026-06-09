@@ -66,14 +66,20 @@ export function useSpeechMatch(
 
   const matchedCount = matched.reduce((n, m) => n + (m ? 1 : 0), 0)
   const ratio = matched.length ? matchedCount / matched.length : 0
-  const passed = ratio >= threshold && matched.length > 0
+  const frontier = matched.reduce((acc, m, i) => (m ? i : acc), -1)
+
+  // Pass needs BOTH enough words said AND the speaker to have reached the end —
+  // otherwise a long statement "finishes" at 60% while you're still mid-sentence.
+  // `reachedEnd` = the furthest spoken word is within the last ~20% of the line.
+  const tail = Math.max(1, Math.ceil(matched.length * 0.2))
+  const reachedEnd = matched.length > 0 && frontier >= matched.length - tail
+  const passed = matched.length > 0 && ratio >= threshold && reachedEnd
 
   // Optimistic statuses: green up to the furthest spoken word PLUS a look-ahead
   // glow of the next couple words (so the highlight leads your voice instead of
   // trailing it); amber only for words genuinely skipped BEHIND the frontier; dim
   // for words still out ahead. Once passed, the whole line reads matched.
   const LOOKAHEAD = 2
-  const frontier = matched.reduce((acc, m, i) => (m ? i : acc), -1)
   const glowTo = frontier >= 0 ? frontier + LOOKAHEAD : -1
   const statuses: WordStatus[] = matched.map((m, i) => {
     if (passed || m) return 'matched'
