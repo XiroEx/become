@@ -68,12 +68,17 @@ export function useSpeechMatch(
   const ratio = matched.length ? matchedCount / matched.length : 0
   const passed = ratio >= threshold && matched.length > 0
 
-  // Optimistic statuses: light up to the furthest spoken word; flag only the
-  // genuinely-skipped words behind that frontier; once passed, all green.
+  // Optimistic statuses: green up to the furthest spoken word PLUS a look-ahead
+  // glow of the next couple words (so the highlight leads your voice instead of
+  // trailing it); amber only for words genuinely skipped BEHIND the frontier; dim
+  // for words still out ahead. Once passed, the whole line reads matched.
+  const LOOKAHEAD = 2
   const frontier = matched.reduce((acc, m, i) => (m ? i : acc), -1)
+  const glowTo = frontier >= 0 ? frontier + LOOKAHEAD : -1
   const statuses: WordStatus[] = matched.map((m, i) => {
     if (passed || m) return 'matched'
-    if (i < frontier) return 'missed'
+    if (i > frontier && i <= glowTo) return 'matched' // optimistic look-ahead
+    if (i < frontier) return 'missed' // skipped behind the frontier
     return 'pending'
   })
 
