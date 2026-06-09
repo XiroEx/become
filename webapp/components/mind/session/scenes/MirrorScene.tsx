@@ -109,104 +109,111 @@ export default function MirrorScene({ move, onDone }: SceneProps) {
   const begin = () => { setStarted(true); sm.start() }
   const useSpeech = sm.supported && !micBlocked
 
+  const SPRING = { type: 'spring', stiffness: 240, damping: 30 } as const
+
   return (
-    <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden px-6 text-center">
+    <div className="relative h-full w-full overflow-hidden text-center">
       {/* Camera background (mirrored) */}
       {cam === 'on' && (
         <video ref={videoRef} playsInline autoPlay muted
           className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/15 to-black/75" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/75" />
 
-      {/* Foreground */}
-      <div className="relative z-10 flex w-full max-w-sm flex-col items-center">
-        <p className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-white/60">
-          <Camera className="h-3.5 w-3.5" />
-          {cam === 'on' ? 'Look at yourself' : 'Mirror'}
-        </p>
+      {/* Foreground — centered until you start, then statement slides to the top
+          and the controls slide to the bottom so your face is clear in the middle. */}
+      <div className={`absolute inset-0 z-10 flex flex-col items-center px-6 ${showHighlight ? 'justify-between py-14' : 'justify-center gap-10'}`}>
+        {/* Top group: label + statement */}
+        <motion.div layout transition={SPRING} className="flex w-full max-w-sm flex-col items-center">
+          <p className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-white/60">
+            <Camera className="h-3.5 w-3.5" />
+            {cam === 'on' ? 'Look at yourself' : 'Mirror'}
+          </p>
+          <p className="mt-5 text-2xl font-bold leading-snug drop-shadow-lg">
+            &ldquo;
+            {words.map((w, i) => {
+              const status = sm.statuses[i] ?? 'pending'
+              const color = !showHighlight
+                ? 'text-white'
+                : status === 'matched' ? 'text-green-400'
+                : status === 'missed' ? 'text-amber-400'
+                : 'text-white/30'
+              return (
+                <span key={i} className={`transition-colors duration-100 ${color}`}>
+                  {w}{i < words.length - 1 ? ' ' : ''}
+                </span>
+              )
+            })}
+            &rdquo;
+          </p>
+          {cam === 'off' && <p className="mt-3 text-xs text-white/50">Camera off — say it anyway.</p>}
+        </motion.div>
 
-        <p className="mt-5 text-2xl font-bold leading-snug drop-shadow-lg">
-          &ldquo;
-          {words.map((w, i) => {
-            const status = sm.statuses[i] ?? 'pending'
-            const color = !showHighlight
-              ? 'text-white'
-              : status === 'matched' ? 'text-green-400'
-              : status === 'missed' ? 'text-amber-400'
-              : 'text-white/30'
-            return (
-              <span key={i} className={`transition-colors duration-100 ${color}`}>
-                {w}{i < words.length - 1 ? ' ' : ''}
+        {/* Bottom group: action + escapes */}
+        <motion.div layout transition={SPRING} className="flex w-full max-w-sm flex-col items-center">
+          {done ? (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center">
+              <span className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20 backdrop-blur-sm">
+                <Check className="h-10 w-10 text-green-400" strokeWidth={3} />
               </span>
+              <p className="mt-4 text-sm font-semibold text-green-400">Locked in.</p>
+            </motion.div>
+          ) : useSpeech ? (
+            !started ? (
+              // Tap to start speaking
+              <div className="flex flex-col items-center">
+                <button onClick={begin} aria-label="Start"
+                  className="flex h-28 w-28 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition-transform active:scale-95">
+                  <Mic className="h-10 w-10 text-white" />
+                </button>
+                <p className="mt-6 text-sm text-white/60">Tap, then say it out loud</p>
+              </div>
+            ) : (
+              // Listening
+              <div className="flex flex-col items-center">
+                <span className="relative flex h-24 w-24 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
+                  <motion.span aria-hidden className="absolute inset-0 rounded-full bg-violet-400/25"
+                    animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0.15, 0.5] }}
+                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }} />
+                  <Mic className="relative z-10 h-9 w-9 text-violet-200" />
+                </span>
+                <p className="mt-5 text-sm text-white/60">Say it like you mean it…</p>
+                <button onClick={finish} className="mt-3 text-sm font-medium text-white/50 transition-colors hover:text-white/80">
+                  Lock it in anyway
+                </button>
+              </div>
             )
-          })}
-          &rdquo;
-        </p>
-        {cam === 'off' && <p className="mt-3 text-xs text-white/50">Camera off — say it anyway.</p>}
-
-        {/* ── Done ── */}
-        {done ? (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-10 flex flex-col items-center">
-            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20 backdrop-blur-sm">
-              <Check className="h-10 w-10 text-green-400" strokeWidth={3} />
-            </span>
-            <p className="mt-4 text-sm font-semibold text-green-400">Locked in.</p>
-          </motion.div>
-        ) : useSpeech ? (
-          !started ? (
-            // Tap to start speaking
-            <div className="mt-10 flex flex-col items-center">
-              <button onClick={begin} aria-label="Start"
-                className="flex h-28 w-28 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm transition-transform active:scale-95">
-                <Mic className="h-10 w-10 text-white" />
-              </button>
-              <p className="mt-6 text-sm text-white/60">Tap, then say it out loud</p>
-            </div>
           ) : (
-            // Listening
-            <div className="mt-10 flex flex-col items-center">
-              <span className="relative flex h-28 w-28 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
-                <motion.span aria-hidden className="absolute inset-0 rounded-full bg-violet-400/25"
-                  animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0.15, 0.5] }}
-                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }} />
-                <Mic className="relative z-10 h-10 w-10 text-violet-200" />
-              </span>
-              <p className="mt-6 text-sm text-white/60">Say it like you mean it…</p>
-              <button onClick={finish} className="mt-4 text-sm font-medium text-white/50 transition-colors hover:text-white/80">
-                Lock it in anyway
+            // ── Hold-to-affirm fallback ──
+            <div className="flex flex-col items-center">
+              <button
+                onPointerDown={press}
+                onPointerUp={release}
+                onPointerLeave={release}
+                onPointerCancel={release}
+                aria-label="Hold to affirm"
+                className="relative flex h-32 w-32 touch-none select-none items-center justify-center rounded-full"
+              >
+                <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="6" />
+                  <circle cx="60" cy="60" r={RADIUS} fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round"
+                    strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - progress)} />
+                </svg>
+                <motion.span animate={{ scale: 1 + progress * 0.08 }}
+                  className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-white/15 px-2 text-xs font-semibold text-white backdrop-blur-sm">
+                  Hold to affirm
+                </motion.span>
               </button>
+              <p className="mt-6 text-sm text-white/60">{micBlocked ? 'Mic blocked — affirm it anyway.' : 'Say it like you mean it.'}</p>
             </div>
-          )
-        ) : (
-          // ── Hold-to-affirm fallback ──
-          <>
-            <button
-              onPointerDown={press}
-              onPointerUp={release}
-              onPointerLeave={release}
-              onPointerCancel={release}
-              aria-label="Hold to affirm"
-              className="relative mt-10 flex h-32 w-32 touch-none select-none items-center justify-center rounded-full"
-            >
-              <svg className="absolute inset-0 -rotate-90" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="6" />
-                <circle cx="60" cy="60" r={RADIUS} fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round"
-                  strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - progress)} />
-              </svg>
-              <motion.span animate={{ scale: 1 + progress * 0.08 }}
-                className="relative z-10 flex h-24 w-24 items-center justify-center rounded-full bg-white/15 px-2 text-xs font-semibold text-white backdrop-blur-sm">
-                Hold to affirm
-              </motion.span>
-            </button>
-            <p className="mt-6 text-sm text-white/60">{micBlocked ? 'Mic blocked — affirm it anyway.' : 'Say it like you mean it.'}</p>
-          </>
-        )}
+          )}
 
-        {!done && (
-          <button onClick={() => setWriteMode(true)} className="mt-5 text-xs font-medium text-white/50 underline-offset-2 hover:text-white/80 hover:underline">
-            Write instead
-          </button>
-        )}
+          {!done && (
+            <button onClick={() => setWriteMode(true)} className="mt-5 text-xs font-medium text-white/50 underline-offset-2 hover:text-white/80 hover:underline">
+              Write instead
+            </button>
+          )}
+        </motion.div>
       </div>
     </div>
   )

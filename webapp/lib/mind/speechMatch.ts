@@ -34,10 +34,13 @@ function levenshtein(a: string, b: string): number {
   return prev[n]
 }
 
-/** Two words count as the same: exact, or within edit-distance 1 for longer words
- * (absorbs minor mis-hears / homophones without matching short stop-words loosely). */
+/** Two words count as the same: exact; one a prefix of the other (≥3 chars — catches
+ * interim/partial recognizer output sooner, e.g. "discip" → "disciplined"); or within
+ * edit-distance 1 for longer words (absorbs minor mis-hears / homophones). */
 export function wordsClose(a: string, b: string): boolean {
   if (a === b) return true
+  const min = Math.min(a.length, b.length)
+  if (min >= 3 && (a.startsWith(b) || b.startsWith(a))) return true
   if (a.length < 4 || b.length < 4) return false
   return levenshtein(a, b) <= 1
 }
