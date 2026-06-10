@@ -282,6 +282,20 @@ export default function MindJourney() {
         <ChevronRight className="h-5 w-5 text-zinc-400" />
       </Link>
 
+      {/* The Becoming — progression / training log */}
+      <Link
+        href="/dashboard/mind/becoming"
+        className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+      >
+        <div>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Where you started, where you are, what&apos;s next
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 text-zinc-400" />
+      </Link>
+
       {/* AI coach — scaffolded (drops into the MoveEngine via redbtn later) */}
       <MindCoachTeaser />
       </div>
