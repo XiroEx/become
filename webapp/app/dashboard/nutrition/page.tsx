@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import { useSwipeNav } from '@/hooks/useSwipeNav'
 import DateNav from '@/components/nutrition/DateNav'
+import NutritionAITeaser from '@/components/nutrition/NutritionAITeaser'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import TagSection, { type MealLogLite } from '@/components/nutrition/TagSection'
 import WaterTracker from '@/components/nutrition/WaterTracker'
@@ -12,7 +14,7 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import { Card, EmptyState, Toast } from '@/components/ui'
@@ -122,6 +124,66 @@ function NutritionPageInner() {
   const [plans, setPlans] = useState<MealPlan[]>([])
   // Schedule-meals drawer — opens on "Schedule meals" CTA when viewingFuture.
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false)
+
+  // One-tap "Copy yesterday": re-log everything from yesterday onto the
+  // selected day (items are full snapshots, so reposting them is lossless).
+  const [copyingYesterday, setCopyingYesterday] = useState(false)
+  const copyYesterday = async () => {
+    if (copyingYesterday) return
+    setCopyingYesterday(true)
+    try {
+      const yest = new Date(selectedDate)
+      yest.setDate(yest.getDate() - 1)
+      const tz = new Date().getTimezoneOffset()
+      const res = await fetch(`/api/meal-logs?date=${formatDateParam(yest)}&tz=${tz}`, { headers: getHeaders() })
+      if (!res.ok) throw new Error('fetch failed')
+      const data = await res.json()
+      const logs: Array<{ tags?: string[]; items?: Record<string, unknown>[] }> = data.logs ?? []
+      const withItems = logs.filter((l) => (l.items?.length ?? 0) > 0)
+      if (withItems.length === 0) {
+        showToast('Nothing logged yesterday to copy', 'error')
+        return
+      }
+      // Stamp logs at midday of the selected date, keeping relative order.
+      const base = new Date(selectedDate)
+      base.setHours(12, 0, 0, 0)
+      let i = 0
+      for (const log of withItems) {
+        await fetch('/api/meal-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getHeaders() },
+          body: JSON.stringify({
+            items: log.items,
+            tags: log.tags ?? [],
+            loggedAt: new Date(base.getTime() + i * 60_000).toISOString(),
+          }),
+        })
+        i++
+      }
+      showToast(`Copied ${withItems.length} meal${withItems.length === 1 ? '' : 's'} from yesterday`, 'success')
+      fetchMealLogs()
+    } catch {
+      showToast('Could not copy yesterday', 'error')
+    } finally {
+      setCopyingYesterday(false)
+    }
+  }
+
+  // Swipe left/right anywhere on the page to move between days — same gesture
+  // as the calendar. Disabled while any modal/drawer is open so in-modal
+  // horizontal gestures never page the date underneath.
+  const shiftDay = (delta: number) => {
+    const d = new Date(selectedDate)
+    d.setDate(d.getDate() + delta)
+    setSelectedDate(d)
+  }
+  const anyOverlayOpen =
+    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null
+  const swipe = useSwipeNav({
+    onPrev: () => shiftDay(-1),
+    onNext: () => shiftDay(1),
+    disabled: anyOverlayOpen,
+  })
 
   const dateParam = formatDateParam(selectedDate)
   // True when the user has scrolled to a future calendar day. Drives the
@@ -613,7 +675,8 @@ function NutritionPageInner() {
   // again, but nutrition is unlocked for every authed user.
   return (
     <>
-      <PageTransition className="space-y-4 pb-6 sm:space-y-6">
+      <PageTransition className="pb-6">
+       <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
         <header className="mb-2 flex items-start justify-between gap-3 sm:mb-4">
           <div className="min-w-0">
@@ -694,13 +757,23 @@ function NutritionPageInner() {
                     Schedule meals
                   </button>
                 ) : (
-                  <button
-                    onClick={() => openFoodSearch('breakfast', false)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add food
-                  </button>
+                  <>
+                    <button
+                      onClick={() => openFoodSearch('breakfast', false)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add food
+                    </button>
+                    <button
+                      onClick={copyYesterday}
+                      disabled={copyingYesterday}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copyingYesterday ? 'Copying…' : 'Copy yesterday'}
+                    </button>
+                  </>
                 )}
                 <Link
                   href="/dashboard/meals"
@@ -835,6 +908,10 @@ function NutritionPageInner() {
           onAddWater={handleAddWater}
         />
 
+        {/* AI copilot — scaffolded (plugs into lib/nutrition/aiSeams via the
+            unified Become AI engine / redbtn graph later) */}
+        <NutritionAITeaser />
+
         {/* Quick Actions — visually identical tiles, accent only varies on the icon badge */}
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <Card
@@ -878,6 +955,7 @@ function NutritionPageInner() {
             <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Goals</span>
           </Card>
         </div>
+       </div>
       </PageTransition>
 
       {/* Food Search Modal — log mode (default) and plan mode (when planForDate set). */}
