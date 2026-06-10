@@ -186,6 +186,11 @@ export default function MindLabClient() {
                       {s.needsDevice === 'mic' && <span title="needs mic">🎤</span>}
                     </div>
                     <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{s.blurb}</div>
+                    {s.sources && s.sources.length > 0 && (
+                      <div className="mt-1.5 text-[10px] leading-tight text-violet-500/80 dark:text-violet-400/80">
+                        {s.sources.join(' · ')}
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -254,9 +259,16 @@ export default function MindLabClient() {
       {/* ── Library tab ── */}
       {tab === 'library' && (
         <div className="space-y-5">
-          {LIBRARY.map((pool) => (
+          {LIBRARY.map((pool) => {
+            const poolSources = Array.from(
+              new Set(MODALITIES.filter((m) => m.pool === pool.key).flatMap((m) => m.sources ?? [])),
+            )
+            return (
             <div key={pool.key}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">{pool.label} · {pool.items.length}</p>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400">{pool.label} · {pool.items.length}</p>
+              {poolSources.length > 0 && (
+                <p className="mb-2 text-[10px] leading-tight text-violet-500/80 dark:text-violet-400/80">inspired by: {poolSources.join(' · ')}</p>
+              )}
               <div className="space-y-1.5">
                 {pool.items.map((it, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
@@ -271,7 +283,8 @@ export default function MindLabClient() {
                 ))}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
