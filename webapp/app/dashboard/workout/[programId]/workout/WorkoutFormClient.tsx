@@ -233,6 +233,35 @@ const fallbackWorkout: WorkoutData = {
   ],
 };
 
+// A set "counts as done" once its required inputs (per tracking type) are filled.
+// Drives auto-checking the DONE box so the user doesn't tick every set by hand.
+function isSetFilled(tracking: string | undefined, set: SetData): boolean {
+  const num = (v: string) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const reps = (set.reps ?? "").trim();
+  const weight = (set.weight ?? "").trim();
+  const duration = (set.duration ?? "").trim();
+  const distance = (set.distance ?? "").trim();
+  switch (tracking || "reps_weight") {
+    case "reps_weight":
+      return reps !== "" && weight !== "" && num(reps) > 0;
+    case "reps_bodyweight":
+    case "reps_only":
+      return reps !== "" && num(reps) > 0;
+    case "time":
+    case "intervals":
+      return duration !== "" && num(duration) > 0;
+    case "time_distance":
+      return (duration !== "" && num(duration) > 0) || (distance !== "" && num(distance) > 0);
+    case "none":
+      return false; // no inputs — completed via the manual check only
+    default:
+      return reps !== "" && num(reps) > 0;
+  }
+}
+
 export default function WorkoutFormPage() {
   const router = useRouter();
   const params = useParams();
@@ -638,24 +667,33 @@ export default function WorkoutFormPage() {
 
   const updateSet = (exerciseIndex: number, setIndex: number, field: keyof SetData, value: string | boolean) => {
     setExerciseProgress((prev) => {
+      const tracking = workout?.exercises?.[exerciseIndex]?.trackingType;
       const updated = prev.map((ep) =>
         ep.exerciseIndex === exerciseIndex
           ? {
               ...ep,
-              sets: ep.sets.map((set, si) =>
-                si === setIndex ? { ...set, [field]: value } : set
-              ),
+              sets: ep.sets.map((set, si) => {
+                if (si !== setIndex) return set;
+                const nextSet = { ...set, [field]: value };
+                // Auto-check the DONE box the moment the set's inputs are filled
+                // (and auto-uncheck if a required field is cleared). Manual
+                // checkbox toggles (field === 'completed') are left as-is.
+                if (field !== "completed") {
+                  nextSet.completed = isSetFilled(tracking, nextSet);
+                }
+                return nextSet;
+              }),
             }
           : ep
       );
-      
+
       // Auto-save on any change (debounced for text inputs, immediate for checkbox)
       if (field === "completed") {
         autoSave(updated);
       } else {
         debouncedAutoSave(updated);
       }
-      
+
       return updated;
     });
   };
