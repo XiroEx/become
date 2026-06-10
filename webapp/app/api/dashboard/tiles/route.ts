@@ -16,6 +16,9 @@ import { verifyAuth } from '@/lib/auth'
 import { ensureWorkoutMetricsRegistered } from '@/lib/metrics/workout'
 import { resolveMetric } from '@/lib/metrics/registry'
 import { ensureWorkoutSuggestionsRegistered } from '@/lib/suggestions/workout'
+import { ensureNutritionSuggestionsRegistered, type NutritionDay } from '@/lib/suggestions/nutrition'
+import MealLog from '@/models/MealLog'
+import NutritionGoal from '@/models/NutritionGoal'
 import { runSuggestions } from '@/lib/suggestions/engine'
 import {
   buildRotatorInputFromProgress,
@@ -35,6 +38,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   ensureWorkoutMetricsRegistered()
   ensureWorkoutSuggestionsRegistered()
+  ensureNutritionSuggestionsRegistered()
 
   const auth = await verifyAuth(request)
   if (!auth.success || !auth.userId) {
@@ -63,6 +67,36 @@ export async function GET(request: NextRequest) {
 
   const now = new Date()
   const recentActivity = recentActivityFromProgress(progress, now)
+
+  // Nutrition rollup for the nutrition suggestion sources: per-day calories/
+  // protein/log-count over the last 14 days + the user's protein goal.
+  try {
+    const since = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+    const rows: Array<{ _id: string; calories: number; protein: number; logCount: number }> =
+      await MealLog.aggregate([
+        { $match: { user: progress?.userId ?? null, loggedAt: { $gte: since } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$loggedAt' } },
+            calories: { $sum: '$totalNutrition.calories' },
+            protein: { $sum: '$totalNutrition.protein' },
+            logCount: { $sum: 1 },
+          },
+        },
+      ])
+    const nutritionDays: NutritionDay[] = rows.map((r) => ({
+      date: new Date(`${r._id}T12:00:00Z`),
+      calories: r.calories ?? 0,
+      protein: r.protein ?? 0,
+      logCount: r.logCount ?? 0,
+    }))
+    const goalDoc = await NutritionGoal.findOne({ userId }).select('protein').lean<{ protein?: number } | null>()
+    ;(recentActivity as Record<string, unknown>).nutritionDays = nutritionDays
+    ;(recentActivity as Record<string, unknown>).proteinGoal = goalDoc?.protein ?? null
+  } catch (err) {
+    console.error('nutrition rollup for suggestions failed:', err)
+  }
+
   const allSuggestions = await runSuggestions(userId, recentActivity, {
     now,
     dismissed: progress?.dismissedSuggestions ?? [],

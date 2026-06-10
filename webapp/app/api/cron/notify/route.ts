@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import Schedule from '@/models/Schedule'
 import ProgramModel from '@/models/Program'
+import MealLog from '@/models/MealLog'
 import { sendPushToUser } from '@/lib/pushNotification'
 import {
   REENGAGEMENT_END_HOUR,
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
   const results = {
     streakAtRisk: 0,
     workoutReminder: 0,
+    mealReminder: 0,
     reEngagement: 0,
     missedSlotsSynced: 0,
     skippedByWindow: 0,
@@ -216,6 +218,65 @@ export async function GET(request: NextRequest) {
         results.errors++
       }
     }
+  }
+
+  // ── 2.5 Meal-log reminder (5pm–8pm LOCAL, nutrition users only) ──────────
+  // Only users who actually use nutrition (≥3 logged meals in the last 10
+  // days) get this; fires when their local evening arrives with NOTHING
+  // logged today. One per local day, pref-gated (notificationPrefs.mealReminder).
+  try {
+    const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)
+    const activeLoggers: Array<{ _id: unknown; count: number; lastLoggedAt: Date }> = await MealLog.aggregate([
+      { $match: { loggedAt: { $gte: tenDaysAgo } } },
+      { $group: { _id: '$user', count: { $sum: 1 }, lastLoggedAt: { $max: '$loggedAt' } } },
+      { $match: { count: { $gte: 3 } } },
+    ])
+    if (activeLoggers.length > 0) {
+      const loggerIds = activeLoggers.map((u) => u._id)
+      const loggerProgress = await UserProgress.find({ userId: { $in: loggerIds } })
+        .select('userId notificationPrefs lastPushSentAt timezoneOffset')
+        .lean()
+      for (const progress of loggerProgress) {
+        if (progress?.notificationPrefs?.mealReminder === false) continue
+        const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+        if (userLocalHour === null) continue
+        if (userLocalHour < 17 || userLocalHour > 20) continue
+
+        const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+        const lastSent = progress?.lastPushSentAt?.mealReminder
+        if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) continue
+
+        // Anything logged in the user's local today? Local midnight in UTC =
+        // dateKey 00:00Z + tz offset minutes.
+        const offset = Number.isFinite(progress?.timezoneOffset as number) ? (progress!.timezoneOffset as number) : 0
+        const dayStartUtc = new Date(new Date(`${userLocalDateKey}T00:00:00Z`).getTime() + offset * 60 * 1000)
+        const dayEndUtc = new Date(dayStartUtc.getTime() + 24 * 60 * 60 * 1000)
+        const loggedToday = await MealLog.exists({
+          user: progress.userId,
+          loggedAt: { $gte: dayStartUtc, $lt: dayEndUtc },
+        })
+        if (loggedToday) continue
+
+        try {
+          await sendPushToUser(String(progress.userId), {
+            title: 'Log today\'s food 🍽️',
+            body: 'A quick log keeps your nutrition picture honest. It takes 30 seconds.',
+            url: '/dashboard/nutrition',
+            tag: 'meal-reminder',
+          })
+          UserProgress.updateOne(
+            { userId: progress.userId },
+            { $set: { 'lastPushSentAt.mealReminder': now } },
+          ).catch(() => {})
+          results.mealReminder++
+        } catch {
+          results.errors++
+        }
+      }
+    }
+  } catch (err) {
+    console.error('meal-reminder sweep failed:', err)
+    results.errors++
   }
 
   // ── 3. Re-engagement (12pm–5:59pm LOCAL per user, 7-day rate limit) ──────

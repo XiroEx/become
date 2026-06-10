@@ -55,6 +55,7 @@ type NotificationPermissionState = 'granted' | 'denied' | 'default'
 interface NotificationPrefs {
   streakAtRisk: boolean
   workoutReminder: boolean
+  mealReminder: boolean
   reEngagement: boolean
   chatMessage: boolean
 }
@@ -68,6 +69,7 @@ interface PreferencesResponse {
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
   { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
   { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
+  { key: 'mealReminder', label: 'Meal log reminder', sublabel: "Evening nudge when you haven't logged any food" },
   { key: 'reEngagement', label: 'Re-engagement', sublabel: "When you've been inactive for a few days" },
   { key: 'chatMessage', label: 'Chat messages', sublabel: 'When someone sends you a message' },
 ]
@@ -140,6 +142,7 @@ export default function SettingsPage() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({
     streakAtRisk: true,
     workoutReminder: true,
+    mealReminder: true,
     reEngagement: true,
     chatMessage: true,
   })
@@ -214,6 +217,7 @@ export default function SettingsPage() {
       setNotifPrefs({
         streakAtRisk: p.streakAtRisk ?? true,
         workoutReminder: p.workoutReminder ?? true,
+        mealReminder: p.mealReminder ?? true,
         reEngagement: p.reEngagement ?? true,
         chatMessage: p.chatMessage ?? true,
       })

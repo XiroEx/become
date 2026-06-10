@@ -1,0 +1,81 @@
+// Nutrition AI seams — the contracts the upcoming Become AI engine fulfills.
+//
+// The engine (a single, full-coverage redbtn graph powering EVERY AI feature
+// of Become — programs, sessions, mindset content, nutrition) is NOT built
+// yet. Like the Mind MoveEngine seam (lib/mind/moves.ts → composeSession),
+// these interfaces define the plug points now so the engine drops in later
+// with no UI rework: same inputs, same outputs, different backing.
+//
+// Three nutrition capabilities, per the product plan:
+//   • PlateEstimator      — camera photo → estimated foods + macros
+//   • ProductFinder       — free-text/photo product lookup → nutrition facts
+//   • NutritionConsultant — meal planning + general nutrition guidance,
+//                           grounded in the user's goals/logs (one of the
+//                           per-domain consultants).
+//
+// Pure types; client-safe. No implementations here — the deterministic app
+// works fully without them, and the UI surfaces them as "coming soon"
+// (components/nutrition/NutritionAITeaser.tsx) until the engine lands.
+
+import type { IMealNutrition } from '@/models/Meal'
+
+export interface EstimatedPlateItem {
+  name: string
+  estimatedServing: string // e.g. "1 cup", "~150 g"
+  nutrition: IMealNutrition
+  confidence: number // 0..1
+}
+
+export interface PlateEstimate {
+  items: EstimatedPlateItem[]
+  total: IMealNutrition
+  caveats?: string[]
+}
+
+/** Camera-based plate estimator: photo in, loggable items out. */
+export interface PlateEstimator {
+  estimate(imageBase64: string, ctx: NutritionAIContext): Promise<PlateEstimate>
+}
+
+export interface ProductMatch {
+  name: string
+  brand?: string
+  servingSize?: number
+  servingUnit?: string
+  nutrition: IMealNutrition
+  source: 'usda' | 'openfoodfacts' | 'ai'
+}
+
+/** Product / nutrition-fact finder: query (text or label photo) → matches. */
+export interface ProductFinder {
+  find(query: { text?: string; imageBase64?: string }, ctx: NutritionAIContext): Promise<ProductMatch[]>
+}
+
+export interface ConsultantTurn {
+  reply: string
+  /** Optional structured output: a proposed plan the UI can apply. */
+  proposedPlans?: Array<{ dateKey: string; tag: string; mealName: string; items: ProductMatch[] }>
+}
+
+/** Meal planner / general nutrition consultant (per-domain consultant). */
+export interface NutritionConsultant {
+  ask(message: string, ctx: NutritionAIContext): Promise<ConsultantTurn>
+}
+
+/** Grounding context the engine receives with every nutrition call. */
+export interface NutritionAIContext {
+  userId: string
+  goals?: { calories?: number; protein?: number; carbs?: number; fats?: number } | null
+  /** Recent per-day rollups (same shape the suggestion engine uses). */
+  recentDays?: Array<{ date: string; calories: number; protein: number; logCount: number }>
+  profile?: { fitnessGoal?: string; weightUnit?: string } | null
+}
+
+/** Capability registry — what the UI may surface and its availability. */
+export const NUTRITION_AI_CAPABILITIES = [
+  { id: 'plate-estimator', label: 'Snap your plate', blurb: 'Point the camera at your food — get foods + macros, ready to log.', available: false },
+  { id: 'product-finder', label: 'Find any product', blurb: 'Name it or photograph the label — nutrition facts found for you.', available: false },
+  { id: 'consultant', label: 'Your nutrition consultant', blurb: 'Meal plans and answers, grounded in your goals and real logs.', available: false },
+] as const
+
+export type NutritionAICapabilityId = (typeof NUTRITION_AI_CAPABILITIES)[number]['id']
