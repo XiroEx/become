@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import Schedule from '@/models/Schedule'
+import ProgramModel from '@/models/Program'
 import { sendPushToUser } from '@/lib/pushNotification'
 import {
   REENGAGEMENT_END_HOUR,
@@ -12,6 +13,7 @@ import {
   isActiveProgramForSchedule,
   localDateKeyForUser,
   localHourForUser,
+  workoutTitleForDay,
 } from '@/lib/notifications/cronNotify'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -129,25 +131,48 @@ export async function GET(request: NextRequest) {
       progressDocs.map((p) => [String(p.userId), p]),
     )
 
+    // Aggregate per USER (not per schedule): a user with two active programs
+    // should get ONE reminder for the workout they'd actually do next, picked
+    // the SAME way the dashboard does (earliest upcoming scheduled slot) — not
+    // one push per schedule, and not a stale program's slot.
+    type SlotCand = { date: Date; phase?: number; dayLabel?: string; workoutTitle?: string; programId?: string }
+    const userSlots = new Map<string, SlotCand[]>()
     for (const sched of schedulesWithRecent) {
       const progress = progressByUserId.get(String(sched.userId))
-
       if (progress?.notificationPrefs?.workoutReminder === false) continue
-
-      // Only remind for programs the user is actively running. A paused or
-      // completed program (e.g. an abandoned split) still has scheduled slots
-      // in its Schedule doc, so without this guard each one fired its own
-      // "today's workout" push. Match the schedule's program against the
-      // user's activePrograms by programId and require active/in-progress.
+      // Only the user's actively-running programs — a paused/abandoned split
+      // still carries scheduled slots and must not drive reminders.
       if (!isActiveProgramForSchedule(progress?.activePrograms, sched.programId)) continue
+      const arr = userSlots.get(String(sched.userId)) ?? []
+      for (const w of sched.scheduledWorkouts as Array<{
+        date: Date; status: string; phase?: number; dayLabel?: string; workoutTitle?: string
+      }>) {
+        if (w.status !== 'scheduled') continue
+        arr.push({ date: new Date(w.date), phase: w.phase, dayLabel: w.dayLabel, workoutTitle: w.workoutTitle, programId: sched.programId })
+      }
+      userSlots.set(String(sched.userId), arr)
+    }
+
+    // Cache program lookups (live definition → accurate day title).
+    const programCache = new Map<string, { phases?: unknown[] } | null>()
+    const getProgram = async (pid?: string) => {
+      if (!pid) return null
+      if (programCache.has(pid)) return programCache.get(pid) ?? null
+      const p = await ProgramModel.findOne({ program_id: pid })
+        .select('phases')
+        .lean<{ phases?: unknown[] } | null>()
+      programCache.set(pid, p)
+      return p
+    }
+
+    for (const [userId, slots] of userSlots) {
+      const progress = progressByUserId.get(userId)
 
       // Skip when we don't know the user's timezone — otherwise the UTC
       // fallback fires reminders in the small hours of their local day.
       const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
       if (userLocalHour === null) continue
-      if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) {
-        continue
-      }
+      if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) continue
 
       const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
       const lastSent = progress?.lastPushSentAt?.workoutReminder
@@ -155,25 +180,35 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // Find the workout scheduled for the user's local today. Each slot's
-      // date field is UTC midnight of the local day, so compare date keys.
-      const todayWorkout = (sched.scheduledWorkouts as Array<{
-        date: Date; status: string; dayLabel?: string; workoutTitle?: string
-      }>).find((w) => {
-        if (w.status !== 'scheduled') return false
-        return localDateKeyForUser(new Date(w.date), progress?.timezoneOffset) === userLocalDateKey
-      })
-      if (!todayWorkout) continue
+      // The next upcoming scheduled workout (earliest slot with local-date-key
+      // >= today). Each slot's date is UTC midnight of its local day.
+      const upcoming = slots
+        .map((s) => ({ ...s, key: localDateKeyForUser(new Date(s.date), progress?.timezoneOffset) }))
+        .filter((s) => s.key >= userLocalDateKey)
+        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.date.getTime() - b.date.getTime()))
+      const best = upcoming[0]
+      // Only send the "today's workout is ready" push when the next one IS today.
+      if (!best || best.key !== userLocalDateKey) continue
+
+      // Resolve the title from the LIVE program (the slot's cached title can be
+      // stale after a program edit — this is the "wrong workout name" bug).
+      const program = await getProgram(best.programId)
+      const liveTitle = program ? workoutTitleForDay(program.phases ?? [], best.phase ?? 1, best.dayLabel ?? '') : null
+      const titleText = liveTitle || best.workoutTitle || best.dayLabel || 'Tap to start your session.'
+      const body =
+        best.dayLabel && !titleText.toLowerCase().includes(best.dayLabel.toLowerCase())
+          ? `${best.dayLabel} · ${titleText}`
+          : titleText
 
       try {
-        await sendPushToUser(String(sched.userId), {
+        await sendPushToUser(userId, {
           title: "Today's workout is ready 💪",
-          body: todayWorkout.workoutTitle || todayWorkout.dayLabel || 'Tap to start your session.',
+          body,
           url: '/dashboard/calendar',
           tag: 'workout-reminder',
         })
         UserProgress.updateOne(
-          { userId: sched.userId },
+          { userId },
           { $set: { 'lastPushSentAt.workoutReminder': now } },
         ).catch(() => {})
         results.workoutReminder++
