@@ -28,6 +28,28 @@ export function isActiveProgramForSchedule(
   return !activeProgram.status || activeProgram.status === 'active' || activeProgram.status === 'in-progress'
 }
 
+/**
+ * Resolve a workout's title from the LIVE program definition for a given phase +
+ * dayLabel. The Schedule slot caches `workoutTitle` at generation time, so it
+ * goes stale when the coach edits/reorders the program — the dashboard reads the
+ * live program, so the reminder must too. Returns null when it can't resolve.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function workoutTitleForDay(phases: any[], phaseNum: number, dayLabel: string): string | null {
+  if (!Array.isArray(phases) || phases.length === 0 || !dayLabel) return null
+  const idx = Math.max(0, (Number(phaseNum) || 1) - 1)
+  const phase = phases[idx] ?? phases[0]
+  const raw = phase?.workouts
+  if (!raw) return null
+  const arr: Array<{ day?: string; title?: string }> = Array.isArray(raw)
+    ? raw
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    : Object.entries(raw).map(([day, w]) => ({ day, ...(w as any) }))
+  const match = arr.find((w) => w.day === dayLabel)
+  const t = match?.title
+  return typeof t === 'string' && t.trim() ? t.trim() : null
+}
+
 export const WORKOUT_REMINDER_START_HOUR = 7
 export const WORKOUT_REMINDER_END_HOUR = 11
 export const REENGAGEMENT_START_HOUR = 12
