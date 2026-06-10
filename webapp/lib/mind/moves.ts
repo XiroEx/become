@@ -161,6 +161,14 @@ export interface Move {
   xp: number
 }
 
+/** The "recite the statement" register — every kind here presents the user's
+ *  identity statement (or a pool line) to affirm in some medium. A session must
+ *  include AT MOST ONE of these, or it degenerates into saying the same phrase
+ *  three different ways back-to-back. */
+export const AFFIRM_STATEMENT_KINDS: MoveKind[] = [
+  'identity', 'mirror', 'type', 'speak', 'compose', 'assemble',
+]
+
 export interface SessionContext {
   chapter: number
   unlockedSystems: string[]
@@ -169,6 +177,9 @@ export interface SessionContext {
   recentState?: MindState | null
   missionAction?: string | null
   identityStatement?: string | null
+  /** Effective move kinds from the user's PREVIOUS session — the composer avoids
+   *  repeating them so back-to-back sessions feel different. */
+  recentKinds?: string[] | null
   /** Deterministic rotation seed (day-of-year) so the same day is stable. */
   dayOfYear: number
   /** Optional explicit seed — overrides dayOfYear so replays vary run-to-run. */
