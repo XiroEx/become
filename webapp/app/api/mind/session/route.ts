@@ -12,9 +12,15 @@ import MindProgress from '@/models/MindProgress'
 import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
 import { getXpToNextChapter, isReadyToLevelUp } from '@/lib/mindXP'
 
-// XP per completion within a local day — diminishing so replays still move you
-// forward without farming a whole chapter in one sitting. completion 4+ = 0.
+// PROGRESSION XP per completion within a local day — diminishing so replays still
+// move you forward without farming a whole chapter in one sitting. completion 4+ = 0.
 const XP_BY_COMPLETION: Record<number, number> = { 1: 15, 2: 8, 3: 5 }
+
+// The "Becoming score" (xpBank) accrues from EVERY completion, including training
+// reps after progression XP is spent — so volume is always rewarded even though it
+// can't rush the arc. Banks the progression XP when there is some, else a flat
+// training amount so the score never stalls.
+const TRAINING_BANK = 3
 
 // Consecutive-day streak of completed Mind sessions, anchored to the caller's
 // local day. Counts today if done, otherwise starts from yesterday (so the
@@ -112,6 +118,8 @@ export async function POST(request: NextRequest) {
     )
     const n = doc?.completions ?? 1
     const xpAwarded = XP_BY_COMPLETION[n] ?? 0
+    // Every rep banks something toward the lifetime Becoming score.
+    const banked = xpAwarded > 0 ? xpAwarded : TRAINING_BANK
 
     // Recency tracking for session spacing: remember when breath last ran (so it
     // can be spaced out) and the modalities used (so the next session can vary).
@@ -123,35 +131,44 @@ export async function POST(request: NextRequest) {
     }
     if (didBreath) recencySet.lastBreathAt = new Date()
 
+    // Always bank toward the lifetime score; only progression xp diminishes.
+    const inc: Record<string, number> = { xpBank: banked }
+    if (xpAwarded > 0) inc.xp = xpAwarded
+    await MindProgress.findOneAndUpdate(
+      { userId: auth.userId },
+      { $inc: inc, $set: recencySet },
+      { upsert: true, setDefaultsOnInsert: true },
+    ).catch(() => {})
     if (xpAwarded > 0) {
-      await MindProgress.findOneAndUpdate(
-        { userId: auth.userId },
-        { $inc: { xp: xpAwarded }, $set: recencySet },
-        { upsert: true, setDefaultsOnInsert: true },
-      ).catch(() => {})
       await MindSession.updateOne({ userId: auth.userId, dateKey }, { $inc: { xpAwarded } }).catch(() => {})
-    } else {
-      // Still record recency even when XP is maxed for the day.
-      await MindProgress.findOneAndUpdate(
-        { userId: auth.userId },
-        { $set: recencySet },
-        { upsert: true, setDefaultsOnInsert: true },
-      ).catch(() => {})
     }
 
-    const progress = await MindProgress.findOne({ userId: auth.userId }).lean<{ chapter?: number; xp?: number } | null>()
+    const progress = await MindProgress.findOne({ userId: auth.userId })
+      .lean<{ chapter?: number; xp?: number; xpBank?: number; lastGrowthAt?: Date } | null>()
     const chapter = progress?.chapter ?? 1
     const xp = progress?.xp ?? 0
+    const xpBank = progress?.xpBank ?? 0
     const streak = await streakFor(auth.userId!, dateKey)
+
+    // Gate the arc: at most one growth moment (level-up) per local day, so volume
+    // can't rush the story. Extra reps stay full sessions that bank score (training).
+    const grewToday = progress?.lastGrowthAt
+      ? localDateKey(null, tz, new Date(progress.lastGrowthAt)) === dateKey
+      : false
+    const readyToLevelUp = isReadyToLevelUp(chapter, xp) && !grewToday
 
     return NextResponse.json({
       completions: n,
       xpAwarded,
+      banked,
+      xpBank,
+      trainingMode: xpAwarded === 0,
       chapter,
       xp,
       streak,
       xpProgress: getXpToNextChapter(chapter, xp),
-      readyToLevelUp: isReadyToLevelUp(chapter, xp),
+      readyToLevelUp,
+      gatedByGrowth: isReadyToLevelUp(chapter, xp) && grewToday,
     })
   } catch (err) {
     console.error('POST /api/mind/session error:', err)
