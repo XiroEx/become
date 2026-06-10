@@ -21,6 +21,13 @@ export interface IMindProgress extends Document {
   userId: Types.ObjectId
   chapter: 1 | 2 | 3 | 4 | 5
   xp: number
+  /** Lifetime "Becoming score" — accrues from EVERY completed session (incl.
+   *  training reps after the daily progression XP is spent). Never decreases.
+   *  The grinder's reward + the score the Becoming tab surfaces. */
+  xpBank: number
+  /** When the last growth moment (chapter level-up) happened — gates progression
+   *  to at most one growth moment per local day, so volume can't rush the arc. */
+  lastGrowthAt?: Date
   vision?: IVision
   chapterHistory: { chapter: number; unlockedAt: Date }[]
   selfDeclaredChapters: number[]  // chapters where user self-declared readiness (one per chapter)
@@ -62,6 +69,8 @@ const MindProgressSchema = new Schema<IMindProgress>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
     chapter: { type: Number, default: 1, min: 1, max: 5 },
     xp: { type: Number, default: 0, min: 0 },
+    xpBank: { type: Number, default: 0, min: 0 },
+    lastGrowthAt: { type: Date },
     vision: { type: VisionSchema },
     chapterHistory: {
       type: [{ chapter: Number, unlockedAt: Date }],

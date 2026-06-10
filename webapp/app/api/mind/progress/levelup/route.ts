@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
 
     const nextChapter = currentChapter + 1
     const update: Record<string, unknown> = {
-      $set: { chapter: nextChapter },
+      // Stamp the growth moment so the session API gates to one per local day.
+      $set: { chapter: nextChapter, lastGrowthAt: new Date() },
       $push: { chapterHistory: { chapter: nextChapter, unlockedAt: new Date() } },
     }
 
