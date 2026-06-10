@@ -46,6 +46,22 @@ export const IDENTITY_POOL: string[] = [
   'I am someone who keeps going.',
   'I trust the work and let go of the outcome.',
   'I am becoming who I was meant to be.',
+  // Method-driven (self-image / future-self / act-as-if / capacity / detachment)
+  'I act as the person I’m becoming — the feeling follows the action.',
+  'I’ve already become him in my mind; now my body catches up.',
+  'When I think I’m done, I know I’m only at forty percent.',
+  'I lower the stakes and raise the effort — calm attracts what force repels.',
+  'I don’t feed the drama; I step back and watch it pass.',
+  'My self-image is mine to rewrite — and I’m writing a stronger one.',
+  'I hold the aim and release the grip.',
+  'I rehearse my best self until it runs on autopilot.',
+  'I keep a record of every hard thing I’ve survived, and I draw from it.',
+  'A setback is a scar, not a sentence — it happened to me, it isn’t me.',
+  'I do the hardest thing first and let it carry the day.',
+  'I pour my whole self into the one thing that makes the rest easier.',
+  'I am calm, certain, and already on my way.',
+  'I callous my mind with every rep I didn’t feel like doing.',
+  'I become it first, then I have it.',
 ]
 
 // ─── Win / reflection prompts (win scene) ─────────────────────────────────────
@@ -63,6 +79,11 @@ export const WIN_PROMPTS: string[] = [
   'What did you learn about yourself today?',
   'What did you say no to that protected your standards?',
   "What did you do today that's worth repeating?",
+  // Evidence-building (the "cookie jar" — bank proof you can draw on later)
+  'What hard thing did you survive or push through today? Add it to the jar.',
+  'What did you do today that your future self will draw strength from?',
+  'What evidence did you create today that the new you is real?',
+  'When did you keep going past the point you wanted to stop?',
 ]
 
 // ─── Session intros ───────────────────────────────────────────────────────────
@@ -215,6 +236,39 @@ export const CHOICE_POOL: { q: string; options: { label: string; response: strin
       { label: 'I show up daily', response: "You're showing up right now. Keep the streak alive." },
     ],
   },
+  // Perspective-shift reflections (detachment / capacity / future-self rehearsal)
+  {
+    q: 'How tightly are you gripping the outcome right now?',
+    options: [
+      { label: 'Too tight', response: 'Loosen the grip. Hold the aim, release the desperation — calm attracts what force repels.' },
+      { label: 'About right', response: 'Good. Steady hands, steady aim. Take the next step.' },
+      { label: 'Not committed enough', response: 'Then decide it’s yours, and move like it already is.' },
+    ],
+  },
+  {
+    q: 'You feel out of gas. Where are you really?',
+    options: [
+      { label: 'Around 40%', response: 'Exactly. The tank has more than the feeling says. One more checkpoint.' },
+      { label: 'Genuinely empty', response: 'Then rest on purpose — recovery is part of the work, not a break from it.' },
+      { label: "I haven't started", response: 'Starting is the hard part. Two minutes. Go.' },
+    ],
+  },
+  {
+    q: 'Who are you rehearsing being today?',
+    options: [
+      { label: 'My future self', response: 'Then move, speak, and choose like them now — the body believes the rehearsal.' },
+      { label: 'My old self', response: 'Catch it. Make one choice your future self would make. Now.' },
+      { label: "Haven't decided", response: 'Decide. You install an identity by acting it out once.' },
+    ],
+  },
+  {
+    q: 'What story about yourself are you ready to retire?',
+    options: [
+      { label: 'That I can’t change', response: 'You rewrite the self-image by acting against it once. This is the rep.' },
+      { label: 'That I always fail', response: 'A scar isn’t a sentence. The next attempt doesn’t know your past.' },
+      { label: 'That it’s too late', response: 'The clock only moves forward. The best move is the next one.' },
+    ],
+  },
 ]
 
 // ─── Sabotage patterns (anti-sabotage / pattern scene) ────────────────────────
@@ -232,6 +286,12 @@ export const SABOTAGE_PATTERNS: { pattern: string; override: string }[] = [
   { pattern: 'Quitting right before the breakthrough', override: 'The dip is the filter. Most quit here — that\'s exactly why you don\'t.' },
   { pattern: 'Negative self-talk on autopilot', override: 'You wouldn\'t talk to a friend like that. Coach yourself instead.' },
   { pattern: '“I\'ll start Monday” thinking', override: 'There is no perfect start date. The next rep is available right now.' },
+  // Method-driven pattern interrupts (detachment / desperation / self-image / fear)
+  { pattern: 'Feeding the drama until it runs your whole day', override: 'Step out of the scene and watch it like a movie. It only has the power you keep feeding it.' },
+  { pattern: 'Wanting it so badly you choke', override: 'Lower the stakes. Hold the aim, release the grip — calm hands hit the target.' },
+  { pattern: 'Treating one failure as your identity', override: 'A scar isn’t a sentence. It happened to you; it isn’t you. Run the next rep.' },
+  { pattern: 'Self-sabotage right as it starts working', override: 'Sabotage is fear in disguise. Name what you’re protecting yourself from — then go anyway.' },
+  { pattern: 'Believing the fatigue signal at 40%', override: 'When you think you’re done, you’ve got 60% left. Push to one more checkpoint.' },
 ]
 
 // ─── Accountability actions (social scene) ────────────────────────────────────
@@ -251,6 +311,11 @@ export const ACCOUNTABILITY_ACTIONS: string[] = [
   'Cut the time you spend with one person who drains your standards.',
   'Offer to help someone with the exact thing you\'re working on. Teaching cements it.',
   'Make one plan with someone that gets you out of the house this week.',
+  // Connection-driven (genuine interest beats self-promotion)
+  'Make one person feel genuinely important today — specific and sincere, not flattery.',
+  'Ask someone about their goals and actually listen — no waiting for your turn to talk.',
+  'Use someone’s name and give them your full attention in your next conversation.',
+  'Lead with appreciation: tell someone exactly what you respect about them.',
 ]
 
 // ─── Daily discipline challenges (discipline scene / api) ─────────────────────
@@ -316,6 +381,17 @@ export const DISCIPLINE_CHALLENGES: string[] = [
   'Do something kind anonymously today.',
   'Pick your single most important goal and take one bold step toward it.',
   'Reflect for 5 minutes: who do you want to be tomorrow?',
+  // Method-driven challenges
+  'When you want to quit today, find your 40% — do one more rep past it.',
+  'Stand at the mirror and say out loud the one thing you’re avoiding. Then go do it.',
+  'List 3 hard things you’ve already survived. Read them, then attack today.',
+  'Eat the frog: your ugliest task gets done before anything else touches your day.',
+  'Pick the ONE thing that makes everything else easier — do only that, first.',
+  'Spend 10 minutes rehearsing tomorrow as your future self, in vivid detail.',
+  'Catch yourself making it life-or-death. Say “this is not life or death,” then act calm.',
+  'Ask “why does this goal matter” three times — until you hit the answer that moves you.',
+  'Name one excuse out loud, then ask: is it true, or just discomfort talking?',
+  'Choose your hardest training time today on purpose. Show up there.',
 ]
 
 // ─── Compose templates (the "Fill it in" modality) ────────────────────────────
@@ -390,6 +466,14 @@ export const COMPOSE_TEMPLATES: ComposeTemplate[] = [
       ['consistent', 'unshaken', 'capable', 'ready'],
     ],
   },
+  {
+    template: 'I’ve already become the person who {0}.',
+    blanks: [['does the work', 'stays calm under pressure', 'finishes', 'keeps their word']],
+  },
+  {
+    template: 'This isn’t life or death — I {0}.',
+    blanks: [['stay calm and move', 'lower the stakes', 'act with steady hands', 'take the next step']],
+  },
 ]
 
 // ─── Non-affirm registers ─────────────────────────────────────────────────────
@@ -433,6 +517,14 @@ export const ACKNOWLEDGE_POOL: { q: string; options: { label: string; response: 
       { label: 'Light', response: 'Ride it. Bank a little extra while it’s easy.' },
     ],
   },
+  {
+    q: 'That failure is loud right now. What is it, really?',
+    options: [
+      { label: 'Proof I’m not enough', response: 'No — it’s a scar, not a sentence. It happened to you; it isn’t you.' },
+      { label: 'A lesson', response: 'Then take the lesson and set down the weight.' },
+      { label: 'Just heavy', response: 'You can carry the lesson without the shame. Put the shame down.' },
+    ],
+  },
 ]
 
 export const INTERROGATIVE_POOL: { q: string; options: { label: string; response: string }[] }[] = [
@@ -458,6 +550,14 @@ export const INTERROGATIVE_POOL: { q: string; options: { label: string; response
       { label: 'A consistent one', response: 'Then let one boring, repeatable action prove it.' },
       { label: 'A disciplined one', response: 'Discipline is just promises kept. Keep one.' },
       { label: 'A resilient one', response: 'Resilience is built on resets. Reset well today.' },
+    ],
+  },
+  {
+    q: 'Look in the mirror — do your actions match your talk today?',
+    options: [
+      { label: 'Yes', response: 'Then keep the receipts. Do one more thing that proves it.' },
+      { label: 'Not yet', response: 'Name the gap out loud. Then close it with one action.' },
+      { label: 'I’m avoiding the mirror', response: 'Look anyway. The truth is where the change starts.' },
     ],
   },
 ]

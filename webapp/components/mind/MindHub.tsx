@@ -424,7 +424,6 @@ export default function MindHub({ onNavigate, streak }: Props) {
                 </button>
               </div>
               <div className="rounded-xl bg-zinc-100 dark:bg-zinc-800 p-3 mb-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">{contentPiece.source}</p>
                 <p className="text-sm font-bold text-zinc-900 dark:text-white mb-1">{contentPiece.title}</p>
                 <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 italic">&ldquo;{contentPiece.mantra}&rdquo;</p>
               </div>

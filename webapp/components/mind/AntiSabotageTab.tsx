@@ -294,7 +294,6 @@ function AntiSabotageProtocols() {
             >
               <div>
                 <p className="text-sm font-bold text-zinc-900 dark:text-white">{p.title}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">{p.source}</p>
               </div>
               <span className="text-zinc-400 text-lg ml-2 shrink-0">{expanded === p.id ? '−' : '+'}</span>
             </button>

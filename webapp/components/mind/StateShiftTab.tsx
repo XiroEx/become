@@ -107,9 +107,6 @@ function ProtocolModal({ piece, onClose }: { piece: ContentPiece; onClose: () =>
 
           <div className="mb-4 flex items-start justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1">
-                {piece.source}
-              </p>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{piece.title}</h2>
             </div>
             <button
@@ -409,7 +406,6 @@ export default function StateShiftTab() {
                 className="flex w-[200px] shrink-0 flex-col justify-between text-left"
               >
                 <div>
-                  <p className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 mb-1.5">{p.source}</p>
                   <p className="text-sm font-bold text-zinc-900 dark:text-white leading-snug">{p.title}</p>
                 </div>
                 <div className="mt-3 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
