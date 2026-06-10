@@ -96,6 +96,7 @@ export const progressionNudgeSource: SuggestionSourceFn = async (
     severity: 'nudge',
     title: `Progress ${exercise}`,
     body: `${exercise} has shown up ${top.count} times recently. If the last session moved cleanly, add a small load or one rep next time.`,
+    placement: 'exercise', // surfaces at the exercise during a workout, not on the dashboard
     primaryAction: { label: 'Open progress', href: '/dashboard/progress#records' },
     dismissible: true,
     cooldownDays: 4,
@@ -117,6 +118,7 @@ export const plateauWarningSource: SuggestionSourceFn = async (
     severity: 'warning',
     title: `${exercise} may be stalling`,
     body: `${exercise} has repeated ${top.count} times in the last few weeks without a recent PR. Consider a lighter technique day or a different rep target.`,
+    placement: 'exercise', // surfaces at the exercise during a workout, not on the dashboard
     primaryAction: { label: 'Review PRs', href: '/dashboard/progress#records' },
     dismissible: true,
     cooldownDays: 7,

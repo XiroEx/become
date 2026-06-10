@@ -19,11 +19,20 @@ export interface SuggestionPrimaryAction {
   href: string
 }
 
+/**
+ * Where a suggestion belongs. 'dashboard' (default) renders in the home
+ * rotator. 'exercise' is scoped to a specific exercise (sourceData.exerciseSlug)
+ * and renders IN CONTEXT — inside a workout session that contains that
+ * exercise, at the moment of doing it — never on the dashboard.
+ */
+export type SuggestionPlacement = 'dashboard' | 'exercise'
+
 export interface Suggestion {
   id: string
   severity: SuggestionSeverity
   title: string
   body: string
+  placement?: SuggestionPlacement
   primaryAction?: SuggestionPrimaryAction
   dismissible: boolean
   /**

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Dumbbell } from "lucide-react";
+import { Dumbbell, X } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
@@ -140,6 +140,10 @@ export default function LiveWorkoutPage() {
   // Track which exercises have been swapped: exerciseIndex -> { originalSlug, originalName }
   const [swappedExercises, setSwappedExercises] = useState<Record<number, { originalSlug: string; originalName: string }>>({});
 
+  // Contextual nudges (progression / plateau) keyed by exercise slug — shown at
+  // the exercise they belong to, only while it's the current one.
+  const [exerciseNudges, setExerciseNudges] = useState<Record<string, { id: string; title: string; body: string }>>({});
+
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
   // All-time best per exercise — used for "Beat your PR" display
@@ -170,6 +174,49 @@ export default function LiveWorkoutPage() {
   const totalSets = currentExercise?.sets || 3;
 
   const isLastStep = currentStepIndex === workoutFlow.length - 1;
+
+  // Fetch contextual nudges for this session's exercises (once per slug set).
+  useEffect(() => {
+    const slugs = Array.from(
+      new Set(exercises.map((e) => (e.exerciseSlug || "").toLowerCase()).filter(Boolean)),
+    );
+    if (slugs.length === 0) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    let cancelled = false;
+    fetch(`/api/workouts/exercise-suggestions?slugs=${encodeURIComponent(slugs.join(","))}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { suggestions?: Array<{ id: string; title: string; body: string; sourceData?: { exerciseSlug?: string } }> } | null) => {
+        if (cancelled || !d?.suggestions) return;
+        const map: Record<string, { id: string; title: string; body: string }> = {};
+        for (const s of d.suggestions) {
+          const slug = String(s.sourceData?.exerciseSlug ?? "").toLowerCase();
+          if (slug && !map[slug]) map[slug] = { id: s.id, title: s.title, body: s.body };
+        }
+        setExerciseNudges(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercises.map((e) => e.exerciseSlug).join(",")]);
+
+  const dismissNudge = useCallback((slug: string, id: string) => {
+    setExerciseNudges((prev) => {
+      const next = { ...prev };
+      delete next[slug];
+      return next;
+    });
+    const token = localStorage.getItem("token");
+    fetch("/api/suggestions/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }, []);
 
   // Determine which inputs to show based on trackingType
   const tracking = currentExercise?.trackingType || "reps_weight";
@@ -1507,6 +1554,28 @@ export default function LiveWorkoutPage() {
                   )}
                 </div>
               )}
+              {/* Contextual nudge for THIS exercise (progression / plateau) */}
+              {(() => {
+                const slug = (currentExercise?.exerciseSlug || "").toLowerCase();
+                const nudge = slug ? exerciseNudges[slug] : undefined;
+                if (!nudge) return null;
+                return (
+                  <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2">
+                    <span className="mt-0.5 text-sm" aria-hidden>⚡</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold uppercase tracking-wide text-amber-300">{nudge.title}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-amber-100/80">{nudge.body}</p>
+                    </div>
+                    <button
+                      onClick={() => dismissNudge(slug, nudge.id)}
+                      aria-label="Dismiss nudge"
+                      className="shrink-0 p-1 text-amber-200/60 transition-colors hover:text-amber-100"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Progress bar */}
