@@ -63,10 +63,13 @@ export async function GET(request: NextRequest) {
 
   const now = new Date()
   const recentActivity = recentActivityFromProgress(progress, now)
-  const suggestions = await runSuggestions(userId, recentActivity, {
+  const allSuggestions = await runSuggestions(userId, recentActivity, {
     now,
     dismissed: progress?.dismissedSuggestions ?? [],
   })
+  // Exercise-scoped suggestions render in-context during a workout (see
+  // /api/workouts/exercise-suggestions) — never on the dashboard.
+  const suggestions = allSuggestions.filter((s) => s.placement !== 'exercise')
 
   const input = buildRotatorInputFromProgress(
     progress,

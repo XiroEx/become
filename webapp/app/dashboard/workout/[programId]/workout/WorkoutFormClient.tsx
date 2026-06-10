@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
@@ -244,6 +245,9 @@ export default function WorkoutFormPage() {
   const [isResuming, setIsResuming] = useState(false);
   const [exerciseProgress, setExerciseProgress] = useState<ExerciseProgress[]>([]);
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
+  // Contextual nudges (progression / plateau) keyed by exercise slug — shown
+  // inside the exercise's expanded card, in context.
+  const [exerciseNudges, setExerciseNudges] = useState<Record<string, { id: string; title: string; body: string }>>({});
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [skipModalExerciseIndex, setSkipModalExerciseIndex] = useState<number | null>(null);
   const [skipModalSetIndex, setSkipModalSetIndex] = useState<number | null>(null);
@@ -265,6 +269,50 @@ export default function WorkoutFormPage() {
   const [summaryStreak, setSummaryStreak] = useState<{ streakDays: number; nextMilestone: number | null } | null>(null);
   const [summaryGoal, setSummaryGoal] = useState<string | null>(null);
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
+
+  // Fetch contextual nudges for this workout's exercises (once per slug set).
+  const workoutSlugKey = (workout?.exercises ?? [])
+    .map((e) => (e.exerciseSlug || "").toLowerCase())
+    .filter(Boolean)
+    .join(",");
+  useEffect(() => {
+    if (!workoutSlugKey) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    let cancelled = false;
+    const slugs = Array.from(new Set(workoutSlugKey.split(",")));
+    fetch(`/api/workouts/exercise-suggestions?slugs=${encodeURIComponent(slugs.join(","))}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { suggestions?: Array<{ id: string; title: string; body: string; sourceData?: { exerciseSlug?: string } }> } | null) => {
+        if (cancelled || !d?.suggestions) return;
+        const map: Record<string, { id: string; title: string; body: string }> = {};
+        for (const s of d.suggestions) {
+          const slug = String(s.sourceData?.exerciseSlug ?? "").toLowerCase();
+          if (slug && !map[slug]) map[slug] = { id: s.id, title: s.title, body: s.body };
+        }
+        setExerciseNudges(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [workoutSlugKey]);
+
+  const dismissNudge = useCallback((slug: string, id: string) => {
+    setExerciseNudges((prev) => {
+      const next = { ...prev };
+      delete next[slug];
+      return next;
+    });
+    const token = localStorage.getItem("token");
+    fetch("/api/suggestions/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }, []);
 
   // Load the current workout from API
   useEffect(() => {
@@ -968,6 +1016,28 @@ export default function WorkoutFormPage() {
                         className="overflow-hidden"
                       >
                         <div className="border-t border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                          {/* Contextual nudge for THIS exercise (progression / plateau) */}
+                          {(() => {
+                            const slug = (exercise.exerciseSlug || "").toLowerCase();
+                            const nudge = slug ? exerciseNudges[slug] : undefined;
+                            if (!nudge) return null;
+                            return (
+                              <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+                                <span className="mt-0.5 text-sm" aria-hidden>⚡</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{nudge.title}</p>
+                                  <p className="mt-0.5 text-xs leading-snug text-amber-800/80 dark:text-amber-100/80">{nudge.body}</p>
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); dismissNudge(slug, nudge.id); }}
+                                  aria-label="Dismiss nudge"
+                                  className="shrink-0 p-1 text-amber-500/70 transition-colors hover:text-amber-600 dark:text-amber-200/60 dark:hover:text-amber-100"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })()}
                           {/* Video Demo Section */}
                           <div className="mb-4">
                             <VideoPlayer
