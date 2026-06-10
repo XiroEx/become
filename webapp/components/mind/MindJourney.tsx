@@ -66,6 +66,7 @@ export default function MindJourney() {
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [lastBreathAt, setLastBreathAt] = useState<number | null>(null)
+  const [recentKinds, setRecentKinds] = useState<string[]>([])
   const [playing, setPlaying] = useState(false)
   // Fresh seed per launch so replays compose a varied set (not the same items).
   const [sessionSeed, setSessionSeed] = useState<number | null>(null)
@@ -98,6 +99,7 @@ export default function MindJourney() {
         setCompletedToday(!!s.completedToday)
         setStreak(s.streak ?? 0)
         setLastBreathAt(typeof s.lastBreathAt === 'number' ? s.lastBreathAt : null)
+        setRecentKinds(Array.isArray(s.recentKinds) ? s.recentKinds : [])
       }
       if (stateRes.ok) {
         const st = await stateRes.json()
@@ -127,12 +129,13 @@ export default function MindJourney() {
       recentState,
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
+      recentKinds,
       dayOfYear: dayOfYear(),
       seed: sessionSeed ?? undefined,
       now: Date.now(),
       lastBreathAt,
     })
-  }, [progress, recentState, missionAction, sessionSeed, lastBreathAt])
+  }, [progress, recentState, missionAction, sessionSeed, lastBreathAt, recentKinds])
 
   const begin = useCallback(() => {
     setSessionSeed(Date.now())

@@ -8,6 +8,7 @@
 // this composer grows (discipline, vision, wins, …); the shape stays the same.
 
 import {
+  AFFIRM_STATEMENT_KINDS,
   IDENTITY_POOL,
   type Move,
   type MindSessionPlan,
@@ -171,11 +172,32 @@ export function buildMove(kind: MoveKind, ctx: SessionContext): Move {
 const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000 // ~4h
 
 // Pick the seed-rotated entry from a pool, skipping any kind already used this
-// session — so a session never shows the same modality twice.
-function pickUnused(pool: MoveKind[], seed: number, used: Set<MoveKind>): MoveKind | undefined {
+// session — so a session never shows the same modality twice. When `avoid` is
+// given (last session's kinds), prefer kinds not in it; fall back when that
+// would leave nothing, so avoidance never empties a slot.
+function pickUnused(
+  pool: MoveKind[],
+  seed: number,
+  used: Set<MoveKind>,
+  avoid?: Set<string>,
+): MoveKind | undefined {
   const avail = pool.filter((k) => !used.has(k))
   if (avail.length === 0) return undefined
+  if (avoid && avoid.size > 0) {
+    const fresh = avail.filter((k) => !avoid.has(k))
+    if (fresh.length > 0) return fresh[seed % fresh.length]
+  }
   return avail[seed % avail.length]
+}
+
+// Mark a kind used — and when it belongs to the affirm-statement family, reserve
+// the WHOLE family, so one session can never recite the same statement in two
+// different mediums (mirror + speak + type back-to-back).
+function markUsed(kind: MoveKind, used: Set<MoveKind>): void {
+  used.add(kind)
+  if (AFFIRM_STATEMENT_KINDS.includes(kind)) {
+    for (const k of AFFIRM_STATEMENT_KINDS) used.add(k)
+  }
 }
 
 export class DeterministicMoveEngine implements MoveEngine {
@@ -183,7 +205,15 @@ export class DeterministicMoveEngine implements MoveEngine {
     const seed = ctx.seed ?? ctx.dayOfYear
     const intro = INTROS[seed % INTROS.length]
     const used = new Set<MoveKind>()
+    const avoid = new Set<string>(ctx.recentKinds ?? []) // last session's kinds
     const moves: Move[] = []
+
+    // Register design: the session has exactly ONE slot per register —
+    //   open (state-check) → regulate (breath/amplify) → core (work) → close
+    //   (the single affirm-statement beat). The affirm-statement family
+    //   (identity/mirror/type/speak/compose/assemble) lives ONLY in the close
+    //   slot; amplify + core draw from other registers. markUsed() reserves the
+    //   whole family once one member is placed, as a structural guarantee.
 
     // 1. Open by checking in (grounds the session, grants XP via /api/mind/state).
     moves.push(stateCheckMove())
@@ -196,8 +226,9 @@ export class DeterministicMoveEngine implements MoveEngine {
     //    player swaps in when the live check-in is positive ('locked_in').
     // The amplify kind is RESERVED in `used` either way, so even when the player
     // swaps it in at runtime it can never collide with the core/close beat.
-    const amplifyPool: MoveKind[] = ['win', 'vision', 'choice', 'mirror']
-    const amplifyKind = pickUnused(amplifyPool, seed, used) ?? 'win'
+    // No affirm-family kinds here — the close slot owns that register.
+    const amplifyPool: MoveKind[] = ['win', 'vision', 'choice']
+    const amplifyKind = pickUnused(amplifyPool, seed, used, avoid) ?? 'win'
     const amplify = buildMove(amplifyKind, ctx)
     const now = ctx.now ?? 0
     const onCooldown = ctx.lastBreathAt != null && now > 0 && now - ctx.lastBreathAt < BREATH_COOLDOWN_MS
@@ -209,12 +240,14 @@ export class DeterministicMoveEngine implements MoveEngine {
       moves.push(breath)
       used.add('breath')
     }
-    used.add(amplifyKind)
+    markUsed(amplifyKind, used)
 
     // 3. Core beat. Tone follows the most recent check-in: a NEGATIVE/off state
     // gets the non-affirm registers (acknowledge + self-compassion, ask-don't-
     // declare, mental contrasting) rather than forced positivity. A positive/
-    // unknown state gets the affirm/evidence registers.
+    // unknown state gets the evidence/action/reflection registers. No affirm-
+    // family kinds — reciting the statement is the close slot's job, and having
+    // it here too meant saying the same phrase twice (or three times) a session.
     const down = ctx.recentState === 'stressed' || ctx.recentState === 'distracted' || ctx.recentState === 'low_energy'
     const corePool: MoveKind[] = []
     if (down) {
@@ -224,25 +257,25 @@ export class DeterministicMoveEngine implements MoveEngine {
       if (ctx.chapter >= 3) corePool.push('challenge') // discipline
       if (ctx.chapter >= 2) corePool.push('win') // self-image: evidence
       if (ctx.chapter >= 2) corePool.push('vision') // foundation: see it
-      if (ctx.chapter >= 2) corePool.push('type', 'speak', 'compose') // active reinforcement
-      if (ctx.chapter >= 2) corePool.push('interrogative', 'contrast') // mix in non-affirm even on good days
+      if (ctx.chapter >= 2) corePool.push('choice', 'interrogative', 'contrast') // reflection registers
       if (ctx.chapter >= 2 && ctx.missionAction?.trim()) corePool.push('mission')
       if (ctx.chapter >= 4) corePool.push('antisabotage') // defense: pattern interrupt
       if (ctx.chapter >= 5) corePool.push('social') // architect: environment
     }
-    const coreKind = pickUnused(corePool, seed, used)
+    const coreKind = pickUnused(corePool, seed, used, avoid)
     if (coreKind) {
       moves.push(buildMove(coreKind, ctx))
-      used.add(coreKind)
+      markUsed(coreKind, used)
     }
 
-    // 4. Close on an identity-reinforcing beat — rotate the MODALITY (and never
-    // repeat one already used this session) so visits feel different.
+    // 4. Close on THE identity-reinforcing beat — the session's single affirm-
+    // statement move. Rotate the MODALITY, avoiding last session's closer when
+    // possible, so visits feel different (affirm / mirror / type / say / fill-in).
     const closePool: MoveKind[] = ['identity']
     if (ctx.chapter >= 2) closePool.push('mirror', 'type', 'speak', 'compose')
-    const closeKind = pickUnused(closePool, seed + 1, used) ?? 'identity'
+    const closeKind = pickUnused(closePool, seed + 1, used, avoid) ?? 'identity'
     moves.push(buildMove(closeKind, ctx))
-    used.add(closeKind)
+    markUsed(closeKind, used)
 
     return { intro, moves, rewardXp: 15 }
   }
@@ -316,11 +349,18 @@ export function composeThemedSession(systemId: string, ctx: SessionContext): Min
   if (!cfg) return null
   const seed = ctx.seed ?? ctx.dayOfYear
   // Rotate the pool by seed, take 2 distinct extras → a 3-move set that varies.
+  // At most ONE affirm-statement modality per session (core counts) — otherwise
+  // a theme like Identity recites the same phrase in 2-3 different mediums.
+  let affirmUsed = AFFIRM_STATEMENT_KINDS.includes(cfg.core)
   const rotated = cfg.pool.map((_, i) => cfg.pool[(i + seed) % cfg.pool.length])
   const extras: MoveKind[] = []
   for (const k of rotated) {
     if (extras.length >= 2) break
-    if (k !== cfg.core && !extras.includes(k)) extras.push(k)
+    if (k === cfg.core || extras.includes(k)) continue
+    const isAffirm = AFFIRM_STATEMENT_KINDS.includes(k)
+    if (isAffirm && affirmUsed) continue
+    if (isAffirm) affirmUsed = true
+    extras.push(k)
   }
   const kinds: MoveKind[] = [cfg.core, ...extras]
   return {
