@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
 
     const chapter = (progress?.chapter as number) ?? 1
     const xp = progress?.xp ?? 0
+    const xpBank = (progress?.xpBank as number) ?? 0
     const selfDeclaredChapters = (progress?.selfDeclaredChapters as number[]) ?? []
     const xpProgress = getXpToNextChapter(chapter, xp)
     const readyToLevelUp = isReadyToLevelUp(chapter, xp)
@@ -69,6 +70,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       chapter,
       xp,
+      xpBank,
       xpProgress,
       readyToLevelUp,
       canSelfDeclare,

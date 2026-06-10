@@ -34,9 +34,12 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
+    const limitParam = Number(new URL(request.url).searchParams.get('limit'))
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(100, Math.floor(limitParam)) : 7
+
     const logs = await StateLog.find({ userId: auth.userId })
       .sort({ timestamp: -1 })
-      .limit(7)
+      .limit(limit)
       .lean()
 
     return NextResponse.json({ logs })
