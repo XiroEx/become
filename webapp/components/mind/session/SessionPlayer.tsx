@@ -41,6 +41,12 @@ interface CompleteResult {
   completions?: number
   readyToLevelUp: boolean
   streak?: number
+  /** Banked toward the lifetime Becoming score this rep (incl. training reps). */
+  banked?: number
+  /** Lifetime Becoming score after this rep. */
+  xpBank?: number
+  /** Daily progression XP is spent — this was a training rep (still banks score). */
+  trainingMode?: boolean
 }
 
 interface LevelUpResult {
@@ -271,7 +277,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                   ? "You've maxed today's XP — but reps still count."
                   : "That's how it's built — one rep at a time."}
               </p>
-              {result && result.xpAwarded > 0 && (
+              {result && result.xpAwarded > 0 ? (
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -279,6 +285,25 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                   className="mt-5 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-green-300"
                 >
                   +{result.xpAwarded} XP
+                </motion.p>
+              ) : result && result.trainingMode && (result.banked ?? 0) > 0 ? (
+                <motion.p
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                  className="mt-5 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-violet-300"
+                >
+                  Training · +{result.banked} banked
+                </motion.p>
+              ) : null}
+              {result && typeof result.xpBank === 'number' && result.xpBank > 0 && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.55 }}
+                  className="mt-3 text-xs font-medium uppercase tracking-widest text-white/40"
+                >
+                  Becoming score {result.xpBank.toLocaleString()}
                 </motion.p>
               )}
               {result && typeof result.streak === 'number' && result.streak > 1 && (

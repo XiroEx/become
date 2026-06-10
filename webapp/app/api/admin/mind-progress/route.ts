@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
   const gate = await requireAdmin(request)
   if (!gate.ok) return gate.response
   await dbConnect()
-  const p = await MindProgress.findOne({ userId: gate.userId }).lean<{ chapter?: number; xp?: number } | null>()
-  return NextResponse.json({ chapter: p?.chapter ?? 1, xp: p?.xp ?? 0 })
+  const p = await MindProgress.findOne({ userId: gate.userId }).lean<{ chapter?: number; xp?: number; xpBank?: number } | null>()
+  return NextResponse.json({ chapter: p?.chapter ?? 1, xp: p?.xp ?? 0, xpBank: p?.xpBank ?? 0 })
 }
 
 export async function POST(request: NextRequest) {
@@ -42,6 +42,8 @@ export async function POST(request: NextRequest) {
         $set: {
           chapter: 1,
           xp: 0,
+          xpBank: 0,
+          lastGrowthAt: null,
           chapterHistory: [{ chapter: 1, unlockedAt: new Date() }],
           selfDeclaredChapters: [],
         },
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
       { upsert: true, setDefaultsOnInsert: true },
     )
     await MindSession.deleteMany({ userId: targetUserId })
-    return NextResponse.json({ chapter: 1, xp: 0, reset: true })
+    return NextResponse.json({ chapter: 1, xp: 0, xpBank: 0, reset: true })
   }
 
   const set: Record<string, number> = {}
