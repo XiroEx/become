@@ -118,12 +118,14 @@ export interface IUserProgress {
   notificationPrefs?: {
     streakAtRisk?: boolean
     workoutReminder?: boolean
+    mealReminder?: boolean
     reEngagement?: boolean
     chatMessage?: boolean
   }
   lastPushSentAt?: {
     streakAtRisk?: Date
     workoutReminder?: Date
+    mealReminder?: Date
     reEngagement?: Date
   }
   // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
@@ -342,12 +344,14 @@ const UserProgressSchema = new Schema<IUserProgress>({
   notificationPrefs: {
     streakAtRisk: { type: Boolean },
     workoutReminder: { type: Boolean },
+    mealReminder: { type: Boolean },
     reEngagement: { type: Boolean },
     chatMessage: { type: Boolean },
   },
   lastPushSentAt: {
     streakAtRisk: { type: Date },
     workoutReminder: { type: Date },
+    mealReminder: { type: Date },
     reEngagement: { type: Date },
   },
   timezoneOffset: { type: Number },

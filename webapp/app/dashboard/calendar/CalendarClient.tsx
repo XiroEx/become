@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
+import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
 import { BackButton } from '@/components/ui/BackButton'
 import {
@@ -357,26 +358,10 @@ export default function CalendarClient() {
     setSelectedDate(new Date())
   }
 
-  // Swipe navigation
-  const swipeStartX = useRef<number | null>(null)
-  const swipeStartY = useRef<number | null>(null)
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    swipeStartX.current = e.touches[0].clientX
-    swipeStartY.current = e.touches[0].clientY
-  }
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (swipeStartX.current === null || swipeStartY.current === null) return
-    const dx = e.changedTouches[0].clientX - swipeStartX.current
-    const dy = e.changedTouches[0].clientY - swipeStartY.current
-    swipeStartX.current = null
-    swipeStartY.current = null
-    // Ignore short swipes or primarily-vertical gestures (scrolling)
-    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return
-    if (dx < 0) navigateNext()
-    else navigatePrev()
-  }
+  // Swipe navigation — shared gesture (hooks/useSwipeNav), identical behavior
+  // on the nutrition day view and timeline.
+  const { handlers: { onTouchStart: handleTouchStart, onTouchEnd: handleTouchEnd } } =
+    useSwipeNav({ onPrev: navigatePrev, onNext: navigateNext })
 
   // Schedule actions
   const handleAction = async (action: string) => {

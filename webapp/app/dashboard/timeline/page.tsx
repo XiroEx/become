@@ -20,8 +20,10 @@ import {
   X,
   Sparkles,
   CalendarDays,
+  CopyPlus,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import { useSwipeNav } from '@/hooks/useSwipeNav'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
@@ -592,6 +594,18 @@ function TimelineClient() {
 
   const goPrev = () => navigate(viewMode === 'day' ? -1 : -7)
   const goNext = () => navigate(viewMode === 'day' ? 1 : 7)
+
+  // Swipe left/right to page days/weeks — the same shared gesture as the
+  // calendar + nutrition day view. Month view manages its own navigation;
+  // disabled there and while any sheet/modal is open.
+  const swipe = useSwipeNav({
+    onPrev: goPrev,
+    onNext: goNext,
+    disabled:
+      viewMode === 'month' ||
+      copyDayOpen || applyMealOpen ||
+      addFoodFor !== null || editEntry !== null || editPlanEntry !== null,
+  })
   // (goToday removed — the header DateOnlyPicker exposes a "Today" chip, and
   // tapping the date label now opens the picker instead of jumping silently.)
 
@@ -923,7 +937,8 @@ function TimelineClient() {
       description="Precision nutrition tracking and meal planning, built around your goals. Launching soon."
       icon={<UtensilsCrossed className="h-10 w-10" />}
     >
-      <PageTransition className="space-y-4 pb-6 sm:space-y-6">
+      <PageTransition className="pb-6">
+       <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
         <header className="mb-2 sm:mb-4">
           <div className="flex items-center justify-between">
@@ -1059,6 +1074,28 @@ function TimelineClient() {
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
+        )}
+
+        {/* Plan tools — copy a day forward / apply a meal to days. Previously
+            buried in the Month view only; the sheets are page-level, so expose
+            them on Day/Week too. */}
+        {viewMode !== 'month' && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCopyDayOpen(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white py-2 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <CopyPlus className="h-3.5 w-3.5" />
+              Copy a day
+            </button>
+            <button
+              onClick={() => setApplyMealOpen(true)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white py-2 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <ChefHat className="h-3.5 w-3.5" />
+              Meal → days
+            </button>
+          </div>
         )}
 
         {/* Tag filter chips */}
@@ -1230,6 +1267,7 @@ function TimelineClient() {
             onApplyMealToDays={() => setApplyMealOpen(true)}
           />
         )}
+       </div>
       </PageTransition>
 
       {/* Floating + Add Food — Day view always, Month view when a day is
