@@ -148,6 +148,7 @@ export function nudgeToSuggestion(r: ProgressionNudgeResult): Suggestion {
       `Last ${r.exerciseName} session you hit ${r.reps} reps at ${r.topWeight} lb — ` +
       `the top of your range. Try ${r.suggestedWeight} lb${perSideNote} next time and ` +
       `build the reps back up.`,
+    placement: 'exercise', // surfaces at the exercise during a workout, not on the dashboard
     primaryAction: {
       label: 'Open progress',
       href: `/dashboard/progress/${encodeURIComponent(r.exerciseSlug)}`,
