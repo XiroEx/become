@@ -1289,7 +1289,7 @@ function TimelineClient() {
             }}
             aria-label={targetFuture ? 'Schedule meals' : 'Add food'}
             title={targetFuture ? 'Schedule meals' : 'Add food'}
-            className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+            className="fixed bottom-28 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
           >
             {targetFuture ? <CalendarDays className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
           </button>
@@ -1391,7 +1391,7 @@ function TimelineClient() {
           presents Undo for ~8s. Kept bespoke because it carries an
           interactive Undo affordance the passive shared Toast can't render. */}
       {undoBatch && (
-        <div className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 flex items-center gap-3 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+        <div className="fixed bottom-28 left-1/2 z-[80] -translate-x-1/2 flex items-center gap-3 rounded-xl bg-zinc-900 px-4 py-3 text-sm font-medium text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
           <Check className="h-4 w-4 shrink-0" />
           <span>{undoBatch.logIds.length} plan{undoBatch.logIds.length === 1 ? '' : 's'} logged</span>
           <button

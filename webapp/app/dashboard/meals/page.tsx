@@ -463,7 +463,7 @@ export default function MealsPage() {
       {tab === 'meals' && (
         <Link
           href="/dashboard/meals/new"
-          className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+          className="fixed bottom-28 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
           aria-label="Create new recipe"
         >
           <Plus className="h-6 w-6" />

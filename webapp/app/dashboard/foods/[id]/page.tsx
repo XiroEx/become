@@ -540,7 +540,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Sticky bottom CTA */}
-      <div className="fixed bottom-20 left-0 right-0 z-30 px-3 sm:px-6">
+      <div className="fixed bottom-28 left-0 right-0 z-30 px-3 sm:px-6">
         <div className="mx-auto max-w-3xl">
           <button
             onClick={() => setLogSheetOpen(true)}
