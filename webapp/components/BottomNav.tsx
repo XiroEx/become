@@ -94,7 +94,7 @@ export default function BottomNav() {
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)' }}
     >
       <ul
-        className={`pointer-events-auto flex items-center gap-1 rounded-full border border-zinc-200/70 bg-white/80 px-2 py-1.5 shadow-lg shadow-black/10 backdrop-blur-xl transition-transform duration-300 ease-out dark:border-white/10 dark:bg-zinc-900/80 dark:shadow-black/40 ${
+        className={`pointer-events-auto flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/80 px-3 py-1.5 shadow-lg shadow-black/10 backdrop-blur-xl transition-transform duration-300 ease-out dark:border-white/10 dark:bg-zinc-900/80 dark:shadow-black/40 ${
           condensed ? 'scale-[0.88]' : 'scale-100'
         }`}
         style={{ transformOrigin: 'center bottom' }}
@@ -105,7 +105,7 @@ export default function BottomNav() {
               href={href}
               aria-label={label}
               title={label}
-              className={`relative flex h-11 w-12 items-center justify-center rounded-full transition-colors sm:w-14 ${
+              className={`relative flex h-12 w-14 items-center justify-center rounded-full transition-colors sm:w-16 ${
                 active
                   ? 'bg-zinc-900/10 text-black dark:bg-white/15 dark:text-white'
                   : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'
