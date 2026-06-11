@@ -99,7 +99,7 @@ export default function NotificationOptIn() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="fixed bottom-24 left-4 right-4 z-[70] mx-auto max-w-sm rounded-2xl bg-zinc-900 p-4 shadow-xl dark:bg-zinc-800 sm:left-auto sm:right-6 sm:w-80"
+          className="fixed bottom-28 left-4 right-4 z-[70] mx-auto max-w-sm rounded-2xl bg-zinc-900 p-4 shadow-xl dark:bg-zinc-800 sm:left-auto sm:right-6 sm:w-80"
         >
           {enabled ? (
             <div className="flex flex-col items-center gap-2 py-2 text-center">
