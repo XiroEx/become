@@ -40,7 +40,7 @@ export default function Toast({ toast }: { toast: ToastData | null }) {
           transition={{ duration: 0.2, ease: 'easeOut' }}
           role="status"
           aria-live="polite"
-          className={`fixed bottom-24 left-1/2 z-[80] w-max max-w-xs -translate-x-1/2 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${TYPE_STYLES[toast.type]}`}
+          className={`fixed bottom-28 left-1/2 z-[80] w-max max-w-xs -translate-x-1/2 flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${TYPE_STYLES[toast.type]}`}
         >
           {(() => {
             const Icon = TYPE_ICON[toast.type]

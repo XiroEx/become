@@ -467,7 +467,7 @@ export default function ChatPage() {
       description="A direct line to your coach. Real conversations, real accountability. Coming soon."
       icon={<MessageCircle className="h-10 w-10" />}
     >
-    <div className="fixed inset-0 z-40 flex flex-col bg-zinc-50 dark:bg-zinc-950">
+    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-50 dark:bg-zinc-950">
       {/* Header */}
       <div className="shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}>
         <div className="mx-auto flex max-w-3xl items-center gap-3">

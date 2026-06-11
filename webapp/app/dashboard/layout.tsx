@@ -17,20 +17,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <TopNav />
         </div>
 
-        {/* Content — grows to fill remaining space, scrolls vertically */}
+        {/* Content — grows to fill remaining space, scrolls vertically.
+            id="app-scroll" is the contract the floating BottomNav uses to
+            react to scrolling. Bottom padding clears the floating pill
+            (pill ≈ 62px + 10px gap) plus the iOS home indicator. */}
         <main
+          id="app-scroll"
           className="min-h-0 flex-1 overflow-y-auto"
           style={{ overscrollBehaviorY: 'contain' }}
         >
-          <div className="mx-auto max-w-3xl px-3 py-4 pb-6 sm:px-6 sm:py-6">
+          <div
+            className="mx-auto max-w-3xl px-3 py-4 sm:px-6 sm:py-6"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)' }}
+          >
             {children}
           </div>
         </main>
 
-        {/* Bottom nav — fixed height, sits above iOS home indicator */}
-        <div className="shrink-0" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <BottomNav />
-        </div>
+        {/* Bottom nav — floating liquid-glass pill (fixed; overlays content) */}
+        <BottomNav />
       </div>
     </AuthGuard>
   )

@@ -1194,7 +1194,7 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
       )}
 
       {/* Sticky save bar */}
-      <div className="fixed bottom-20 left-0 right-0 z-30 px-3 sm:px-6">
+      <div className="fixed bottom-28 left-0 right-0 z-30 px-3 sm:px-6">
         <div className="mx-auto max-w-3xl">
           <button
             onClick={save}
@@ -1210,7 +1210,7 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed bottom-32 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium text-white shadow-lg ${
+          className={`fixed bottom-44 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium text-white shadow-lg ${
             toast.type === 'success' ? 'bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900' : 'bg-red-600'
           }`}
         >
