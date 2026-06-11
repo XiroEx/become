@@ -23,7 +23,7 @@ import {
   CopyPlus,
 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import { useSwipeNav } from '@/hooks/useSwipeNav'
+import { useSwipeNav, slideVariants } from '@/hooks/useSwipeNav'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
@@ -276,6 +276,8 @@ function TimelineClient() {
   }, [searchParams])
 
   const [viewMode, setViewMode] = useState<ViewMode>(initialView)
+  // Slide direction for the day/week body transition (calendar-style).
+  const [slideDir, setSlideDir] = useState(0)
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate)
   // Month view: the inline-expanded day strip. Null = no selection.
   const [monthSelectedDate, setMonthSelectedDate] = useState<Date | null>(null)
@@ -587,6 +589,7 @@ function TimelineClient() {
   // ── Navigation ──────────────────────────────────────────────────────────
 
   const navigate = (deltaDays: number) => {
+    setSlideDir(deltaDays > 0 ? 1 : -1)
     const next = new Date(selectedDate)
     next.setDate(next.getDate() + deltaDays)
     setSelectedDate(next)
@@ -1056,7 +1059,9 @@ function TimelineClient() {
                       onChange={(key) => {
                         if (!key) return
                         const [y, m, d] = key.split('-').map(Number)
-                        setSelectedDate(new Date(y, m - 1, d))
+                        const next = new Date(y, m - 1, d)
+                        setSlideDir(next.getTime() === selectedDate.getTime() ? 0 : next > selectedDate ? 1 : -1)
+                        setSelectedDate(next)
                         setHeaderDatePickerOpen(false)
                       }}
                     />
@@ -1165,7 +1170,20 @@ function TimelineClient() {
         </div>
         )}
 
-        {/* Body */}
+        {/* Body — day/week slide horizontally on date paging (same motion as
+            the calendar grid). Month manages its own transitions. */}
+        {viewMode !== 'month' && (
+        <div className="relative overflow-x-clip">
+        <AnimatePresence initial={false} custom={slideDir} mode="popLayout">
+        <motion.div
+          key={`${viewMode}:${formatDateParam(range.from)}`}
+          custom={slideDir}
+          variants={slideVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+        >
         {viewMode === 'day' && (
           <DayView
             date={selectedDate}
@@ -1212,7 +1230,16 @@ function TimelineClient() {
             weekHasFuture={weekHasFuture}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
+            onOpenDay={(dateKey) => {
+              setSlideDir(0)
+              setSelectedDate(parseDateParam(dateKey))
+              setView('day')
+            }}
           />
+        )}
+        </motion.div>
+        </AnimatePresence>
+        </div>
         )}
         {viewMode === 'month' && (
           <MonthView
@@ -1635,6 +1662,8 @@ interface WeekViewProps {
   weekHasFuture: boolean
   activeFilters: Set<string>
   isFilterActive: boolean
+  /** Tap a bar in the calories chart → open that day in Day view. */
+  onOpenDay: (dateKey: string) => void
 }
 
 function WeekView({
@@ -1643,6 +1672,7 @@ function WeekView({
   onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
   weekHasFuture,
   activeFilters, isFilterActive,
+  onOpenDay,
 }: WeekViewProps) {
   // Order newest-first so the most recent days are at the top.
   const ordered = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days])
@@ -1695,7 +1725,13 @@ function WeekView({
               const isToday = isSameLocalDay(dt, new Date())
               const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'narrow' })
               return (
-                <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+                <button
+                  key={d.date}
+                  type="button"
+                  onClick={() => onOpenDay(d.date)}
+                  aria-label={`Open ${d.date} in day view`}
+                  className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded-lg transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                >
                   <div className="flex h-full w-full items-end">
                     <motion.div
                       initial={{ height: 0 }}
@@ -1716,7 +1752,7 @@ function WeekView({
                   }`}>
                     {dayLabel}
                   </span>
-                </div>
+                </button>
               )
             })}
           </div>

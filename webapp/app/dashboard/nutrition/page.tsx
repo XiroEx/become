@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
-import { useSwipeNav } from '@/hooks/useSwipeNav'
+import { useSwipeNav, slideVariants } from '@/hooks/useSwipeNav'
+import { AnimatePresence, motion } from 'framer-motion'
 import DateNav from '@/components/nutrition/DateNav'
 import NutritionAITeaser from '@/components/nutrition/NutritionAITeaser'
 import CalorieRing from '@/components/nutrition/CalorieRing'
@@ -172,10 +173,16 @@ function NutritionPageInner() {
   // Swipe left/right anywhere on the page to move between days — same gesture
   // as the calendar. Disabled while any modal/drawer is open so in-modal
   // horizontal gestures never page the date underneath.
+  // Direction-aware date change so the day content slides like the calendar.
+  const [slideDir, setSlideDir] = useState(0)
+  const changeDate = (next: Date) => {
+    setSlideDir(next.getTime() === selectedDate.getTime() ? 0 : next > selectedDate ? 1 : -1)
+    setSelectedDate(next)
+  }
   const shiftDay = (delta: number) => {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() + delta)
-    setSelectedDate(d)
+    changeDate(d)
   }
   const anyOverlayOpen =
     foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null
@@ -726,8 +733,23 @@ function NutritionPageInner() {
         {/* Date Navigation */}
         <DateNav
           date={selectedDate}
-          onDateChange={setSelectedDate}
+          onDateChange={changeDate}
         />
+
+        {/* Date-scoped content — slides horizontally on date change (same
+            motion as the calendar grid). popLayout keeps exit/enter stacked. */}
+        <div className="relative overflow-x-clip">
+        <AnimatePresence initial={false} custom={slideDir} mode="popLayout">
+        <motion.div
+          key={dateParam}
+          custom={slideDir}
+          variants={slideVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+          className="space-y-4 sm:space-y-6"
+        >
 
         {/* Calorie Ring + Macro Summary */}
         <CalorieRing
@@ -907,6 +929,10 @@ function NutritionPageInner() {
           goal={goals.waterGoal}
           onAddWater={handleAddWater}
         />
+
+        </motion.div>
+        </AnimatePresence>
+        </div>
 
         {/* AI copilot — scaffolded (plugs into lib/nutrition/aiSeams via the
             unified Become AI engine / redbtn graph later) */}
