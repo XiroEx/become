@@ -58,6 +58,11 @@ export default defineConfig({
       },
     },
     {
+      name: 'app-shots',
+      testMatch: '**/app-shots.spec.ts',
+      use: { ...devices['Pixel 5'], video: 'off' },
+    },
+    {
       name: 'nutri-shots',
       testMatch: '**/nutri-shots.spec.ts',
       use: { ...devices['Pixel 5'], video: 'off' },

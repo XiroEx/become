@@ -9,7 +9,7 @@ import MealApplySheet from '@/components/meals/MealApplySheet'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import SavedFoodCard from '@/components/meals/SavedFoodCard'
 import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, Bookmark } from 'lucide-react'
-import { EmptyState, Toast } from '@/components/ui'
+import { EmptyState, Toast, SegmentedControl } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { useToast } from '@/hooks/useToast'
 
@@ -280,32 +280,15 @@ export default function MealsPage() {
         </p>
       </header>
 
-      {/* Tab strip — same segmented control pattern as the timeline's
-          Day/Week/Month toggle, for app-wide consistency. */}
-      <div className="inline-flex w-full rounded-xl border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
-        <button
-          onClick={() => setTab('meals')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
-            tab === 'meals'
-              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-              : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-          }`}
-        >
-          <ChefHat className="h-3.5 w-3.5" />
-          Recipes
-        </button>
-        <button
-          onClick={() => setTab('foods')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
-            tab === 'foods'
-              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-              : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-          }`}
-        >
-          <Bookmark className="h-3.5 w-3.5" />
-          Favorites
-        </button>
-      </div>
+      {/* Tab strip — shared SegmentedControl */}
+      <SegmentedControl
+        segments={[
+          { value: 'meals', label: 'Recipes', Icon: ChefHat },
+          { value: 'foods', label: 'Favorites', Icon: Bookmark },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {/* Search bar */}
       <div className="relative">
