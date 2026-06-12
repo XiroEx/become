@@ -280,14 +280,15 @@ export default function MealsPage() {
         </p>
       </header>
 
-      {/* Tab strip — Meals | My Foods */}
-      <div className="inline-flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+      {/* Tab strip — same segmented control pattern as the timeline's
+          Day/Week/Month toggle, for app-wide consistency. */}
+      <div className="inline-flex w-full rounded-xl border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
         <button
           onClick={() => setTab('meals')}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
             tab === 'meals'
-              ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white'
-              : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+              : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
           }`}
         >
           <ChefHat className="h-3.5 w-3.5" />
@@ -295,10 +296,10 @@ export default function MealsPage() {
         </button>
         <button
           onClick={() => setTab('foods')}
-          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
             tab === 'foods'
-              ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-white'
-              : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+              : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
           }`}
         >
           <Bookmark className="h-3.5 w-3.5" />

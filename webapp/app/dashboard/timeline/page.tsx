@@ -1170,6 +1170,20 @@ function TimelineClient() {
         </div>
         )}
 
+        {/* Week schedule CTA — static across week paging, so it lives OUTSIDE
+            the sliding region (sliding a button away to reveal the same
+            button looks broken). */}
+        {viewMode === 'week' && weekHasFuture && (
+          <button
+            type="button"
+            onClick={() => setScheduleDrawer({ open: true, date: range.from, endDate: range.to, range: true })}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Schedule meals for this week
+          </button>
+        )}
+
         {/* Body — day/week slide horizontally on date paging (same motion as
             the calendar grid). Month manages its own transitions. */}
         {viewMode !== 'month' && (
@@ -1219,15 +1233,10 @@ function TimelineClient() {
                 setAddFoodFor({ date, tag: defaultTagForNow() })
               }
             }}
-            onScheduleMeals={() => {
-              // Open drawer in range mode covering the visible week.
-              setScheduleDrawer({ open: true, date: range.from, endDate: range.to, range: true })
-            }}
             onEditPlanItem={(planId, item, planItems) => setEditPlanEntry({ planId, item, planItems })}
             onDeletePlan={handleDeletePlan}
             onSkipPlan={handleSkipPlan}
             onPromotePlan={handlePromotePlan}
-            weekHasFuture={weekHasFuture}
             activeFilters={activeFilters}
             isFilterActive={activeFilters.size > 0}
             onOpenDay={(dateKey) => {
@@ -1654,12 +1663,10 @@ interface WeekViewProps {
   onDeleteLog: (logId: string, mealName?: string) => void
   onToggleFilter: (tag: string) => void
   onAddFood: (date: Date) => void
-  onScheduleMeals: () => void
   onEditPlanItem: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   onDeletePlan: (planId: string, scope?: 'one' | 'series') => Promise<void>
   onSkipPlan: (planId: string) => Promise<void>
   onPromotePlan: (planId: string) => Promise<void>
-  weekHasFuture: boolean
   activeFilters: Set<string>
   isFilterActive: boolean
   /** Tap a bar in the calories chart → open that day in Day view. */
@@ -1668,9 +1675,8 @@ interface WeekViewProps {
 
 function WeekView({
   days, plans, summary, onEditItem, onDeleteLog,
-  onToggleFilter, onAddFood, onScheduleMeals,
+  onToggleFilter, onAddFood,
   onEditPlanItem, onDeletePlan, onSkipPlan, onPromotePlan,
-  weekHasFuture,
   activeFilters, isFilterActive,
   onOpenDay,
 }: WeekViewProps) {
@@ -1691,19 +1697,6 @@ function WeekView({
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Schedule meals CTA — visible when the visible week contains today
-          or a future day. Opens the drawer in range mode covering this week. */}
-      {weekHasFuture && (
-        <button
-          type="button"
-          onClick={onScheduleMeals}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-        >
-          <CalendarDays className="h-4 w-4" />
-          Schedule meals for this week
-        </button>
-      )}
-
       {/* Summary panel */}
       <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="grid grid-cols-3 gap-3 border-b border-zinc-100 pb-3 dark:border-zinc-800">

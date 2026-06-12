@@ -692,22 +692,20 @@ function NutritionPageInner() {
               Track your food, macros, and hydration
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Link
               href="/dashboard/meals"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
-              aria-label="Saved recipes & favorites"
-              title="Recipes & favorites"
+              className="flex h-10 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
             >
-              <ChefHat className="h-5 w-5" />
+              <ChefHat className="h-4 w-4" />
+              Recipes
             </Link>
             <Link
               href={`/dashboard/timeline?date=${dateParam}`}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
-              aria-label="Switch to timeline view"
-              title="Timeline view"
+              className="flex h-10 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
             >
-              <Clock className="h-5 w-5" />
+              <Clock className="h-4 w-4" />
+              Timeline
             </Link>
           </div>
         </header>
@@ -735,6 +733,19 @@ function NutritionPageInner() {
           date={selectedDate}
           onDateChange={changeDate}
         />
+
+        {/* Future-day schedule CTA — static across future-day paging, so it
+            sits OUTSIDE the sliding region. */}
+        {viewingFuture && visibleTags.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setScheduleDrawerOpen(true)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Schedule meals
+          </button>
+        )}
 
         {/* Date-scoped content — slides horizontally on date change (same
             motion as the calendar grid). popLayout keeps exit/enter stacked. */}
@@ -809,19 +820,7 @@ function NutritionPageInner() {
           />
         )}
 
-        {/* When the user IS viewing a future date and already has plans, surface
-            the Schedule-meals CTA prominently above the tag sections so it's
-            never more than one tap away from richer planning. */}
-        {viewingFuture && visibleTags.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setScheduleDrawerOpen(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-          >
-            <CalendarDays className="h-4 w-4" />
-            Schedule meals
-          </button>
-        )}
+
 
         {/* Tag Sections */}
         {visibleTags.map(tag => (
