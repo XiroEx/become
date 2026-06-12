@@ -96,7 +96,7 @@ export default function ArsenalClient() {
     <PageTransition className="pb-6">
       <header className="mb-2 flex items-center gap-3">
         <BackButton fallbackHref="/dashboard/mind" />
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">Focused Sessions</h1>
+        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">Your Arsenal</h1>
       </header>
       <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
         Need a reset? Vision work? Pick a focus — each one&apos;s a short, fresh session.
@@ -126,21 +126,24 @@ export default function ArsenalClient() {
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{info.label}</h3>
                     <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{info.hook}</p>
                   </div>
-                  {playable ? (
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white dark:bg-white dark:text-black">
+                  {playable && (
+                    <button
+                      type="button"
+                      aria-label="Start focused session"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); launch(id) }}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-white transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black"
+                    >
                       <Play className="h-3.5 w-3.5 fill-current" />
-                    </span>
-                  ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+                    </button>
                   )}
+                  <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
                 </Card>
               )
 
-              return playable ? (
-                <button key={id} type="button" onClick={() => launch(id)} className="block w-full text-left">
-                  {inner}
-                </button>
-              ) : (
+              // The CARD opens the system's full dashboard (meditations,
+              // journaling, habits, goals — the deep tools). The play button
+              // alone launches the quick focused session.
+              return (
                 <Link key={id} href={`/dashboard/mind/${id}`} className="block">
                   {inner}
                 </Link>
