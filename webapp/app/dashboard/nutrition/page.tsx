@@ -18,7 +18,7 @@ import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
-import { Card, EmptyState, Toast } from '@/components/ui'
+import { Card, EmptyState, Toast, HeaderPillLink } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { isFutureLocalDate } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
@@ -693,20 +693,8 @@ function NutritionPageInner() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href="/dashboard/meals"
-              className="flex h-10 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <ChefHat className="h-4 w-4" />
-              Recipes
-            </Link>
-            <Link
-              href={`/dashboard/timeline?date=${dateParam}`}
-              className="flex h-10 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <Clock className="h-4 w-4" />
-              Timeline
-            </Link>
+            <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>Recipes</HeaderPillLink>
+            <HeaderPillLink href={`/dashboard/timeline?date=${dateParam}`} Icon={Clock}>Timeline</HeaderPillLink>
           </div>
         </header>
 

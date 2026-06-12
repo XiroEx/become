@@ -30,7 +30,7 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import DateOnlyPicker from '@/components/ui/DateOnlyPicker'
 import { BackButton } from '@/components/ui/BackButton'
-import { Toast } from '@/components/ui'
+import { Toast, SegmentedControl, HeaderPillLink } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
@@ -954,52 +954,22 @@ function TimelineClient() {
                 </p>
               </div>
             </div>
-            <Link
-              href={`/dashboard/nutrition?date=${formatDateParam(selectedDate)}`}
-              className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <UtensilsCrossed className="h-4 w-4" />
+            <HeaderPillLink href={`/dashboard/nutrition?date=${formatDateParam(selectedDate)}`} Icon={UtensilsCrossed}>
               Log
-            </Link>
+            </HeaderPillLink>
           </div>
         </header>
 
-        {/* View-mode toggle */}
-        <div className="inline-flex w-full rounded-xl border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
-          <button
-            onClick={() => setView('day')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
-              viewMode === 'day'
-                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            Day
-          </button>
-          <button
-            onClick={() => setView('week')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
-              viewMode === 'week'
-                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            <CalendarIcon className="h-3.5 w-3.5" />
-            Week
-          </button>
-          <button
-            onClick={() => setView('month')}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors sm:text-sm ${
-              viewMode === 'month'
-                ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            <CalendarIcon className="h-3.5 w-3.5" />
-            Month
-          </button>
-        </div>
+        {/* View-mode toggle — shared SegmentedControl */}
+        <SegmentedControl
+          segments={[
+            { value: 'day', label: 'Day', Icon: Clock },
+            { value: 'week', label: 'Week', Icon: CalendarIcon },
+            { value: 'month', label: 'Month', Icon: CalendarIcon },
+          ]}
+          value={viewMode}
+          onChange={setView}
+        />
 
         {/* Date navigation — Day/Week only. Month view has its own header. */}
         {viewMode !== 'month' && (
