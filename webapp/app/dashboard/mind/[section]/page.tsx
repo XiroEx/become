@@ -8,7 +8,7 @@ import StateShiftTab from '@/components/mind/StateShiftTab'
 import SelfImageTab from '@/components/mind/SelfImageTab'
 import MissionTab from '@/components/mind/MissionTab'
 import DisciplineTab from '@/components/mind/DisciplineTab'
-import AntiSabotageTab from '@/components/mind/AntiSabotageTab'
+import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
 import SocialTab from '@/components/mind/SocialTab'
 import VisionTab from '@/components/mind/VisionTab'
 
@@ -64,7 +64,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
         {section === 'self-image'    && <SelfImageTab streak={streak} />}
         {section === 'mission'       && <MissionTab />}
         {section === 'discipline'    && <DisciplineTab />}
-        {section === 'anti-sabotage' && <AntiSabotageTab />}
+        {section === 'anti-sabotage' && <AntiSabotageDashboard />}
         {section === 'social'        && <SocialTab />}
         {section === 'vision'        && <VisionTab streak={streak} />}
       </div>
