@@ -58,6 +58,11 @@ export default defineConfig({
       },
     },
     {
+      name: 'nutri-shots',
+      testMatch: '**/nutri-shots.spec.ts',
+      use: { ...devices['Pixel 5'], video: 'off' },
+    },
+    {
       name: 'nutrition',
       testMatch: '**/nutrition.spec.ts',
       timeout: 180_000,
