@@ -15,12 +15,15 @@ export interface GuidedStep {
   body?: string
   /** When set, this step asks for a typed answer. */
   inputPrompt?: string
+  /** Per-step textarea placeholder (defaults to a generic starter). */
+  placeholder?: string
 }
 
 export default function GuidedFlow({
   title,
   steps,
   accent = '#fb923c',
+  doneText = 'Done. That counts.',
   onComplete,
   onExit,
 }: {
@@ -28,6 +31,8 @@ export default function GuidedFlow({
   steps: GuidedStep[]
   /** Accent color (system color). */
   accent?: string
+  /** Per-system finish line (uniqueness, not just recolor). */
+  doneText?: string
   onComplete: (answers: { prompt: string; answer: string }[]) => void
   onExit: () => void
 }) {
@@ -57,8 +62,14 @@ export default function GuidedFlow({
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black text-white">
+      {/* Subtle system-accent glow at the top — per-system uniqueness. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-1/2"
+        style={{ background: `radial-gradient(120% 70% at 50% 0%, ${accent}26, transparent 70%)` }}
+      />
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
+      <div className="relative z-10 flex items-center gap-3 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
         <button onClick={onExit} aria-label="Exit" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
           <X className="h-5 w-5" />
         </button>
@@ -74,14 +85,14 @@ export default function GuidedFlow({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-6 pb-16 text-center">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16 text-center">
         <AnimatePresence mode="wait">
           {done ? (
             <motion.div key="done" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
               <span className="flex h-20 w-20 items-center justify-center rounded-full" style={{ backgroundColor: `${accent}26` }}>
                 <Check className="h-10 w-10" strokeWidth={3} style={{ color: accent }} />
               </span>
-              <p className="mt-5 text-lg font-bold">Done. That counts.</p>
+              <p className="mt-5 text-lg font-bold">{doneText}</p>
             </motion.div>
           ) : (
             <motion.div
@@ -99,7 +110,7 @@ export default function GuidedFlow({
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Type it honestly…"
+                  placeholder={step.placeholder ?? "Type it honestly…"}
                   rows={3}
                   autoFocus
                   className="mt-6 w-full resize-none rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-base text-white placeholder-white/30 focus:border-white/40 focus:outline-none"

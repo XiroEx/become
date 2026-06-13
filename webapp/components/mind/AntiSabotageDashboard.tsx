@@ -13,6 +13,7 @@ import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
 const ACCENT = '#fb923c' // orange — anti-sabotage system color
+const DONE_TEXT = 'Caught. That’s the skill.' // anti-sabotage-specific finish line
 
 // ── Interrupt protocols as guided runs (Become-voiced) ────────────────────────
 
@@ -20,16 +21,26 @@ const PROTOCOLS: { id: string; title: string; blurb: string; Icon: typeof Zap; s
   {
     id: 'pattern-recognition', title: 'Pattern Recognition', blurb: 'Name the pattern — it can’t survive the light.', Icon: Search,
     steps: [
-      { title: 'Where do you always quit?', body: 'Think of the last three times you stopped. Same point? Same feeling?' },
-      { title: 'Name the trigger', inputPrompt: 'What point, feeling, or trigger makes you stop?' },
-      { title: 'It’s named.', body: 'A pattern you can name is a pattern you can see coming. Next time it starts, you’ll know.' },
+      { title: 'Where do you always quit?', body: 'Picture the last three times you stopped. Same point? Same feeling?' },
+      {
+        title: 'What’s your pattern?',
+        inputPrompt: 'What’s your pattern?',
+        body: 'The exact moment, feeling, or trigger that makes you stop — every time.',
+        placeholder: 'e.g. I quit the second it stops being exciting',
+      },
+      { title: 'Now it’s named.', body: 'A pattern you can name is one you can see coming. Next time it starts, you’ll catch it.' },
     ],
   },
   {
     id: 'stop-lying', title: 'Stop Lying to Yourself', blurb: 'Self-deception is the most expensive habit.', Icon: Eye,
     steps: [
-      { title: 'Sixty honest seconds.', body: 'Not about others — about you. Your effort. Your habits. Your excuses.' },
-      { title: 'Write the truth', inputPrompt: 'Where are you fooling yourself right now?' },
+      { title: 'Sixty honest seconds.', body: 'Not about anyone else — about you. Your effort, your habits, your excuses.' },
+      {
+        title: 'Where are you fooling yourself?',
+        inputPrompt: 'Where are you fooling yourself?',
+        body: 'The thing you know isn’t true but keep telling yourself anyway.',
+        placeholder: 'e.g. “I’ll start Monday”',
+      },
       { title: 'You can’t fix what you won’t admit.', body: 'You just admitted it. That’s the hard part done.' },
     ],
   },
@@ -37,7 +48,12 @@ const PROTOCOLS: { id: string; title: string; blurb: string; Icon: typeof Zap; s
     id: 'action-override', title: 'Action Override', blurb: 'You can’t think your way to action.', Icon: Zap,
     steps: [
       { title: 'Stop planning.', body: 'You’ve thought about this enough. Readiness is a myth.' },
-      { title: 'Pick the smallest physical move', inputPrompt: 'What can you physically do in the next 5 minutes?' },
+      {
+        title: 'What’s your smallest move?',
+        inputPrompt: 'What’s your smallest move?',
+        body: 'The tiniest physical action you can take toward it in the next 5 minutes.',
+        placeholder: 'e.g. Open the doc and write one line',
+      },
       { title: 'Go do it. Right now.', body: 'Close this, do the thing, come back. Motion creates momentum — nothing else does.' },
     ],
   },
@@ -146,6 +162,7 @@ export default function AntiSabotageDashboard() {
         title={flow.title}
         steps={flow.steps}
         accent={ACCENT}
+        doneText={DONE_TEXT}
         onExit={() => setFlow(null)}
         onComplete={(answers) => {
           setFlow(null)
@@ -213,7 +230,12 @@ export default function AntiSabotageDashboard() {
               onClick={() => setFlow({
                 title: f.trigger,
                 kind: 'fear-breakdown',
-                steps: f.questions.map((q) => ({ title: q, inputPrompt: q })),
+                steps: f.questions.map((q, i) => ({
+                  title: q,
+                  inputPrompt: q,
+                  body: i === 0 ? `Your fear: “${f.trigger}.” Answer each one honestly — this is just for you.` : undefined,
+                  placeholder: 'Answer honestly — just for you…',
+                })),
               })}
             />
           ))}
