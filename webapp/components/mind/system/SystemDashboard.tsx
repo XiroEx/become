@@ -75,6 +75,8 @@ const KIND_LABEL: Record<string, string> = {
   'protocol': 'Protocol run',
   'fear-breakdown': 'Fear broken down',
   'pattern-catch': 'Pattern caught',
+  'did-the-hard-thing': 'Hard thing done',
+  'nonnegotiable': 'Non-negotiable set',
 }
 
 function relDay(d: string): string {
