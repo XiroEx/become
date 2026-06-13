@@ -15,53 +15,84 @@ import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
 const ACCENT = '#ef4444' // red — discipline system color
+const DONE_TEXT = 'That’s how it’s built.' // discipline-specific finish line
 
 const PROTOCOLS: { id: string; title: string; blurb: string; Icon: typeof Flame; steps: GuidedStep[] }[] = [
   {
     id: 'do-it-anyway', title: 'Do It Anyway', blurb: 'Feelings are data, not instructions.', Icon: Flame,
     steps: [
       { title: 'You don’t feel like it.', body: 'Noted. The plan doesn’t care how you feel — and neither does the person you’re becoming.' },
-      { title: 'What’s the one thing?', inputPrompt: 'Name the thing you’re avoiding right now.' },
+      {
+        title: 'What are you dodging?',
+        inputPrompt: 'What are you dodging?',
+        body: 'Name the exact thing you keep pushing off — the workout, the call, the task. Be specific.',
+        placeholder: 'e.g. The leg workout I keep skipping',
+      },
       { title: 'Go execute it.', body: 'Every time you do what you said regardless of how you feel, you become someone who does what they say.' },
     ],
   },
   {
     id: 'eat-the-frog', title: 'Eat the Frog', blurb: 'Hardest thing first. The day is won.', Icon: Soup,
     steps: [
-      { title: 'Find the frog.', inputPrompt: 'What’s the hardest, most-avoided task you have today?' },
-      { title: 'Nothing else first.', body: 'No phone, no food, no “quick” anything until that’s started. The momentum carries the whole day.' },
+      {
+        title: 'What’s your frog today?',
+        inputPrompt: 'What’s your frog today?',
+        body: 'Your “frog” is the hardest, ugliest, most-avoided task on your plate right now.',
+        placeholder: 'e.g. Finish the proposal I’ve been avoiding',
+      },
+      { title: 'Eat it first.', body: 'No phone, no food, no “quick” anything until that one’s started. The momentum carries the whole day.' },
     ],
   },
   {
     id: 'find-your-40', title: 'Find Your 40%', blurb: 'When you think you’re done, you’re at 40%.', Icon: Gauge,
     steps: [
-      { title: 'The tank has more.', body: 'That “done” feeling is your comfort system, not your limit. It’s lying.' },
-      { title: 'Name the next checkpoint', inputPrompt: 'What’s ONE more rep / minute / step past where you wanted to stop?' },
-      { title: 'Go get it.', body: 'Just the next checkpoint. Then you’ll find another.' },
+      { title: 'Your tank has more.', body: 'That “done” feeling is your comfort system talking, not your real limit. It’s lying to you.' },
+      {
+        title: 'What’s your one-more?',
+        inputPrompt: 'What’s your one-more?',
+        body: 'One more rep, one more minute, one more step past where you wanted to quit. Name it.',
+        placeholder: 'e.g. 5 more minutes on the run',
+      },
+      { title: 'Go get it.', body: 'Just that next checkpoint. Once you’re there, you’ll find another.' },
     ],
   },
   {
     id: 'cold-reality', title: 'Cold Reality', blurb: 'Where you are is the result of what you’ve done.', Icon: Eye,
     steps: [
-      { title: 'Sixty brutally honest seconds.', body: 'No blame. No excuses. Just facts.' },
-      { title: 'The honest audit', inputPrompt: 'What habits and choices got you to where you are right now?' },
-      { title: 'Now decide.', body: 'What changes if you keep them? What changes if you don’t? You already know.' },
+      { title: 'Sixty brutally honest seconds.', body: 'No blame. No excuses. Just the facts about where you actually are right now.' },
+      {
+        title: 'What got you here?',
+        inputPrompt: 'What got you here?',
+        body: 'The habits and choices — good and bad — that built your current situation. Own all of it.',
+        placeholder: 'e.g. Late nights, skipped mornings, no real plan',
+      },
+      { title: 'Now decide.', body: 'What changes if you keep those habits? What changes if you don’t? You already know.' },
     ],
   },
   {
     id: 'excuse-callout', title: 'Excuse Callout', blurb: 'An excuse is a lie told too many times.', Icon: Megaphone,
     steps: [
-      { title: 'Say the excuse out loud.', inputPrompt: 'What’s the excuse you’re about to use?' },
-      { title: 'Is it true — or is it comfort?', body: 'Discomfort is not danger. That excuse has a solution, and you know what it is.' },
+      {
+        title: 'What’s your excuse?',
+        inputPrompt: 'What’s your excuse?',
+        body: 'Say the exact thing you’re about to tell yourself to get out of it.',
+        placeholder: 'e.g. I’m too tired to train today',
+      },
+      { title: 'Is it true — or is it comfort?', body: 'Discomfort is not danger. That excuse has a solution, and somewhere you already know what it is.' },
       { title: 'Do it anyway.', body: 'You’ll respect yourself more at the end of the day. Your future self is watching this exact decision.' },
     ],
   },
 ]
 
 const SET_NONNEGOTIABLE: GuidedStep[] = [
-  { title: 'Draw a line you won’t cross.', body: 'A non-negotiable is a standard you defend no matter what — the floor, not the goal.' },
-  { title: 'Name your non-negotiable', inputPrompt: 'What will you NOT drop below? (e.g. “I train even on bad days.”)' },
-  { title: 'That’s the standard now.', body: 'Standards you defend become identity. Defend this one today.' },
+  { title: 'Draw a line you won’t cross.', body: 'A non-negotiable is the floor you defend no matter what — not the goal, the standard beneath it.' },
+  {
+    title: 'What’s your line?',
+    inputPrompt: 'What’s your line?',
+    body: 'One standard you refuse to drop below, in your own words.',
+    placeholder: 'e.g. I train even on bad days',
+  },
+  { title: 'That’s your standard now.', body: 'Standards you defend become identity. Defend this one today.' },
 ]
 
 function authHeaders(): HeadersInit {
@@ -137,6 +168,7 @@ export default function DisciplineDashboard() {
         title={flow.title}
         steps={flow.steps}
         accent={ACCENT}
+        doneText={DONE_TEXT}
         onExit={() => setFlow(null)}
         onComplete={(answers) => {
           setFlow(null)
