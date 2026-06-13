@@ -8,7 +8,7 @@
 // setting a non-negotiable is a journaled flow, everything lands in the record.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check } from 'lucide-react'
+import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2 } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { SystemHero, ToolkitCard, TrackRecord, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { Toast } from '@/components/ui'
@@ -103,38 +103,82 @@ function authHeaders(): HeadersInit {
 }
 
 interface TodayChallenge { challenge: string; completed: boolean }
+interface NonNeg { id: string; text: string; currentStreak: number; longestStreak: number; checkedToday: boolean }
 
 export default function DisciplineDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
-  const [reps, setReps] = useState(0)
   const [today, setToday] = useState<TodayChallenge | null>(null)
+  const [nonNegs, setNonNegs] = useState<NonNeg[]>([])
   const [marking, setMarking] = useState(false)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
 
   const load = useCallback(async () => {
     try {
       const tz = new Date().getTimezoneOffset()
-      const [jr, cr] = await Promise.all([
+      const [jr, cr, nr] = await Promise.all([
         fetch('/api/mind/journal?system=discipline&limit=8', { headers: authHeaders() }),
         fetch(`/api/mind/discipline?tz=${tz}`, { headers: authHeaders() }),
+        fetch(`/api/mind/non-negotiables?tz=${tz}`, { headers: authHeaders() }),
       ])
       if (jr.ok) {
         const d = await jr.json()
         setEntries((d.entries ?? []).map((e: { _id: string; title: string; kind: string; createdAt: string }) => ({
           id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt,
         })))
-        const counts = d.counts ?? {}
-        setReps(Object.values(counts).reduce((a: number, b) => a + (b as number), 0))
       }
       if (cr.ok) {
         const d = await cr.json()
         if (d.challenge) setToday({ challenge: d.challenge.challenge, completed: !!d.challenge.completed })
       }
+      if (nr.ok) {
+        const d = await nr.json()
+        setNonNegs(d.items ?? [])
+      }
     } catch { /* ignore */ }
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // ── Non-negotiables (the distinct centerpiece of Discipline) ──
+  const heldToday = nonNegs.filter((n) => n.checkedToday).length
+  const topStreak = nonNegs.reduce((m, n) => Math.max(m, n.currentStreak), 0)
+
+  const createNonNeg = async (text: string) => {
+    try {
+      const res = await fetch('/api/mind/non-negotiables', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ text }),
+      })
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}))
+        showToast(e.error || 'Could not save', 'error')
+        return
+      }
+      showToast('That’s your line now. Defend it. 🗡️', 'success')
+      load()
+    } catch { showToast('Could not save', 'error') }
+  }
+
+  const checkNonNeg = async (n: NonNeg) => {
+    if (n.checkedToday) return
+    const tz = new Date().getTimezoneOffset()
+    setNonNegs((prev) => prev.map((x) => x.id === n.id ? { ...x, checkedToday: true, currentStreak: x.currentStreak + 1 } : x)) // optimistic
+    try {
+      await fetch('/api/mind/non-negotiables', {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ id: n.id, action: 'check', tz }),
+      })
+      load()
+    } catch { /* ignore */ }
+  }
+
+  const removeNonNeg = async (id: string) => {
+    setNonNegs((prev) => prev.filter((x) => x.id !== id)) // optimistic
+    try {
+      await fetch('/api/mind/non-negotiables', {
+        method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ id, action: 'deactivate' }),
+      })
+    } catch { /* ignore */ }
+  }
 
   const save = async (kind: string, title: string, lines: { prompt: string; answer: string }[]) => {
     try {
@@ -171,9 +215,16 @@ export default function DisciplineDashboard() {
         doneText={DONE_TEXT}
         onExit={() => setFlow(null)}
         onComplete={(answers) => {
+          const kind = flow.kind
           setFlow(null)
+          if (kind === 'nonnegotiable') {
+            // Create a STANDING non-negotiable from the typed line (don't journal).
+            const line = answers[0]?.answer?.trim()
+            if (line) createNonNeg(line)
+            return
+          }
           showToast('Logged to your track record', 'success')
-          save(flow.kind, flow.title, answers)
+          save(kind, flow.title, answers)
         }}
       />
     )
@@ -185,8 +236,8 @@ export default function DisciplineDashboard() {
         Icon={Sword}
         title="Discipline"
         tagline="Hold your own line — do the hard thing"
-        statValue={reps}
-        statLabel="reps logged"
+        statValue={topStreak > 0 ? `${topStreak}🔥` : '—'}
+        statLabel="best streak"
         color="text-red-500"
         bg="bg-red-50 dark:bg-red-500/10"
       />
@@ -220,14 +271,73 @@ export default function DisciplineDashboard() {
         )}
       </div>
 
-      {/* Set a non-negotiable */}
-      <ToolkitCard
-        Icon={ShieldCheck}
-        title="Set a non-negotiable"
-        blurb="Name a standard you’ll defend. It gets saved."
-        color="text-red-500"
-        onClick={() => setFlow({ title: 'Set a non-negotiable', kind: 'nonnegotiable', steps: SET_NONNEGOTIABLE })}
-      />
+      {/* Your non-negotiables — the standing, checkable, streak-tracked list.
+          This is what makes Discipline distinct from the other systems. */}
+      <div>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Your non-negotiables</p>
+          {nonNegs.length > 0 && (
+            <span className="text-[11px] font-semibold text-zinc-400">{heldToday}/{nonNegs.length} held today</span>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          {nonNegs.map((n) => (
+            <div
+              key={n.id}
+              className={`group flex items-center gap-3 rounded-2xl border p-3.5 transition-colors ${
+                n.checkedToday
+                  ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+                  : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+              }`}
+            >
+              <button
+                onClick={() => checkNonNeg(n)}
+                aria-label={n.checkedToday ? 'Held today' : 'Mark held today'}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                  n.checkedToday
+                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                    : 'border-zinc-300 text-transparent hover:border-red-400 dark:border-zinc-600'
+                }`}
+              >
+                <Check className="h-4 w-4" strokeWidth={3} />
+              </button>
+              <p className={`min-w-0 flex-1 text-sm font-medium ${n.checkedToday ? 'text-zinc-500 line-through dark:text-zinc-400' : 'text-zinc-900 dark:text-white'}`}>
+                {n.text}
+              </p>
+              {n.currentStreak > 0 && (
+                <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-600 dark:bg-orange-500/15 dark:text-orange-300">
+                  <Flame className="h-3.5 w-3.5" />{n.currentStreak}
+                </span>
+              )}
+              <button
+                onClick={() => removeNonNeg(n.id)}
+                aria-label="Remove"
+                className="shrink-0 p-1 text-zinc-300 transition-colors hover:text-red-500 dark:text-zinc-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {nonNegs.length === 0 && (
+          <p className="rounded-2xl border border-dashed border-zinc-300 p-4 text-center text-xs text-zinc-400 dark:border-zinc-700">
+            No lines drawn yet. Set the standards you refuse to drop below — then check them off daily and build a streak.
+          </p>
+        )}
+
+        {nonNegs.length < 7 && (
+          <button
+            type="button"
+            onClick={() => setFlow({ title: 'Set a non-negotiable', kind: 'nonnegotiable', steps: SET_NONNEGOTIABLE })}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-red-300 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50 dark:border-red-500/40 dark:hover:bg-red-500/10"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Draw a new line
+          </button>
+        )}
+      </div>
 
       {/* Protocols — guided runs */}
       <div>
