@@ -125,6 +125,14 @@ export default function AntiSabotageDashboard() {
   const [caught, setCaught] = useState(0)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
   const [catching, setCatching] = useState(false)
+  // Cooldown so the catch can't be machine-gunned into a meaningless number —
+  // real catches are spaced; this keeps the pride stat honest.
+  const [cooldown, setCooldown] = useState(0)
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
 
   const load = useCallback(async () => {
     try {
@@ -151,15 +159,21 @@ export default function AntiSabotageDashboard() {
     } catch { /* ignore */ }
   }
 
-  // One-tap pattern catch — the system's pride stat.
+  // One-tap pattern catch — the system's pride stat. Cooldown-gated so it can't
+  // be spammed (you can log many real catches a day, just not all at once).
+  const CATCH_COOLDOWN_S = 45
   const catchPattern = async () => {
-    if (catching) return
+    if (catching || cooldown > 0) return
     setCatching(true)
     setCaught((c) => c + 1) // optimistic
+    setCooldown(CATCH_COOLDOWN_S)
     showToast('Caught it. That’s the whole skill. 🛡️', 'success')
     await save('pattern-catch', 'Caught a pattern mid-act', [])
     setCatching(false)
   }
+
+  // Today's featured interrupt — excluded from the list below so it isn't shown twice.
+  const featuredInterrupt = dailyPick(PROTOCOLS, 3)
 
   if (flow) {
     return (
@@ -191,41 +205,43 @@ export default function AntiSabotageDashboard() {
       />
 
       {/* Daily drop — a fresh interrupt featured each day */}
-      {(() => {
-        const p = dailyPick(PROTOCOLS, 3)
-        if (!p) return null
-        return (
-          <DailyDrop
-            Icon={Sparkles}
-            eyebrow="Today’s interrupt"
-            title={p.title}
-            blurb={p.blurb}
-            ctaLabel="Run"
-            color="text-orange-500"
-            onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
-          />
-        )
-      })()}
+      {featuredInterrupt && (
+        <DailyDrop
+          Icon={Sparkles}
+          eyebrow="Today’s interrupt"
+          title={featuredInterrupt.title}
+          blurb={featuredInterrupt.blurb}
+          ctaLabel="Run"
+          color="text-orange-500"
+          onClick={() => setFlow({ title: featuredInterrupt.title, kind: 'protocol', steps: featuredInterrupt.steps })}
+        />
+      )}
 
-      {/* Do one now — the one-tap catch */}
+      {/* Do one now — the one-tap catch (cooldown-gated against spam) */}
       <button
         type="button"
         onClick={catchPattern}
-        disabled={catching}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 py-4 text-base font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
+        disabled={catching || cooldown > 0}
+        className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold transition-transform active:scale-[0.98] ${
+          cooldown > 0
+            ? 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+            : 'bg-orange-500 text-white'
+        }`}
       >
         <Hand className="h-5 w-5" />
-        I caught myself doing it
+        {cooldown > 0 ? `Caught — stay sharp (${cooldown}s)` : 'I caught myself doing it'}
       </button>
       <p className="-mt-3 text-center text-[11px] text-zinc-400">
-        Old pattern showed up and you noticed? Tap it. Noticing IS the win.
+        {cooldown > 0
+          ? 'Logged. Catch the next one when it actually happens.'
+          : 'Old pattern showed up and you noticed? Tap it. Noticing IS the win.'}
       </p>
 
-      {/* Interrupt protocols — guided runs */}
+      {/* Interrupt protocols — guided runs (today's featured one lives up top) */}
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Interrupt protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.map((p) => (
+          {PROTOCOLS.filter((p) => p.id !== featuredInterrupt?.id).map((p) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}
