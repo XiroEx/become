@@ -100,6 +100,8 @@ const SET_NONNEGOTIABLE: GuidedStep[] = [
   { title: 'That’s your standard now.', body: 'Standards you defend become identity. Defend this one today.' },
 ]
 
+const FIGHT_LABELS: Record<number, string> = { 1: 'Coasting', 2: 'Light', 3: 'Solid', 4: 'Hard', 5: 'All in' }
+
 // A quick daily scale check — a different interaction shape from the typed flows.
 const FIGHT_CHECK: GuidedStep[] = [
   {
@@ -125,6 +127,7 @@ export default function DisciplineDashboard() {
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   const [today, setToday] = useState<TodayChallenge | null>(null)
   const [nonNegs, setNonNegs] = useState<NonNeg[]>([])
+  const [fightToday, setFightToday] = useState<number | null>(null) // today's fight-check score
   const [marking, setMarking] = useState(false)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
 
@@ -138,9 +141,13 @@ export default function DisciplineDashboard() {
       ])
       if (jr.ok) {
         const d = await jr.json()
-        setEntries((d.entries ?? []).map((e: { _id: string; title: string; kind: string; createdAt: string }) => ({
-          id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt,
-        })))
+        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string; lines?: { answer?: string }[] }> = d.entries ?? []
+        setEntries(raw.map((e) => ({ id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt })))
+        // Surface today's fight-check score (it was saving silently before).
+        const todayStr = new Date().toDateString()
+        const fc = raw.find((e) => e.kind === 'fight-check' && new Date(e.createdAt).toDateString() === todayStr)
+        const v = fc?.lines?.[0]?.answer ? Number(fc.lines[0].answer) : NaN
+        setFightToday(Number.isFinite(v) ? v : null)
       }
       if (cr.ok) {
         const d = await cr.json()
@@ -238,6 +245,13 @@ export default function DisciplineDashboard() {
             if (line) createNonNeg(line)
             return
           }
+          if (kind === 'fight-check') {
+            const v = Number(answers[0]?.answer)
+            if (Number.isFinite(v)) setFightToday(v) // optimistic — card flips to done state
+            showToast('Fight set. Now make today match it. 🗡️', 'success')
+            save(kind, flow.title, answers)
+            return
+          }
           showToast('Logged to your track record', 'success')
           save(kind, flow.title, answers)
         }}
@@ -325,16 +339,37 @@ export default function DisciplineDashboard() {
         )}
       </div>
 
-      {/* Daily drop — a quick fight check (scale) + a rotating protocol */}
-      <DailyDrop
-        Icon={Crosshair}
-        eyebrow="Daily fight check"
-        title="How hard will you go today?"
-        blurb="One tap. Sets the bar for the day."
-        ctaLabel="Check"
-        color="text-red-500"
-        onClick={() => setFlow({ title: 'Fight check', kind: 'fight-check', steps: FIGHT_CHECK })}
-      />
+      {/* Daily fight check — once done today, show the logged score + a done
+          state (tap to redo) instead of the generic prompt. */}
+      {fightToday != null ? (
+        <button
+          type="button"
+          onClick={() => setFlow({ title: 'Fight check', kind: 'fight-check', steps: FIGHT_CHECK })}
+          className="flex w-full items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-left transition-transform active:scale-[0.99] dark:border-emerald-500/30 dark:bg-emerald-500/10"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <Crosshair className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Daily fight check · logged</p>
+            <p className="text-sm font-bold text-zinc-900 dark:text-white">
+              Today: {fightToday}/5 — {FIGHT_LABELS[fightToday] ?? ''}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Tap to change your answer.</p>
+          </div>
+          <Check className="h-5 w-5 shrink-0 text-emerald-500" strokeWidth={3} />
+        </button>
+      ) : (
+        <DailyDrop
+          Icon={Crosshair}
+          eyebrow="Daily fight check"
+          title="How hard will you go today?"
+          blurb="One tap. Sets the bar for the day."
+          ctaLabel="Check"
+          color="text-red-500"
+          onClick={() => setFlow({ title: 'Fight check', kind: 'fight-check', steps: FIGHT_CHECK })}
+        />
+      )}
 
       {/* Today's hard thing — the rotating daily challenge (distinct from the
           standing "Your non-negotiables" list below; avoid the name collision). */}
