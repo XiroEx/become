@@ -257,46 +257,6 @@ export default function DisciplineDashboard() {
         bg="bg-red-50 dark:bg-red-500/10"
       />
 
-      {/* Daily drop — a quick fight check (scale) + a rotating protocol */}
-      <DailyDrop
-        Icon={Crosshair}
-        eyebrow="Daily fight check"
-        title="How hard will you go today?"
-        blurb="One tap. Sets the bar for the day."
-        ctaLabel="Check"
-        color="text-red-500"
-        onClick={() => setFlow({ title: 'Fight check', kind: 'fight-check', steps: FIGHT_CHECK })}
-      />
-
-      {/* Today's non-negotiable — the do-one-now */}
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
-        <p className="text-xs font-semibold uppercase tracking-widest text-red-500">Today’s non-negotiable</p>
-        <p className="mt-2 text-base font-bold leading-snug text-zinc-900 dark:text-white">
-          {today?.challenge ?? 'Loading your hard thing…'}
-        </p>
-        {today?.completed ? (
-          <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-            <Check className="h-5 w-5" strokeWidth={3} /> Done today. Respect.
-          </div>
-        ) : (
-          <div className="mt-3 flex flex-col gap-2">
-            <button
-              onClick={markDone}
-              disabled={marking || !today}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 py-3 text-sm font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
-            >
-              <Check className="h-4 w-4" strokeWidth={3} /> I did it
-            </button>
-            <button
-              onClick={() => setFlow({ title: 'Do It Anyway', kind: 'protocol', steps: PROTOCOLS[0].steps })}
-              className="text-xs font-medium text-red-600/80 transition-colors hover:text-red-700 dark:text-red-300/80"
-            >
-              Not feeling it? →
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Your non-negotiables — the standing, checkable, streak-tracked list.
           This is what makes Discipline distinct from the other systems. */}
       <div>
@@ -362,6 +322,47 @@ export default function DisciplineDashboard() {
             <ShieldCheck className="h-4 w-4" />
             Draw a new line
           </button>
+        )}
+      </div>
+
+      {/* Daily drop — a quick fight check (scale) + a rotating protocol */}
+      <DailyDrop
+        Icon={Crosshair}
+        eyebrow="Daily fight check"
+        title="How hard will you go today?"
+        blurb="One tap. Sets the bar for the day."
+        ctaLabel="Check"
+        color="text-red-500"
+        onClick={() => setFlow({ title: 'Fight check', kind: 'fight-check', steps: FIGHT_CHECK })}
+      />
+
+      {/* Today's hard thing — the rotating daily challenge (distinct from the
+          standing "Your non-negotiables" list below; avoid the name collision). */}
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+        <p className="text-xs font-semibold uppercase tracking-widest text-red-500">Today’s hard thing</p>
+        <p className="mt-2 text-base font-bold leading-snug text-zinc-900 dark:text-white">
+          {today?.challenge ?? 'Loading your hard thing…'}
+        </p>
+        {today?.completed ? (
+          <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            <Check className="h-5 w-5" strokeWidth={3} /> Done today. Respect.
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              onClick={markDone}
+              disabled={marking || !today}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 py-3 text-sm font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-60"
+            >
+              <Check className="h-4 w-4" strokeWidth={3} /> I did it
+            </button>
+            <button
+              onClick={() => setFlow({ title: 'Do It Anyway', kind: 'protocol', steps: PROTOCOLS[0].steps })}
+              className="text-xs font-medium text-red-600/80 transition-colors hover:text-red-700 dark:text-red-300/80"
+            >
+              Not feeling it? →
+            </button>
+          </div>
         )}
       </div>
 
