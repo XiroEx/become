@@ -6,9 +6,10 @@
 // everything lands in the track record (MindJournal).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Shield, Zap, Eye, Search, CircleSlash, RefreshCcw, Hand } from 'lucide-react'
+import { Shield, Zap, Eye, Search, CircleSlash, RefreshCcw, Hand, Sparkles } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
-import { SystemHero, ToolkitCard, TrackRecord, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -21,11 +22,15 @@ const PROTOCOLS: { id: string; title: string; blurb: string; Icon: typeof Zap; s
   {
     id: 'pattern-recognition', title: 'Pattern Recognition', blurb: 'Name the pattern — it can’t survive the light.', Icon: Search,
     steps: [
-      { title: 'Where do you always quit?', body: 'Picture the last three times you stopped. Same point? Same feeling?' },
+      {
+        title: 'Where does it usually hit?',
+        body: 'Pick the moment your old pattern strikes the most.',
+        choices: ['Right at the start', 'The messy middle', 'Just before the win', 'When no one’s watching'],
+      },
       {
         title: 'What’s your pattern?',
         inputPrompt: 'What’s your pattern?',
-        body: 'The exact moment, feeling, or trigger that makes you stop — every time.',
+        body: 'The exact feeling or trigger that makes you stop — in your words.',
         placeholder: 'e.g. I quit the second it stops being exciting',
       },
       { title: 'Now it’s named.', body: 'A pattern you can name is one you can see coming. Next time it starts, you’ll catch it.' },
@@ -184,6 +189,23 @@ export default function AntiSabotageDashboard() {
         color="text-orange-500"
         bg="bg-orange-50 dark:bg-orange-500/10"
       />
+
+      {/* Daily drop — a fresh interrupt featured each day */}
+      {(() => {
+        const p = dailyPick(PROTOCOLS, 3)
+        if (!p) return null
+        return (
+          <DailyDrop
+            Icon={Sparkles}
+            eyebrow="Today’s interrupt"
+            title={p.title}
+            blurb={p.blurb}
+            ctaLabel="Run"
+            color="text-orange-500"
+            onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
+          />
+        )
+      })()}
 
       {/* Do one now — the one-tap catch */}
       <button
