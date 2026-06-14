@@ -64,6 +64,40 @@ export function ToolkitCard({
   )
 }
 
+export function DailyDrop({
+  Icon, eyebrow, title, blurb, ctaLabel, onClick, color,
+}: {
+  Icon: LucideIcon
+  eyebrow: string
+  title: string
+  blurb: string
+  ctaLabel: string
+  onClick: () => void
+  color: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-4 text-left transition-transform active:scale-[0.99] dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-900/40"
+    >
+      <div className="flex items-center gap-3">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 ${color}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className={`text-[10px] font-bold uppercase tracking-widest ${color}`}>{eyebrow}</p>
+          <p className="text-sm font-bold text-zinc-900 dark:text-white">{title}</p>
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{blurb}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-zinc-900 px-3 py-1.5 text-xs font-bold text-white dark:bg-white dark:text-black">
+          {ctaLabel}
+        </span>
+      </div>
+    </button>
+  )
+}
+
 export interface TrackRecordEntry {
   id: string
   title: string
@@ -77,6 +111,7 @@ const KIND_LABEL: Record<string, string> = {
   'pattern-catch': 'Pattern caught',
   'did-the-hard-thing': 'Hard thing done',
   'nonnegotiable': 'Non-negotiable set',
+  'fight-check': 'Fight check',
 }
 
 function relDay(d: string): string {

@@ -1,16 +1,17 @@
 'use client'
 
-// Discipline system dashboard — built on the shared SystemDashboard skeleton,
-// same interactive treatment as Anti-Sabotage. Reframed per product direction:
-// Discipline is about NON-NEGOTIABLES (doing the hard thing, holding your own
-// line), NOT habit/goal tracking (that gets its own dedicated home). No dead
-// text — today's hard thing is one-tap done, protocols run as GuidedFlows,
-// setting a non-negotiable is a journaled flow, everything lands in the record.
+// Discipline system dashboard. Shares the SystemDashboard primitives but its
+// PRIMARY mechanic is distinct from the other systems: a persistent
+// Non-Negotiables tracker — standing user-defined standards with daily check-off
+// and a breakable per-item streak (the thing that pulls you back daily). Plus
+// today's rotating hard-thing and guided protocols. Habit/goal tracking is a
+// separate dedicated home (not here).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2 } from 'lucide-react'
+import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
-import { SystemHero, ToolkitCard, TrackRecord, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -21,11 +22,15 @@ const PROTOCOLS: { id: string; title: string; blurb: string; Icon: typeof Flame;
   {
     id: 'do-it-anyway', title: 'Do It Anyway', blurb: 'Feelings are data, not instructions.', Icon: Flame,
     steps: [
-      { title: 'You don’t feel like it.', body: 'Noted. The plan doesn’t care how you feel — and neither does the person you’re becoming.' },
+      {
+        title: 'What’s the resistance?',
+        body: 'Name what’s really in the way right now.',
+        choices: ['Tired', 'Bored', 'Scared', 'Too busy', 'Just don’t want to'],
+      },
       {
         title: 'What are you dodging?',
         inputPrompt: 'What are you dodging?',
-        body: 'Name the exact thing you keep pushing off — the workout, the call, the task. Be specific.',
+        body: 'The exact thing you keep pushing off — the workout, the call, the task. Be specific.',
         placeholder: 'e.g. The leg workout I keep skipping',
       },
       { title: 'Go execute it.', body: 'Every time you do what you said regardless of how you feel, you become someone who does what they say.' },
@@ -93,6 +98,16 @@ const SET_NONNEGOTIABLE: GuidedStep[] = [
     placeholder: 'e.g. I train even on bad days',
   },
   { title: 'That’s your standard now.', body: 'Standards you defend become identity. Defend this one today.' },
+]
+
+// A quick daily scale check — a different interaction shape from the typed flows.
+const FIGHT_CHECK: GuidedStep[] = [
+  {
+    title: 'How hard are you willing to go today?',
+    body: 'No wrong answer — just be honest about today’s fight.',
+    scale: { min: 1, max: 5, minLabel: 'Coasting', maxLabel: 'All in' },
+  },
+  { title: 'Now back it up.', body: 'A number is a promise to yourself. Make today match it.' },
 ]
 
 function authHeaders(): HeadersInit {
@@ -240,6 +255,17 @@ export default function DisciplineDashboard() {
         statLabel="best streak"
         color="text-red-500"
         bg="bg-red-50 dark:bg-red-500/10"
+      />
+
+      {/* Daily drop — a quick fight check (scale) + a rotating protocol */}
+      <DailyDrop
+        Icon={Crosshair}
+        eyebrow="Daily fight check"
+        title="How hard will you go today?"
+        blurb="One tap. Sets the bar for the day."
+        ctaLabel="Check"
+        color="text-red-500"
+        onClick={() => setFlow({ title: 'Fight check', kind: 'fight-check', steps: FIGHT_CHECK })}
       />
 
       {/* Today's non-negotiable — the do-one-now */}
