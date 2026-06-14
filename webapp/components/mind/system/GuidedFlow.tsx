@@ -1,10 +1,11 @@
 'use client'
 
-// GuidedFlow — the system dashboards' interactive primitive. Replaces "tap →
-// read a paragraph" with a full-screen, one-thing-per-screen guided run in the
-// same immersive treatment as the session player: dark stage, progress bar,
-// big type. Steps are either instructions (tap Next) or questions (type an
-// answer). Finishes with a check moment, then onComplete(answers).
+// GuidedFlow — the system dashboards' interactive primitive. Full-screen,
+// one-thing-per-screen guided run in the session-player treatment (dark stage,
+// progress bar, big type). Steps come in several INTERACTION TYPES so a run
+// isn't all typing — info, type-an-answer, pick-one (choices), and a 1–5 scale.
+// Finishes with a per-system check moment, then onComplete(answers). This is the
+// seam the AI engine will later generate steps into.
 
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -13,10 +14,14 @@ import { X, Check, ArrowRight } from 'lucide-react'
 export interface GuidedStep {
   title: string
   body?: string
-  /** When set, this step asks for a typed answer. */
+  /** Type-an-answer step. */
   inputPrompt?: string
   /** Per-step textarea placeholder (defaults to a generic starter). */
   placeholder?: string
+  /** Pick-one step — tapping a choice records it and advances (no typing). */
+  choices?: string[]
+  /** 1–5 (or custom) scale step — tap a number to record + advance. */
+  scale?: { min: number; max: number; minLabel: string; maxLabel: string }
 }
 
 export default function GuidedFlow({
@@ -43,12 +48,15 @@ export default function GuidedFlow({
 
   const step = steps[idx]
   const isLast = idx === steps.length - 1
+  const isChoice = !!step.choices?.length
+  const isScale = !!step.scale
+  const isInput = !!step.inputPrompt
 
-  const advance = () => {
+  // Record an answer (when the step produces one) and move forward.
+  const commit = (answer?: string) => {
     const next = [...answers]
-    if (step.inputPrompt) {
-      if (!input.trim()) return
-      next.push({ prompt: step.inputPrompt, answer: input.trim() })
+    if (answer !== undefined) {
+      next.push({ prompt: step.inputPrompt || step.title, answer })
       setAnswers(next)
       setInput('')
     }
@@ -106,25 +114,67 @@ export default function GuidedFlow({
               <p className="text-xs uppercase tracking-widest text-white/40">{title}</p>
               <h2 className="mt-4 text-2xl font-extrabold leading-snug">{step.title}</h2>
               {step.body && <p className="mt-3 text-base leading-relaxed text-white/70">{step.body}</p>}
-              {step.inputPrompt && (
+
+              {/* ── Type-an-answer ── */}
+              {isInput && (
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder={step.placeholder ?? "Type it honestly…"}
+                  placeholder={step.placeholder ?? 'Type it honestly…'}
                   rows={3}
                   autoFocus
                   className="mt-6 w-full resize-none rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-base text-white placeholder-white/30 focus:border-white/40 focus:outline-none"
                 />
               )}
-              <button
-                onClick={advance}
-                disabled={!!step.inputPrompt && !input.trim()}
-                className="mt-8 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold text-black transition-transform active:scale-95 disabled:opacity-40"
-                style={{ backgroundColor: 'white' }}
-              >
-                {isLast ? 'Finish' : 'Next'}
-                <ArrowRight className="h-5 w-5" />
-              </button>
+
+              {/* ── Pick-one ── */}
+              {isChoice && (
+                <div className="mt-6 flex w-full flex-col gap-2.5">
+                  {step.choices!.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => commit(c)}
+                      className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3.5 text-left text-base font-medium text-white transition-colors hover:border-white/40 active:scale-[0.99]"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* ── 1–5 scale ── */}
+              {isScale && (
+                <div className="mt-7 w-full">
+                  <div className="flex items-center justify-between gap-2">
+                    {Array.from({ length: step.scale!.max - step.scale!.min + 1 }, (_, i) => step.scale!.min + i).map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => commit(String(n))}
+                        className="flex h-12 flex-1 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-lg font-bold text-white transition-colors hover:border-white/50 active:scale-95"
+                        style={{ borderColor: undefined }}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex justify-between text-[11px] text-white/40">
+                    <span>{step.scale!.minLabel}</span>
+                    <span>{step.scale!.maxLabel}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Advance button — only for info + type steps (choice/scale auto-advance). */}
+              {!isChoice && !isScale && (
+                <button
+                  onClick={() => commit(isInput ? input.trim() : undefined)}
+                  disabled={isInput && !input.trim()}
+                  className="mt-8 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95 disabled:opacity-40"
+                >
+                  {isLast ? 'Finish' : 'Next'}
+                  <ArrowRight className="h-5 w-5" />
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
