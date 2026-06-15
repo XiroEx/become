@@ -127,7 +127,7 @@ function choiceMove(ctx: SessionContext): Move {
 // Acknowledge + self-compassion — validate the hard feeling instead of denying it.
 function acknowledgeMove(ctx: SessionContext): Move {
   const item = ACKNOWLEDGE_POOL[(ctx.seed ?? ctx.dayOfYear) % ACKNOWLEDGE_POOL.length]
-  return { id: 'acknowledge', kind: 'acknowledge', title: item.q, subtitle: 'Honest is allowed.', options: item.options, xp: 5 }
+  return { id: 'acknowledge', kind: 'acknowledge', title: item.q, subtitle: 'No need to spin it.', options: item.options, xp: 5 }
 }
 
 // Interrogative self-talk — ask, don't declare ("Will you?").
