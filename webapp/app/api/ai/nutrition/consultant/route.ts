@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireAiUser, trimHistory, asText, userGrounding, mintToolToken } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -30,7 +30,10 @@ export async function POST(request: NextRequest) {
   const trig = await triggerBecomeTask(
     'nutrition.consultant',
     { message, history: trimHistory(body.history), user: await userGrounding(gate.user.userId, body) },
-    { conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined },
+    {
+      conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
+      userToken: mintToolToken(gate.user.userId, gate.user.email),
+    },
   )
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
