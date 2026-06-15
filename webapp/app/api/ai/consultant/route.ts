@@ -5,7 +5,7 @@
 // unavailable, so the chat never dead-ends.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runFreeformTask, type BecomeTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask, type BecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, trimHistory, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
     user: grounding,
   }
 
-  const reply = await runFreeformTask(task, context, {
+  const trig = await triggerBecomeTask(task, context, {
     conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
   })
 
-  if (reply) return NextResponse.json({ ok: true, reply })
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, reply: FALLBACK[domain] ?? FALLBACK.mindset, fallback: true })
 }

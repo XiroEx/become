@@ -12,6 +12,7 @@
 //   • ProductFinder.find       — throws ProductUnavailableError on the same
 //     condition. Returns ProductMatch[] when the route eventually resolves.
 
+import { runAiTask } from '@/lib/ai/runClient'
 import type {
   PlateEstimate,
   PlateEstimator,
@@ -103,20 +104,12 @@ class ProductFinderImpl implements ProductFinder {
 
 class NutritionConsultantImpl implements NutritionConsultant {
   async ask(message: string, ctx: NutritionAIContext): Promise<ConsultantTurn> {
-    const res = await fetch('/api/ai/nutrition/consultant', {
-      method: 'POST',
-      headers: authHeader(),
-      body: JSON.stringify({ message, grounding: ctx }),
-    })
+    // Async run: POST returns a runId, runAiTask polls until the reply lands.
+    const r = await runAiTask('/api/ai/nutrition/consultant', { message, grounding: ctx })
 
-    const data = await res.json().catch(() => ({})) as Record<string, unknown>
-
-    // Route always returns { reply } even on fallback, so we read it directly.
-    // If completely unreachable, return a graceful local fallback.
     const reply =
-      typeof data.reply === 'string' && data.reply.trim()
-        ? data.reply
-        : "Let's keep it simple. Tell me your goal and roughly what you eat in a normal day, and I'll help you adjust one thing at a time."
+      (r.text && r.text.trim()) || (r.reply && r.reply.trim())
+        || "Let's keep it simple. Tell me your goal and roughly what you eat in a normal day, and I'll help you adjust one thing at a time."
 
     return { reply }
   }

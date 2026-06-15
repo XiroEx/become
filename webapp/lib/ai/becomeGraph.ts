@@ -73,28 +73,30 @@ interface RunState {
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'error'])
 
+export type RunStatus = 'pending' | 'completed' | 'failed'
+
+export interface RunSnapshot {
+  status: RunStatus
+  ok?: boolean
+  result?: unknown
+  text?: string
+  error?: string
+}
+
 /**
- * Invoke the Become AI graph and return its normalized result. Never throws —
- * always resolves to `{ ok: true, ... }` or `{ ok: false, error }` so callers
- * can branch to a deterministic fallback. The secret + read-back token stay
- * server-side and are never returned.
+ * Trigger a graph run and return its runId IMMEDIATELY (~130–500ms). Used by the
+ * async route pattern: the route triggers, returns the runId to the client, and
+ * the client polls /api/ai/run/<runId> — so no single HTTP request is ever held
+ * open long enough to hit the edge proxy's ~15s timeout. Never throws.
  */
-export async function runBecomeTask(
+export async function triggerBecomeTask(
   task: BecomeTask,
   context: string | Record<string, unknown>,
   opts: RunBecomeOptions = {},
-): Promise<RunBecomeResult> {
+): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
   const secret = process.env.BECOME_AI_WEBHOOK_SECRET
-  const readToken = process.env.BECOME_AI_READBACK_TOKEN
   if (!secret) return { ok: false, error: 'missing_webhook_secret' }
-  if (!readToken) return { ok: false, error: 'missing_readback_token' }
-
-  const timeoutMs = opts.timeoutMs ?? 120_000
-  const pollIntervalMs = opts.pollIntervalMs ?? 800
-  const deadline = Date.now() + timeoutMs
-
   try {
-    // 1. Trigger the run (secret-gated webhook). Returns immediately with a runId.
     const triggerRes = await fetch(
       `${BASE}/api/v1/webhooks/${WEBHOOK_ID}?secret=${encodeURIComponent(secret)}`,
       {
@@ -113,42 +115,74 @@ export async function runBecomeTask(
     if (!triggerRes.ok) return { ok: false, error: `trigger_http_${triggerRes.status}` }
     const trigger = (await triggerRes.json()) as { ok?: boolean; runId?: string }
     if (!trigger.runId) return { ok: false, error: 'no_run_id' }
-
-    // 2. Poll the run until terminal (read-back is owner-authed via the PAT).
-    while (Date.now() < deadline) {
-      await sleep(pollIntervalMs)
-      let stateRes: Response
-      try {
-        stateRes = await fetch(`${BASE}/api/runs/${trigger.runId}`, {
-          headers: { Authorization: `Bearer ${readToken}` },
-          signal: AbortSignal.timeout(10_000),
-        })
-      } catch {
-        continue // transient read error — keep polling until the deadline
-      }
-      if (!stateRes.ok) continue
-      const state = (await stateRes.json()) as RunState
-      if (!TERMINAL.has(state.status)) continue
-
-      if (state.status !== 'completed') return { ok: false, error: `run_${state.status}` }
-      const data = state.output?.data ?? {}
-      const br = (data.becomeResponse ?? data.result) as BecomeResponse | undefined
-      if (br && br.ok) {
-        return {
-          ok: true,
-          result: br.result ?? (data.taskResult as unknown) ?? undefined,
-          text: br.text ?? (data.responseText as string) ?? undefined,
-        }
-      }
-      return {
-        ok: false,
-        error: (br as { error?: string } | undefined)?.error ?? 'task_failed',
-      }
-    }
-    return { ok: false, error: 'timeout' }
+    return { ok: true, runId: trigger.runId }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'unknown_error' }
   }
+}
+
+/**
+ * Read a single run's current state (~<1s). Returns 'pending' while the run is
+ * in flight OR on any transient read error (the caller keeps polling against its
+ * own deadline), 'completed' with the normalized result, or 'failed'.
+ */
+export async function fetchBecomeRun(runId: string): Promise<RunSnapshot> {
+  const readToken = process.env.BECOME_AI_READBACK_TOKEN
+  if (!readToken) return { status: 'failed', error: 'missing_readback_token' }
+  try {
+    const res = await fetch(`${BASE}/api/runs/${encodeURIComponent(runId)}`, {
+      headers: { Authorization: `Bearer ${readToken}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!res.ok) return { status: 'pending' } // transient — keep polling
+    const state = (await res.json()) as RunState
+    if (!TERMINAL.has(state.status)) return { status: 'pending' }
+    if (state.status !== 'completed') return { status: 'failed', error: `run_${state.status}` }
+    const data = state.output?.data ?? {}
+    const br = (data.becomeResponse ?? data.result) as BecomeResponse | undefined
+    if (br && br.ok) {
+      return {
+        status: 'completed',
+        ok: true,
+        result: br.result ?? (data.taskResult as unknown) ?? undefined,
+        text: br.text ?? (data.responseText as string) ?? undefined,
+      }
+    }
+    return {
+      status: 'completed',
+      ok: false,
+      error: (br as { error?: string } | undefined)?.error ?? 'task_failed',
+    }
+  } catch {
+    return { status: 'pending' } // transient read error — keep polling
+  }
+}
+
+/**
+ * Blocking trigger→poll convenience. Holds the call until the run finishes, so
+ * use it ONLY for fast tasks (the vision stubs return in ~5s, under the edge
+ * timeout). Slow tasks MUST use the async trigger/fetch pattern instead. Never
+ * throws — resolves to a fallback-friendly result.
+ */
+export async function runBecomeTask(
+  task: BecomeTask,
+  context: string | Record<string, unknown>,
+  opts: RunBecomeOptions = {},
+): Promise<RunBecomeResult> {
+  const trig = await triggerBecomeTask(task, context, opts)
+  if (!trig.ok) return { ok: false, error: trig.error }
+
+  const deadline = Date.now() + (opts.timeoutMs ?? 120_000)
+  const pollIntervalMs = opts.pollIntervalMs ?? 800
+  while (Date.now() < deadline) {
+    await sleep(pollIntervalMs)
+    const s = await fetchBecomeRun(trig.runId)
+    if (s.status === 'pending') continue
+    if (s.status === 'failed') return { ok: false, error: s.error ?? 'run_failed' }
+    if (s.ok) return { ok: true, result: s.result, text: s.text }
+    return { ok: false, error: s.error ?? 'task_failed' }
+  }
+  return { ok: false, error: 'timeout' }
 }
 
 /**

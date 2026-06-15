@@ -15,6 +15,7 @@ import {
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { draftProgramToProgramBody } from "@/lib/quickSession/generate";
+import { runAiTask } from "@/lib/ai/runClient";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -265,33 +266,25 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
       try {
         const equipmentStr = equipment.length ? equipment.join(", ") : undefined;
         const focusDef = FOCUS_DEFS[focus];
-        const aiRes = await fetch("/api/ai/workout/session", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            prompt: aiPrompt.trim() || undefined,
-            focus: focusDef.label,
-            equipment: equipmentStr,
-            level: difficulty,
-          }),
+        // Async run: POST returns a runId, runAiTask polls until the session lands.
+        const r = await runAiTask("/api/ai/workout/session", {
+          prompt: aiPrompt.trim() || undefined,
+          focus: focusDef.label,
+          equipment: equipmentStr,
+          level: difficulty,
         });
-        if (aiRes.ok) {
-          const aiData = (await aiRes.json()) as AiSessionResponse;
-          if (aiData.ok && aiData.session?.exercises?.length) {
-            const exercises = await resolveExerciseNames(
-              aiData.session.exercises,
-              headers,
-            );
-            if (exercises.length > 0) {
-              setSession({
-                title: aiData.session.title || `${focusDef.label} Session`,
-                focus,
-                exercises,
-              });
-              setAiUsed(true);
-              setLoading(false);
-              return;
-            }
+        const aiSession = r.result as AiSessionResponse["session"] | undefined;
+        if (r.ok && aiSession?.exercises?.length) {
+          const exercises = await resolveExerciseNames(aiSession.exercises, headers);
+          if (exercises.length > 0) {
+            setSession({
+              title: aiSession.title || `${focusDef.label} Session`,
+              focus,
+              exercises,
+            });
+            setAiUsed(true);
+            setLoading(false);
+            return;
           }
         }
         // AI returned ok:false or empty — fall through to deterministic
@@ -350,21 +343,17 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
         const focusDef = FOCUS_DEFS[focus];
         const equipmentStr = equipment.length ? equipment.join(", ") : undefined;
         const goal = aiPrompt.trim() || `${focusDef.label} training`;
-        const aiRes = await fetch("/api/ai/workout/program", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            goal,
-            daysPerWeek,
-            weeks,
-            level: difficulty,
-            equipment: equipmentStr,
-          }),
+        // Async run: POST returns a runId, runAiTask polls until the program lands.
+        const r = await runAiTask("/api/ai/workout/program", {
+          goal,
+          daysPerWeek,
+          weeks,
+          level: difficulty,
+          equipment: equipmentStr,
         });
-        if (aiRes.ok) {
-          const aiData = (await aiRes.json()) as AiProgramResponse;
-          if (aiData.ok && aiData.program?.days?.length) {
-            const p = aiData.program;
+        {
+          const p = r.result as AiProgramResponse["program"] | undefined;
+          if (r.ok && p?.days?.length) {
             // Resolve all exercises across all days in parallel.
             const resolvedDays = await Promise.all(
               (p.days ?? []).map(async (d, i): Promise<DraftProgramDay> => {
