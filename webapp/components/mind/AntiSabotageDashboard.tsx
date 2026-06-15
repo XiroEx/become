@@ -125,6 +125,7 @@ export default function AntiSabotageDashboard() {
   const [caught, setCaught] = useState(0)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
   const [catching, setCatching] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
   // Cooldown so the catch can't be machine-gunned into a meaningless number —
   // real catches are spaced; this keeps the pride stat honest.
   const [cooldown, setCooldown] = useState(0)
@@ -172,6 +173,30 @@ export default function AntiSabotageDashboard() {
     setCatching(false)
   }
 
+  // Personalize with AI — calls /api/ai/mind/flow and launches the returned steps as
+  // a guided flow. Falls back to the static featured interrupt on any failure.
+  const runAiFlow = async (topic: string, fallbackProtocol: typeof PROTOCOLS[0] | undefined) => {
+    if (aiLoading) return
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/ai/mind/flow', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ system: 'anti-sabotage', topic }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok && Array.isArray(data.steps) && data.steps.length > 0) {
+        setFlow({ title: topic, kind: 'protocol', steps: data.steps })
+        return
+      }
+    } catch { /* fall through */ }
+    // Fallback — launch the static protocol without surfacing an error
+    showToast("Using today's protocol", 'neutral')
+    if (fallbackProtocol) {
+      setFlow({ title: fallbackProtocol.title, kind: 'protocol', steps: fallbackProtocol.steps })
+    }
+  }
+
   // Today's featured interrupt — excluded from the list below so it isn't shown twice.
   const featuredInterrupt = dailyPick(PROTOCOLS, 3)
 
@@ -182,9 +207,10 @@ export default function AntiSabotageDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
-        onExit={() => setFlow(null)}
+        onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           setFlow(null)
+          setAiLoading(false)
           showToast('Logged to your track record', 'success')
           save(flow.kind, flow.title, answers)
         }}
@@ -216,6 +242,33 @@ export default function AntiSabotageDashboard() {
           onClick={() => setFlow({ title: featuredInterrupt.title, kind: 'protocol', steps: featuredInterrupt.steps })}
         />
       )}
+
+      {/* Personalize with AI — generates a flow tailored to the user’s current
+          pattern. Falls back to the featured static protocol without hard-erroring. */}
+      <button
+        type="button"
+        disabled={aiLoading}
+        onClick={() => runAiFlow(
+          featuredInterrupt?.title ?? 'interrupt a self-sabotage pattern',
+          featuredInterrupt,
+        )}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-orange-300 py-3 text-sm font-semibold text-orange-500 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-orange-500/30 dark:hover:bg-orange-500/10"
+      >
+        {aiLoading ? (
+          <>
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Building your session…
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" />
+            Personalize with AI
+          </>
+        )}
+      </button>
 
       {/* Do one now — the one-tap catch (cooldown-gated against spam) */}
       <button
