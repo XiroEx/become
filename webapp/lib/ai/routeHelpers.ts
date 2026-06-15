@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
+import { assembleUserContext } from './userContext'
 
 export interface AiUser {
   userId: string
@@ -42,4 +43,23 @@ export function trimHistory(
 /** Coerce an arbitrary client value to a bounded string. */
 export function asText(v: unknown, max = 2000): string {
   return typeof v === 'string' ? v.slice(0, max) : ''
+}
+
+/**
+ * Build the `user` grounding for a graph call: a server-assembled, per-user
+ * context summary (authoritative) merged with any extra fields the client sent.
+ * This is the Layer-1 "push" — every AI call gets a cheap baseline of who the
+ * user is without the model having to tool-call for it.
+ */
+export async function userGrounding(
+  userId: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const client = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
+  try {
+    const ctx = await assembleUserContext(userId)
+    return { ...ctx, ...client }
+  } catch {
+    return client
+  }
 }

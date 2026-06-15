@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -27,10 +27,9 @@ export async function POST(request: NextRequest) {
   const message = asText(body.message)
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
-  const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
   const trig = await triggerBecomeTask(
     'nutrition.consultant',
-    { message, history: trimHistory(body.history), user: grounding },
+    { message, history: trimHistory(body.history), user: await userGrounding(gate.user.userId, body) },
     { conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined },
   )
 
