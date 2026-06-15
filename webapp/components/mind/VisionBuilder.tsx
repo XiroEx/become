@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight, Sparkles, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 
 interface VisionData {
   habits: string
@@ -79,12 +81,14 @@ interface Props {
 }
 
 export default function VisionBuilder({ onComplete }: Props) {
+  const { toast, showToast } = useToast()
   const [phase, setPhase] = useState<'intro' | 'steps' | 'saving'>('intro')
   const [stepIdx, setStepIdx] = useState(0)
   const [values, setValues] = useState<VisionData>({
     habits: '', mind: '', body: '', relationships: '', environment: '', identityStatement: '',
   })
   const [saving, setSaving] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
   const step = STEPS[stepIdx]
   const isLast = stepIdx === STEPS.length - 1
@@ -114,6 +118,40 @@ export default function VisionBuilder({ onComplete }: Props) {
       onComplete(values)
     } catch {
       setSaving(false)
+    }
+  }
+
+  // Calls /api/ai/mind/generate to draft an identity statement.
+  // On success, fills the field so the user can edit before saving.
+  // On failure, leaves the field untouched and shows a subtle toast.
+  async function generateIdentity() {
+    if (generating) return
+    setGenerating(true)
+    try {
+      const token = getToken()
+      // Build a grounding hint from dimensions already filled in.
+      const grounding = {
+        habits: values.habits || undefined,
+        mind: values.mind || undefined,
+        body: values.body || undefined,
+        relationships: values.relationships || undefined,
+        environment: values.environment || undefined,
+      }
+      const res = await fetch('/api/ai/mind/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ kind: 'identity', grounding }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok && typeof data.text === 'string' && data.text.trim()) {
+        setValues((v) => ({ ...v, identityStatement: data.text.trim() }))
+      } else {
+        showToast('Could not generate — write yours above', 'neutral')
+      }
+    } catch {
+      showToast('Could not generate — write yours above', 'neutral')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -195,6 +233,22 @@ export default function VisionBuilder({ onComplete }: Props) {
             className="mb-3 w-full flex-1 resize-none rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-amber-400 dark:focus:border-amber-500 leading-relaxed"
           />
 
+          {/* AI generate — only on the identity statement step */}
+          {step.key === 'identityStatement' && (
+            <button
+              type="button"
+              disabled={generating}
+              onClick={generateIdentity}
+              className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 py-2.5 text-xs font-semibold text-amber-600 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-amber-500/30 dark:text-amber-400 dark:hover:bg-amber-500/10"
+            >
+              {generating ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>
+              ) : (
+                <><Sparkles className="h-3.5 w-3.5" /> Generate one for me</>
+              )}
+            </button>
+          )}
+
           {/* Example hint */}
           <p className="mb-6 text-xs text-zinc-400 dark:text-zinc-500 leading-snug">
             {step.example}
@@ -219,6 +273,8 @@ export default function VisionBuilder({ onComplete }: Props) {
           {!isLast && <ArrowRight className="h-4 w-4" />}
         </button>
       </div>
+
+      <Toast toast={toast} />
     </div>
   )
 }

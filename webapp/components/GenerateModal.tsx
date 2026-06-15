@@ -3,13 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Wand2, Loader2, RefreshCw, Dumbbell, Calendar } from "lucide-react";
+import { X, Wand2, Loader2, RefreshCw, Dumbbell, Calendar, Sparkles } from "lucide-react";
 import {
   FOCUS_DEFS,
   QUICK_FOCUS_ORDER,
   type FocusKey,
   type DraftSession,
   type DraftProgram,
+  type DraftExercise,
+  type DraftProgramDay,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { draftProgramToProgramBody } from "@/lib/quickSession/generate";
@@ -61,6 +63,47 @@ interface ErrorResponse {
   error?: string;
 }
 
+// AI session route response
+interface AiSessionResponse {
+  ok: boolean;
+  fallback?: boolean;
+  session?: {
+    title?: string;
+    focus?: string;
+    exercises?: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>;
+  };
+}
+
+// AI program route response
+interface AiProgramResponse {
+  ok: boolean;
+  fallback?: boolean;
+  program?: {
+    name?: string;
+    description?: string;
+    focus?: string;
+    daysPerWeek?: number;
+    weeks?: number;
+    days?: Array<{
+      day?: number;
+      title?: string;
+      focus?: string;
+      exercises?: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>;
+    }>;
+  };
+}
+
+// Exercise search endpoint response
+interface ExerciseSearchItem {
+  slug: string;
+  name: string;
+  trackingType: string;
+}
+
+interface ExerciseSearchResponse {
+  exercises: ExerciseSearchItem[];
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function authHeaders(): HeadersInit {
@@ -68,6 +111,76 @@ function authHeaders(): HeadersInit {
     "Content-Type": "application/json",
     Authorization: `Bearer ${typeof window !== "undefined" ? localStorage.getItem("token") : ""}`,
   };
+}
+
+// ─── AI helpers ───────────────────────────────────────────────────────────────
+
+/** Convert a name string to a best-guess slug (kebab-case). Used only as a
+ *  fallback when no exercise library match is found — the live engine can still
+ *  display it; it just won't have full metadata. */
+function nameToFallbackSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+/**
+ * Resolve a list of AI-returned exercise names to DraftExercise objects by
+ * searching the library. Best-effort: unmatched names get a synthetic slug.
+ * All fetches run in parallel (Promise.allSettled).
+ */
+async function resolveExerciseNames(
+  aiExercises: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>,
+  headers: HeadersInit,
+): Promise<DraftExercise[]> {
+  const results = await Promise.allSettled(
+    aiExercises.map(async (ai) => {
+      const name = (ai.name ?? "").trim();
+      if (!name) return null;
+
+      let slug: string = nameToFallbackSlug(name);
+      let trackingType: string = "reps_weight";
+
+      try {
+        const res = await fetch(
+          `/api/exercises/search?q=${encodeURIComponent(name)}&limit=3`,
+          { headers },
+        );
+        if (res.ok) {
+          const data = (await res.json()) as ExerciseSearchResponse;
+          const match = data.exercises?.[0];
+          if (match) {
+            slug = match.slug;
+            trackingType = match.trackingType;
+          }
+        }
+      } catch {
+        /* best-effort — keep the fallback slug */
+      }
+
+      const setsRaw = ai.sets ?? 3;
+      const sets = typeof setsRaw === "number" && setsRaw > 0 ? setsRaw : 3;
+      const repsRaw = ai.reps;
+      const reps =
+        repsRaw !== undefined && repsRaw !== null ? String(repsRaw) : "8-12";
+
+      const exercise: DraftExercise = {
+        exerciseSlug: slug,
+        name,
+        trackingType,
+        sets,
+        reps,
+        ...(ai.rest ? { rest: ai.rest } : {}),
+      };
+      return exercise;
+    }),
+  );
+
+  return results
+    .map((r) => (r.status === "fulfilled" ? r.value : null))
+    .filter((ex): ex is DraftExercise => ex !== null);
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -97,6 +210,11 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   const [program, setProgram] = useState<DraftProgram | null>(null);
   const [expandedDay, setExpandedDay] = useState<number | null>(0);
 
+  // AI controls
+  const [useAi, setUseAi] = useState<boolean>(false);
+  const [aiPrompt, setAiPrompt] = useState<string>("");
+  const [aiUsed, setAiUsed] = useState<boolean>(false); // was last generation AI-powered?
+
   // Async state
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -114,6 +232,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setSaved(false);
     setLoading(false);
     setSaving(false);
+    setAiUsed(false);
   }, [open]);
 
   // Reset preview/error state when switching tabs.
@@ -124,6 +243,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setError(null);
     setUpgradeNotice(null);
     setSaved(false);
+    setAiUsed(false);
   }, []);
 
   const toggleEquipment = useCallback((value: string) => {
@@ -137,10 +257,54 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   const generateSession = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setAiUsed(false);
+    const headers = authHeaders();
+
+    // ── AI path (when toggled) ────────────────────────────────────────────────
+    if (useAi) {
+      try {
+        const equipmentStr = equipment.length ? equipment.join(", ") : undefined;
+        const focusDef = FOCUS_DEFS[focus];
+        const aiRes = await fetch("/api/ai/workout/session", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            prompt: aiPrompt.trim() || undefined,
+            focus: focusDef.label,
+            equipment: equipmentStr,
+            level: difficulty,
+          }),
+        });
+        if (aiRes.ok) {
+          const aiData = (await aiRes.json()) as AiSessionResponse;
+          if (aiData.ok && aiData.session?.exercises?.length) {
+            const exercises = await resolveExerciseNames(
+              aiData.session.exercises,
+              headers,
+            );
+            if (exercises.length > 0) {
+              setSession({
+                title: aiData.session.title || `${focusDef.label} Session`,
+                focus,
+                exercises,
+              });
+              setAiUsed(true);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+        // AI returned ok:false or empty — fall through to deterministic
+      } catch {
+        // Network / parse error — fall through to deterministic
+      }
+    }
+
+    // ── Deterministic fallback (always works) ─────────────────────────────────
     try {
       const res = await fetch("/api/generate/session", {
         method: "POST",
-        headers: authHeaders(),
+        headers,
         body: JSON.stringify({
           focus,
           difficulty,
@@ -161,7 +325,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [focus, difficulty, equipment, exerciseCount, includeCardio]);
+  }, [focus, difficulty, equipment, exerciseCount, includeCardio, useAi, aiPrompt]);
 
   const startSession = useCallback(() => {
     if (!session) return;
@@ -177,10 +341,76 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setError(null);
     setUpgradeNotice(null);
     setSaved(false);
+    setAiUsed(false);
+    const headers = authHeaders();
+
+    // ── AI path (when toggled) ────────────────────────────────────────────────
+    if (useAi) {
+      try {
+        const focusDef = FOCUS_DEFS[focus];
+        const equipmentStr = equipment.length ? equipment.join(", ") : undefined;
+        const goal = aiPrompt.trim() || `${focusDef.label} training`;
+        const aiRes = await fetch("/api/ai/workout/program", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            goal,
+            daysPerWeek,
+            weeks,
+            level: difficulty,
+            equipment: equipmentStr,
+          }),
+        });
+        if (aiRes.ok) {
+          const aiData = (await aiRes.json()) as AiProgramResponse;
+          if (aiData.ok && aiData.program?.days?.length) {
+            const p = aiData.program;
+            // Resolve all exercises across all days in parallel.
+            const resolvedDays = await Promise.all(
+              (p.days ?? []).map(async (d, i): Promise<DraftProgramDay> => {
+                const exercises = await resolveExerciseNames(
+                  (d.exercises ?? []) as Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>,
+                  headers,
+                );
+                return {
+                  day: `Day ${typeof d.day === "number" ? d.day : i + 1}`,
+                  title: d.title ?? `Day ${i + 1}`,
+                  focus: focus, // keep the user's chosen focus as the DraftProgramDay focus
+                  exercises,
+                };
+              }),
+            );
+
+            if (resolvedDays.some((d) => d.exercises.length > 0)) {
+              const draftProgram: DraftProgram = {
+                name: p.name || `${FOCUS_DEFS[focus].label} ${daysPerWeek}-Day Program`,
+                description:
+                  p.description ||
+                  `An AI-generated ${weeks}-week, ${daysPerWeek}-day program.`,
+                focus,
+                daysPerWeek: p.daysPerWeek ?? daysPerWeek,
+                weeks: p.weeks ?? weeks,
+                days: resolvedDays,
+              };
+              setProgram(draftProgram);
+              setExpandedDay(0);
+              setAiUsed(true);
+              setLoading(false);
+              return;
+            }
+          }
+        }
+        // AI returned ok:false or empty — fall through to deterministic
+      } catch {
+        // Network / parse error — fall through to deterministic
+      }
+    }
+
+    // ── Deterministic fallback (always works) ─────────────────────────────────
     try {
       const res = await fetch("/api/generate/program", {
         method: "POST",
-        headers: authHeaders(),
+        headers,
         body: JSON.stringify({
           focus,
           difficulty,
@@ -203,7 +433,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [focus, difficulty, equipment, daysPerWeek, weeks, exercisesPerDay]);
+  }, [focus, difficulty, equipment, daysPerWeek, weeks, exercisesPerDay, useAi, aiPrompt]);
 
   const saveProgram = useCallback(async () => {
     if (!program) return;
@@ -464,18 +694,34 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                   >
                     {loading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : useAi ? (
+                      <Sparkles className="h-4 w-4" />
                     ) : (
                       <Wand2 className="h-4 w-4" />
                     )}
-                    {loading ? "Generating…" : "Generate session"}
+                    {loading
+                      ? useAi
+                        ? "Generating your session…"
+                        : "Generating…"
+                      : useAi
+                      ? "✨ Generate with AI"
+                      : "Generate session"}
                   </button>
 
                   {/* Session preview */}
                   {session && (
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-                      <h3 className="mb-3 text-base font-bold text-zinc-900 dark:text-zinc-50">
-                        {session.title}
-                      </h3>
+                      <div className="mb-1 flex items-center gap-2">
+                        <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
+                          {session.title}
+                        </h3>
+                        {aiUsed && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            AI
+                          </span>
+                        )}
+                      </div>
                       <ul className="space-y-2">
                         {session.exercises.map((ex, i) => (
                           <li
@@ -591,18 +837,34 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                   >
                     {loading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : useAi ? (
+                      <Sparkles className="h-4 w-4" />
                     ) : (
                       <Wand2 className="h-4 w-4" />
                     )}
-                    {loading ? "Generating…" : "Generate program"}
+                    {loading
+                      ? useAi
+                        ? "Generating your program…"
+                        : "Generating…"
+                      : useAi
+                      ? "✨ Generate with AI"
+                      : "Generate program"}
                   </button>
 
                   {/* Program preview */}
                   {program && (
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
-                      <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-                        {program.name}
-                      </h3>
+                      <div className="mb-0.5 flex items-center gap-2">
+                        <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
+                          {program.name}
+                        </h3>
+                        {aiUsed && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            AI
+                          </span>
+                        )}
+                      </div>
                       <p className="mb-3 mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                         {program.weeks} weeks · {program.daysPerWeek} days/week
                       </p>
@@ -702,17 +964,51 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                 </div>
               )}
 
-              {/* AI hook — future, disabled */}
-              <div className="mt-7">
-                <span className="mb-2 inline-block rounded-full bg-purple-600/10 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-400">
-                  Coming soon
-                </span>
+              {/* ── AI toggle + prompt ── */}
+              <div className="mt-7 rounded-2xl border border-purple-200 bg-purple-50/60 p-4 dark:border-purple-800/50 dark:bg-purple-950/20">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                      Generate with AI
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUseAi((v) => !v)}
+                    aria-label={useAi ? "Disable AI generation" : "Enable AI generation"}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${
+                      useAi ? "bg-purple-600" : "bg-zinc-300 dark:bg-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                        useAi ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
                 <textarea
-                  disabled
                   rows={2}
-                  placeholder="Describe your ideal workout in your own words… (AI generation coming soon)"
-                  className="w-full cursor-not-allowed resize-none rounded-2xl border border-zinc-200 bg-zinc-100 px-3 py-2.5 text-sm text-zinc-400 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-500 dark:placeholder:text-zinc-500"
+                  disabled={!useAi || loading}
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder={
+                    activeTab === "session"
+                      ? "Describe your ideal session… e.g. “a 30-min chest + shoulders burnout”"
+                      : "Describe your goal… e.g. “build strength for a first powerlifting meet”"
+                  }
+                  className={`w-full resize-none rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                    useAi
+                      ? "border-purple-300 bg-white text-zinc-900 placeholder:text-zinc-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-purple-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                      : "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-500"
+                  }`}
                 />
+                {useAi && (
+                  <p className="mt-1.5 text-[11px] text-purple-500 dark:text-purple-400">
+                    AI generates first (~30-40 s); falls back to the standard builder automatically.
+                  </p>
+                )}
               </div>
             </div>
           </motion.div>

@@ -8,7 +8,7 @@
 // separate dedicated home (not here).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair } from 'lucide-react'
+import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair, Sparkles } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { dailyPick } from '@/lib/mind/rotation'
@@ -129,6 +129,7 @@ export default function DisciplineDashboard() {
   const [nonNegs, setNonNegs] = useState<NonNeg[]>([])
   const [fightToday, setFightToday] = useState<number | null>(null) // today's fight-check score
   const [marking, setMarking] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
 
   const load = useCallback(async () => {
@@ -212,6 +213,28 @@ export default function DisciplineDashboard() {
     } catch { /* ignore */ }
   }
 
+  // Personalize with AI — calls /api/ai/mind/flow and launches the returned steps.
+  // Falls back to the static "Do It Anyway" protocol on any failure.
+  const runAiFlow = async (topic: string) => {
+    if (aiLoading) return
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/ai/mind/flow', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ system: 'discipline', topic }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok && Array.isArray(data.steps) && data.steps.length > 0) {
+        setFlow({ title: topic, kind: 'protocol', steps: data.steps })
+        return
+      }
+    } catch { /* fall through */ }
+    // Fallback — launch "Do It Anyway" without surfacing a hard error
+    showToast("Using today's protocol", 'neutral')
+    setFlow({ title: PROTOCOLS[0].title, kind: 'protocol', steps: PROTOCOLS[0].steps })
+  }
+
   const markDone = async () => {
     if (marking || !today || today.completed) return
     setMarking(true)
@@ -235,10 +258,11 @@ export default function DisciplineDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
-        onExit={() => setFlow(null)}
+        onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           const kind = flow.kind
           setFlow(null)
+          setAiLoading(false)
           if (kind === 'nonnegotiable') {
             // Create a STANDING non-negotiable from the typed line (don't journal).
             const line = answers[0]?.answer?.trim()
@@ -400,6 +424,30 @@ export default function DisciplineDashboard() {
           </div>
         )}
       </div>
+
+      {/* Personalize with AI — generates a discipline flow tailored to the user's
+          current block. Falls back to "Do It Anyway" without hard-erroring. */}
+      <button
+        type="button"
+        disabled={aiLoading}
+        onClick={() => runAiFlow('do the hard thing I am avoiding today')}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-300 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:hover:bg-red-500/10"
+      >
+        {aiLoading ? (
+          <>
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Building your session…
+          </>
+        ) : (
+          <>
+            <Sparkles className="h-4 w-4" />
+            Personalize with AI
+          </>
+        )}
+      </button>
 
       {/* Protocols — guided runs */}
       <div>

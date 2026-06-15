@@ -14,7 +14,8 @@ import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import { composeSession } from '@/lib/mind/composeSession'
-import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
+import { composeSessionAI } from '@/lib/mind/aiEngine'
+import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
 
@@ -70,6 +71,10 @@ export default function MindJourney() {
   const [playing, setPlaying] = useState(false)
   // Fresh seed per launch so replays compose a varied set (not the same items).
   const [sessionSeed, setSessionSeed] = useState<number | null>(null)
+  // AI-composed session (become-ai graph). Pre-composed in the background after
+  // the page loads so there's NO added wait at Begin: if it's ready we play it,
+  // otherwise we fall back to the instant deterministic plan.
+  const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -137,18 +142,42 @@ export default function MindJourney() {
     })
   }, [progress, recentState, missionAction, sessionSeed, lastBreathAt, recentKinds])
 
+  // Background AI pre-composition — fire once per load when the deterministic
+  // plan is ready. The graph is best-effort; on any failure aiPlan stays null and
+  // the deterministic plan is used. Effective plan = AI when ready, else local.
+  useEffect(() => {
+    if (!progress || aiPlan) return
+    let cancelled = false
+    const ctx: SessionContext = {
+      chapter: progress.chapter,
+      unlockedSystems: progress.unlockedSystems,
+      recentState,
+      missionAction,
+      identityStatement: progress.vision?.identityStatement ?? null,
+      recentKinds,
+      dayOfYear: dayOfYear(),
+      now: Date.now(),
+      lastBreathAt,
+    }
+    composeSessionAI(ctx).then((p) => { if (!cancelled && p) setAiPlan(p) })
+    return () => { cancelled = true }
+  }, [progress, recentState, missionAction, recentKinds, lastBreathAt, aiPlan])
+
+  const effectivePlan = aiPlan ?? plan
+
   const begin = useCallback(() => {
     setSessionSeed(Date.now())
     setPlaying(true)
   }, [])
 
   // ── Immersive session overlay ──
-  if (playing && plan) {
+  if (playing && effectivePlan) {
     return (
       <SessionPlayer
-        plan={plan}
+        plan={effectivePlan}
         onExit={() => {
           setPlaying(false)
+          setAiPlan(null)
           setLoading(true)
           load()
         }}
@@ -238,7 +267,7 @@ export default function MindJourney() {
       {/* Centered focus area — fills the space below the header */}
       <div className="flex flex-1 flex-col justify-center">
       {/* The next move */}
-      {plan && (
+      {effectivePlan && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
             onClick={begin}
@@ -248,10 +277,10 @@ export default function MindJourney() {
             <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
               {completedToday ? 'Go again' : 'Today'}
             </p>
-            <h2 className="mt-2 text-3xl font-extrabold">{plan.intro.title}</h2>
-            <p className="mt-2 max-w-xs text-sm text-white/80">{plan.intro.subtitle}</p>
+            <h2 className="mt-2 text-3xl font-extrabold">{effectivePlan.intro.title}</h2>
+            <p className="mt-2 max-w-xs text-sm text-white/80">{effectivePlan.intro.subtitle}</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              {plan.moves.map((m) => (
+              {effectivePlan.moves.map((m) => (
                 <span key={m.id} className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
                   {MOVE_CHIP[m.kind]}
                 </span>
