@@ -53,12 +53,14 @@ function hydrate(ai: AiMove, ctx: SessionContext): Move | null {
   const kind = ai.kind as MoveKind
   if (!VALID_KINDS.includes(kind)) return null
   const base = buildMove(kind, ctx)
+  // The AI's job is SELECTING + SEQUENCING moves and personalizing the genuinely
+  // free-text, self-contained fields — the affirmation `statement` and the
+  // reflection `prompt`. It must NOT touch `title`/`subtitle`: those are crafted,
+  // on-brand, and (for choice/acknowledge/interrogative/compose moves) paired with
+  // deterministic options the model can't see — overriding the title there
+  // produced incoherent "question doesn't match its answers" slop. Keep them.
   return {
     ...base,
-    title: str(ai.title) ?? base.title,
-    subtitle: str(ai.subtitle) ?? base.subtitle,
-    // Only let the AI override free-text copy fields; keep structural payloads
-    // (options/compose/altPositive/protocolId) from the deterministic builder.
     statement: str(ai.statement) ?? base.statement,
     prompt: str(ai.prompt) ?? base.prompt,
   }
