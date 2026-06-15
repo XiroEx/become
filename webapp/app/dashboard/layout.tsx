@@ -3,6 +3,7 @@ import React from 'react'
 import BottomNav from '../../components/BottomNav'
 import TopNav from '../../components/TopNav'
 import AuthGuard from '../../components/AuthGuard'
+import AiActivityIndicator from '../../components/ai/AiActivityIndicator'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -33,6 +34,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {children}
           </div>
         </main>
+
+        {/* Global AI activity pill — shows whenever any generation is in flight,
+            so leaving a modal / navigating doesn't hide that work is happening. */}
+        <AiActivityIndicator />
 
         {/* Bottom nav — floating liquid-glass pill (fixed; overlays content) */}
         <BottomNav />
