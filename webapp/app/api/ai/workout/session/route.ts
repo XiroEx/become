@@ -5,17 +5,11 @@
 // The caller falls back to its deterministic quick-session generator on ok:false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runStructuredTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
-
-interface SessionResult {
-  title?: string
-  focus?: string
-  exercises?: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>
-}
 
 export async function POST(request: NextRequest) {
   const gate = await requireAiUser(request)
@@ -29,7 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const session = await runStructuredTask<SessionResult>('workout.generateSession', {
+  const trig = await triggerBecomeTask('workout.generateSession', {
     prompt: asText(body.prompt, 600),
     focus: asText(body.focus, 120),
     duration: typeof body.duration === 'number' ? body.duration : asText(body.duration, 40),
@@ -38,8 +32,6 @@ export async function POST(request: NextRequest) {
     user: grounding,
   })
 
-  if (session && Array.isArray(session.exercises) && session.exercises.length > 0) {
-    return NextResponse.json({ ok: true, session })
-  }
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
 }

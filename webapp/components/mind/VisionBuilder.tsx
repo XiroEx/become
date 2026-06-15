@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Sparkles, Loader2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { runAiTask } from '@/lib/ai/runClient'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -128,7 +129,6 @@ export default function VisionBuilder({ onComplete }: Props) {
     if (generating) return
     setGenerating(true)
     try {
-      const token = getToken()
       // Build a grounding hint from dimensions already filled in.
       const grounding = {
         habits: values.habits || undefined,
@@ -137,14 +137,10 @@ export default function VisionBuilder({ onComplete }: Props) {
         relationships: values.relationships || undefined,
         environment: values.environment || undefined,
       }
-      const res = await fetch('/api/ai/mind/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ kind: 'identity', grounding }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.ok && typeof data.text === 'string' && data.text.trim()) {
-        setValues((v) => ({ ...v, identityStatement: data.text.trim() }))
+      const r = await runAiTask('/api/ai/mind/generate', { kind: 'identity', grounding })
+      const text = r.text && r.text.trim()
+      if (r.ok && text) {
+        setValues((v) => ({ ...v, identityStatement: text }))
       } else {
         showToast('Could not generate — write yours above', 'neutral')
       }

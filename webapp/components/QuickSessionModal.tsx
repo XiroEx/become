@@ -23,6 +23,7 @@ import {
   type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
+import { runAiTask } from "@/lib/ai/runClient";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -243,24 +244,18 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
       // ── AI path ────────────────────────────────────────────────────────────
       if (useAi) {
         try {
-          const aiRes = await fetch("/api/ai/workout/session", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ focus: FOCUS_DEFS[focus].label }),
-          });
+          // Async run: POST returns a runId, runAiTask polls until the session lands.
+          const r = await runAiTask("/api/ai/workout/session", { focus: FOCUS_DEFS[focus].label });
           if (genId !== activeGenRef.current) return; // stale
-          if (aiRes.ok) {
-            const aiData = (await aiRes.json()) as AiSessionResponse;
+          const aiSession = r.result as AiSessionResponse["session"] | undefined;
+          if (r.ok && aiSession) {
+            const resolved = await resolveAiSession(aiSession, focus, headers);
             if (genId !== activeGenRef.current) return;
-            if (aiData.ok && aiData.session) {
-              const resolved = await resolveAiSession(aiData.session, focus, headers);
-              if (genId !== activeGenRef.current) return;
-              if (resolved) {
-                setPreview(resolved);
-                setAiUsed(true);
-                setGenerating(false);
-                return;
-              }
+            if (resolved) {
+              setPreview(resolved);
+              setAiUsed(true);
+              setGenerating(false);
+              return;
             }
           }
         } catch {

@@ -6,7 +6,7 @@
 // and falls back to the deterministic composer whenever ok is false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runStructuredTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
   const ctx = (body.context && typeof body.context === 'object' ? body.context : {}) as Record<string, unknown>
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
 
-  const plan = await runStructuredTask('mind.composeSession', { ...ctx, user: grounding })
+  const trig = await triggerBecomeTask('mind.composeSession', { ...ctx, user: grounding })
 
-  if (plan) return NextResponse.json({ ok: true, plan })
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
 }

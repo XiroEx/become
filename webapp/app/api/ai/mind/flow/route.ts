@@ -6,15 +6,11 @@
 // flow whenever ok is false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runStructuredTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
-
-interface FlowResult {
-  steps?: unknown[]
-}
 
 export async function POST(request: NextRequest) {
   const gate = await requireAiUser(request)
@@ -32,14 +28,13 @@ export async function POST(request: NextRequest) {
   if (!system.trim()) return NextResponse.json({ error: 'Missing system' }, { status: 400 })
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const result = await runStructuredTask<FlowResult>('mind.generateFlow', {
+  const trig = await triggerBecomeTask('mind.generateFlow', {
     system,
     topic,
     intent: asText(body.intent, 200),
     user: grounding,
   })
 
-  const steps = Array.isArray(result?.steps) ? result!.steps : null
-  if (steps && steps.length > 0) return NextResponse.json({ ok: true, steps })
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
 }
