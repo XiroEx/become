@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,6 +20,7 @@ import {
   isFocusKey,
   type FocusKey,
   type DraftSession,
+  type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 
@@ -42,6 +43,26 @@ interface GenerateSessionResponse {
 
 interface ErrorResponse {
   error?: string;
+}
+
+interface AiSessionResponse {
+  ok: boolean;
+  fallback?: boolean;
+  session?: {
+    title?: string;
+    focus?: string;
+    exercises?: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>;
+  };
+}
+
+interface ExerciseSearchItem {
+  slug: string;
+  name: string;
+  trackingType: string;
+}
+
+interface ExerciseSearchResponse {
+  exercises: ExerciseSearchItem[];
 }
 
 interface WorkoutLog {
@@ -78,6 +99,76 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+// ─── AI name → slug resolution ───────────────────────────────────────────────
+
+function nameToFallbackSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+async function resolveAiSession(
+  aiSession: NonNullable<AiSessionResponse["session"]>,
+  focus: FocusKey,
+  headers: HeadersInit,
+): Promise<DraftSession | null> {
+  const aiExercises = aiSession.exercises ?? [];
+  if (aiExercises.length === 0) return null;
+
+  const resolved = await Promise.allSettled(
+    aiExercises.map(async (ai) => {
+      const name = (ai.name ?? "").trim();
+      if (!name) return null;
+
+      let slug = nameToFallbackSlug(name);
+      let trackingType = "reps_weight";
+
+      try {
+        const res = await fetch(
+          `/api/exercises/search?q=${encodeURIComponent(name)}&limit=3`,
+          { headers },
+        );
+        if (res.ok) {
+          const data = (await res.json()) as ExerciseSearchResponse;
+          const match = data.exercises?.[0];
+          if (match) {
+            slug = match.slug;
+            trackingType = match.trackingType;
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      const sets = typeof ai.sets === "number" && ai.sets > 0 ? ai.sets : 3;
+      const reps = ai.reps !== undefined && ai.reps !== null ? String(ai.reps) : "8-12";
+
+      const exercise: DraftExercise = {
+        exerciseSlug: slug,
+        name,
+        trackingType,
+        sets,
+        reps,
+        ...(ai.rest ? { rest: ai.rest } : {}),
+      };
+      return exercise;
+    }),
+  );
+
+  const exercises = resolved
+    .map((r) => (r.status === "fulfilled" ? r.value : null))
+    .filter((ex): ex is DraftExercise => ex !== null);
+
+  if (exercises.length === 0) return null;
+  return {
+    title: aiSession.title || `${FOCUS_DEFS[focus].label} Session`,
+    focus,
+    exercises,
+  };
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 export default function QuickSessionModal({ open, onClose }: QuickSessionModalProps) {
@@ -95,6 +186,11 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
   const [generating, setGenerating] = useState(false);
   // Re-launch state for a "repeat" tap on a recent session.
   const [repeating, setRepeating] = useState(false);
+  // AI state
+  const [useAi, setUseAi] = useState(false);
+  const [aiUsed, setAiUsed] = useState(false);
+  // Prevent concurrent AI + deterministic fetches when switching focus mid-flight
+  const activeGenRef = useRef(0);
 
   // ── Reset transient state when the sheet toggles ──
   useEffect(() => {
@@ -105,6 +201,8 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
       setPreview(null);
       setGenerating(false);
       setRepeating(false);
+      setAiUsed(false);
+      activeGenRef.current += 1; // cancel any in-flight generation
     }
   }, [open]);
 
@@ -132,30 +230,70 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
   }, [open]);
 
   // ── Generate a preview for a focus (does NOT start it) ──
-  const generateFor = useCallback(async (focus: FocusKey) => {
-    setError(null);
-    setSelectedFocus(focus);
-    setPreview(null);
-    setGenerating(true);
-    try {
-      const res = await fetch("/api/generate/session", {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ focus }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as ErrorResponse;
-        setError(data.error || "Couldn't build that session. Try again.");
-        return;
+  const generateFor = useCallback(
+    async (focus: FocusKey) => {
+      setError(null);
+      setSelectedFocus(focus);
+      setPreview(null);
+      setAiUsed(false);
+      setGenerating(true);
+      const genId = ++activeGenRef.current;
+      const headers = authHeaders();
+
+      // ── AI path ────────────────────────────────────────────────────────────
+      if (useAi) {
+        try {
+          const aiRes = await fetch("/api/ai/workout/session", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ focus: FOCUS_DEFS[focus].label }),
+          });
+          if (genId !== activeGenRef.current) return; // stale
+          if (aiRes.ok) {
+            const aiData = (await aiRes.json()) as AiSessionResponse;
+            if (genId !== activeGenRef.current) return;
+            if (aiData.ok && aiData.session) {
+              const resolved = await resolveAiSession(aiData.session, focus, headers);
+              if (genId !== activeGenRef.current) return;
+              if (resolved) {
+                setPreview(resolved);
+                setAiUsed(true);
+                setGenerating(false);
+                return;
+              }
+            }
+          }
+        } catch {
+          /* fall through to deterministic */
+        }
+        if (genId !== activeGenRef.current) return;
       }
-      const data = (await res.json()) as GenerateSessionResponse;
-      setPreview(data.session);
-    } catch {
-      setError("Network error. Try again.");
-    } finally {
-      setGenerating(false);
-    }
-  }, []);
+
+      // ── Deterministic fallback ─────────────────────────────────────────────
+      try {
+        const res = await fetch("/api/generate/session", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ focus }),
+        });
+        if (genId !== activeGenRef.current) return;
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          setError(data.error || "Couldn't build that session. Try again.");
+          return;
+        }
+        const data = (await res.json()) as GenerateSessionResponse;
+        if (genId !== activeGenRef.current) return;
+        setPreview(data.session);
+      } catch {
+        if (genId !== activeGenRef.current) return;
+        setError("Network error. Try again.");
+      } finally {
+        if (genId === activeGenRef.current) setGenerating(false);
+      }
+    },
+    [useAi],
+  );
 
   // ── Start the previewed session ──
   const startPreview = useCallback(() => {
@@ -309,9 +447,31 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
 
               {/* ── 2. Quick start by focus (select → preview → start) ── */}
               <section>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                  Quick start by focus
-                </p>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                    Quick start by focus
+                  </p>
+                  {/* AI toggle */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseAi((v) => !v);
+                      // Reset the preview so the user re-taps a chip with the new setting
+                      setPreview(null);
+                      setSelectedFocus(null);
+                      setAiUsed(false);
+                    }}
+                    disabled={busy}
+                    className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                      useAi
+                        ? "bg-purple-600 text-white"
+                        : "border border-zinc-300 text-zinc-500 hover:border-purple-400 hover:text-purple-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-purple-600 dark:hover:text-purple-400"
+                    }`}
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {useAi ? "AI on" : "AI"}
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {QUICK_FOCUS_ORDER.map((k) => FOCUS_DEFS[k]).map((def) => {
                     const active = selectedFocus === def.key;
@@ -346,12 +506,22 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                     {generating ? (
                       <div className="flex items-center justify-center gap-2 py-6 text-sm text-zinc-500 dark:text-zinc-400">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Building your {FOCUS_DEFS[selectedFocus].label.toLowerCase()} session…
+                        {useAi
+                          ? `Generating your ${FOCUS_DEFS[selectedFocus].label.toLowerCase()} session with AI…`
+                          : `Building your ${FOCUS_DEFS[selectedFocus].label.toLowerCase()} session…`}
                       </div>
                     ) : preview ? (
                       <>
                         <div className="mb-2 flex items-center justify-between">
-                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">{preview.title}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold text-zinc-900 dark:text-white">{preview.title}</p>
+                            {aiUsed && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[9px] font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                <Sparkles className="h-2 w-2" />
+                                AI
+                              </span>
+                            )}
+                          </div>
                           <span className="text-xs text-zinc-400 dark:text-zinc-500">
                             {preview.exercises.length} exercises
                           </span>
