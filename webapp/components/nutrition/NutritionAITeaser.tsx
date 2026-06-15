@@ -42,6 +42,8 @@ export default function NutritionAITeaser() {
           <CoachChat
             endpoint="/api/ai/nutrition/consultant"
             domain="nutrition"
+            persistKey="nutrition-consultant"
+            runLabel="Consultant is replying"
             title="Your nutrition consultant"
             subtitle="Grounded in your goals and logs"
             accentFrom="from-emerald-500"

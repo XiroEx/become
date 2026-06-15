@@ -39,6 +39,8 @@ export default function MindCoachTeaser() {
           <CoachChat
             endpoint="/api/ai/consultant"
             domain="mindset"
+            persistKey="mind-coach"
+            runLabel="Coach is replying"
             title="Your mindset coach"
             subtitle="Here for the hard part"
             accentFrom="from-violet-500"
