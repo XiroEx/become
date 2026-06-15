@@ -10,12 +10,12 @@ import {
   type FocusKey,
   type DraftSession,
   type DraftProgram,
-  type DraftExercise,
   type DraftProgramDay,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { draftProgramToProgramBody } from "@/lib/quickSession/generate";
 import { runAiTask } from "@/lib/ai/runClient";
+import { resolveAiExercises, MIN_RESOLVED_EXERCISES, type AiExerciseIn } from "@/lib/ai/resolveExercises";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -94,17 +94,6 @@ interface AiProgramResponse {
   };
 }
 
-// Exercise search endpoint response
-interface ExerciseSearchItem {
-  slug: string;
-  name: string;
-  trackingType: string;
-}
-
-interface ExerciseSearchResponse {
-  exercises: ExerciseSearchItem[];
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function authHeaders(): HeadersInit {
@@ -115,74 +104,6 @@ function authHeaders(): HeadersInit {
 }
 
 // ─── AI helpers ───────────────────────────────────────────────────────────────
-
-/** Convert a name string to a best-guess slug (kebab-case). Used only as a
- *  fallback when no exercise library match is found — the live engine can still
- *  display it; it just won't have full metadata. */
-function nameToFallbackSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-
-/**
- * Resolve a list of AI-returned exercise names to DraftExercise objects by
- * searching the library. Best-effort: unmatched names get a synthetic slug.
- * All fetches run in parallel (Promise.allSettled).
- */
-async function resolveExerciseNames(
-  aiExercises: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>,
-  headers: HeadersInit,
-): Promise<DraftExercise[]> {
-  const results = await Promise.allSettled(
-    aiExercises.map(async (ai) => {
-      const name = (ai.name ?? "").trim();
-      if (!name) return null;
-
-      let slug: string = nameToFallbackSlug(name);
-      let trackingType: string = "reps_weight";
-
-      try {
-        const res = await fetch(
-          `/api/exercises/search?q=${encodeURIComponent(name)}&limit=3`,
-          { headers },
-        );
-        if (res.ok) {
-          const data = (await res.json()) as ExerciseSearchResponse;
-          const match = data.exercises?.[0];
-          if (match) {
-            slug = match.slug;
-            trackingType = match.trackingType;
-          }
-        }
-      } catch {
-        /* best-effort — keep the fallback slug */
-      }
-
-      const setsRaw = ai.sets ?? 3;
-      const sets = typeof setsRaw === "number" && setsRaw > 0 ? setsRaw : 3;
-      const repsRaw = ai.reps;
-      const reps =
-        repsRaw !== undefined && repsRaw !== null ? String(repsRaw) : "8-12";
-
-      const exercise: DraftExercise = {
-        exerciseSlug: slug,
-        name,
-        trackingType,
-        sets,
-        reps,
-        ...(ai.rest ? { rest: ai.rest } : {}),
-      };
-      return exercise;
-    }),
-  );
-
-  return results
-    .map((r) => (r.status === "fulfilled" ? r.value : null))
-    .filter((ex): ex is DraftExercise => ex !== null);
-}
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
@@ -275,8 +196,10 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
         });
         const aiSession = r.result as AiSessionResponse["session"] | undefined;
         if (r.ok && aiSession?.exercises?.length) {
-          const exercises = await resolveExerciseNames(aiSession.exercises, headers);
-          if (exercises.length > 0) {
+          const { exercises, matched } = await resolveAiExercises(aiSession.exercises, headers);
+          // Only use the AI session if enough exercises resolved to REAL library
+          // entries; otherwise fall through so the user never sees a thin / janky set.
+          if (matched >= MIN_RESOLVED_EXERCISES) {
             setSession({
               title: aiSession.title || `${focusDef.label} Session`,
               focus,
@@ -287,7 +210,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
             return;
           }
         }
-        // AI returned ok:false or empty — fall through to deterministic
+        // AI returned ok:false, empty, or too few real exercises — fall through to deterministic
       } catch {
         // Network / parse error — fall through to deterministic
       }
@@ -354,11 +277,11 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
         {
           const p = r.result as AiProgramResponse["program"] | undefined;
           if (r.ok && p?.days?.length) {
-            // Resolve all exercises across all days in parallel.
+            // Resolve all exercises across all days in parallel (unmatched dropped).
             const resolvedDays = await Promise.all(
               (p.days ?? []).map(async (d, i): Promise<DraftProgramDay> => {
-                const exercises = await resolveExerciseNames(
-                  (d.exercises ?? []) as Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>,
+                const { exercises } = await resolveAiExercises(
+                  (d.exercises ?? []) as AiExerciseIn[],
                   headers,
                 );
                 return {
@@ -370,16 +293,20 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
               }),
             );
 
-            if (resolvedDays.some((d) => d.exercises.length > 0)) {
+            // Drop days left empty after dropping unmatched exercises, and only
+            // accept the AI program if it's substantial enough to not look broken.
+            const days = resolvedDays.filter((d) => d.exercises.length > 0);
+            const totalExercises = days.reduce((n, d) => n + d.exercises.length, 0);
+            if (days.length >= 2 && totalExercises >= MIN_RESOLVED_EXERCISES) {
               const draftProgram: DraftProgram = {
                 name: p.name || `${FOCUS_DEFS[focus].label} ${daysPerWeek}-Day Program`,
                 description:
                   p.description ||
                   `An AI-generated ${weeks}-week, ${daysPerWeek}-day program.`,
                 focus,
-                daysPerWeek: p.daysPerWeek ?? daysPerWeek,
+                daysPerWeek: p.daysPerWeek ?? days.length,
                 weeks: p.weeks ?? weeks,
-                days: resolvedDays,
+                days,
               };
               setProgram(draftProgram);
               setExpandedDay(0);
@@ -389,7 +316,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
             }
           }
         }
-        // AI returned ok:false or empty — fall through to deterministic
+        // AI returned ok:false, empty, or too thin — fall through to deterministic
       } catch {
         // Network / parse error — fall through to deterministic
       }

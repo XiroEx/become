@@ -16,6 +16,7 @@ import { motion } from 'framer-motion'
 import { Sparkles, X, ArrowUp } from 'lucide-react'
 import { runStore } from '@/lib/ai/runStore'
 import { useAiRun } from '@/lib/ai/useRuns'
+import { stripAiLeakage } from '@/lib/ai/sanitize'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -101,7 +102,7 @@ export default function CoachChat({
     if (!pendingRunId) return
     if (!run) { setPendingRunId(null); return } // run no longer tracked (expired)
     if (run.status === 'pending') return
-    const reply = (run.text && run.text.trim())
+    const reply = stripAiLeakage((run.text && run.text.trim()) || '')
       || 'I had trouble reaching the coach just now — try that again in a moment.'
     setMessages((m) => [...m, { role: 'assistant', text: reply }])
     runStore.remove(pendingRunId)

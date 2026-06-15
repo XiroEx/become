@@ -20,10 +20,10 @@ import {
   isFocusKey,
   type FocusKey,
   type DraftSession,
-  type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { runAiTask } from "@/lib/ai/runClient";
+import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -54,16 +54,6 @@ interface AiSessionResponse {
     focus?: string;
     exercises?: Array<{ name?: string; sets?: number; reps?: string | number; rest?: string }>;
   };
-}
-
-interface ExerciseSearchItem {
-  slug: string;
-  name: string;
-  trackingType: string;
-}
-
-interface ExerciseSearchResponse {
-  exercises: ExerciseSearchItem[];
 }
 
 interface WorkoutLog {
@@ -102,14 +92,6 @@ function shortDate(iso: string): string {
 
 // ─── AI name → slug resolution ───────────────────────────────────────────────
 
-function nameToFallbackSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-");
-}
-
 async function resolveAiSession(
   aiSession: NonNullable<AiSessionResponse["session"]>,
   focus: FocusKey,
@@ -118,51 +100,11 @@ async function resolveAiSession(
   const aiExercises = aiSession.exercises ?? [];
   if (aiExercises.length === 0) return null;
 
-  const resolved = await Promise.allSettled(
-    aiExercises.map(async (ai) => {
-      const name = (ai.name ?? "").trim();
-      if (!name) return null;
+  // Resolve to REAL library exercises; unmatched names are dropped (no synthetic
+  // slugs → no janky no-video tiles). Require enough to be worth showing.
+  const { exercises, matched } = await resolveAiExercises(aiExercises, headers);
+  if (matched < MIN_RESOLVED_EXERCISES) return null;
 
-      let slug = nameToFallbackSlug(name);
-      let trackingType = "reps_weight";
-
-      try {
-        const res = await fetch(
-          `/api/exercises/search?q=${encodeURIComponent(name)}&limit=3`,
-          { headers },
-        );
-        if (res.ok) {
-          const data = (await res.json()) as ExerciseSearchResponse;
-          const match = data.exercises?.[0];
-          if (match) {
-            slug = match.slug;
-            trackingType = match.trackingType;
-          }
-        }
-      } catch {
-        /* best-effort */
-      }
-
-      const sets = typeof ai.sets === "number" && ai.sets > 0 ? ai.sets : 3;
-      const reps = ai.reps !== undefined && ai.reps !== null ? String(ai.reps) : "8-12";
-
-      const exercise: DraftExercise = {
-        exerciseSlug: slug,
-        name,
-        trackingType,
-        sets,
-        reps,
-        ...(ai.rest ? { rest: ai.rest } : {}),
-      };
-      return exercise;
-    }),
-  );
-
-  const exercises = resolved
-    .map((r) => (r.status === "fulfilled" ? r.value : null))
-    .filter((ex): ex is DraftExercise => ex !== null);
-
-  if (exercises.length === 0) return null;
   return {
     title: aiSession.title || `${FOCUS_DEFS[focus].label} Session`,
     focus,
