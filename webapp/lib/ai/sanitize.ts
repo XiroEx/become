@@ -5,6 +5,30 @@
 
 import type { GuidedStep } from '@/components/mind/system/GuidedFlow'
 
+/** Strip markdown formatting to plain text. Chat + scenes render plain text, so
+ *  stray bold/italic/header/code markers would otherwise show up literally. */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, '')             // fenced code blocks
+    .replace(/`([^`]+)`/g, '$1')                // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')       // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')    // links → link text
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')         // headers
+    .replace(/^\s{0,3}>\s?/gm, '')              // blockquotes
+    .replace(/\*\*([^*]+)\*\*/g, '$1')          // **bold**
+    .replace(/__([^_]+)__/g, '$1')              // __bold__
+    .replace(/\*([^*\n]+)\*/g, '$1')            // *italic*
+    .replace(/(?<=\s|^)_([^_\n]+)_(?=\s|$|[.,!?])/g, '$1') // _italic_
+    .replace(/^\s*[-*+]\s+/gm, '')              // bullet markers
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+/** Chat/scene-ready cleanup: drop AI disclaimers + markdown. */
+export function cleanReply(text: string): string {
+  return stripMarkdown(stripAiLeakage(text))
+}
+
 /** Strip any leaked "as an AI / language model" disclaimer phrasing. */
 export function stripAiLeakage(text: string): string {
   return text
