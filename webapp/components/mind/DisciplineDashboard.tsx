@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair, Sparkles } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
+import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
@@ -221,8 +222,8 @@ export default function DisciplineDashboard() {
     setAiLoading(true)
     try {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'discipline', topic })
-      const steps = (r.result as { steps?: GuidedStep[] } | undefined)?.steps
-      if (r.ok && Array.isArray(steps) && steps.length > 0) {
+      const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
+      if (r.ok && steps) {
         setFlow({ title: topic, kind: 'protocol', steps })
         return
       }
