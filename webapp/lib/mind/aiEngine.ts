@@ -12,6 +12,7 @@
 // state), NOT as a drop-in sync MoveEngine.
 
 import { buildMove } from './composeSession'
+import { runAiTask } from '@/lib/ai/runClient'
 import {
   AFFIRM_STATEMENT_KINDS,
   type Move,
@@ -70,17 +71,9 @@ function hydrate(ai: AiMove, ctx: SessionContext): Move | null {
 export async function composeSessionAI(ctx: SessionContext): Promise<MindSessionPlan | null> {
   let plan: AiPlan | null = null
   try {
-    const res = await fetch('/api/ai/mind/session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}`,
-      },
-      body: JSON.stringify({ context: ctx }),
-    })
-    const d = await res.json().catch(() => null)
-    if (!d?.ok || !d.plan) return null
-    plan = d.plan as AiPlan
+    const r = await runAiTask('/api/ai/mind/session', { context: ctx })
+    if (!r.ok || !r.result || typeof r.result !== 'object') return null
+    plan = r.result as AiPlan
   } catch {
     return null
   }

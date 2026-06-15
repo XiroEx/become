@@ -6,19 +6,11 @@
 // The caller keeps its deterministic builder as the fallback on ok:false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runStructuredTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
-
-interface ProgramResult {
-  name?: string
-  description?: string
-  daysPerWeek?: number
-  weeks?: number
-  days?: Array<{ day?: number; title?: string; exercises?: unknown[] }>
-}
 
 export async function POST(request: NextRequest) {
   const gate = await requireAiUser(request)
@@ -32,7 +24,7 @@ export async function POST(request: NextRequest) {
   }
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const program = await runStructuredTask<ProgramResult>('workout.generateProgram', {
+  const trig = await triggerBecomeTask('workout.generateProgram', {
     goal: asText(body.goal, 400),
     daysPerWeek: typeof body.daysPerWeek === 'number' ? body.daysPerWeek : asText(body.daysPerWeek, 20),
     weeks: typeof body.weeks === 'number' ? body.weeks : asText(body.weeks, 20),
@@ -41,8 +33,6 @@ export async function POST(request: NextRequest) {
     user: grounding,
   })
 
-  if (program && Array.isArray(program.days) && program.days.length > 0) {
-    return NextResponse.json({ ok: true, program })
-  }
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
 }

@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, X, ArrowUp } from 'lucide-react'
+import { runAiTask } from '@/lib/ai/runClient'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -63,18 +64,10 @@ export default function CoachChat({
     setInput('')
     setSending(true)
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}`,
-        },
-        body: JSON.stringify({ domain, message: msg, history, grounding, conversationId: convoId.current }),
-      })
-      const d = await res.json().catch(() => ({}))
-      const reply = typeof d.reply === 'string' && d.reply.trim()
-        ? d.reply
-        : 'I had trouble reaching the coach just now — try that again in a moment.'
+      // Async run: POST returns a runId, runAiTask polls until the reply is ready.
+      const r = await runAiTask(endpoint, { domain, message: msg, history, grounding, conversationId: convoId.current })
+      const reply = (r.text && r.text.trim()) || (r.reply && r.reply.trim())
+        || 'I had trouble reaching the coach just now — try that again in a moment.'
       setMessages((m) => [...m, { role: 'assistant', text: reply }])
     } catch {
       setMessages((m) => [...m, { role: 'assistant', text: 'Connection hiccup — give that another try in a sec.' }])

@@ -4,7 +4,7 @@
 // full consultant chat: this is a single punchy reply for in-session prompts.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runFreeformTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, trimHistory, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
@@ -27,12 +27,12 @@ export async function POST(request: NextRequest) {
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const reply = await runFreeformTask(
+  const trig = await triggerBecomeTask(
     'mind.coachReply',
     { message, history: trimHistory(body.history, 4), user: grounding },
     { conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined },
   )
 
-  if (reply) return NextResponse.json({ ok: true, reply })
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, reply: FALLBACK, fallback: true })
 }

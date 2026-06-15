@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Shield, Zap, Eye, Search, CircleSlash, RefreshCcw, Hand, Sparkles } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import { runAiTask } from '@/lib/ai/runClient'
 import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
@@ -179,14 +180,10 @@ export default function AntiSabotageDashboard() {
     if (aiLoading) return
     setAiLoading(true)
     try {
-      const res = await fetch('/api/ai/mind/flow', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ system: 'anti-sabotage', topic }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok && data.ok && Array.isArray(data.steps) && data.steps.length > 0) {
-        setFlow({ title: topic, kind: 'protocol', steps: data.steps })
+      const r = await runAiTask('/api/ai/mind/flow', { system: 'anti-sabotage', topic })
+      const steps = (r.result as { steps?: GuidedStep[] } | undefined)?.steps
+      if (r.ok && Array.isArray(steps) && steps.length > 0) {
+        setFlow({ title: topic, kind: 'protocol', steps })
         return
       }
     } catch { /* fall through */ }
