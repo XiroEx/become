@@ -12,6 +12,7 @@
 // object. Keep it SHORT — this rides in the prompt on every call.
 
 import dbConnect from '@/lib/mongodb'
+import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
 import MindProgress from '@/models/MindProgress'
 import Mission from '@/models/Mission'
@@ -23,6 +24,19 @@ import NutritionGoal from '@/models/NutritionGoal'
 const DAY = 86_400_000
 
 export interface UserContext {
+  profile?: {
+    goal?: string
+    experience?: string
+    age?: number
+    sex?: string
+    heightCm?: number
+    currentWeightKg?: number
+    targetWeightKg?: number
+    injuries?: string
+    equipment?: string[]
+  }
+  /** Most recent logged scale weight (lbs), independent of the profile figure. */
+  latestWeight?: { lbs: number; daysAgo: number }
   streak?: { current: number; longest: number }
   lastWorkout?: { title: string; daysAgo: number }
   workoutsLast7Days?: number
@@ -60,7 +74,8 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     return ctx
   }
 
-  const [progress, mind, mission, identity, wins, nutGoal, nutLog] = await Promise.all([
+  const [user, progress, mind, mission, identity, wins, nutGoal, nutLog] = await Promise.all([
+    User.findById(userId).lean<Record<string, unknown>>().catch(() => null),
     UserProgress.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
     MindProgress.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
     Mission.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
@@ -69,6 +84,30 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     NutritionGoal.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
     NutritionLog.findOne({ userId }).sort({ date: -1 }).lean<Record<string, unknown>>().catch(() => null),
   ])
+
+  // Profile (physical stats + goal) — what a coach needs to tailor advice.
+  const prof = user?.profile as Record<string, unknown> | undefined
+  if (prof) {
+    const p: NonNullable<UserContext['profile']> = {}
+    if (prof.fitnessGoal) p.goal = String(prof.fitnessGoal)
+    if (prof.experienceLevel) p.experience = String(prof.experienceLevel)
+    if (typeof prof.age === 'number') p.age = prof.age
+    if (prof.biologicalSex) p.sex = String(prof.biologicalSex)
+    if (typeof prof.heightCm === 'number') p.heightCm = prof.heightCm
+    if (typeof prof.currentWeightKg === 'number') p.currentWeightKg = prof.currentWeightKg
+    if (typeof prof.targetWeightKg === 'number') p.targetWeightKg = prof.targetWeightKg
+    if (prof.injuryNotes) p.injuries = String(prof.injuryNotes)
+    if (Array.isArray(prof.equipmentAccess) && prof.equipmentAccess.length) p.equipment = (prof.equipmentAccess as unknown[]).map(String)
+    if (Object.keys(p).length) ctx.profile = p
+  }
+
+  // Latest logged scale weight (lbs) — often fresher than the profile figure.
+  const weightHist = Array.isArray(progress?.weightHistory) ? (progress!.weightHistory as Array<Record<string, unknown>>) : []
+  if (weightHist.length) {
+    const last = weightHist[weightHist.length - 1]
+    const ago = daysAgo(last?.date as Date, now)
+    if (typeof last?.weight === 'number' && ago !== undefined) ctx.latestWeight = { lbs: Math.round(last.weight as number), daysAgo: ago }
+  }
 
   // Streak
   if (progress && typeof progress.streakDays === 'number') {
@@ -132,6 +171,20 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
 /** Compact plain-text rendering (no markdown) for prompt injection. */
 function renderSummary(c: UserContext): string {
   const lines: string[] = []
+  if (c.profile) {
+    const p = c.profile
+    const bits: string[] = []
+    if (p.age) bits.push(`${p.age}yo`)
+    if (p.sex) bits.push(p.sex)
+    if (p.heightCm) bits.push(`${p.heightCm}cm`)
+    if (p.currentWeightKg) bits.push(`${p.currentWeightKg}kg${p.targetWeightKg ? ` (goal ${p.targetWeightKg}kg)` : ''}`)
+    if (p.experience) bits.push(p.experience)
+    if (p.goal) bits.push(`goal: ${p.goal}`)
+    if (bits.length) lines.push(`Profile: ${bits.join(', ')}.`)
+    if (p.injuries) lines.push(`Injuries/notes: ${p.injuries}.`)
+    if (p.equipment?.length) lines.push(`Equipment: ${p.equipment.join(', ')}.`)
+  }
+  if (c.latestWeight) lines.push(`Latest logged weight: ${c.latestWeight.lbs} lbs (${c.latestWeight.daysAgo === 0 ? 'today' : `${c.latestWeight.daysAgo}d ago`}).`)
   if (c.streak) lines.push(`Streak: ${c.streak.current} day${c.streak.current === 1 ? '' : 's'} (best ${c.streak.longest}).`)
   if (c.lastWorkout) lines.push(`Last workout: ${c.lastWorkout.title}, ${c.lastWorkout.daysAgo === 0 ? 'today' : `${c.lastWorkout.daysAgo}d ago`}.`)
   if (typeof c.workoutsLast7Days === 'number') lines.push(`Workouts in last 7 days: ${c.workoutsLast7Days}.`)
