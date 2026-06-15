@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { triggerBecomeTask, type BecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -44,12 +44,11 @@ export async function POST(request: NextRequest) {
   const message = asText(body.message)
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
-  // Compact, whitelisted grounding — only safe summary fields the client already has.
-  const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
+  // Server-assembled per-user context (push) merged with any client-sent grounding.
   const context = {
     message,
     history: trimHistory(body.history),
-    user: grounding,
+    user: await userGrounding(gate.user.userId, body),
   }
 
   const trig = await triggerBecomeTask(task, context, {

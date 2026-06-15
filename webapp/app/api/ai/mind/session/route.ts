@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser } from '@/lib/ai/routeHelpers'
+import { requireAiUser, userGrounding } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -24,9 +24,8 @@ export async function POST(request: NextRequest) {
   }
 
   const ctx = (body.context && typeof body.context === 'object' ? body.context : {}) as Record<string, unknown>
-  const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
 
-  const trig = await triggerBecomeTask('mind.composeSession', { ...ctx, user: grounding })
+  const trig = await triggerBecomeTask('mind.composeSession', { ...ctx, user: await userGrounding(gate.user.userId, body) })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
