@@ -5,8 +5,28 @@
 // token live only in lib/ai/becomeGraph.ts (server env) and never reach here.
 
 import { NextRequest, NextResponse } from 'next/server'
+import jwt from 'jsonwebtoken'
 import { verifyAuth } from '@/lib/auth'
 import { assembleUserContext } from './userContext'
+
+const JWT_SECRET = process.env.JWT_SECRET || ''
+
+/**
+ * Mint a SHORT-LIVED (15 min) token scoped to this user for the graph to call
+ * back into Become on the user's behalf (MCP/data tools). Deliberately short
+ * because it rides in the webhook body, which lands in run state (Redis ~1h).
+ * It verifies through the normal verifyAuth (userId) and only ever reaches GET
+ * data endpoints via the become MCP tools, so it's effectively read-scoped; the
+ * `scope` claim is there for future server-side enforcement.
+ */
+export function mintToolToken(userId: string, email?: string): string | undefined {
+  if (!JWT_SECRET || !userId) return undefined
+  try {
+    return jwt.sign({ userId, email, scope: 'ai-tools' }, JWT_SECRET, { expiresIn: '15m' })
+  } catch {
+    return undefined
+  }
+}
 
 export interface AiUser {
   userId: string

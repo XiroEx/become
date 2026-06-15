@@ -52,6 +52,9 @@ export interface RunBecomeOptions {
   image?: string
   /** Multi-turn isolation for chat-style freeform tasks. */
   conversationId?: string
+  /** Short-lived user token the graph forwards to the Become MCP/data tools so
+   *  it can pull this user's data on demand (read-scoped). Lands in run state. */
+  userToken?: string
   /** Total budget for the whole call (trigger + poll). Default 120s. */
   timeoutMs?: number
   /** Poll cadence while waiting for the run to finish. Default 800ms. */
@@ -108,6 +111,7 @@ export async function triggerBecomeTask(
           ...(opts.outputSchema ? { outputSchema: opts.outputSchema } : {}),
           ...(opts.image ? { image: opts.image } : {}),
           ...(opts.conversationId ? { conversationId: opts.conversationId } : {}),
+          ...(opts.userToken ? { userToken: opts.userToken } : {}),
         }),
         signal: AbortSignal.timeout(15_000),
       },
