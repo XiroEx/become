@@ -174,7 +174,12 @@ export async function GET(request: NextRequest) {
 
     // --- 1. Our DB foods (always first) ---
 
-    const customLimit = 5
+    // Pull a generous candidate pool from our DB. The final ordering is decided
+    // by the relevance/coverage ranking below — NOT by this fetch — so we must
+    // surface enough candidates that a brand match (e.g. a "Fairlife" shake)
+    // isn't crowded out of the top-N by high-usageCount generic foods before
+    // ranking even runs. Was 5; that cap was dropping on-brand DB matches.
+    const customLimit = 25
 
     const textFilter = { ...baseFilter, $text: { $search: q } }
     const textResults = await Food.find(textFilter, { score: { $meta: 'textScore' } })
@@ -292,6 +297,17 @@ export async function GET(request: NextRequest) {
       return qw.slice(0, len) === nw.slice(0, len)
     }
 
+    // How many of the query's words this result matches across name + brand.
+    // Drives both the coverage ranking and the precision filter below.
+    // "fairlife protein shake" → a Fairlife shake covers 3/3; a Quest shake
+    // covers 2/3 (no "fairlife"), so it ranks (and filters) lower.
+    function coveredCount(name: string, brand?: string): number {
+      const searchableWords = ((name ?? '').toLowerCase() + ' ' + (brand ?? '').toLowerCase())
+        .split(/[\s,]+/)
+        .filter(Boolean)
+      return qWords.filter(qw => searchableWords.some(sw => stemMatch(qw, sw))).length
+    }
+
     // Strip trailing prep/state qualifiers ("Bananas, raw" → "Bananas") for length scoring.
     // Display name is unaffected — this only counts words for ranking.
     const QUALIFIER_PATTERN = /,\s*(raw|cooked|boiled|roasted|baked|grilled|fried|steamed|sauteed|shelled|peeled|whole|fresh|dried|canned|frozen|with skin|without skin|with salt|without salt|unsweetened|sweetened|enriched|unenriched|fortified)\b.*$/i
@@ -322,10 +338,7 @@ export async function GET(request: NextRequest) {
 
       // Coverage searches name + brand combined so "jimmy dean" matches Jimmy Dean
       // products even when "Jimmy Dean" only appears in the brand field.
-      const searchableWords = (nameLower + ' ' + (brand ?? '').toLowerCase())
-        .split(/[\s,]+/)
-        .filter(Boolean)
-      const covered = qWords.filter(qw => searchableWords.some(sw => stemMatch(qw, sw))).length
+      const covered = coveredCount(name, brand)
       const coverageScore = (qWords.length - covered) * 100
 
       // Length is computed on stripped name only (qualifiers removed) so
@@ -399,24 +412,51 @@ export async function GET(request: NextRequest) {
     const offWithFlag = dedupedOff.map(r => ({ ...r, isSaved: false }))
 
     const combined = [...customFoods, ...usdaWithFlag, ...offWithFlag]
-    combined.sort((a, b) => {
-      // Source priority: saved (-1) > our DB (0) > usda (1) > off (2)
-      // Anything sourced from our Food collection (manual/usda/off-imported) ranks first.
-      const aFromOurDb = a.source !== 'usda' && a.source !== 'openfoodfacts'
-        ? true
-        // Imported foods that came from our DB will have an ObjectId _id (not "usda-..." / "off-...")
-        : typeof a._id !== 'string' || (!a._id.startsWith?.('usda-') && !a._id.startsWith?.('off-'))
-      const bFromOurDb = b.source !== 'usda' && b.source !== 'openfoodfacts'
-        ? true
-        : typeof b._id !== 'string' || (!b._id.startsWith?.('usda-') && !b._id.startsWith?.('off-'))
 
-      const srcA = a.isSaved ? -1 : aFromOurDb ? 0 : a.source === 'usda' ? 1 : 2
-      const srcB = b.isSaved ? -1 : bFromOurDb ? 0 : b.source === 'usda' ? 1 : 2
-      if (srcA !== srcB) return srcA - srcB
-      return relevanceScore(a.name, a.brand, a.dataType) - relevanceScore(b.name, b.brand, b.dataType)
-    })
+    // "From our DB" test — saved/curated foods and anything already imported
+    // (ObjectId _id, not a synthetic "usda-"/"off-" id). Used only as a
+    // tie-breaker now, NOT the primary sort key.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function fromOurDb(x: any): boolean {
+      return x.source !== 'usda' && x.source !== 'openfoodfacts'
+        ? true
+        : typeof x._id !== 'string' || (!x._id.startsWith?.('usda-') && !x._id.startsWith?.('off-'))
+    }
 
-    const paged = combined.slice(offset, offset + limit)
+    // Score once: how many query words each result covers, its full relevance
+    // (coverage + name simplicity + whole-food bonus), and a source rank used
+    // only to break ties between equally-relevant results.
+    const scored = combined.map(item => ({
+      item,
+      covered: coveredCount(item.name, item.brand),
+      rel: relevanceScore(item.name, item.brand, item.dataType),
+      src: item.isSaved ? -1 : fromOurDb(item) ? 0 : item.source === 'usda' ? 1 : 2,
+    }))
+
+    // Precision filter (the MyFitnessPal behavior): when the query names a
+    // specific food and at least one result matches ALL its words, hide the
+    // results that don't. So "Fairlife protein shake" returns Fairlife shakes —
+    // not every protein shake in the catalog. This only triggers on a full
+    // match (maxCovered === every query word); a typo or partial query that
+    // matches nothing fully falls back to best-effort ranking instead of an
+    // empty list. Source no longer lets a generic in-DB food outrank a more
+    // relevant external brand match.
+    let kept = scored
+    if (qWords.length >= 1 && combined.length > 0) {
+      const maxCovered = scored.reduce((m, s) => Math.max(m, s.covered), 0)
+      if (maxCovered === qWords.length && maxCovered > 0) {
+        const precise = scored.filter(s => s.covered === maxCovered)
+        if (precise.length > 0) kept = precise
+      }
+    }
+
+    // Relevance-dominant ordering: full-coverage, simplest-name results first;
+    // source (saved → our DB → USDA → OFF) only breaks ties within the same
+    // relevance.
+    kept.sort((a, b) => (a.rel !== b.rel ? a.rel - b.rel : a.src - b.src))
+
+    const sortedFoods = kept.map(s => s.item)
+    const paged = sortedFoods.slice(offset, offset + limit)
 
     // Background auto-import: every external result returned to the client
     // that's not already in our DB gets persisted asynchronously via
@@ -433,7 +473,7 @@ export async function GET(request: NextRequest) {
     const extraFdcIds = synth.additionalFdcIds
     after(() => backgroundImportExternals(paged, authResult.userId, extraFdcIds))
 
-    return NextResponse.json({ foods: paged, total: combined.length, offset, limit })
+    return NextResponse.json({ foods: paged, total: sortedFoods.length, offset, limit })
   } catch (error) {
     console.error('Error searching foods:', error)
     return NextResponse.json({ error: 'Failed to search foods' }, { status: 500 })
