@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, Send, BookmarkPlus } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
@@ -117,6 +118,7 @@ export default function SnapPlateModal({
   onClose,
   onLogged,
 }: SnapPlateModalProps) {
+  const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
   const galleryInputRef = useRef<HTMLInputElement>(null) // upload from library (no capture)
   const [state, setState] = useState<ModalState>({ phase: 'idle' })
@@ -377,7 +379,12 @@ export default function SnapPlateModal({
         showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save recipe.", 'error')
         return false
       }
+      const data = await res.json().catch(() => null)
+      const mealId = data?.meal?._id
       showToast(`Saved "${name.trim()}" to your recipes`, 'success')
+      // Take the user straight to the saved recipe (where they can also delete it).
+      onClose()
+      if (mealId) router.push(`/dashboard/meals/${mealId}`)
       return true
     } catch (err) {
       console.error('[SnapPlateModal] save recipe error', err)
