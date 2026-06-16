@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ options, challengeId })
   } catch (err) {
     console.error('passkey register options error:', err)
-    return NextResponse.json({ error: 'Could not start passkey setup' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Could not start passkey setup'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

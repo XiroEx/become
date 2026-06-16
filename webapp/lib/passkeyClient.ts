@@ -9,6 +9,17 @@ export function passkeysSupported(): boolean {
   return typeof window !== 'undefined' && !!window.PublicKeyCredential
 }
 
+/** Pull a human-readable error message out of a non-OK API response. */
+async function readError(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = await res.json()
+    if (data && typeof data.error === 'string' && data.error) return data.error
+  } catch {
+    // non-JSON body — fall through
+  }
+  return fallback
+}
+
 /** Enroll a passkey for the currently-signed-in Become user. */
 export async function registerPasskey(): Promise<void> {
   const token = getToken()
@@ -16,9 +27,12 @@ export async function registerPasskey(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
   })
-  if (!optRes.ok) throw new Error('Could not start passkey setup')
+  if (!optRes.ok) throw new Error(await readError(optRes, 'Could not start passkey setup'))
   const { options, challengeId } = await optRes.json()
 
+  // startRegistration throws native WebAuthn errors (NotAllowedError,
+  // InvalidStateError, NotSupportedError, SecurityError…) with a .name — let
+  // those propagate unchanged so the caller can explain them.
   const response = await startRegistration({ optionsJSON: options })
 
   const verifyRes = await fetch('/api/auth/passkey/register/verify', {
@@ -26,7 +40,7 @@ export async function registerPasskey(): Promise<void> {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
     body: JSON.stringify({ challengeId, response }),
   })
-  if (!verifyRes.ok) throw new Error('Passkey setup failed')
+  if (!verifyRes.ok) throw new Error(await readError(verifyRes, 'Passkey setup failed'))
 }
 
 /** Sign in with a passkey. Stores the Become token and returns it. */
