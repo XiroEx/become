@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -93,40 +93,28 @@ export default function SnapPlateModal({
   onClose,
   onLogged,
 }: SnapPlateModalProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
+  const galleryInputRef = useRef<HTMLInputElement>(null) // upload from library (no capture)
   const [state, setState] = useState<ModalState>({ phase: 'idle' })
   const { toast, showToast } = useToast(3500)
 
   useLockScroll(open)
 
-  // Reset when the modal closes so it opens fresh each time.
+  // Reset to the chooser when the modal closes so it opens fresh each time.
   useEffect(() => {
     if (!open) setState({ phase: 'idle' })
   }, [open])
 
-  // Trigger the hidden file input on open (once per open event).
-  const triggeredRef = useRef(false)
-  useEffect(() => {
-    if (open && state.phase === 'idle' && !triggeredRef.current) {
-      triggeredRef.current = true
-      // Small delay so the modal has a chance to mount its animation first.
-      const t = setTimeout(() => {
-        fileInputRef.current?.click()
-      }, 200)
-      return () => clearTimeout(t)
-    }
-    if (!open) {
-      triggeredRef.current = false
-    }
-  }, [open, state.phase])
+  const pickCamera = () => fileInputRef.current?.click()
+  const pickGallery = () => galleryInputRef.current?.click()
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     // Reset the input value so the same photo can be re-picked if needed.
     e.target.value = ''
     if (!file) {
-      // User cancelled the native picker — just close.
-      onClose()
+      // User cancelled the native picker — return to the chooser (don't close).
+      setState({ phase: 'idle' })
       return
     }
 
@@ -171,13 +159,11 @@ export default function SnapPlateModal({
         })
       }
     }
-  }, [onClose])
+  }, [])
 
   const handleRetry = () => {
+    // Back to the chooser so the user can take a new photo OR upload one.
     setState({ phase: 'idle' })
-    triggeredRef.current = false
-    // Re-trigger file picker.
-    setTimeout(() => fileInputRef.current?.click(), 50)
   }
 
   const setMultiplier = (idx: number, delta: number) => {
@@ -282,12 +268,20 @@ export default function SnapPlateModal({
 
   return (
     <>
-      {/* Hidden file input — triggered programmatically */}
+      {/* Hidden inputs — camera (capture) and library upload (no capture). */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        className="sr-only"
+        onChange={handleFileChange}
+        aria-hidden="true"
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
         className="sr-only"
         onChange={handleFileChange}
         aria-hidden="true"
@@ -334,6 +328,37 @@ export default function SnapPlateModal({
 
               {/* Body */}
               <div className="flex-1 overflow-y-auto overscroll-contain">
+
+                {/* Idle — choose camera or upload */}
+                {state.phase === 'idle' && (
+                  <div className="flex flex-col items-center justify-center gap-6 py-16 px-6 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
+                      <Camera className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-zinc-900 dark:text-white">Snap or upload your plate</p>
+                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                        Take a photo now, or pick one from your library.
+                      </p>
+                    </div>
+                    <div className="flex w-full max-w-xs flex-col gap-2.5">
+                      <button
+                        onClick={pickCamera}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+                      >
+                        <Camera className="h-4 w-4" />
+                        Take photo
+                      </button>
+                      <button
+                        onClick={pickGallery}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Upload photo
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Loading */}
                 {state.phase === 'loading' && (

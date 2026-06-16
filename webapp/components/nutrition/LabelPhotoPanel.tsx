@@ -121,24 +121,24 @@ export default function LabelPhotoPanel({
 
   return (
     <>
-      {/* Hidden file input */}
+      {/* Hidden file input — no `capture`, so the OS picker offers BOTH "take
+          photo" and "choose from library". */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="sr-only"
         onChange={handleFileChange}
         aria-hidden="true"
       />
 
-      {/* Camera button — styled to match the barcode button beside it */}
+      {/* Scan/upload button — styled to match the barcode button beside it */}
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={loading}
-        aria-label="Scan label photo"
-        title="Scan a nutrition label"
+        aria-label="Scan or upload a nutrition label"
+        title="Scan or upload a nutrition label"
         className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
       >
         {loading ? (
