@@ -32,9 +32,23 @@ export interface PlateEstimate {
   caveats?: string[]
 }
 
-/** Camera-based plate estimator: photo in, loggable items out. */
+/** Text input for a no-photo estimate or a correction of a prior estimate. */
+export interface TextEstimateInput {
+  /** Free-text description of the meal (the "describe it" path). */
+  description?: string
+  /** A prior item list to be corrected. */
+  priorEstimate?: EstimatedPlateItem[]
+  /** The user's correction, e.g. "it was 6 tacos not 5". */
+  correction?: string
+}
+
+/** Plate estimator: photo in (or text), loggable items out. */
 export interface PlateEstimator {
-  estimate(imageBase64: string, ctx: NutritionAIContext): Promise<PlateEstimate>
+  /** Photo → estimate. Optional `note` lets the user describe the plate (e.g.
+   *  "these are 6 carnitas tacos") to improve identification/counts. */
+  estimate(imageBase64: string, ctx: NutritionAIContext, note?: string): Promise<PlateEstimate>
+  /** Estimate from words (describe a meal) or refine a prior estimate via a correction. */
+  estimateFromText(input: TextEstimateInput, ctx: NutritionAIContext): Promise<PlateEstimate>
 }
 
 export interface ProductMatch {

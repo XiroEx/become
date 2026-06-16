@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, ArrowRight } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -37,6 +37,7 @@ interface ReviewItem extends EstimatedPlateItem {
 
 type ModalState =
   | { phase: 'idle' }
+  | { phase: 'describe' }
   | { phase: 'loading' }
   | { phase: 'error'; message: string }
   | { phase: 'review'; items: ReviewItem[]; imageThumb: string }
@@ -84,6 +85,22 @@ function runningTotal(items: ReviewItem[]) {
   }
 }
 
+/** The model occasionally returns confidence on a 1-5 scale instead of 0-1. */
+function normalizeConfidence(c: unknown): number {
+  const n = typeof c === 'number' && isFinite(c) ? c : 0
+  const v = n > 1 ? n / 5 : n
+  return Math.max(0, Math.min(1, v))
+}
+
+function toReviewItems(est: PlateEstimate): ReviewItem[] {
+  return (est.items ?? []).map((item) => ({
+    ...item,
+    confidence: normalizeConfidence(item.confidence),
+    multiplier: 1,
+    removed: false,
+  }))
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function SnapPlateModal({
@@ -96,17 +113,65 @@ export default function SnapPlateModal({
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
   const galleryInputRef = useRef<HTMLInputElement>(null) // upload from library (no capture)
   const [state, setState] = useState<ModalState>({ phase: 'idle' })
+  const [describeText, setDescribeText] = useState('')
   const { toast, showToast } = useToast(3500)
 
   useLockScroll(open)
 
   // Reset to the chooser when the modal closes so it opens fresh each time.
   useEffect(() => {
-    if (!open) setState({ phase: 'idle' })
+    if (!open) { setState({ phase: 'idle' }); setDescribeText('') }
   }, [open])
 
   const pickCamera = () => fileInputRef.current?.click()
   const pickGallery = () => galleryInputRef.current?.click()
+
+  // Shared loading→review/error wrapper for any estimate source.
+  const runEstimate = useCallback(async (
+    make: () => Promise<PlateEstimate>,
+    imageThumb: string,
+    failMsg: string,
+  ) => {
+    setState({ phase: 'loading' })
+    try {
+      const estimate = await make()
+      if (!estimate.items || estimate.items.length === 0) {
+        setState({ phase: 'error', message: failMsg })
+        return
+      }
+      setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
+    } catch (err) {
+      if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] estimate error', err)
+      setState({ phase: 'error', message: failMsg })
+    }
+  }, [])
+
+  const handleDescribe = () => {
+    const t = describeText.trim()
+    if (!t) return
+    runEstimate(
+      () => plateEstimator.estimateFromText({ description: t }, { userId: '' }),
+      '',
+      "Couldn't estimate that — try adding a little more detail.",
+    )
+  }
+
+  // Correct a prior estimate by text. If it came from a PHOTO, re-run the vision
+  // pass with the original image + the correction as a note (best accuracy). If it
+  // came from "describe it" (no image), refine via the text task.
+  const handleCorrect = useCallback((priorItems: ReviewItem[], imageThumb: string, correction: string) => {
+    const c = correction.trim()
+    if (!c) return
+    const failMsg = "Couldn't apply that correction — try rephrasing."
+    if (imageThumb.startsWith('data:')) {
+      runEstimate(() => plateEstimator.estimate(imageThumb, { userId: '' }, c), imageThumb, failMsg)
+    } else {
+      const prior: EstimatedPlateItem[] = priorItems
+        .filter((it) => !it.removed)
+        .map(({ name, estimatedServing, nutrition, confidence }) => ({ name, estimatedServing, nutrition, confidence }))
+      runEstimate(() => plateEstimator.estimateFromText({ priorEstimate: prior, correction: c }, { userId: '' }), '', failMsg)
+    }
+  }, [runEstimate])
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -138,13 +203,7 @@ export default function SnapPlateModal({
         return
       }
 
-      const reviewItems: ReviewItem[] = estimate.items.map((item) => ({
-        ...item,
-        multiplier: 1,
-        removed: false,
-      }))
-
-      setState({ phase: 'review', items: reviewItems, imageThumb })
+      setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
       if (err instanceof PlateUnavailableError) {
         setState({
@@ -356,6 +415,51 @@ export default function SnapPlateModal({
                         <ImagePlus className="h-4 w-4" />
                         Upload photo
                       </button>
+                      <button
+                        onClick={() => setState({ phase: 'describe' })}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+                      >
+                        <PencilLine className="h-4 w-4" />
+                        Describe it instead
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Describe — text-only estimate (no photo) */}
+                {state.phase === 'describe' && (
+                  <div className="flex flex-col gap-4 px-6 py-10">
+                    <div className="text-center">
+                      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
+                        <PencilLine className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <p className="font-semibold text-zinc-900 dark:text-white">Describe your meal</p>
+                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                        In your words — we&apos;ll estimate the macros.
+                      </p>
+                    </div>
+                    <textarea
+                      value={describeText}
+                      onChange={(e) => setDescribeText(e.target.value)}
+                      autoFocus
+                      rows={4}
+                      placeholder="e.g. 6 pork carnitas street tacos and a small cup of salsa verde"
+                      className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setState({ phase: 'idle' })}
+                        className="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        Back
+                      </button>
+                      <button
+                        onClick={handleDescribe}
+                        disabled={!describeText.trim()}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Estimate
+                      </button>
                     </div>
                   </div>
                 )}
@@ -410,6 +514,7 @@ export default function SnapPlateModal({
                     imageThumb={state.imageThumb}
                     onSetMultiplier={setMultiplier}
                     onToggleRemove={toggleRemove}
+                    onCorrect={(text) => handleCorrect(state.items, state.imageThumb, text)}
                   />
                 )}
 
@@ -447,25 +552,55 @@ interface ReviewBodyProps {
   imageThumb: string
   onSetMultiplier: (idx: number, delta: number) => void
   onToggleRemove: (idx: number) => void
+  onCorrect: (text: string) => void
 }
 
-function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove }: ReviewBodyProps) {
+function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorrect }: ReviewBodyProps) {
   const STEP = 0.25
+  const [fix, setFix] = useState('')
+
+  const submitFix = () => {
+    const t = fix.trim()
+    if (!t) return
+    setFix('')
+    onCorrect(t)
+  }
 
   return (
     <div className="space-y-1 pb-2">
-      {/* Thumb */}
-      <div className="relative mx-4 mt-4 mb-2 overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800" style={{ height: 140 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageThumb}
-          alt="Your plate"
-          className="h-full w-full object-cover"
+      {/* Thumb — only when this estimate came from a photo */}
+      {imageThumb.startsWith('data:') && (
+        <div className="relative mx-4 mt-4 mb-2 overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800" style={{ height: 140 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageThumb}
+            alt="Your plate"
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          <p className="absolute bottom-2 left-3 text-xs font-medium text-white/80">
+            AI estimate &mdash; adjust if needed
+          </p>
+        </div>
+      )}
+
+      {/* Correct via text */}
+      <div className="mx-4 mt-4 mb-1 flex items-center gap-2">
+        <input
+          value={fix}
+          onChange={(e) => setFix(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submitFix() }}
+          placeholder="Not right? e.g. &quot;it was 6 tacos&quot;"
+          className="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        <p className="absolute bottom-2 left-3 text-xs font-medium text-white/80">
-          AI estimate &mdash; adjust if needed
-        </p>
+        <button
+          onClick={submitFix}
+          disabled={!fix.trim()}
+          aria-label="Apply correction"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white transition-colors hover:bg-emerald-700 disabled:opacity-40"
+        >
+          <ArrowRight className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Item rows */}
