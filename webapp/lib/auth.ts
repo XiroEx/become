@@ -17,8 +17,20 @@ export interface AuthResult {
   error?: string
 }
 
+// Session length. Tokens roll on every authenticated /api/auth/me call (sliding
+// session — see that route), so an active user effectively never gets logged
+// out; this is just the inactivity window before a fresh login is required.
+export const SESSION_EXPIRY = '30d'
+export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+
 export function signToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: SESSION_EXPIRY })
+}
+
+/** Build the Set-Cookie header value for the auth cookie (rolling Max-Age). */
+export function authCookie(token: string): string {
+  const secure = process.env.NODE_ENV === 'production' ? 'Secure;' : ''
+  return `auth_token=${token}; HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; SameSite=Lax; ${secure}`
 }
 
 export function verifyToken(token: string): JWTPayload {
