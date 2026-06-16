@@ -1,13 +1,11 @@
 // POST /api/ai/nutrition/plate
-// Body: { image (base64), grounding? }
-// → plate estimate (nutrition.plateEstimate, vision). Vision is a STUB on the
-// graph today (text-only model), so this returns { ok:false, unavailable:true }
-// until a vision neuron is dropped into the become-vision-runner — the seam is
-// fully wired so it lights up with zero webapp changes. The UI shows its
-// "coming soon" state when unavailable is true.
+// Body: { image (base64 data URL), grounding? }
+// → plate estimate (nutrition.plateEstimate, vision/multimodal Gemini). ASYNC:
+// returns a runId the client polls via /api/ai/run/<runId>; the run result is the
+// PlateEstimate. Image is base64-only server-side; the bearer/secret stay server-side.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runBecomeTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
@@ -28,9 +26,9 @@ export async function POST(request: NextRequest) {
   if (!image) return NextResponse.json({ error: 'Missing image' }, { status: 400 })
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const res = await runBecomeTask('nutrition.plateEstimate', { user: grounding }, { image })
+  const trig = await triggerBecomeTask('nutrition.plateEstimate', { user: grounding }, { image })
 
-  if (res.ok && res.result) return NextResponse.json({ ok: true, estimate: res.result })
-  // vision_not_yet_available (stub) or any failure → graceful unavailable.
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  // couldn't even trigger → graceful unavailable.
   return NextResponse.json({ ok: false, unavailable: true })
 }

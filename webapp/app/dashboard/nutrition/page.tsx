@@ -12,10 +12,11 @@ import CalorieRing from '@/components/nutrition/CalorieRing'
 import TagSection, { type MealLogLite } from '@/components/nutrition/TagSection'
 import WaterTracker from '@/components/nutrition/WaterTracker'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera } from 'lucide-react'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import { Card, EmptyState, Toast, HeaderPillLink } from '@/components/ui'
@@ -114,6 +115,7 @@ function NutritionPageInner() {
   const [planDateInput, setPlanDateInput] = useState<string>('')
   const [foodSearchTag, setFoodSearchTag] = useState<string>('snack')
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
+  const [snapPlateOpen, setSnapPlateOpen] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
   const { toast, showToast } = useToast(4000)
@@ -185,7 +187,7 @@ function NutritionPageInner() {
     changeDate(d)
   }
   const anyOverlayOpen =
-    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null
+    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null || snapPlateOpen
   const swipe = useSwipeNav({
     onPrev: () => shiftDay(-1),
     onNext: () => shiftDay(1),
@@ -714,6 +716,14 @@ function NutritionPageInner() {
           >
             <ScanBarcode className="h-5 w-5" />
           </button>
+          <button
+            onClick={() => setSnapPlateOpen(true)}
+            aria-label="Snap plate photo"
+            title="Snap your plate — AI estimates foods and macros"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
+          >
+            <Camera className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Date Navigation */}
@@ -970,6 +980,15 @@ function NutritionPageInner() {
         </div>
        </div>
       </PageTransition>
+
+      {/* Snap Plate Modal — AI vision plate estimator */}
+      <SnapPlateModal
+        open={snapPlateOpen}
+        tag={foodSearchTag || getDefaultTagForNow()}
+        dateKey={dateParam}
+        onClose={() => setSnapPlateOpen(false)}
+        onLogged={() => { fetchMealLogs(); fetchTags() }}
+      />
 
       {/* Food Search Modal — log mode (default) and plan mode (when planForDate set). */}
       <FoodSearchModal
