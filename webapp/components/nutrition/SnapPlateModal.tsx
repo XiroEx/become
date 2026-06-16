@@ -608,7 +608,7 @@ function ComposeBody({ dataUrl, note, onNoteChange, onBack, onEstimate }: Compos
           value={note}
           onChange={(e) => onNoteChange(e.target.value)}
           rows={3}
-          placeholder="Anything the photo misses — sauces, dressings, a side, a drink, or portion sizes"
+          placeholder="Describe your meal and/or add anything the photo misses — sauces, sides, drinks, portions…"
           className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
         />
       </div>
