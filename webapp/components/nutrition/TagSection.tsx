@@ -18,6 +18,8 @@ import {
   MoreVertical,
   CalendarDays,
   ChefHat,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
 import { Card } from '@/components/ui'
@@ -519,6 +521,7 @@ interface ItemRowProps {
 
 function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
   const [expanded, setExpanded] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const totalCalories = Math.round((item.nutrition.calories ?? 0) * (item.servings ?? 1))
   // Prefer the user's actual logged quantity + unit when present (PR 4
   // provenance). Old log rows fall back to the legacy "X servings · servingSize"
@@ -530,31 +533,70 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
   const showVariant = shouldShowVariantName(item.variantName)
 
   return (
-    <div className="group">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-      >
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
-            {item.name}
-            {showVariant && (
-              <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                {' '}&middot; {item.variantName}
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-            {item.brand && (
-              <span className="text-zinc-400 dark:text-zinc-500">{item.brand} &middot; </span>
-            )}
-            {detailDisplay}
-          </p>
-        </div>
-        <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
-          {totalCalories}
-        </span>
-      </button>
+    <div className="group relative">
+      <div className="flex w-full items-center gap-1 pr-1.5">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        >
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
+              {item.name}
+              {showVariant && (
+                <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                  {' '}&middot; {item.variantName}
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+              {item.brand && (
+                <span className="text-zinc-400 dark:text-zinc-500">{item.brand} &middot; </span>
+              )}
+              {detailDisplay}
+            </p>
+          </div>
+          <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">
+            {totalCalories}
+          </span>
+        </button>
+
+        {/* Per-entry actions menu (edit / delete) */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o) }}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          aria-label="Entry options"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      </div>
+
+      {menuOpen && (
+        <>
+          {/* Backdrop closes the menu */}
+          <button
+            className="fixed inset-0 z-10 cursor-default"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setMenuOpen(false)}
+          />
+          <div className="absolute right-2 top-11 z-20 w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+            <button
+              onClick={() => { setMenuOpen(false); onEdit() }}
+              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </button>
+            <button
+              onClick={() => { setMenuOpen(false); onDelete() }}
+              className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-zinc-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </button>
+          </div>
+        </>
+      )}
 
       <AnimatePresence>
         {expanded && (
@@ -565,42 +607,16 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className="flex items-center justify-between px-3 pb-2">
-              <div className="flex gap-2 text-[11px] tabular-nums">
-                <span className="rounded bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                  P {Math.round((item.nutrition.protein ?? 0) * (item.servings ?? 1))}g
-                </span>
-                <span className="rounded bg-green-100 px-1.5 py-0.5 font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                  C {Math.round((item.nutrition.carbs ?? 0) * (item.servings ?? 1))}g
-                </span>
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                  F {Math.round((item.nutrition.fats ?? 0) * (item.servings ?? 1))}g
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onEdit() }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-                  aria-label="Edit entry"
-                >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete() }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                  aria-label="Delete entry"
-                >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6" />
-                    <path d="M14 11v6" />
-                  </svg>
-                </button>
-              </div>
+            <div className="flex items-center gap-2 px-3 pb-2 text-[11px] tabular-nums">
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                P {Math.round((item.nutrition.protein ?? 0) * (item.servings ?? 1))}g
+              </span>
+              <span className="rounded bg-green-100 px-1.5 py-0.5 font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                C {Math.round((item.nutrition.carbs ?? 0) * (item.servings ?? 1))}g
+              </span>
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                F {Math.round((item.nutrition.fats ?? 0) * (item.servings ?? 1))}g
+              </span>
             </div>
           </motion.div>
         )}
