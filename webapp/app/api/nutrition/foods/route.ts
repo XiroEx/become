@@ -442,9 +442,14 @@ export async function GET(request: NextRequest) {
     // empty list. Source no longer lets a generic in-DB food outrank a more
     // relevant external brand match.
     let kept = scored
+    // True when the query fully matches at least one result — drives both the
+    // precision filter and the "Best Match" badge (we only crown a top result
+    // when we're confident it IS the food searched for, not a fuzzy fallback).
+    let hasFullMatch = false
     if (qWords.length >= 1 && combined.length > 0) {
       const maxCovered = scored.reduce((m, s) => Math.max(m, s.covered), 0)
       if (maxCovered === qWords.length && maxCovered > 0) {
+        hasFullMatch = true
         const precise = scored.filter(s => s.covered === maxCovered)
         if (precise.length > 0) kept = precise
       }
@@ -457,6 +462,14 @@ export async function GET(request: NextRequest) {
 
     const sortedFoods = kept.map(s => s.item)
     const paged = sortedFoods.slice(offset, offset + limit)
+
+    // Best Match: crown the single top result on the first page when the query
+    // confidently matches it (the frontend renders a "Best Match" badge).
+    // Because we dedupe + rank across our DB + USDA + OFF first, this points at
+    // the best single representative of the food across all sources.
+    if (q && offset === 0 && hasFullMatch && paged.length > 0) {
+      paged[0] = { ...paged[0], isBestMatch: true }
+    }
 
     // Background auto-import: every external result returned to the client
     // that's not already in our DB gets persisted asynchronously via
