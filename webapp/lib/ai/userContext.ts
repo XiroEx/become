@@ -135,11 +135,29 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     ctx.mood = { avg7: Math.round(avg * 10) / 10, entries7: recentMoods.length }
   }
 
-  // Active program (most recent in-progress)
+  // Active program: the one the user has actually STARTED and is most recently
+  // active in. We must exclude programs whose startDate is in the future (e.g.
+  // one scheduled to begin next month): a future startDate sorts above a current
+  // program's last-workout date, so the not-yet-started program was getting
+  // picked as "active" — making the AI talk about "Day 1 of the 30-Day Shred"
+  // (unstarted) instead of the program the user is mid-way through (and missing
+  // workouts on).
   const programs = Array.isArray(progress?.activePrograms) ? (progress!.activePrograms as Array<Record<string, unknown>>) : []
+  const ms = (d: unknown): number => {
+    const t = d ? new Date(d as Date).getTime() : 0
+    return Number.isFinite(t) ? t : 0
+  }
+  // Activity recency = most recent workout, or the start date once it has
+  // actually arrived (future start dates don't count toward "recency").
+  const activityTime = (p: Record<string, unknown>): number => {
+    const st = ms(p.startDate)
+    return Math.max(ms(p.lastWorkoutDate), st <= now ? st : 0)
+  }
   const active = programs
     .filter((p) => p.status === 'in-progress' || p.status === 'active')
-    .sort((a, b) => new Date((b.lastWorkoutDate as Date) || (b.startDate as Date) || 0).getTime() - new Date((a.lastWorkoutDate as Date) || (a.startDate as Date) || 0).getTime())[0]
+    // Drop programs that haven't started yet (future startDate, no activity).
+    .filter((p) => ms(p.lastWorkoutDate) > 0 || ms(p.startDate) === 0 || ms(p.startDate) <= now)
+    .sort((a, b) => activityTime(b) - activityTime(a))[0]
   if (active) ctx.program = { name: (active.programName as string) || 'your program', phase: active.currentPhase as number, day: active.currentDay as string }
 
   // Nutrition: most recent logged day vs goals
