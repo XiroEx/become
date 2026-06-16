@@ -12,7 +12,7 @@
 // server-only module.
 
 import { useRef, useCallback } from 'react'
-import { Loader2, ScanLine } from 'lucide-react'
+import { Loader2, Camera } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -144,7 +144,7 @@ export default function LabelPhotoPanel({
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <ScanLine className="h-5 w-5" />
+          <Camera className="h-5 w-5" />
         )}
       </button>
 

@@ -981,6 +981,17 @@ function NutritionPageInner() {
        </div>
       </PageTransition>
 
+      {/* Floating add button — persistent "add food" affordance that stays put
+          as the day view scrolls. Sits above the floating BottomNav (z-40) and
+          clears it via bottom-28; modals (z-50+) overlay it. */}
+      <button
+        onClick={() => openFoodSearch(getDefaultTagForNow())}
+        aria-label={viewingFuture ? 'Schedule food' : 'Add food'}
+        className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg shadow-zinc-900/30 transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-zinc-900"
+      >
+        <Plus className="h-7 w-7" />
+      </button>
+
       {/* Snap Plate Modal — AI vision plate estimator */}
       <SnapPlateModal
         open={snapPlateOpen}
