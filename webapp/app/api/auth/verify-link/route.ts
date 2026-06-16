@@ -1,7 +1,7 @@
 import dbConnect from '@/lib/mongodb'
 import User from '@/models/User'
 import MagicLink, { verifyMagicLink, storeAuthToken } from '@/models/MagicLink'
-import { signToken } from '@/lib/auth'
+import { signToken, authCookie } from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
@@ -63,16 +63,14 @@ export async function POST(req: Request) {
       // Store the JWT for the polling session
       await storeAuthToken(token, jwtToken)
 
-      // Set HTTP-only cookie for persistent auth (7 days)
-      const cookieMaxAge = 7 * 24 * 60 * 60
-
+      // Set HTTP-only cookie for persistent auth. Rolls on each /api/auth/me.
       return new Response(JSON.stringify({
         token: jwtToken,
         user: { id: user._id, name: user.name, email: user.email }
       }), {
         status: 200,
         headers: {
-          'Set-Cookie': `auth_token=${jwtToken}; HttpOnly; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; ${process.env.NODE_ENV === 'production' ? 'Secure;' : ''}`
+          'Set-Cookie': authCookie(jwtToken)
         }
       })
     } catch (saveErr) {
