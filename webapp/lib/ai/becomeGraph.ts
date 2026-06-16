@@ -30,9 +30,11 @@ export type BecomeTask =
   | 'mind.generateFlow'
   | 'workout.generateSession'
   | 'workout.generateProgram'
-  // vision (stub today — graph returns vision_not_yet_available)
+  // vision (multimodal Gemini)
   | 'nutrition.plateEstimate'
   | 'nutrition.productFind'
+  // structured text → plate estimate (describe a meal / correct a prior estimate)
+  | 'nutrition.describeEstimate'
 
 export interface BecomeResponse {
   ok: boolean

@@ -25,8 +25,16 @@ export async function POST(request: NextRequest) {
   const image = typeof body.image === 'string' ? body.image : ''
   if (!image) return NextResponse.json({ error: 'Missing image' }, { status: 400 })
 
+  // Optional user note/description sent WITH the photo (e.g. "these are 6 carnitas
+  // tacos") — the plate prompt is instructed to trust explicit counts/ingredients.
+  const note = typeof body.note === 'string' ? body.note.slice(0, 500) : ''
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask('nutrition.plateEstimate', { user: grounding }, { image })
+  const trig = await triggerBecomeTask(
+    'nutrition.plateEstimate',
+    { user: grounding, ...(note.trim() ? { note } : {}) },
+    { image },
+  )
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   // couldn't even trigger → graceful unavailable.

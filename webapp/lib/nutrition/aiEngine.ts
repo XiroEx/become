@@ -21,6 +21,7 @@ import type {
   ConsultantTurn,
   NutritionConsultant,
   NutritionAIContext,
+  TextEstimateInput,
 } from '@/lib/nutrition/aiSeams'
 
 // ── Error sentinels ──────────────────────────────────────────────────────────
@@ -42,12 +43,28 @@ export class ProductUnavailableError extends Error {
 // ── PlateEstimator ───────────────────────────────────────────────────────────
 
 class PlateEstimatorImpl implements PlateEstimator {
-  async estimate(imageBase64: string, ctx: NutritionAIContext): Promise<PlateEstimate> {
+  async estimate(imageBase64: string, ctx: NutritionAIContext, note?: string): Promise<PlateEstimate> {
     // Async run: POST returns a runId, runAiTask polls until the estimate lands.
-    const r = await runAiTask('/api/ai/nutrition/plate', { image: imageBase64, grounding: ctx })
+    const r = await runAiTask('/api/ai/nutrition/plate', {
+      image: imageBase64,
+      grounding: ctx,
+      ...(note && note.trim() ? { note } : {}),
+    })
     const est = r.result as PlateEstimate | undefined
     if (r.ok && est && Array.isArray(est.items)) return est
     // unavailable / failure → one error type for callers.
+    throw new PlateUnavailableError()
+  }
+
+  async estimateFromText(input: TextEstimateInput, ctx: NutritionAIContext): Promise<PlateEstimate> {
+    const r = await runAiTask('/api/ai/nutrition/describe', {
+      description: input.description,
+      correction: input.correction,
+      priorEstimate: input.priorEstimate,
+      grounding: ctx,
+    })
+    const est = r.result as PlateEstimate | undefined
+    if (r.ok && est && Array.isArray(est.items)) return est
     throw new PlateUnavailableError()
   }
 }
