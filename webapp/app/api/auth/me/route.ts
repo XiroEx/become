@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
-import { verifyToken, verifyAuth } from '../../../../lib/auth'
+import { verifyToken, signToken, authCookie } from '../../../../lib/auth'
 import type { MeResponse } from '../../../../lib/sharedApiTypes'
 
 export async function GET(req: NextRequest) {
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
     }
 
-    let payload: { userId: string; email: string }
+    let payload: { userId: string; email: string; role?: string }
     try {
       payload = verifyToken(token)
     } catch {
@@ -37,14 +37,29 @@ export async function GET(req: NextRequest) {
       .lean()
     if (!user) return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 })
 
-    // If token came from cookie, include it in response so client can sync to localStorage.
+    // Sliding session: the presented token is valid, so mint a FRESH one and
+    // roll the cookie. Any app open within the inactivity window resets the
+    // clock, so active users never get force-logged-out (the headline cause of
+    // "I keep getting signed out"). We return the fresh token in the body too so
+    // the client can sync localStorage — not just on the cookie path. `void
+    // fromCookie` keeps the parsed flag without affecting behavior.
+    void fromCookie
+    const refreshed = signToken({
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+    })
+
     // The response shape is the shared MeResponse contract — webapp and the Expo
     // sibling consume the same zod schema (see shared/api-client/src/schemas/auth.ts).
     const responseBody: MeResponse = {
       user: user as unknown as MeResponse['user'],
-      ...(fromCookie && token ? { token } : {}),
+      token: refreshed,
     }
-    return new Response(JSON.stringify(responseBody), { status: 200 })
+    return new Response(JSON.stringify(responseBody), {
+      status: 200,
+      headers: { 'Set-Cookie': authCookie(refreshed) },
+    })
   } catch (err: unknown) {
     console.error('me error', err)
     const message = err instanceof Error ? err.message : 'Server error'

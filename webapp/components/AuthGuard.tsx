@@ -6,6 +6,31 @@ interface AuthGuardProps {
   children: React.ReactNode
 }
 
+// Decode a JWT payload safely. JWT uses base64url (- _ and no padding) which
+// plain atob() can choke on — a throw here used to needlessly drop a valid
+// token. Convert to base64 + pad first.
+function decodeJwtPayload(token: string): { exp?: number } {
+  const part = token.split('.')[1] ?? ''
+  const b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+  return JSON.parse(atob(padded))
+}
+
+// Roll the sliding session in the background: hit /api/auth/me with the current
+// token; if the server returns a freshly-minted token, sync it to localStorage.
+// Fire-and-forget — never blocks render or signs the user out on failure.
+function rollSession(token: string): void {
+  fetch('/api/auth/me', {
+    credentials: 'include',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      if (d?.token && typeof window !== 'undefined') localStorage.setItem('token', d.token)
+    })
+    .catch(() => {})
+}
+
 export default function AuthGuard({ children }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
@@ -17,8 +42,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     if (token) {
       // Validate the token locally first
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]))
-        const exp = payload.exp * 1000 // Convert to milliseconds
+        const payload = decodeJwtPayload(token)
+        const exp = (payload.exp ?? 0) * 1000 // Convert to milliseconds
         if (Date.now() >= exp) {
           // Token expired
           localStorage.removeItem('token')
@@ -42,6 +67,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             // Non-critical — if profile fetch fails, allow access
           }
         }
+        // Roll the sliding session so an active user's clock keeps resetting
+        // even though we short-circuited on the still-valid local token.
+        rollSession(token)
         setIsAuthenticated(true)
         return
       } catch {
