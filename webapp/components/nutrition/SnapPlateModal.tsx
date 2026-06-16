@@ -19,7 +19,10 @@ import { useLockScroll } from '@/lib/useLockScroll'
 
 interface SnapPlateModalProps {
   open: boolean
+  /** Initially-selected meal (default; the user can change it in the review). */
   tag: string
+  /** Meal options to choose from when logging (defaults to the 4 standard meals). */
+  tagOptions?: string[]
   /** YYYY-MM-DD or an ISO string used for loggedAt stamping. Pass the page's
    *  selectedDate formatted param so the log lands on the right day. */
   dateKey: string
@@ -27,6 +30,8 @@ interface SnapPlateModalProps {
   /** Called after items are successfully POSTed to /api/meal-logs. */
   onLogged: () => void
 }
+
+const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
 
 interface ReviewItem extends EstimatedPlateItem {
   /** User-adjustable multiplier on top of the AI-estimated nutrition. 1 = as-is. */
@@ -107,6 +112,7 @@ function toReviewItems(est: PlateEstimate): ReviewItem[] {
 export default function SnapPlateModal({
   open,
   tag,
+  tagOptions,
   dateKey,
   onClose,
   onLogged,
@@ -116,6 +122,9 @@ export default function SnapPlateModal({
   const [state, setState] = useState<ModalState>({ phase: 'idle' })
   const [describeText, setDescribeText] = useState('')
   const [composeNote, setComposeNote] = useState('')
+  // Which meal the plate logs into — user-selectable in the review.
+  const [selectedTag, setSelectedTag] = useState<string>(tag)
+  const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
 
   useLockScroll(open)
@@ -123,7 +132,8 @@ export default function SnapPlateModal({
   // Reset to the chooser when the modal closes so it opens fresh each time.
   useEffect(() => {
     if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
-  }, [open])
+    else setSelectedTag(tag) // default to the page's time-of-day meal on open
+  }, [open, tag])
 
   const pickCamera = () => fileInputRef.current?.click()
   const pickGallery = () => galleryInputRef.current?.click()
@@ -307,7 +317,7 @@ export default function SnapPlateModal({
         headers,
         body: JSON.stringify({
           items: mealItems,
-          tags: [tag],
+          tags: [selectedTag],
           loggedAt,
         }),
       })
@@ -548,7 +558,9 @@ export default function SnapPlateModal({
               {state.phase === 'review' && (
                 <ReviewFooter
                   items={state.items}
-                  tag={tag}
+                  tag={selectedTag}
+                  mealOptions={mealOptions}
+                  onSelectTag={setSelectedTag}
                   onLog={handleLog}
                   onRetry={handleRetry}
                 />
@@ -758,16 +770,39 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
 interface ReviewFooterProps {
   items: ReviewItem[]
   tag: string
+  mealOptions: string[]
+  onSelectTag: (t: string) => void
   onLog: () => void
   onRetry: () => void
 }
 
-function ReviewFooter({ items, tag, onLog, onRetry }: ReviewFooterProps) {
+function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onRetry }: ReviewFooterProps) {
   const totals = runningTotal(items)
   const activeCount = items.filter((it) => !it.removed).length
 
   return (
     <div className="shrink-0 border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
+      {/* Meal picker — which meal this plate logs into */}
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-0.5">
+        {mealOptions.map((m) => {
+          const active = m === tag
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onSelectTag(m)}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                active
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+              }`}
+            >
+              {m}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Running total */}
       <div className="mb-3 flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2.5 dark:bg-zinc-800">
         <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -796,7 +831,7 @@ function ReviewFooter({ items, tag, onLog, onRetry }: ReviewFooterProps) {
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
           <Plus className="h-4 w-4" />
-          Add to {tag}
+          Add to <span className="capitalize">{tag}</span>
         </button>
       </div>
     </div>
