@@ -984,7 +984,8 @@ function NutritionPageInner() {
       {/* Snap Plate Modal — AI vision plate estimator */}
       <SnapPlateModal
         open={snapPlateOpen}
-        tag={foodSearchTag || getDefaultTagForNow()}
+        tag={getDefaultTagForNow()}
+        tagOptions={DEFAULT_TAGS}
         dateKey={dateParam}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { fetchMealLogs(); fetchTags() }}
