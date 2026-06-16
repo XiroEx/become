@@ -14,6 +14,7 @@
 import dbConnect from '@/lib/mongodb'
 import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
+import Schedule from '@/models/Schedule'
 import MindProgress from '@/models/MindProgress'
 import Mission from '@/models/Mission'
 import IdentityProfile from '@/models/IdentityProfile'
@@ -42,6 +43,15 @@ export interface UserContext {
   workoutsLast7Days?: number
   mood?: { avg7: number; entries7: number }
   program?: { name: string; phase?: number; day?: string }
+  /** Schedule adherence for the active program — so the AI knows when the user
+   *  is behind (missed / overdue) and what their next session actually is. */
+  schedule?: {
+    completed: number
+    missed: number
+    /** Past-dated workouts still marked 'scheduled' (silently behind). */
+    overdue: number
+    nextWorkout?: { title: string; dayLabel?: string; inDays: number }
+  }
   nutritionToday?: { calories: number; protein: number; goalCalories?: number; goalProtein?: number; daysAgo: number }
   identityStatement?: string
   futureSelf?: string
@@ -74,7 +84,7 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     return ctx
   }
 
-  const [user, progress, mind, mission, identity, wins, nutGoal, nutLog] = await Promise.all([
+  const [user, progress, mind, mission, identity, wins, nutGoal, nutLog, schedules] = await Promise.all([
     User.findById(userId).lean<Record<string, unknown>>().catch(() => null),
     UserProgress.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
     MindProgress.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
@@ -83,6 +93,7 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     DailyWin.find({ userId }).sort({ date: -1 }).limit(3).lean<Array<Record<string, unknown>>>().catch(() => []),
     NutritionGoal.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
     NutritionLog.findOne({ userId }).sort({ date: -1 }).lean<Record<string, unknown>>().catch(() => null),
+    Schedule.find({ userId }).lean<Array<Record<string, unknown>>>().catch(() => []),
   ])
 
   // Profile (physical stats + goal) — what a coach needs to tailor advice.
@@ -160,6 +171,45 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     .sort((a, b) => activityTime(b) - activityTime(a))[0]
   if (active) ctx.program = { name: (active.programName as string) || 'your program', phase: active.currentPhase as number, day: active.currentDay as string }
 
+  // Schedule adherence for the active program. THIS is how the AI knows the user
+  // is behind (missed / overdue sessions) instead of cheerily acting like every
+  // day is Day 1. Match the schedule to the active program by id, then name.
+  if (active && Array.isArray(schedules) && schedules.length) {
+    const aId = active.programId != null ? String(active.programId) : ''
+    const aName = (active.programName as string) || ''
+    const sched =
+      schedules.find((s) => aId && String(s.programId) === aId) ||
+      schedules.find((s) => aName && s.programName === aName) ||
+      undefined
+    const workouts = Array.isArray(sched?.scheduledWorkouts)
+      ? (sched!.scheduledWorkouts as Array<Record<string, unknown>>)
+      : []
+    if (workouts.length) {
+      let completed = 0
+      let missed = 0
+      let overdue = 0
+      let next: { title: string; dayLabel?: string; inDays: number } | undefined
+      for (const w of workouts) {
+        const status = String(w.status ?? '')
+        const t = ms(w.date)
+        if (status === 'completed') completed++
+        else if (status === 'missed') missed++
+        else if (status === 'scheduled') {
+          if (t && t < now) {
+            // Past-dated but never completed/marked — the user is silently behind.
+            overdue++
+          } else if (t) {
+            const inDays = Math.max(0, Math.round((t - now) / DAY))
+            if (!next || inDays < next.inDays) {
+              next = { title: (w.workoutTitle as string) || 'your next workout', dayLabel: w.dayLabel as string, inDays }
+            }
+          }
+        }
+      }
+      ctx.schedule = { completed, missed, overdue, ...(next ? { nextWorkout: next } : {}) }
+    }
+  }
+
   // Nutrition: most recent logged day vs goals
   if (nutLog && nutLog.dailyTotals) {
     const t = nutLog.dailyTotals as Record<string, number>
@@ -208,6 +258,19 @@ function renderSummary(c: UserContext): string {
   if (typeof c.workoutsLast7Days === 'number') lines.push(`Workouts in last 7 days: ${c.workoutsLast7Days}.`)
   if (c.mood) lines.push(`Mood (7-day avg): ${c.mood.avg7}/5 over ${c.mood.entries7} check-in${c.mood.entries7 === 1 ? '' : 's'}.`)
   if (c.program) lines.push(`Program: ${c.program.name}${c.program.phase ? `, phase ${c.program.phase}` : ''}${c.program.day ? `, ${c.program.day}` : ''}.`)
+  if (c.schedule) {
+    const s = c.schedule
+    const behind = s.missed + s.overdue
+    const bits = [`${s.completed} done`, `${s.missed} missed`]
+    if (s.overdue) bits.push(`${s.overdue} overdue`)
+    let line = `Schedule: ${bits.join(', ')}.`
+    if (behind > 0) line += ` User is BEHIND on this program (${behind} session${behind === 1 ? '' : 's'}) — acknowledge it and help them restart, don't treat today as Day 1.`
+    if (s.nextWorkout) {
+      const when = s.nextWorkout.inDays === 0 ? 'today' : s.nextWorkout.inDays === 1 ? 'tomorrow' : `in ${s.nextWorkout.inDays}d`
+      line += ` Next: ${s.nextWorkout.dayLabel ? `${s.nextWorkout.dayLabel} — ` : ''}${s.nextWorkout.title} (${when}).`
+    }
+    lines.push(line)
+  }
   if (c.nutritionToday) {
     const n = c.nutritionToday
     const when = n.daysAgo === 0 ? 'today' : `${n.daysAgo}d ago`
