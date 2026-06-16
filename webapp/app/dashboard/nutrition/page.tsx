@@ -985,7 +985,7 @@ function NutritionPageInner() {
       <SnapPlateModal
         open={snapPlateOpen}
         tag={getDefaultTagForNow()}
-        tagOptions={DEFAULT_TAGS}
+        tagOptions={Array.from(new Set([...tagsResp.defaults, ...tagsResp.userTags]))}
         dateKey={dateParam}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { fetchMealLogs(); fetchTags() }}
