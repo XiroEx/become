@@ -39,35 +39,15 @@ export class ProductUnavailableError extends Error {
   }
 }
 
-// ── Auth header helper ───────────────────────────────────────────────────────
-
-function authHeader(): HeadersInit {
-  const token = typeof window !== 'undefined' ? (localStorage.getItem('token') ?? '') : ''
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  }
-}
-
 // ── PlateEstimator ───────────────────────────────────────────────────────────
 
 class PlateEstimatorImpl implements PlateEstimator {
   async estimate(imageBase64: string, ctx: NutritionAIContext): Promise<PlateEstimate> {
-    const res = await fetch('/api/ai/nutrition/plate', {
-      method: 'POST',
-      headers: authHeader(),
-      body: JSON.stringify({ image: imageBase64, grounding: ctx }),
-    })
-
-    const data = await res.json().catch(() => ({})) as Record<string, unknown>
-
-    if (data.ok === true && data.estimate) {
-      return data.estimate as PlateEstimate
-    }
-
-    // { ok: false, unavailable: true } — vision stub not yet live.
-    // Also treat any other failure (network error after throw, bad status) the
-    // same way so callers only need to handle one error type.
+    // Async run: POST returns a runId, runAiTask polls until the estimate lands.
+    const r = await runAiTask('/api/ai/nutrition/plate', { image: imageBase64, grounding: ctx })
+    const est = r.result as PlateEstimate | undefined
+    if (r.ok && est && Array.isArray(est.items)) return est
+    // unavailable / failure → one error type for callers.
     throw new PlateUnavailableError()
   }
 }
@@ -79,23 +59,14 @@ class ProductFinderImpl implements ProductFinder {
     query: { text?: string; imageBase64?: string },
     ctx: NutritionAIContext,
   ): Promise<ProductMatch[]> {
-    const res = await fetch('/api/ai/nutrition/product', {
-      method: 'POST',
-      headers: authHeader(),
-      body: JSON.stringify({
-        text: query.text,
-        image: query.imageBase64,
-        grounding: ctx,
-      }),
-    })
-
-    const data = await res.json().catch(() => ({})) as Record<string, unknown>
-
-    if (data.ok === true && Array.isArray(data.matches)) {
-      return data.matches as ProductMatch[]
-    }
-
-    // { ok: false, unavailable: true } — vision stub or no result.
+    // Async run: POST returns a runId, runAiTask polls until matches land.
+    const r = await runAiTask(
+      '/api/ai/nutrition/product',
+      { text: query.text, image: query.imageBase64, grounding: ctx },
+    )
+    const result = r.result as { matches?: ProductMatch[] } | ProductMatch[] | undefined
+    const matches = Array.isArray(result) ? result : result?.matches
+    if (r.ok && Array.isArray(matches)) return matches
     throw new ProductUnavailableError()
   }
 }
