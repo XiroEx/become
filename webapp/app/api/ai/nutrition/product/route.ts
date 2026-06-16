@@ -6,7 +6,7 @@
 // route exists so the seam is complete when the vision neuron lands.)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runBecomeTask } from '@/lib/ai/becomeGraph'
+import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
   if (!text.trim() && !image) return NextResponse.json({ error: 'Missing query' }, { status: 400 })
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const res = await runBecomeTask(
+  const trig = await triggerBecomeTask(
     'nutrition.productFind',
     { text, user: grounding },
     image ? { image } : {},
   )
 
-  if (res.ok && res.result) return NextResponse.json({ ok: true, matches: res.result })
+  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, unavailable: true })
 }
