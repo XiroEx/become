@@ -95,6 +95,7 @@ interface FoodResult {
   nutriscore_grade?: string
   variants?: FoodVariant[]
   isSaved?: boolean
+  isBestMatch?: boolean
 }
 
 interface MealResult {
@@ -1334,6 +1335,12 @@ export default function FoodSearchModal({
                         }`}
                       >
                         <div className="flex-1 min-w-0">
+                          {food.isBestMatch && (
+                            <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                              <Star className="h-2.5 w-2.5 fill-current" />
+                              Best Match
+                            </span>
+                          )}
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                               {food.name}
