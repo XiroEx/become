@@ -34,11 +34,30 @@ interface SnapPlateModalProps {
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
 
+/** A confident match against something we already have in the DB. */
+interface DbMatch {
+  kind: 'food' | 'meal' | 'recipe'
+  id: string
+  name: string
+  brand?: string
+  servingSize: number
+  servingUnit: string
+  nutrition: { calories: number; protein: number; carbs: number; fats: number }
+  source: string
+  confidence: number
+}
+
 interface ReviewItem extends EstimatedPlateItem {
-  /** User-adjustable multiplier on top of the AI-estimated nutrition. 1 = as-is. */
+  /** User-adjustable multiplier on top of the per-serving nutrition. 1 = as-is. */
   multiplier: number
   /** Excluded by the user before logging. */
   removed: boolean
+  /** Brand, when we matched the item to a branded DB food. */
+  brand?: string
+  /** Set once we've reconciled this item against the DB (foods/meals/recipes). */
+  matchChecked?: boolean
+  /** The DB item this maps to, or null when it's genuinely new (AI estimate). */
+  match?: DbMatch | null
 }
 
 type ModalState =
@@ -105,7 +124,53 @@ function toReviewItems(est: PlateEstimate): ReviewItem[] {
     confidence: normalizeConfidence(item.confidence),
     multiplier: 1,
     removed: false,
+    matchChecked: false,
+    match: null,
   }))
+}
+
+// Reconcile AI-estimated items against the DB (foods/meals/recipes). Confident
+// matches adopt the DB item's canonical name + per-serving macros and link its
+// id; the portion is preserved by converting the AI's calorie estimate into a
+// serving multiplier of the matched food. Unmatched items are flagged new.
+async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
+  try {
+    const token = getToken()
+    const headers: HeadersInit = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const res = await fetch('/api/nutrition/foods/match', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ items: items.map((it) => ({ name: it.name, brand: it.brand })) }),
+    })
+    if (!res.ok) return items.map((it) => ({ ...it, matchChecked: true }))
+    const data = await res.json().catch(() => null)
+    const matches: Array<DbMatch | null> = Array.isArray(data?.matches) ? data.matches : []
+    return items.map((it, i) => {
+      const m = matches[i]
+      if (!m) return { ...it, matchChecked: true, match: null }
+      // Preserve the eaten portion: how many DB servings ≈ the AI's calorie call.
+      const dbCal = m.nutrition?.calories ?? 0
+      const aiCal = it.nutrition?.calories ?? 0
+      const mult = dbCal > 0 && aiCal > 0 ? Math.max(1, Math.round(aiCal / dbCal)) : it.multiplier
+      const servingLabel = m.servingSize && m.servingSize !== 1
+        ? `${m.servingSize} ${m.servingUnit}`
+        : `1 ${m.servingUnit}`
+      return {
+        ...it,
+        name: m.name,
+        brand: m.brand,
+        // Per-serving macros now come from the DB, not the AI guess.
+        nutrition: { ...it.nutrition, ...m.nutrition },
+        estimatedServing: mult > 1 ? `${mult} × ${servingLabel}` : servingLabel,
+        multiplier: mult,
+        matchChecked: true,
+        match: m,
+      }
+    })
+  } catch {
+    return items.map((it) => ({ ...it, matchChecked: true }))
+  }
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -136,6 +201,24 @@ export default function SnapPlateModal({
     if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
     else setSelectedTag(tag) // default to the page's time-of-day meal on open
   }, [open, tag])
+
+  // Reconcile new review items against the DB once they land (any source:
+  // photo, describe, or a correction). Runs in the background; the row badges
+  // update in place when it resolves. A ref guards against double-runs.
+  const reconcilingRef = useRef(false)
+  useEffect(() => {
+    if (state.phase !== 'review') { reconcilingRef.current = false; return }
+    if (reconcilingRef.current) return
+    if (!state.items.some((it) => !it.matchChecked)) return
+    reconcilingRef.current = true
+    const thumb = state.imageThumb
+    reconcileWithDb(state.items).then((reconciled) => {
+      reconcilingRef.current = false
+      setState((prev) => (prev.phase === 'review' && prev.imageThumb === thumb
+        ? { ...prev, items: reconciled }
+        : prev))
+    })
+  }, [state])
 
   const pickCamera = () => fileInputRef.current?.click()
   const pickGallery = () => galleryInputRef.current?.click()
@@ -298,18 +381,23 @@ export default function SnapPlateModal({
         ? new Date().toISOString()
         : `${dateKey}T12:00:00.000Z`
 
+      // Store PER-SERVING nutrition + servings (the server multiplies the two
+      // for totals — storing pre-scaled nutrition AND servings double-counted).
+      // Matched items link their DB foodId and carry the DB serving unit.
       const mealItems = activeItems.map((it) => {
-        const s = scaledNutrition(it, it.multiplier)
+        const n = it.nutrition
         return {
+          ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
           name: it.name,
-          servingSize: 1,
-          servingUnit: 'serving',
+          ...(it.brand ? { brand: it.brand } : {}),
+          servingSize: it.match ? it.match.servingSize : 1,
+          servingUnit: it.match ? it.match.servingUnit : 'serving',
           servings: it.multiplier,
           nutrition: {
-            calories: s.calories,
-            protein: s.protein,
-            carbs: s.carbs,
-            fats: s.fats,
+            calories: Math.round(n.calories ?? 0),
+            protein: Math.round((n.protein ?? 0) * 10) / 10,
+            carbs: Math.round((n.carbs ?? 0) * 10) / 10,
+            fats: Math.round((n.fats ?? 0) * 10) / 10,
           },
         }
       })
@@ -352,13 +440,20 @@ export default function SnapPlateModal({
       return false
     }
     const items = activeItems.map((it) => {
-      const s = scaledNutrition(it, it.multiplier)
+      const n = it.nutrition
       return {
+        ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
         name: it.name,
-        servingSize: 1,
-        servingUnit: 'serving',
+        ...(it.brand ? { brand: it.brand } : {}),
+        servingSize: it.match ? it.match.servingSize : 1,
+        servingUnit: it.match ? it.match.servingUnit : 'serving',
         servings: it.multiplier,
-        nutrition: { calories: s.calories, protein: s.protein, carbs: s.carbs, fats: s.fats },
+        nutrition: {
+          calories: Math.round(n.calories ?? 0),
+          protein: Math.round((n.protein ?? 0) * 10) / 10,
+          carbs: Math.round((n.carbs ?? 0) * 10) / 10,
+          fats: Math.round((n.fats ?? 0) * 10) / 10,
+        },
       }
     })
     try {
@@ -760,7 +855,19 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
                     <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${confidenceColor(item.confidence)}`}>
                       {confidenceLabel(item.confidence)}
                     </span>
+                    {item.match ? (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        {item.match.kind === 'food' ? 'In your foods' : item.match.kind === 'recipe' ? 'Recipe' : 'Your meal'}
+                      </span>
+                    ) : item.matchChecked ? (
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                        New
+                      </span>
+                    ) : null}
                   </div>
+                  {item.brand && (
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{item.brand}</p>
+                  )}
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">{item.estimatedServing}</p>
                   {!item.removed && (
                     <p className="mt-0.5 text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
