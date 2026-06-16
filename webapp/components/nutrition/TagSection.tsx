@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Sun,
@@ -315,6 +316,31 @@ export default function TagSection({
                             Apply meal template…
                           </button>
                         )}
+                        {/* Delete everything logged in this section. Only shown
+                            when there are actual logged entries (not plans). */}
+                        {flat.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setKebabOpen(false)
+                              const entries = flat.filter(fi => fi.item._id)
+                              if (entries.length === 0) return
+                              const ok = typeof window === 'undefined' || window.confirm(
+                                entries.length === 1
+                                  ? `Delete the logged entry in ${label}?`
+                                  : `Delete all ${entries.length} logged entries in ${label}?`,
+                              )
+                              if (!ok) return
+                              for (const fi of entries) {
+                                onRemoveEntry(fi.logId, String(fi.item._id))
+                              }
+                            }}
+                            className="mt-0.5 flex w-full items-center gap-2 rounded border-t border-zinc-100 px-2 py-1.5 text-left text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-zinc-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {flat.length === 1 ? 'Delete logged entry' : 'Delete logged entries'}
+                          </button>
+                        )}
                       </motion.div>
                     </>
                   )}
@@ -522,6 +548,25 @@ interface ItemRowProps {
 function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Anchor the menu to the kebab's on-screen position and render it via a
+  // portal so the section card's overflow-hidden can't clip it (this was
+  // cutting off "Delete" on the last item). Flip upward when near the bottom.
+  const kebabRef = useRef<HTMLButtonElement>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+
+  const toggleMenu = () => {
+    if (menuOpen) { setMenuOpen(false); return }
+    const r = kebabRef.current?.getBoundingClientRect()
+    if (r) {
+      const MENU_H = 92 // approx height of the 2-item menu
+      const openUp = window.innerHeight - r.bottom < MENU_H + 16
+      setMenuPos({
+        top: openUp ? r.top - MENU_H - 6 : r.bottom + 6,
+        right: window.innerWidth - r.right,
+      })
+    }
+    setMenuOpen(true)
+  }
   const totalCalories = Math.round((item.nutrition.calories ?? 0) * (item.servings ?? 1))
   // Prefer the user's actual logged quantity + unit when present (PR 4
   // provenance). Old log rows fall back to the legacy "X servings · servingSize"
@@ -562,7 +607,8 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
 
         {/* Per-entry actions menu (edit / delete) */}
         <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o) }}
+          ref={kebabRef}
+          onClick={(e) => { e.stopPropagation(); toggleMenu() }}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           aria-label="Entry options"
         >
@@ -570,16 +616,19 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
         </button>
       </div>
 
-      {menuOpen && (
+      {menuOpen && menuPos && typeof document !== 'undefined' && createPortal(
         <>
           {/* Backdrop closes the menu */}
           <button
-            className="fixed inset-0 z-10 cursor-default"
+            className="fixed inset-0 z-[60] cursor-default"
             aria-hidden="true"
             tabIndex={-1}
             onClick={() => setMenuOpen(false)}
           />
-          <div className="absolute right-2 top-11 z-20 w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <div
+            className="fixed z-[61] w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
             <button
               onClick={() => { setMenuOpen(false); onEdit() }}
               className="flex w-full items-center gap-2.5 px-3 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -595,7 +644,8 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
               Delete
             </button>
           </div>
-        </>
+        </>,
+        document.body,
       )}
 
       <AnimatePresence>
