@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, ArrowRight } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, Send } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -38,7 +38,8 @@ interface ReviewItem extends EstimatedPlateItem {
 type ModalState =
   | { phase: 'idle' }
   | { phase: 'describe' }
-  | { phase: 'loading' }
+  | { phase: 'compose'; dataUrl: string }
+  | { phase: 'loading'; loadingMsg: string }
   | { phase: 'error'; message: string }
   | { phase: 'review'; items: ReviewItem[]; imageThumb: string }
   | { phase: 'logging' }
@@ -114,13 +115,14 @@ export default function SnapPlateModal({
   const galleryInputRef = useRef<HTMLInputElement>(null) // upload from library (no capture)
   const [state, setState] = useState<ModalState>({ phase: 'idle' })
   const [describeText, setDescribeText] = useState('')
+  const [composeNote, setComposeNote] = useState('')
   const { toast, showToast } = useToast(3500)
 
   useLockScroll(open)
 
   // Reset to the chooser when the modal closes so it opens fresh each time.
   useEffect(() => {
-    if (!open) { setState({ phase: 'idle' }); setDescribeText('') }
+    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
   }, [open])
 
   const pickCamera = () => fileInputRef.current?.click()
@@ -131,8 +133,9 @@ export default function SnapPlateModal({
     make: () => Promise<PlateEstimate>,
     imageThumb: string,
     failMsg: string,
+    loadingMsg = 'Reading your plate…',
   ) => {
-    setState({ phase: 'loading' })
+    setState({ phase: 'loading', loadingMsg })
     try {
       const estimate = await make()
       if (!estimate.items || estimate.items.length === 0) {
@@ -153,25 +156,52 @@ export default function SnapPlateModal({
       () => plateEstimator.estimateFromText({ description: t }, { userId: '' }),
       '',
       "Couldn't estimate that — try adding a little more detail.",
+      'Estimating…',
     )
   }
 
-  // Correct a prior estimate by text. If it came from a PHOTO, re-run the vision
-  // pass with the original image + the correction as a note (best accuracy). If it
-  // came from "describe it" (no image), refine via the text task.
-  const handleCorrect = useCallback((priorItems: ReviewItem[], imageThumb: string, correction: string) => {
+  // Submit the compose phase: photo + optional note → vision estimate.
+  const handleComposeEstimate = (dataUrl: string, note: string) => {
+    const noteArg = note.trim() || undefined
+    runEstimate(
+      () => plateEstimator.estimate(dataUrl, { userId: '' }, noteArg),
+      dataUrl,
+      "Couldn't read that plate — try a clearer, well-lit photo.",
+      'Reading your plate…',
+    )
+  }
+
+  // Correct a prior estimate by text. On failure, stays on review + shows a toast.
+  // If it came from a PHOTO, re-run the vision pass with the original image + correction
+  // as a note (best accuracy). If text-only (no image), refine via the text task.
+  const handleCorrect = useCallback(async (priorItems: ReviewItem[], imageThumb: string, correction: string) => {
     const c = correction.trim()
     if (!c) return
-    const failMsg = "Couldn't apply that correction — try rephrasing."
-    if (imageThumb.startsWith('data:')) {
-      runEstimate(() => plateEstimator.estimate(imageThumb, { userId: '' }, c), imageThumb, failMsg)
-    } else {
-      const prior: EstimatedPlateItem[] = priorItems
-        .filter((it) => !it.removed)
-        .map(({ name, estimatedServing, nutrition, confidence }) => ({ name, estimatedServing, nutrition, confidence }))
-      runEstimate(() => plateEstimator.estimateFromText({ priorEstimate: prior, correction: c }, { userId: '' }), '', failMsg)
+    setState({ phase: 'loading', loadingMsg: 'Applying correction…' })
+    try {
+      let estimate: PlateEstimate
+      if (imageThumb.startsWith('data:')) {
+        estimate = await plateEstimator.estimate(imageThumb, { userId: '' }, c)
+      } else {
+        const prior: EstimatedPlateItem[] = priorItems
+          .filter((it) => !it.removed)
+          .map(({ name, estimatedServing, nutrition, confidence }) => ({ name, estimatedServing, nutrition, confidence }))
+        estimate = await plateEstimator.estimateFromText({ priorEstimate: prior, correction: c }, { userId: '' })
+      }
+      if (!estimate.items || estimate.items.length === 0) {
+        // Return to the review with the original items + show a toast.
+        setState({ phase: 'review', items: priorItems, imageThumb })
+        showToast("Couldn't apply that — try rephrasing.", 'error')
+        return
+      }
+      setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
+    } catch (err) {
+      if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] correction error', err)
+      // Stay on review with original items.
+      setState({ phase: 'review', items: priorItems, imageThumb })
+      showToast("Couldn't apply that — try rephrasing.", 'error')
     }
-  }, [runEstimate])
+  }, [showToast])
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -183,40 +213,17 @@ export default function SnapPlateModal({
       return
     }
 
-    setState({ phase: 'loading' })
+    // Briefly show loading while resizing, then drop into the compose step.
+    setState({ phase: 'loading', loadingMsg: 'Preparing image…' })
 
     try {
       const resized = await resizeImageToBlob(file, { maxDim: 1024, quality: 0.6 })
       const dataUrl = await blobToDataUrl(resized)
-
-      // Build a small thumbnail for the review screen header.
-      const imageThumb = dataUrl
-
-      // ctx: minimal — vision doesn't depend on user context.
-      const estimate: PlateEstimate = await plateEstimator.estimate(dataUrl, { userId: '' })
-
-      if (!estimate.items || estimate.items.length === 0) {
-        setState({
-          phase: 'error',
-          message: "Couldn't read that plate — try a clearer, well-lit photo.",
-        })
-        return
-      }
-
-      setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
+      setComposeNote('')
+      setState({ phase: 'compose', dataUrl })
     } catch (err) {
-      if (err instanceof PlateUnavailableError) {
-        setState({
-          phase: 'error',
-          message: "Couldn't read that plate — try a clearer, well-lit photo.",
-        })
-      } else {
-        console.error('[SnapPlateModal] plate estimate error', err)
-        setState({
-          phase: 'error',
-          message: "Something went wrong. Try a clearer, well-lit photo.",
-        })
-      }
+      console.error('[SnapPlateModal] image resize error', err)
+      setState({ phase: 'error', message: 'Could not load that image. Please try again.' })
     }
   }, [])
 
@@ -388,7 +395,7 @@ export default function SnapPlateModal({
               {/* Body */}
               <div className="flex-1 overflow-y-auto overscroll-contain">
 
-                {/* Idle — choose camera or upload */}
+                {/* Idle — choose camera, upload, or describe */}
                 {state.phase === 'idle' && (
                   <div className="flex flex-col items-center justify-center gap-6 py-16 px-6 text-center">
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
@@ -397,7 +404,7 @@ export default function SnapPlateModal({
                     <div>
                       <p className="font-semibold text-zinc-900 dark:text-white">Snap or upload your plate</p>
                       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        Take a photo now, or pick one from your library.
+                        Take a photo, pick one from your library, or just describe what you ate.
                       </p>
                     </div>
                     <div className="flex w-full max-w-xs flex-col gap-2.5">
@@ -464,6 +471,17 @@ export default function SnapPlateModal({
                   </div>
                 )}
 
+                {/* Compose — image preview + optional note before estimating */}
+                {state.phase === 'compose' && (
+                  <ComposeBody
+                    dataUrl={state.dataUrl}
+                    note={composeNote}
+                    onNoteChange={setComposeNote}
+                    onBack={() => setState({ phase: 'idle' })}
+                    onEstimate={() => handleComposeEstimate(state.dataUrl, composeNote)}
+                  />
+                )}
+
                 {/* Loading */}
                 {state.phase === 'loading' && (
                   <div className="flex flex-col items-center justify-center gap-4 py-20 px-6 text-center">
@@ -471,7 +489,7 @@ export default function SnapPlateModal({
                       <Loader2 className="h-7 w-7 animate-spin text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <div>
-                      <p className="font-semibold text-zinc-900 dark:text-white">Reading your plate&hellip;</p>
+                      <p className="font-semibold text-zinc-900 dark:text-white">{state.loadingMsg}</p>
                       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">This can take up to 30 seconds.</p>
                     </div>
                   </div>
@@ -545,6 +563,63 @@ export default function SnapPlateModal({
   )
 }
 
+// ── ComposeBody ───────────────────────────────────────────────────────────────
+
+interface ComposeBodyProps {
+  dataUrl: string
+  note: string
+  onNoteChange: (v: string) => void
+  onBack: () => void
+  onEstimate: () => void
+}
+
+function ComposeBody({ dataUrl, note, onNoteChange, onBack, onEstimate }: ComposeBodyProps) {
+  return (
+    <div className="flex flex-col gap-4 px-4 py-4">
+      {/* Image preview */}
+      <div className="relative overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800" style={{ height: 200 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={dataUrl}
+          alt="Your photo"
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+      </div>
+
+      {/* Optional description */}
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Add a note <span className="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+        </label>
+        <textarea
+          value={note}
+          onChange={(e) => onNoteChange(e.target.value)}
+          rows={3}
+          placeholder="e.g. these are 6 carnitas tacos — add context if it helps"
+          className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          Back
+        </button>
+        <button
+          onClick={onEstimate}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
+        >
+          <Camera className="h-4 w-4" />
+          Estimate
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── ReviewBody ────────────────────────────────────────────────────────────────
 
 interface ReviewBodyProps {
@@ -599,7 +674,7 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
           aria-label="Apply correction"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white transition-colors hover:bg-emerald-700 disabled:opacity-40"
         >
-          <ArrowRight className="h-4 w-4" />
+          <Send className="h-4 w-4" />
         </button>
       </div>
 
