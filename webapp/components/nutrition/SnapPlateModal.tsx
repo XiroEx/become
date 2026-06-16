@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, Send } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, Send, BookmarkPlus } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -340,6 +340,52 @@ export default function SnapPlateModal({
     }
   }
 
+  // Save the current items as a reusable meal/recipe template (does NOT log).
+  // Returns true on success so the footer can collapse its name input.
+  const handleSaveRecipe = async (name: string): Promise<boolean> => {
+    if (state.phase !== 'review') return false
+    const activeItems = state.items.filter((it) => !it.removed)
+    if (activeItems.length === 0) {
+      showToast('Add at least one item first.', 'error')
+      return false
+    }
+    const items = activeItems.map((it) => {
+      const s = scaledNutrition(it, it.multiplier)
+      return {
+        name: it.name,
+        servingSize: 1,
+        servingUnit: 'serving',
+        servings: it.multiplier,
+        nutrition: { calories: s.calories, protein: s.protein, carbs: s.carbs, fats: s.fats },
+      }
+    })
+    try {
+      const token = getToken()
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch('/api/meals', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name: name.trim(), items }),
+      })
+      if (res.status === 402 || res.status === 403) {
+        showToast('Saving recipes needs a Plus plan.', 'error')
+        return false
+      }
+      if (!res.ok) {
+        const d = await res.json().catch(() => null)
+        showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save recipe.", 'error')
+        return false
+      }
+      showToast(`Saved "${name.trim()}" to your recipes`, 'success')
+      return true
+    } catch (err) {
+      console.error('[SnapPlateModal] save recipe error', err)
+      showToast("Couldn't save recipe. Check your connection.", 'error')
+      return false
+    }
+  }
+
   if (!open) return null
 
   return (
@@ -562,6 +608,7 @@ export default function SnapPlateModal({
                   mealOptions={mealOptions}
                   onSelectTag={setSelectedTag}
                   onLog={handleLog}
+                  onSaveRecipe={handleSaveRecipe}
                   onRetry={handleRetry}
                 />
               )}
@@ -773,12 +820,24 @@ interface ReviewFooterProps {
   mealOptions: string[]
   onSelectTag: (t: string) => void
   onLog: () => void
+  onSaveRecipe: (name: string) => Promise<boolean>
   onRetry: () => void
 }
 
-function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onRetry }: ReviewFooterProps) {
+function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecipe, onRetry }: ReviewFooterProps) {
   const totals = runningTotal(items)
   const activeCount = items.filter((it) => !it.removed).length
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [recipeName, setRecipeName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const submitRecipe = async () => {
+    if (!recipeName.trim() || saving) return
+    setSaving(true)
+    const ok = await onSaveRecipe(recipeName)
+    setSaving(false)
+    if (ok) { setSaveOpen(false); setRecipeName('') }
+  }
 
   return (
     <div className="shrink-0 border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
@@ -834,6 +893,46 @@ function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onRetry }: 
           Add to <span className="capitalize">{tag}</span>
         </button>
       </div>
+
+      {/* Save as recipe — reusable named meal you can re-log later */}
+      {saveOpen ? (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="text"
+            value={recipeName}
+            onChange={(e) => setRecipeName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitRecipe() }}
+            placeholder="Recipe name"
+            autoFocus
+            className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+          />
+          <button
+            onClick={submitRecipe}
+            disabled={!recipeName.trim() || saving}
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Save
+          </button>
+          <button
+            onClick={() => { setSaveOpen(false); setRecipeName('') }}
+            disabled={saving}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            aria-label="Cancel"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setSaveOpen(true)}
+          disabled={activeCount === 0}
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-800 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
+        >
+          <BookmarkPlus className="h-3.5 w-3.5" />
+          Save as recipe
+        </button>
+      )}
     </div>
   )
 }
