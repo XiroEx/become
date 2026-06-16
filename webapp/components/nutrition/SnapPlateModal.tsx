@@ -460,7 +460,7 @@ export default function SnapPlateModal({
                       onChange={(e) => setDescribeText(e.target.value)}
                       autoFocus
                       rows={4}
-                      placeholder="e.g. 6 pork carnitas street tacos and a small cup of salsa verde"
+                      placeholder="Describe your whole meal — the food and portions, plus any sauces, dressings, sides and drinks. e.g. chicken burrito bowl with rice, black beans, guac and salsa, and a large iced tea"
                       className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
                     />
                     <div className="flex gap-2">
@@ -608,7 +608,7 @@ function ComposeBody({ dataUrl, note, onNoteChange, onBack, onEstimate }: Compos
           value={note}
           onChange={(e) => onNoteChange(e.target.value)}
           rows={3}
-          placeholder="e.g. these are 6 carnitas tacos — add context if it helps"
+          placeholder="Anything the photo misses — sauces, dressings, a side, a drink, or portion sizes"
           className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
         />
       </div>
