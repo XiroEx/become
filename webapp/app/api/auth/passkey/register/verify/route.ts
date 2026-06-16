@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('passkey register verify error:', err)
-    return NextResponse.json({ error: 'Passkey setup failed' }, { status: 400 })
+    // Forward the real reason (redAuth/WebAuthn messages are safe — no secrets)
+    // so the client can tell the user what actually went wrong.
+    const message = err instanceof Error ? err.message : 'Passkey setup failed'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }

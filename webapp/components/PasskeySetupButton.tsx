@@ -7,6 +7,26 @@
 import { useEffect, useState } from 'react'
 import { registerPasskey, passkeysSupported } from '@/lib/passkeyClient'
 
+// Turn a passkey ceremony failure into something the user can act on. WebAuthn
+// throws DOMExceptions with a stable `.name`; server-side failures arrive as a
+// plain Error whose message we forward verbatim.
+function describePasskeyError(err: unknown): string {
+  const e = err as { name?: string; message?: string }
+  switch (e?.name) {
+    case 'NotAllowedError':
+      return 'Passkey setup was cancelled or timed out. Make sure your device has Face ID / Touch ID or a screen lock set up, then try again.'
+    case 'InvalidStateError':
+      return 'A passkey for this account already exists on this device.'
+    case 'NotSupportedError':
+      return 'This device or browser does not support passkeys.'
+    case 'SecurityError':
+      return 'Passkeys are unavailable here. Open Become at https://become.redbtn.io in Safari or Chrome (not an in-app browser) and try again.'
+    case 'AbortError':
+      return 'Passkey setup was cancelled.'
+  }
+  return e?.message ? `Could not add a passkey: ${e.message}` : 'Could not add a passkey. Please try again.'
+}
+
 export default function PasskeySetupButton() {
   const [supported, setSupported] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -25,8 +45,9 @@ export default function PasskeySetupButton() {
     try {
       await registerPasskey()
       setStatus({ ok: true, msg: 'Passkey added. You can use it to sign in next time.' })
-    } catch {
-      setStatus({ ok: false, msg: 'Could not add a passkey. Please try again.' })
+    } catch (err) {
+      console.error('passkey registration failed:', err)
+      setStatus({ ok: false, msg: describePasskeyError(err) })
     } finally {
       setBusy(false)
     }
