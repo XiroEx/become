@@ -343,8 +343,9 @@ export default function SnapPlateModal({
   }, [])
 
   const handleRetry = () => {
-    // Back to the chooser so the user can take a new photo OR upload one.
-    setState({ phase: 'idle' })
+    // No chooser anymore — exit so the user re-taps Snap/Upload/Describe (each a
+    // direct action). Avoids surfacing an intermediate picker screen.
+    onClose()
   }
 
   const setMultiplier = (idx: number, delta: number) => {
@@ -633,7 +634,7 @@ export default function SnapPlateModal({
                     />
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setState({ phase: 'idle' })}
+                        onClick={onClose}
                         className="inline-flex items-center rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                       >
                         Back
@@ -655,7 +656,7 @@ export default function SnapPlateModal({
                     dataUrl={state.dataUrl}
                     note={composeNote}
                     onNoteChange={setComposeNote}
-                    onBack={() => setState({ phase: 'idle' })}
+                    onBack={onClose}
                     onEstimate={() => handleComposeEstimate(state.dataUrl, composeNote)}
                   />
                 )}
