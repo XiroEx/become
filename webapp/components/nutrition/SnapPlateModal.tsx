@@ -31,8 +31,12 @@ interface SnapPlateModalProps {
   /** Called after items are successfully POSTed to /api/meal-logs. */
   onLogged: () => void
   /** Which surface to open on. 'describe' jumps straight to the text flow;
+   *  'compose' opens directly on a pre-selected image (see initialImage);
    *  default 'idle' shows the snap/upload/describe chooser. */
-  initialPhase?: 'idle' | 'describe'
+  initialPhase?: 'idle' | 'describe' | 'compose'
+  /** A data-URL image to open straight into the compose step (used when the
+   *  caller — dash/search hub — already captured the photo via its own input). */
+  initialImage?: string | null
 }
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -186,6 +190,7 @@ export default function SnapPlateModal({
   onClose,
   onLogged,
   initialPhase = 'idle',
+  initialImage = null,
 }: SnapPlateModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
@@ -200,14 +205,19 @@ export default function SnapPlateModal({
 
   useLockScroll(open)
 
-  // Reset on close; on open, jump to the requested surface (chooser or describe).
+  // Reset on close; on open, jump to the requested surface.
   useEffect(() => {
     if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
     else {
       setSelectedTag(tag) // default to the page's time-of-day meal on open
-      setState({ phase: initialPhase === 'describe' ? 'describe' : 'idle' })
+      if (initialPhase === 'compose' && initialImage) {
+        setComposeNote('')
+        setState({ phase: 'compose', dataUrl: initialImage })
+      } else {
+        setState({ phase: initialPhase === 'describe' ? 'describe' : 'idle' })
+      }
     }
-  }, [open, tag, initialPhase])
+  }, [open, tag, initialPhase, initialImage])
 
   // Reconcile new review items against the DB once they land (any source:
   // photo, describe, or a correction). Runs in the background; the row badges
