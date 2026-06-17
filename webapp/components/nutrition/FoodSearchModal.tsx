@@ -317,6 +317,16 @@ export default function FoodSearchModal({
 
   useLockScroll(isOpen)
 
+  // Keep the search textarea one line tall when empty/short and grow only as
+  // text wraps. onChange handles typing; this covers mount/clear/open so it
+  // doesn't render at the default (too-tall) rows height.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+  }, [query, isOpen])
+
   // Sync state on open/close
   useEffect(() => {
     if (isOpen) {
