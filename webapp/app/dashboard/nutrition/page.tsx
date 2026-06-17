@@ -16,7 +16,7 @@ import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import type { IFoodEntry } from '@/models/NutritionLog'
@@ -730,6 +730,7 @@ function NutritionPageInner() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>Recipes</HeaderPillLink>
+            <HeaderPillLink href="/dashboard/nutrition/scans" Icon={History}>Scans</HeaderPillLink>
             <HeaderPillLink href={`/dashboard/timeline?date=${dateParam}`} Icon={Clock}>Timeline</HeaderPillLink>
           </div>
         </header>
