@@ -58,6 +58,30 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` }
 }
 
+// Cache the AI-composed session so we DON'T regenerate on every tab open. It
+// regenerates only after the cache is cleared on session finish, or once it's
+// older than 8 hours.
+const AI_PLAN_KEY = 'mind-ai-plan'
+const AI_PLAN_TTL = 8 * 60 * 60 * 1000 // 8h
+function readCachedAiPlan(): MindSessionPlan | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(AI_PLAN_KEY)
+    if (!raw) return null
+    const o = JSON.parse(raw) as { plan?: MindSessionPlan; ts?: number }
+    if (o?.plan && typeof o.ts === 'number' && Date.now() - o.ts < AI_PLAN_TTL) return o.plan
+  } catch { /* ignore */ }
+  return null
+}
+function writeCachedAiPlan(plan: MindSessionPlan): void {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(AI_PLAN_KEY, JSON.stringify({ plan, ts: Date.now() })) } catch { /* ignore */ }
+}
+function clearCachedAiPlan(): void {
+  if (typeof window === 'undefined') return
+  try { localStorage.removeItem(AI_PLAN_KEY) } catch { /* ignore */ }
+}
+
 export default function MindJourney() {
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
@@ -147,6 +171,11 @@ export default function MindJourney() {
   // the deterministic plan is used. Effective plan = AI when ready, else local.
   useEffect(() => {
     if (!progress || aiPlan) return
+    // Reuse a still-fresh cached plan instead of regenerating on every open.
+    // It only regenerates after a finished session (which clears the cache) or
+    // once the cache is older than 8h.
+    const cached = readCachedAiPlan()
+    if (cached) { setAiPlan(cached); return }
     let cancelled = false
     const ctx: SessionContext = {
       chapter: progress.chapter,
@@ -159,7 +188,11 @@ export default function MindJourney() {
       now: Date.now(),
       lastBreathAt,
     }
-    composeSessionAI(ctx).then((p) => { if (!cancelled && p) setAiPlan(p) })
+    composeSessionAI(ctx).then((p) => {
+      if (cancelled || !p) return
+      setAiPlan(p)
+      writeCachedAiPlan(p)
+    })
     return () => { cancelled = true }
   }, [progress, recentState, missionAction, recentKinds, lastBreathAt, aiPlan])
 
@@ -177,6 +210,8 @@ export default function MindJourney() {
         plan={effectivePlan}
         onExit={() => {
           setPlaying(false)
+          // Finished a session → drop the cached plan so a fresh one composes.
+          clearCachedAiPlan()
           setAiPlan(null)
           setLoading(true)
           load()
