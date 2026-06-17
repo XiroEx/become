@@ -21,6 +21,9 @@ import type { IMealNutrition } from '@/models/Meal'
 
 export interface EstimatedPlateItem {
   name: string
+  /** Brand when the model can read it on packaging or the user named it (e.g.
+   *  "Fairlife"). Used in DB matching exactly like a manual search's brand. */
+  brand?: string
   estimatedServing: string // e.g. "1 cup", "~150 g"
   nutrition: IMealNutrition
   confidence: number // 0..1
