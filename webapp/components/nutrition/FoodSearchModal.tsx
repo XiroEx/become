@@ -317,14 +317,16 @@ export default function FoodSearchModal({
 
   useLockScroll(isOpen)
 
-  // Keep the search textarea one line tall when empty/short and grow only as
-  // text wraps. onChange handles typing; this covers mount/clear/open so it
-  // doesn't render at the default (too-tall) rows height.
+  // Keep the search textarea one line tall when empty and grow only as the
+  // VALUE wraps. When empty, reset to the rows=1 height so a (long, wrapping)
+  // placeholder can't inflate it — otherwise the empty box renders taller than
+  // the box with content. onChange does the same while typing.
   useEffect(() => {
     const el = inputRef.current
     if (!el) return
+    if (!el.value) { el.style.height = ''; return }
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+    el.style.height = `${Math.min(Math.max(el.scrollHeight + 2, 42), 140)}px`
   }, [query, isOpen])
 
   // Sync state on open/close
@@ -1042,10 +1044,14 @@ export default function FoodSearchModal({
                     value={query}
                     onChange={(e) => {
                       setQuery(e.target.value)
-                      // Grow with content but never below the single-line height
-                      // (border-box makes scrollHeight ~2px short → would shrink).
-                      e.target.style.height = 'auto'
-                      e.target.style.height = `${Math.min(Math.max(e.target.scrollHeight + 2, 42), 140)}px`
+                      // Empty → let min-h govern (a wrapping placeholder must not
+                      // inflate the box). With content, grow but never below one
+                      // line (border-box makes scrollHeight ~2px short).
+                      if (!e.target.value) { e.target.style.height = '' }
+                      else {
+                        e.target.style.height = 'auto'
+                        e.target.style.height = `${Math.min(Math.max(e.target.scrollHeight + 2, 42), 140)}px`
+                      }
                     }}
                     placeholder="Search or describe foods and meals…"
                     className="block min-h-[42px] w-full resize-none overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-10 pr-3 text-sm leading-5 text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800"
