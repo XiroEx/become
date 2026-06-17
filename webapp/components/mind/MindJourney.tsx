@@ -58,26 +58,32 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` }
 }
 
-// Cache the AI-composed session so we DON'T regenerate on every tab open. It
-// regenerates only after the cache is cleared on session finish, or once it's
-// older than 8 hours.
+// Gate AI session composition so it does NOT run on every tab open. We store an
+// 8h cooldown timestamp that starts the MOMENT we attempt a composition — even
+// if the graph fails or returns nothing (so a failed/slow run can't re-fire on
+// the next render or reopen). It regenerates only after the cooldown lapses
+// (8h) or after a finished session clears it.
 const AI_PLAN_KEY = 'mind-ai-plan'
 const AI_PLAN_TTL = 8 * 60 * 60 * 1000 // 8h
-function readCachedAiPlan(): MindSessionPlan | null {
+function readAiPlanCache(): { plan: MindSessionPlan | null; ts: number } | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem(AI_PLAN_KEY)
     if (!raw) return null
     const o = JSON.parse(raw) as { plan?: MindSessionPlan; ts?: number }
-    if (o?.plan && typeof o.ts === 'number' && Date.now() - o.ts < AI_PLAN_TTL) return o.plan
+    if (typeof o?.ts === 'number') return { plan: o.plan ?? null, ts: o.ts }
   } catch { /* ignore */ }
   return null
 }
-function writeCachedAiPlan(plan: MindSessionPlan): void {
+function markAiAttempt(): void {
+  if (typeof window === 'undefined') return
+  try { localStorage.setItem(AI_PLAN_KEY, JSON.stringify({ ts: Date.now() })) } catch { /* ignore */ }
+}
+function writeAiPlan(plan: MindSessionPlan): void {
   if (typeof window === 'undefined') return
   try { localStorage.setItem(AI_PLAN_KEY, JSON.stringify({ plan, ts: Date.now() })) } catch { /* ignore */ }
 }
-function clearCachedAiPlan(): void {
+function clearAiPlan(): void {
   if (typeof window === 'undefined') return
   try { localStorage.removeItem(AI_PLAN_KEY) } catch { /* ignore */ }
 }
@@ -171,11 +177,17 @@ export default function MindJourney() {
   // the deterministic plan is used. Effective plan = AI when ready, else local.
   useEffect(() => {
     if (!progress || aiPlan) return
-    // Reuse a still-fresh cached plan instead of regenerating on every open.
-    // It only regenerates after a finished session (which clears the cache) or
-    // once the cache is older than 8h.
-    const cached = readCachedAiPlan()
-    if (cached) { setAiPlan(cached); return }
+    const cache = readAiPlanCache()
+    if (cache && Date.now() - cache.ts < AI_PLAN_TTL) {
+      // Within the 8h cooldown — reuse the cached plan if we have one, otherwise
+      // ride the deterministic plan. Either way, DON'T regenerate.
+      if (cache.plan) setAiPlan(cache.plan)
+      return
+    }
+    // Outside the cooldown (or first ever): compose once. Start the cooldown
+    // synchronously NOW so settling deps / quick reopens can't re-fire it, even
+    // if the graph is slow or returns nothing.
+    markAiAttempt()
     let cancelled = false
     const ctx: SessionContext = {
       chapter: progress.chapter,
@@ -191,7 +203,7 @@ export default function MindJourney() {
     composeSessionAI(ctx).then((p) => {
       if (cancelled || !p) return
       setAiPlan(p)
-      writeCachedAiPlan(p)
+      writeAiPlan(p)
     })
     return () => { cancelled = true }
   }, [progress, recentState, missionAction, recentKinds, lastBreathAt, aiPlan])
@@ -210,8 +222,8 @@ export default function MindJourney() {
         plan={effectivePlan}
         onExit={() => {
           setPlaying(false)
-          // Finished a session → drop the cached plan so a fresh one composes.
-          clearCachedAiPlan()
+          // Finished a session → clear the cooldown so a fresh one composes.
+          clearAiPlan()
           setAiPlan(null)
           setLoading(true)
           load()
