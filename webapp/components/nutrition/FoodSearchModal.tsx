@@ -1068,7 +1068,7 @@ export default function FoodSearchModal({
                         onClick={() => onDescribe(query)}
                         aria-label="Describe this meal to estimate macros"
                         title="Describe → estimate macros"
-                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm transition-colors hover:bg-emerald-700"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
                       >
                         <PencilLine className="h-4 w-4" />
                       </button>
