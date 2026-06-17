@@ -15,6 +15,7 @@ import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import { composeSession } from '@/lib/mind/composeSession'
 import { composeSessionAI } from '@/lib/mind/aiEngine'
+import { MIND_AI_PLAN_KEY } from '@/lib/mind/sessionCache'
 import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
@@ -63,7 +64,7 @@ function authHeaders(): HeadersInit {
 // if the graph fails or returns nothing (so a failed/slow run can't re-fire on
 // the next render or reopen). It regenerates only after the cooldown lapses
 // (8h) or after a finished session clears it.
-const AI_PLAN_KEY = 'mind-ai-plan'
+const AI_PLAN_KEY = MIND_AI_PLAN_KEY
 const AI_PLAN_TTL = 8 * 60 * 60 * 1000 // 8h
 function readAiPlanCache(): { plan: MindSessionPlan | null; ts: number } | null {
   if (typeof window === 'undefined') return null
