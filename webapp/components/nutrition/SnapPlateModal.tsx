@@ -37,6 +37,9 @@ interface SnapPlateModalProps {
   /** A data-URL image to open straight into the compose step (used when the
    *  caller — dash/search hub — already captured the photo via its own input). */
   initialImage?: string | null
+  /** Prefill text for the describe flow (used when the user typed in the search
+   *  box and hit the describe-send button). Implies initialPhase 'describe'. */
+  initialDescribe?: string | null
 }
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -193,6 +196,7 @@ export default function SnapPlateModal({
   onLogged,
   initialPhase = 'idle',
   initialImage = null,
+  initialDescribe = null,
 }: SnapPlateModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
@@ -217,11 +221,14 @@ export default function SnapPlateModal({
       if (initialPhase === 'compose' && initialImage) {
         setComposeNote('')
         setState({ phase: 'compose', dataUrl: initialImage })
+      } else if (initialPhase === 'describe') {
+        setDescribeText(initialDescribe ?? '')
+        setState({ phase: 'describe' })
       } else {
-        setState({ phase: initialPhase === 'describe' ? 'describe' : 'idle' })
+        setState({ phase: 'idle' })
       }
     }
-  }, [open, tag, initialPhase, initialImage])
+  }, [open, tag, initialPhase, initialImage, initialDescribe])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Reconcile new review items against the DB once they land (any source:
@@ -591,11 +598,17 @@ export default function SnapPlateModal({
               <div className="shrink-0 flex items-center justify-between border-b border-zinc-200 px-4 py-4 dark:border-zinc-800">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                    <Camera className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    {state.phase === 'describe'
+                      ? <PencilLine className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      : <Camera className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-zinc-900 dark:text-white">Snap your plate</h2>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">AI estimate &mdash; tweak before logging</p>
+                    <h2 className="text-base font-bold text-zinc-900 dark:text-white">
+                      {state.phase === 'describe' ? 'Describe your meal' : 'Your plate'}
+                    </h2>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {state.phase === 'describe' ? 'Add a photo too, or just use your words' : 'AI estimate — tweak before logging'}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -648,7 +661,7 @@ export default function SnapPlateModal({
                   </div>
                 )}
 
-                {/* Describe — text-only estimate (no photo) */}
+                {/* Describe — confirm the text, optionally add a photo, estimate. */}
                 {state.phase === 'describe' && (
                   <div className="flex flex-col gap-4 px-6 py-10">
                     <div className="text-center">
@@ -657,7 +670,7 @@ export default function SnapPlateModal({
                       </div>
                       <p className="font-semibold text-zinc-900 dark:text-white">Describe your meal</p>
                       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        In your words — we&apos;ll estimate the macros.
+                        In your words — add a photo too, or just estimate from the text.
                       </p>
                     </div>
                     <textarea
@@ -668,6 +681,22 @@ export default function SnapPlateModal({
                       placeholder="Describe your whole meal — the food and portions, plus any sauces, dressings, sides and drinks. e.g. chicken burrito bowl with rice, black beans, guac and salsa, and a large iced tea"
                       className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3.5 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
                     />
+                    {/* Optional photo — carries the typed text as the note into the
+                        compose/estimate step (the photo + your words together). */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => { setComposeNote(describeText); pickCamera() }}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        <Camera className="h-4 w-4" /> Add photo
+                      </button>
+                      <button
+                        onClick={() => { setComposeNote(describeText); pickGallery() }}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        <ImagePlus className="h-4 w-4" /> Upload photo
+                      </button>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         onClick={onClose}
