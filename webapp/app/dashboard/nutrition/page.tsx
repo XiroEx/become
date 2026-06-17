@@ -26,6 +26,7 @@ import { useToast } from '@/hooks/useToast'
 import { isFutureLocalDate } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
+import { invalidateMindSession } from '@/lib/mind/sessionCache'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -194,6 +195,7 @@ function NutritionPageInner() {
         i++
       }
       showToast(`Copied ${withItems.length} meal${withItems.length === 1 ? '' : 's'} from yesterday`, 'success')
+      invalidateMindSession()
       fetchMealLogs()
     } catch {
       showToast('Could not copy yesterday', 'error')
@@ -490,6 +492,7 @@ function NutritionPageInner() {
       }
 
       if (res.ok) {
+        invalidateMindSession() // new context → next mind load composes fresh
         await Promise.all([fetchMealLogs(), fetchTags()])
         setFoodSearchOpen(false)
         setFoodSearchAutoScan(false)
@@ -569,6 +572,7 @@ function NutritionPageInner() {
         body: JSON.stringify({ ...data, date: dateParam, tz }),
       })
       if (res.ok) {
+        invalidateMindSession()
         await fetchSideTables()
       }
     } catch (err) {
@@ -1072,7 +1076,7 @@ function NutritionPageInner() {
         initialPhase={snapPlatePhase}
         initialImage={snapInitialImage}
         onClose={() => setSnapPlateOpen(false)}
-        onLogged={() => { fetchMealLogs(); fetchTags() }}
+        onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags() }}
       />
 
       {/* Food Search Modal — log mode (default) and plan mode (when planForDate set). */}

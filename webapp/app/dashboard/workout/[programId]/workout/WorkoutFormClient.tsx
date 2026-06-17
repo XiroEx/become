@@ -11,6 +11,7 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary from "@/components/WorkoutSummary";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
+import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 
@@ -588,6 +589,8 @@ export default function WorkoutFormPage() {
           setProgramCompleted(true);
           setCompletedProgramName(data.programName || "");
         }
+        // Activity changed → next Mind load composes a fresh session.
+        invalidateMindSession();
       }
     } catch (error) {
       console.error("Error auto-saving:", error);
