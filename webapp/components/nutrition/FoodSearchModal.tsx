@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
+import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, ImagePlus, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import { getToken } from '@/lib/clientAuth'
@@ -46,10 +46,11 @@ interface FoodSearchModalProps {
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
   ) => void | Promise<void>
   autoScan?: boolean
-  // Capture hub: when provided, the modal shows "Snap a photo" / "Describe"
-  // buttons that hand off to the single AI capture surface (SnapPlate). Keeps
-  // every food-entry path in one place instead of scattered cameras.
+  // Capture hub: when provided, the modal shows Snap / Upload / Describe buttons
+  // that hand off to the single AI capture surface (SnapPlate). Keeps every
+  // food-entry path in one place instead of scattered cameras.
   onSnapPhoto?: () => void
+  onUpload?: () => void
   onDescribe?: () => void
 }
 
@@ -237,6 +238,7 @@ export default function FoodSearchModal({
   onSelectFood,
   autoScan = false,
   onSnapPhoto,
+  onUpload,
   onDescribe,
 }: FoodSearchModalProps) {
   const isPlanMode = mode === 'plan'
@@ -1032,37 +1034,60 @@ export default function FoodSearchModal({
                 )}
               </div>
 
-              {/* Capture row — one place for every way to add food. Type above,
-                  or scan a barcode, snap/upload a photo, or describe it. */}
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
-                  data-testid="barcode-scan-btn"
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                >
-                  <ScanBarcode className="h-5 w-5" />
-                  <span className="text-[11px] font-semibold">Barcode</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSnapPhoto?.()}
-                  disabled={!onSnapPhoto}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                >
-                  <Camera className="h-5 w-5" />
-                  <span className="text-[11px] font-semibold">Snap photo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onDescribe?.()}
-                  disabled={!onDescribe}
-                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                >
-                  <PencilLine className="h-5 w-5" />
-                  <span className="text-[11px] font-semibold">Describe</span>
-                </button>
-              </div>
+              {/* Capture row — one place for every way to add food. Collapses
+                  away (shrink + fade) the moment the user starts typing a search,
+                  so the results get the space. */}
+              <AnimatePresence initial={false}>
+                {!query.trim() && (
+                  <motion.div
+                    key="capture-row"
+                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                    animate={{ height: 'auto', opacity: 1, marginTop: 8 }}
+                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
+                        data-testid="barcode-scan-btn"
+                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                      >
+                        <ScanBarcode className="h-5 w-5" />
+                        <span className="text-[11px] font-semibold">Barcode</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSnapPhoto?.()}
+                        disabled={!onSnapPhoto}
+                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                      >
+                        <Camera className="h-5 w-5" />
+                        <span className="text-[11px] font-semibold">Snap</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUpload?.()}
+                        disabled={!onUpload}
+                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                      >
+                        <ImagePlus className="h-5 w-5" />
+                        <span className="text-[11px] font-semibold">Upload</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDescribe?.()}
+                        disabled={!onDescribe}
+                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                      >
+                        <PencilLine className="h-5 w-5" />
+                        <span className="text-[11px] font-semibold">Describe</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Barcode loading / error feedback */}
               {barcodeLoading && (
