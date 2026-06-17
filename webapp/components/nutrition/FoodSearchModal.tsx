@@ -1022,37 +1022,45 @@ export default function FoodSearchModal({
                   type. Searching works as normal; when there's text, a describe
                   send button slides in on the right (the box shrinks to make
                   room) to send the text straight to the describe flow. */}
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
-                <textarea
-                  ref={inputRef}
-                  autoFocus
-                  rows={1}
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value)
-                    e.target.style.height = 'auto'
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`
-                  }}
-                  placeholder="Search or describe foods and meals…"
-                  className={`block w-full resize-none overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-10 text-sm leading-5 text-zinc-900 placeholder-zinc-400 transition-[padding] focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800 ${query.trim() ? 'pr-12' : 'pr-4'}`}
-                />
-                <AnimatePresence>
+              <div className="flex items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                  <textarea
+                    ref={inputRef}
+                    autoFocus
+                    rows={1}
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value)
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`
+                    }}
+                    placeholder="Search or describe foods and meals…"
+                    className="block w-full resize-none overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-10 pr-3 text-sm leading-5 text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800"
+                  />
+                </div>
+                {/* Describe send — slides in beside the bar (which shrinks to make
+                    room) and is vertically centered via the flex row. */}
+                <AnimatePresence initial={false}>
                   {query.trim() && onDescribe && (
-                    <motion.button
+                    <motion.div
                       key="describe-send"
-                      type="button"
-                      initial={{ opacity: 0, x: 10, scale: 0.8 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
-                      exit={{ opacity: 0, x: 10, scale: 0.8 }}
-                      transition={{ duration: 0.16, ease: 'easeOut' }}
-                      onClick={() => onDescribe(query)}
-                      aria-label="Describe this meal to estimate macros"
-                      title="Describe → estimate macros"
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm transition-colors hover:bg-emerald-700"
+                      initial={{ width: 0, opacity: 0, marginLeft: 0 }}
+                      animate={{ width: 40, opacity: 1, marginLeft: 8 }}
+                      exit={{ width: 0, opacity: 0, marginLeft: 0 }}
+                      transition={{ duration: 0.18, ease: 'easeOut' }}
+                      className="shrink-0 overflow-hidden"
                     >
-                      <PencilLine className="h-4 w-4" />
-                    </motion.button>
+                      <button
+                        type="button"
+                        onClick={() => onDescribe(query)}
+                        aria-label="Describe this meal to estimate macros"
+                        title="Describe → estimate macros"
+                        className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm transition-colors hover:bg-emerald-700"
+                      >
+                        <PencilLine className="h-4 w-4" />
+                      </button>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>
