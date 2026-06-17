@@ -121,6 +121,7 @@ function NutritionPageInner() {
   const [snapPlateOpen, setSnapPlateOpen] = useState(false)
   const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe' | 'compose'>('idle')
   const [snapInitialImage, setSnapInitialImage] = useState<string | null>(null)
+  const [snapDescribeText, setSnapDescribeText] = useState<string | null>(null)
   // Hidden inputs so "Snap" (camera) and "Upload" (library) are distinct, direct
   // actions from both the dash and the search hub — each opens the right picker
   // within the user gesture, then drops straight into the plate compose step.
@@ -131,7 +132,7 @@ function NutritionPageInner() {
 
   const openSnapCamera = () => cameraInputRef.current?.click()
   const openSnapUpload = () => galleryInputRef.current?.click()
-  const openDescribe = () => { setSnapInitialImage(null); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }
+  const openDescribe = (text?: string) => { setSnapInitialImage(null); setSnapDescribeText(text ?? null); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }
 
   const handleCaptureFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1076,6 +1077,7 @@ function NutritionPageInner() {
         dateKey={dateParam}
         initialPhase={snapPlatePhase}
         initialImage={snapInitialImage}
+        initialDescribe={snapDescribeText}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags() }}
       />
@@ -1090,7 +1092,7 @@ function NutritionPageInner() {
         autoScan={foodSearchAutoScan}
         onSnapPhoto={() => { setFoodSearchOpen(false); openSnapCamera() }}
         onUpload={() => { setFoodSearchOpen(false); openSnapUpload() }}
-        onDescribe={() => { setFoodSearchOpen(false); openDescribe() }}
+        onDescribe={(text) => { setFoodSearchOpen(false); openDescribe(text) }}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null) }}
         onSelectFood={(entry, tag, loggedAt) => {
           if (planForDate) {
