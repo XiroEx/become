@@ -13,8 +13,8 @@
       "valueType": "object",
       "lastModifiedAt": "2026-06-15T19:27:01.057Z",
       "lastModifiedBy": "69a0b790a0ae8660290a78da",
-      "accessCount": 44,
-      "lastAccessedAt": "2026-06-16T04:08:23.430Z"
+      "accessCount": 141,
+      "lastAccessedAt": "2026-06-17T15:04:56.745Z"
     },
     {
       "key": "mind.coachReply",
@@ -65,8 +65,8 @@
       "valueType": "object",
       "lastModifiedAt": "2026-06-14T20:57:45.568Z",
       "lastModifiedBy": "system",
-      "accessCount": 30,
-      "lastAccessedAt": "2026-06-16T03:11:03.751Z"
+      "accessCount": 31,
+      "lastAccessedAt": "2026-06-17T00:11:42.221Z"
     },
     {
       "key": "consultant.nutrition",
@@ -224,8 +224,8 @@
       "valueType": "object",
       "lastModifiedAt": "2026-06-15T19:27:01.057Z",
       "lastModifiedBy": "69a0b790a0ae8660290a78da",
-      "accessCount": 39,
-      "lastAccessedAt": "2026-06-16T03:54:44.307Z"
+      "accessCount": 104,
+      "lastAccessedAt": "2026-06-17T15:04:56.602Z"
     },
     {
       "key": "workout.generateSession",
@@ -277,8 +277,8 @@
       "valueType": "object",
       "lastModifiedAt": "2026-06-14T20:57:45.568Z",
       "lastModifiedBy": "system",
-      "accessCount": 13,
-      "lastAccessedAt": "2026-06-15T19:13:54.849Z"
+      "accessCount": 14,
+      "lastAccessedAt": "2026-06-17T00:12:52.416Z"
     },
     {
       "key": "workout.generateProgram",
@@ -373,6 +373,7 @@
           "items": [
             {
               "name": "string",
+              "brand": "string",
               "estimatedServing": "string",
               "nutrition": {
                 "calories": 0,
@@ -393,13 +394,13 @@
             "string"
           ]
         },
-        "systemPrompt": "Look at the food in this photo, identify each distinct item, estimate a realistic serving and your best macro estimate. Be honest about uncertainty — this is an estimate. Output only the JSON."
+        "systemPrompt": "Look at the food in this photo, identify each distinct item, estimate a realistic serving and your best macro estimate. Be honest about uncertainty — this is an estimate. If the user provides a note or description in the context, use it to inform identification and counts — trust explicit counts and ingredients the user states (e.g. \"these are 6 carnitas tacos\" means 6 tacos of carnitas). Output only the JSON. Set `brand` only when the brand is clearly legible on packaging visible in the photo; otherwise omit it — do not guess brands."
       },
       "valueType": "object",
-      "lastModifiedAt": "2026-06-15T23:59:29.886Z",
-      "lastModifiedBy": "vision-enable",
-      "accessCount": 18,
-      "lastAccessedAt": "2026-06-16T04:02:24.653Z"
+      "lastModifiedAt": "2026-06-17T18:06:18.072Z",
+      "lastModifiedBy": "brand-field-add",
+      "accessCount": 41,
+      "lastAccessedAt": "2026-06-17T13:29:22.788Z"
     },
     {
       "key": "nutrition.productFind",
@@ -504,11 +505,12 @@
       "key": "nutrition.describeEstimate",
       "value": {
         "family": "structured",
-        "systemPrompt": "Estimate the nutrition of a meal from the user's words. The context may include: `description` (free text of what they ate), and/or `priorEstimate` (a previous item list you produced) plus `correction` (the user fixing it). If a correction + priorEstimate are present, return the FULL corrected estimate honoring the correction (e.g. change counts/items as told) while keeping the parts they didn't correct. Identify each distinct food item, estimate a realistic serving and your best macro estimate. Be honest about uncertainty. Output only the JSON.",
+        "systemPrompt": "Estimate a meal's items and macros from TEXT (no photo). The JSON context may contain `description` (free text of what they ate) and/or `priorEstimate` (an array of items you estimated before) plus `correction` (the user's text fix). Rules: if `priorEstimate` and `correction` are both present, return the CORRECTED FULL estimate honoring the correction — adjust the affected item(s) and scale their macros accordingly (e.g. \"it was 6 tacos, not 5\" → 6 tacos with macros scaled up), and keep any unaffected items unchanged. If only `description` is given, estimate the items from it. Identify each distinct food item, give a realistic serving and your best macro estimate, and be honest about uncertainty (set confidence). Output ONLY the JSON object. Set `brand` only when the brand is explicitly stated by the user in their description or note; otherwise omit it — do not guess brands.",
         "schema": {
           "items": [
             {
               "name": "string",
+              "brand": "string",
               "estimatedServing": "string",
               "nutrition": {
                 "calories": 0,
@@ -531,13 +533,13 @@
         }
       },
       "valueType": "object",
-      "lastModifiedAt": "2026-06-16T04:07:16.284Z",
-      "lastModifiedBy": "registry-add-describeEstimate",
-      "accessCount": 1,
-      "lastAccessedAt": "2026-06-16T04:08:23.275Z"
+      "lastModifiedAt": "2026-06-17T18:06:18.073Z",
+      "lastModifiedBy": "brand-field-add",
+      "accessCount": 8,
+      "lastAccessedAt": "2026-06-17T02:19:13.419Z"
     }
   ],
   "isArchived": false,
   "createdAt": "2026-06-14T20:57:45.568Z",
-  "updatedAt": "2026-06-16T04:08:23.431Z"
+  "updatedAt": "2026-06-17T18:06:18.073Z"
 }

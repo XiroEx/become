@@ -443,6 +443,40 @@ export default function SnapPlateModal({
         return
       }
 
+      // Save this scan to the user's history (best-effort — never block logging).
+      const logData = await res.json().catch(() => null)
+      const scanItems = activeItems.map((it) => {
+        const n = it.nutrition
+        return {
+          ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
+          name: it.name,
+          ...(it.brand ? { brand: it.brand } : {}),
+          estimatedServing: it.estimatedServing,
+          servingSize: it.match ? it.match.servingSize : 1,
+          servingUnit: it.match ? it.match.servingUnit : 'serving',
+          servings: it.multiplier,
+          nutrition: {
+            calories: Math.round(n.calories ?? 0),
+            protein: Math.round((n.protein ?? 0) * 10) / 10,
+            carbs: Math.round((n.carbs ?? 0) * 10) / 10,
+            fats: Math.round((n.fats ?? 0) * 10) / 10,
+          },
+          confidence: it.confidence,
+          ...(it.match ? { matchKind: it.match.kind } : {}),
+        }
+      })
+      fetch('/api/nutrition/scans', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          source: imageThumb ? 'photo' : 'describe',
+          tag: selectedTag,
+          items: scanItems,
+          loggedAt,
+          mealLogId: logData?.mealLog?._id ?? logData?._id,
+        }),
+      }).catch(() => { /* best-effort history */ })
+
       showToast(`${activeItems.length} item${activeItems.length === 1 ? '' : 's'} logged`, 'success')
       onLogged()
       onClose()
