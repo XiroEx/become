@@ -48,12 +48,13 @@ function kindFor(endpoint: string): string {
 export async function runAiTask(
   endpoint: string,
   body: Record<string, unknown>,
-  opts: { label?: string; meta?: Record<string, unknown> } = {},
+  opts: { label?: string; meta?: Record<string, unknown>; silent?: boolean } = {},
 ): Promise<AiTaskResult> {
   const rec = await runStore.startAndWait(endpoint, body, {
     kind: kindFor(endpoint),
     label: opts.label ?? labelFor(endpoint),
     meta: opts.meta,
+    silent: opts.silent,
   })
   if (!rec) return { ok: false, error: 'start_failed' }
   return {
