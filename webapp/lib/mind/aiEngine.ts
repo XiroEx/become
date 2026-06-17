@@ -162,7 +162,9 @@ function hydrate(ai: AiMove, ctx: SessionContext): Move | null {
 export async function composeSessionAI(ctx: SessionContext): Promise<MindSessionPlan | null> {
   let plan: AiPlan | null = null
   try {
-    const r = await runAiTask('/api/ai/mind/session', { context: ctx })
+    // Silent: background pre-composition, kept OUT of the global activity
+    // indicator so it doesn't toast "Composing your session…" on every open.
+    const r = await runAiTask('/api/ai/mind/session', { context: ctx }, { silent: true })
     if (!r.ok || !r.result || typeof r.result !== 'object') return null
     plan = r.result as AiPlan
   } catch {

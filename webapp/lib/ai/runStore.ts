@@ -92,7 +92,7 @@ class RunStore {
 
   /** Records still generating — drives the global activity indicator. */
   activeRuns(): RunRecord[] {
-    return this.getSnapshot().filter((r) => r.status === 'pending')
+    return this.getSnapshot().filter((r) => r.status === 'pending' && !r.silent)
   }
 
   private emit() {
