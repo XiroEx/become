@@ -205,7 +205,9 @@ export default function SnapPlateModal({
 
   useLockScroll(open)
 
-  // Reset on close; on open, jump to the requested surface.
+  // Reset on close; on open, jump to the requested surface. Legitimate
+  // sync-to-prop effect (modal state follows open/initialPhase/initialImage).
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
     else {
@@ -218,6 +220,7 @@ export default function SnapPlateModal({
       }
     }
   }, [open, tag, initialPhase, initialImage])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Reconcile new review items against the DB once they land (any source:
   // photo, describe, or a correction). Runs in the background; the row badges
