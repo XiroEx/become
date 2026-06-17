@@ -1622,7 +1622,8 @@ export default function LiveWorkoutPage() {
                         </div>
                         <input
                           type="number"
-                          inputMode="numeric"
+                          inputMode="decimal"
+                          step="any"
                           value={currentWeight}
                           onChange={(e) => updateCurrentInput("weight", e.target.value)}
                           placeholder="0"

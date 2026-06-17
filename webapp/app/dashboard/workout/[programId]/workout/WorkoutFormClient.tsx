@@ -1366,7 +1366,8 @@ export default function WorkoutFormPage() {
                                   <div className="col-span-4">
                                     <input
                                       type="number"
-                                      inputMode="numeric"
+                                      inputMode="decimal"
+                                      step="any"
                                       placeholder="0"
                                       value={set.weight}
                                       onChange={(e) => updateSet(originalIndex, roundIndex, "weight", e.target.value)}
