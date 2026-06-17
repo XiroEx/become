@@ -116,6 +116,7 @@ function NutritionPageInner() {
   const [foodSearchTag, setFoodSearchTag] = useState<string>('snack')
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [snapPlateOpen, setSnapPlateOpen] = useState(false)
+  const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe'>('idle')
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
   const { toast, showToast } = useToast(4000)
@@ -998,6 +999,7 @@ function NutritionPageInner() {
         tag={getDefaultTagForNow()}
         tagOptions={Array.from(new Set([...tagsResp.defaults, ...tagsResp.userTags]))}
         dateKey={dateParam}
+        initialPhase={snapPlatePhase}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { fetchMealLogs(); fetchTags() }}
       />
@@ -1010,6 +1012,8 @@ function NutritionPageInner() {
         viewedDate={planForDate ?? selectedDate}
         mode={planForDate ? 'plan' : 'log'}
         autoScan={foodSearchAutoScan}
+        onSnapPhoto={() => { setFoodSearchOpen(false); setSnapPlatePhase('idle'); setSnapPlateOpen(true) }}
+        onDescribe={() => { setFoodSearchOpen(false); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null) }}
         onSelectFood={(entry, tag, loggedAt) => {
           if (planForDate) {
