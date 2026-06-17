@@ -125,6 +125,8 @@ function NutritionPageInner() {
   // within the user gesture, then drops straight into the plate compose step.
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
+  // Which dash capture dropdown is open: camera (photo/barcode) or upload (upload/describe).
+  const [captureMenu, setCaptureMenu] = useState<null | 'camera' | 'upload'>(null)
 
   const openSnapCamera = () => cameraInputRef.current?.click()
   const openSnapUpload = () => galleryInputRef.current?.click()
@@ -728,8 +730,8 @@ function NutritionPageInner() {
           </div>
         </header>
 
-        {/* Add food — a compact (fake) search tap + the four direct capture
-            actions as small icon buttons, all on one line. */}
+        {/* Add food — a compact (fake) search tap + two capture menus: a camera
+            (take photo / scan barcode) and an upload (upload photo / describe). */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => openFoodSearch(getDefaultTagForNow())}
@@ -738,34 +740,56 @@ function NutritionPageInner() {
             <Search className="h-4 w-4 shrink-0 text-zinc-400" />
             <span className="truncate text-sm text-zinc-400 dark:text-zinc-500">Search foods…</span>
           </button>
-          <button
-            onClick={() => openFoodSearch(getDefaultTagForNow(), true)}
-            aria-label="Scan barcode"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-          >
-            <ScanBarcode className="h-5 w-5" />
-          </button>
-          <button
-            onClick={openSnapCamera}
-            aria-label="Snap a photo"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-          >
-            <Camera className="h-5 w-5" />
-          </button>
-          <button
-            onClick={openSnapUpload}
-            aria-label="Upload a photo"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-          >
-            <ImagePlus className="h-5 w-5" />
-          </button>
-          <button
-            onClick={openDescribe}
-            aria-label="Describe a meal"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-          >
-            <PencilLine className="h-5 w-5" />
-          </button>
+
+          {/* Camera menu — take photo / scan barcode */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setCaptureMenu((m) => (m === 'camera' ? null : 'camera'))}
+              aria-label="Camera options"
+              aria-expanded={captureMenu === 'camera'}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
+            {captureMenu === 'camera' && (
+              <>
+                <button className="fixed inset-0 z-40 cursor-default" aria-hidden tabIndex={-1} onClick={() => setCaptureMenu(null)} />
+                <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  <button onClick={() => { setCaptureMenu(null); openSnapCamera() }} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    <Camera className="h-4 w-4" /> Take photo
+                  </button>
+                  <button onClick={() => { setCaptureMenu(null); openFoodSearch(getDefaultTagForNow(), true) }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    <ScanBarcode className="h-4 w-4" /> Scan barcode
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Upload menu — upload photo / describe */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setCaptureMenu((m) => (m === 'upload' ? null : 'upload'))}
+              aria-label="Upload options"
+              aria-expanded={captureMenu === 'upload'}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <ImagePlus className="h-5 w-5" />
+            </button>
+            {captureMenu === 'upload' && (
+              <>
+                <button className="fixed inset-0 z-40 cursor-default" aria-hidden tabIndex={-1} onClick={() => setCaptureMenu(null)} />
+                <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                  <button onClick={() => { setCaptureMenu(null); openSnapUpload() }} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    <ImagePlus className="h-4 w-4" /> Upload photo
+                  </button>
+                  <button onClick={() => { setCaptureMenu(null); openDescribe() }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                    <PencilLine className="h-4 w-4" /> Describe
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Hidden capture inputs feeding the plate flow (page-owned so both the
