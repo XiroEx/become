@@ -31,6 +31,9 @@ export interface RunRecord {
   updatedAt: number
   /** Surface-specific payload (e.g. conversation key, focus) for reattachment. */
   meta?: Record<string, unknown>
+  /** Background runs (e.g. mind session pre-composition) — tracked + persisted
+   *  but kept OUT of the global activity indicator so they don't toast. */
+  silent?: boolean
 }
 
 const LS_KEY = 'become.ai.runs.v1'
@@ -133,7 +136,7 @@ class RunStore {
   async start(
     endpoint: string,
     body: Record<string, unknown>,
-    opts: { kind: string; label: string; meta?: Record<string, unknown> },
+    opts: { kind: string; label: string; meta?: Record<string, unknown>; silent?: boolean },
   ): Promise<string | null> {
     let started: { runId?: string; ok?: boolean; reply?: string; text?: string; result?: unknown; unavailable?: boolean; fallback?: boolean } | null = null
     try {
@@ -153,7 +156,7 @@ class RunStore {
         status: started.ok ? 'done' : 'error',
         result: started.result, text: started.text ?? started.reply,
         error: started.ok ? undefined : (started.unavailable ? 'unavailable' : 'fallback'),
-        startedAt: now, updatedAt: now, meta: opts.meta,
+        startedAt: now, updatedAt: now, meta: opts.meta, silent: opts.silent,
       })
       this.emit()
       return id
@@ -161,7 +164,7 @@ class RunStore {
 
     const rec: RunRecord = {
       runId: started.runId, endpoint, kind: opts.kind, label: opts.label,
-      status: 'pending', startedAt: now, updatedAt: now, meta: opts.meta,
+      status: 'pending', startedAt: now, updatedAt: now, meta: opts.meta, silent: opts.silent,
     }
     this.runs.set(rec.runId, rec)
     this.emit()
@@ -173,7 +176,7 @@ class RunStore {
   async startAndWait(
     endpoint: string,
     body: Record<string, unknown>,
-    opts: { kind: string; label: string; meta?: Record<string, unknown> },
+    opts: { kind: string; label: string; meta?: Record<string, unknown>; silent?: boolean },
   ): Promise<RunRecord | null> {
     const id = await this.start(endpoint, body, opts)
     if (!id) return null

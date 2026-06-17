@@ -105,6 +105,8 @@ export default function MindJourney() {
   // the page loads so there's NO added wait at Begin: if it's ready we play it,
   // otherwise we fall back to the instant deterministic plan.
   const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null)
+  // True only while the AI is actively composing a session (shown on the hero).
+  const [composing, setComposing] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -189,6 +191,7 @@ export default function MindJourney() {
     // if the graph is slow or returns nothing.
     markAiAttempt()
     let cancelled = false
+    setComposing(true)
     const ctx: SessionContext = {
       chapter: progress.chapter,
       unlockedSystems: progress.unlockedSystems,
@@ -200,11 +203,13 @@ export default function MindJourney() {
       now: Date.now(),
       lastBreathAt,
     }
-    composeSessionAI(ctx).then((p) => {
-      if (cancelled || !p) return
-      setAiPlan(p)
-      writeAiPlan(p)
-    })
+    composeSessionAI(ctx)
+      .then((p) => {
+        if (cancelled || !p) return
+        setAiPlan(p)
+        writeAiPlan(p)
+      })
+      .finally(() => { if (!cancelled) setComposing(false) })
     return () => { cancelled = true }
   }, [progress, recentState, missionAction, recentKinds, lastBreathAt, aiPlan])
 
@@ -313,22 +318,46 @@ export default function MindJourney() {
 
       {/* Centered focus area — fills the space below the header */}
       <div className="flex flex-1 flex-col justify-center">
-      {/* The next move */}
-      {effectivePlan && (
+      {/* The next move — while the AI is composing, the hero shows the loader
+          (no Begin button); otherwise the ready session. Clean solid card, no
+          gradient. */}
+      {composing ? (
+        <motion.div
+          key="composing"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="flex w-full flex-col items-center justify-center gap-5 rounded-3xl bg-zinc-900 p-12 text-center text-white dark:bg-zinc-800"
+        >
+          <span className="relative flex h-14 w-14 items-center justify-center">
+            <motion.span
+              className="absolute inset-0 rounded-full"
+              style={{ background: 'conic-gradient(from 0deg, #a78bfa, #34d399, transparent)' }}
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
+            />
+            <span className="absolute inset-[3px] rounded-full bg-zinc-900 dark:bg-zinc-800" />
+            <Brain className="relative h-6 w-6 text-white" />
+          </span>
+          <div>
+            <h2 className="text-xl font-extrabold">Composing your session…</h2>
+            <p className="mt-1 text-sm text-white/60">Tailoring it to where you are today.</p>
+          </div>
+        </motion.div>
+      ) : effectivePlan ? (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
             onClick={begin}
-            className="group relative w-full overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-green-600 p-6 text-left text-white shadow-lg transition-transform active:scale-[0.98]"
+            className="group relative w-full rounded-3xl bg-zinc-900 p-6 text-left text-white shadow-sm transition-transform active:scale-[0.98] dark:bg-zinc-800"
           >
-            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/70">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/50">
               {completedToday ? 'Go again' : 'Today'}
             </p>
             <h2 className="mt-2 text-3xl font-extrabold">{effectivePlan.intro.title}</h2>
-            <p className="mt-2 max-w-xs text-sm text-white/80">{effectivePlan.intro.subtitle}</p>
+            <p className="mt-2 max-w-xs text-sm text-white/70">{effectivePlan.intro.subtitle}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {effectivePlan.moves.map((m) => (
-                <span key={m.id} className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
+                <span key={m.id} className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white/90">
                   {MOVE_CHIP[m.kind]}
                 </span>
               ))}
@@ -338,14 +367,14 @@ export default function MindJourney() {
               <ArrowRight className="h-5 w-5" />
             </span>
             {completedToday && (
-              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-white/70">
+              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-white/60">
                 <Check className="h-3.5 w-3.5" />
                 Done today{streak > 0 ? ` · ${streak}-day streak` : ''}
               </p>
             )}
           </button>
         </motion.div>
-      )}
+      ) : null}
 
       {/* More → Arsenal */}
       <Link
