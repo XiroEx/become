@@ -6,12 +6,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dumbbell, X } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
+import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import { readQuickSession, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { invalidateMindSession } from "@/lib/mind/sessionCache";
 
 interface SetData {
   reps: string;
@@ -785,6 +787,7 @@ export default function LiveWorkoutPage() {
         body: JSON.stringify(saveBody),
       });
       if (isComplete && res.ok) {
+        invalidateMindSession(); // logged a session → next mind load composes fresh
         const data = await res.json();
         if (data.programCompleted) {
           setProgramCompleted(true);
@@ -792,6 +795,8 @@ export default function LiveWorkoutPage() {
         }
         // Clear the draft — workout is done, no need to resume
         try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
+        // Activity changed → next Mind load composes a fresh session.
+        invalidateMindSession();
       }
     } catch (error) {
       console.error("Error saving workout:", error);
