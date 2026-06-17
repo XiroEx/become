@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, ImagePlus, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
+import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import { getToken } from '@/lib/clientAuth'
@@ -51,7 +51,8 @@ interface FoodSearchModalProps {
   // food-entry path in one place instead of scattered cameras.
   onSnapPhoto?: () => void
   onUpload?: () => void
-  onDescribe?: () => void
+  // Receives the current search-box text to seed the describe flow.
+  onDescribe?: (text: string) => void
 }
 
 interface AlternateServing {
@@ -311,7 +312,7 @@ export default function FoodSearchModal({
   const [saveToast, setSaveToast] = useState<string | null>(null)
   const toastTimerRef = useRef<NodeJS.Timeout>(undefined)
 
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
 
   useLockScroll(isOpen)
@@ -1017,26 +1018,43 @@ export default function FoodSearchModal({
                 </div>
               )}
 
-              {/* Search input */}
+              {/* Search / describe box — a textarea that grows vertically as you
+                  type. Searching works as normal; when there's text, a describe
+                  send button slides in on the right (the box shrinks to make
+                  room) to send the text straight to the describe flow. */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <input
+                <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
+                <textarea
                   ref={inputRef}
-                  type="text"
                   autoFocus
+                  rows={1}
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search foods and meals…"
-                  className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800"
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                    e.target.style.height = 'auto'
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`
+                  }}
+                  placeholder="Search or describe foods and meals…"
+                  className={`block w-full resize-none overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 py-2.5 pl-10 text-sm leading-5 text-zinc-900 placeholder-zinc-400 transition-[padding] focus:border-zinc-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:bg-zinc-800 ${query.trim() ? 'pr-12' : 'pr-4'}`}
                 />
-                {query && (
-                  <button
-                    onClick={() => setQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+                <AnimatePresence>
+                  {query.trim() && onDescribe && (
+                    <motion.button
+                      key="describe-send"
+                      type="button"
+                      initial={{ opacity: 0, x: 10, scale: 0.8 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 10, scale: 0.8 }}
+                      transition={{ duration: 0.16, ease: 'easeOut' }}
+                      onClick={() => onDescribe(query)}
+                      aria-label="Describe this meal to estimate macros"
+                      title="Describe → estimate macros"
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm transition-colors hover:bg-emerald-700"
+                    >
+                      <PencilLine className="h-4 w-4" />
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Capture row — one place for every way to add food. Collapses
@@ -1052,42 +1070,35 @@ export default function FoodSearchModal({
                     transition={{ duration: 0.18, ease: 'easeOut' }}
                     className="overflow-hidden"
                   >
-                    <div className="grid grid-cols-4 gap-2">
+                    {/* Three wider, shorter actions — describe now lives on the
+                        search box, so it's dropped from this row. */}
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
                         data-testid="barcode-scan-btn"
-                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                       >
-                        <ScanBarcode className="h-5 w-5" />
-                        <span className="text-[11px] font-semibold">Barcode</span>
+                        <ScanBarcode className="h-4 w-4" />
+                        <span className="text-xs font-semibold">Barcode</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => onSnapPhoto?.()}
                         disabled={!onSnapPhoto}
-                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                       >
-                        <Camera className="h-5 w-5" />
-                        <span className="text-[11px] font-semibold">Snap</span>
+                        <Camera className="h-4 w-4" />
+                        <span className="text-xs font-semibold">Snap</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => onUpload?.()}
                         disabled={!onUpload}
-                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                       >
-                        <ImagePlus className="h-5 w-5" />
-                        <span className="text-[11px] font-semibold">Upload</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDescribe?.()}
-                        disabled={!onDescribe}
-                        className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                      >
-                        <PencilLine className="h-5 w-5" />
-                        <span className="text-[11px] font-semibold">Describe</span>
+                        <Upload className="h-4 w-4" />
+                        <span className="text-xs font-semibold">Upload</span>
                       </button>
                     </div>
                   </motion.div>
