@@ -728,46 +728,44 @@ function NutritionPageInner() {
           </div>
         </header>
 
-        {/* Add food — a compact (fake) search tap that opens the hub, plus the
-            four direct capture actions mirrored from the hub modal. */}
-        <div className="space-y-2">
+        {/* Add food — a compact (fake) search tap + the four direct capture
+            actions as small icon buttons, all on one line. */}
+        <div className="flex items-center gap-2">
           <button
             onClick={() => openFoodSearch(getDefaultTagForNow())}
-            className="flex w-full items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <Search className="h-4 w-4 shrink-0 text-zinc-400" />
-            <span className="text-sm text-zinc-400 dark:text-zinc-500">Search foods…</span>
+            <span className="truncate text-sm text-zinc-400 dark:text-zinc-500">Search foods…</span>
           </button>
-          <div className="grid grid-cols-4 gap-2">
-            <button
-              onClick={() => openFoodSearch(getDefaultTagForNow(), true)}
-              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <ScanBarcode className="h-5 w-5" />
-              <span className="text-[11px] font-semibold">Barcode</span>
-            </button>
-            <button
-              onClick={openSnapCamera}
-              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <Camera className="h-5 w-5" />
-              <span className="text-[11px] font-semibold">Snap</span>
-            </button>
-            <button
-              onClick={openSnapUpload}
-              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <ImagePlus className="h-5 w-5" />
-              <span className="text-[11px] font-semibold">Upload</span>
-            </button>
-            <button
-              onClick={openDescribe}
-              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
-            >
-              <PencilLine className="h-5 w-5" />
-              <span className="text-[11px] font-semibold">Describe</span>
-            </button>
-          </div>
+          <button
+            onClick={() => openFoodSearch(getDefaultTagForNow(), true)}
+            aria-label="Scan barcode"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+          >
+            <ScanBarcode className="h-5 w-5" />
+          </button>
+          <button
+            onClick={openSnapCamera}
+            aria-label="Snap a photo"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+          >
+            <Camera className="h-5 w-5" />
+          </button>
+          <button
+            onClick={openSnapUpload}
+            aria-label="Upload a photo"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+          >
+            <ImagePlus className="h-5 w-5" />
+          </button>
+          <button
+            onClick={openDescribe}
+            aria-label="Describe a meal"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+          >
+            <PencilLine className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Hidden capture inputs feeding the plate flow (page-owned so both the
