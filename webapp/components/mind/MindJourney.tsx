@@ -14,9 +14,9 @@ import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import { composeSession } from '@/lib/mind/composeSession'
-import { composeSessionAI } from '@/lib/mind/aiEngine'
-import { MIND_AI_PLAN_KEY } from '@/lib/mind/sessionCache'
-import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
+import { readMindPlanCache, invalidateMindSession } from '@/lib/mind/sessionCache'
+import { precomposeMindSession } from '@/lib/mind/precompose'
+import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
 
@@ -59,36 +59,6 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` }
 }
 
-// Gate AI session composition so it does NOT run on every tab open. We store an
-// 8h cooldown timestamp that starts the MOMENT we attempt a composition — even
-// if the graph fails or returns nothing (so a failed/slow run can't re-fire on
-// the next render or reopen). It regenerates only after the cooldown lapses
-// (8h) or after a finished session clears it.
-const AI_PLAN_KEY = MIND_AI_PLAN_KEY
-const AI_PLAN_TTL = 8 * 60 * 60 * 1000 // 8h
-function readAiPlanCache(): { plan: MindSessionPlan | null; ts: number } | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(AI_PLAN_KEY)
-    if (!raw) return null
-    const o = JSON.parse(raw) as { plan?: MindSessionPlan; ts?: number }
-    if (typeof o?.ts === 'number') return { plan: o.plan ?? null, ts: o.ts }
-  } catch { /* ignore */ }
-  return null
-}
-function markAiAttempt(): void {
-  if (typeof window === 'undefined') return
-  try { localStorage.setItem(AI_PLAN_KEY, JSON.stringify({ ts: Date.now() })) } catch { /* ignore */ }
-}
-function writeAiPlan(plan: MindSessionPlan): void {
-  if (typeof window === 'undefined') return
-  try { localStorage.setItem(AI_PLAN_KEY, JSON.stringify({ plan, ts: Date.now() })) } catch { /* ignore */ }
-}
-function clearAiPlan(): void {
-  if (typeof window === 'undefined') return
-  try { localStorage.removeItem(AI_PLAN_KEY) } catch { /* ignore */ }
-}
-
 export default function MindJourney() {
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
@@ -106,8 +76,6 @@ export default function MindJourney() {
   // the page loads so there's NO added wait at Begin: if it's ready we play it,
   // otherwise we fall back to the instant deterministic plan.
   const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null)
-  // True only while the AI is actively composing a session (shown on the hero).
-  const [composing, setComposing] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -175,44 +143,24 @@ export default function MindJourney() {
     })
   }, [progress, recentState, missionAction, sessionSeed, lastBreathAt, recentKinds])
 
-  // Background AI pre-composition — fire once per load when the deterministic
-  // plan is ready. The graph is best-effort; on any failure aiPlan stays null and
-  // the deterministic plan is used. Effective plan = AI when ready, else local.
+  // Adopt the AI-composed session if one is cached. Generation itself runs in
+  // the background on APP OPEN (lib/mind/precompose, mounted in the shell) — we
+  // never block the Mind view on it. If the cache is empty (first run, or a
+  // workout/nutrition log invalidated it), kick a cooldown-gated, silent warm so
+  // the next view shows the fresh AI plan; meanwhile the deterministic plan
+  // renders instantly.
   useEffect(() => {
     if (!progress || aiPlan) return
-    const cache = readAiPlanCache()
-    if (cache && Date.now() - cache.ts < AI_PLAN_TTL) {
-      // Within the 8h cooldown — reuse the cached plan if we have one, otherwise
-      // ride the deterministic plan. Either way, DON'T regenerate.
-      if (cache.plan) setAiPlan(cache.plan)
-      return
-    }
-    // Outside the cooldown (or first ever): compose once. Start the cooldown
-    // synchronously NOW so settling deps / quick reopens can't re-fire it, even
-    // if the graph is slow or returns nothing.
-    markAiAttempt()
+    const cache = readMindPlanCache()
+    if (cache?.plan) { setAiPlan(cache.plan); return }
     let cancelled = false
-    setComposing(true)
-    const ctx: SessionContext = {
-      chapter: progress.chapter,
-      unlockedSystems: progress.unlockedSystems,
-      recentState,
-      missionAction,
-      identityStatement: progress.vision?.identityStatement ?? null,
-      recentKinds,
-      dayOfYear: dayOfYear(),
-      now: Date.now(),
-      lastBreathAt,
-    }
-    composeSessionAI(ctx)
-      .then((p) => {
-        if (cancelled || !p) return
-        setAiPlan(p)
-        writeAiPlan(p)
-      })
-      .finally(() => { if (!cancelled) setComposing(false) })
+    precomposeMindSession().then(() => {
+      if (cancelled) return
+      const c = readMindPlanCache()
+      if (c?.plan) setAiPlan(c.plan)
+    })
     return () => { cancelled = true }
-  }, [progress, recentState, missionAction, recentKinds, lastBreathAt, aiPlan])
+  }, [progress, aiPlan])
 
   const effectivePlan = aiPlan ?? plan
 
@@ -228,9 +176,11 @@ export default function MindJourney() {
         plan={effectivePlan}
         onExit={() => {
           setPlaying(false)
-          // Finished a session → clear the cooldown so a fresh one composes.
-          clearAiPlan()
+          // Finished a session → drop the cache and warm a fresh one in the
+          // background (non-blocking), so the next view shows a new AI session.
+          invalidateMindSession()
           setAiPlan(null)
+          precomposeMindSession()
           setLoading(true)
           load()
         }}
@@ -319,33 +269,10 @@ export default function MindJourney() {
 
       {/* Centered focus area — fills the space below the header */}
       <div className="flex flex-1 flex-col justify-center">
-      {/* The next move — while the AI is composing, the hero shows the loader
-          (no Begin button); otherwise the ready session. Clean solid card, no
-          gradient. */}
-      {composing ? (
-        <motion.div
-          key="composing"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="flex w-full flex-col items-center justify-center gap-5 rounded-3xl bg-zinc-900 p-12 text-center text-white dark:bg-zinc-800"
-        >
-          <span className="relative flex h-14 w-14 items-center justify-center">
-            <motion.span
-              className="absolute inset-0 rounded-full"
-              style={{ background: 'conic-gradient(from 0deg, #a78bfa, #34d399, transparent)' }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
-            />
-            <span className="absolute inset-[3px] rounded-full bg-zinc-900 dark:bg-zinc-800" />
-            <Brain className="relative h-6 w-6 text-white" />
-          </span>
-          <div>
-            <h2 className="text-xl font-extrabold">Composing your session…</h2>
-            <p className="mt-1 text-sm text-white/60">Tailoring it to where you are today.</p>
-          </div>
-        </motion.div>
-      ) : effectivePlan ? (
+      {/* The next move — always the instant (deterministic) session; if an
+          AI-composed plan is cached it's used transparently. Never blocks on
+          generation (that happens in the background on app open). */}
+      {effectivePlan ? (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
             onClick={begin}

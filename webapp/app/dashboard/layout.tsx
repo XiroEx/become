@@ -3,10 +3,13 @@ import React from 'react'
 import BottomNav from '../../components/BottomNav'
 import TopNav from '../../components/TopNav'
 import AuthGuard from '../../components/AuthGuard'
+import MindSessionWarmer from '../../components/mind/MindSessionWarmer'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
+      {/* Background: compose the AI Mind session on app open (cooldown-gated). */}
+      <MindSessionWarmer />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
       <div
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"

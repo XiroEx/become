@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Dumbbell, X } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
-import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
@@ -787,12 +786,14 @@ export default function LiveWorkoutPage() {
         body: JSON.stringify(saveBody),
       });
       if (isComplete && res.ok) {
-        invalidateMindSession(); // logged a session → next mind load composes fresh
         const data = await res.json();
         if (data.programCompleted) {
           setProgramCompleted(true);
           setCompletedProgramName(data.programName || "");
         }
+        // New training context → drop the cached Mind session so the next
+        // compose (app open / Mind open) reflects the just-finished workout.
+        invalidateMindSession();
         // Clear the draft — workout is done, no need to resume
         try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
         // Activity changed → next Mind load composes a fresh session.
