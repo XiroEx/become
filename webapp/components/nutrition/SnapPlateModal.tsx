@@ -156,10 +156,12 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
     return items.map((it, i) => {
       const m = matches[i]
       if (!m) return { ...it, matchChecked: true, match: null }
-      // Preserve the eaten portion: how many DB servings ≈ the AI's calorie call.
+      // Preserve the eaten portion: how many DB servings ≈ the AI's calorie
+      // call. Rounded to the nearest 0.25 (the stepper's granularity) so half /
+      // quarter portions survive instead of snapping to whole servings.
       const dbCal = m.nutrition?.calories ?? 0
       const aiCal = it.nutrition?.calories ?? 0
-      const mult = dbCal > 0 && aiCal > 0 ? Math.max(1, Math.round(aiCal / dbCal)) : it.multiplier
+      const mult = dbCal > 0 && aiCal > 0 ? Math.max(0.25, Math.round((aiCal / dbCal) * 4) / 4) : it.multiplier
       const servingLabel = m.servingSize && m.servingSize !== 1
         ? `${m.servingSize} ${m.servingUnit}`
         : `1 ${m.servingUnit}`
