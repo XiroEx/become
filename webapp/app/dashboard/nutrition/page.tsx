@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
@@ -16,7 +16,9 @@ import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera } from 'lucide-react'
+import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, PencilLine } from 'lucide-react'
+import { resizeImageToBlob } from '@/lib/imageResize'
+import { blobToDataUrl } from '@/lib/blobToBase64'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import type { IMealItem } from '@/models/Meal'
 import { Card, EmptyState, Toast, HeaderPillLink } from '@/components/ui'
@@ -116,7 +118,32 @@ function NutritionPageInner() {
   const [foodSearchTag, setFoodSearchTag] = useState<string>('snack')
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [snapPlateOpen, setSnapPlateOpen] = useState(false)
-  const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe'>('idle')
+  const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe' | 'compose'>('idle')
+  const [snapInitialImage, setSnapInitialImage] = useState<string | null>(null)
+  // Hidden inputs so "Snap" (camera) and "Upload" (library) are distinct, direct
+  // actions from both the dash and the search hub — each opens the right picker
+  // within the user gesture, then drops straight into the plate compose step.
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
+
+  const openSnapCamera = () => cameraInputRef.current?.click()
+  const openSnapUpload = () => galleryInputRef.current?.click()
+  const openDescribe = () => { setSnapInitialImage(null); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }
+
+  const handleCaptureFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-picking the same file
+    if (!file) return
+    try {
+      const resized = await resizeImageToBlob(file, { maxDim: 1024, quality: 0.6 })
+      const dataUrl = await blobToDataUrl(resized)
+      setSnapInitialImage(dataUrl)
+      setSnapPlatePhase('compose')
+      setSnapPlateOpen(true)
+    } catch (err) {
+      console.error('[nutrition] image capture failed', err)
+    }
+  }, [])
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
   const { toast, showToast } = useToast(4000)
@@ -701,31 +728,52 @@ function NutritionPageInner() {
           </div>
         </header>
 
-        {/* Global search bar */}
-        <div className="flex items-center gap-2">
+        {/* Add food — a compact (fake) search tap that opens the hub, plus the
+            four direct capture actions mirrored from the hub modal. */}
+        <div className="space-y-2">
           <button
             onClick={() => openFoodSearch(getDefaultTagForNow())}
-            className="flex flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <Search className="h-4 w-4 shrink-0 text-zinc-400" />
             <span className="text-sm text-zinc-400 dark:text-zinc-500">Search foods…</span>
           </button>
-          <button
-            onClick={() => openFoodSearch(getDefaultTagForNow(), true)}
-            aria-label="Scan barcode"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
-          >
-            <ScanBarcode className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setSnapPlateOpen(true)}
-            aria-label="Snap plate photo"
-            title="Snap your plate — AI estimates foods and macros"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700"
-          >
-            <Camera className="h-5 w-5" />
-          </button>
+          <div className="grid grid-cols-4 gap-2">
+            <button
+              onClick={() => openFoodSearch(getDefaultTagForNow(), true)}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <ScanBarcode className="h-5 w-5" />
+              <span className="text-[11px] font-semibold">Barcode</span>
+            </button>
+            <button
+              onClick={openSnapCamera}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <Camera className="h-5 w-5" />
+              <span className="text-[11px] font-semibold">Snap</span>
+            </button>
+            <button
+              onClick={openSnapUpload}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <ImagePlus className="h-5 w-5" />
+              <span className="text-[11px] font-semibold">Upload</span>
+            </button>
+            <button
+              onClick={openDescribe}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-white py-2.5 text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+            >
+              <PencilLine className="h-5 w-5" />
+              <span className="text-[11px] font-semibold">Describe</span>
+            </button>
+          </div>
         </div>
+
+        {/* Hidden capture inputs feeding the plate flow (page-owned so both the
+            dash and the search hub can trigger them within a user gesture). */}
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCaptureFile} />
+        <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={handleCaptureFile} />
 
         {/* Date Navigation */}
         <DateNav
@@ -1000,6 +1048,7 @@ function NutritionPageInner() {
         tagOptions={Array.from(new Set([...tagsResp.defaults, ...tagsResp.userTags]))}
         dateKey={dateParam}
         initialPhase={snapPlatePhase}
+        initialImage={snapInitialImage}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { fetchMealLogs(); fetchTags() }}
       />
@@ -1012,8 +1061,9 @@ function NutritionPageInner() {
         viewedDate={planForDate ?? selectedDate}
         mode={planForDate ? 'plan' : 'log'}
         autoScan={foodSearchAutoScan}
-        onSnapPhoto={() => { setFoodSearchOpen(false); setSnapPlatePhase('idle'); setSnapPlateOpen(true) }}
-        onDescribe={() => { setFoodSearchOpen(false); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }}
+        onSnapPhoto={() => { setFoodSearchOpen(false); openSnapCamera() }}
+        onUpload={() => { setFoodSearchOpen(false); openSnapUpload() }}
+        onDescribe={() => { setFoodSearchOpen(false); openDescribe() }}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null) }}
         onSelectFood={(entry, tag, loggedAt) => {
           if (planForDate) {
