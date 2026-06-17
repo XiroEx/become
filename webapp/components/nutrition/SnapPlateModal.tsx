@@ -30,6 +30,9 @@ interface SnapPlateModalProps {
   onClose: () => void
   /** Called after items are successfully POSTed to /api/meal-logs. */
   onLogged: () => void
+  /** Which surface to open on. 'describe' jumps straight to the text flow;
+   *  default 'idle' shows the snap/upload/describe chooser. */
+  initialPhase?: 'idle' | 'describe'
 }
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -182,6 +185,7 @@ export default function SnapPlateModal({
   dateKey,
   onClose,
   onLogged,
+  initialPhase = 'idle',
 }: SnapPlateModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
@@ -196,11 +200,14 @@ export default function SnapPlateModal({
 
   useLockScroll(open)
 
-  // Reset to the chooser when the modal closes so it opens fresh each time.
+  // Reset on close; on open, jump to the requested surface (chooser or describe).
   useEffect(() => {
     if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
-    else setSelectedTag(tag) // default to the page's time-of-day meal on open
-  }, [open, tag])
+    else {
+      setSelectedTag(tag) // default to the page's time-of-day meal on open
+      setState({ phase: initialPhase === 'describe' ? 'describe' : 'idle' })
+    }
+  }, [open, tag, initialPhase])
 
   // Reconcile new review items against the DB once they land (any source:
   // photo, describe, or a correction). Runs in the background; the row badges

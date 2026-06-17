@@ -3,9 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
-import LabelPhotoPanel from './LabelPhotoPanel'
-import type { LabelFoodResult } from './LabelPhotoPanel'
+import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/models/NutritionLog'
 import { getToken } from '@/lib/clientAuth'
@@ -48,6 +46,11 @@ interface FoodSearchModalProps {
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
   ) => void | Promise<void>
   autoScan?: boolean
+  // Capture hub: when provided, the modal shows "Snap a photo" / "Describe"
+  // buttons that hand off to the single AI capture surface (SnapPlate). Keeps
+  // every food-entry path in one place instead of scattered cameras.
+  onSnapPhoto?: () => void
+  onDescribe?: () => void
 }
 
 interface AlternateServing {
@@ -233,6 +236,8 @@ export default function FoodSearchModal({
   onClose,
   onSelectFood,
   autoScan = false,
+  onSnapPhoto,
+  onDescribe,
 }: FoodSearchModalProps) {
   const isPlanMode = mode === 'plan'
   const tagPickerEnabled = showTagPicker ?? Boolean(currentTag)
@@ -295,10 +300,6 @@ export default function FoodSearchModal({
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [barcodeError, setBarcodeError] = useState<string | null>(null)
 
-  // Label photo scan state (AI product finder via camera)
-  const [labelLoading, setLabelLoading] = useState(false)
-  const [labelError, setLabelError] = useState<string | null>(null)
-
   // Set of foodIds (real ObjectId strings) the user has saved.
   // Source of truth for the bookmark icon — independently of fetched results.
   const [savedFoodIds, setSavedFoodIds] = useState<Set<string>>(new Set())
@@ -334,8 +335,6 @@ export default function FoodSearchModal({
       setActiveTab('all')
       setScannerOpen(false)
       setBarcodeError(null)
-      setLabelLoading(false)
-      setLabelError(null)
       addingRef.current = false
       setAdding(false)
       setTagDropdownOpen(false)
@@ -408,23 +407,6 @@ export default function FoodSearchModal({
       setBarcodeLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Handle results from the label-photo AI scan. Maps LabelFoodResult (which uses
-  // the same fields as FoodResult but with source:'ai') into the FoodResult shape
-  // and injects them directly as results, auto-selecting the first match so the
-  // QuantityPicker expands immediately (mirrors the barcode-success path).
-  const handleLabelResults = useCallback((foods: LabelFoodResult[]) => {
-    if (!foods.length) return
-    // Map to the FoodResult interface. LabelFoodResult is already structurally
-    // compatible — cast via unknown to avoid the missing optional fields.
-    const mapped = foods as unknown as FoodResult[]
-    const first = mapped[0]
-    const variantIdx = pickDefaultVariantIdx(first.variants)
-    setSelectedFood(first)
-    setSelectedVariantIdx(variantIdx)
-    setSelection(null)
-    setResults(mapped)
   }, [])
 
   const fetchMeals = useCallback(async (searchQuery: string) => {
@@ -941,31 +923,13 @@ export default function FoodSearchModal({
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
                   {isPlanMode ? 'Plan Food' : 'Add Food'}
                 </h2>
-                <div className="flex items-center gap-1.5">
-                  {/* Label photo scan (AI product finder) */}
-                  <LabelPhotoPanel
-                    loading={labelLoading}
-                    error={null}
-                    onLoadingChange={setLabelLoading}
-                    onError={setLabelError}
-                    onResults={handleLabelResults}
-                  />
-                  <button
-                    onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
-                    data-testid="barcode-scan-btn"
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                    aria-label="Scan barcode"
-                  >
-                    <ScanBarcode className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={onClose}
-                    data-testid="food-search-close"
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
+                <button
+                  onClick={onClose}
+                  data-testid="food-search-close"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
               {/* Tag picker + Custom Food shortcut */}
@@ -1068,6 +1032,38 @@ export default function FoodSearchModal({
                 )}
               </div>
 
+              {/* Capture row — one place for every way to add food. Type above,
+                  or scan a barcode, snap/upload a photo, or describe it. */}
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
+                  data-testid="barcode-scan-btn"
+                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <ScanBarcode className="h-5 w-5" />
+                  <span className="text-[11px] font-semibold">Barcode</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSnapPhoto?.()}
+                  disabled={!onSnapPhoto}
+                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <Camera className="h-5 w-5" />
+                  <span className="text-[11px] font-semibold">Snap photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDescribe?.()}
+                  disabled={!onDescribe}
+                  className="flex flex-col items-center justify-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50 py-2.5 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <PencilLine className="h-5 w-5" />
+                  <span className="text-[11px] font-semibold">Describe</span>
+                </button>
+              </div>
+
               {/* Barcode loading / error feedback */}
               {barcodeLoading && (
                 <div className="mt-2 flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-800">
@@ -1089,26 +1085,6 @@ export default function FoodSearchModal({
                   </button>
                 </div>
               )}
-              {/* Label photo error */}
-              {labelError && !labelLoading && (
-                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-900/20">
-                  <span className="text-xs text-amber-700 dark:text-amber-300">{labelError}</span>
-                  <button
-                    onClick={() => setLabelError(null)}
-                    className="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-200"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              {/* Label photo loading */}
-              {labelLoading && (
-                <div className="mt-2 flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-800">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-500" />
-                  <span className="text-xs text-zinc-600 dark:text-zinc-400">Reading label&hellip;</span>
-                </div>
-              )}
-
               {/* Tabs */}
               <div className="mt-3 flex gap-1">
                 {tabs.map((tab) => (
