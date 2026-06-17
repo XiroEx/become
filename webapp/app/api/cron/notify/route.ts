@@ -137,7 +137,7 @@ export async function GET(request: NextRequest) {
     // should get ONE reminder for the workout they'd actually do next, picked
     // the SAME way the dashboard does (earliest upcoming scheduled slot) — not
     // one push per schedule, and not a stale program's slot.
-    type SlotCand = { date: Date; phase?: number; dayLabel?: string; workoutTitle?: string; programId?: string }
+    type SlotCand = { date: Date; status: string; phase?: number; dayLabel?: string; workoutTitle?: string; programId?: string }
     const userSlots = new Map<string, SlotCand[]>()
     for (const sched of schedulesWithRecent) {
       const progress = progressByUserId.get(String(sched.userId))
@@ -149,8 +149,11 @@ export async function GET(request: NextRequest) {
       for (const w of sched.scheduledWorkouts as Array<{
         date: Date; status: string; phase?: number; dayLabel?: string; workoutTitle?: string
       }>) {
-        if (w.status !== 'scheduled') continue
-        arr.push({ date: new Date(w.date), phase: w.phase, dayLabel: w.dayLabel, workoutTitle: w.workoutTitle, programId: sched.programId })
+        // Keep UNCOMPLETED slots — both upcoming ('scheduled') and recently
+        // 'missed' — so a user who's behind catches up on the workout they still
+        // owe (e.g. a missed Day 3 Legs) instead of skipping to today's Day 4.
+        if (w.status !== 'scheduled' && w.status !== 'missed') continue
+        arr.push({ date: new Date(w.date), status: w.status, phase: w.phase, dayLabel: w.dayLabel, workoutTitle: w.workoutTitle, programId: sched.programId })
       }
       userSlots.set(String(sched.userId), arr)
     }
@@ -182,15 +185,24 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // The next upcoming scheduled workout (earliest slot with local-date-key
-      // >= today). Each slot's date is UTC midnight of its local day.
-      const upcoming = slots
-        .map((s) => ({ ...s, key: localDateKeyForUser(new Date(s.date), progress?.timezoneOffset) }))
-        .filter((s) => s.key >= userLocalDateKey)
+      // Each slot's date is UTC midnight of its local day → bucket by local key.
+      const keyed = slots.map((s) => ({ ...s, key: localDateKeyForUser(new Date(s.date), progress?.timezoneOffset) }))
+
+      // Only nudge on a training day: there must be a slot scheduled for TODAY.
+      const hasTodaySlot = keyed.some((s) => s.status === 'scheduled' && s.key === userLocalDateKey)
+      if (!hasTodaySlot) continue
+
+      // The workout to surface = the earliest UNCOMPLETED slot that's due (today
+      // or overdue), within a 7-day catch-up window so we don't nag about
+      // ancient misses. This makes a behind user's reminder name the workout
+      // they still owe (missed Day 3 Legs) rather than today's calendar slot.
+      const CATCHUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+      const cutoffMs = now.getTime() - CATCHUP_WINDOW_MS
+      const due = keyed
+        .filter((s) => s.key <= userLocalDateKey && new Date(s.date).getTime() >= cutoffMs)
         .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.date.getTime() - b.date.getTime()))
-      const best = upcoming[0]
-      // Only send the "today's workout is ready" push when the next one IS today.
-      if (!best || best.key !== userLocalDateKey) continue
+      const best = due[0]
+      if (!best) continue
 
       // Resolve the title from the LIVE program (the slot's cached title can be
       // stale after a program edit — this is the "wrong workout name" bug).
