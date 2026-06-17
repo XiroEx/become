@@ -917,6 +917,10 @@ export default function FoodSearchModal({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            // Focus the search once the panel finishes sliding in — focusing
+            // mid-animation (the old 100ms timeout) missed and left it unfocused.
+            // Skip when autoScan is opening the barcode scanner instead.
+            onAnimationComplete={() => { if (isOpen && !autoScan) inputRef.current?.focus({ preventScroll: true }) }}
             className="relative flex h-full w-full flex-col sm:h-[85vh] sm:max-h-[700px] sm:max-w-lg sm:rounded-2xl sm:bg-white sm:shadow-2xl sm:dark:bg-zinc-900"
           >
             {/* Header */}
@@ -1019,6 +1023,7 @@ export default function FoodSearchModal({
                 <input
                   ref={inputRef}
                   type="text"
+                  autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search foods and meals…"
