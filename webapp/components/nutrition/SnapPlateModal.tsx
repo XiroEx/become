@@ -33,13 +33,28 @@ interface SnapPlateModalProps {
   /** Which surface to open on. 'describe' jumps straight to the text flow;
    *  'compose' opens directly on a pre-selected image (see initialImage);
    *  default 'idle' shows the snap/upload/describe chooser. */
-  initialPhase?: 'idle' | 'describe' | 'compose'
+  initialPhase?: 'idle' | 'describe' | 'compose' | 'review'
   /** A data-URL image to open straight into the compose step (used when the
    *  caller — dash/search hub — already captured the photo via its own input). */
   initialImage?: string | null
   /** Prefill text for the describe flow (used when the user typed in the search
    *  box and hit the describe-send button). Implies initialPhase 'describe'. */
   initialDescribe?: string | null
+  /** Pre-loaded items to open straight into the review step — used when
+   *  re-opening a saved scan from history to edit before re-logging. Each item
+   *  carries per-serving nutrition + servings (+ optional brand/foodId/match). */
+  initialReview?: Array<{
+    foodId?: string
+    name: string
+    brand?: string
+    estimatedServing?: string
+    servingSize?: number
+    servingUnit?: string
+    servings?: number
+    nutrition: { calories: number; protein: number; carbs: number; fats: number }
+    confidence?: number
+    matchKind?: 'food' | 'meal' | 'recipe'
+  }> | null
 }
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -197,6 +212,7 @@ export default function SnapPlateModal({
   initialPhase = 'idle',
   initialImage = null,
   initialDescribe = null,
+  initialReview = null,
 }: SnapPlateModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
@@ -221,6 +237,30 @@ export default function SnapPlateModal({
       if (initialPhase === 'compose' && initialImage) {
         setComposeNote('')
         setState({ phase: 'compose', dataUrl: initialImage })
+      } else if (initialPhase === 'review' && initialReview && initialReview.length) {
+        // Re-opening a saved scan to edit: rebuild review items from the scan.
+        const items: ReviewItem[] = initialReview.map((si) => ({
+          name: si.name,
+          brand: si.brand,
+          estimatedServing: si.estimatedServing || `${si.servingSize ?? 1} ${si.servingUnit ?? 'serving'}`,
+          nutrition: si.nutrition,
+          confidence: si.confidence ?? 0.8,
+          multiplier: si.servings ?? 1,
+          removed: false,
+          matchChecked: true,
+          match: si.matchKind ? {
+            kind: si.matchKind,
+            id: si.foodId ?? '',
+            name: si.name,
+            brand: si.brand,
+            servingSize: si.servingSize ?? 1,
+            servingUnit: si.servingUnit ?? 'serving',
+            nutrition: si.nutrition,
+            source: si.matchKind,
+            confidence: si.confidence ?? 1,
+          } : null,
+        }))
+        setState({ phase: 'review', items, imageThumb: '' })
       } else if (initialPhase === 'describe') {
         setDescribeText(initialDescribe ?? '')
         setState({ phase: 'describe' })
@@ -228,7 +268,7 @@ export default function SnapPlateModal({
         setState({ phase: 'idle' })
       }
     }
-  }, [open, tag, initialPhase, initialImage, initialDescribe])
+  }, [open, tag, initialPhase, initialImage, initialDescribe, initialReview])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Reconcile new review items against the DB once they land (any source:
@@ -472,6 +512,15 @@ export default function SnapPlateModal({
           ...(it.match ? { matchKind: it.match.kind } : {}),
         }
       })
+      // Tiny thumbnail for the scan history list (photo scans only). Best-effort.
+      let thumb: string | undefined
+      if (imageThumb && imageThumb.startsWith('data:image/')) {
+        try {
+          const blob = await (await fetch(imageThumb)).blob()
+          const small = await resizeImageToBlob(blob, { maxDim: 256, quality: 0.5 })
+          thumb = await blobToDataUrl(small)
+        } catch { /* no thumb */ }
+      }
       fetch('/api/nutrition/scans', {
         method: 'POST',
         headers,
@@ -481,6 +530,7 @@ export default function SnapPlateModal({
           items: scanItems,
           loggedAt,
           mealLogId: logData?.mealLog?._id ?? logData?._id,
+          ...(thumb ? { thumb } : {}),
         }),
       }).catch(() => { /* best-effort history */ })
 

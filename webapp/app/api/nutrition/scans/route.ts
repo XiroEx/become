@@ -71,11 +71,18 @@ export async function POST(request: NextRequest) {
     await dbConnect()
     // Total honors per-serving × servings (same convention as meal logs).
     const totalNutrition = computeTotalNutrition(items as unknown as IMealItem[])
+    // Accept a small inline thumbnail only — reject anything that isn't a data
+    // image or is too big to store inline (~200KB of base64).
+    const thumb = typeof body?.thumb === 'string'
+      && body.thumb.startsWith('data:image/')
+      && body.thumb.length <= 200_000
+      ? body.thumb : undefined
     const scan = await PlateScan.create({
       user: new mongoose.Types.ObjectId(auth.userId),
       source: body?.source === 'describe' ? 'describe' : 'photo',
       note: typeof body?.note === 'string' ? body.note.slice(0, 500) : undefined,
       tag: typeof body?.tag === 'string' ? body.tag : undefined,
+      thumb,
       items,
       totalNutrition,
       loggedAt: body?.loggedAt ? new Date(body.loggedAt) : new Date(),
