@@ -9,7 +9,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
-import { Camera, PencilLine, ArrowLeft, Trash2, RotateCcw, Loader2 } from 'lucide-react'
+import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2 } from 'lucide-react'
 
 interface ScanItem {
   foodId?: string
@@ -28,6 +28,7 @@ interface Scan {
   source: 'photo' | 'describe'
   note?: string
   tag?: string
+  thumb?: string
   items: ScanItem[]
   totalNutrition: { calories: number; protein: number; carbs: number; fats: number }
   createdAt: string
@@ -135,9 +136,14 @@ export default function ScanHistoryPage() {
             <Card key={scan._id} className="!p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    {scan.source === 'describe' ? <PencilLine className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
-                  </span>
+                  {scan.thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={scan.thumb} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                      {scan.source === 'describe' ? <PencilLine className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+                    </span>
+                  )}
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-zinc-900 dark:text-white">
                       {Math.round(scan.totalNutrition?.calories ?? 0)} cal
@@ -147,6 +153,13 @@ export default function ScanHistoryPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  <Link
+                    href={`/dashboard/nutrition?scan=${scan._id}`}
+                    aria-label="Edit and re-log this scan"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Link>
                   <button
                     onClick={() => logAgain(scan)}
                     disabled={busyId === scan._id}

@@ -119,9 +119,16 @@ function NutritionPageInner() {
   const [foodSearchTag, setFoodSearchTag] = useState<string>('snack')
   const [foodSearchAutoScan, setFoodSearchAutoScan] = useState(false)
   const [snapPlateOpen, setSnapPlateOpen] = useState(false)
-  const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe' | 'compose'>('idle')
+  const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe' | 'compose' | 'review'>('idle')
   const [snapInitialImage, setSnapInitialImage] = useState<string | null>(null)
   const [snapDescribeText, setSnapDescribeText] = useState<string | null>(null)
+  const [snapReview, setSnapReview] = useState<Array<{
+    foodId?: string; name: string; brand?: string; estimatedServing?: string
+    servingSize?: number; servingUnit?: string; servings?: number
+    nutrition: { calories: number; protein: number; carbs: number; fats: number }
+    confidence?: number; matchKind?: 'food' | 'meal' | 'recipe'
+  }> | null>(null)
+  const handledScanRef = useRef<string | null>(null)
   // Hidden inputs so "Snap" (camera) and "Upload" (library) are distinct, direct
   // actions from both the dash and the search hub — each opens the right picker
   // within the user gesture, then drops straight into the plate compose step.
@@ -342,6 +349,29 @@ function NutritionPageInner() {
     }
     init()
   }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans])
+
+  // Re-open a saved scan to edit (?scan=<id> from the Scan history "Edit"):
+  // fetch it and open the plate review pre-loaded with its items.
+  useEffect(() => {
+    const scanId = searchParams?.get('scan')
+    if (!scanId || handledScanRef.current === scanId) return
+    handledScanRef.current = scanId
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/nutrition/scans/${scanId}`, { headers: getHeaders() })
+        if (!res.ok) return
+        const data = await res.json()
+        const items = data?.scan?.items
+        if (Array.isArray(items) && items.length) {
+          setSnapInitialImage(null)
+          setSnapDescribeText(null)
+          setSnapReview(items)
+          setSnapPlatePhase('review')
+          setSnapPlateOpen(true)
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [searchParams, getHeaders])
 
   // ── Visible tags ──────────────────────────────────────────────────────────────
   // Only show tags that have content today, plus any session-added empty tags.
@@ -1012,7 +1042,7 @@ function NutritionPageInner() {
 
         {/* AI copilot — scaffolded (plugs into lib/nutrition/aiSeams via the
             unified Become AI engine / redbtn graph later) */}
-        <NutritionAITeaser />
+        <NutritionAITeaser remaining={{ calories: goals.calories - dailyTotals.calories, protein: goals.protein - dailyTotals.protein }} />
 
         {/* Quick Actions — visually identical tiles, accent only varies on the icon badge */}
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -1080,6 +1110,7 @@ function NutritionPageInner() {
         initialPhase={snapPlatePhase}
         initialImage={snapInitialImage}
         initialDescribe={snapDescribeText}
+        initialReview={snapReview}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags(); setFoodSearchOpen(false) }}
       />
