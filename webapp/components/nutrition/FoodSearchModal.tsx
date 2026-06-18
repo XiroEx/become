@@ -1042,6 +1042,10 @@ export default function FoodSearchModal({
                   <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
                   <textarea
                     ref={inputRef}
+                    // autoFocus brings the keyboard up on the SAME tap that opens
+                    // the modal (one press) — it must run within the user gesture.
+                    // The earlier choppiness was Low Power Mode, not this.
+                    autoFocus
                     rows={1}
                     value={query}
                     onChange={(e) => {
