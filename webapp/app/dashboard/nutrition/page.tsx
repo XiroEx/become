@@ -1081,7 +1081,7 @@ function NutritionPageInner() {
         initialImage={snapInitialImage}
         initialDescribe={snapDescribeText}
         onClose={() => setSnapPlateOpen(false)}
-        onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags() }}
+        onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags(); setFoodSearchOpen(false) }}
       />
 
       {/* Food Search Modal — log mode (default) and plan mode (when planForDate set). */}
@@ -1092,9 +1092,9 @@ function NutritionPageInner() {
         viewedDate={planForDate ?? selectedDate}
         mode={planForDate ? 'plan' : 'log'}
         autoScan={foodSearchAutoScan}
-        onSnapPhoto={() => { setFoodSearchOpen(false); openSnapCamera() }}
-        onUpload={() => { setFoodSearchOpen(false); openSnapUpload() }}
-        onDescribe={(text) => { setFoodSearchOpen(false); openDescribe(text) }}
+        onSnapPhoto={() => openSnapCamera()}
+        onUpload={() => openSnapUpload()}
+        onDescribe={(text) => openDescribe(text)}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null) }}
         onSelectFood={(entry, tag, loggedAt) => {
           if (planForDate) {
