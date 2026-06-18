@@ -29,6 +29,9 @@ export interface IPlateScan {
   source: 'photo' | 'describe'
   note?: string
   tag?: string
+  /** Small data-URL thumbnail of the photo (photo scans only) for the history
+   *  list. Kept tiny (~256px / low quality) so it's cheap to store inline. */
+  thumb?: string
   items: IPlateScanItem[]
   totalNutrition: IMealNutrition
   /** When/whether the scan was logged, and the resulting meal log. */
@@ -67,6 +70,7 @@ const PlateScanSchema = new Schema<IPlateScan>({
   source: { type: String, enum: ['photo', 'describe'], required: true, default: 'photo' },
   note: { type: String },
   tag: { type: String },
+  thumb: { type: String },
   items: { type: [PlateScanItemSchema], default: [] },
   totalNutrition: { type: NutritionSchema, default: () => ({ calories: 0, protein: 0, carbs: 0, fats: 0 }) },
   loggedAt: { type: Date },

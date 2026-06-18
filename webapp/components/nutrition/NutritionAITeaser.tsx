@@ -11,8 +11,20 @@ import { AnimatePresence } from 'framer-motion'
 import { Sparkles, ChevronRight } from 'lucide-react'
 import CoachChat from '@/components/ai/CoachChat'
 
-export default function NutritionAITeaser() {
+export default function NutritionAITeaser({ remaining }: { remaining?: { calories: number; protein: number } }) {
   const [open, setOpen] = useState(false)
+
+  // When the user has real macros left for the day, lead with a tailored nudge.
+  const hasRemaining = !!remaining && (remaining.calories > 50 || remaining.protein > 5)
+  const macrosPrompt = hasRemaining
+    ? `What should I eat to hit my remaining ${Math.max(0, Math.round(remaining!.calories))} cal and ${Math.max(0, Math.round(remaining!.protein))}g protein today?`
+    : null
+  const suggestions = [
+    ...(macrosPrompt ? [macrosPrompt] : []),
+    'Plan my dinner around 40g protein',
+    'Is my day on track?',
+    'Quick high-protein snacks',
+  ]
 
   return (
     <>
@@ -30,7 +42,9 @@ export default function NutritionAITeaser() {
               Your nutrition consultant
             </p>
             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-              Meal plans, macro help, and real answers for your goals.
+              {hasRemaining
+                ? `Hit your last ${Math.max(0, Math.round(remaining!.calories))} cal — tap for a suggestion.`
+                : 'Meal plans, macro help, and real answers for your goals.'}
             </p>
           </div>
           <ChevronRight className="h-5 w-5 shrink-0 text-zinc-400" />
@@ -50,11 +64,7 @@ export default function NutritionAITeaser() {
             accentTo="to-teal-500"
             greeting="Hey — I'm here to help you eat in a way that actually works for you. What are you trying to figure out? Macro targets, what to eat before a workout, how to hit your protein without losing your mind — ask anything."
             placeholder="Ask about your nutrition…"
-            suggestions={[
-              "Plan my dinner around 40g protein",
-              "Is my day on track?",
-              "Quick high-protein snacks",
-            ]}
+            suggestions={suggestions}
             onClose={() => setOpen(false)}
           />
         )}
