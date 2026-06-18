@@ -16,7 +16,7 @@ import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, Target, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History } from 'lucide-react'
+import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import type { IFoodEntry } from '@/models/NutritionLog'
@@ -1047,14 +1047,14 @@ function NutritionPageInner() {
 
           <Card
             as={Link}
-            href="/dashboard/nutrition/goals"
+            href={`/dashboard/timeline?date=${dateParam}`}
             variant="compact"
             className="flex flex-col items-center gap-2 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
-              <Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+              <CalendarDays className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Goals</span>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Meal Plan</span>
           </Card>
         </div>
        </div>
