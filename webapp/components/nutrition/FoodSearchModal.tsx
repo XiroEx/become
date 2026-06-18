@@ -333,7 +333,8 @@ export default function FoodSearchModal({
   useEffect(() => {
     if (isOpen) {
       setActiveTag(currentTag ?? 'snack')
-      setTimeout(() => inputRef.current?.focus(), 100)
+      // NOTE: focus happens in the panel's onAnimationComplete (after the slide),
+      // not here — focusing now would pop the keyboard mid-animation (choppy).
       if (autoScan) {
         setTimeout(() => { setBarcodeError(null); setScannerOpen(true) }, 350)
       }
@@ -919,6 +920,7 @@ export default function FoodSearchModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
           className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-900 sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm sm:p-4 touch-none"
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',
@@ -929,11 +931,12 @@ export default function FoodSearchModal({
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            // Focus the search once the panel finishes sliding in — focusing
-            // mid-animation (the old 100ms timeout) missed and left it unfocused.
-            // Skip when autoScan is opening the barcode scanner instead.
+            // Lively spring with a touch of overshoot (Dynamic-Island feel).
+            transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.85 }}
+            // Focus the search ONLY after the panel finishes sliding in — focusing
+            // (and popping the keyboard) mid-animation is what made it choppy.
             onAnimationComplete={() => { if (isOpen && !autoScan) inputRef.current?.focus({ preventScroll: true }) }}
+            style={{ willChange: 'transform' }}
             className="relative flex h-full w-full flex-col sm:h-[85vh] sm:max-h-[700px] sm:max-w-lg sm:rounded-2xl sm:bg-white sm:shadow-2xl sm:dark:bg-zinc-900"
           >
             {/* Header */}
@@ -1039,7 +1042,6 @@ export default function FoodSearchModal({
                   <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
                   <textarea
                     ref={inputRef}
-                    autoFocus
                     rows={1}
                     value={query}
                     onChange={(e) => {
