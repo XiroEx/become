@@ -131,7 +131,12 @@ export default function EditFoodModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!item || !item._id || !selection) return
-    if (selection.quantity <= 0) { setError('Amount must be greater than 0'); return }
+    // Guard quantity AND multiplier: plan-mode below divides per-serving
+    // nutrition by selection.multiplier — a 0/invalid multiplier would write
+    // Infinity/NaN macros to the plan.
+    if (selection.quantity <= 0 || !(selection.multiplier > 0)) {
+      setError('Amount must be greater than 0'); return
+    }
 
     setSaving(true)
     setError('')
