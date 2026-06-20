@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
-import NutritionLog from '@/models/NutritionLog'
+import DayNutrition from '@/models/DayNutrition'
 import NutritionGoal from '@/models/NutritionGoal'
 import MealLog, { IMealLog } from '@/models/MealLog'
 import { IMealItem } from '@/models/Meal'
@@ -28,8 +28,9 @@ import mongoose from 'mongoose'
 //     water, quickAdds, dailyTotals, goals }
 //
 // MealLogs are grouped by their primary tag — first matching default tag from
-// breakfast/lunch/dinner/snack, otherwise "snack". Water and quickAdds still
-// live on NutritionLog and are returned as before.
+// breakfast/lunch/dinner/snack, otherwise "snack". Water and quickAdds live on
+// DayNutrition (the day-level, non-food state) and are returned as before.
+// dailyTotals are computed here from MealLog + quickAdds (never stored).
 // ---------------------------------------------------------------------------
 
 const PRIMARY_TAGS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -220,7 +221,7 @@ export async function GET(request: NextRequest) {
         user: authResult.userId,
         loggedAt: { $gte: start, $lte: end },
       }).sort({ loggedAt: 1 }).lean<IMealLog[]>(),
-      NutritionLog.findOne({ userId: authResult.userId, date: nutritionLogKey }).lean(),
+      DayNutrition.findOne({ userId: authResult.userId, date: nutritionLogKey }).lean(),
       NutritionGoal.findOne({ userId: authResult.userId }).lean(),
     ])
 
@@ -236,7 +237,7 @@ export async function GET(request: NextRequest) {
     // the canonical lookup result (which was null) over guessing.
     let nutritionLog = primaryLog
     if (!nutritionLog) {
-      const candidates = await NutritionLog.find({
+      const candidates = await DayNutrition.find({
         userId: authResult.userId,
         date: { $gte: start, $lt: new Date(end.getTime() + 1) },
       }).lean()
@@ -255,7 +256,7 @@ export async function GET(request: NextRequest) {
         // operator effort. The alternative (audit-only) was considered but
         // rejected — there's no reason to preserve the old key, and the
         // migration script remains the bulk-fix tool for offline conversion.
-        NutritionLog.updateOne(
+        DayNutrition.updateOne(
           { _id: fallback._id },
           { $set: { date: nutritionLogKey } }
         ).catch((err) => {
@@ -318,7 +319,6 @@ export async function POST(request: NextRequest) {
 
     const dateKey = localDateKey(dateStr, tzOffsetMinutes)
     const { start, end } = localDayWindowForKey(dateKey, tzOffsetMinutes)
-    const date = utcMidnightDateKey(dateKey)
 
     const item = await resolveItemFromInput({
       foodId: food.foodId,
@@ -365,20 +365,9 @@ export async function POST(request: NextRequest) {
       await Food.updateOne({ _id: item.foodId }, { $inc: { usageCount: 1 } }).catch(() => null)
     }
 
-    // Ensure a NutritionLog row exists so water / quickAdds keep working in
-    // the legacy shape. Don't sync meals[] here — they're served from MealLog.
-    await NutritionLog.updateOne(
-      { userId: authResult.userId, date },
-      { $setOnInsert: {
-        userId: authResult.userId,
-        date,
-        meals: [],
-        water: { current: 0, goal: 96 },
-        quickAdds: [],
-        dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, sugar: 0, sodium: 0 },
-      } },
-      { upsert: true }
-    )
+    // Food logging lives entirely in MealLog. Water / quickAdds rows on
+    // DayNutrition are created on demand by their own routes — nothing to seed
+    // here.
 
     const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
 
@@ -567,7 +556,7 @@ async function buildLegacyDayResponse(userId: string, dateKey: string, tzOffsetM
       user: userId,
       loggedAt: { $gte: start, $lte: end },
     }).sort({ loggedAt: 1 }).lean<IMealLog[]>(),
-    NutritionLog.findOne({ userId, date: nutritionKey }).lean(),
+    DayNutrition.findOne({ userId, date: nutritionKey }).lean(),
     NutritionGoal.findOne({ userId }).lean(),
   ])
 
