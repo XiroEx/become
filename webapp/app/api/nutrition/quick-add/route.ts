@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
-import NutritionLog from '@/models/NutritionLog'
+import DayNutrition from '@/models/DayNutrition'
 import NutritionGoal from '@/models/NutritionGoal'
 import { verifyAuth } from '@/lib/auth'
 import {
@@ -46,25 +46,22 @@ export async function POST(request: NextRequest) {
       loggedAt: new Date()
     }
 
-    // Find or create the day's log
-    let log = await NutritionLog.findOne({ userId: authResult.userId, date })
+    // Find or create the day's row
+    let log = await DayNutrition.findOne({ userId: authResult.userId, date })
 
     if (!log) {
       const goals = await NutritionGoal.findOne({ userId: authResult.userId }).lean()
-      log = new NutritionLog({
+      log = new DayNutrition({
         userId: authResult.userId,
         date,
-        meals: [],
         water: { current: 0, goal: goals?.waterGoal ?? 96 },
         quickAdds: [],
-        dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, sugar: 0, sodium: 0 }
       })
     }
 
     log.quickAdds.push(quickAddEntry)
-
-    // Recalculate daily totals
-    log.recalculateTotals()
+    // Daily totals are computed at read time (/api/nutrition/log) from MealLog
+    // + quickAdds — nothing to recalc on this row.
     await log.save()
 
     return NextResponse.json({ success: true, log })
@@ -93,7 +90,7 @@ export async function DELETE(request: NextRequest) {
     await dbConnect()
 
     const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
-    const log = await NutritionLog.findOne({ userId: authResult.userId, date })
+    const log = await DayNutrition.findOne({ userId: authResult.userId, date })
 
     if (!log) {
       return NextResponse.json({ error: 'No nutrition log found for this date' }, { status: 404 })
@@ -105,7 +102,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     log.quickAdds.splice(idx, 1)
-    log.recalculateTotals()
     await log.save()
 
     return NextResponse.json({ success: true, log })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
-import NutritionLog from '@/models/NutritionLog'
+import DayNutrition from '@/models/DayNutrition'
 import NutritionGoal from '@/models/NutritionGoal'
 import { verifyAuth } from '@/lib/auth'
 import {
@@ -32,23 +32,21 @@ export async function POST(request: NextRequest) {
     // users' increments into the correct local-day row.
     const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
 
-    // Try to increment on existing log
-    let log = await NutritionLog.findOneAndUpdate(
+    // Try to increment on existing row
+    let log = await DayNutrition.findOneAndUpdate(
       { userId: authResult.userId, date },
       { $inc: { 'water.current': amount } },
       { new: true }
     )
 
     if (!log) {
-      // Create new log for this day
+      // Create new row for this day
       const goals = await NutritionGoal.findOne({ userId: authResult.userId }).lean()
-      log = await NutritionLog.create({
+      log = await DayNutrition.create({
         userId: authResult.userId,
         date,
-        meals: [],
         water: { current: amount, goal: goals?.waterGoal ?? 96 },
         quickAdds: [],
-        dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, sugar: 0, sodium: 0 }
       })
     }
 
@@ -79,23 +77,21 @@ export async function PUT(request: NextRequest) {
 
     const date = utcMidnightDateKey(localDateKey(dateStr, tzOffsetMinutes))
 
-    // Try to set on existing log
-    let log = await NutritionLog.findOneAndUpdate(
+    // Try to set on existing row
+    let log = await DayNutrition.findOneAndUpdate(
       { userId: authResult.userId, date },
       { $set: { 'water.current': amount } },
       { new: true }
     )
 
     if (!log) {
-      // Create new log for this day
+      // Create new row for this day
       const goals = await NutritionGoal.findOne({ userId: authResult.userId }).lean()
-      log = await NutritionLog.create({
+      log = await DayNutrition.create({
         userId: authResult.userId,
         date,
-        meals: [],
         water: { current: amount, goal: goals?.waterGoal ?? 96 },
         quickAdds: [],
-        dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, sugar: 0, sodium: 0 }
       })
     }
 

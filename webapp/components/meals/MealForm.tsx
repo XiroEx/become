@@ -7,7 +7,7 @@ import { Plus, Trash2, X, Save, ArrowLeft, ChevronDown, AlertCircle, Loader2, Ch
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 import { resizeImageToBlob } from '@/lib/imageResize'
-import type { IFoodEntry } from '@/models/NutritionLog'
+import type { IFoodEntry } from '@/lib/nutritionTypes'
 import type { IMealItem, IMealRecipe } from '@/models/Meal'
 
 export interface MealFormInitial {
