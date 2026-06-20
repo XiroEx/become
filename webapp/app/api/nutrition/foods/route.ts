@@ -5,6 +5,7 @@ import Food, { IFood } from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { searchUSDA } from '@/lib/usda'
+import { stemMatch } from '@/lib/nutrition/foodMatch'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
 import {
   flattenFoodForResponse,
@@ -290,12 +291,7 @@ export async function GET(request: NextRequest) {
     const qLower = q.toLowerCase().trim()
     const qWords = qLower.split(/\s+/)
 
-    // Stem match: share a common prefix of up to 5 chars (handles plurals, conjugations)
-    function stemMatch(qw: string, nw: string): boolean {
-      const len = Math.min(qw.length, nw.length, 5)
-      if (len < 3) return qw === nw
-      return qw.slice(0, len) === nw.slice(0, len)
-    }
+    // Stem match (shared with the vision reconcile) — see lib/nutrition/foodMatch.
 
     // How many of the query's words this result matches across name + brand.
     // Drives both the coverage ranking and the precision filter below.
