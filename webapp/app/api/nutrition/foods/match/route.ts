@@ -15,6 +15,7 @@ import Meal from '@/models/Meal'
 import Recipe from '@/models/Recipe'
 import { verifyAuth } from '@/lib/auth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
+import { stemMatch, words, contentWords, coverage } from '@/lib/nutrition/foodMatch'
 
 type Kind = 'food' | 'meal' | 'recipe'
 
@@ -41,38 +42,8 @@ interface MatchResult {
   confidence: number
 }
 
-// ── Text helpers (mirrors the food-search ranking's coverage logic) ────────────
-
-function stemMatch(qw: string, nw: string): boolean {
-  const len = Math.min(qw.length, nw.length, 5)
-  if (len < 3) return qw === nw
-  return qw.slice(0, len) === nw.slice(0, len)
-}
-
-function words(s: string): string[] {
-  return (s || '').toLowerCase().split(/[\s,()]+/).filter(Boolean)
-}
-
-// Words that don't carry identity — dropped before requiring full coverage so
-// "grilled chicken breast" still matches a DB "Chicken Breast".
-const STOP = new Set(['of', 'with', 'and', 'the', 'a', 'an', 'in', 'on', 'or', 'to'])
-const PREP = new Set([
-  'grilled', 'baked', 'roasted', 'fried', 'steamed', 'boiled', 'cooked', 'raw',
-  'fresh', 'sauteed', 'sautéed', 'seared', 'scrambled', 'poached', 'mashed',
-  'sliced', 'diced', 'chopped', 'grated', 'toasted', 'smoked', 'plain', 'whole',
-  'organic', 'homemade',
-])
-
-function contentWords(name: string): string[] {
-  return words(name).filter((w) => !STOP.has(w) && !PREP.has(w))
-}
-
-// Fraction of `queryWords` covered by `candWords` (stem-aware).
-function coverage(queryWords: string[], candWords: string[]): number {
-  if (queryWords.length === 0) return 0
-  const covered = queryWords.filter((qw) => candWords.some((cw) => stemMatch(qw, cw))).length
-  return covered / queryWords.length
-}
+// Text helpers (stemMatch/words/STOP/PREP/contentWords/coverage) are shared with
+// the food-search ranking — see lib/nutrition/foodMatch.
 
 type FoodLean = IFood & { _id: mongoose.Types.ObjectId }
 
