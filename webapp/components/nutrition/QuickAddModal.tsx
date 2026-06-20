@@ -111,6 +111,8 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                   id="qa-calories"
                   type="number"
                   min="0"
+                  inputMode="decimal"
+                  step="any"
                   value={calories}
                   onChange={(e) => setCalories(e.target.value)}
                   placeholder="e.g., 350"
@@ -132,6 +134,8 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                     <input
                       type="number"
                       min="0"
+                      inputMode="decimal"
+                      step="any"
                       value={protein}
                       onChange={(e) => setProtein(e.target.value)}
                       placeholder="g"
@@ -145,6 +149,8 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                     <input
                       type="number"
                       min="0"
+                      inputMode="decimal"
+                      step="any"
                       value={carbs}
                       onChange={(e) => setCarbs(e.target.value)}
                       placeholder="g"
@@ -158,6 +164,8 @@ export default function QuickAddModal({ isOpen, onClose, onSubmit }: QuickAddMod
                     <input
                       type="number"
                       min="0"
+                      inputMode="decimal"
+                      step="any"
                       value={fats}
                       onChange={(e) => setFats(e.target.value)}
                       placeholder="g"
