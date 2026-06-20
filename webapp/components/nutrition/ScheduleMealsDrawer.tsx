@@ -60,7 +60,7 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import { EmptyState } from '@/components/ui'
 import { todayLocalKey, addDaysToKey, compareDateKeys } from '@/lib/mealPlanDates'
-import type { IFoodEntry } from '@/models/NutritionLog'
+import type { IFoodEntry } from '@/lib/nutritionTypes'
 import type { IMealItem } from '@/models/Meal'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 

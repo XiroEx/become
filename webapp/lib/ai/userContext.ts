@@ -19,7 +19,8 @@ import MindProgress from '@/models/MindProgress'
 import Mission from '@/models/Mission'
 import IdentityProfile from '@/models/IdentityProfile'
 import DailyWin from '@/models/DailyWin'
-import NutritionLog from '@/models/NutritionLog'
+import MealLog from '@/models/MealLog'
+import DayNutrition from '@/models/DayNutrition'
 import NutritionGoal from '@/models/NutritionGoal'
 
 const DAY = 86_400_000
@@ -92,7 +93,7 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     IdentityProfile.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
     DailyWin.find({ userId }).sort({ date: -1 }).limit(3).lean<Array<Record<string, unknown>>>().catch(() => []),
     NutritionGoal.findOne({ userId }).lean<Record<string, unknown>>().catch(() => null),
-    NutritionLog.findOne({ userId }).sort({ date: -1 }).lean<Record<string, unknown>>().catch(() => null),
+    MealLog.findOne({ user: userId }).sort({ loggedAt: -1 }).lean<Record<string, unknown>>().catch(() => null),
     Schedule.find({ userId }).lean<Array<Record<string, unknown>>>().catch(() => []),
   ])
 
@@ -210,15 +211,37 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     }
   }
 
-  // Nutrition: most recent logged day vs goals
-  if (nutLog && nutLog.dailyTotals) {
-    const t = nutLog.dailyTotals as Record<string, number>
+  // Nutrition: most recent logged day vs goals. Totals are computed from
+  // MealLog (the canonical food log) + that day's quickAdds — `nutLog` here is
+  // the user's most recent MealLog, which anchors the day we summarize.
+  if (nutLog && nutLog.loggedAt) {
+    const d = new Date(nutLog.loggedAt as Date)
+    const dayStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000 - 1)
+    const [dayLogs, extras] = await Promise.all([
+      MealLog.find({ user: userId, loggedAt: { $gte: dayStart, $lte: dayEnd } })
+        .lean<Array<Record<string, unknown>>>().catch(() => []),
+      DayNutrition.findOne({ userId, date: dayStart })
+        .lean<Record<string, unknown>>().catch(() => null),
+    ])
+    let calories = 0
+    let protein = 0
+    for (const l of dayLogs) {
+      const n = (l.totalNutrition as Record<string, number>) || {}
+      calories += n.calories || 0
+      protein += n.protein || 0
+    }
+    const quickAdds = (extras?.quickAdds as Array<Record<string, number>>) || []
+    for (const qa of quickAdds) {
+      calories += qa.calories || 0
+      protein += qa.protein || 0
+    }
     ctx.nutritionToday = {
-      calories: Math.round(t.calories ?? 0),
-      protein: Math.round(t.protein ?? 0),
+      calories: Math.round(calories),
+      protein: Math.round(protein),
       goalCalories: nutGoal ? (nutGoal.calories as number) : undefined,
       goalProtein: nutGoal ? (nutGoal.protein as number) : undefined,
-      daysAgo: daysAgo(nutLog.date as Date, now) ?? 0,
+      daysAgo: daysAgo(dayStart, now) ?? 0,
     }
   }
 
