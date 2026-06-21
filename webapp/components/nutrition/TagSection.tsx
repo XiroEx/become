@@ -378,25 +378,45 @@ export default function TagSection({
               ) : (
                 <>
                   {groups.map((group) => (
-                    <div key={group.key}>
-                      {group.mealName && (
-                        <div className="flex items-center gap-1.5 border-b border-zinc-200 bg-zinc-50/60 px-3 py-1.5 text-[11px] font-medium text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400">
-                          <span className="uppercase tracking-wide">From:</span>
+                    group.mealName ? (
+                      // Meal group — foods logged together from a saved Meal are
+                      // enclosed in an outlined card so it's clear they're a group.
+                      <div
+                        key={group.key}
+                        className="mx-3 my-2 overflow-hidden rounded-xl border border-orange-200 bg-orange-50/40 dark:border-orange-900/40 dark:bg-orange-900/10"
+                      >
+                        <div className="flex items-center gap-1.5 border-b border-orange-200/70 px-3 py-1.5 text-[11px] font-medium dark:border-orange-900/40">
+                          <ChefHat className="h-3 w-3 shrink-0 text-orange-500" />
+                          <span className="uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
                           <span className="truncate text-zinc-700 dark:text-zinc-200">{group.mealName}</span>
                         </div>
-                      )}
-                      <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                        {group.items.map((fi) => (
-                          <ItemRow
-                            key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
-                            logId={fi.logId}
-                            item={fi.item}
-                            onEdit={() => onEditEntry(fi.logId, fi.item)}
-                            onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
-                          />
-                        ))}
+                        <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
+                          {group.items.map((fi) => (
+                            <ItemRow
+                              key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
+                              logId={fi.logId}
+                              item={fi.item}
+                              onEdit={() => onEditEntry(fi.logId, fi.item)}
+                              onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div key={group.key}>
+                        <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                          {group.items.map((fi) => (
+                            <ItemRow
+                              key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
+                              logId={fi.logId}
+                              item={fi.item}
+                              onEdit={() => onEditEntry(fi.logId, fi.item)}
+                              onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
                   ))}
 
                   {/* Planned rows — one per item per plan. Visually distinct
