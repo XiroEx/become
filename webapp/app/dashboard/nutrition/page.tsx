@@ -342,11 +342,16 @@ function NutritionPageInner() {
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
+  // Full-page skeleton only on the FIRST load. On day swipes we refetch in the
+  // background and let the date-scoped content slide + update in place (matches
+  // the timeline) — gating the whole page on `loading` every date change made
+  // the dash flash a skeleton on every swipe.
+  const didInitialLoad = useRef(false)
   useEffect(() => {
     async function init() {
-      setLoading(true)
+      if (!didInitialLoad.current) setLoading(true)
       await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans()])
-      setLoading(false)
+      if (!didInitialLoad.current) { setLoading(false); didInitialLoad.current = true }
     }
     init()
   }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans])
@@ -762,7 +767,7 @@ function NutritionPageInner() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>Recipes</HeaderPillLink>
+            <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>My Stuff</HeaderPillLink>
             <HeaderPillLink href={`/dashboard/timeline?date=${dateParam}`} Icon={Clock}>Timeline</HeaderPillLink>
           </div>
         </header>
@@ -922,7 +927,7 @@ function NutritionPageInner() {
                   className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
                   <ChefHat className="h-4 w-4" />
-                  Browse recipes
+                  Browse My Stuff
                 </Link>
               </div>
             }
@@ -1074,7 +1079,7 @@ function NutritionPageInner() {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30">
               <BookOpen className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
-            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Recipes</span>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">My Stuff</span>
           </Card>
 
           <Card
