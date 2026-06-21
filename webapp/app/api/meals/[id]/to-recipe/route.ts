@@ -76,6 +76,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       usageCount: 0,
     })
 
+    // "Turn into" = MOVE, not copy. Remove the source meal now that the recipe
+    // exists. Only after a successful create so a failure never loses the meal.
+    await Meal.deleteOne({ _id: meal._id })
+
     return NextResponse.json({ success: true, recipe }, { status: 201 })
   } catch (error) {
     console.error('Error converting meal to recipe:', error)
