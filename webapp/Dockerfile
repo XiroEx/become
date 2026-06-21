@@ -12,9 +12,19 @@ WORKDIR /app
 
 # --- deps ---
 FROM base AS deps
+ARG _BUILD_SECRET_NPMRC
 COPY package.json package-lock.json* ./
-RUN --mount=type=secret,id=npmrc,target=/app/.npmrc \
-    npm install --ignore-scripts
+# Write .npmrc from the BuildKit secret (preferred — token never lands in layers).
+# If the secret mount is empty/absent (workers without redsecrets key), fall back
+# to the _BUILD_SECRET_NPMRC build-arg injected by RedRun from the workspace env.
+RUN --mount=type=secret,id=npmrc,target=/tmp/npmrc-secret \
+    if [ -s /tmp/npmrc-secret ]; then \
+      cp /tmp/npmrc-secret .npmrc; \
+    elif [ -n "$_BUILD_SECRET_NPMRC" ]; then \
+      printf '%s' "$_BUILD_SECRET_NPMRC" > .npmrc; \
+    fi && \
+    npm install --ignore-scripts && \
+    rm -f .npmrc
 
 # --- builder ---
 FROM base AS builder
