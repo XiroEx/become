@@ -158,6 +158,9 @@ function NutritionPageInner() {
   }, [])
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
+  // When set, the food picker appends to THIS specific MealLog (used by "add to
+  // this meal" on a logged meal group) rather than the smart tag-append.
+  const [addToLogId, setAddToLogId] = useState<string | null>(null)
   const { toast, showToast } = useToast(4000)
   // "+ Add tag" inline input state
   const [showAddTagInput, setShowAddTagInput] = useState(false)
@@ -499,7 +502,11 @@ function NutritionPageInner() {
       // MealLog (so their intent — a separate entry at that exact time — is
       // preserved). Otherwise we fall back to the smart "append to existing
       // log of this tag" behavior.
-      const existing = loggedAtOverride ? undefined : findLogForTag(useTag)
+      // "Add to this meal" targets a specific log; otherwise smart-append to the
+      // tag's log (unless the user pinned a custom time → always a new entry).
+      const existing = addToLogId
+        ? logs.find(l => l._id === addToLogId)
+        : (loggedAtOverride ? undefined : findLogForTag(useTag))
       let res: Response
       if (existing) {
         res = await fetch(`/api/meal-logs/${existing._id}/items`, {
@@ -534,6 +541,7 @@ function NutritionPageInner() {
         await Promise.all([fetchMealLogs(), fetchTags()])
         setFoodSearchOpen(false)
         setFoodSearchAutoScan(false)
+        setAddToLogId(null)
         // Once a session-added tag has content, it'll appear via logsByTag — drop it.
         setSessionTags(prev => prev.filter(t => t !== useTag))
       } else {
@@ -642,6 +650,17 @@ function NutritionPageInner() {
     // food" — automatically route through plan mode against the visible
     // date. Logs on a future date don't make semantic sense; planning does.
     setPlanForDate(isFutureLocalDate(selectedDate) ? selectedDate : null)
+    setAddToLogId(null)
+    setFoodSearchOpen(true)
+  }
+
+  // Add a food INTO an existing logged meal group (keeps it under that meal's
+  // outline). Always log mode against the specific MealLog.
+  const openAddToMeal = (logId: string, tag: string) => {
+    setAddToLogId(logId)
+    setFoodSearchTag(tag.toLowerCase())
+    setFoodSearchAutoScan(false)
+    setPlanForDate(null)
     setFoodSearchOpen(true)
   }
 
@@ -944,6 +963,7 @@ function NutritionPageInner() {
             logs={logsByTag[tag] || []}
             plans={plansByTag[tag] || []}
             onAddFood={(t) => openFoodSearch(t, false)}
+            onAddToMeal={(logId, t) => openAddToMeal(logId, t)}
             onEditEntry={(logId, item) => setEditEntry({ logId, item })}
             onRemoveEntry={handleRemoveEntry}
             onRemovePlan={handleRemovePlan}
@@ -1134,7 +1154,7 @@ function NutritionPageInner() {
         onSnapPhoto={() => openSnapCamera()}
         onUpload={() => openSnapUpload()}
         onDescribe={(text) => openDescribe(text)}
-        onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null) }}
+        onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null); setAddToLogId(null) }}
         onSelectFood={(entry, tag, loggedAt) => {
           if (planForDate) {
             // Submit to /api/meal-plans inline since the nutrition page's
