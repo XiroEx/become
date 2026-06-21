@@ -208,10 +208,11 @@ function titleCaseTag(tag: string): string {
     .join('-')
 }
 
-type TabId = 'all' | 'mine' | 'recent' | 'frequent'
+type TabId = 'all' | 'meals' | 'mine' | 'recent' | 'frequent'
 
 const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'all', label: 'All', Icon: Search },
+  { id: 'meals', label: 'Meals', Icon: ChefHat },
   { id: 'mine', label: 'My Foods', Icon: Bookmark },
   { id: 'recent', label: 'Recent', Icon: Clock },
   { id: 'frequent', label: 'Frequent', Icon: Star },
@@ -425,8 +426,8 @@ export default function FoodSearchModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const fetchMeals = useCallback(async (searchQuery: string) => {
-    if (!searchQuery || searchQuery.trim().length < 2) {
+  const fetchMeals = useCallback(async (searchQuery: string, all = false) => {
+    if (!all && (!searchQuery || searchQuery.trim().length < 2)) {
       setMealResults([])
       return
     }
@@ -435,7 +436,10 @@ export default function FoodSearchModal({
       const token = getToken()
       const headers: HeadersInit = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`/api/meals?q=${encodeURIComponent(searchQuery)}&limit=10`, { headers })
+      const url = all
+        ? `/api/meals?mine=true&limit=50`
+        : `/api/meals?q=${encodeURIComponent(searchQuery)}&limit=10`
+      const res = await fetch(url, { headers })
       if (res.ok) {
         const data = await res.json()
         setMealResults(Array.isArray(data.meals) ? data.meals : [])
@@ -490,6 +494,13 @@ export default function FoodSearchModal({
   useEffect(() => {
     if (!isOpen) return
 
+    // Meals tab: load all the user's meals (filtered client-side by query).
+    if (activeTab === 'meals') {
+      setResults([])
+      fetchMeals('', true)
+      return
+    }
+
     if (activeTab === 'recent' || activeTab === 'frequent' || activeTab === 'mine') {
       fetchResults('', activeTab)
       setMealResults([])
@@ -511,15 +522,14 @@ export default function FoodSearchModal({
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       fetchResults(query, activeTab)
+      fetchMeals(query) // surface matching saved meals alongside foods on All
     }, 300)
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  // fetchMeals intentionally omitted — recipe results no longer surface in food
-  // search. Save a recipe as a food to make it discoverable here.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, activeTab, isOpen, fetchResults])
+  }, [query, activeTab, isOpen, fetchResults, fetchMeals])
 
   // Active variant for the currently selected food (or null)
   const activeVariant = useMemo<FoodVariant | null>(() => {
@@ -943,7 +953,7 @@ export default function FoodSearchModal({
             <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-800">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-                  {isPlanMode ? 'Plan Food' : 'Add Food'}
+                  {isPlanMode ? 'Add to Plan' : 'Add to Day'}
                 </h2>
                 <button
                   onClick={onClose}
@@ -1181,7 +1191,7 @@ export default function FoodSearchModal({
             <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {/* Meals section — only on "all" tab + query (≥2 chars). Sticky-style header
                   matches the "My Foods" header pattern; chevron toggles collapse. */}
-              {activeTab === 'all' && query.trim().length >= 2 && (mealsLoading || mealResults.length > 0) && (
+              {((activeTab === 'all' && query.trim().length >= 2 && (mealsLoading || mealResults.length > 0)) || (activeTab === 'meals' && (mealsLoading || mealResults.length > 0))) && (
                 <div className="border-b border-zinc-100 dark:border-zinc-800">
                   <button
                     type="button"
@@ -1213,7 +1223,10 @@ export default function FoodSearchModal({
                           </div>
                         ) : (
                           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                            {mealResults.map(meal => {
+                            {(activeTab === 'meals' && query.trim()
+                              ? mealResults.filter(m => m.name.toLowerCase().includes(query.trim().toLowerCase()))
+                              : mealResults
+                            ).map(meal => {
                               const cal = Math.round(meal.totalNutrition?.calories ?? 0)
                               return (
                                 <button
