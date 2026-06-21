@@ -29,6 +29,7 @@ interface Scan {
   note?: string
   tag?: string
   thumb?: string
+  imageUrl?: string
   items: ScanItem[]
   totalNutrition: { calories: number; protein: number; carbs: number; fats: number }
   createdAt: string
