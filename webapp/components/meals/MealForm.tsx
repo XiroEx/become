@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Trash2, X, Save, ArrowLeft, ChevronDown, AlertCircle, Loader2, ChefHat, ImagePlus, ImageIcon } from 'lucide-react'
 import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
-import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import type { IMealItem, IMealRecipe } from '@/models/Meal'
@@ -51,25 +50,6 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
   const [defaultTag, setDefaultTag] = useState<string>(initial?.defaultTag ?? '')
   const [items, setItems] = useState<(IMealItem & { _id?: string })[]>(initial?.items ?? [])
-  const [hasRecipe, setHasRecipe] = useState<boolean>(!!initial?.recipe)
-  const [recipeInstructions, setRecipeInstructions] = useState<string>(
-    initial?.recipe?.instructions?.join('\n') ?? ''
-  )
-  const [prepTime, setPrepTime] = useState<string>(
-    initial?.recipe?.prepTimeMinutes != null ? String(initial.recipe.prepTimeMinutes) : ''
-  )
-  const [cookTime, setCookTime] = useState<string>(
-    initial?.recipe?.cookTimeMinutes != null ? String(initial.recipe.cookTimeMinutes) : ''
-  )
-  const [recipeServings, setRecipeServings] = useState<string>(
-    initial?.recipe?.servings != null ? String(initial.recipe.servings) : '1'
-  )
-  // Optional explicit per-serving bridges. When set, save-as-food on this
-  // meal uses these instead of the auto-estimator (UNITS_AND_SERVINGS_PLAN §10.8).
-  const [bridge, setBridge] = useState<BridgeValues>({
-    gramsPerServing: initial?.recipe?.gramsPerServing,
-    mlPerServing: initial?.recipe?.mlPerServing,
-  })
 
   const [foodSearchOpen, setFoodSearchOpen] = useState(false)
   const [tagPickerOpen, setTagPickerOpen] = useState(false)
@@ -87,15 +67,6 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       setTags(initial.tags ?? [])
       setDefaultTag(initial.defaultTag ?? '')
       setItems(initial.items ?? [])
-      setHasRecipe(!!initial.recipe)
-      setRecipeInstructions(initial.recipe?.instructions?.join('\n') ?? '')
-      setPrepTime(initial.recipe?.prepTimeMinutes != null ? String(initial.recipe.prepTimeMinutes) : '')
-      setCookTime(initial.recipe?.cookTimeMinutes != null ? String(initial.recipe.cookTimeMinutes) : '')
-      setRecipeServings(initial.recipe?.servings != null ? String(initial.recipe.servings) : '1')
-      setBridge({
-        gramsPerServing: initial.recipe?.gramsPerServing,
-        mlPerServing: initial.recipe?.mlPerServing,
-      })
     }
   }, [initial])
 
@@ -313,19 +284,8 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         servings: it.servings,
         nutrition: it.nutrition,
       })),
-      recipe: hasRecipe
-        ? {
-            instructions: recipeInstructions
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.length > 0),
-            prepTimeMinutes: prepTime ? Number(prepTime) || undefined : undefined,
-            cookTimeMinutes: cookTime ? Number(cookTime) || undefined : undefined,
-            servings: Number(recipeServings) || 1,
-            gramsPerServing: bridge.gramsPerServing,
-            mlPerServing: bridge.mlPerServing,
-          }
-        : undefined,
+      // Meals don't carry cooking instructions — those belong to Recipes. The
+      // `recipe` subfield is intentionally not written from the meal form.
     }
 
     try {
@@ -353,7 +313,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         }
       } else {
         const d = await res.json().catch(() => ({}))
-        setError(d.error || 'Failed to save recipe.')
+        setError(d.error || 'Failed to save meal.')
       }
     } catch {
       setError('Network error. Please try again.')
@@ -376,7 +336,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             Back
           </button>
           <h1 className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">
-            {mealId ? 'Edit Recipe' : 'New Recipe'}
+            {mealId ? 'Edit Meal' : 'New Meal'}
           </h1>
           <div className="w-16" /> {/* spacer */}
         </div>
@@ -661,100 +621,6 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
               Add item
             </button>
           </div>
-        </div>
-
-        {/* Recipe toggle */}
-        <div>
-          <label className="flex items-center justify-between gap-3 py-2 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-3 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
-            <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-white">Cooking instructions</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Add a recipe with prep / cook time.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setHasRecipe(v => !v)}
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                hasRecipe ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'
-              }`}
-              aria-pressed={hasRecipe}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                  hasRecipe ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </label>
-
-          <AnimatePresence>
-            {hasRecipe && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="mt-2 space-y-3 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-3 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Prep (min)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={prepTime}
-                        onChange={(e) => setPrepTime(e.target.value)}
-                        className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Cook (min)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={cookTime}
-                        onChange={(e) => setCookTime(e.target.value)}
-                        className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                        Yields (servings)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={recipeServings}
-                        onChange={(e) => setRecipeServings(e.target.value)}
-                        className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Instructions (one step per line)
-                    </label>
-                    <textarea
-                      value={recipeInstructions}
-                      onChange={(e) => setRecipeInstructions(e.target.value)}
-                      rows={5}
-                      placeholder={'1. Combine all ingredients in a blender\n2. Blend until smooth'}
-                      className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                    />
-                  </div>
-                  <BridgeFieldGroup
-                    value={bridge}
-                    onChange={setBridge}
-                    collapsible
-                    title="Optional: weight or volume per serving"
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* Error */}

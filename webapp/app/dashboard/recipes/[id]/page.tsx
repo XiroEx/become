@@ -8,6 +8,7 @@ import PageTransition from '@/components/PageTransition'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import {
   ArrowLeft,
+  Pencil,
   Trash2,
   ScrollText,
   Loader2,
@@ -224,6 +225,13 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
               {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeftRight className="h-3.5 w-3.5" />}
               To meal
             </button>
+            <Link
+              href={`/dashboard/recipes/${recipe._id}/edit`}
+              className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Link>
             <button
               onClick={() => setConfirmDelete(true)}
               className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
