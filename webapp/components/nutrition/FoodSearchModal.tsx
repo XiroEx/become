@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
@@ -317,6 +317,18 @@ export default function FoodSearchModal({
   const debounceRef = useRef<NodeJS.Timeout>(undefined)
 
   useLockScroll(isOpen)
+
+  // Focus the search field as the modal opens — WITHOUT scrolling the page.
+  // The `autoFocus` attribute (and a plain .focus()) make iOS scroll the
+  // document to reveal the input, jumping the view to the bottom. preventScroll
+  // keeps the one-tap keyboard while pinning the view at the top. useLayoutEffect
+  // runs in the commit phase (same timing as autoFocus), so the keyboard still
+  // comes up on the opening tap.
+  useLayoutEffect(() => {
+    if (isOpen && !autoScan) {
+      inputRef.current?.focus({ preventScroll: true })
+    }
+  }, [isOpen, autoScan])
 
   // Keep the search textarea one line tall when empty and grow only as the
   // VALUE wraps. When empty, reset to the rows=1 height so a (long, wrapping)
@@ -1052,10 +1064,9 @@ export default function FoodSearchModal({
                   <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
                   <textarea
                     ref={inputRef}
-                    // autoFocus brings the keyboard up on the SAME tap that opens
-                    // the modal (one press) — it must run within the user gesture.
-                    // The earlier choppiness was Low Power Mode, not this.
-                    autoFocus
+                    // Focus is handled by a useLayoutEffect with preventScroll
+                    // (see above) — the bare `autoFocus` attribute scrolled iOS
+                    // to the input (jumped the page to the bottom).
                     rows={1}
                     value={query}
                     onChange={(e) => {
