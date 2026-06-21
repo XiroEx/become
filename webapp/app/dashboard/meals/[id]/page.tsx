@@ -346,7 +346,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           recipe: meal.recipe ? { servings: meal.recipe.servings } : undefined,
           tags: meal.tags,
         } : null}
-        defaultTag={getDefaultTagForNow()}
+        defaultTag={meal.defaultTag || getDefaultTagForNow()}
         availableTags={tagsResp}
         onClose={() => setApplySheetOpen(false)}
         onApplied={() => {

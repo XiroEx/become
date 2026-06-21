@@ -15,6 +15,7 @@ export interface MealFormInitial {
   description?: string
   imageUrl?: string
   tags: string[]
+  defaultTag?: string
   items: (IMealItem & { _id?: string })[]
   recipe?: IMealRecipe
 }
@@ -48,6 +49,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   const [imageError, setImageError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
+  const [defaultTag, setDefaultTag] = useState<string>(initial?.defaultTag ?? '')
   const [items, setItems] = useState<(IMealItem & { _id?: string })[]>(initial?.items ?? [])
   const [hasRecipe, setHasRecipe] = useState<boolean>(!!initial?.recipe)
   const [recipeInstructions, setRecipeInstructions] = useState<string>(
@@ -83,6 +85,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       setDescription(initial.description ?? '')
       setImageUrl(initial.imageUrl)
       setTags(initial.tags ?? [])
+      setDefaultTag(initial.defaultTag ?? '')
       setItems(initial.items ?? [])
       setHasRecipe(!!initial.recipe)
       setRecipeInstructions(initial.recipe?.instructions?.join('\n') ?? '')
@@ -298,6 +301,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
       name: name.trim(),
       description: description.trim() || undefined,
       tags,
+      defaultTag: defaultTag || undefined,
       items: items.map(it => ({
         foodId: it.foodId ? String(it.foodId) : undefined,
         variantId: it.variantId ? String(it.variantId) : undefined,
@@ -475,6 +479,34 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
             rows={2}
             className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white dark:focus:ring-white/10"
           />
+        </div>
+
+        {/* Default meal time — the slot this meal pre-selects when logged. You
+            can still log it to any meal (e.g. chili to lunch or dinner). */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Default meal time
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {allTagOptions.map(tag => {
+              const active = defaultTag === tag
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setDefaultTag(active ? '' : tag)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  {titleCaseTag(tag)}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">Optional — just the default slot when you log this meal.</p>
         </div>
 
         {/* Tags */}

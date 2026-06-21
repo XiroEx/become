@@ -37,7 +37,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (tag) {
-      filter.tags = tag
+      // Match the meal's default slot OR any of its arbitrary tags.
+      const tagCond = { $or: [{ defaultTag: tag }, { tags: tag }] }
+      filter = Object.keys(filter).length ? { $and: [filter, tagCond] } : tagCond
     }
 
     let meals
@@ -115,6 +117,7 @@ export async function POST(request: NextRequest) {
       items,
       recipe: body.recipe,
       tags: Array.isArray(body.tags) ? body.tags : [],
+      defaultTag: typeof body.defaultTag === 'string' && body.defaultTag ? body.defaultTag.toLowerCase() : undefined,
       createdBy: authResult.userId,
       isPublic: !!body.isPublic,
       // Only admins may mark meals verified at creation time.
