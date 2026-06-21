@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from '@/components/PageTransition'
 import MealCard from '@/components/meals/MealCard'
+import RecipeCard from '@/components/meals/RecipeCard'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import SavedFoodCard from '@/components/meals/SavedFoodCard'
-import { Search, Plus, ChefHat, Loader2, X, Tag as TagIcon, Bookmark } from 'lucide-react'
+import { Search, Plus, ChefHat, ScrollText, Loader2, X, Tag as TagIcon, Bookmark } from 'lucide-react'
 import { EmptyState, Toast, SegmentedControl } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { useToast } from '@/hooks/useToast'
@@ -29,6 +30,18 @@ interface MealLite {
   recipe?: { servings?: number }
   createdBy?: string
   isVerified?: boolean
+}
+
+interface RecipeLite {
+  _id: string
+  name: string
+  description?: string
+  imageUrl?: string
+  tags?: string[]
+  ingredients?: unknown[]
+  totalsPerServing?: { calories: number; protein: number; carbs: number; fats: number }
+  savedFoodId?: string
+  createdBy?: string
 }
 
 interface MeResponse {
@@ -74,12 +87,16 @@ function titleCaseTag(tag: string): string {
     .join('-')
 }
 
-type Tab = 'meals' | 'foods'
+type Tab = 'recipes' | 'meals' | 'foods'
 
 export default function MealsPage() {
   const [tab, setTab] = useState<Tab>('meals')
   const [meals, setMeals] = useState<MealLite[]>([])
   const [savedFoods, setSavedFoods] = useState<SavedFoodLite[]>([])
+  const [recipes, setRecipes] = useState<RecipeLite[]>([])
+  const [recipesLoading, setRecipesLoading] = useState(false)
+  const [busyRecipeId, setBusyRecipeId] = useState<string | null>(null)
+  const [convertingId, setConvertingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [foodsLoading, setFoodsLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -180,10 +197,91 @@ export default function MealsPage() {
     fetchTags()
   }, [fetchMe, fetchTags])
 
+  const fetchRecipes = useCallback(async () => {
+    setRecipesLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (debouncedSearch) params.set('q', debouncedSearch)
+      params.set('mine', 'true')
+      params.set('limit', '50')
+      const res = await fetch(`/api/nutrition/recipes?${params.toString()}`, { headers: getHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setRecipes(Array.isArray(data.recipes) ? data.recipes : [])
+      } else {
+        setRecipes([])
+      }
+    } catch {
+      setRecipes([])
+    } finally {
+      setRecipesLoading(false)
+    }
+  }, [debouncedSearch, getHeaders])
+
   useEffect(() => {
-    if (tab === 'meals') fetchMeals()
+    if (tab === 'recipes') fetchRecipes()
+    else if (tab === 'meals') fetchMeals()
     else fetchSavedFoods()
-  }, [tab, fetchMeals, fetchSavedFoods])
+  }, [tab, fetchRecipes, fetchMeals, fetchSavedFoods])
+
+  // ── Recipe / conversion handlers ───────────────────────────────────────────
+  // Save-or-Log: recipes are never logged directly. First tap mints (or reuses)
+  // a Food from the recipe; once saved, tapping logs that Food via FoodLogSheet.
+  const handleRecipeSaveOrLog = async (recipe: RecipeLite) => {
+    setBusyRecipeId(recipe._id)
+    try {
+      const res = await fetch(`/api/nutrition/recipes/${recipe._id}/save-as-food`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { showToast(data?.error || 'Could not save recipe', 'error'); return }
+      const wasSaved = recipe.savedFoodId || data?.alreadyExisted
+      // Reflect the saved state so the button flips to "Log".
+      setRecipes(prev => prev.map(r => r._id === recipe._id
+        ? { ...r, savedFoodId: r.savedFoodId || data?.food?._id || data?.food?.id || 'saved' } : r))
+      if (wasSaved && data?.food) {
+        setLogTargetFood(data.food as SavedFoodLite)  // open the log sheet for the Food
+      } else {
+        showToast('Saved to your Foods — tap again to log it', 'success')
+      }
+    } catch {
+      showToast('Could not save recipe', 'error')
+    } finally {
+      setBusyRecipeId(null)
+    }
+  }
+
+  const handleRecipeToMeal = async (recipe: RecipeLite) => {
+    setConvertingId(recipe._id)
+    try {
+      const res = await fetch(`/api/nutrition/recipes/${recipe._id}/to-meal`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { showToast(data?.error || 'Could not convert', 'error'); return }
+      showToast(`"${recipe.name}" added to your Meals`, 'success')
+    } catch {
+      showToast('Could not convert', 'error')
+    } finally {
+      setConvertingId(null)
+    }
+  }
+
+  const handleMealToRecipe = async (meal: MealLite) => {
+    setConvertingId(meal._id)
+    try {
+      const res = await fetch(`/api/meals/${meal._id}/to-recipe`, {
+        method: 'POST', headers: getHeaders(),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { showToast(data?.error || 'Could not convert', 'error'); return }
+      showToast(`"${meal.name}" added to your Recipes`, 'success')
+    } catch {
+      showToast('Could not convert', 'error')
+    } finally {
+      setConvertingId(null)
+    }
+  }
 
   const allTags = useMemo<string[]>(() => {
     const seen = new Set<string>()
@@ -274,7 +372,9 @@ export default function MealsPage() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">My Stuff</h1>
         </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
-          {tab === 'meals'
+          {tab === 'recipes'
+            ? 'Recipes become foods — save one as a food, then log it.'
+            : tab === 'meals'
             ? 'Your saved meals — groups of foods you can log in one tap.'
             : 'Your saved foods. Tap to log.'}
         </p>
@@ -283,6 +383,7 @@ export default function MealsPage() {
       {/* Tab strip — shared SegmentedControl */}
       <SegmentedControl
         segments={[
+          { value: 'recipes', label: 'Recipes', Icon: ScrollText },
           { value: 'meals', label: 'Meals', Icon: ChefHat },
           { value: 'foods', label: 'Foods', Icon: Bookmark },
         ]}
@@ -297,7 +398,7 @@ export default function MealsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={tab === 'meals' ? 'Search your meals…' : 'Search your foods…'}
+          placeholder={tab === 'recipes' ? 'Search your recipes…' : tab === 'meals' ? 'Search your meals…' : 'Search your foods…'}
           className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600"
         />
         {search && (
@@ -353,6 +454,44 @@ export default function MealsPage() {
       )}
 
       {/* Meal list (Meals tab only) */}
+      {/* Recipes list */}
+      {tab === 'recipes' && (recipesLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+        </div>
+      ) : recipes.length === 0 ? (
+        <EmptyState
+          icon={<ScrollText className="h-7 w-7" />}
+          title={debouncedSearch ? 'No recipes match' : 'No recipes yet'}
+          description={
+            debouncedSearch
+              ? 'Try a different search.'
+              : 'A recipe is a set of ingredients you save as a food (e.g. Turkey Chili). Convert a meal to a recipe, or build one.'
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-3">
+          <AnimatePresence initial={false}>
+            {recipes.map(recipe => (
+              <RecipeCard
+                key={recipe._id}
+                name={recipe.name}
+                description={recipe.description}
+                imageUrl={recipe.imageUrl}
+                tags={recipe.tags || []}
+                perServing={recipe.totalsPerServing}
+                ingredientCount={recipe.ingredients?.length ?? 0}
+                saved={Boolean(recipe.savedFoodId)}
+                busy={busyRecipeId === recipe._id}
+                converting={convertingId === recipe._id}
+                onSaveOrLog={() => handleRecipeSaveOrLog(recipe)}
+                onConvertToMeal={() => handleRecipeToMeal(recipe)}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
+      ))}
+
       {tab === 'meals' && (loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
@@ -360,11 +499,11 @@ export default function MealsPage() {
       ) : meals.length === 0 ? (
         <EmptyState
           icon={<ChefHat className="h-7 w-7" />}
-          title={debouncedSearch || selectedTag ? 'No recipes match' : 'No saved recipes yet'}
+          title={debouncedSearch || selectedTag ? 'No meals match' : 'No saved meals yet'}
           description={
             debouncedSearch || selectedTag
               ? 'Try a different search or clear the filter.'
-              : 'Save your go-to recipes as templates and log them with one tap.'
+              : 'Save a group of foods as a meal and log it with one tap.'
           }
           action={!debouncedSearch && !selectedTag ? (
             <Link
@@ -372,7 +511,7 @@ export default function MealsPage() {
               className="flex items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               <Plus className="h-4 w-4" />
-              Create your first recipe
+              Create your first meal
             </Link>
           ) : undefined}
         />
@@ -393,6 +532,9 @@ export default function MealsPage() {
               applying={false}
               applied={appliedIds.has(meal._id)}
               onApply={() => handleApplyOpen(meal._id)}
+              onConvertToRecipe={Boolean(currentUserId && meal.createdBy && String(meal.createdBy) === currentUserId)
+                ? () => handleMealToRecipe(meal) : undefined}
+              converting={convertingId === meal._id}
             />
           ))}
         </div>
@@ -443,12 +585,12 @@ export default function MealsPage() {
         </div>
       ))}
 
-      {/* Floating + New Recipe button (Recipes tab only — favorites are added via search modal) */}
+      {/* Floating + New Meal button (Meals tab only — foods are added via search modal) */}
       {tab === 'meals' && (
         <Link
           href="/dashboard/meals/new"
           className="fixed bottom-28 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
-          aria-label="Create new recipe"
+          aria-label="Create new meal"
         >
           <Plus className="h-6 w-6" />
         </Link>

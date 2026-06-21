@@ -43,6 +43,10 @@ export interface IRecipe {
   isPublic: boolean
   createdBy?: Types.ObjectId
   imageUrl?: string
+  /** The Food this recipe has been saved as (recipe → "save as food"). When
+   *  set, the recipe is logged by logging this Food — recipes are never logged
+   *  directly. Drives the "Save or Log" affordance. */
+  savedFoodId?: Types.ObjectId
   usageCount: number
   createdAt?: Date
   updatedAt?: Date
@@ -89,6 +93,7 @@ const RecipeSchema = new Schema<IRecipe>({
   isPublic: { type: Boolean, default: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   imageUrl: { type: String },
+  savedFoodId: { type: Schema.Types.ObjectId, ref: 'Food' },
   usageCount: { type: Number, default: 0 }
 }, {
   timestamps: true
