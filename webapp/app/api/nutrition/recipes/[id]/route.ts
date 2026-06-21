@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Recipe from '@/models/Recipe'
+import Food from '@/models/Food'
+import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
 
 // GET: Get a single recipe by ID
@@ -125,6 +127,15 @@ export async function DELETE(
     }
 
     await Recipe.deleteOne({ _id: id })
+
+    // Don't orphan references: any Food minted from this recipe keeps a
+    // `recipeId` back-pointer — clear it so it never dangles. Also drop the
+    // recipe's stored image. Foods themselves are independent (own nutrition)
+    // and are intentionally kept.
+    await Promise.all([
+      Food.updateMany({ recipeId: recipe._id }, { $unset: { recipeId: 1 } }),
+      RecipeImage.deleteOne({ recipeId: recipe._id }),
+    ])
 
     return NextResponse.json({ success: true })
   } catch (error) {
