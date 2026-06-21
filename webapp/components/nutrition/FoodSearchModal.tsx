@@ -423,7 +423,7 @@ export default function FoodSearchModal({
     } finally {
       setBarcodeLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [])
 
   const fetchMeals = useCallback(async (searchQuery: string, all = false) => {
@@ -528,7 +528,7 @@ export default function FoodSearchModal({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [query, activeTab, isOpen, fetchResults, fetchMeals])
 
   // Active variant for the currently selected food (or null)
@@ -1273,6 +1273,17 @@ export default function FoodSearchModal({
                 </div>
               )}
 
+              {/* Meals tab — empty state when the user has no saved meals. */}
+              {activeTab === 'meals' && !mealsLoading && mealResults.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 py-16 px-4">
+                  <ChefHat className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center">No saved meals yet.</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center max-w-xs">
+                    Save a plate from a scan, or build one in My Stuff → Meals.
+                  </p>
+                </div>
+              )}
+
               {/* Foods header — only when meals are also visible, so users see the boundary. */}
               {activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 && (
                 <button
@@ -1287,7 +1298,8 @@ export default function FoodSearchModal({
                 </button>
               )}
 
-              {!foodsExpanded && activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 ? null :
+              {activeTab === 'meals' ? null :
+              !foodsExpanded && activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 ? null :
               loading ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
