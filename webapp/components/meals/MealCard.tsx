@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Pencil, ChefHat, Loader2, Check } from 'lucide-react'
+import { Pencil, ChefHat, Loader2, Check, ArrowLeftRight } from 'lucide-react'
 import { Card } from '@/components/ui'
 
 interface MealCardProps {
@@ -23,6 +23,9 @@ interface MealCardProps {
   applying?: boolean
   applied?: boolean
   onApply: () => void
+  /** Optional: convert this meal into a Recipe (a group intended to become a Food). */
+  onConvertToRecipe?: () => void
+  converting?: boolean
 }
 
 function titleCaseTag(tag: string): string {
@@ -45,6 +48,8 @@ export default function MealCard({
   applying,
   applied,
   onApply,
+  onConvertToRecipe,
+  converting,
 }: MealCardProps) {
   const cal = Math.round(totalNutrition?.calories ?? 0)
   const protein = Math.round(totalNutrition?.protein ?? 0)
@@ -140,26 +145,39 @@ export default function MealCard({
             )}
           </div>
 
-          {/* Apply button */}
-          <button
-            onClick={onApply}
-            disabled={applying || applied}
-            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            {applying ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Logging…
-              </>
-            ) : applied ? (
-              <>
-                <Check className="h-3.5 w-3.5" />
-                Logged!
-              </>
-            ) : (
-              'Log to today'
+          {/* Apply button (+ optional convert-to-recipe) */}
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              onClick={onApply}
+              disabled={applying || applied}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+            >
+              {applying ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Logging…
+                </>
+              ) : applied ? (
+                <>
+                  <Check className="h-3.5 w-3.5" />
+                  Logged!
+                </>
+              ) : (
+                'Log to today'
+              )}
+            </button>
+            {onConvertToRecipe && (
+              <button
+                onClick={onConvertToRecipe}
+                disabled={converting}
+                title="Convert to a recipe (a group intended to be saved as a food)"
+                className="flex shrink-0 items-center justify-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeftRight className="h-3.5 w-3.5" />}
+                Recipe
+              </button>
             )}
-          </button>
+          </div>
         </div>
       </div>
     </Card>
