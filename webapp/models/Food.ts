@@ -127,6 +127,10 @@ export interface IFood {
   usageCount: number
   createdBy?: Types.ObjectId
 
+  /** When this Food was minted from a Recipe (recipe → "save as food"), the
+   *  source recipe id — so the Food links back to the recipe it came from. */
+  recipeId?: Types.ObjectId
+
   /**
    * When true, this Food has been auto-flagged (or admin-flagged) for review
    * — typically because nutrition values are suspect, the slug had to be
@@ -220,6 +224,7 @@ const FoodSchema = new Schema<IFood>({
 
   usageCount: { type: Number, default: 0 },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  recipeId: { type: Schema.Types.ObjectId, ref: 'Recipe' },
 
   needsReview: { type: Boolean, default: false },
   groupKey: { type: String },
