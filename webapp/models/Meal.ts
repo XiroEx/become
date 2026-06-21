@@ -75,6 +75,10 @@ export interface IMeal {
 
   recipe?: IMealRecipe
   tags: string[]
+  /** Default meal-time slot suggested when logging this meal (breakfast/lunch/
+   *  dinner/snack or a custom tag). The user can still log it to ANY tag — this
+   *  is only the pre-selected default (e.g. chili defaults to dinner). */
+  defaultTag?: string
 
   createdBy?: Types.ObjectId
   isPublic: boolean
@@ -137,6 +141,7 @@ const MealSchema = new Schema<IMeal>({
 
   recipe: { type: MealRecipeSchema },
   tags: { type: [String], default: [] },
+  defaultTag: { type: String },
 
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   isPublic: { type: Boolean, default: false },

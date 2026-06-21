@@ -30,6 +30,7 @@ interface MealLite {
   recipe?: { servings?: number }
   createdBy?: string
   isVerified?: boolean
+  defaultTag?: string
 }
 
 interface RecipeLite {
@@ -586,7 +587,7 @@ export default function MealsPage() {
           recipe: applyTargetMeal.recipe ? { servings: applyTargetMeal.recipe.servings } : undefined,
           tags: applyTargetMeal.tags,
         } : null}
-        defaultTag={getDefaultTagForNow()}
+        defaultTag={applyTargetMeal?.defaultTag || getDefaultTagForNow()}
         availableTags={tagsResp}
         onClose={() => setApplyTargetMeal(null)}
         onApplied={() => {
