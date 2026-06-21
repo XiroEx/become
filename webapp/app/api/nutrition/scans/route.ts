@@ -77,12 +77,17 @@ export async function POST(request: NextRequest) {
       && body.thumb.startsWith('data:image/')
       && body.thumb.length <= 200_000
       ? body.thumb : undefined
+    // Full-res image lives in blob storage; only accept our own same-origin blob
+    // path (uploaded via /api/nutrition/scans/image), never an arbitrary URL.
+    const imageUrl = typeof body?.imageUrl === 'string' && body.imageUrl.startsWith('/api/blob/')
+      ? body.imageUrl.slice(0, 512) : undefined
     const scan = await PlateScan.create({
       user: new mongoose.Types.ObjectId(auth.userId),
       source: body?.source === 'describe' ? 'describe' : 'photo',
       note: typeof body?.note === 'string' ? body.note.slice(0, 500) : undefined,
       tag: typeof body?.tag === 'string' ? body.tag : undefined,
       thumb,
+      imageUrl,
       items,
       totalNutrition,
       loggedAt: body?.loggedAt ? new Date(body.loggedAt) : new Date(),

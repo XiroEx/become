@@ -55,6 +55,9 @@ interface SnapPlateModalProps {
     confidence?: number
     matchKind?: 'food' | 'meal' | 'recipe'
   }> | null
+  /** Full-res image URL of a re-opened saved scan (served via /api/blob). Shown
+   *  as the review image so re-opening history shows the real photo. */
+  initialImageUrl?: string | null
 }
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -213,6 +216,7 @@ export default function SnapPlateModal({
   initialImage = null,
   initialDescribe = null,
   initialReview = null,
+  initialImageUrl = null,
 }: SnapPlateModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
@@ -260,7 +264,7 @@ export default function SnapPlateModal({
             confidence: si.confidence ?? 1,
           } : null,
         }))
-        setState({ phase: 'review', items, imageThumb: '' })
+        setState({ phase: 'review', items, imageThumb: initialImageUrl || '' })
       } else if (initialPhase === 'describe') {
         setDescribeText(initialDescribe ?? '')
         setState({ phase: 'describe' })
@@ -268,7 +272,7 @@ export default function SnapPlateModal({
         setState({ phase: 'idle' })
       }
     }
-  }, [open, tag, initialPhase, initialImage, initialDescribe, initialReview])
+  }, [open, tag, initialPhase, initialImage, initialDescribe, initialReview, initialImageUrl])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Reconcile new review items against the DB once they land (any source:
@@ -512,6 +516,26 @@ export default function SnapPlateModal({
           ...(it.match ? { matchKind: it.match.kind } : {}),
         }
       })
+      // Full-res image → blob storage (best-effort, never blocks logging). On a
+      // fresh capture `imageThumb` is a ~1024px data: URL we upload to MinIO; on
+      // a re-opened scan it's already an /api/blob URL we just reuse.
+      let imageUrl: string | undefined
+      if (imageThumb && imageThumb.startsWith('/api/blob/')) {
+        imageUrl = imageThumb
+      } else if (imageThumb && imageThumb.startsWith('data:image/')) {
+        try {
+          const blob = await (await fetch(imageThumb)).blob()
+          const fd = new FormData()
+          fd.append('file', new File([blob], 'scan.jpg', { type: blob.type || 'image/jpeg' }))
+          const up = await fetch('/api/nutrition/scans/image', {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+            body: fd,
+          })
+          if (up.ok) { const j = await up.json().catch(() => null); imageUrl = j?.imageUrl || undefined }
+        } catch { /* no full-res — fall back to the inline thumb */ }
+      }
+
       // Tiny thumbnail for the scan history list (photo scans only). Best-effort.
       let thumb: string | undefined
       if (imageThumb && imageThumb.startsWith('data:image/')) {
@@ -531,6 +555,7 @@ export default function SnapPlateModal({
           loggedAt,
           mealLogId: logData?.mealLog?._id ?? logData?._id,
           ...(thumb ? { thumb } : {}),
+          ...(imageUrl ? { imageUrl } : {}),
         }),
       }).catch(() => { /* best-effort history */ })
 
@@ -940,8 +965,9 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
 
   return (
     <div className="space-y-1 pb-2">
-      {/* Thumb — only when this estimate came from a photo */}
-      {imageThumb.startsWith('data:') && (
+      {/* Thumb — only when this estimate came from a photo. `imageThumb` is a
+          data: URL on a fresh capture, or an /api/blob URL on a re-opened scan. */}
+      {(imageThumb.startsWith('data:') || imageThumb.startsWith('/api/blob/')) && (
         <div className="relative mx-4 mt-4 mb-2 overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800" style={{ height: 140 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
