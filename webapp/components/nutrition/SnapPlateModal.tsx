@@ -605,24 +605,24 @@ export default function SnapPlateModal({
         body: JSON.stringify({ name: name.trim(), items }),
       })
       if (res.status === 402 || res.status === 403) {
-        showToast('Saving recipes needs a Plus plan.', 'error')
+        showToast('Saving meals needs a Plus plan.', 'error')
         return false
       }
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save recipe.", 'error')
+        showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save meal.", 'error')
         return false
       }
       const data = await res.json().catch(() => null)
       const mealId = data?.meal?._id
-      showToast(`Saved "${name.trim()}" to your recipes`, 'success')
-      // Take the user straight to the saved recipe (where they can also delete it).
+      showToast(`Saved "${name.trim()}" to your meals`, 'success')
+      // Take the user straight to the saved meal (where they can also delete it).
       onClose()
       if (mealId) router.push(`/dashboard/meals/${mealId}`)
       return true
     } catch (err) {
-      console.error('[SnapPlateModal] save recipe error', err)
-      showToast("Couldn't save recipe. Check your connection.", 'error')
+      console.error('[SnapPlateModal] save meal error', err)
+      showToast("Couldn't save meal. Check your connection.", 'error')
       return false
     }
   }
@@ -1170,7 +1170,7 @@ function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecip
         </button>
       </div>
 
-      {/* Save as recipe — reusable named meal you can re-log later */}
+      {/* Save as meal — a reusable named group of foods you can re-log later */}
       {saveOpen ? (
         <div className="mt-2 flex items-center gap-2">
           <input
@@ -1178,7 +1178,7 @@ function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecip
             value={recipeName}
             onChange={(e) => setRecipeName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submitRecipe() }}
-            placeholder="Recipe name"
+            placeholder="Meal name"
             autoFocus
             className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
           />
@@ -1206,7 +1206,7 @@ function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecip
           className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-800 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
           <BookmarkPlus className="h-3.5 w-3.5" />
-          Save as recipe
+          Save as meal
         </button>
       )}
     </div>
