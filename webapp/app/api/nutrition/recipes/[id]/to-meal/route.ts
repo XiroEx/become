@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Meal, { computeTotalNutrition, IMealItem } from '@/models/Meal'
 import Recipe, { IRecipeIngredient } from '@/models/Recipe'
 import Food from '@/models/Food'
+import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
 
 // POST /api/nutrition/recipes/[id]/to-meal — convert a Recipe into a Meal
@@ -74,12 +75,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
 
     // "Turn into" = MOVE, not copy. Remove the source recipe now that the meal
-    // exists (only after a successful create). If the recipe had been saved as a
-    // Food, drop that food's back-reference so it doesn't dangle.
-    if (recipe.savedFoodId) {
-      await Food.updateOne({ _id: recipe.savedFoodId }, { $unset: { recipeId: 1 } }).catch(() => null)
-    }
+    // exists (only after a successful create). Clear the recipe back-pointer on
+    // any Food minted from it (kept — foods are independent) and drop its image.
+    await Food.updateMany({ recipeId: recipe._id }, { $unset: { recipeId: 1 } }).catch(() => null)
     await Recipe.deleteOne({ _id: recipe._id })
+    await RecipeImage.deleteOne({ recipeId: recipe._id }).catch(() => null)
 
     return NextResponse.json({ success: true, meal }, { status: 201 })
   } catch (error) {
