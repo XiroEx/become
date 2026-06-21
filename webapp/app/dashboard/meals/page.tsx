@@ -96,7 +96,6 @@ export default function MealsPage() {
   const [recipes, setRecipes] = useState<RecipeLite[]>([])
   const [recipesLoading, setRecipesLoading] = useState(false)
   const [busyRecipeId, setBusyRecipeId] = useState<string | null>(null)
-  const [convertingId, setConvertingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [foodsLoading, setFoodsLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -251,41 +250,6 @@ export default function MealsPage() {
     }
   }
 
-  const handleRecipeToMeal = async (recipe: RecipeLite) => {
-    setConvertingId(recipe._id)
-    try {
-      const res = await fetch(`/api/nutrition/recipes/${recipe._id}/to-meal`, {
-        method: 'POST', headers: getHeaders(),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok) { showToast(data?.error || 'Could not convert', 'error'); return }
-      // Moved, not copied — drop it from the Recipes list.
-      setRecipes(prev => prev.filter(r => r._id !== recipe._id))
-      showToast(`"${recipe.name}" is now a meal`, 'success')
-    } catch {
-      showToast('Could not convert', 'error')
-    } finally {
-      setConvertingId(null)
-    }
-  }
-
-  const handleMealToRecipe = async (meal: MealLite) => {
-    setConvertingId(meal._id)
-    try {
-      const res = await fetch(`/api/meals/${meal._id}/to-recipe`, {
-        method: 'POST', headers: getHeaders(),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok) { showToast(data?.error || 'Could not convert', 'error'); return }
-      // Moved, not copied — drop it from the Meals list.
-      setMeals(prev => prev.filter(m => m._id !== meal._id))
-      showToast(`"${meal.name}" is now a recipe`, 'success')
-    } catch {
-      showToast('Could not convert', 'error')
-    } finally {
-      setConvertingId(null)
-    }
-  }
 
   const allTags = useMemo<string[]>(() => {
     const seen = new Set<string>()
@@ -479,6 +443,7 @@ export default function MealsPage() {
             {recipes.map(recipe => (
               <RecipeCard
                 key={recipe._id}
+                id={recipe._id}
                 name={recipe.name}
                 description={recipe.description}
                 imageUrl={recipe.imageUrl}
@@ -487,9 +452,7 @@ export default function MealsPage() {
                 ingredientCount={recipe.ingredients?.length ?? 0}
                 saved={Boolean(recipe.savedFoodId)}
                 busy={busyRecipeId === recipe._id}
-                converting={convertingId === recipe._id}
                 onSaveOrLog={() => handleRecipeSaveOrLog(recipe)}
-                onConvertToMeal={() => handleRecipeToMeal(recipe)}
               />
             ))}
           </AnimatePresence>
@@ -536,9 +499,6 @@ export default function MealsPage() {
               applying={false}
               applied={appliedIds.has(meal._id)}
               onApply={() => handleApplyOpen(meal._id)}
-              onConvertToRecipe={Boolean(currentUserId && meal.createdBy && String(meal.createdBy) === currentUserId)
-                ? () => handleMealToRecipe(meal) : undefined}
-              converting={convertingId === meal._id}
             />
           ))}
         </div>
