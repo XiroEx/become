@@ -121,6 +121,7 @@ function NutritionPageInner() {
   const [snapPlateOpen, setSnapPlateOpen] = useState(false)
   const [snapPlatePhase, setSnapPlatePhase] = useState<'idle' | 'describe' | 'compose' | 'review'>('idle')
   const [snapInitialImage, setSnapInitialImage] = useState<string | null>(null)
+  const [snapImageUrl, setSnapImageUrl] = useState<string | null>(null)
   const [snapDescribeText, setSnapDescribeText] = useState<string | null>(null)
   const [snapReview, setSnapReview] = useState<Array<{
     foodId?: string; name: string; brand?: string; estimatedServing?: string
@@ -365,6 +366,7 @@ function NutritionPageInner() {
         if (Array.isArray(items) && items.length) {
           setSnapInitialImage(null)
           setSnapDescribeText(null)
+          setSnapImageUrl(typeof data.scan.imageUrl === 'string' ? data.scan.imageUrl : null)
           setSnapReview(items)
           setSnapPlatePhase('review')
           setSnapPlateOpen(true)
@@ -1111,6 +1113,7 @@ function NutritionPageInner() {
         initialImage={snapInitialImage}
         initialDescribe={snapDescribeText}
         initialReview={snapReview}
+        initialImageUrl={snapImageUrl}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags(); setFoodSearchOpen(false) }}
       />
