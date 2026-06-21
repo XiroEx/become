@@ -602,7 +602,7 @@ export default function SnapPlateModal({
       const res = await fetch('/api/meals', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name: name.trim(), items }),
+        body: JSON.stringify({ name: name.trim(), items, defaultTag: selectedTag }),
       })
       if (res.status === 402 || res.status === 403) {
         showToast('Saving meals needs a Plus plan.', 'error')

@@ -68,6 +68,7 @@ export async function PATCH(
     if (body.description !== undefined) meal.description = body.description
     if (body.imageUrl !== undefined) meal.imageUrl = body.imageUrl
     if (Array.isArray(body.tags)) meal.tags = body.tags
+    if (body.defaultTag !== undefined) meal.defaultTag = typeof body.defaultTag === 'string' && body.defaultTag ? body.defaultTag.toLowerCase() : undefined
     if (body.recipe !== undefined) meal.recipe = body.recipe
     if (body.isPublic !== undefined) meal.isPublic = !!body.isPublic
     if (isAdmin && body.isVerified !== undefined) meal.isVerified = !!body.isVerified

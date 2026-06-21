@@ -47,6 +47,7 @@ export default function EditMealPage({ params }: { params: Promise<{ id: string 
               description: data.meal.description,
               imageUrl: data.meal.imageUrl,
               tags: data.meal.tags ?? [],
+              defaultTag: data.meal.defaultTag,
               items: data.meal.items ?? [],
               recipe: data.meal.recipe,
             })
