@@ -259,7 +259,9 @@ export default function MealsPage() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) { showToast(data?.error || 'Could not convert', 'error'); return }
-      showToast(`"${recipe.name}" added to your Meals`, 'success')
+      // Moved, not copied — drop it from the Recipes list.
+      setRecipes(prev => prev.filter(r => r._id !== recipe._id))
+      showToast(`"${recipe.name}" is now a meal`, 'success')
     } catch {
       showToast('Could not convert', 'error')
     } finally {
@@ -275,7 +277,9 @@ export default function MealsPage() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) { showToast(data?.error || 'Could not convert', 'error'); return }
-      showToast(`"${meal.name}" added to your Recipes`, 'success')
+      // Moved, not copied — drop it from the Meals list.
+      setMeals(prev => prev.filter(m => m._id !== meal._id))
+      showToast(`"${meal.name}" is now a recipe`, 'success')
     } catch {
       showToast('Could not convert', 'error')
     } finally {
