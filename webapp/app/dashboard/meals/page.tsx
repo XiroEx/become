@@ -271,20 +271,20 @@ export default function MealsPage() {
       <header className="mb-2 sm:mb-4">
         <div className="flex items-center gap-3">
           <BackButton />
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Recipes</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">My Stuff</h1>
         </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
           {tab === 'meals'
-            ? 'Save the recipes you cook often. Tap to log.'
-            : 'Your favorite foods. Tap to log.'}
+            ? 'Your saved meals — groups of foods you can log in one tap.'
+            : 'Your saved foods. Tap to log.'}
         </p>
       </header>
 
       {/* Tab strip — shared SegmentedControl */}
       <SegmentedControl
         segments={[
-          { value: 'meals', label: 'Recipes', Icon: ChefHat },
-          { value: 'foods', label: 'Favorites', Icon: Bookmark },
+          { value: 'meals', label: 'Meals', Icon: ChefHat },
+          { value: 'foods', label: 'Foods', Icon: Bookmark },
         ]}
         value={tab}
         onChange={setTab}
@@ -297,7 +297,7 @@ export default function MealsPage() {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={tab === 'meals' ? 'Search your recipes…' : 'Search your favorites…'}
+          placeholder={tab === 'meals' ? 'Search your meals…' : 'Search your foods…'}
           className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600"
         />
         {search && (
