@@ -251,10 +251,14 @@ export default function MealsPage() {
   }
 
 
+  // Filter the Meals tab by the user's OWN category tags only — NOT the default
+  // meal-times (breakfast/lunch/dinner/snack). A saved meal isn't intrinsically
+  // a breakfast; meal-time is chosen when you log it. So meal-time chips don't
+  // belong here — only meaningful custom categories ("high-protein", "quick"…).
   const allTags = useMemo<string[]>(() => {
     const seen = new Set<string>()
     const out: string[] = []
-    for (const t of [...tagsResp.defaults, ...tagsResp.userTags]) {
+    for (const t of tagsResp.userTags) {
       const norm = String(t).toLowerCase()
       if (!seen.has(norm)) {
         seen.add(norm)
