@@ -65,21 +65,32 @@ async function matchOne(
   // Candidate pools — text search + a regex fallback on the most distinctive
   // (longest) content word, so we don't miss a candidate the text index ranked
   // out. Owner-scope meals/recipes to the user (or public ones).
-  const longest = [...content].sort((a, b) => b.length - a.length)[0]
+  // Match candidates on ANY content word (not just the longest) so a saved item
+  // is found even when the description adds descriptor words ("everyday coffee").
+  const escapeRe = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const anyWord = content.map(escapeRe).filter(Boolean).join('|') || escapeRe(name)
   const ownerOr = [{ createdBy: new mongoose.Types.ObjectId(userId) }, { isPublic: true }]
 
   const [foodText, foodRegex, meals, recipes] = await Promise.all([
     Food.find({ $text: { $search: q } }).limit(20).lean<FoodLean[]>().catch(() => []),
     Food.find({ $or: [
-      { name: { $regex: longest, $options: 'i' } },
-      { brand: { $regex: longest, $options: 'i' } },
-      { aliases: { $regex: longest, $options: 'i' } },
+      { name: { $regex: anyWord, $options: 'i' } },
+      { brand: { $regex: anyWord, $options: 'i' } },
+      { aliases: { $regex: anyWord, $options: 'i' } },
     ] }).limit(20).lean<FoodLean[]>().catch(() => []),
-    Meal.find({ $and: [{ $or: ownerOr }, { name: { $regex: longest, $options: 'i' } }] })
-      .limit(15).lean<Array<Record<string, unknown>>>().catch(() => []),
-    Recipe.find({ $and: [{ $or: ownerOr }, { name: { $regex: longest, $options: 'i' } }] })
-      .limit(15).lean<Array<Record<string, unknown>>>().catch(() => []),
+    Meal.find({ $and: [{ $or: ownerOr }, { name: { $regex: anyWord, $options: 'i' } }] })
+      .limit(20).lean<Array<Record<string, unknown>>>().catch(() => []),
+    Recipe.find({ $and: [{ $or: ownerOr }, { name: { $regex: anyWord, $options: 'i' } }] })
+      .limit(20).lean<Array<Record<string, unknown>>>().catch(() => []),
   ])
+
+  // "Subset" match: the saved item's whole name appears in the description
+  // (e.g. saved "Coffee" inside "everyday coffee"). Lets the user's own saved
+  // items win even when the description carries extra words.
+  const subsetMatch = (candName: string): boolean => {
+    const cc = contentWords(candName)
+    return cc.length > 0 && coverage(cc, content) >= 1
+  }
 
   // Dedupe foods by id.
   const foodById = new Map<string, FoodLean>()
@@ -91,7 +102,11 @@ async function matchOne(
   for (const f of foodById.values()) {
     const candWords = words(`${f.name} ${f.brand ?? ''} ${(f.aliases ?? []).join(' ')}`)
     const cov = coverage(content, candWords)
-    if (cov < 1) continue // require the full identity of the item to be present
+    // Full coverage for any food; OR a subset match for the user's OWN saved
+    // food (so "everyday coffee" finds their custom "Coffee" — but we don't
+    // loosen against the giant global catalog).
+    const isOwn = !!f.createdBy && String(f.createdBy) === userId
+    if (cov < 1 && !(isOwn && subsetMatch(f.name))) continue
     const flat = flattenFoodForResponse(f)
     // Brand + full-phrase agreement raise confidence (and ranking).
     const brandHit = brand ? words(brand).every((bw) => candWords.some((cw) => stemMatch(bw, cw))) : false
@@ -112,7 +127,7 @@ async function matchOne(
   // Meals (whole meal = one serving)
   for (const m of meals) {
     const candWords = words(String(m.name ?? ''))
-    if (coverage(content, candWords) < 1) continue
+    if (coverage(content, candWords) < 1 && !subsetMatch(String(m.name ?? ''))) continue
     const tn = (m.totalNutrition as MatchNutrition) || ({} as MatchNutrition)
     candidates.push({
       kind: 'meal',
@@ -129,14 +144,16 @@ async function matchOne(
   // Recipes (recipe nutrition is per serving)
   for (const r of recipes) {
     const candWords = words(String(r.name ?? ''))
-    if (coverage(content, candWords) < 1) continue
+    if (coverage(content, candWords) < 1 && !subsetMatch(String(r.name ?? ''))) continue
+    // Recipe macros live on `totalsPerServing` (per serving) — NOT `nutrition`.
+    // Reading the wrong field made matched recipes adopt empty macros.
     candidates.push({
       kind: 'recipe',
       id: String(r._id),
       name: String(r.name ?? 'Recipe'),
       servingSize: 1,
       servingUnit: 'serving',
-      nutrition: (r.nutrition as MatchNutrition) || ({} as MatchNutrition),
+      nutrition: (r.totalsPerServing as MatchNutrition) || ({} as MatchNutrition),
       source: 'recipe',
       confidence: 0.8,
     })
