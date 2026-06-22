@@ -1104,7 +1104,7 @@ function NutritionPageInner() {
 
           <Card
             as={Link}
-            href={`/dashboard/timeline?date=${dateParam}`}
+            href="/dashboard/meal-plan"
             variant="compact"
             className="flex flex-col items-center gap-2 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
           >
