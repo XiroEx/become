@@ -40,6 +40,9 @@ interface MatchResult {
   nutrition: MatchNutrition
   source: string
   confidence: number
+  /** The user's own saved item (own food / meal / recipe) — ranked first so
+   *  "use my saved foods" beats a generic global-catalog match. */
+  owned?: boolean
 }
 
 // Text helpers (stemMatch/words/STOP/PREP/contentWords/coverage) are shared with
@@ -121,6 +124,7 @@ async function matchOne(
       nutrition: flat.nutrition as MatchNutrition,
       source: f.source || 'manual',
       confidence: Math.min(1, 0.6 + 0.3 * fullCov + (brandHit ? 0.1 : 0)),
+      owned: isOwn,
     })
   }
 
@@ -138,6 +142,7 @@ async function matchOne(
       nutrition: tn,
       source: 'meal',
       confidence: 0.8,
+      owned: !!m.createdBy && String(m.createdBy) === userId,
     })
   }
 
@@ -156,6 +161,7 @@ async function matchOne(
       nutrition: (r.totalsPerServing as MatchNutrition) || ({} as MatchNutrition),
       source: 'recipe',
       confidence: 0.8,
+      owned: !!r.createdBy && String(r.createdBy) === userId,
     })
   }
 
@@ -165,6 +171,7 @@ async function matchOne(
   // then shorter name (the simplest representative).
   const kindRank: Record<Kind, number> = { food: 0, meal: 1, recipe: 2 }
   candidates.sort((a, b) =>
+    (Number(b.owned) - Number(a.owned)) ||   // the user's own saved items win
     b.confidence - a.confidence ||
     kindRank[a.kind] - kindRank[b.kind] ||
     a.name.length - b.name.length,
