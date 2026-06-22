@@ -178,11 +178,12 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
       const m = matches[i]
       if (!m) return { ...it, matchChecked: true, match: null }
       // Preserve the eaten portion: how many DB servings ≈ the AI's calorie
-      // call. Rounded to the nearest 0.25 (the stepper's granularity) so half /
-      // quarter portions survive instead of snapping to whole servings.
+      // call. Rounded to the nearest 0.1 so the auto-fit tracks the estimate
+      // closely (the stepper still lets you nudge it). E.g. AI 200 cal vs a
+      // 140-cal serving → 1.4×, not a coarse 1.5×.
       const dbCal = m.nutrition?.calories ?? 0
       const aiCal = it.nutrition?.calories ?? 0
-      const mult = dbCal > 0 && aiCal > 0 ? Math.max(0.25, Math.round((aiCal / dbCal) * 4) / 4) : it.multiplier
+      const mult = dbCal > 0 && aiCal > 0 ? Math.max(0.1, Math.round((aiCal / dbCal) * 10) / 10) : it.multiplier
       const servingLabel = m.servingSize && m.servingSize !== 1
         ? `${m.servingSize} ${m.servingUnit}`
         : `1 ${m.servingUnit}`
@@ -407,7 +408,7 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) =>
         i === idx
-          ? { ...it, multiplier: Math.max(0.25, parseFloat((it.multiplier + delta).toFixed(2))) }
+          ? { ...it, multiplier: Math.max(0.1, parseFloat((it.multiplier + delta).toFixed(2))) }
           : it
       ),
     })
