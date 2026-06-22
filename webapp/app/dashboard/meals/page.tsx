@@ -554,12 +554,21 @@ export default function MealsPage() {
         </div>
       ))}
 
-      {/* Floating + New Meal button (Meals tab only — foods are added via search modal) */}
+      {/* Floating + New button — Meals & Recipes tabs (foods are added via the search modal) */}
       {tab === 'meals' && (
         <Link
           href="/dashboard/meals/new"
           className="fixed bottom-28 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
           aria-label="Create new meal"
+        >
+          <Plus className="h-6 w-6" />
+        </Link>
+      )}
+      {tab === 'recipes' && (
+        <Link
+          href="/dashboard/recipes/new"
+          className="fixed bottom-28 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-black sm:right-6"
+          aria-label="Create new recipe"
         >
           <Plus className="h-6 w-6" />
         </Link>
