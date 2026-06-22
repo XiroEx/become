@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Minus, Check, ImagePlus, PencilLine, Send, BookmarkPlus } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -15,6 +15,7 @@ import { getToken } from '@/lib/clientAuth'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { useLockScroll } from '@/lib/useLockScroll'
+import FoodItemRow from '@/components/nutrition/FoodItemRow'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,18 +103,6 @@ type ModalState =
   | { phase: 'logging' }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function confidenceLabel(c: number): string {
-  if (c >= 0.8) return 'High'
-  if (c >= 0.5) return 'Medium'
-  return 'Low'
-}
-
-function confidenceColor(c: number): string {
-  if (c >= 0.8) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-  if (c >= 0.5) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-  return 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300'
-}
 
 function scaledNutrition(item: EstimatedPlateItem, multiplier: number) {
   const n = item.nutrition
@@ -530,6 +519,7 @@ export default function SnapPlateModal({
           // Log in the item's natural unit: 1 unit × `servings` count.
           servingSize: 1,
           servingUnit: it.unitLabel || 'serving',
+          servingLabel: formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
             calories: Math.round(n.calories ?? 0),
@@ -569,6 +559,7 @@ export default function SnapPlateModal({
           estimatedServing: formatAmount(it.multiplier, it.unitLabel),
           servingSize: 1,
           servingUnit: it.unitLabel || 'serving',
+          servingLabel: formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
             calories: Math.round(n.calories ?? 0),
@@ -1064,86 +1055,33 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
         </button>
       </div>
 
-      {/* Item rows */}
+      {/* Item rows — the shared FoodItemRow (review layout) */}
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800 px-4">
         {items.map((item, idx) => {
           const scaled = scaledNutrition(item, item.multiplier)
+          const badges = item.match
+            ? [{ label: item.match.kind === 'food' ? 'In your foods' : item.match.kind === 'recipe' ? 'Recipe' : 'Your meal', tone: 'green' as const }]
+            : item.matchChecked
+              ? [{ label: 'New', tone: 'zinc' as const }]
+              : []
           return (
-            <div
+            <FoodItemRow
               key={idx}
-              className={`py-3 transition-opacity ${item.removed ? 'opacity-40' : ''}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-white truncate">{item.name}</span>
-                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${confidenceColor(item.confidence)}`}>
-                      {confidenceLabel(item.confidence)}
-                    </span>
-                    {item.match ? (
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        {item.match.kind === 'food' ? 'In your foods' : item.match.kind === 'recipe' ? 'Recipe' : 'Your meal'}
-                      </span>
-                    ) : item.matchChecked ? (
-                      <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                        New
-                      </span>
-                    ) : null}
-                  </div>
-                  {item.brand && (
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{item.brand}</p>
-                  )}
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatAmount(item.multiplier, item.unitLabel)}</p>
-                  {!item.removed && (
-                    <p className="mt-0.5 text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
-                      <span className="font-semibold">{scaled.calories} cal</span>
-                      <span className="ml-1.5 text-zinc-400 dark:text-zinc-500">
-                        P {scaled.protein}g &middot; C {scaled.carbs}g &middot; F {scaled.fats}g
-                      </span>
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Multiplier stepper */}
-                  {!item.removed && (
-                    <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-800">
-                      <button
-                        onClick={() => onSetMultiplier(idx, -stepForUnit(item.unitLabel))}
-                        disabled={item.multiplier <= floorForUnit(item.unitLabel)}
-                        className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-200 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                        aria-label="Decrease amount"
-                      >
-                        <Minus className="h-3 w-3" />
-                      </button>
-                      <span className="min-w-[2rem] px-1 text-center text-xs font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">
-                        {Math.round(item.multiplier * 100) / 100}
-                      </span>
-                      <button
-                        onClick={() => onSetMultiplier(idx, stepForUnit(item.unitLabel))}
-                        className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                        aria-label="Increase amount"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Remove / restore toggle */}
-                  <button
-                    onClick={() => onToggleRemove(idx)}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-                      item.removed
-                        ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50'
-                        : 'text-zinc-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400'
-                    }`}
-                    aria-label={item.removed ? 'Restore item' : 'Remove item'}
-                  >
-                    {item.removed ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
-              </div>
-            </div>
+              layout="review"
+              name={item.name}
+              brand={item.brand}
+              servingLabel={formatAmount(item.multiplier, item.unitLabel)}
+              calories={scaled.calories}
+              macros={{ protein: scaled.protein, carbs: scaled.carbs, fats: scaled.fats }}
+              confidence={item.confidence}
+              badges={badges}
+              dimmed={item.removed}
+              count={item.multiplier}
+              stepDelta={stepForUnit(item.unitLabel)}
+              stepFloor={floorForUnit(item.unitLabel)}
+              onStep={(delta) => onSetMultiplier(idx, delta)}
+              onRemove={() => onToggleRemove(idx)}
+            />
           )
         })}
       </div>

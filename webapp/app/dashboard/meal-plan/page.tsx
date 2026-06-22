@@ -17,6 +17,18 @@ import {
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
+const SLOT_ORDER = ['breakfast', 'lunch', 'dinner', 'snack']
+
+/** Order meal tags: the standard meals first (in meal-time order), then any
+ *  custom tags alphabetically. De-dupes. */
+function orderSlots(tags: string[]): string[] {
+  return Array.from(new Set(tags.map(t => t.toLowerCase()))).sort((a, b) => {
+    const ia = SLOT_ORDER.indexOf(a)
+    const ib = SLOT_ORDER.indexOf(b)
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
+    return a.localeCompare(b)
+  })
+}
 
 function ymd(d: Date): string {
   const y = d.getFullYear()
@@ -49,6 +61,11 @@ export default function MealPlanPage() {
   const [picker, setPicker] = useState<{ date: Date; tag: string } | null>(null)
   const [groceryOpen, setGroceryOpen] = useState(false)
   const [checked, setChecked] = useState<Set<string>>(new Set())
+  // Per-day meal slots the user has revealed beyond the default Breakfast (+ any
+  // slot that already has plans). Keyed by dateKey. Lets each day start simple
+  // and grow via the centered "+ Add meal" — driven by the meal-tag system.
+  const [extraSlots, setExtraSlots] = useState<Record<string, string[]>>({})
+  const [addingSlotFor, setAddingSlotFor] = useState<string | null>(null)
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -221,9 +238,14 @@ export default function MealPlanPage() {
             const cals = Math.round(dayCalories(dayKey))
             const tint = TINT_CLASSES[tintForCalories(cals, goalCal)]
             const isToday = dayKey === today
-            // Slots to show: the 4 standard, plus any custom tags present.
-            const extraTags = Array.from(new Set(dayPlans.map(p => p.tag.toLowerCase()))).filter(t => !SLOTS.includes(t as typeof SLOTS[number]))
-            const slotList = [...SLOTS, ...extraTags]
+            // Start with just Breakfast; reveal more meals via the centered "+".
+            // Any slot that already has plans is always shown.
+            const tagsWithPlans = dayPlans.map(p => p.tag.toLowerCase())
+            const slotList = orderSlots(['breakfast', ...tagsWithPlans, ...(extraSlots[dayKey] ?? [])])
+            // The meal-tag system: defaults + the user's custom tags. What's left
+            // to add is everything not already shown for this day.
+            const allTags = orderSlots([...(tagsResp.defaults.length ? tagsResp.defaults : [...SLOTS]), ...tagsResp.userTags])
+            const addableTags = allTags.filter(t => !slotList.includes(t))
             return (
               <div key={dayKey} className={`overflow-hidden rounded-xl border ${isToday ? 'border-zinc-900 dark:border-white' : 'border-zinc-200 dark:border-zinc-800'} bg-white dark:bg-zinc-900`}>
                 <div className={`flex items-center justify-between px-3 py-2 ${tint}`}>
@@ -241,6 +263,8 @@ export default function MealPlanPage() {
                 <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {slotList.map(slot => {
                     const slotPlans = dayPlans.filter(p => p.tag.toLowerCase() === slot)
+                    // An empty, user-revealed slot (not Breakfast) can be hidden again.
+                    const removableEmpty = slot !== 'breakfast' && slotPlans.length === 0 && (extraSlots[dayKey] ?? []).includes(slot)
                     return (
                       <div key={slot} className="flex items-start gap-2 px-3 py-2">
                         <span className="mt-1 w-16 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{titleCase(slot)}</span>
@@ -260,6 +284,15 @@ export default function MealPlanPage() {
                             </div>
                           ))}
                         </div>
+                        {removableEmpty && (
+                          <button
+                            onClick={() => setExtraSlots(prev => ({ ...prev, [dayKey]: (prev[dayKey] ?? []).filter(t => t !== slot) }))}
+                            aria-label={`Hide ${slot}`}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-300 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-zinc-600 dark:hover:bg-red-900/20"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
                         <button onClick={() => setPicker({ date: day, tag: slot })} aria-label={`Add to ${slot} on ${dayKey}`}
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700">
                           <Plus className="h-4 w-4" />
@@ -267,6 +300,44 @@ export default function MealPlanPage() {
                       </div>
                     )
                   })}
+
+                  {/* Add another meal slot — driven by the meal-tag system. */}
+                  <div className="px-3 py-2">
+                    {addingSlotFor === dayKey ? (
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        {addableTags.length === 0 ? (
+                          <span className="text-xs text-zinc-400">All meals added</span>
+                        ) : addableTags.map(t => (
+                          <button
+                            key={t}
+                            onClick={() => {
+                              setExtraSlots(prev => ({ ...prev, [dayKey]: orderSlots([...(prev[dayKey] ?? []), t]) }))
+                              setAddingSlotFor(null)
+                            }}
+                            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          >
+                            {titleCase(t)}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setAddingSlotFor(null)}
+                          aria-label="Cancel adding meal"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setAddingSlotFor(dayKey)}
+                        disabled={addableTags.length === 0}
+                        aria-label={`Add a meal to ${dayKey}`}
+                        className="mx-auto flex h-7 items-center justify-center gap-1 rounded-full bg-zinc-100 px-3 text-xs font-semibold text-zinc-500 transition-colors hover:bg-zinc-200 disabled:opacity-40 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add meal
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )

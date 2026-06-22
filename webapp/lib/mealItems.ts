@@ -20,6 +20,8 @@ export interface MealItemInput {
   servingUnit?: string
   servings?: number
   nutrition?: Partial<IMealNutrition>
+  /** Friendly per-log amount label ("1 medium", "6 bites"). Presentation-only. */
+  servingLabel?: string
   // Provenance (PR 4 picker rework). Optional — old writes don't carry these.
   loggedQuantity?: number
   loggedUnit?: string
@@ -62,6 +64,7 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
   const foodObjectId = coerceObjectId(input.foodId)
   let variantObjectId = coerceObjectId(input.variantId)
   let variantName = input.variantName
+  let servingLabel = input.servingLabel
   // Bridge snapshots — fall back to the variant's stored bridges so re-edits
   // can show the right unit toggle even when the client forgot to send them.
   let loggedGramsPerServing = input.loggedGramsPerServing
@@ -82,6 +85,9 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
         if (!variantName) variantName = chosen.name
         if (loggedGramsPerServing == null) loggedGramsPerServing = chosen.gramsPerServing
         if (loggedMlPerServing == null) loggedMlPerServing = chosen.mlPerServing
+        // Seed the friendly label from the food's default when the client didn't
+        // send one (only meaningful at one serving of the default).
+        if (!servingLabel && chosen.displayLabel && (input.servings ?? 1) === 1) servingLabel = chosen.displayLabel
       }
       if (!name) name = foodDoc.name
       if (!brand) brand = foodDoc.brand
@@ -104,6 +110,7 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
     servingUnit,
     servings: input.servings ?? 1,
     nutrition,
+    servingLabel,
     // Pass-through of the new picker provenance. Stored when present, omitted
     // (left undefined → no schema field) when not — old writes stay clean.
     loggedQuantity: input.loggedQuantity,
