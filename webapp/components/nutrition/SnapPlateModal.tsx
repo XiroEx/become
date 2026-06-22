@@ -76,8 +76,12 @@ interface DbMatch {
 }
 
 interface ReviewItem extends EstimatedPlateItem {
-  /** User-adjustable multiplier on top of the per-serving nutrition. 1 = as-is. */
+  /** Amount eaten = `multiplier` of `unitLabel` (e.g. 2 kiwis, 150 g). `nutrition`
+   *  is per ONE `unitLabel`. We show real amounts, never an abstract "× serving". */
   multiplier: number
+  /** The natural unit a count is expressed in: a household unit (kiwi, bottle,
+   *  bite, slice, cup, tbsp) or a mass/volume unit (g, ml, oz). */
+  unitLabel: string
   /** Excluded by the user before logging. */
   removed: boolean
   /** Brand, when we matched the item to a branded DB food. */
@@ -146,15 +150,69 @@ function normalizeConfidence(c: unknown): number {
   return Math.max(0, Math.min(1, v))
 }
 
+// ── Amount/unit helpers — show real servings, never an abstract "× serving" ────
+const MASS_UNITS = new Set(['g', 'ml', 'oz', 'kg', 'lb', 'mg', 'l'])
+function normUnit(u: string): string {
+  const x = u.trim().toLowerCase()
+  if (x === 'gram' || x === 'grams') return 'g'
+  if (x === 'milliliter' || x === 'milliliters' || x === 'millilitre' || x === 'millilitres') return 'ml'
+  if (x === 'ounce' || x === 'ounces') return 'oz'
+  if (x === 'liter' || x === 'liters' || x === 'litre') return 'l'
+  return x
+}
+/** Parse an AI serving string ("1 kiwi", "6 bites", "~150 g", "1 cup (240 g)") → count + unit. */
+function parseServing(s?: string): { qty: number; unit: string } {
+  const str = (s || '').trim()
+  const m = str.match(/^~?\s*([\d.]+)\s*(.*)$/)
+  if (!m) return { qty: 1, unit: str ? normUnit(str) : 'serving' }
+  const qty = parseFloat(m[1]) || 1
+  let unit = normUnit(m[2].replace(/\([^)]*\)/g, '').trim()) // drop "(240 g)" parentheticals
+  if (!unit) unit = 'serving'
+  // Singularize simple count plurals so it reads right at any count.
+  if (!MASS_UNITS.has(unit) && unit.length > 2 && unit.endsWith('s')) unit = unit.slice(0, -1)
+  return { qty, unit }
+}
+/** "1 kiwi", "2 kiwis", "150 g", "6 bites" */
+function formatAmount(qty: number, unit: string): string {
+  const n = Math.round(qty * 100) / 100
+  if (MASS_UNITS.has(unit)) return `${n} ${unit}`
+  const label = n === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`)
+  return `${n} ${label}`
+}
+function stepForUnit(unit: string): number {
+  if (unit === 'g' || unit === 'ml') return 10
+  return 1
+}
+function floorForUnit(unit: string): number {
+  return MASS_UNITS.has(unit) ? stepForUnit(unit) : 0.5
+}
+type Macros = { calories: number; protein: number; carbs: number; fats: number }
+/** Per-ONE-unit macros, given the macros for the whole `qty`-unit portion. */
+function perUnitNutrition(total: Macros, qty: number): Macros {
+  const q = qty > 0 ? qty : 1
+  return {
+    calories: (total.calories ?? 0) / q,
+    protein: (total.protein ?? 0) / q,
+    carbs: (total.carbs ?? 0) / q,
+    fats: (total.fats ?? 0) / q,
+  }
+}
+
 function toReviewItems(est: PlateEstimate): ReviewItem[] {
-  return (est.items ?? []).map((item) => ({
-    ...item,
-    confidence: normalizeConfidence(item.confidence),
-    multiplier: 1,
-    removed: false,
-    matchChecked: false,
-    match: null,
-  }))
+  return (est.items ?? []).map((item) => {
+    const { qty, unit } = parseServing(item.estimatedServing)
+    // The AI's nutrition is for the whole portion (qty units) → store per-unit.
+    return {
+      ...item,
+      nutrition: perUnitNutrition(item.nutrition, qty),
+      confidence: normalizeConfidence(item.confidence),
+      multiplier: qty,
+      unitLabel: unit,
+      removed: false,
+      matchChecked: false,
+      match: null,
+    }
+  })
 }
 
 // Reconcile AI-estimated items against the DB (foods/meals/recipes). Confident
@@ -177,24 +235,27 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
     return items.map((it, i) => {
       const m = matches[i]
       if (!m) return { ...it, matchChecked: true, match: null }
-      // Preserve the eaten portion: how many DB servings ≈ the AI's calorie
-      // call. Rounded to the nearest 0.1 so the auto-fit tracks the estimate
-      // closely (the stepper still lets you nudge it). E.g. AI 200 cal vs a
-      // 140-cal serving → 1.4×, not a coarse 1.5×.
+      // Keep the AI's NATURAL portion (e.g. "1 kiwi", "6 bites") and count, but
+      // adopt YOUR saved food's macros for it. Calories are calorie-bridged to
+      // the AI's estimate; the other macros come from your food's profile at that
+      // calorie level. No abstract "× of 100 g".
       const dbCal = m.nutrition?.calories ?? 0
-      const aiCal = it.nutrition?.calories ?? 0
-      const mult = dbCal > 0 && aiCal > 0 ? Math.max(0.1, Math.round((aiCal / dbCal) * 10) / 10) : it.multiplier
-      const servingLabel = m.servingSize && m.servingSize !== 1
-        ? `${m.servingSize} ${m.servingUnit}`
-        : `1 ${m.servingUnit}`
+      const qty = it.multiplier > 0 ? it.multiplier : 1
+      const aiTotalCal = (it.nutrition?.calories ?? 0) * qty
+      const totalMult = dbCal > 0 && aiTotalCal > 0 ? aiTotalCal / dbCal : qty // servings of the saved food
+      const f = totalMult / qty
+      const perUnit: Macros = {
+        calories: (m.nutrition.calories ?? 0) * f,
+        protein: (m.nutrition.protein ?? 0) * f,
+        carbs: (m.nutrition.carbs ?? 0) * f,
+        fats: (m.nutrition.fats ?? 0) * f,
+      }
       return {
         ...it,
         name: m.name,
         brand: m.brand,
-        // Per-serving macros now come from the DB, not the AI guess.
-        nutrition: { ...it.nutrition, ...m.nutrition },
-        estimatedServing: mult > 1 ? `${mult} × ${servingLabel}` : servingLabel,
-        multiplier: mult,
+        nutrition: perUnit, // per ONE unit, from your saved food
+        // unitLabel + multiplier (the AI's natural count) are preserved.
         matchChecked: true,
         match: m,
       }
@@ -247,10 +308,11 @@ export default function SnapPlateModal({
         const items: ReviewItem[] = initialReview.map((si) => ({
           name: si.name,
           brand: si.brand,
-          estimatedServing: si.estimatedServing || `${si.servingSize ?? 1} ${si.servingUnit ?? 'serving'}`,
+          estimatedServing: si.estimatedServing || `${si.servings ?? 1} ${si.servingUnit ?? 'serving'}`,
           nutrition: si.nutrition,
           confidence: si.confidence ?? 0.8,
           multiplier: si.servings ?? 1,
+          unitLabel: si.servingUnit ?? 'serving',
           removed: false,
           matchChecked: true,
           match: si.matchKind ? {
@@ -408,7 +470,7 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) =>
         i === idx
-          ? { ...it, multiplier: Math.max(0.1, parseFloat((it.multiplier + delta).toFixed(2))) }
+          ? { ...it, multiplier: Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2))) }
           : it
       ),
     })
@@ -460,13 +522,14 @@ export default function SnapPlateModal({
       // for totals — storing pre-scaled nutrition AND servings double-counted).
       // Matched items link their DB foodId and carry the DB serving unit.
       const mealItems = activeItems.map((it) => {
-        const n = it.nutrition
+        const n = it.nutrition // per ONE unit
         return {
           ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
           name: it.name,
           ...(it.brand ? { brand: it.brand } : {}),
-          servingSize: it.match ? it.match.servingSize : 1,
-          servingUnit: it.match ? it.match.servingUnit : 'serving',
+          // Log in the item's natural unit: 1 unit × `servings` count.
+          servingSize: 1,
+          servingUnit: it.unitLabel || 'serving',
           servings: it.multiplier,
           nutrition: {
             calories: Math.round(n.calories ?? 0),
@@ -503,9 +566,9 @@ export default function SnapPlateModal({
           ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
           name: it.name,
           ...(it.brand ? { brand: it.brand } : {}),
-          estimatedServing: it.estimatedServing,
-          servingSize: it.match ? it.match.servingSize : 1,
-          servingUnit: it.match ? it.match.servingUnit : 'serving',
+          estimatedServing: formatAmount(it.multiplier, it.unitLabel),
+          servingSize: 1,
+          servingUnit: it.unitLabel || 'serving',
           servings: it.multiplier,
           nutrition: {
             calories: Math.round(n.calories ?? 0),
@@ -580,13 +643,13 @@ export default function SnapPlateModal({
       return false
     }
     const items = activeItems.map((it) => {
-      const n = it.nutrition
+      const n = it.nutrition // per ONE unit
       return {
         ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
         name: it.name,
         ...(it.brand ? { brand: it.brand } : {}),
-        servingSize: it.match ? it.match.servingSize : 1,
-        servingUnit: it.match ? it.match.servingUnit : 'serving',
+        servingSize: 1,
+        servingUnit: it.unitLabel || 'serving',
         servings: it.multiplier,
         nutrition: {
           calories: Math.round(n.calories ?? 0),
@@ -954,7 +1017,6 @@ interface ReviewBodyProps {
 }
 
 function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorrect }: ReviewBodyProps) {
-  const STEP = 0.25
   const [fix, setFix] = useState('')
 
   const submitFix = () => {
@@ -1031,7 +1093,7 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
                   {item.brand && (
                     <p className="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">{item.brand}</p>
                   )}
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{item.estimatedServing}</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{formatAmount(item.multiplier, item.unitLabel)}</p>
                   {!item.removed && (
                     <p className="mt-0.5 text-xs tabular-nums text-zinc-600 dark:text-zinc-300">
                       <span className="font-semibold">{scaled.calories} cal</span>
@@ -1047,20 +1109,20 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
                   {!item.removed && (
                     <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 dark:border-zinc-700 dark:bg-zinc-800">
                       <button
-                        onClick={() => onSetMultiplier(idx, -STEP)}
-                        disabled={item.multiplier <= 0.25}
+                        onClick={() => onSetMultiplier(idx, -stepForUnit(item.unitLabel))}
+                        disabled={item.multiplier <= floorForUnit(item.unitLabel)}
                         className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-200 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                        aria-label="Decrease serving"
+                        aria-label="Decrease amount"
                       >
                         <Minus className="h-3 w-3" />
                       </button>
-                      <span className="w-8 text-center text-xs font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">
-                        {item.multiplier === 1 ? '1x' : `${item.multiplier}x`}
+                      <span className="min-w-[2rem] px-1 text-center text-xs font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">
+                        {Math.round(item.multiplier * 100) / 100}
                       </span>
                       <button
-                        onClick={() => onSetMultiplier(idx, STEP)}
+                        onClick={() => onSetMultiplier(idx, stepForUnit(item.unitLabel))}
                         className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                        aria-label="Increase serving"
+                        aria-label="Increase amount"
                       >
                         <Plus className="h-3 w-3" />
                       </button>
