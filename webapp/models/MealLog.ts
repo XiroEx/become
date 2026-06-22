@@ -57,6 +57,7 @@ const MealLogItemSchema = new Schema<IMealItem>({
   servingUnit: { type: String, required: true },
   servings: { type: Number, required: true, default: 1 },
   nutrition: { type: MealLogNutritionSchema, required: true },
+  servingLabel: { type: String },
   loggedQuantity: { type: Number },
   loggedUnit: { type: String },
   loggedGramsPerServing: { type: Number },

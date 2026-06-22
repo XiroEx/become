@@ -172,6 +172,7 @@ export function cloneItemsForSnapshot(items: IMealItem[]): IMealItem[] {
     servingUnit: item.servingUnit,
     servings: item.servings ?? 1,
     nutrition: item.nutrition,
+    servingLabel: item.servingLabel,
     loggedQuantity: item.loggedQuantity,
     loggedUnit: item.loggedUnit,
     loggedGramsPerServing: item.loggedGramsPerServing,
