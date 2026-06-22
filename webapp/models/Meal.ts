@@ -33,6 +33,16 @@ export interface IMealItem {
   servings: number
   nutrition: IMealNutrition
 
+  /**
+   * Per-log friendly amount label — e.g. "1 medium", "6 bites", "1 handful".
+   * Presentation-only: the math always uses servingSize/servingUnit (+ servings
+   * and the logged{Quantity,Unit} provenance below). This is where the friendly
+   * name lives for a LOGGED item — seeded from the Food variant's displayLabel
+   * (or computed from an AI estimate) but editable per log, independent of the
+   * food's default. Absent on older logs → the UI falls back to the hard metric.
+   */
+  servingLabel?: string
+
   // ---------------------------------------------------------------------------
   // Provenance for re-edit (PR 1 foundation; consumers wired up in PR 4).
   //
@@ -117,6 +127,7 @@ const MealItemSchema = new Schema<IMealItem>({
   servingUnit: { type: String, required: true },
   servings: { type: Number, required: true, default: 1 },
   nutrition: { type: MealNutritionSchema, required: true },
+  servingLabel: { type: String },
   loggedQuantity: { type: Number },
   loggedUnit: { type: String },
   loggedGramsPerServing: { type: Number },
