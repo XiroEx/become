@@ -341,7 +341,7 @@ export default function MealsPage() {
     <PageTransition className="space-y-4 pb-24 sm:space-y-6">
       <header className="mb-2 sm:mb-4">
         <div className="flex items-center gap-3">
-          <BackButton />
+          <BackButton href="/dashboard/nutrition" />
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">My Stuff</h1>
         </div>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
