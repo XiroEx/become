@@ -213,7 +213,7 @@ type TabId = 'all' | 'meals' | 'mine' | 'recent' | 'frequent'
 const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
   { id: 'all', label: 'All', Icon: Search },
   { id: 'meals', label: 'Meals', Icon: ChefHat },
-  { id: 'mine', label: 'My Foods', Icon: Bookmark },
+  { id: 'mine', label: 'Foods', Icon: Bookmark },
   { id: 'recent', label: 'Recent', Icon: Clock },
   { id: 'frequent', label: 'Frequent', Icon: Star },
 ]
@@ -965,7 +965,7 @@ export default function FoodSearchModal({
             <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-800">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-white">
-                  {isPlanMode ? 'Add to Plan' : 'Add to Day'}
+                  {isPlanMode ? 'Plan' : 'Add'}
                 </h2>
                 <button
                   onClick={onClose}
@@ -1179,13 +1179,13 @@ export default function FoodSearchModal({
                   </button>
                 </div>
               )}
-              {/* Tabs */}
-              <div className="mt-3 flex gap-1">
+              {/* Tabs — horizontally scrollable so no chip wraps or gets cut off */}
+              <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                       activeTab === tab.id
                         ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
                         : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
@@ -1385,7 +1385,7 @@ export default function FoodSearchModal({
                     {showMyFoodsHeader && (
                       <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-amber-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 backdrop-blur dark:bg-amber-900/30 dark:text-amber-200">
                         <Bookmark className="h-3 w-3 fill-current" />
-                        My Foods
+                        Foods
                       </div>
                     )}
                     {showOtherResultsHeader && (
