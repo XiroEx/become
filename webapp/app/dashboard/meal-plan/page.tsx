@@ -7,7 +7,7 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import { Toast } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { useToast } from '@/hooks/useToast'
-import { ChevronLeft, ChevronRight, Plus, X, Loader2, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X, Loader2, Clock, ShoppingCart, Check } from 'lucide-react'
 import {
   fetchPlansInRange,
   tintForCalories,
@@ -47,6 +47,8 @@ export default function MealPlanPage() {
   const [goalCal, setGoalCal] = useState(0)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({ defaults: [], userTags: [] })
   const [picker, setPicker] = useState<{ date: Date; tag: string } | null>(null)
+  const [groceryOpen, setGroceryOpen] = useState(false)
+  const [checked, setChecked] = useState<Set<string>>(new Set())
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -103,6 +105,31 @@ export default function MealPlanPage() {
 
   const dayCalories = (dayKey: string): number =>
     (byDay.get(dayKey) ?? []).reduce((s, p) => s + (p.expectedNutrition?.calories ?? 0), 0)
+
+  // Grocery list — aggregate every planned item across the week by name + unit,
+  // summing quantities. The plan's items are already flattened foods (saved
+  // meals/recipes expand into items at plan time), so this is the shopping list.
+  const grocery = useMemo(() => {
+    const map = new Map<string, { key: string; name: string; unit: string; qty: number }>()
+    for (const p of plans) for (const it of (p.items ?? [])) {
+      const name = (it.name ?? '').trim()
+      if (!name) continue
+      const unit = it.servingUnit ?? ''
+      const key = `${name.toLowerCase()}|${unit.toLowerCase()}`
+      const qty = it.servings ?? 1
+      const cur = map.get(key)
+      if (cur) cur.qty += qty
+      else map.set(key, { key, name, unit, qty })
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [plans])
+
+  const toggleChecked = (key: string) => setChecked(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
+  const fmtQty = (n: number) => (Math.round(n * 100) / 100).toString()
 
   const handleRemovePlan = async (planId: string) => {
     const prev = plans
@@ -174,6 +201,16 @@ export default function MealPlanPage() {
         </button>
       </div>
 
+      {/* Grocery list — aggregated shopping list for the displayed week */}
+      <button
+        onClick={() => setGroceryOpen(true)}
+        disabled={grocery.length === 0}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+      >
+        <ShoppingCart className="h-4 w-4" />
+        Grocery list{grocery.length > 0 ? ` (${grocery.length})` : ''}
+      </button>
+
       {loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>
       ) : (
@@ -243,6 +280,43 @@ export default function MealPlanPage() {
 
       <Toast toast={toast} />
     </PageTransition>
+
+    {/* Grocery list — aggregated for the displayed week */}
+    {groceryOpen && (
+      <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-900 sm:items-center sm:justify-center sm:bg-black/60 sm:p-4"
+        onClick={() => setGroceryOpen(false)}>
+        <div className="flex h-full w-full flex-col sm:h-[80vh] sm:max-h-[640px] sm:max-w-md sm:overflow-hidden sm:rounded-2xl sm:shadow-2xl"
+          onClick={e => e.stopPropagation()}>
+          <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Grocery list</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">{weekLabel} · {grocery.length} item{grocery.length === 1 ? '' : 's'}</p>
+            </div>
+            <button onClick={() => setGroceryOpen(false)} aria-label="Close"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto bg-white p-2 dark:bg-zinc-900">
+            {grocery.length === 0 ? (
+              <p className="px-3 py-10 text-center text-sm text-zinc-400">Nothing planned this week yet.</p>
+            ) : grocery.map(g => {
+              const isChecked = checked.has(g.key)
+              return (
+                <button key={g.key} onClick={() => toggleChecked(g.key)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${isChecked ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black' : 'border-zinc-300 dark:border-zinc-600'}`}>
+                    {isChecked && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className={`min-w-0 flex-1 truncate text-sm ${isChecked ? 'text-zinc-400 line-through dark:text-zinc-600' : 'text-zinc-800 dark:text-zinc-200'}`}>{g.name}</span>
+                  <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">{fmtQty(g.qty)} {g.unit}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Plan a food into the chosen day + slot (plan mode = no time picker) */}
     <FoodSearchModal
