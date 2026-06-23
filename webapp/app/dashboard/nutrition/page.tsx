@@ -785,9 +785,10 @@ function NutritionPageInner() {
               Track your food, macros, and hydration
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>My Stuff</HeaderPillLink>
             <HeaderPillLink href={`/dashboard/timeline?date=${dateParam}`} Icon={Clock}>Timeline</HeaderPillLink>
+            <HeaderPillLink href="/dashboard/nutrition/scans" Icon={History}>Estimates</HeaderPillLink>
           </div>
         </header>
 
@@ -822,9 +823,6 @@ function NutritionPageInner() {
                   <button onClick={() => { setCaptureMenu(null); openFoodSearch(getDefaultTagForNow(), true) }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     <ScanBarcode className="h-4 w-4" /> Scan barcode
                   </button>
-                  <Link href="/dashboard/nutrition/scans" onClick={() => setCaptureMenu(null)} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                    <History className="h-4 w-4" /> Scan history
-                  </Link>
                 </div>
               </>
             )}
