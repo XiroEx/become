@@ -118,8 +118,8 @@ export default function ScanHistoryPage() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Scan history</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Your past photo &amp; describe scans</p>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Estimate history</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Your past photo &amp; describe estimates</p>
         </div>
       </header>
 
@@ -128,8 +128,8 @@ export default function ScanHistoryPage() {
       ) : scans.length === 0 ? (
         <EmptyState
           icon={<Camera className="h-8 w-8" />}
-          title="No scans yet"
-          description="Snap or describe a meal in Nutrition and it'll show up here."
+          title="No estimates yet"
+          description="Snap or describe a meal in Nutrition and your estimate will show up here."
         />
       ) : (
         <div className="space-y-3">
@@ -156,7 +156,7 @@ export default function ScanHistoryPage() {
                 <div className="flex shrink-0 items-center gap-1">
                   <Link
                     href={`/dashboard/nutrition?scan=${scan._id}`}
-                    aria-label="Edit and re-log this scan"
+                    aria-label="Edit and re-log this estimate"
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -172,7 +172,7 @@ export default function ScanHistoryPage() {
                   <button
                     onClick={() => remove(scan._id)}
                     disabled={busyId === scan._id}
-                    aria-label="Delete scan"
+                    aria-label="Delete estimate"
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                   >
                     <Trash2 className="h-4 w-4" />
