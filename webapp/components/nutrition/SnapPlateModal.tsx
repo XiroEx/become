@@ -62,6 +62,9 @@ interface SnapPlateModalProps {
   /** Full-res image URL of a re-opened saved scan (served via /api/blob). Shown
    *  as the review image so re-opening history shows the real photo. */
   initialImageUrl?: string | null
+  /** When re-opening a saved estimate from history, its id — so edits/logs update
+   *  that record in place instead of creating a duplicate. */
+  initialScanId?: string | null
 }
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -259,6 +262,31 @@ function toReviewItems(est: PlateEstimate): ReviewItem[] {
   })
 }
 
+/** Map review items → the PlateScan history item shape (used for both the
+ *  generation-time save and the on-log update). Excludes removed items. */
+function buildScanItems(items: ReviewItem[]) {
+  return items.filter((it) => !it.removed).map((it) => {
+    const n = it.nutrition
+    return {
+      ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
+      name: it.name,
+      ...(it.brand ? { brand: it.brand } : {}),
+      estimatedServing: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
+      servingSize: 1,
+      servingUnit: it.unitLabel || 'serving',
+      servings: it.multiplier,
+      nutrition: {
+        calories: Math.round(n.calories ?? 0),
+        protein: Math.round((n.protein ?? 0) * 10) / 10,
+        carbs: Math.round((n.carbs ?? 0) * 10) / 10,
+        fats: Math.round((n.fats ?? 0) * 10) / 10,
+      },
+      confidence: it.confidence,
+      ...(it.match ? { matchKind: it.match.kind } : {}),
+    }
+  })
+}
+
 // Reconcile AI-estimated items against the DB (foods/meals/recipes). Confident
 // matches adopt the DB item's canonical name + per-serving macros and link its
 // id; the portion is preserved by converting the AI's calorie estimate into a
@@ -328,6 +356,7 @@ export default function SnapPlateModal({
   initialDescribe = null,
   initialReview = null,
   initialImageUrl = null,
+  initialScanId = null,
 }: SnapPlateModalProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)   // camera (capture)
@@ -337,6 +366,10 @@ export default function SnapPlateModal({
   const [composeNote, setComposeNote] = useState('')
   // Which meal the plate logs into — user-selectable in the review.
   const [selectedTag, setSelectedTag] = useState<string>(tag)
+  // The history record id for the current estimate. Set when we first save a
+  // freshly generated estimate (or when re-opening one); reused so corrections
+  // and logging UPDATE that record instead of creating duplicates.
+  const [savedScanId, setSavedScanId] = useState<string | null>(null)
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
 
@@ -346,9 +379,12 @@ export default function SnapPlateModal({
   // sync-to-prop effect (modal state follows open/initialPhase/initialImage).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote('') }
+    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null) }
     else {
       setSelectedTag(tag) // default to the page's time-of-day meal on open
+      // Re-opening a saved estimate links its record so edits/logs update it;
+      // a fresh open starts with no record (the first generation creates one).
+      setSavedScanId(initialScanId ?? null)
       if (initialPhase === 'compose' && initialImage) {
         setComposeNote('')
         setState({ phase: 'compose', dataUrl: initialImage })
@@ -384,12 +420,54 @@ export default function SnapPlateModal({
         setState({ phase: 'idle' })
       }
     }
-  }, [open, tag, initialPhase, initialImage, initialDescribe, initialReview, initialImageUrl])
+  }, [open, tag, initialPhase, initialImage, initialDescribe, initialReview, initialImageUrl, initialScanId])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Reconcile new review items against the DB once they land (any source:
   // photo, describe, or a correction). Runs in the background; the row badges
   // update in place when it resolves. A ref guards against double-runs.
+  // Save (or update) the current estimate to history. Best-effort — never blocks.
+  // Every GENERATED estimate is persisted here, not just logged ones.
+  const persistEstimate = useCallback(async (
+    items: ReviewItem[],
+    imageThumb: string,
+    opts?: { mealLogId?: string; loggedAt?: string; imageUrl?: string },
+  ) => {
+    try {
+      const scanItems = buildScanItems(items)
+      if (scanItems.length === 0) return
+      const token = getToken()
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      // Cheap inline 256px thumbnail (photo estimates only) — no MinIO round-trip.
+      let thumb: string | undefined
+      if (imageThumb && imageThumb.startsWith('data:image/')) {
+        try {
+          const blob = await (await fetch(imageThumb)).blob()
+          const small = await resizeImageToBlob(blob, { maxDim: 256, quality: 0.5 })
+          thumb = await blobToDataUrl(small)
+        } catch { /* no thumb */ }
+      }
+      const imageUrl = opts?.imageUrl || (imageThumb.startsWith('/api/blob/') ? imageThumb : undefined)
+      const payload: Record<string, unknown> = {
+        source: imageThumb ? 'photo' : 'describe',
+        tag: selectedTag,
+        items: scanItems,
+        ...(thumb ? { thumb } : {}),
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(opts?.mealLogId ? { mealLogId: opts.mealLogId } : {}),
+        ...(opts?.loggedAt ? { loggedAt: opts.loggedAt } : {}),
+      }
+      if (savedScanId) {
+        await fetch(`/api/nutrition/scans/${savedScanId}`, { method: 'PATCH', headers, body: JSON.stringify(payload) })
+      } else {
+        const res = await fetch('/api/nutrition/scans', { method: 'POST', headers, body: JSON.stringify(payload) })
+        const j = await res.json().catch(() => null)
+        if (j?.scan?._id) setSavedScanId(String(j.scan._id))
+      }
+    } catch { /* best-effort history */ }
+  }, [selectedTag, savedScanId])
+
   const reconcilingRef = useRef(false)
   useEffect(() => {
     if (state.phase !== 'review') { reconcilingRef.current = false; return }
@@ -402,8 +480,12 @@ export default function SnapPlateModal({
       setState((prev) => (prev.phase === 'review' && prev.imageThumb === thumb
         ? { ...prev, items: reconciled }
         : prev))
+      // Persist the freshly generated (now matched) estimate to history. Fresh
+      // estimates have unchecked items so this only runs once per generation /
+      // correction — re-opened scans (already matched) skip it.
+      void persistEstimate(reconciled, thumb)
     })
-  }, [state])
+  }, [state, persistEstimate])
 
   const pickCamera = () => fileInputRef.current?.click()
   const pickGallery = () => galleryInputRef.current?.click()
@@ -617,32 +699,13 @@ export default function SnapPlateModal({
         return
       }
 
-      // Save this scan to the user's history (best-effort — never block logging).
+      // Update this estimate's history record (created at generation time) with the
+      // final items + the meal-log link + a full-res image. Best-effort.
       const logData = await res.json().catch(() => null)
-      const scanItems = activeItems.map((it) => {
-        const n = it.nutrition
-        return {
-          ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
-          name: it.name,
-          ...(it.brand ? { brand: it.brand } : {}),
-          estimatedServing: formatAmount(it.multiplier, it.unitLabel),
-          servingSize: 1,
-          servingUnit: it.unitLabel || 'serving',
-          servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
-          servings: it.multiplier,
-          nutrition: {
-            calories: Math.round(n.calories ?? 0),
-            protein: Math.round((n.protein ?? 0) * 10) / 10,
-            carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-            fats: Math.round((n.fats ?? 0) * 10) / 10,
-          },
-          confidence: it.confidence,
-          ...(it.match ? { matchKind: it.match.kind } : {}),
-        }
-      })
-      // Full-res image → blob storage (best-effort, never blocks logging). On a
-      // fresh capture `imageThumb` is a ~1024px data: URL we upload to MinIO; on
-      // a re-opened scan it's already an /api/blob URL we just reuse.
+      const mealLogId = logData?.mealLog?._id ?? logData?._id
+      // Full-res image → blob storage. On a fresh capture `imageThumb` is a
+      // ~1024px data: URL we upload to MinIO; on a re-opened scan it's already
+      // an /api/blob URL we reuse.
       let imageUrl: string | undefined
       if (imageThumb && imageThumb.startsWith('/api/blob/')) {
         imageUrl = imageThumb
@@ -659,29 +722,7 @@ export default function SnapPlateModal({
           if (up.ok) { const j = await up.json().catch(() => null); imageUrl = j?.imageUrl || undefined }
         } catch { /* no full-res — fall back to the inline thumb */ }
       }
-
-      // Tiny thumbnail for the scan history list (photo scans only). Best-effort.
-      let thumb: string | undefined
-      if (imageThumb && imageThumb.startsWith('data:image/')) {
-        try {
-          const blob = await (await fetch(imageThumb)).blob()
-          const small = await resizeImageToBlob(blob, { maxDim: 256, quality: 0.5 })
-          thumb = await blobToDataUrl(small)
-        } catch { /* no thumb */ }
-      }
-      fetch('/api/nutrition/scans', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          source: imageThumb ? 'photo' : 'describe',
-          tag: selectedTag,
-          items: scanItems,
-          loggedAt,
-          mealLogId: logData?.mealLog?._id ?? logData?._id,
-          ...(thumb ? { thumb } : {}),
-          ...(imageUrl ? { imageUrl } : {}),
-        }),
-      }).catch(() => { /* best-effort history */ })
+      void persistEstimate(activeItems, imageThumb, { mealLogId, loggedAt, imageUrl })
 
       showToast(`${activeItems.length} item${activeItems.length === 1 ? '' : 's'} logged`, 'success')
       onLogged()
