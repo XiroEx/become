@@ -16,6 +16,9 @@ import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { useLockScroll } from '@/lib/useLockScroll'
 import FoodItemRow from '@/components/nutrition/FoodItemRow'
+import { scalingFactor } from '@/lib/foodMath'
+import type { Unit } from '@/lib/units'
+import type { ServingUnit } from '@/models/Food'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +77,10 @@ interface DbMatch {
   nutrition: { calories: number; protein: number; carbs: number; fats: number }
   source: string
   confidence: number
+  /** Bridges + friendly label for unit-accurate alignment of the AI quantity. */
+  gramsPerServing?: number
+  mlPerServing?: number
+  displayLabel?: string
 }
 
 interface ReviewItem extends EstimatedPlateItem {
@@ -91,6 +98,9 @@ interface ReviewItem extends EstimatedPlateItem {
   matchChecked?: boolean
   /** The DB item this maps to, or null when it's genuinely new (AI estimate). */
   match?: DbMatch | null
+  /** A freeform friendly label the user typed (overrides the computed amount).
+   *  Cleared when the user changes the count, so it never goes stale. */
+  labelOverride?: string
 }
 
 type ModalState =
@@ -187,6 +197,51 @@ function perUnitNutrition(total: Macros, qty: number): Macros {
   }
 }
 
+// ── Phase 2: align the AI's quantity to the matched food's REAL serving ───────
+const DISCRETE_FOOD_UNITS = new Set<Unit>(['each', 'slice', 'scoop', 'serving'])
+/** Map a parsed AI unit string to a known mass/volume Unit, or null if it's a
+ *  household/count word ("kiwi", "bite") we can't convert dimensionally. */
+function toKnownUnit(u: string): Unit | null {
+  switch (u) {
+    case 'g': return 'g'
+    case 'ml': return 'ml'
+    case 'oz': return 'oz'
+    case 'lb': case 'pound': return 'lb'
+    case 'cup': return 'cup'
+    case 'tbsp': case 'tablespoon': return 'tbsp'
+    case 'tsp': case 'teaspoon': return 'tsp'
+    case 'fl_oz': case 'floz': return 'fl_oz'
+    default: return null
+  }
+}
+/**
+ * How many of the matched food's servings the AI portion (`qty` of `aiUnit`)
+ * equals — using real-unit math, NOT the calorie ratio. Returns null when the
+ * units can't be reconciled (caller falls back to the calorie estimate).
+ *  - mass/volume AI unit → scalingFactor (same family, or via gram/ml bridge)
+ *  - household/count AI unit → align by count if the food's serving is discrete
+ */
+function alignedServingsOfFood(qty: number, aiUnit: string, m: DbMatch): number | null {
+  const known = toKnownUnit(aiUnit)
+  if (known) {
+    try {
+      const f = scalingFactor(
+        { servingSize: m.servingSize, servingUnit: m.servingUnit as ServingUnit, nutrition: m.nutrition, gramsPerServing: m.gramsPerServing, mlPerServing: m.mlPerServing },
+        qty,
+        known,
+      )
+      return Number.isFinite(f) && f > 0 ? f : null
+    } catch {
+      return null // unit not reconcilable with this food (no bridge)
+    }
+  }
+  // Count word ("1 kiwi", "6 bites") → align to a discrete-serving food by count.
+  if (DISCRETE_FOOD_UNITS.has(m.servingUnit as Unit) && m.servingSize > 0) {
+    return qty / m.servingSize
+  }
+  return null
+}
+
 function toReviewItems(est: PlateEstimate): ReviewItem[] {
   return (est.items ?? []).map((item) => {
     const { qty, unit } = parseServing(item.estimatedServing)
@@ -225,13 +280,18 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
       const m = matches[i]
       if (!m) return { ...it, matchChecked: true, match: null }
       // Keep the AI's NATURAL portion (e.g. "1 kiwi", "6 bites") and count, but
-      // adopt YOUR saved food's macros for it. Calories are calorie-bridged to
-      // the AI's estimate; the other macros come from your food's profile at that
-      // calorie level. No abstract "× of 100 g".
+      // adopt YOUR saved food's macros for it. Phase 2: when the AI's unit can be
+      // reconciled with the food's real serving (same family, or via a gram/ml
+      // bridge, or a count→discrete-serving match), use that EXACT alignment so
+      // all macros come straight from your food. Otherwise fall back to bridging
+      // the AI's calorie estimate into a serving multiplier. No "× of 100 g".
       const dbCal = m.nutrition?.calories ?? 0
       const qty = it.multiplier > 0 ? it.multiplier : 1
       const aiTotalCal = (it.nutrition?.calories ?? 0) * qty
-      const totalMult = dbCal > 0 && aiTotalCal > 0 ? aiTotalCal / dbCal : qty // servings of the saved food
+      const aligned = alignedServingsOfFood(qty, it.unitLabel, m) // servings of the food, by unit math
+      const totalMult = aligned != null
+        ? aligned
+        : (dbCal > 0 && aiTotalCal > 0 ? aiTotalCal / dbCal : qty)
       const f = totalMult / qty
       const perUnit: Macros = {
         calories: (m.nutrition.calories ?? 0) * f,
@@ -459,9 +519,18 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) =>
         i === idx
-          ? { ...it, multiplier: Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2))) }
+          // Changing the count clears any freeform label so it can't go stale.
+          ? { ...it, multiplier: Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2))), labelOverride: undefined }
           : it
       ),
+    })
+  }
+
+  const setItemLabel = (idx: number, label: string) => {
+    if (state.phase !== 'review') return
+    setState({
+      ...state,
+      items: state.items.map((it, i) => (i === idx ? { ...it, labelOverride: label } : it)),
     })
   }
 
@@ -519,7 +588,7 @@ export default function SnapPlateModal({
           // Log in the item's natural unit: 1 unit × `servings` count.
           servingSize: 1,
           servingUnit: it.unitLabel || 'serving',
-          servingLabel: formatAmount(it.multiplier, it.unitLabel),
+          servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
             calories: Math.round(n.calories ?? 0),
@@ -559,7 +628,7 @@ export default function SnapPlateModal({
           estimatedServing: formatAmount(it.multiplier, it.unitLabel),
           servingSize: 1,
           servingUnit: it.unitLabel || 'serving',
-          servingLabel: formatAmount(it.multiplier, it.unitLabel),
+          servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
             calories: Math.round(n.calories ?? 0),
@@ -905,6 +974,7 @@ export default function SnapPlateModal({
                     items={state.items}
                     imageThumb={state.imageThumb}
                     onSetMultiplier={setMultiplier}
+                    onSetLabel={setItemLabel}
                     onToggleRemove={toggleRemove}
                     onCorrect={(text) => handleCorrect(state.items, state.imageThumb, text)}
                   />
@@ -1003,11 +1073,12 @@ interface ReviewBodyProps {
   items: ReviewItem[]
   imageThumb: string
   onSetMultiplier: (idx: number, delta: number) => void
+  onSetLabel: (idx: number, label: string) => void
   onToggleRemove: (idx: number) => void
   onCorrect: (text: string) => void
 }
 
-function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorrect }: ReviewBodyProps) {
+function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onToggleRemove, onCorrect }: ReviewBodyProps) {
   const [fix, setFix] = useState('')
 
   const submitFix = () => {
@@ -1070,7 +1141,7 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
               layout="review"
               name={item.name}
               brand={item.brand}
-              servingLabel={formatAmount(item.multiplier, item.unitLabel)}
+              servingLabel={item.labelOverride || formatAmount(item.multiplier, item.unitLabel)}
               calories={scaled.calories}
               macros={{ protein: scaled.protein, carbs: scaled.carbs, fats: scaled.fats }}
               confidence={item.confidence}
@@ -1080,6 +1151,7 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onToggleRemove, onCorr
               stepDelta={stepForUnit(item.unitLabel)}
               stepFloor={floorForUnit(item.unitLabel)}
               onStep={(delta) => onSetMultiplier(idx, delta)}
+              onServingLabelChange={(label) => onSetLabel(idx, label)}
               onRemove={() => onToggleRemove(idx)}
             />
           )
