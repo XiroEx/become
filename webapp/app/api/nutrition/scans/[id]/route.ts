@@ -8,7 +8,7 @@ import dbConnect from '@/lib/mongodb'
 import PlateScan, { IPlateScanItem } from '@/models/PlateScan'
 import { computeTotalNutrition } from '@/models/Meal'
 import type { IMealItem } from '@/models/Meal'
-import { coerceItem } from '../route'
+import { coerceItem } from '@/lib/plateScanCoerce'
 import { verifyAuth } from '@/lib/auth'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
