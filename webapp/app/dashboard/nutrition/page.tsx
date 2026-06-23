@@ -129,6 +129,7 @@ function NutritionPageInner() {
     nutrition: { calories: number; protein: number; carbs: number; fats: number }
     confidence?: number; matchKind?: 'food' | 'meal' | 'recipe'
   }> | null>(null)
+  const [snapScanId, setSnapScanId] = useState<string | null>(null)
   const handledScanRef = useRef<string | null>(null)
   // Hidden inputs so "Snap" (camera) and "Upload" (library) are distinct, direct
   // actions from both the dash and the search hub — each opens the right picker
@@ -141,7 +142,7 @@ function NutritionPageInner() {
 
   const openSnapCamera = () => cameraInputRef.current?.click()
   const openSnapUpload = () => galleryInputRef.current?.click()
-  const openDescribe = (text?: string) => { setSnapInitialImage(null); setSnapDescribeText(text ?? null); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }
+  const openDescribe = (text?: string) => { setSnapInitialImage(null); setSnapImageUrl(null); setSnapScanId(null); setSnapReview(null); setSnapDescribeText(text ?? null); setSnapPlatePhase('describe'); setSnapPlateOpen(true) }
 
   const handleCaptureFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -151,6 +152,7 @@ function NutritionPageInner() {
       const resized = await resizeImageToBlob(file, { maxDim: 1024, quality: 0.6 })
       const dataUrl = await blobToDataUrl(resized)
       setSnapInitialImage(dataUrl)
+      setSnapImageUrl(null); setSnapScanId(null); setSnapReview(null)
       setSnapPlatePhase('compose')
       setSnapPlateOpen(true)
     } catch (err) {
@@ -376,6 +378,7 @@ function NutritionPageInner() {
           setSnapInitialImage(null)
           setSnapDescribeText(null)
           setSnapImageUrl(typeof data.scan.imageUrl === 'string' ? data.scan.imageUrl : null)
+          setSnapScanId(scanId)
           setSnapReview(items)
           setSnapPlatePhase('review')
           setSnapPlateOpen(true)
@@ -1161,6 +1164,7 @@ function NutritionPageInner() {
         initialDescribe={snapDescribeText}
         initialReview={snapReview}
         initialImageUrl={snapImageUrl}
+        initialScanId={snapScanId}
         onClose={() => setSnapPlateOpen(false)}
         onLogged={() => { invalidateMindSession(); fetchMealLogs(); fetchTags(); setFoodSearchOpen(false) }}
       />

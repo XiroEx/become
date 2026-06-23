@@ -13,7 +13,7 @@ function num(v: unknown, d = 0): number {
   return Number.isFinite(n) ? n : d
 }
 
-function coerceItem(raw: Record<string, unknown>): IPlateScanItem | null {
+export function coerceItem(raw: Record<string, unknown>): IPlateScanItem | null {
   const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   if (!name) return null
   const n = (raw.nutrition ?? {}) as Record<string, unknown>
