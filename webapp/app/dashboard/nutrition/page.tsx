@@ -16,7 +16,7 @@ import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History } from 'lucide-react'
+import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History, ChevronDown } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
@@ -137,6 +137,7 @@ function NutritionPageInner() {
   const galleryInputRef = useRef<HTMLInputElement>(null)
   // Which dash capture dropdown is open: camera (photo/barcode) or upload (upload/describe).
   const [captureMenu, setCaptureMenu] = useState<null | 'camera' | 'upload'>(null)
+  const [navMenuOpen, setNavMenuOpen] = useState(false)
 
   const openSnapCamera = () => cameraInputRef.current?.click()
   const openSnapUpload = () => galleryInputRef.current?.click()
@@ -785,10 +786,33 @@ function NutritionPageInner() {
               Track your food, macros, and hydration
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>My Stuff</HeaderPillLink>
-            <HeaderPillLink href={`/dashboard/timeline?date=${dateParam}`} Icon={Clock}>Timeline</HeaderPillLink>
-            <HeaderPillLink href="/dashboard/nutrition/scans" Icon={History}>Estimates</HeaderPillLink>
+            {/* Timeline + Estimate history tucked into one dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setNavMenuOpen((o) => !o)}
+                aria-label="Timeline and history"
+                aria-expanded={navMenuOpen}
+                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
+              >
+                <Clock className="h-4 w-4" /> Timeline
+                <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+              </button>
+              {navMenuOpen && (
+                <>
+                  <button className="fixed inset-0 z-40 cursor-default" aria-hidden tabIndex={-1} onClick={() => setNavMenuOpen(false)} />
+                  <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                    <Link href={`/dashboard/timeline?date=${dateParam}`} onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                      <Clock className="h-4 w-4" /> Timeline
+                    </Link>
+                    <Link href="/dashboard/nutrition/scans" onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                      <History className="h-4 w-4" /> Estimate history
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
