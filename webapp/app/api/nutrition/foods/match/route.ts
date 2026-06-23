@@ -70,14 +70,18 @@ async function matchOne(
   if (content.length === 0) return null
   const fullQueryWords = words(`${name} ${brand}`)
   const q = `${name} ${brand}`.trim()
+  // Haystack = name + brand content words. The AI often splits a saved item's
+  // distinctive words across name AND brand (e.g. name "Mild Roast Coffee",
+  // brand "Everyday Dose"), so candidate discovery + subset matching must look
+  // at BOTH — otherwise the user's "Everyday Dose Coffee" recipe never surfaces.
+  const haystack = contentWords(`${name} ${brand}`)
 
-  // Candidate pools — text search + a regex fallback on the most distinctive
-  // (longest) content word, so we don't miss a candidate the text index ranked
-  // out. Owner-scope meals/recipes to the user (or public ones).
-  // Match candidates on ANY content word (not just the longest) so a saved item
-  // is found even when the description adds descriptor words ("everyday coffee").
+  // Candidate pools — text search + a regex fallback on ANY content word (name
+  // or brand), so we don't miss a candidate the text index ranked out and a
+  // saved item is found even when the description carries extra/split words.
+  // Owner-scope meals/recipes to the user (or public ones).
   const escapeRe = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const anyWord = content.map(escapeRe).filter(Boolean).join('|') || escapeRe(name)
+  const anyWord = haystack.map(escapeRe).filter(Boolean).join('|') || escapeRe(name)
   const ownerOr = [{ createdBy: new mongoose.Types.ObjectId(userId) }, { isPublic: true }]
 
   const [foodText, foodRegex, meals, recipes] = await Promise.all([
@@ -93,12 +97,13 @@ async function matchOne(
       .limit(20).lean<Array<Record<string, unknown>>>().catch(() => []),
   ])
 
-  // "Subset" match: the saved item's whole name appears in the description
-  // (e.g. saved "Coffee" inside "everyday coffee"). Lets the user's own saved
-  // items win even when the description carries extra words.
+  // "Subset" match: the saved item's whole name appears in the query name+brand
+  // (e.g. saved "Everyday Dose Coffee" inside name "Mild Roast Coffee" + brand
+  // "Everyday Dose"). Lets the user's own saved items win even when the AI splits
+  // or adds words.
   const subsetMatch = (candName: string): boolean => {
     const cc = contentWords(candName)
-    return cc.length > 0 && coverage(cc, content) >= 1
+    return cc.length > 0 && coverage(cc, haystack) >= 1
   }
 
   // Dedupe foods by id.
