@@ -307,6 +307,14 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
     return items.map((it, i) => {
       const m = matches[i]
       if (!m) return { ...it, matchChecked: true, match: null }
+      // Guard: a saved item with empty/broken macros (e.g. a 0-cal "Blueberries")
+      // must NOT override a real AI estimate. If the match has no usable nutrition
+      // but the AI estimated some, keep the AI estimate (treat as unmatched).
+      const matchHasMacros = (m.nutrition?.calories ?? 0) > 0
+        || (m.nutrition?.protein ?? 0) > 0 || (m.nutrition?.carbs ?? 0) > 0 || (m.nutrition?.fats ?? 0) > 0
+      const aiHasMacros = (it.nutrition?.calories ?? 0) > 0
+        || (it.nutrition?.protein ?? 0) > 0 || (it.nutrition?.carbs ?? 0) > 0 || (it.nutrition?.fats ?? 0) > 0
+      if (!matchHasMacros && aiHasMacros) return { ...it, matchChecked: true, match: null }
       // Keep the AI's NATURAL portion (e.g. "1 kiwi", "6 bites") and count, but
       // adopt YOUR saved food's macros for it. Phase 2: when the AI's unit can be
       // reconciled with the food's real serving (same family, or via a gram/ml
