@@ -62,6 +62,9 @@ export interface FoodItemRowProps {
   // ── actions ──
   onEdit?: () => void
   onRemove?: () => void
+  /** When provided, the friendly amount line becomes tap-to-edit (review layout):
+   *  the user can type a freeform label like "1 handful". */
+  onServingLabelChange?: (label: string) => void
 }
 
 function confidenceLabel(c: number): string {
@@ -80,11 +83,17 @@ function round(n: number, dp = 0): number {
   return Math.round((n ?? 0) * f) / f
 }
 
-/** Header shared by both layouts: name (+variant), badges, brand, amount. */
+/** Header shared by both layouts: name (+variant), badges, brand, amount. When
+ *  `onLabelChange` is set, the amount line is tap-to-edit (freeform label). */
 function RowHeader({
-  name, brand, variantName, servingLabel, hardAmount, confidence, badges,
-}: Pick<FoodItemRowProps, 'name' | 'brand' | 'variantName' | 'servingLabel' | 'hardAmount' | 'confidence' | 'badges'>) {
+  name, brand, variantName, servingLabel, hardAmount, confidence, badges, onLabelChange,
+}: Pick<FoodItemRowProps, 'name' | 'brand' | 'variantName' | 'servingLabel' | 'hardAmount' | 'confidence' | 'badges'>
+  & { onLabelChange?: (v: string) => void }) {
   const showHard = !!hardAmount && hardAmount !== servingLabel
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const startEdit = () => { setDraft(servingLabel || hardAmount || ''); setEditing(true) }
+  const commit = () => { const v = draft.trim(); if (v) onLabelChange?.(v); setEditing(false) }
   return (
     <div className="min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -112,13 +121,36 @@ function RowHeader({
           </span>
         ))}
       </div>
-      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-        {brand && <span className="text-zinc-400 dark:text-zinc-500">{brand} &middot; </span>}
-        {servingLabel || hardAmount || ''}
-        {showHard && servingLabel && (
-          <span className="text-zinc-400 dark:text-zinc-500"> &middot; {hardAmount}</span>
-        )}
-      </p>
+      {editing ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit() }
+            else if (e.key === 'Escape') setEditing(false)
+          }}
+          placeholder="e.g. 1 handful"
+          className="mt-0.5 w-full rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-xs text-zinc-900 focus:outline-none dark:border-emerald-700 dark:bg-zinc-900 dark:text-white"
+        />
+      ) : (
+        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+          {brand && <span className="text-zinc-400 dark:text-zinc-500">{brand} &middot; </span>}
+          {onLabelChange ? (
+            <button
+              type="button"
+              onClick={startEdit}
+              className="underline decoration-dotted underline-offset-2 transition-colors hover:text-zinc-700 dark:hover:text-zinc-200"
+            >
+              {servingLabel || hardAmount || 'Set amount'}
+            </button>
+          ) : (servingLabel || hardAmount || '')}
+          {showHard && servingLabel && (
+            <span className="text-zinc-400 dark:text-zinc-500"> &middot; {hardAmount}</span>
+          )}
+        </p>
+      )}
     </div>
   )
 }
@@ -134,7 +166,7 @@ function MacroLine({ macros }: { macros: { protein: number; carbs: number; fats:
 export default function FoodItemRow(props: FoodItemRowProps) {
   const {
     calories, macros, confidence, badges, layout = 'review', dimmed,
-    count, onStep, stepDelta = 1, stepFloor = 0.5, onEdit, onRemove,
+    count, onStep, stepDelta = 1, stepFloor = 0.5, onEdit, onRemove, onServingLabelChange,
     name, brand, variantName, servingLabel, hardAmount,
   } = props
 
@@ -143,6 +175,7 @@ export default function FoodItemRow(props: FoodItemRowProps) {
       name={name} brand={brand} variantName={variantName}
       servingLabel={servingLabel} hardAmount={hardAmount}
       confidence={confidence} badges={badges}
+      onLabelChange={onServingLabelChange}
     />
   )
 

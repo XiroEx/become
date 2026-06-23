@@ -43,6 +43,12 @@ interface MatchResult {
   /** The user's own saved item (own food / meal / recipe) — ranked first so
    *  "use my saved foods" beats a generic global-catalog match. */
   owned?: boolean
+  // Cross-unit bridges + friendly label so the plate reconcile can align an AI
+  // quantity (e.g. "150 g", "1 cup") to the food's real serving instead of
+  // back-calculating from calories. Only populated for `food` matches.
+  gramsPerServing?: number
+  mlPerServing?: number
+  displayLabel?: string
 }
 
 // Text helpers (stemMatch/words/STOP/PREP/contentWords/coverage) are shared with
@@ -125,6 +131,9 @@ async function matchOne(
       source: f.source || 'manual',
       confidence: Math.min(1, 0.6 + 0.3 * fullCov + (brandHit ? 0.1 : 0)),
       owned: isOwn,
+      gramsPerServing: flat.gramsPerServing,
+      mlPerServing: flat.mlPerServing,
+      displayLabel: flat.displayLabel,
     })
   }
 
