@@ -48,6 +48,11 @@ const FIXES: Fix[] = [
   { id: '6a39dd5e2971dc283318453f', label: 'Tomato Cooking Base (Goya)', source: 'fatsecret.com', nutrition: { calories: 100, protein: 0, carbs: 25, fats: 0 } },
   // Captain Morgan Original Spiced Rum — ~194 cal/100 ml from alcohol; macros ~0 (manual record was 0 cal).
   { id: '6a2513a9a75ea6fbd168de67', label: 'Captain Morgan', source: 'recipal/eatthismuch', nutrition: { calories: 194, protein: 0, carbs: 0, fats: 0 } },
+  // --- 2026-06-24: new broken OFF imports OFF couldn't supply macros for ---
+  // USDA cheddar per 100g (OFF had macros null).
+  { id: '6a3b3f7dff7e93c00c7d14bf', label: 'Everyday Cheddar cheese (Woolworths)', source: 'myfooddata/USDA', nutrition: { calories: 403, protein: 23, carbs: 3.1, fats: 33.3 } },
+  // Pure matcha green tea powder per 100g (OFF had macros null). Generic proxy.
+  { id: '6a3b3f7dff7e93c00c7d14b5', label: 'Everyday Matcha', source: 'recipal/nutritionvalue', nutrition: { calories: 347, protein: 27.4, carbs: 44.7, fats: 6.5, fiber: 38 } },
 ]
 
 const n = (v: unknown) => (typeof v === 'number' && isFinite(v) ? v : 0)
