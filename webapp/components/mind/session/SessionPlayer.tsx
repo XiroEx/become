@@ -65,6 +65,11 @@ export interface SessionPlayerProps {
   /** Admin lab: seed the live state so breath-for-state + the regulate amplify
    *  swap can be exercised without first playing a state-check. */
   initialLiveState?: MindState | null
+  /** Public shared view: render read-only (implies preview — no writes) and, on
+   *  ANY attempt to advance/interact, call onRequireAuth instead of progressing
+   *  so the recipient is prompted to sign in to Become to continue. */
+  gated?: boolean
+  onRequireAuth?: () => void
 }
 
 type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
@@ -76,8 +81,10 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null }: SessionPlayerProps) {
+export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth }: SessionPlayerProps) {
   const router = useRouter()
+  // Gated (public share) runs are always read-only — never write progress.
+  preview = preview || gated
   const [stage, setStage] = useState<Stage>('intro')
   const [index, setIndex] = useState(0)
   const [liveState, setLiveState] = useState<MindState | null>(initialLiveState)
@@ -125,12 +132,14 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   }, [plan.moves, liveState, preview])
 
   const next = useCallback(() => {
+    // Public share: any attempt to advance prompts sign-in instead of progressing.
+    if (gated) { onRequireAuth?.(); return }
     if (index >= total - 1) {
       void complete()
     } else {
       setIndex((i) => i + 1)
     }
-  }, [index, total, complete])
+  }, [gated, onRequireAuth, index, total, complete])
 
   const handleLevelUp = useCallback(async () => {
     if (advancing) return
