@@ -21,7 +21,7 @@ import {
   type FocusKey,
   type DraftSession,
 } from "@/lib/quickSession/types";
-import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
+import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 import ShareButton from "@/components/share/ShareButton";
@@ -237,7 +237,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
   const startPreview = useCallback(() => {
     if (!preview) return;
     const id = stashQuickSession(preview);
-    router.push(quickSessionLiveHref(id));
+    router.push(quickSessionOverviewHref(id));
     onClose();
   }, [preview, router, onClose]);
 
@@ -260,7 +260,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         }
         const data = (await res.json()) as GenerateSessionResponse;
         const id = stashQuickSession(data.session);
-        router.push(quickSessionLiveHref(id));
+        router.push(quickSessionOverviewHref(id));
         onClose();
       } catch {
         setError("Network error. Try again.");
