@@ -112,29 +112,35 @@ export async function DELETE(
     await dbConnect()
 
     const { id, itemId } = await params
-    const log = await MealLog.findById(id)
-    if (!log) {
-      return NextResponse.json({ error: 'Meal log not found' }, { status: 404 })
-    }
-    if (log.user.toString() !== authResult.userId) {
-      return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(itemId)) {
+      return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
     }
 
-    const idx = findItemIndex(log, itemId)
-    if (idx === -1) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+    // Atomic $pull by sub-document _id — avoids the read-modify-write race when
+    // several items are deleted in quick succession (which previously made one
+    // delete "fail" because a concurrent save had already changed the array).
+    const updated = await MealLog.findOneAndUpdate(
+      { _id: id, user: authResult.userId },
+      { $pull: { items: { _id: new mongoose.Types.ObjectId(itemId) } } },
+      { new: true },
+    )
+
+    // Idempotent: if the log (or item) is already gone, the user's goal — that
+    // entry removed — is achieved. Return success rather than a 404 that surfaces
+    // as "Failed to delete entry" on a double-tap / concurrent delete.
+    if (!updated) {
+      return NextResponse.json({ success: true, deleted: true })
     }
 
-    log.items.splice(idx, 1)
-
-    // If no items left, delete the log entirely.
-    if (log.items.length === 0) {
+    // No items left → remove the whole log.
+    if (updated.items.length === 0) {
       await MealLog.deleteOne({ _id: id })
       return NextResponse.json({ success: true, deleted: true })
     }
 
-    await log.save()
-    return NextResponse.json({ success: true, log })
+    // Recompute totals (the pre-save hook reruns computeTotalNutrition on save).
+    await updated.save()
+    return NextResponse.json({ success: true, log: updated })
   } catch (error) {
     console.error('Error deleting meal log item:', error)
     return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 })
