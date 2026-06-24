@@ -11,7 +11,7 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
-import { readQuickSession, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, quickSessionOverviewHref, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 
 interface SetData {
@@ -888,6 +888,7 @@ export default function LiveWorkoutPage() {
   // Advance to next step with appropriate rest
   const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
     if (isComplete) {
+      if (isQuick && quickSessionId) clearQuickSession(quickSessionId); // done — drop the draft
       setShowSummary(true);
       return;
     }
@@ -982,6 +983,7 @@ export default function LiveWorkoutPage() {
     saveWorkout(updatedData, allDone);
 
     if (allDone) {
+      if (isQuick && quickSessionId) clearQuickSession(quickSessionId); // done — drop the draft
       setShowSummary(true);
       return;
     }
@@ -1243,7 +1245,13 @@ export default function LiveWorkoutPage() {
             style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)' }}
           >
             <button
-              onClick={(e) => { e.stopPropagation(); router.back(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Quick sessions return to their overview (persisted) so closing
+                // live never strands the user with no way back into the session.
+                if (isQuick && quickSessionId) router.push(quickSessionOverviewHref(quickSessionId));
+                else router.back();
+              }}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
