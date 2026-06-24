@@ -9,6 +9,7 @@ import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary from "@/components/WorkoutSummary";
+import ShareButton from "@/components/share/ShareButton";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -895,15 +896,24 @@ export default function WorkoutFormPage() {
               <p className="text-xs text-zinc-500 dark:text-zinc-400">{workout.day}</p>
             </div>
 
-            <button
-              onClick={() => router.push(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}`)}
-              className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-sm font-medium text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-600"
-            >
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Live
-            </button>
+            <div className="flex items-center gap-2">
+              <ShareButton
+                kind="workout"
+                programId={programId}
+                day={workout.day}
+                label=""
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              />
+              <button
+                onClick={() => router.push(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}`)}
+                className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-sm font-medium text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-600"
+              >
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                Live
+              </button>
+            </div>
           </div>
 
           {/* Progress bar */}

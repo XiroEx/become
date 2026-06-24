@@ -24,6 +24,7 @@ import {
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
+import ShareButton from "@/components/share/ShareButton";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -485,6 +486,12 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                             <RefreshCw className="h-4 w-4" />
                             Regenerate
                           </button>
+                          <ShareButton
+                            kind="session"
+                            session={{ title: preview.title, focus: preview.focus, exercises: preview.exercises }}
+                            label=""
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-300 text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          />
                           <button
                             onClick={startPreview}
                             disabled={busy}
