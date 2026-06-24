@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Meal from '@/models/Meal'
+import MealPlan from '@/models/MealPlan'
 import { verifyAuth } from '@/lib/auth'
 import { requireFeature } from '@/lib/entitlements'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
@@ -80,7 +81,15 @@ export async function PATCH(
 
     await meal.save()
 
-    return NextResponse.json({ success: true, meal })
+    // How many ACTIVE meal-plan slots were created from this meal? The client
+    // uses this to offer "update the planned copies too?" after an edit.
+    const plannedCount = await MealPlan.countDocuments({
+      mealId: meal._id,
+      user: authResult.userId,
+      status: 'active',
+    })
+
+    return NextResponse.json({ success: true, meal, plannedCount })
   } catch (error) {
     console.error('Error updating meal:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to update meal' }, { status: 500 })

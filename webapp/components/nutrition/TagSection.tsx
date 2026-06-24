@@ -90,6 +90,9 @@ interface TagSectionProps {
   plans?: MealPlan[]
   onRemovePlan?: (planId: string) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
+  /** "Log it" — promote a plan into a real log (today). When provided, a Log it
+   *  button appears in the planned header. */
+  onLogPlan?: (planId: string) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -185,6 +188,7 @@ export default function TagSection({
   plans = [],
   onRemovePlan,
   onEditPlanItem,
+  onLogPlan,
 }: TagSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -460,6 +464,14 @@ export default function TagSection({
                           <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
                             {plans.filter(p => p.mealName).map(p => p.mealName).join(', ')}
                           </span>
+                        )}
+                        {onLogPlan && (
+                          <button
+                            onClick={() => plans.forEach(p => onLogPlan(p._id))}
+                            className="ml-auto inline-flex shrink-0 items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700"
+                          >
+                            Log it
+                          </button>
                         )}
                       </div>
                       <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
