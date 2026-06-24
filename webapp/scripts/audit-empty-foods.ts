@@ -1,21 +1,22 @@
 /**
  * Audit: find Food docs with empty / broken nutrition.
  *
- * Flags any food whose DEFAULT variant (the one used for display + logging) has
- * suspect nutrition: 0 cal, 1 cal, or all macros (protein/carbs/fats) = 0g.
- * These produce nonsense in the app (e.g. "1 cup blueberries · 1 cal · 0g").
+ * A food's DEFAULT variant (the one used for display + logging) is "broken" when
+ * it has real calories but 0 macros, or 0 everything — UNLESS it's a legitimately
+ * near-zero food (water / tea / coffee / seltzer / vinegar / spirits / diet drink),
+ * which genuinely has ~0 macros. Those are classified "legit near-zero" and are
+ * NOT flagged.
  *
- * Read-only by default — prints a report (counts + breakdown + a sample list).
- * Pass --flag to set `needsReview: true` on the broken foods so they surface in
- * the admin Foods review queue (reversible; idempotent).
+ * Read-only by default. Modes:
+ *   --flag         set needsReview=true on the TRULY-broken foods (skips legit)
+ *   --clear-legit  clear needsReview on flagged foods that are legit near-zero
  *
  * Run from webapp/:
- *   AUDIT (prod):  PROD_MONGODB_URI="<uri>" npx tsx scripts/audit-empty-foods.ts --prod
- *   FLAG  (prod):  PROD_MONGODB_URI="<uri>" npx tsx scripts/audit-empty-foods.ts --prod --flag
- *   DEV:           npx tsx scripts/audit-empty-foods.ts
+ *   AUDIT:        PROD_MONGODB_URI="<uri>" npx tsx scripts/audit-empty-foods.ts --prod
+ *   CLEAR LEGIT:  PROD_MONGODB_URI="<uri>" npx tsx scripts/audit-empty-foods.ts --prod --clear-legit
+ *   FLAG BROKEN:  PROD_MONGODB_URI="<uri>" npx tsx scripts/audit-empty-foods.ts --prod --flag
  *
- * Reads MONGODB_URI (dev) or PROD_MONGODB_URI / MONGODB_URI_PROD (--prod) — from
- * the env or .env.local, same convention as sibling migrations.
+ * Reads MONGODB_URI (dev) or PROD_MONGODB_URI / MONGODB_URI_PROD (--prod).
  */
 
 import mongoose from 'mongoose'
@@ -26,114 +27,103 @@ dotenv.config({ path: path.join(__dirname, '../.env.local') })
 
 const isProd = process.argv.includes('--prod')
 const doFlag = process.argv.includes('--flag')
+const doClearLegit = process.argv.includes('--clear-legit')
 
 const MONGODB_URI = isProd
   ? (process.env.PROD_MONGODB_URI || process.env.MONGODB_URI_PROD || process.env.MONGODB_URI)
   : process.env.MONGODB_URI
-
-if (!MONGODB_URI) {
-  console.error(`Missing ${isProd ? 'PROD_MONGODB_URI' : 'MONGODB_URI'} env var`)
-  process.exit(1)
-}
+if (!MONGODB_URI) { console.error(`Missing ${isProd ? 'PROD_MONGODB_URI' : 'MONGODB_URI'} env var`); process.exit(1) }
 
 interface Nutrition { calories?: number; protein?: number; carbs?: number; fats?: number }
 interface Variant { name?: string; isDefault?: boolean; servingSize?: number; servingUnit?: string; nutrition?: Nutrition }
 interface FoodDoc {
   _id: mongoose.Types.ObjectId
-  name?: string
-  brand?: string
-  category?: string
-  source?: string
-  isFirstClass?: boolean
-  isVerified?: boolean
-  needsReview?: boolean
+  name?: string; brand?: string; category?: string; source?: string
+  isFirstClass?: boolean; isVerified?: boolean; needsReview?: boolean
   variants?: Variant[]
 }
 
 const n = (v: number | undefined) => (typeof v === 'number' && isFinite(v) ? v : 0)
+const defaultVariant = (f: FoodDoc): Variant | undefined => (f.variants ?? []).find(v => v.isDefault) ?? (f.variants ?? [])[0]
 
-/** Reason a variant's nutrition is suspect, or null if it looks fine. */
+// Foods that legitimately have ~0 macros regardless of calories: beverages,
+// spirits, vinegars, diet/zero drinks. Detected by name/brand keywords, the
+// Beverage category, or an explicit allowlist for branded items the keywords
+// miss (verified by hand 2026-06-23).
+const LEGIT_RE = /\b(water|sparkling|seltzer|tonic|soda|cola|tea|coffee|espresso|latte|cappuccino|kombucha|vinegar|rum|vodka|gin|whisk(?:e)?y|tequila|liquor|liqueur|brandy|bourbon|cognac|scotch|wine|beer|ale|cider|spirit|hydration|electrolyte|energy drink|bcaa|hoplark|tulsi)\b/i
+const LEGIT_IDS = new Set<string>([
+  '6a2513a9a75ea6fbd168de67', // Captain Morgan (spirit)
+  '6a26e1f8f4cd4f7c997df1e5', // Reign Total Body Fuel (0-cal energy drink)
+  '6a251178a75ea6fbd168de65', // Poland Spring (water)
+])
+function isLegitNearZero(f: FoodDoc): boolean {
+  if (LEGIT_IDS.has(String(f._id))) return true
+  if (f.category === 'Beverage') return true
+  return LEGIT_RE.test(`${f.name ?? ''} ${f.brand ?? ''}`)
+}
+
+/** Reason the default variant is suspect, or null if it looks fine. */
 function brokenReason(v: Variant | undefined): string | null {
   if (!v || !v.nutrition) return 'no-nutrition'
-  const c = n(v.nutrition.calories)
-  const p = n(v.nutrition.protein), cb = n(v.nutrition.carbs), f = n(v.nutrition.fats)
+  const c = n(v.nutrition.calories), p = n(v.nutrition.protein), cb = n(v.nutrition.carbs), f = n(v.nutrition.fats)
   if (c === 0 && p === 0 && cb === 0 && f === 0) return '0-everything'
   if (p === 0 && cb === 0 && f === 0) return '0-macros'
-  if (c === 0) return '0-cal'
   if (c === 1) return '1-cal'
+  if (c === 0) return '0-cal'
   return null
 }
 
-function defaultVariant(f: FoodDoc): Variant | undefined {
-  const vs = f.variants ?? []
-  return vs.find(v => v.isDefault) ?? vs[0]
-}
-
 async function main() {
-  console.log(`\n== Empty/broken food audit ==  (${isProd ? 'PROD' : 'DEV'}${doFlag ? ', FLAGGING' : ', read-only'})\n`)
+  console.log(`\n== Empty/broken food audit ==  (${isProd ? 'PROD' : 'DEV'}${doFlag ? ', FLAG broken' : doClearLegit ? ', CLEAR-LEGIT' : ', read-only'})\n`)
   await mongoose.connect(MONGODB_URI as string)
   const Foods = mongoose.connection.collection<FoodDoc>('foods')
 
   const total = await Foods.countDocuments({})
   const cursor = Foods.find({}, { projection: { name: 1, brand: 1, category: 1, source: 1, isFirstClass: 1, isVerified: 1, needsReview: 1, variants: 1 } })
 
-  let generic = 0, branded = 0
-  const broken: Array<{ id: string; name: string; brand: string; source: string; cat: string; reason: string; cal: number; p: number; c: number; f: number; serving: string; generic: boolean }> = []
+  const broken: FoodDoc[] = []   // truly broken (needs fixing)
+  const legit: FoodDoc[] = []    // flagged-but-legit near-zero (false positives)
   const reasonCounts: Record<string, number> = {}
-  const sourceCounts: Record<string, number> = {}
 
   for await (const f of cursor) {
-    const isGeneric = !f.brand || !String(f.brand).trim()
-    if (isGeneric) generic++; else branded++
-    const dv = defaultVariant(f)
-    const reason = brokenReason(dv)
-    if (reason) {
-      reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1
-      const src = f.source || 'manual'
-      sourceCounts[`${src}${isGeneric ? '/generic' : '/branded'}`] = (sourceCounts[`${src}${isGeneric ? '/generic' : '/branded'}`] ?? 0) + 1
-      broken.push({
-        id: String(f._id),
-        name: f.name || '(unnamed)',
-        brand: f.brand || '',
-        source: src,
-        cat: f.category || '',
-        reason,
-        cal: n(dv?.nutrition?.calories), p: n(dv?.nutrition?.protein), c: n(dv?.nutrition?.carbs), f: n(dv?.nutrition?.fats),
-        serving: `${dv?.servingSize ?? '?'} ${dv?.servingUnit ?? ''}`.trim(),
-        generic: isGeneric,
-      })
-    }
+    const reason = brokenReason(defaultVariant(f))
+    if (!reason) continue
+    if (isLegitNearZero(f)) { legit.push(f); continue }
+    reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1
+    broken.push(f)
   }
 
-  console.log(`Total foods:      ${total}`)
-  console.log(`  generic (no brand): ${generic}`)
-  console.log(`  branded:            ${branded}`)
-  console.log(`\nBroken (default variant): ${broken.length}  (${broken.filter(b => b.generic).length} generic, ${broken.filter(b => !b.generic).length} branded)`)
-  console.log('\nBy reason:')
+  console.log(`Total foods: ${total}`)
+  console.log(`Truly broken (real food, 0 macros): ${broken.length}`)
+  console.log(`Legit near-zero (beverage/spirit/vinegar — not broken): ${legit.length}`)
+  console.log('\nBroken by reason:')
   for (const [r, c] of Object.entries(reasonCounts).sort((a, b) => b[1] - a[1])) console.log(`  ${r.padEnd(14)} ${c}`)
-  console.log('\nBy source:')
-  for (const [s, c] of Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])) console.log(`  ${s.padEnd(22)} ${c}`)
 
-  // Sample — generic first (most user-visible), then branded.
-  const sample = [...broken].sort((a, b) => Number(b.generic) - Number(a.generic) || a.name.localeCompare(b.name)).slice(0, 80)
-  console.log(`\nSample (${sample.length} of ${broken.length}):`)
+  const sample = [...broken].slice(0, 80)
+  console.log(`\nTruly-broken sample (${sample.length} of ${broken.length}):`)
   for (const b of sample) {
-    console.log(`  [${b.reason.padEnd(12)}] ${b.name}${b.brand ? ` (${b.brand})` : ''} · ${b.source} · ${b.cat} · ${b.serving} · ${b.cal}cal P${b.p} C${b.c} F${b.f} · ${b.id}`)
+    const dv = defaultVariant(b)
+    console.log(`  ${b.name}${b.brand ? ` (${b.brand})` : ''} · ${b.source} · ${b.category} · ${dv?.servingSize ?? '?'} ${dv?.servingUnit ?? ''} · ${n(dv?.nutrition?.calories)}cal P${n(dv?.nutrition?.protein)} C${n(dv?.nutrition?.carbs)} F${n(dv?.nutrition?.fats)} · ${b._id}`)
   }
 
   if (doFlag && broken.length) {
-    const ids = broken.map(b => new mongoose.Types.ObjectId(b.id))
-    const res = await Foods.updateMany({ _id: { $in: ids } }, { $set: { needsReview: true } })
-    console.log(`\nFlagged needsReview=true on ${res.modifiedCount} foods (matched ${res.matchedCount}).`)
-  } else if (broken.length) {
-    console.log('\n(read-only — re-run with --flag to set needsReview=true on these)')
+    const res = await Foods.updateMany({ _id: { $in: broken.map(b => b._id) } }, { $set: { needsReview: true } })
+    console.log(`\nFlagged needsReview=true on ${res.modifiedCount} truly-broken foods.`)
+  }
+  if (doClearLegit) {
+    // Clear needsReview on flagged-but-legit foods (de-noise the review queue).
+    const flaggedLegit = legit.filter(f => f.needsReview)
+    if (flaggedLegit.length) {
+      const res = await Foods.updateMany({ _id: { $in: flaggedLegit.map(f => f._id) } }, { $set: { needsReview: false } })
+      console.log(`\nCleared needsReview on ${res.modifiedCount} legit near-zero foods:`)
+      for (const f of flaggedLegit) console.log(`  - ${f.name}${f.brand ? ` (${f.brand})` : ''}`)
+    } else {
+      console.log('\nNo flagged legit-near-zero foods to clear.')
+    }
   }
 
   await mongoose.disconnect()
   console.log('\nDone.\n')
 }
 
-main().catch((err) => {
-  console.error(err)
-  process.exit(1)
-})
+main().catch((err) => { console.error(err); process.exit(1) })

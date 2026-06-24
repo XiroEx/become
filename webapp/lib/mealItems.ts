@@ -36,16 +36,24 @@ function coerceObjectId(v: string | mongoose.Types.ObjectId | undefined): mongoo
   return undefined
 }
 
+/** Clamp a nutrition number to a finite, non-negative value (0 when missing /
+ *  NaN / Infinity / negative) so a bad client payload can't corrupt daily totals. */
+function num(v: unknown): number {
+  return typeof v === 'number' && isFinite(v) && v >= 0 ? v : 0
+}
+function numOpt(v: unknown): number | undefined {
+  return v == null ? undefined : num(v)
+}
 function coerceNutrition(n: Partial<IMealNutrition> | undefined): IMealNutrition {
   return {
-    calories: n?.calories ?? 0,
-    protein: n?.protein ?? 0,
-    carbs: n?.carbs ?? 0,
-    fats: n?.fats ?? 0,
-    fiber: n?.fiber,
-    sugar: n?.sugar,
-    sodium: n?.sodium,
-    saturatedFat: n?.saturatedFat,
+    calories: num(n?.calories),
+    protein: num(n?.protein),
+    carbs: num(n?.carbs),
+    fats: num(n?.fats),
+    fiber: numOpt(n?.fiber),
+    sugar: numOpt(n?.sugar),
+    sodium: numOpt(n?.sodium),
+    saturatedFat: numOpt(n?.saturatedFat),
   }
 }
 
@@ -100,15 +108,23 @@ export async function resolveItemFromInput(input: MealItemInput): Promise<IMealI
   if (!servingUnit) throw new Error(`Item is missing required field: servingUnit (${ctx})`)
   if (!nutrition) throw new Error(`Item is missing required field: nutrition (${ctx})`)
 
+  // Guard servings: a non-finite / <=0 value would corrupt totals (servings ×
+  // per-serving). Clamp to 1 rather than reject so a quirky client never blocks
+  // a log; servingSize is likewise floored to a positive number.
+  const servings = typeof input.servings === 'number' && isFinite(input.servings) && input.servings > 0
+    ? input.servings : 1
+  const safeServingSize = typeof servingSize === 'number' && isFinite(servingSize) && servingSize > 0
+    ? servingSize : 1
+
   return {
     foodId: foodObjectId,
     variantId: variantObjectId,
     variantName,
     name,
     brand,
-    servingSize,
+    servingSize: safeServingSize,
     servingUnit,
-    servings: input.servings ?? 1,
+    servings,
     nutrition,
     servingLabel,
     // Pass-through of the new picker provenance. Stored when present, omitted
