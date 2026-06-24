@@ -5,15 +5,15 @@
 
 import { useState } from 'react'
 import { Share2, Copy, Check, Download, X, Loader2 } from 'lucide-react'
-import type { Workout } from '@/lib/data/programs'
 
 interface ShareButtonProps {
   kind: 'program' | 'workout' | 'session'
   programId?: string
   day?: string
   phase?: string
-  /** For one-off/generated sessions — the content to snapshot. */
-  session?: { title: string; focus?: string; exercises: Workout['exercises'] }
+  /** For one-off/generated sessions — the content to snapshot. Exercises are a
+   *  loose draft shape; the server sanitizes them. */
+  session?: { title: string; focus?: string; exercises: unknown[] }
   label?: string
   className?: string
 }
