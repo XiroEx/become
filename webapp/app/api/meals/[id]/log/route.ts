@@ -82,6 +82,11 @@ export async function POST(
       servingUnit: item.servingUnit,
       servings: (item.servings ?? 1) * portion,
       nutrition: item.nutrition,
+      servingLabel: item.servingLabel,
+      loggedQuantity: item.loggedQuantity,
+      loggedUnit: item.loggedUnit,
+      loggedGramsPerServing: item.loggedGramsPerServing,
+      loggedMlPerServing: item.loggedMlPerServing,
     }))
 
     const log = await MealLog.create({
