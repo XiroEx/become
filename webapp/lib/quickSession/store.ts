@@ -36,7 +36,10 @@ export function stashQuickSession(session: DraftSession): string {
   const sessionId = genId()
   const payload: StoredQuickSession = { ...session, sessionId }
   try {
-    sessionStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(payload))
+    // localStorage (not sessionStorage) so a generated session survives closing
+    // the live view / tab and can be re-opened from its overview — it used to
+    // vanish on close with no way back in.
+    localStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(payload))
   } catch {
     /* storage full / unavailable — the live client falls back gracefully */
   }
@@ -46,12 +49,25 @@ export function stashQuickSession(session: DraftSession): string {
 /** Read back a stashed session by id (null if missing/corrupt). */
 export function readQuickSession(sessionId: string): StoredQuickSession | null {
   try {
-    const raw = sessionStorage.getItem(KEY_PREFIX + sessionId)
+    const raw = localStorage.getItem(KEY_PREFIX + sessionId)
+      // Back-compat: older drafts were stashed in sessionStorage.
+      ?? (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(KEY_PREFIX + sessionId) : null)
     if (!raw) return null
     return JSON.parse(raw) as StoredQuickSession
   } catch {
     return null
   }
+}
+
+/** Remove a stashed session (call once it's completed). */
+export function clearQuickSession(sessionId: string): void {
+  try { localStorage.removeItem(KEY_PREFIX + sessionId) } catch { /* ignore */ }
+  try { sessionStorage.removeItem(KEY_PREFIX + sessionId) } catch { /* ignore */ }
+}
+
+/** The overview ("regular view") URL for a stashed quick session. */
+export function quickSessionOverviewHref(sessionId: string): string {
+  return `/dashboard/workout/quick-session?session=${encodeURIComponent(sessionId)}`
 }
 
 /** The live route URL for a stashed quick session. */
