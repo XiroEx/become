@@ -319,10 +319,6 @@ export async function POST(request: NextRequest) {
 
     const dateKey = localDateKey(dateStr, tzOffsetMinutes)
     const { start, end } = localDayWindowForKey(dateKey, tzOffsetMinutes)
-<<<<<<< Updated upstream
-=======
-    const date = utcMidnightDateKey(dateKey)
->>>>>>> Stashed changes
 
     const item = await resolveItemFromInput({
       foodId: food.foodId,

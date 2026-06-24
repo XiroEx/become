@@ -31,7 +31,7 @@ export default function SharedSessionPage({ params }: { params: Promise<{ token:
     let alive = true
     ;(async () => {
       try {
-        const res = await fetch(`/api/share/${token}`)
+        const res = await fetch(`/api/share/mind/${token}`)
         if (!res.ok) { if (alive) setStatus('notfound'); return }
         const d: ShareData = await res.json()
         if (!alive) return
@@ -48,7 +48,7 @@ export default function SharedSessionPage({ params }: { params: Promise<{ token:
 
   // Continue/login CTA — Become is the destination. Deep-resume isn't supported
   // yet, so we route to register/login; the share link is preserved for sharing.
-  const next = encodeURIComponent(`/share/${token}`)
+  const next = encodeURIComponent(`/share/mind/${token}`)
 
   if (status === 'loading') {
     return (

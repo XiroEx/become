@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ token: doc!.token, url: `/share/${doc!.token}` }, { status: 201 })
+    return NextResponse.json({ token: doc!.token, url: `/share/mind/${doc!.token}` }, { status: 201 })
   } catch (error) {
     console.error('Error creating shared session:', error)
     return NextResponse.json({ error: 'Failed to create share' }, { status: 500 })
