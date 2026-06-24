@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Program, Workout } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
 import ExerciseAccordion from "@/components/ExerciseAccordion";
+import ShareButton from "@/components/share/ShareButton";
 import { Card } from "@/components/ui";
 
 // The dashboard layout uses a `<main>` element with overflow-y-auto as the
@@ -719,8 +720,13 @@ export default function ProgramDetailClient({ program }: Props) {
                 </>
               )}
             </button>
+            <ShareButton
+              kind="program"
+              programId={program.program_id}
+              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:px-6 sm:py-3"
+            />
           </div>
-          
+
           {/* Progress indicator if enrolled */}
           {activeProgram && (
             <div className="mt-4">
