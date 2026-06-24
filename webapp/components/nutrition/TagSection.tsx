@@ -403,38 +403,17 @@ export default function TagSection({
                 <>
                   {groups.map((group) => (
                     group.mealName ? (
-                      // Meal group — foods logged together from a saved Meal are
-                      // enclosed in an outlined card so it's clear they're a group.
-                      <div
+                      // Meal group — collapsed by default into a single row (meal
+                      // name + total cal); tap to drop down the ingredients. Keeps
+                      // multiple meals in a tag from becoming a long flat list.
+                      <MealGroupCard
                         key={group.key}
-                        className="mx-3 my-2 overflow-hidden rounded-xl border border-orange-200 bg-orange-50/40 dark:border-orange-900/40 dark:bg-orange-900/10"
-                      >
-                        <div className="flex items-center gap-1.5 border-b border-orange-200/70 px-3 py-1.5 text-[11px] font-medium dark:border-orange-900/40">
-                          <ChefHat className="h-3 w-3 shrink-0 text-orange-500" />
-                          <span className="uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
-                          <span className="truncate text-zinc-700 dark:text-zinc-200">{group.mealName}</span>
-                        </div>
-                        <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
-                          {group.items.map((fi) => (
-                            <ItemRow
-                              key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
-                              logId={fi.logId}
-                              item={fi.item}
-                              onEdit={() => onEditEntry(fi.logId, fi.item)}
-                              onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
-                            />
-                          ))}
-                        </div>
-                        {onAddToMeal && group.items[0]?.logId && (
-                          <button
-                            onClick={() => onAddToMeal(group.items[0].logId, tag)}
-                            className="flex w-full items-center justify-center gap-1.5 border-t border-orange-200/70 px-3 py-2 text-[11px] font-semibold text-orange-700/80 transition-colors hover:bg-orange-100/50 dark:border-orange-900/40 dark:text-orange-300/80 dark:hover:bg-orange-900/20"
-                          >
-                            <Plus className="h-3 w-3" />
-                            Add food to this meal
-                          </button>
-                        )}
-                      </div>
+                        group={group}
+                        tag={tag}
+                        onEditEntry={onEditEntry}
+                        onRemoveEntry={onRemoveEntry}
+                        onAddToMeal={onAddToMeal}
+                      />
                     ) : (
                       <div key={group.key}>
                         <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -510,6 +489,69 @@ export default function TagSection({
         )}
       </AnimatePresence>
     </Card>
+  )
+}
+
+// ── Meal group — foods logged together from a saved Meal, collapsed into a
+// single row (meal name + total cal) that drops down to the ingredients. Keeps
+// several meals in one tag from becoming a long flat list. ───────────────────
+
+interface MealGroupCardProps {
+  group: { key: string; mealName?: string; items: { logId: string; item: IMealItem & { _id?: string } }[] }
+  tag: string
+  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onRemoveEntry: (logId: string, itemId: string) => void
+  onAddToMeal?: (logId: string, tag: string) => void
+}
+
+function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: MealGroupCardProps) {
+  const [open, setOpen] = useState(false)
+  const totalCal = Math.round(group.items.reduce((s, fi) => s + (fi.item.nutrition?.calories ?? 0) * (fi.item.servings ?? 1), 0))
+  return (
+    <div className="mx-3 my-2 overflow-hidden rounded-xl border border-orange-200 bg-orange-50/40 dark:border-orange-900/40 dark:bg-orange-900/10">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex w-full items-center gap-1.5 px-3 py-2.5 text-left ${open ? 'border-b border-orange-200/70 dark:border-orange-900/40' : ''}`}
+      >
+        <ChefHat className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{group.mealName}</span>
+        <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-orange-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
+              {group.items.map((fi, idx) => (
+                <ItemRow
+                  key={`${fi.logId}-${fi.item._id ?? idx}`}
+                  logId={fi.logId}
+                  item={fi.item}
+                  onEdit={() => onEditEntry(fi.logId, fi.item)}
+                  onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
+                />
+              ))}
+            </div>
+            {onAddToMeal && group.items[0]?.logId && (
+              <button
+                onClick={() => onAddToMeal(group.items[0].logId, tag)}
+                className="flex w-full items-center justify-center gap-1.5 border-t border-orange-200/70 px-3 py-2 text-[11px] font-semibold text-orange-700/80 transition-colors hover:bg-orange-100/50 dark:border-orange-900/40 dark:text-orange-300/80 dark:hover:bg-orange-900/20"
+              >
+                <Plus className="h-3 w-3" />
+                Add food to this meal
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 
