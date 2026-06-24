@@ -122,6 +122,24 @@ export function convertWithBridge(
     }
   }
 
+  // Fast path: converting INTO the variant's OWN serving unit (the conversion
+  // `scalingFactor` always performs — user's unit → the variant's servingUnit).
+  // Resolve the source value to a number of servings via whichever bridge matches
+  // the SOURCE family, then scale by servingSize. This avoids routing through the
+  // other family's canonical (which needs the OTHER bridge) — the old path divided
+  // a gram-bridged cup serving by ML['cup'] again, making mass→cup ~240× too small
+  // (e.g. "148 g blueberries" resolved to ~0.004 cup instead of 1 cup).
+  if (to === variant.servingUnit) {
+    if (fa === 'mass' && variant.gramsPerServing != null && variant.gramsPerServing > 0) {
+      const servings = (value * GRAMS[from as 'g' | 'oz' | 'lb']) / variant.gramsPerServing
+      return servings * variant.servingSize
+    }
+    if (fa === 'volume' && variant.mlPerServing != null && variant.mlPerServing > 0) {
+      const servings = (value * ML[from as keyof typeof ML]) / variant.mlPerServing
+      return servings * variant.servingSize
+    }
+  }
+
   // Cross-family. We need a bridge that ties the variant's serving to a
   // canonical mass (gramsPerServing) or volume (mlPerServing). Strategy:
   // 1. Convert `value` (in `from`) to the canonical of its own family.
@@ -387,7 +405,7 @@ const UNIT_ALIASES: Record<string, Unit> = {
  */
 export function parseQuantityString(input: string): { value: number; unit: Unit } | null {
   if (!input) return null
-  let s = input.trim().toLowerCase()
+  const s = input.trim().toLowerCase()
   if (!s) return null
 
   // Pull off the leading number portion (digits, decimals, fractions, glyphs)
