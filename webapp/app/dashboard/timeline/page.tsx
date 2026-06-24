@@ -1649,8 +1649,18 @@ function WeekView({
   activeFilters, isFilterActive,
   onOpenDay,
 }: WeekViewProps) {
-  // Order newest-first so the most recent days are at the top.
-  const ordered = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days])
+  // Order today→end-of-week first (ascending), then past days of the week after.
+  // (Previously newest-first, which buried today at the bottom — users expect
+  // "today to the end of the week" reading top-to-bottom.)
+  const ordered = useMemo(() => {
+    const todayKey = formatDateParam(new Date())
+    return [...days].sort((a, b) => {
+      const aPast = a.date < todayKey
+      const bPast = b.date < todayKey
+      if (aPast !== bPast) return aPast ? 1 : -1 // today + future before past
+      return a.date.localeCompare(b.date)        // chronological within each group
+    })
+  }, [days])
   // Map of date key -> plans for that day.
   const plansByDate = useMemo(() => {
     const map = new Map<string, MealPlan[]>()
