@@ -46,6 +46,9 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   const [pendingImageBlob, setPendingImageBlob] = useState<Blob | null>(null)
   const [imageBusy, setImageBusy] = useState(false)
   const [imageError, setImageError] = useState<string | null>(null)
+  // After editing a meal that's in the meal plan: prompt to propagate the edit
+  // to the planned copies. { id, count } while the confirm is open.
+  const [planSync, setPlanSync] = useState<{ id: string; count: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [tags, setTags] = useState<string[]>(initial?.tags ?? [])
   const [defaultTag, setDefaultTag] = useState<string>(initial?.defaultTag ?? '')
@@ -306,6 +309,12 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
           }
         }
 
+        // Editing a meal that's in the meal plan → ask whether to update the
+        // planned copies (they're snapshots, not live refs).
+        if (mealId && id && (data?.plannedCount ?? 0) > 0) {
+          setPlanSync({ id, count: data.plannedCount })
+          return // the confirm modal navigates once the user answers
+        }
         if (id) {
           router.push(`/dashboard/meals/${id}`)
         } else {
@@ -658,6 +667,42 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         onClose={() => setFoodSearchOpen(false)}
         onSelectFood={handleAddItem}
       />
+
+      {/* In-meal-plan? Offer to propagate the edit to the planned copies. */}
+      {planSync && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={() => { const id = planSync.id; setPlanSync(null); router.push(`/dashboard/meals/${id}`) }}>
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-bold text-zinc-900 dark:text-white">Update your meal plan?</h2>
+            <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+              This meal is in {planSync.count} upcoming meal-plan slot{planSync.count === 1 ? '' : 's'}. Update the planned {planSync.count === 1 ? 'copy' : 'copies'} to match your edit?
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => { const id = planSync.id; setPlanSync(null); router.push(`/dashboard/meals/${id}`) }}
+                className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Keep plans as-is
+              </button>
+              <button
+                onClick={async () => {
+                  const id = planSync.id
+                  setPlanSync(null)
+                  try {
+                    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+                    const h: HeadersInit = { 'Content-Type': 'application/json' }
+                    if (token) h['Authorization'] = `Bearer ${token}`
+                    await fetch(`/api/meals/${id}/sync-plans`, { method: 'POST', headers: h })
+                  } catch { /* best-effort */ }
+                  router.push(`/dashboard/meals/${id}`)
+                }}
+                className="flex-1 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                Update plans
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

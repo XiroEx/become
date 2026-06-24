@@ -23,7 +23,7 @@ import type { IFoodEntry } from '@/lib/nutritionTypes'
 import type { IMealItem } from '@/models/Meal'
 import { Card, EmptyState, Toast, HeaderPillLink } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
-import { isFutureLocalDate } from '@/lib/mealPlanDates'
+import { isFutureLocalDate, todayLocalKey } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 import { invalidateMindSession } from '@/lib/mind/sessionCache'
@@ -246,6 +246,10 @@ function NutritionPageInner() {
   // copy on "Add food" → "Schedule food" CTAs and routes new picker opens
   // through plan mode (see openFoodSearch).
   const viewingFuture = isFutureLocalDate(selectedDate)
+  // Show planned meals on TODAY as well as future days (a plan you made for this
+  // morning should appear on today's nutrition page, not only on the plan/timeline
+  // page). Past days render logs only.
+  const showPlans = dateParam >= todayLocalKey()
 
   // ── Auth helper ────────────────────────────────────────────────────────────
 
@@ -411,7 +415,7 @@ function NutritionPageInner() {
     // When viewing a future date, plans drive section visibility too — a tag
     // with only plans (no logs) still gets a row so the user sees what's
     // scheduled.
-    if (viewingFuture) {
+    if (showPlans) {
       for (const p of plans) addTag(String(p.tag).toLowerCase())
     }
     // Defaults preserved in canonical order, then custom-with-content sorted, then session-added.
@@ -420,7 +424,7 @@ function NutritionPageInner() {
     for (const t of customSorted) if (!out.includes(t)) out.push(t)
     for (const t of sessionTags) if (!out.includes(t)) out.push(t)
     return out
-  }, [logs, sessionTags, viewingFuture, plans])
+  }, [logs, sessionTags, showPlans, plans])
 
   // Map tag -> logs that include this tag.
   const logsByTag = useMemo<Record<string, MealLogLite[]>>(() => {
@@ -441,7 +445,7 @@ function NutritionPageInner() {
   // Map tag -> plans that target this tag. Empty when not viewing future.
   const plansByTag = useMemo<Record<string, MealPlan[]>>(() => {
     const map: Record<string, MealPlan[]> = {}
-    if (!viewingFuture) return map
+    if (!showPlans) return map
     for (const t of visibleTags) map[t] = []
     for (const p of plans) {
       const key = String(p.tag).toLowerCase()
@@ -449,7 +453,7 @@ function NutritionPageInner() {
       map[key].push(p)
     }
     return map
-  }, [viewingFuture, plans, visibleTags])
+  }, [showPlans, plans, visibleTags])
 
   // ── Date navigation ───────────────────────────────────────────────────────
 
@@ -573,6 +577,23 @@ function NutritionPageInner() {
     } catch {
       setPlans(prev)
       showErrorToast('Failed to remove plan.')
+    }
+  }
+
+  // Log it — promote a plan into a real log (today only). Mirrors the meal-plan
+  // page's "Log it". Refetches so the planned row becomes a logged row.
+  const handleLogPlan = async (planId: string) => {
+    try {
+      const res = await fetch(`/api/meal-plans/${planId}/promote`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+      })
+      if (!res.ok) throw new Error('promote_failed')
+      await Promise.all([fetchMealLogs(), fetchPlans()])
+      showToast('Logged from your plan', 'success')
+    } catch {
+      showErrorToast('Could not log this plan.')
     }
   }
 
@@ -992,6 +1013,7 @@ function NutritionPageInner() {
             onEditEntry={(logId, item) => setEditEntry({ logId, item })}
             onRemoveEntry={handleRemoveEntry}
             onRemovePlan={handleRemovePlan}
+            onLogPlan={dateParam === todayLocalKey() ? handleLogPlan : undefined}
             onRemoveTag={handleRemoveSessionTag}
             removable={
               sessionTags.includes(tag)
