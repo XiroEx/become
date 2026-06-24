@@ -503,6 +503,19 @@ const foods: SeedFood[] = [
   },
 ]
 
+// A household-unit serving must be ONE unit (1 cup / 1 each / 1 slice), with the
+// gram weight in gramsPerServing — NOT the gram weight crammed into servingSize.
+// Several seed entries above wrote `servingSize: <gramWeight>, servingUnit: 'cup'`
+// which means "<gramWeight> cups per serving" and makes a real "1 cup" log scale
+// to ~1/gramWeight (near-zero). Normalize here so the data is always consistent.
+const HOUSEHOLD_UNITS = new Set(['each', 'cup', 'slice', 'tbsp', 'tsp', 'scoop', 'serving'])
+function normalizeVariant(v: IFoodVariant): IFoodVariant {
+  if (HOUSEHOLD_UNITS.has(v.servingUnit) && v.servingSize > 3) {
+    return { ...v, servingSize: 1, gramsPerServing: v.gramsPerServing ?? v.servingSize }
+  }
+  return v
+}
+
 async function seed() {
   console.log('Connecting to MongoDB...')
   await mongoose.connect(MONGODB_URI)
@@ -525,7 +538,7 @@ async function seed() {
       slug,
       brand: food.brand,
       category: food.category,
-      variants: food.variants,
+      variants: food.variants.map(normalizeVariant),
       aliases: food.aliases ?? [],
       source: 'manual',
       isFirstClass: true,
