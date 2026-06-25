@@ -47,7 +47,9 @@ export default function PublicShareView({ share }: { share: SharePayloadData }) 
   const openGate = () => setGateOpen(true)
 
   return (
-    <div className="min-h-screen bg-zinc-50 pb-28 dark:bg-zinc-950">
+    // Own scroll container (h-dvh + overflow) so the page scrolls in in-app
+    // browsers / PWAs regardless of any body-level overflow lock.
+    <div className="h-dvh overflow-y-auto overscroll-contain bg-zinc-50 pb-28 dark:bg-zinc-950">
       {/* Top bar */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
         <span className="text-lg font-black tracking-tight text-zinc-900 dark:text-white">{APP_NAME.toUpperCase()}</span>
