@@ -51,7 +51,7 @@ export default function QuickSessionOverviewPage() {
   const focusLabel = session.focus ? FOCUS_DEFS[session.focus]?.label : undefined
 
   return (
-    <PageTransition className="pb-28">
+    <PageTransition className="pb-44">
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-4">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -92,11 +92,11 @@ export default function QuickSessionOverviewPage() {
         </div>
       </div>
 
-      {/* Start CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+      {/* Start CTA — pinned above the floating BottomNav (bottom-28 contract). */}
+      <div className="fixed bottom-28 left-0 right-0 z-30 px-4">
         <button
           onClick={() => router.push(quickSessionLiveHref(session.sessionId))}
-          className="mx-auto flex w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-green-500 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:from-green-700 hover:to-green-600"
+          className="mx-auto flex w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-green-500 py-3 text-sm font-semibold text-white shadow-lg shadow-green-600/25 transition-all hover:from-green-700 hover:to-green-600"
         >
           <Play className="h-4 w-4 fill-current" /> Start workout
         </button>
