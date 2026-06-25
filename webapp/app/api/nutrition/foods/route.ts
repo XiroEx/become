@@ -306,17 +306,41 @@ export async function GET(request: NextRequest) {
 
     // Strip trailing prep/state qualifiers ("Bananas, raw" → "Bananas") for length scoring.
     // Display name is unaffected — this only counts words for ranking.
-    const QUALIFIER_PATTERN = /,\s*(raw|cooked|boiled|roasted|baked|grilled|fried|steamed|sauteed|shelled|peeled|whole|fresh|dried|canned|frozen|with skin|without skin|with salt|without salt|unsweetened|sweetened|enriched|unenriched|fortified)\b.*$/i
+    const QUALIFIER_PATTERN = /,\s*(raw|cooked|boiled|roasted|baked|grilled|fried|steamed|sauteed|shelled|peeled|whole|fresh|dried|canned|frozen|unheated|heated|smoked|dehydrated|commercial|with skin|without skin|with salt|without salt|unsweetened|sweetened|enriched|unenriched|fortified)\b.*$/i
     function stripQualifiers(name: string): string {
       return name.replace(QUALIFIER_PATTERN, '').trim()
     }
 
-    // Whole-food data types get a small bonus — tiebreaker, not overriding coverage
+    // Whole-food data types get a small bonus over branded junk — tiebreaker between
+    // equally-relevant external items only. Does NOT override our curated isFirstClass entries.
     const USDA_TYPE_BONUS: Record<string, number> = {
       'Foundation': -10,
       'SR Legacy': -5,
       'Survey (FNDDS)': 0,
       'Branded': 0,
+    }
+
+    // Penalty for results that are technically a word-match but clearly not what the
+    // user wants: cooking-fat/ingredient items (tallow, lard), plant-based impersonators
+    // (Impossible), or processed-meat products (frankfurters) — UNLESS the query itself
+    // asks for those things.
+    function irrelevancePenalty(name: string, brand?: string): number {
+      const lc = (name ?? '').toLowerCase()
+      const bLc = (brand ?? '').toLowerCase()
+      const full = lc + ' ' + bLc
+      // Animal-fat / cooking-fat ingredient entries — penalize unless user is searching for fat/oil
+      if (/^fat[,\s]/.test(lc) || /\b(tallow|lard|suet|beef fat|chicken fat)\b/.test(lc)) {
+        if (!/\b(fat|tallow|lard|suet|oil|grease)\b/.test(qLower)) return 300
+      }
+      // Plant-based / meatless — penalize unless user explicitly asks
+      if (/\b(impossible|beyond meat|meatless|plant[\s-]based|vegan meat)\b/.test(full)) {
+        if (!/\b(impossible|beyond|plant|vegan|meatless)\b/.test(qLower)) return 200
+      }
+      // Processed-meat / deli products — penalize for generic meat queries
+      if (/\b(frankfurter|hot dog|beerwurst|bratwurst|kielbasa|bologna|liverwurst)\b/.test(lc)) {
+        if (!/\b(frankfurter|hot.?dog|beerwurst|bratwurst|sausage|frank|bologna|liverwurst)\b/.test(qLower)) return 150
+      }
+      return 0
     }
 
     function relevanceScore(name: string, brand?: string, dataType?: string): number {
@@ -329,7 +353,7 @@ export async function GET(request: NextRequest) {
       // Tiebreak with full word count so "Bananas, raw" beats "Bananas, overripe, raw".
       if (dataType !== 'Branded' && strippedLower === qLower) {
         const fullWordCount = nameLower.split(/[\s,]+/).filter(Boolean).length
-        return -1000 + (USDA_TYPE_BONUS[dataType ?? ''] ?? 0) + fullWordCount
+        return -1000 + (USDA_TYPE_BONUS[dataType ?? ''] ?? 0) + fullWordCount + irrelevancePenalty(name, brand)
       }
 
       // Coverage searches name + brand combined so "jimmy dean" matches Jimmy Dean
@@ -342,7 +366,7 @@ export async function GET(request: NextRequest) {
       const lengthScore = strippedLower.split(/[\s,]+/).filter(Boolean).length
 
       const typeScore = USDA_TYPE_BONUS[dataType ?? ''] ?? 0
-      return coverageScore + lengthScore + typeScore
+      return coverageScore + lengthScore + typeScore + irrelevancePenalty(name, brand)
     }
 
     // Tag external sources as never-saved so the frontend can render the bookmark
@@ -422,10 +446,15 @@ export async function GET(request: NextRequest) {
     // Score once: how many query words each result covers, its full relevance
     // (coverage + name simplicity + whole-food bonus), and a source rank used
     // only to break ties between equally-relevant results.
+    //
+    // isFirstClass items (our admin-curated essentials) get a large negative bonus
+    // so they always surface above any USDA / OFF external result for the same query.
+    // Without this, USDA Foundation/SR-Legacy type bonuses (-10/-5) make items like
+    // "Fat, beef tallow" rank above "Ground Beef 85/15" for a "beef" search.
     const scored = combined.map(item => ({
       item,
       covered: coveredCount(item.name, item.brand),
-      rel: relevanceScore(item.name, item.brand, item.dataType),
+      rel: relevanceScore(item.name, item.brand, item.dataType) - (item.isFirstClass ? 500 : 0),
       src: item.isSaved ? -1 : fromOurDb(item) ? 0 : item.source === 'usda' ? 1 : 2,
     }))
 

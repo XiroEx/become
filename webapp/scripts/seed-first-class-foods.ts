@@ -501,6 +501,335 @@ const foods: SeedFood[] = [
       nutrition: { calories: 227, protein: 15.2, carbs: 40.8, fats: 0.9, fiber: 15, sugar: 0.6, sodium: 0.002, saturatedFat: 0.2 },
     }],
   },
+
+  // ── Sirloin Steak ────────────────────────────────────────────────────────────
+  {
+    name: 'Sirloin Steak',
+    category: 'Protein',
+    aliases: ['Top sirloin', 'Beef sirloin', 'Steak'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [
+          { label: '100 g', multiplier: 1 },
+          { label: '6 oz (170g)', multiplier: 1.7 },
+        ],
+        nutrition: { calories: 174, protein: 21, carbs: 0, fats: 9.5, fiber: 0, sugar: 0, sodium: 0.057, saturatedFat: 3.7 },
+      },
+      {
+        name: 'Grilled',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [
+          { label: '100 g cooked', multiplier: 1 },
+          { label: '4 oz cooked (113g)', multiplier: 1.13 },
+          { label: '6 oz cooked (170g)', multiplier: 1.7 },
+        ],
+        nutrition: { calories: 207, protein: 30, carbs: 0, fats: 9.5, fiber: 0, sugar: 0, sodium: 0.07, saturatedFat: 3.7 },
+      },
+    ],
+  },
+
+  // ── Ribeye Steak ─────────────────────────────────────────────────────────────
+  {
+    name: 'Ribeye Steak',
+    category: 'Protein',
+    aliases: ['Rib eye', 'Rib-eye steak', 'Beef ribeye'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [
+          { label: '100 g', multiplier: 1 },
+          { label: '8 oz (227g)', multiplier: 2.27 },
+        ],
+        nutrition: { calories: 291, protein: 18, carbs: 0, fats: 24, fiber: 0, sugar: 0, sodium: 0.065, saturatedFat: 10 },
+      },
+      {
+        name: 'Grilled',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [
+          { label: '100 g cooked', multiplier: 1 },
+          { label: '6 oz cooked (170g)', multiplier: 1.7 },
+        ],
+        nutrition: { calories: 313, protein: 26, carbs: 0, fats: 22, fiber: 0, sugar: 0, sodium: 0.076, saturatedFat: 9.5 },
+      },
+    ],
+  },
+
+  // ── Ground Beef 80/20 ────────────────────────────────────────────────────────
+  {
+    name: 'Ground Beef 80/20',
+    category: 'Protein',
+    aliases: ['80% lean ground beef', 'Regular ground beef', 'Ground beef'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '4 oz (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 254, protein: 17.2, carbs: 0, fats: 20, fiber: 0, sugar: 0, sodium: 0.072, saturatedFat: 7.7 },
+      },
+      {
+        name: 'Cooked',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '4 oz cooked (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 279, protein: 27, carbs: 0, fats: 18.5, fiber: 0, sugar: 0, sodium: 0.083, saturatedFat: 7.2 },
+      },
+    ],
+  },
+
+  // ── Ground Beef 93/7 ─────────────────────────────────────────────────────────
+  {
+    name: 'Ground Beef 93/7',
+    category: 'Protein',
+    aliases: ['93% lean ground beef', 'Extra lean ground beef'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '4 oz (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 152, protein: 20.7, carbs: 0, fats: 7.5, fiber: 0, sugar: 0, sodium: 0.07, saturatedFat: 2.9 },
+      },
+      {
+        name: 'Cooked',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '4 oz cooked (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 194, protein: 28.5, carbs: 0, fats: 8.7, fiber: 0, sugar: 0, sodium: 0.083, saturatedFat: 3.4 },
+      },
+    ],
+  },
+
+  // ── Turkey Breast ────────────────────────────────────────────────────────────
+  {
+    name: 'Turkey Breast, Skinless',
+    category: 'Protein',
+    aliases: ['Turkey breast', 'Skinless turkey breast', 'Turkey'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '4 oz (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 104, protein: 23, carbs: 0, fats: 1, fiber: 0, sugar: 0, sodium: 0.055, saturatedFat: 0.3 },
+      },
+      {
+        name: 'Roasted',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '4 oz cooked (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 135, protein: 30, carbs: 0, fats: 1, fiber: 0, sugar: 0, sodium: 0.07, saturatedFat: 0.3 },
+      },
+    ],
+  },
+
+  // ── Ground Turkey ────────────────────────────────────────────────────────────
+  {
+    name: 'Ground Turkey',
+    category: 'Protein',
+    aliases: ['Turkey mince', 'Lean ground turkey'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '4 oz (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 149, protein: 19.6, carbs: 0, fats: 7.6, fiber: 0, sugar: 0, sodium: 0.08, saturatedFat: 2 },
+      },
+      {
+        name: 'Cooked',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '4 oz cooked (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 201, protein: 28, carbs: 0, fats: 9.8, fiber: 0, sugar: 0, sodium: 0.111, saturatedFat: 2.6 },
+      },
+    ],
+  },
+
+  // ── Tuna, Canned in Water ────────────────────────────────────────────────────
+  {
+    name: 'Tuna, Canned in Water',
+    category: 'Protein',
+    aliases: ['Canned tuna', 'Chunk light tuna', 'Tuna'],
+    variants: [{
+      name: 'Drained',
+      isDefault: true,
+      servingSize: 85,
+      servingUnit: 'each',
+      alternateServings: [
+        { label: '1 can drained (85g)', multiplier: 1 },
+        { label: '100 g', multiplier: 100 / 85 },
+      ],
+      nutrition: { calories: 100, protein: 22, carbs: 0, fats: 0.5, fiber: 0, sugar: 0, sodium: 0.287, saturatedFat: 0.1 },
+    }],
+  },
+
+  // ── Shrimp ───────────────────────────────────────────────────────────────────
+  {
+    name: 'Shrimp',
+    category: 'Protein',
+    aliases: ['Prawns', 'Cooked shrimp'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '4 oz (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 85, protein: 18, carbs: 0.9, fats: 1, fiber: 0, sugar: 0, sodium: 0.119, saturatedFat: 0.3 },
+      },
+      {
+        name: 'Cooked',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '4 oz cooked (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 99, protein: 24, carbs: 0.2, fats: 0.3, fiber: 0, sugar: 0, sodium: 0.148, saturatedFat: 0.1 },
+      },
+    ],
+  },
+
+  // ── Pork Tenderloin ──────────────────────────────────────────────────────────
+  {
+    name: 'Pork Tenderloin',
+    category: 'Protein',
+    aliases: ['Pork loin', 'Pork'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '4 oz (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 109, protein: 20.9, carbs: 0, fats: 2.6, fiber: 0, sugar: 0, sodium: 0.055, saturatedFat: 0.9 },
+      },
+      {
+        name: 'Roasted',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '4 oz cooked (113g)', multiplier: 1.13 }],
+        nutrition: { calories: 143, protein: 26, carbs: 0, fats: 3.5, fiber: 0, sugar: 0, sodium: 0.068, saturatedFat: 1.2 },
+      },
+    ],
+  },
+
+  // ── Cod ──────────────────────────────────────────────────────────────────────
+  {
+    name: 'Cod',
+    category: 'Protein',
+    aliases: ['Atlantic cod', 'Codfish', 'White fish'],
+    variants: [
+      {
+        name: 'Raw',
+        isDefault: false,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g', multiplier: 1 }, { label: '6 oz (170g)', multiplier: 1.7 }],
+        nutrition: { calories: 82, protein: 18, carbs: 0, fats: 0.7, fiber: 0, sugar: 0, sodium: 0.054, saturatedFat: 0.1 },
+      },
+      {
+        name: 'Baked',
+        isDefault: true,
+        servingSize: 100,
+        servingUnit: 'g',
+        alternateServings: [{ label: '100 g cooked', multiplier: 1 }, { label: '6 oz cooked (170g)', multiplier: 1.7 }],
+        nutrition: { calories: 105, protein: 23, carbs: 0, fats: 0.9, fiber: 0, sugar: 0, sodium: 0.068, saturatedFat: 0.2 },
+      },
+    ],
+  },
+
+  // ── Cottage Cheese ───────────────────────────────────────────────────────────
+  {
+    name: 'Cottage Cheese, Low-Fat',
+    category: 'Dairy',
+    aliases: ['Cottage cheese', 'Low fat cottage cheese', '2% cottage cheese'],
+    variants: [{
+      name: 'Default',
+      isDefault: true,
+      servingSize: 226,
+      servingUnit: 'cup',
+      alternateServings: [
+        { label: '1 cup (226g)', multiplier: 1 },
+        { label: '1/2 cup (113g)', multiplier: 0.5 },
+        { label: '100 g', multiplier: 100 / 226 },
+      ],
+      nutrition: { calories: 206, protein: 28, carbs: 8.2, fats: 4.5, fiber: 0, sugar: 8.2, sodium: 0.918, saturatedFat: 1.8 },
+    }],
+  },
+
+  // ── Canned Chicken Breast ────────────────────────────────────────────────────
+  {
+    name: 'Chicken Breast, Canned',
+    category: 'Protein',
+    aliases: ['Canned chicken', 'Canned chicken breast'],
+    variants: [{
+      name: 'Drained',
+      isDefault: true,
+      servingSize: 142,
+      servingUnit: 'each',
+      alternateServings: [
+        { label: '1 can drained (142g)', multiplier: 1 },
+        { label: '100 g', multiplier: 100 / 142 },
+      ],
+      nutrition: { calories: 230, protein: 43, carbs: 0, fats: 5, fiber: 0, sugar: 0, sodium: 0.9, saturatedFat: 1.5 },
+    }],
+  },
+
+  // ── Whole Milk ───────────────────────────────────────────────────────────────
+  {
+    name: 'Whole Milk',
+    category: 'Dairy',
+    aliases: ['Milk', 'Full fat milk', '3.25% milk'],
+    variants: [{
+      name: 'Default',
+      isDefault: true,
+      servingSize: 244,
+      servingUnit: 'cup',
+      alternateServings: [
+        { label: '1 cup (244ml)', multiplier: 1 },
+        { label: '100 ml', multiplier: 100 / 244 },
+      ],
+      nutrition: { calories: 149, protein: 8, carbs: 11.7, fats: 8, fiber: 0, sugar: 12.3, sodium: 0.105, saturatedFat: 4.6 },
+    }],
+  },
+
+  // ── 2% Milk ──────────────────────────────────────────────────────────────────
+  {
+    name: '2% Milk',
+    category: 'Dairy',
+    aliases: ['Reduced fat milk', 'Semi-skimmed milk'],
+    variants: [{
+      name: 'Default',
+      isDefault: true,
+      servingSize: 244,
+      servingUnit: 'cup',
+      alternateServings: [
+        { label: '1 cup (244ml)', multiplier: 1 },
+        { label: '100 ml', multiplier: 100 / 244 },
+      ],
+      nutrition: { calories: 122, protein: 8.1, carbs: 11.7, fats: 4.8, fiber: 0, sugar: 12.3, sodium: 0.115, saturatedFat: 3 },
+    }],
+  },
 ]
 
 // A household-unit serving must be ONE unit (1 cup / 1 each / 1 slice), with the
