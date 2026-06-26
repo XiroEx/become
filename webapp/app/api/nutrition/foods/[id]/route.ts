@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
+import { clearFoodReferences } from '@/lib/nutrition/foodReferenceCleanup'
 
 // ---------------------------------------------------------------------------
 // GET: Fetch a single Food by id (or slug). Returns full doc + variants.
@@ -71,6 +72,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    await clearFoodReferences(food._id as mongoose.Types.ObjectId)
     await Food.deleteOne({ _id: id })
     return NextResponse.json({ success: true })
   } catch (error) {

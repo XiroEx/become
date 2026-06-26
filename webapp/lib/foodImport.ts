@@ -8,6 +8,7 @@ import { baseGroupKey } from '@/lib/foodGrouping'
 import { canonicalFoodName } from '@/lib/foodCanonicalName'
 import { canAutoMergeAsVariant, type VariantMergeParent, type VariantMergeCandidate } from '@/lib/foodVariantMerge'
 import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import { assessFoodImportQuality, foodQualityErrorMessage } from '@/lib/nutrition/foodQuality'
 
 const VALID_CATEGORIES: FoodCategory[] = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -388,6 +389,17 @@ export async function importFromUSDA(
   // For non-Branded foods this becomes the primary serving; for Branded it
   // adds alternateServings.
   const mapped = applyFoodPortionsToMapped(baseMapped, usda)
+  const quality = assessFoodImportQuality({
+    name: mapped.name,
+    brand: mapped.brand,
+    category: mapped.category,
+    servingSize: mapped.servingSize,
+    servingUnit: mapped.servingUnit,
+    gramsPerServing: mapped.gramsPerServing,
+    mlPerServing: mapped.mlPerServing,
+    nutrition: mapped.nutrition,
+  })
+  if (!quality.ok) throw new Error(foodQualityErrorMessage(quality))
 
   // Strip prep qualifier from canonical name so it lives in the variant name
   const baseName = mapped.name.replace(/,\s*[a-z][a-z\s\-/]*$/i, '').trim() || mapped.name
@@ -802,6 +814,17 @@ export async function importFromOpenFoodFacts(
   if (!off) throw new Error(`OpenFoodFacts entry not found for code=${code}`)
 
   const variant = mapOffToVariant(off)
+  const quality = assessFoodImportQuality({
+    name: off.product_name,
+    brand: off.brands,
+    category: off.category,
+    servingSize: variant.servingSize,
+    servingUnit: variant.servingUnit,
+    gramsPerServing: variant.gramsPerServing,
+    mlPerServing: variant.mlPerServing,
+    nutrition: variant.nutrition,
+  })
+  if (!quality.ok) throw new Error(foodQualityErrorMessage(quality))
   const offGroupKey = baseGroupKey(off.product_name)
 
   // Attempt to merge into an existing OFF parent with the same source +
