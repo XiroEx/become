@@ -6,6 +6,11 @@ import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { searchUSDA } from '@/lib/usda'
 import { stemMatch } from '@/lib/nutrition/foodMatch'
+import {
+  foodSearchIrrelevancePenalty,
+  shouldSkipBackgroundImportForQuery,
+  stripFoodQualifiers,
+} from '@/lib/nutrition/foodQuality'
 import type { IOpenFoodFact } from '@/models/OpenFoodFact'
 import {
   flattenFoodForResponse,
@@ -304,13 +309,6 @@ export async function GET(request: NextRequest) {
       return qWords.filter(qw => searchableWords.some(sw => stemMatch(qw, sw))).length
     }
 
-    // Strip trailing prep/state qualifiers ("Bananas, raw" → "Bananas") for length scoring.
-    // Display name is unaffected — this only counts words for ranking.
-    const QUALIFIER_PATTERN = /,\s*(raw|cooked|boiled|roasted|baked|grilled|fried|steamed|sauteed|shelled|peeled|whole|fresh|dried|canned|frozen|unheated|heated|smoked|dehydrated|commercial|with skin|without skin|with salt|without salt|unsweetened|sweetened|enriched|unenriched|fortified)\b.*$/i
-    function stripQualifiers(name: string): string {
-      return name.replace(QUALIFIER_PATTERN, '').trim()
-    }
-
     // Whole-food data types get a small bonus over branded junk — tiebreaker between
     // equally-relevant external items only. Does NOT override our curated isFirstClass entries.
     const USDA_TYPE_BONUS: Record<string, number> = {
@@ -320,32 +318,10 @@ export async function GET(request: NextRequest) {
       'Branded': 0,
     }
 
-    // Penalty for results that are technically a word-match but clearly not what the
-    // user wants: cooking-fat/ingredient items (tallow, lard), plant-based impersonators
-    // (Impossible), or processed-meat products (frankfurters) — UNLESS the query itself
-    // asks for those things.
-    function irrelevancePenalty(name: string, brand?: string): number {
-      const lc = (name ?? '').toLowerCase()
-      const bLc = (brand ?? '').toLowerCase()
-      const full = lc + ' ' + bLc
-      // Animal-fat / cooking-fat ingredient entries — penalize unless user is searching for fat/oil
-      if (/^fat[,\s]/.test(lc) || /\b(tallow|lard|suet|beef fat|chicken fat)\b/.test(lc)) {
-        if (!/\b(fat|tallow|lard|suet|oil|grease)\b/.test(qLower)) return 300
-      }
-      // Plant-based / meatless — penalize unless user explicitly asks
-      if (/\b(impossible|beyond meat|meatless|plant[\s-]based|vegan meat)\b/.test(full)) {
-        if (!/\b(impossible|beyond|plant|vegan|meatless)\b/.test(qLower)) return 200
-      }
-      // Processed-meat / deli products — penalize for generic meat queries
-      if (/\b(frankfurter|hot dog|beerwurst|bratwurst|kielbasa|bologna|liverwurst)\b/.test(lc)) {
-        if (!/\b(frankfurter|hot.?dog|beerwurst|bratwurst|sausage|frank|bologna|liverwurst)\b/.test(qLower)) return 150
-      }
-      return 0
-    }
-
     function relevanceScore(name: string, brand?: string, dataType?: string): number {
       const nameLower = name.toLowerCase()
-      const strippedLower = stripQualifiers(nameLower).toLowerCase()
+      const strippedLower = stripFoodQualifiers(nameLower).toLowerCase()
+      const qualityPenalty = foodSearchIrrelevancePenalty(name, brand, qLower)
 
       // Exact match against the stripped name ("Apples, raw" → "apples" matches "apples"),
       // BUT only for non-Branded sources. Otherwise junk Branded entries like "KIWI"
@@ -353,7 +329,7 @@ export async function GET(request: NextRequest) {
       // Tiebreak with full word count so "Bananas, raw" beats "Bananas, overripe, raw".
       if (dataType !== 'Branded' && strippedLower === qLower) {
         const fullWordCount = nameLower.split(/[\s,]+/).filter(Boolean).length
-        return -1000 + (USDA_TYPE_BONUS[dataType ?? ''] ?? 0) + fullWordCount + irrelevancePenalty(name, brand)
+        return -1000 + (USDA_TYPE_BONUS[dataType ?? ''] ?? 0) + fullWordCount + qualityPenalty
       }
 
       // Coverage searches name + brand combined so "jimmy dean" matches Jimmy Dean
@@ -366,7 +342,7 @@ export async function GET(request: NextRequest) {
       const lengthScore = strippedLower.split(/[\s,]+/).filter(Boolean).length
 
       const typeScore = USDA_TYPE_BONUS[dataType ?? ''] ?? 0
-      return coverageScore + lengthScore + typeScore + irrelevancePenalty(name, brand)
+      return coverageScore + lengthScore + typeScore + qualityPenalty
     }
 
     // Tag external sources as never-saved so the frontend can render the bookmark
@@ -509,7 +485,7 @@ export async function GET(request: NextRequest) {
     // with the same variant set the user just saw. importFromUSDA's
     // groupKey-based merge logic ensures these all land on the same parent.
     const extraFdcIds = synth.additionalFdcIds
-    after(() => backgroundImportExternals(paged, authResult.userId, extraFdcIds))
+    after(() => backgroundImportExternals(paged, authResult.userId, extraFdcIds, q))
 
     return NextResponse.json({ foods: paged, total: sortedFoods.length, offset, limit })
   } catch (error) {
@@ -530,6 +506,8 @@ const BG_IMPORT_CONCURRENCY = 5
 interface BackgroundImportItem {
   _id?: unknown
   source?: string
+  name?: string
+  brand?: string
   barcode?: string
 }
 
@@ -555,6 +533,7 @@ async function backgroundImportExternals(
   results: BackgroundImportItem[],
   userId?: string,
   extraFdcIds: string[] = [],
+  query = '',
 ): Promise<void> {
   // Collect every USDA fdcId we need to import; one set so the batch fetch
   // covers both primary results and synth-merge secondaries with no dup
@@ -567,11 +546,13 @@ async function backgroundImportExternals(
     const id = typeof r._id === 'string' ? r._id : ''
     if (!id) continue
     if (id.startsWith('usda-')) {
+      if (shouldSkipBackgroundImportForQuery(r, query)) continue
       const fdcId = id.slice('usda-'.length)
       if (!fdcId || seenFdcIds.has(fdcId)) continue
       seenFdcIds.add(fdcId)
       usdaFdcIds.push(fdcId)
     } else if (id.startsWith('off-')) {
+      if (shouldSkipBackgroundImportForQuery(r, query)) continue
       const code = id.slice('off-'.length)
       if (!code) continue
       offCodes.push(code)

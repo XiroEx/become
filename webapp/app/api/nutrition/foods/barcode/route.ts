@@ -10,6 +10,7 @@ import {
   importFromOpenFoodFacts,
   importManualFood,
 } from '@/lib/foodImport'
+import { assessFoodImportQuality } from '@/lib/nutrition/foodQuality'
 
 // ---------------------------------------------------------------------------
 // Map an OFF doc to the response shape
@@ -47,6 +48,14 @@ function mapOffToFoodResult(off: InstanceType<typeof OpenFoodFact> & { _id: unkn
     source:           'openfoodfacts' as const,
     image_url:        off.image_url || undefined,
     nutriscore_grade: off.nutriscore_grade || undefined,
+  }
+}
+
+function markAsNonPersistedPreview<T extends { _id: string }>(food: T, code: string): T & { persistable: false } {
+  return {
+    ...food,
+    _id: `preview-off-${code}`,
+    persistable: false,
   }
 }
 
@@ -105,9 +114,15 @@ export async function GET(request: NextRequest) {
         })
       } catch (err) {
         console.warn(`barcode OFF import failed code=${offFood.code}:`, err instanceof Error ? err.message : String(err))
-        // Fall through to legacy mapped response so the user still gets
-        // something usable for this scan.
-        return NextResponse.json({ food: mapOffToFoodResult(offFood as Parameters<typeof mapOffToFoodResult>[0]) })
+        // Return a non-backed preview. Do not expose `off-<code>` here: the
+        // import already failed, so a synthetic importable id would point at a
+        // record the app cannot safely persist.
+        return NextResponse.json({
+          food: markAsNonPersistedPreview(
+            mapOffToFoodResult(offFood as Parameters<typeof mapOffToFoodResult>[0]),
+            offFood.code,
+          ),
+        })
       }
     }
 
@@ -167,11 +182,41 @@ export async function GET(request: NextRequest) {
               sodium:   n.sodium_100g  != null ? Math.round(n.sodium_100g  * 1000) / 1000 : undefined,
             }
             const altQty = (p.serving_quantity && p.serving_quantity > 0 && p.serving_quantity !== 100) ? p.serving_quantity : null
+            const liveFood = {
+              _id:    `preview-off-${candidate}`,
+              name:   p.product_name || p.product_name_en || 'Unknown Product',
+              brand:  p.brands || undefined,
+              category: p.categories_tags?.[0]?.replace(/^en:/, '') || 'Other',
+              servingSize: 100,
+              servingUnit: 'g' as const,
+              alternateServings: altQty
+                ? [{ label: p.serving_size || `${altQty}g`, multiplier: altQty / 100 }]
+                : [],
+              nutrition,
+              barcode:          candidate,
+              source:           'openfoodfacts' as const,
+              image_url:        p.image_url || undefined,
+              nutriscore_grade: p.nutriscore_grade || undefined,
+              persistable:      false as const,
+            }
+            const quality = assessFoodImportQuality({
+              name: liveFood.name,
+              brand: liveFood.brand,
+              category: liveFood.category,
+              servingSize: liveFood.servingSize,
+              servingUnit: liveFood.servingUnit,
+              gramsPerServing: altQty ?? undefined,
+              nutrition,
+            })
+            if (!quality.ok) {
+              console.warn(`barcode live-OFF quality rejected code=${candidate}: ${quality.reasons.join(', ')}`)
+              return NextResponse.json({ food: liveFood })
+            }
             try {
               const { food: imported } = await importManualFood({
-                name: p.product_name || p.product_name_en || 'Unknown Product',
-                brand: p.brands || undefined,
-                category: p.categories_tags?.[0]?.replace(/^en:/, '') || undefined,
+                name: liveFood.name,
+                brand: liveFood.brand,
+                category: liveFood.category,
                 barcode: candidate,
                 imageUrl: p.image_url || undefined,
                 servingSize: 100,
@@ -190,25 +235,9 @@ export async function GET(request: NextRequest) {
               })
             } catch (err) {
               console.warn(`barcode live-OFF import failed code=${candidate}:`, err instanceof Error ? err.message : String(err))
-              // Fall through to synthetic response so the user still sees the
-              // food they just scanned.
-              const food = {
-                _id:    `off-${candidate}`,
-                name:   p.product_name || p.product_name_en || 'Unknown Product',
-                brand:  p.brands || undefined,
-                category: p.categories_tags?.[0]?.replace(/^en:/, '') || 'Other',
-                servingSize: 100,
-                servingUnit: 'g' as const,
-                alternateServings: altQty
-                  ? [{ label: p.serving_size || `${altQty}g`, multiplier: altQty / 100 }]
-                  : [],
-                nutrition,
-                barcode:          candidate,
-                source:           'openfoodfacts' as const,
-                image_url:        p.image_url || undefined,
-                nutriscore_grade: p.nutriscore_grade || undefined,
-              }
-              return NextResponse.json({ food })
+              // Fall through to a non-backed preview so the user still sees
+              // the scanned product, without leaking an importable `off-` id.
+              return NextResponse.json({ food: liveFood })
             }
           }
         }

@@ -101,6 +101,7 @@ interface FoodResult {
   variants?: FoodVariant[]
   isSaved?: boolean
   isBestMatch?: boolean
+  persistable?: boolean
 }
 
 interface MealResult {
@@ -555,6 +556,10 @@ export default function FoodSearchModal({
     food: FoodResult,
   ): Promise<{ foodId: string; variants?: FoodVariant[]; error?: string }> => {
     const id = String(food._id || '')
+
+    if (food.persistable === false) {
+      return { foodId: id, variants: food.variants, error: 'food preview is not importable' }
+    }
 
     // Already a real Food doc — no work to do.
     if (isObjectIdString(id)) {
