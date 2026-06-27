@@ -464,7 +464,7 @@ export default function QuantityPicker({
   return (
     <div className={className}>
       {isInline ? (
-        <div className="flex items-stretch gap-2">
+        <div className={`relative flex items-stretch gap-2 overflow-visible ${unitMenuOpen ? 'z-[90]' : ''}`}>
           <input
             type="text"
             inputMode="decimal"
@@ -474,7 +474,7 @@ export default function QuantityPicker({
             placeholder={primaryOption?.label ?? 'Amount'}
             className="min-w-0 flex-[2] appearance-none rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-medium tabular-nums text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:bg-zinc-950 dark:[-webkit-text-fill-color:#f4f4f5] dark:[color-scheme:dark]"
           />
-          <div className="relative min-w-[88px] flex-1">
+          <div className="relative min-w-[88px] flex-1 overflow-visible">
             <button
               type="button"
               onClick={() => setUnitMenuOpen(v => !v)}
@@ -488,7 +488,7 @@ export default function QuantityPicker({
             {unitMenuOpen && (
               <div
                 role="listbox"
-                className="absolute right-0 top-full z-50 mt-1 max-h-64 w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                className="absolute right-0 top-full z-[100] mt-1 max-h-64 w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
               >
                 <ChoiceSection title="Servings" choices={choiceGroups.servings} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
                 <ChoiceSection title="Weight" choices={choiceGroups.weight} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
