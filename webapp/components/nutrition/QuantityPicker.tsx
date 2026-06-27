@@ -23,10 +23,11 @@
 // ---------------------------------------------------------------------------
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Check, ChevronDown, Pencil } from 'lucide-react'
 import {
   type Unit,
   convert,
+  convertWithBridge,
   familyOf,
   unitLabel,
   parseQuantityString,
@@ -81,6 +82,8 @@ export interface QuantityPickerProps {
   initial?: { quantity: number; unit: Unit }
   /** Called whenever the resolved selection changes (every keystroke / chip). */
   onChange: (sel: QuantityPickerSelection) => void
+  /** `inline` renders a quiet amount field + custom unit dropdown instead of preset chips. */
+  layout?: 'chips' | 'inline'
   /** Optional className passthrough for outer wrapper. */
   className?: string
 }
@@ -316,16 +319,19 @@ export default function QuantityPicker({
   weightPref = 'lbs',
   initial,
   onChange,
+  layout = 'chips',
   className,
 }: QuantityPickerProps) {
   const quickOptions = useMemo(() => buildQuickOptions(variant), [variant])
   const dropdownUnits = useMemo(() => unitsForCustomDropdown(variant), [variant])
+  const isInline = layout === 'inline'
+  const primaryOption = quickOptions[0]
 
   // ── Initial state derivation ──────────────────────────────────────────
   // If `initial` matches one of the quick chips, start in chip mode; otherwise
   // start in custom mode pre-filled with the initial values.
   const initialMatch = initial ? matchOption(quickOptions, initial.quantity, initial.unit) : null
-  const startMode: 'quick' | 'custom' = initial ? (initialMatch ? 'quick' : 'custom') : 'quick'
+  const startMode: 'quick' | 'custom' = isInline ? 'custom' : (initial ? (initialMatch ? 'quick' : 'custom') : 'quick')
 
   const [mode, setMode] = useState<'quick' | 'custom'>(startMode)
   const [activeOptionId, setActiveOptionId] = useState<string>(
@@ -337,13 +343,16 @@ export default function QuantityPicker({
       // Render the unbridged number portion only — the unit dropdown holds the unit.
       return formatNumberForInput(initial.quantity)
     }
+    if (isInline) return formatNumberForInput(primaryOption?.quantity ?? variant.servingSize)
     return ''
   })
 
   const [customUnit, setCustomUnit] = useState<Unit>(() => {
     if (initial) return initial.unit
+    if (isInline) return primaryOption?.unit ?? (variant.servingUnit as Unit)
     return defaultCustomUnit(variant, weightPref)
   })
+  const [unitMenuOpen, setUnitMenuOpen] = useState(false)
 
   // Reset state when the variant identity changes. Callers swap variants by
   // re-rendering with a different `variant` prop; we key on the storage
@@ -355,11 +364,12 @@ export default function QuantityPicker({
     if (lastVariantKey.current === variantKey) return
     lastVariantKey.current = variantKey
 
-    setMode('quick')
+    setMode(isInline ? 'custom' : 'quick')
     setActiveOptionId(quickOptions[0]?.id ?? 'primary')
-    setCustomValue('')
-    setCustomUnit(defaultCustomUnit(variant, weightPref))
-  }, [variant, variantKey, quickOptions, weightPref])
+    setCustomValue(isInline ? formatNumberForInput(quickOptions[0]?.quantity ?? variant.servingSize) : '')
+    setCustomUnit(isInline ? (quickOptions[0]?.unit ?? (variant.servingUnit as Unit)) : defaultCustomUnit(variant, weightPref))
+    setUnitMenuOpen(false)
+  }, [variant, variantKey, quickOptions, weightPref, isInline])
 
   // ── Resolve selection ─────────────────────────────────────────────────
   const variantForMath: VariantForMath = {
@@ -371,7 +381,7 @@ export default function QuantityPicker({
   }
 
   const resolved = useMemo<QuantityPickerSelection>(() => {
-    if (mode === 'quick') {
+    if (!isInline && mode === 'quick') {
       const opt = quickOptions.find(o => o.id === activeOptionId) ?? quickOptions[0]
       if (!opt) return zeroSelection(quickOptions[0]?.unit ?? (variant.servingUnit as Unit))
       return resolve(variantForMath, opt.quantity, opt.unit)
@@ -388,6 +398,7 @@ export default function QuantityPicker({
     activeOptionId,
     customValue,
     customUnit,
+    isInline,
     quickOptions,
     variant.servingSize,
     variant.servingUnit,
@@ -430,11 +441,72 @@ export default function QuantityPicker({
     }
   }
 
+  const onInlineUnitSelect = (nextUnit: Unit) => {
+    const numeric = parseLeadingNumber(customValue)
+    if (numeric != null && numeric > 0 && Number.isFinite(numeric) && nextUnit !== customUnit) {
+      const converted = convertWithBridge(numeric, customUnit, nextUnit, {
+        servingSize: variant.servingSize,
+        servingUnit: variant.servingUnit as Unit,
+        gramsPerServing: variant.gramsPerServing,
+        mlPerServing: variant.mlPerServing,
+      })
+      if (converted != null && Number.isFinite(converted) && converted > 0) {
+        setCustomValue(formatNumberForInput(converted))
+      }
+    }
+    setCustomUnit(nextUnit)
+    setUnitMenuOpen(false)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────
 
   return (
     <div className={className}>
-      {mode === 'quick' ? (
+      {isInline ? (
+        <div className="flex items-stretch gap-2">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={customValue}
+            onChange={(e) => onCustomValueChange(e.target.value)}
+            onBlur={onCustomBlur}
+            placeholder={primaryOption?.label ?? 'Amount'}
+            className="min-w-0 flex-[2] rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-medium tabular-nums text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-500"
+          />
+          <div className="relative min-w-[88px] flex-1">
+            <button
+              type="button"
+              onClick={() => setUnitMenuOpen(v => !v)}
+              className="flex h-full w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-semibold text-zinc-800 outline-none transition-colors hover:bg-white focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:focus:border-zinc-500"
+              aria-haspopup="listbox"
+              aria-expanded={unitMenuOpen}
+            >
+              <span className="truncate">{unitLabel(customUnit)}</span>
+              <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${unitMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {unitMenuOpen && (
+              <div
+                role="listbox"
+                className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                {dropdownUnits.map(u => (
+                  <button
+                    key={u}
+                    type="button"
+                    role="option"
+                    aria-selected={customUnit === u}
+                    onClick={() => onInlineUnitSelect(u)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  >
+                    <Check className={`h-4 w-4 ${customUnit === u ? 'opacity-100' : 'opacity-0'}`} />
+                    <span>{unitLabel(u)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : mode === 'quick' ? (
         <div className="flex flex-wrap items-center gap-1.5">
           {quickOptions.map(opt => {
             const isActive = opt.id === activeOptionId

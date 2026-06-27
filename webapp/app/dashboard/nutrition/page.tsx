@@ -485,6 +485,7 @@ function NutritionPageInner() {
       // picker rework); pass them through when the modal supplied them so the
       // log row knows the user's actual unit + bridges for future re-edits.
       const extra = food as IFoodEntry & {
+        servingLabel?: string
         loggedQuantity?: number
         loggedUnit?: string
         loggedGramsPerServing?: number
@@ -500,6 +501,7 @@ function NutritionPageInner() {
         servingUnit: food.servingUnit,
         servings: food.servings,
         nutrition: food.nutrition,
+        servingLabel: extra.servingLabel,
         loggedQuantity: extra.loggedQuantity,
         loggedUnit: extra.loggedUnit,
         loggedGramsPerServing: extra.loggedGramsPerServing,
@@ -1219,6 +1221,7 @@ function NutritionPageInner() {
               servingUnit: entry.servingUnit,
               servings: entry.servings,
               nutrition: entry.nutrition,
+              servingLabel: (entry as { servingLabel?: string }).servingLabel,
               loggedQuantity: (entry as { loggedQuantity?: number }).loggedQuantity,
               loggedUnit: (entry as { loggedUnit?: string }).loggedUnit,
               loggedGramsPerServing: (entry as { loggedGramsPerServing?: number }).loggedGramsPerServing,
