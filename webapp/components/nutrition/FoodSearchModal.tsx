@@ -1419,7 +1419,10 @@ export default function FoodSearchModal({
                       food.isSaved !== true &&
                       prev?.isSaved === true
                     return (
-                  <div key={food._id}>
+                  <div
+                    key={food._id}
+                    className={`relative ${selectedFood?._id === food._id ? 'z-[70]' : 'z-0'}`}
+                  >
                     {showMyFoodsHeader && (
                       <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-amber-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 backdrop-blur dark:bg-amber-900/30 dark:text-amber-200">
                         <Bookmark className="h-3 w-3 fill-current" />
@@ -1551,7 +1554,7 @@ export default function FoodSearchModal({
                             animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
                             exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                             transition={{ duration: 0.2 }}
-                            className="relative z-10"
+                            className="relative z-[80] overflow-visible"
                           >
                             <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
                               {/* Variant picker — only shown when a food has >1 variant */}
@@ -1581,7 +1584,7 @@ export default function FoodSearchModal({
                                     {variantMenuOpen && (
                                       <div
                                         role="listbox"
-                                        className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                                        className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
                                       >
                                         {food.variants.map((variant, vIdx) => {
                                           const isActive = selectedVariantIdx === vIdx
