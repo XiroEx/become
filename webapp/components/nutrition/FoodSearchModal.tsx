@@ -295,6 +295,7 @@ export default function FoodSearchModal({
   const [servingLabelEditing, setServingLabelEditing] = useState(false)
   // Index into selectedFood.variants — defaults to the variant marked isDefault.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
+  const [variantMenuOpen, setVariantMenuOpen] = useState(false)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
   const addingRef = useRef(false)
@@ -588,6 +589,7 @@ export default function FoodSearchModal({
     setServingLabelDraft(variantFriendlyLabel(activeVariant))
     setServingLabelEditing(false)
     setAddQuantity('1')
+    setVariantMenuOpen(false)
   }, [selectedFood?._id, selectedVariantIdx, activeVariant])
 
   // Copy-on-pick: external (usda-/off-) results get persisted to our Food
@@ -1558,33 +1560,54 @@ export default function FoodSearchModal({
                                   <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                                     Preparation
                                   </p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {food.variants.map((variant, vIdx) => {
-                                      const isActive = selectedVariantIdx === vIdx
-                                      return (
-                                        <button
-                                          key={variant._id ?? vIdx}
-                                          onClick={() => {
-                                            setSelectedVariantIdx(vIdx)
-                                            // QuantityPicker resets to its
-                                            // defaults on variant change.
-                                            setSelection(null)
-                                          }}
-                                          className={`flex flex-col items-start gap-0.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
-                                            isActive
-                                              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                                              : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                                          }`}
-                                        >
-                                          <span className="font-semibold">{variant.name}</span>
-                                          <span className={`text-[10px] tabular-nums ${isActive ? 'opacity-80' : 'opacity-70'}`}>
-                                            {Math.round(variant.nutrition.calories)} cal
-                                            {' · '}
-                                            {Math.round(variant.nutrition.protein * 10) / 10}g protein
-                                          </span>
-                                        </button>
-                                      )
-                                    })}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setVariantMenuOpen(open => !open)}
+                                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                                      aria-haspopup="listbox"
+                                      aria-expanded={variantMenuOpen}
+                                    >
+                                      <span className="min-w-0 truncate">{activeVariant?.name ?? 'Select preparation'}</span>
+                                      <span className="flex shrink-0 items-center gap-2 text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
+                                        {activeVariant && (
+                                          <>
+                                            {Math.round(activeVariant.nutrition.calories)} cal
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${variantMenuOpen ? 'rotate-180' : ''}`} />
+                                          </>
+                                        )}
+                                      </span>
+                                    </button>
+                                    {variantMenuOpen && (
+                                      <div
+                                        role="listbox"
+                                        className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                                      >
+                                        {food.variants.map((variant, vIdx) => {
+                                          const isActive = selectedVariantIdx === vIdx
+                                          return (
+                                            <button
+                                              key={variant._id ?? vIdx}
+                                              type="button"
+                                              role="option"
+                                              aria-selected={isActive}
+                                              onClick={() => {
+                                                setSelectedVariantIdx(vIdx)
+                                                setSelection(null)
+                                                setVariantMenuOpen(false)
+                                              }}
+                                              className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                                            >
+                                              <Check className={`h-4 w-4 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0'}`} />
+                                              <span className="min-w-0 flex-1 truncate font-medium">{variant.name}</span>
+                                              <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+                                                {Math.round(variant.nutrition.calories)} cal
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               )}
