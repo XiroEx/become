@@ -471,13 +471,13 @@ export default function QuantityPicker({
             onChange={(e) => onCustomValueChange(e.target.value)}
             onBlur={onCustomBlur}
             placeholder={primaryOption?.label ?? 'Amount'}
-            className="min-w-0 flex-[2] rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-medium tabular-nums text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-500"
+            className="min-w-0 flex-[2] appearance-none rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-medium tabular-nums text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:bg-zinc-950 dark:[-webkit-text-fill-color:#f4f4f5] dark:[color-scheme:dark]"
           />
           <div className="relative min-w-[88px] flex-1">
             <button
               type="button"
               onClick={() => setUnitMenuOpen(v => !v)}
-              className="flex h-full w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-semibold text-zinc-800 outline-none transition-colors hover:bg-white focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:focus:border-zinc-500"
+              className="flex h-full w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-semibold text-zinc-800 outline-none transition-colors hover:bg-white focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:focus:border-zinc-500 dark:[color-scheme:dark]"
               aria-haspopup="listbox"
               aria-expanded={unitMenuOpen}
             >
@@ -545,12 +545,12 @@ export default function QuantityPicker({
               onBlur={onCustomBlur}
               placeholder="Amount"
               autoFocus
-              className="w-24 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:placeholder-zinc-500"
+              className="w-24 appearance-none rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder-zinc-500 dark:[-webkit-text-fill-color:#f4f4f5] dark:[color-scheme:dark]"
             />
             <select
               value={customUnit}
               onChange={(e) => setCustomUnit(e.target.value as Unit)}
-              className="flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+              className="flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:[color-scheme:dark]"
             >
               {dropdownUnits.map(u => (
                 <option key={u} value={u}>{unitLabel(u)}</option>
