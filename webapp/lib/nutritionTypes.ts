@@ -29,6 +29,7 @@ export interface IFoodEntry {
   servingUnit: string
   servings: number
   nutrition: IFoodNutrition
+  servingLabel?: string
   // PR 4 picker rework — provenance carried through so re-edit clients can avoid
   // synthesizing from `multiplier × servingSize`. Optional: old entries omit them.
   loggedQuantity?: number

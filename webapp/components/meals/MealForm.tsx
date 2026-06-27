@@ -126,6 +126,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
     // Forward them so meal templates carry the same provenance and re-edits
     // round-trip through the picker.
     const extra = food as IFoodEntry & {
+      servingLabel?: string
       loggedQuantity?: number
       loggedUnit?: string
       loggedGramsPerServing?: number
@@ -149,6 +150,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         sugar: food.nutrition.sugar,
         sodium: food.nutrition.sodium,
       },
+      servingLabel: extra.servingLabel,
       loggedQuantity: extra.loggedQuantity,
       loggedUnit: extra.loggedUnit,
       loggedGramsPerServing: extra.loggedGramsPerServing,

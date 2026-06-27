@@ -202,6 +202,32 @@ function preferredServingLabel(food: FoodResult): string {
   return base
 }
 
+function variantFriendlyLabel(variant: FoodVariant | null): string {
+  if (!variant) return ''
+  if (variant.displayLabel?.trim()) return prettifyUnitCodes(variant.displayLabel.trim())
+  const alt = variant.alternateServings?.find(s => s.label?.trim())
+  return alt ? prettifyUnitCodes(alt.label.trim()) : ''
+}
+
+function positiveDecimal(value: string): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function scaleNutrition(n: FoodNutrition | undefined, factor: number): FoodNutrition {
+  const safe = Number.isFinite(factor) && factor > 0 ? factor : 0
+  return {
+    calories: (n?.calories ?? 0) * safe,
+    protein: (n?.protein ?? 0) * safe,
+    carbs: (n?.carbs ?? 0) * safe,
+    fats: (n?.fats ?? 0) * safe,
+    fiber: n?.fiber != null ? n.fiber * safe : undefined,
+    sugar: n?.sugar != null ? n.sugar * safe : undefined,
+    sodium: n?.sodium != null ? n.sodium * safe : undefined,
+    saturatedFat: n?.saturatedFat != null ? n.saturatedFat * safe : undefined,
+  }
+}
+
 function titleCaseTag(tag: string): string {
   return tag
     .split(/[-_\s]+/)
@@ -264,6 +290,9 @@ export default function FoodSearchModal({
   // first value (which it does on mount), then a complete spec of what the user
   // is about to log.
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
+  const [addQuantity, setAddQuantity] = useState('1')
+  const [servingLabelDraft, setServingLabelDraft] = useState('')
+  const [servingLabelEditing, setServingLabelEditing] = useState(false)
   // Index into selectedFood.variants — defaults to the variant marked isDefault.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   // Loading state for the import-on-pick network call.
@@ -549,6 +578,17 @@ export default function FoodSearchModal({
     if (!selectedFood) return null
     return getActiveVariant(selectedFood, selectedVariantIdx)
   }, [selectedFood, selectedVariantIdx])
+  const addQuantityMultiplier = positiveDecimal(addQuantity)
+  const previewNutrition = useMemo(
+    () => scaleNutrition(selection?.nutrition, addQuantityMultiplier || 1),
+    [selection, addQuantityMultiplier],
+  )
+
+  useEffect(() => {
+    setServingLabelDraft(variantFriendlyLabel(activeVariant))
+    setServingLabelEditing(false)
+    setAddQuantity('1')
+  }, [selectedFood?._id, selectedVariantIdx, activeVariant])
 
   // Copy-on-pick: external (usda-/off-) results get persisted to our Food
   // collection before being logged. Returns the resolved foodId + variants.
@@ -809,7 +849,7 @@ export default function FoodSearchModal({
   }
 
   const handleAddFood = async () => {
-    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0) return
+    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0) return
     if (addingRef.current) return
     addingRef.current = true
     setAdding(true)
@@ -830,9 +870,10 @@ export default function FoodSearchModal({
 
       // Build the legacy IFoodEntry shape, but extend with the new
       // logged{Quantity,Unit,GramsPerServing,MlPerServing} fields the API
-      // tolerates. The math now lives in `selection`: nutrition is scaled,
-      // and `multiplier` plays the role of "servings" for back-compat readers.
+      // tolerates. Nutrition stays as a per-serving snapshot; `servings`
+      // carries the selected amount and quantity multiplier for server totals.
       const entry: IFoodEntry & {
+        servingLabel?: string
         loggedQuantity?: number
         loggedUnit?: Unit
         loggedGramsPerServing?: number
@@ -844,38 +885,25 @@ export default function FoodSearchModal({
         variantName: resolvedVariantName,
         name: selectedFood.name,
         brand: selectedFood.brand,
+        servingLabel: servingLabelDraft.trim() || undefined,
         servingSize: activeVariant.servingSize,
         servingUnit: activeVariant.servingUnit,
         // `servings` here is the back-compat "× per-variant-serving" multiplier.
         // New consumers should prefer loggedQuantity + loggedUnit.
-        servings: selection.multiplier,
+        servings: selection.multiplier * addQuantityMultiplier,
         nutrition: {
-          calories: selection.nutrition.calories,
-          protein: selection.nutrition.protein,
-          carbs: selection.nutrition.carbs,
-          fats: selection.nutrition.fats,
-          fiber: selection.nutrition.fiber,
-          sugar: selection.nutrition.sugar,
-          sodium: selection.nutrition.sodium,
+          calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
+          protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
+          carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
+          fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
+          fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
+          sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
+          sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
         },
-        loggedQuantity: selection.quantity,
+        loggedQuantity: selection.quantity * addQuantityMultiplier,
         loggedUnit: selection.unit,
         loggedGramsPerServing: activeVariant.gramsPerServing,
         loggedMlPerServing: activeVariant.mlPerServing,
-      }
-
-      // Per-serving nutrition is what the API expects; the multiplier (`servings`)
-      // does the scaling on the server. Recompute the per-serving snapshot from
-      // the variant rather than from the scaled selection so the value stays
-      // stable across re-edits at any quantity.
-      entry.nutrition = {
-        calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
-        protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
-        carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
-        fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
-        fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
-        sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
-        sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
       }
 
       // Compute loggedAt — only sent in log mode. When the user picked a date
@@ -904,6 +932,9 @@ export default function FoodSearchModal({
       )
       setSelectedFood(null)
       setSelection(null)
+      setAddQuantity('1')
+      setServingLabelDraft('')
+      setServingLabelEditing(false)
       setSelectedVariantIdx(0)
       setCustomDate(null)
       setDateEditOpen(false)
@@ -1562,31 +1593,66 @@ export default function FoodSearchModal({
                                   Resolves nutrition for any (quantity, unit) within the
                                   variant's domain (or its bridged cross-family). */}
                               {selectedFood?._id === food._id && activeVariant && (
-                                <div className="mb-2.5">
-                                  <QuantityPicker
-                                    variant={activeVariant}
-                                    onChange={setSelection}
-                                  />
-                                </div>
-                              )}
+                                <>
+                                  {(servingLabelDraft || servingLabelEditing) && (
+                                    <div className="mb-2 flex min-h-7 items-center gap-2">
+                                      {servingLabelEditing ? (
+                                        <input
+                                          type="text"
+                                          value={servingLabelDraft}
+                                          onChange={(e) => setServingLabelDraft(e.target.value)}
+                                          onBlur={() => setServingLabelEditing(false)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault()
+                                              setServingLabelEditing(false)
+                                            }
+                                          }}
+                                          autoFocus
+                                          className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                                          aria-label="Friendly serving name"
+                                        />
+                                      ) : (
+                                        <span className="min-w-0 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                          {servingLabelDraft}
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setServingLabelEditing(true)}
+                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                                        aria-label="Edit friendly serving name"
+                                      >
+                                        <PencilLine className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
 
-                              {/* Live nutrition preview from the resolved selection. */}
-                              <div className="flex items-center justify-end gap-3">
-                                <div className="text-right">
-                                  <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {Math.round(selection?.nutrition.calories ?? 0)} cal
-                                    </span>
-                                  </p>
-                                  <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                    P: {Math.round(selection?.nutrition.protein ?? 0)}g
-                                    {' '}&middot;{' '}
-                                    C: {Math.round(selection?.nutrition.carbs ?? 0)}g
-                                    {' '}&middot;{' '}
-                                    F: {Math.round(selection?.nutrition.fats ?? 0)}g
-                                  </p>
-                                </div>
-                              </div>
+                                  <div className="mb-2.5 grid grid-cols-3 items-start gap-2">
+                                    <div className="col-span-2">
+                                      <QuantityPicker
+                                        variant={activeVariant}
+                                        layout="inline"
+                                        onChange={setSelection}
+                                      />
+                                    </div>
+                                    <div className="pt-0.5 text-right">
+                                      <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                          {Math.round(previewNutrition.calories)} cal
+                                        </span>
+                                      </p>
+                                      <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                                        P: {Math.round(previewNutrition.protein)}g
+                                        {' '}&middot;{' '}
+                                        C: {Math.round(previewNutrition.carbs)}g
+                                        {' '}&middot;{' '}
+                                        F: {Math.round(previewNutrition.fats)}g
+                                      </p>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                               {/* Date-only picker — defaults to "Now" (today @ current
                                   wall-clock time). Tap to backdate to a past day. No time
                                   is ever surfaced: submission grafts the current wall-clock
@@ -1721,29 +1787,44 @@ export default function FoodSearchModal({
                                   )}
                                 </div>
                               )}
-                              <button
-                                onClick={handleAddFood}
-                                disabled={adding || !selection || selection.quantity <= 0}
-                                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                              >
-                                {adding ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    {isPlanMode ? 'Planning…' : 'Adding…'}
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="h-4 w-4" />
-                                    {isPlanMode
-                                      ? (
-                                          repeatOpen && repeatCount > 1
-                                            ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
-                                            : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
-                                        )
-                                      : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
-                                  </>
-                                )}
-                              </button>
+                              <div className="mt-2 grid grid-cols-4 gap-2">
+                                <button
+                                  onClick={handleAddFood}
+                                  disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
+                                  className="col-span-3 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                >
+                                  {adding ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      {isPlanMode ? 'Planning…' : 'Adding…'}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="h-4 w-4" />
+                                      {isPlanMode
+                                        ? (
+                                            repeatOpen && repeatCount > 1
+                                              ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
+                                              : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                          )
+                                        : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                    </>
+                                  )}
+                                </button>
+                                <input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  inputMode="decimal"
+                                  value={addQuantity}
+                                  onChange={(e) => setAddQuantity(e.target.value)}
+                                  onBlur={() => {
+                                    if (positiveDecimal(addQuantity) <= 0) setAddQuantity('1')
+                                  }}
+                                  aria-label="Quantity"
+                                  className="min-w-0 rounded-lg border border-zinc-200 bg-white px-2 text-center text-sm font-semibold tabular-nums text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                                />
+                              </div>
                             </div>
                           </motion.div>
                         )}
