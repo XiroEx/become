@@ -487,7 +487,7 @@ export default function QuantityPicker({
             {unitMenuOpen && (
               <div
                 role="listbox"
-                className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                className="absolute right-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
               >
                 {dropdownUnits.map(u => (
                   <button

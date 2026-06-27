@@ -1547,11 +1547,11 @@ export default function FoodSearchModal({
                       <AnimatePresence>
                         {selectedFood?._id === food._id && (
                           <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
+                            initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                            animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                            exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                             transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
+                            className="relative z-10"
                           >
                             <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
                               {/* Variant picker — only shown when a food has >1 variant */}
