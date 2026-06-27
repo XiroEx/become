@@ -1620,7 +1620,7 @@ export default function FoodSearchModal({
                                   {(servingLabelDraft || servingLabelEditing) && (
                                     <div className="mb-2 flex min-h-7 items-center gap-2">
                                       {servingLabelEditing ? (
-                                        <div className="min-w-0 flex-1">
+                                        <div className="flex min-w-0 flex-1 items-center gap-2">
                                           <input
                                             type="text"
                                             value={servingLabelDraft}
@@ -1633,12 +1633,12 @@ export default function FoodSearchModal({
                                               }
                                             }}
                                             autoFocus
-                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                                            className="min-w-0 basis-2/3 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
                                             aria-label="Friendly serving name"
                                           />
-                                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                          <span className="inline-flex min-w-0 basis-1/3 items-center justify-center gap-1 rounded-full bg-zinc-100 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                                             <PencilLine className="h-3 w-3" />
-                                            Label only
+                                            <span className="truncate">Label only</span>
                                           </span>
                                         </div>
                                       ) : (
