@@ -160,8 +160,8 @@ export default function EditFoodModal({
             servings: selection.multiplier,
             loggedQuantity: selection.quantity,
             loggedUnit: selection.unit,
-            loggedGramsPerServing: bridge.gramsPerServing ?? it.loggedGramsPerServing,
-            loggedMlPerServing: bridge.mlPerServing ?? it.loggedMlPerServing,
+            loggedGramsPerServing: selection.gramsPerServing ?? bridge.gramsPerServing ?? it.loggedGramsPerServing,
+            loggedMlPerServing: selection.mlPerServing ?? bridge.mlPerServing ?? it.loggedMlPerServing,
             // Roll the scaled-per-serving nutrition forward; the QuantityPicker
             // returned per-serving nutrition based on the bridge it solved.
             nutrition: {
@@ -205,8 +205,8 @@ export default function EditFoodModal({
             // Bridge values: prefer the user's inline edits, fall back to the
             // existing snapshot. The route only assigns these when the field is
             // present, so undefined values leave the stored snapshot intact.
-            loggedGramsPerServing: bridge.gramsPerServing ?? item.loggedGramsPerServing,
-            loggedMlPerServing: bridge.mlPerServing ?? item.loggedMlPerServing,
+            loggedGramsPerServing: selection.gramsPerServing ?? bridge.gramsPerServing ?? item.loggedGramsPerServing,
+            loggedMlPerServing: selection.mlPerServing ?? bridge.mlPerServing ?? item.loggedMlPerServing,
           }),
         })
       }
