@@ -35,6 +35,12 @@ import {
   suggestedToggleUnit,
   formatQuantity,
 } from '@/lib/units'
+import {
+  buildServingChoiceGroups,
+  findBestBridgeForUnit,
+  type ServingChoice,
+  variantForServingChoice,
+} from '@/lib/nutrition/servingOptions'
 // Note: nutritionForQuantity covers the canonical math; scalingFactor is used
 // directly so we can short-circuit on non-finite results without throwing.
 import { nutritionForQuantity, scalingFactor, type VariantForMath } from '@/lib/foodMath'
@@ -55,6 +61,9 @@ export type QuantityPickerSelection = {
    * to the legacy log shape (`servings × multiplier` math). Zero when invalid.
    */
   multiplier: number
+  /** Effective bridge used for this choice, including label-derived bridges. */
+  gramsPerServing?: number
+  mlPerServing?: number
 }
 
 /**
@@ -87,13 +96,6 @@ export interface QuantityPickerProps {
   /** Optional className passthrough for outer wrapper. */
   className?: string
 }
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const MASS_FAMILY_UNITS: Unit[] = ['g', 'oz', 'lb']
-const VOLUME_FAMILY_UNITS: Unit[] = ['ml', 'fl_oz', 'cup', 'tbsp', 'tsp']
 
 // ---------------------------------------------------------------------------
 // Quick-option construction
@@ -262,33 +264,6 @@ function buildQuickOptions(variant: QuantityPickerVariant): QuickOption[] {
   return [primary, middle, doubleOption]
 }
 
-// ---------------------------------------------------------------------------
-// Custom-mode unit list
-// ---------------------------------------------------------------------------
-
-function unitsForCustomDropdown(variant: QuantityPickerVariant): Unit[] {
-  const native = variant.servingUnit as Unit
-  const family = familyOf(native)
-
-  const out: Unit[] = []
-
-  if (family === 'mass') {
-    out.push(...MASS_FAMILY_UNITS)
-    if (variant.mlPerServing != null) out.push(...VOLUME_FAMILY_UNITS)
-  } else if (family === 'volume') {
-    out.push(...VOLUME_FAMILY_UNITS)
-    if (variant.gramsPerServing != null) out.push(...MASS_FAMILY_UNITS)
-  } else {
-    // discrete: include the variant's own discrete unit; if a bridge exists,
-    // also include the corresponding family.
-    out.push(native)
-    if (variant.gramsPerServing != null) out.push(...MASS_FAMILY_UNITS)
-    if (variant.mlPerServing != null) out.push(...VOLUME_FAMILY_UNITS)
-  }
-
-  return out
-}
-
 function defaultCustomUnit(variant: QuantityPickerVariant, weightPref: 'kg' | 'lbs'): Unit {
   const suggested = suggestedToggleUnit(variant.servingUnit as Unit, weightPref)
   if (suggested) return suggested
@@ -323,7 +298,8 @@ export default function QuantityPicker({
   className,
 }: QuantityPickerProps) {
   const quickOptions = useMemo(() => buildQuickOptions(variant), [variant])
-  const dropdownUnits = useMemo(() => unitsForCustomDropdown(variant), [variant])
+  const choiceGroups = useMemo(() => buildServingChoiceGroups(variant), [variant])
+  const dropdownChoices = choiceGroups.all
   const isInline = layout === 'inline'
   const primaryOption = quickOptions[0]
 
@@ -353,6 +329,11 @@ export default function QuantityPicker({
     return defaultCustomUnit(variant, weightPref)
   })
   const [unitMenuOpen, setUnitMenuOpen] = useState(false)
+  const selectedChoiceId = useMemo(() => {
+    const unitChoice = dropdownChoices.find(choice => choice.unit === customUnit && choice.group !== 'servings')
+    const servingChoice = dropdownChoices.find(choice => choice.unit === customUnit)
+    return unitChoice?.id ?? servingChoice?.id ?? ''
+  }, [dropdownChoices, customUnit])
 
   // Reset state when the variant identity changes. Callers swap variants by
   // re-rendering with a different `variant` prop; we key on the storage
@@ -372,13 +353,21 @@ export default function QuantityPicker({
   }, [variant, variantKey, quickOptions, weightPref, isInline])
 
   // ── Resolve selection ─────────────────────────────────────────────────
-  const variantForMath: VariantForMath = {
+  const variantForMath = useMemo<VariantForMath>(() => ({
     servingSize: variant.servingSize,
     servingUnit: variant.servingUnit,
     nutrition: variant.nutrition,
     gramsPerServing: variant.gramsPerServing,
     mlPerServing: variant.mlPerServing,
-  }
+  }), [variant])
+  const activeBridge = useMemo(
+    () => findBestBridgeForUnit(choiceGroups, customUnit),
+    [choiceGroups, customUnit],
+  )
+  const customVariantForMath = useMemo(
+    () => variantForServingChoice(variantForMath, activeBridge),
+    [variantForMath, activeBridge],
+  )
 
   const resolved = useMemo<QuantityPickerSelection>(() => {
     if (!isInline && mode === 'quick') {
@@ -391,7 +380,7 @@ export default function QuantityPicker({
     if (numeric == null || numeric <= 0 || !Number.isFinite(numeric)) {
       return zeroSelection(customUnit)
     }
-    return resolve(variantForMath, numeric, customUnit)
+    return resolve(customVariantForMath, numeric, customUnit)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     mode,
@@ -405,6 +394,7 @@ export default function QuantityPicker({
     variant.gramsPerServing,
     variant.mlPerServing,
     variant.nutrition.calories,
+    activeBridge,
   ])
 
   // ── Emit upstream ─────────────────────────────────────────────────────
@@ -421,7 +411,7 @@ export default function QuantityPicker({
   const onCustomValueChange = (value: string) => {
     setCustomValue(value)
     const parsed = parseQuantityString(value)
-    if (parsed && dropdownUnits.includes(parsed.unit)) {
+    if (parsed && dropdownChoices.some(choice => choice.unit === parsed.unit)) {
       // User pasted "240ml": auto-promote the unit dropdown AND retain the
       // numeric portion in the input. Strip the unit from the visible text
       // so the field doesn't read "240ml ml" after re-render.
@@ -435,20 +425,31 @@ export default function QuantityPicker({
     // unit, normalize it. This is a safety net for keystrokes that arrived
     // mid-stream and weren't caught by `onCustomValueChange`.
     const parsed = parseQuantityString(customValue)
-    if (parsed && dropdownUnits.includes(parsed.unit)) {
+    if (parsed && dropdownChoices.some(choice => choice.unit === parsed.unit)) {
       setCustomUnit(parsed.unit)
       setCustomValue(formatNumberForInput(parsed.value))
     }
   }
 
-  const onInlineUnitSelect = (nextUnit: Unit) => {
+  const onInlineChoiceSelect = (choice: ServingChoice) => {
+    if (choice.group === 'servings') {
+      setCustomValue(formatNumberForInput(choice.quantity))
+      setCustomUnit(choice.unit)
+      setUnitMenuOpen(false)
+      return
+    }
+
+    const nextUnit = choice.unit
     const numeric = parseLeadingNumber(customValue)
     if (numeric != null && numeric > 0 && Number.isFinite(numeric) && nextUnit !== customUnit) {
+      const bridge = choice.gramsPerServing != null || choice.mlPerServing != null
+        ? choice
+        : activeBridge
       const converted = convertWithBridge(numeric, customUnit, nextUnit, {
         servingSize: variant.servingSize,
         servingUnit: variant.servingUnit as Unit,
-        gramsPerServing: variant.gramsPerServing,
-        mlPerServing: variant.mlPerServing,
+        gramsPerServing: bridge?.gramsPerServing ?? variant.gramsPerServing,
+        mlPerServing: bridge?.mlPerServing ?? variant.mlPerServing,
       })
       if (converted != null && Number.isFinite(converted) && converted > 0) {
         setCustomValue(formatNumberForInput(converted))
@@ -487,21 +488,11 @@ export default function QuantityPicker({
             {unitMenuOpen && (
               <div
                 role="listbox"
-                className="absolute right-0 top-full z-50 mt-1 w-36 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+                className="absolute right-0 top-full z-50 mt-1 max-h-64 w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
               >
-                {dropdownUnits.map(u => (
-                  <button
-                    key={u}
-                    type="button"
-                    role="option"
-                    aria-selected={customUnit === u}
-                    onClick={() => onInlineUnitSelect(u)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                  >
-                    <Check className={`h-4 w-4 ${customUnit === u ? 'opacity-100' : 'opacity-0'}`} />
-                    <span>{unitLabel(u)}</span>
-                  </button>
-                ))}
+                <ChoiceSection title="Servings" choices={choiceGroups.servings} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
+                <ChoiceSection title="Weight" choices={choiceGroups.weight} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
+                <ChoiceSection title="Volume" choices={choiceGroups.volume} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
               </div>
             )}
           </div>
@@ -548,13 +539,34 @@ export default function QuantityPicker({
               className="w-24 appearance-none rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-center text-sm font-medium text-zinc-900 placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder-zinc-500 dark:[-webkit-text-fill-color:#f4f4f5] dark:[color-scheme:dark]"
             />
             <select
-              value={customUnit}
-              onChange={(e) => setCustomUnit(e.target.value as Unit)}
+              value={selectedChoiceId}
+              onChange={(e) => {
+                const choice = dropdownChoices.find(c => c.id === e.target.value)
+                if (choice) onInlineChoiceSelect(choice)
+              }}
               className="flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100 dark:[color-scheme:dark]"
             >
-              {dropdownUnits.map(u => (
-                <option key={u} value={u}>{unitLabel(u)}</option>
-              ))}
+              {choiceGroups.servings.length > 0 && (
+                <optgroup label="Servings">
+                  {choiceGroups.servings.map(choice => (
+                    <option key={choice.id} value={choice.id}>{choice.label}</option>
+                  ))}
+                </optgroup>
+              )}
+              {choiceGroups.weight.length > 0 && (
+                <optgroup label="Weight">
+                  {choiceGroups.weight.map(choice => (
+                    <option key={choice.id} value={choice.id}>{choice.label}</option>
+                  ))}
+                </optgroup>
+              )}
+              {choiceGroups.volume.length > 0 && (
+                <optgroup label="Volume">
+                  {choiceGroups.volume.map(choice => (
+                    <option key={choice.id} value={choice.id}>{choice.label}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           <button
@@ -628,10 +640,52 @@ function resolve(variantForMath: VariantForMath, quantity: number, unit: Unit): 
     const factor = scalingFactor(variantForMath, quantity, unit)
     if (!Number.isFinite(factor) || factor < 0) return zeroSelection(unit)
     const nutrition = nutritionForQuantity(variantForMath, quantity, unit)
-    return { quantity, unit, multiplier: factor, nutrition }
+    return {
+      quantity,
+      unit,
+      multiplier: factor,
+      nutrition,
+      gramsPerServing: variantForMath.gramsPerServing,
+      mlPerServing: variantForMath.mlPerServing,
+    }
   } catch {
     // The picker's UI restricts unit choices to ones the variant can handle;
     // if we somehow get here, surface zero rather than crash.
     return zeroSelection(unit)
   }
+}
+
+function ChoiceSection({
+  title,
+  choices,
+  customUnit,
+  onSelect,
+}: {
+  title: string
+  choices: ServingChoice[]
+  customUnit: Unit
+  onSelect: (choice: ServingChoice) => void
+}) {
+  if (choices.length === 0) return null
+
+  return (
+    <div className="py-1">
+      <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+        {title}
+      </div>
+      {choices.map(choice => (
+        <button
+          key={choice.id}
+          type="button"
+          role="option"
+          aria-selected={customUnit === choice.unit}
+          onClick={() => onSelect(choice)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
+        >
+          <Check className={`h-4 w-4 shrink-0 ${customUnit === choice.unit ? 'opacity-100' : 'opacity-0'}`} />
+          <span className="min-w-0 truncate">{choice.label}</span>
+        </button>
+      ))}
+    </div>
+  )
 }

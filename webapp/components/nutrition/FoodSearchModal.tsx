@@ -904,8 +904,8 @@ export default function FoodSearchModal({
         },
         loggedQuantity: selection.quantity * addQuantityMultiplier,
         loggedUnit: selection.unit,
-        loggedGramsPerServing: activeVariant.gramsPerServing,
-        loggedMlPerServing: activeVariant.mlPerServing,
+        loggedGramsPerServing: selection.gramsPerServing ?? activeVariant.gramsPerServing,
+        loggedMlPerServing: selection.mlPerServing ?? activeVariant.mlPerServing,
       }
 
       // Compute loggedAt — only sent in log mode. When the user picked a date
