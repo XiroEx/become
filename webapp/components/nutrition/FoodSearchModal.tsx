@@ -1660,79 +1660,6 @@ export default function FoodSearchModal({
                                     </div>
                                   )}
 
-                                  <div className="mb-1.5 flex min-h-7 items-center justify-between gap-2">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                      Quality
-                                    </p>
-                                    {!isPlanMode && (
-                                      <div className="flex min-w-0 shrink-0 items-center gap-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() => setDateEditOpen(v => !v)}
-                                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                                            customDate
-                                              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
-                                              : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                                          }`}
-                                          aria-expanded={dateEditOpen}
-                                          aria-label={customDate ? `Logging for ${formatDatePillLabel(customDate)}, tap to change date` : 'Log date: now, tap to choose a past date'}
-                                        >
-                                          <CalendarDays className="h-3 w-3" />
-                                          <span className="tabular-nums">
-                                            {formatDatePillLabel(customDate)}
-                                          </span>
-                                        </button>
-                                        {customDate && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              setCustomDate(null)
-                                              setDateEditOpen(false)
-                                            }}
-                                            className="inline-flex h-5 w-5 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
-                                            aria-label="Clear date"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
-                                        )}
-                                        <span className="hidden text-[10px] text-zinc-500 dark:text-zinc-400 min-[360px]:inline">
-                                          {customDate ? 'Logged on chosen day' : 'Logged now'}
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {!isPlanMode && (
-                                    <AnimatePresence initial={false}>
-                                      {dateEditOpen && (
-                                        <motion.div
-                                          key="dateonly-disclosure"
-                                          initial={{ opacity: 0, height: 0 }}
-                                          animate={{ opacity: 1, height: 'auto' }}
-                                          exit={{ opacity: 0, height: 0 }}
-                                          transition={{ duration: 0.2 }}
-                                          className="mb-2 overflow-hidden"
-                                        >
-                                          <DateOnlyPicker
-                                            value={customDate ?? dateToKey(viewedDate ?? new Date())}
-                                            maxDate={dateToKey(new Date())}
-                                            showTodayChip
-                                            onClear={() => { setCustomDate(null); setDateEditOpen(false) }}
-                                            onChange={(next) => {
-                                              // When the user picks "today", treat it as "Now"
-                                              // (null) so the pill reflects that and we don't
-                                              // pin a stale wall-clock time on submit.
-                                              const todayKey = dateToKey(new Date())
-                                              setCustomDate(next === todayKey ? null : next)
-                                              setDateEditOpen(false)
-                                            }}
-                                          />
-                                        </motion.div>
-                                      )}
-                                    </AnimatePresence>
-                                  )}
-
                                   <div className="mb-2.5 grid grid-cols-3 items-start gap-2">
                                     <div className="col-span-2">
                                       <QuantityPicker
@@ -1757,6 +1684,82 @@ export default function FoodSearchModal({
                                     </div>
                                   </div>
                                 </>
+                              )}
+                              {/* Date-only picker — defaults to "Now" (today @ current
+                                  wall-clock time). Tap to backdate to a past day. No time
+                                  is ever surfaced: submission grafts the current wall-clock
+                                  time onto the picked date. Hidden in plan mode (plans
+                                  carry the page-supplied plannedDate). */}
+                              {!isPlanMode && (
+                                <div className="mt-2.5 flex flex-col gap-2">
+                                  <div className="grid grid-cols-4 items-center gap-2">
+                                    <div className="col-span-3 flex min-w-0 items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setDateEditOpen(v => !v)}
+                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                          customDate
+                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
+                                            : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
+                                        }`}
+                                        aria-expanded={dateEditOpen}
+                                        aria-label={customDate ? `Logging for ${formatDatePillLabel(customDate)}, tap to change date` : 'Log date: now, tap to choose a past date'}
+                                      >
+                                        <CalendarDays className="h-3 w-3" />
+                                        <span className="tabular-nums">
+                                          {formatDatePillLabel(customDate)}
+                                        </span>
+                                      </button>
+                                      {customDate && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setCustomDate(null)
+                                            setDateEditOpen(false)
+                                          }}
+                                          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+                                          aria-label="Clear date"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                      <span className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">
+                                        {customDate ? 'Logged on chosen day' : 'Logged now'}
+                                      </span>
+                                    </div>
+                                    <span className="min-w-0 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                      Quantity
+                                    </span>
+                                  </div>
+                                  <AnimatePresence initial={false}>
+                                    {dateEditOpen && (
+                                      <motion.div
+                                        key="dateonly-disclosure"
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="overflow-hidden"
+                                      >
+                                        <DateOnlyPicker
+                                          value={customDate ?? dateToKey(viewedDate ?? new Date())}
+                                          maxDate={dateToKey(new Date())}
+                                          showTodayChip
+                                          onClear={() => { setCustomDate(null); setDateEditOpen(false) }}
+                                          onChange={(next) => {
+                                            // When the user picks "today", treat it as "Now"
+                                            // (null) so the pill reflects that and we don't
+                                            // pin a stale wall-clock time on submit.
+                                            const todayKey = dateToKey(new Date())
+                                            setCustomDate(next === todayKey ? null : next)
+                                            setDateEditOpen(false)
+                                          }}
+                                        />
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
                               )}
                               {/* Recurrence disclosure — plan mode only. Per plan
                                   §7.3 expand-on-create. Hidden by default; tap to open
