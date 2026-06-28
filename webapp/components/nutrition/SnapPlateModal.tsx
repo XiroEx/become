@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -287,6 +287,38 @@ function buildScanItems(items: ReviewItem[]) {
   })
 }
 
+function buildGenerationFeedbackMetadata(
+  items: ReviewItem[],
+  imageThumb: string,
+  tag: string,
+  scanId: string | null,
+) {
+  const activeItems = items.filter((it) => !it.removed)
+  return {
+    surface: 'snap_plate_review',
+    source: imageThumb ? 'photo' : 'describe',
+    tag,
+    scanId: scanId ?? undefined,
+    totals: runningTotal(activeItems),
+    itemCount: activeItems.length,
+    removedItemCount: items.length - activeItems.length,
+    items: activeItems.map((it) => {
+      const total = scaledNutrition(it, it.multiplier)
+      return {
+        name: it.name,
+        brand: it.brand,
+        servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
+        unitLabel: it.unitLabel,
+        multiplier: it.multiplier,
+        confidence: it.confidence,
+        matchKind: it.match?.kind ?? null,
+        matchSource: it.match?.source ?? null,
+        nutrition: total,
+      }
+    }),
+  }
+}
+
 // Reconcile AI-estimated items against the DB (foods/meals/recipes). Confident
 // matches adopt the DB item's canonical name + per-serving macros and link its
 // id; the portion is preserved by converting the AI's calorie estimate into a
@@ -378,6 +410,7 @@ export default function SnapPlateModal({
   // freshly generated estimate (or when re-opening one); reused so corrections
   // and logging UPDATE that record instead of creating duplicates.
   const [savedScanId, setSavedScanId] = useState<string | null>(null)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
 
@@ -387,7 +420,7 @@ export default function SnapPlateModal({
   // sync-to-prop effect (modal state follows open/initialPhase/initialImage).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null) }
+    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false) }
     else {
       setSelectedTag(tag) // default to the page's time-of-day meal on open
       // Re-opening a saved estimate links its record so edits/logs update it;
@@ -1026,6 +1059,7 @@ export default function SnapPlateModal({
                     onSetLabel={setItemLabel}
                     onToggleRemove={toggleRemove}
                     onCorrect={(text) => handleCorrect(state.items, state.imageThumb, text)}
+                    onFeedback={() => setFeedbackOpen(true)}
                   />
                 )}
 
@@ -1050,6 +1084,18 @@ export default function SnapPlateModal({
                 />
               )}
             </motion.div>
+
+            {state.phase === 'review' && (
+              <GenerationFeedbackModal
+                open={feedbackOpen}
+                items={state.items}
+                imageThumb={state.imageThumb}
+                tag={selectedTag}
+                scanId={savedScanId}
+                onClose={() => setFeedbackOpen(false)}
+                onSent={() => showToast('Feedback saved. Thank you.', 'success')}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1125,9 +1171,10 @@ interface ReviewBodyProps {
   onSetLabel: (idx: number, label: string) => void
   onToggleRemove: (idx: number) => void
   onCorrect: (text: string) => void
+  onFeedback: () => void
 }
 
-function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onToggleRemove, onCorrect }: ReviewBodyProps) {
+function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
   const [fix, setFix] = useState('')
 
   const submitFix = () => {
@@ -1206,7 +1253,153 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onToggleRe
           )
         })}
       </div>
+
+      <div className="mx-4 mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400">
+        <p>
+          These foods are a best guess. Check portions before logging, and{' '}
+          <button
+            type="button"
+            onClick={onFeedback}
+            className="font-semibold text-emerald-700 underline underline-offset-2 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+          >
+            send feedback
+          </button>
+          {' '}if this estimate missed.
+        </p>
+      </div>
     </div>
+  )
+}
+
+// ── GenerationFeedbackModal ──────────────────────────────────────────────────
+
+interface GenerationFeedbackModalProps {
+  open: boolean
+  items: ReviewItem[]
+  imageThumb: string
+  tag: string
+  scanId: string | null
+  onClose: () => void
+  onSent: () => void
+}
+
+function GenerationFeedbackModal({ open, items, imageThumb, tag, scanId, onClose, onSent }: GenerationFeedbackModalProps) {
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      const t = setTimeout(() => {
+        setMessage('')
+        setSending(false)
+        setSent(false)
+      }, 200)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
+  const submit = async () => {
+    const text = message.trim()
+    if (!text || sending) return
+    setSending(true)
+    try {
+      const token = getToken()
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          type: 'nutrition_generation',
+          message: text,
+          metadata: buildGenerationFeedbackMetadata(items, imageThumb, tag, scanId),
+        }),
+      })
+      if (!res.ok) throw new Error('feedback failed')
+      setSent(true)
+      onSent()
+      setTimeout(onClose, 700)
+    } catch {
+      setSending(false)
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[90] flex items-end justify-center bg-black/45 px-4 py-4 backdrop-blur-sm sm:items-center"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 20, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 20, opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.16 }}
+            className="w-full max-w-md rounded-2xl bg-white p-4 shadow-2xl dark:bg-zinc-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {sent ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                  <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+                </div>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white">Feedback saved</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                      <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Improve this estimate</h3>
+                      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                        Tell us what was wrong. We will save it with this generated food list.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                    aria-label="Close feedback"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={4}
+                  maxLength={2000}
+                  autoFocus
+                  placeholder="Example: It was 6 tacos, not 2, and the chips were a small handful."
+                  className="w-full resize-none rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-500 focus:bg-white focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:bg-zinc-800"
+                />
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="text-xs text-zinc-400">{message.length}/2000</span>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={!message.trim() || sending}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                  >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Send
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
