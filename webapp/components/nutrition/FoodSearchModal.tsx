@@ -1728,7 +1728,7 @@ export default function FoodSearchModal({
                                         {customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
-                                    <span className="min-w-0 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                    <span className="min-w-0 self-end text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                                       Quantity
                                     </span>
                                   </div>
