@@ -22,7 +22,8 @@
 //   No top-level browser APIs; all state lives inside the component.
 // ---------------------------------------------------------------------------
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown, Pencil } from 'lucide-react'
 import {
   type Unit,
@@ -95,6 +96,13 @@ export interface QuantityPickerProps {
   layout?: 'chips' | 'inline'
   /** Optional className passthrough for outer wrapper. */
   className?: string
+}
+
+type UnitMenuPosition = {
+  left: number
+  top: number
+  width: number
+  maxHeight: number
 }
 
 // ---------------------------------------------------------------------------
@@ -329,11 +337,64 @@ export default function QuantityPicker({
     return defaultCustomUnit(variant, weightPref)
   })
   const [unitMenuOpen, setUnitMenuOpen] = useState(false)
+  const unitButtonRef = useRef<HTMLButtonElement>(null)
+  const [unitMenuPosition, setUnitMenuPosition] = useState<UnitMenuPosition | null>(null)
+  const updateUnitMenuPosition = useCallback(() => {
+    const button = unitButtonRef.current
+    if (!button || typeof window === 'undefined') return
+
+    const rect = button.getBoundingClientRect()
+    const viewportWidth = window.visualViewport?.width ?? window.innerWidth
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+    const viewportOffsetLeft = window.visualViewport?.offsetLeft ?? 0
+    const viewportOffsetTop = window.visualViewport?.offsetTop ?? 0
+    const margin = 8
+    const gap = 4
+    const desiredWidth = 208
+    const width = Math.min(desiredWidth, viewportWidth - margin * 2)
+    const left = Math.max(
+      viewportOffsetLeft + margin,
+      Math.min(
+        viewportOffsetLeft + viewportWidth - margin - width,
+        rect.right + viewportOffsetLeft - width,
+      ),
+    )
+    const below = viewportOffsetTop + viewportHeight - rect.bottom - gap - margin
+    const above = rect.top - viewportOffsetTop - gap - margin
+    const openUp = below < 180 && above > below
+    const available = openUp ? above : below
+    const maxHeight = Math.max(136, Math.min(256, available))
+    const top = openUp
+      ? Math.max(viewportOffsetTop + margin, rect.top + viewportOffsetTop - gap - maxHeight)
+      : Math.min(
+          viewportOffsetTop + viewportHeight - margin - maxHeight,
+          rect.bottom + viewportOffsetTop + gap,
+        )
+
+    setUnitMenuPosition({ left, top, width, maxHeight })
+  }, [])
   const selectedChoiceId = useMemo(() => {
     const unitChoice = dropdownChoices.find(choice => choice.unit === customUnit && choice.group !== 'servings')
     const servingChoice = dropdownChoices.find(choice => choice.unit === customUnit)
     return unitChoice?.id ?? servingChoice?.id ?? ''
   }, [dropdownChoices, customUnit])
+
+  useEffect(() => {
+    if (!unitMenuOpen) return
+    updateUnitMenuPosition()
+
+    const viewport = window.visualViewport
+    window.addEventListener('resize', updateUnitMenuPosition)
+    window.addEventListener('scroll', updateUnitMenuPosition, true)
+    viewport?.addEventListener('resize', updateUnitMenuPosition)
+    viewport?.addEventListener('scroll', updateUnitMenuPosition)
+    return () => {
+      window.removeEventListener('resize', updateUnitMenuPosition)
+      window.removeEventListener('scroll', updateUnitMenuPosition, true)
+      viewport?.removeEventListener('resize', updateUnitMenuPosition)
+      viewport?.removeEventListener('scroll', updateUnitMenuPosition)
+    }
+  }, [unitMenuOpen, updateUnitMenuPosition])
 
   // Reset state when the variant identity changes. Callers swap variants by
   // re-rendering with a different `variant` prop; we key on the storage
@@ -459,6 +520,31 @@ export default function QuantityPicker({
     setUnitMenuOpen(false)
   }
 
+  const openUnitMenu = () => {
+    updateUnitMenuPosition()
+    setUnitMenuOpen(v => !v)
+  }
+
+  const inlineUnitMenu = unitMenuOpen && unitMenuPosition && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          role="listbox"
+          className="fixed z-[9999] overflow-y-auto overflow-x-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
+          style={{
+            left: unitMenuPosition.left,
+            top: unitMenuPosition.top,
+            width: unitMenuPosition.width,
+            maxHeight: unitMenuPosition.maxHeight,
+          }}
+        >
+          <ChoiceSection title="Servings" choices={choiceGroups.servings} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
+          <ChoiceSection title="Weight" choices={choiceGroups.weight} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
+          <ChoiceSection title="Volume" choices={choiceGroups.volume} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
+        </div>,
+        document.body,
+      )
+    : null
+
   // ── Render ────────────────────────────────────────────────────────────
 
   return (
@@ -476,8 +562,9 @@ export default function QuantityPicker({
           />
           <div className="relative min-w-[88px] flex-1 overflow-visible">
             <button
+              ref={unitButtonRef}
               type="button"
-              onClick={() => setUnitMenuOpen(v => !v)}
+              onClick={openUnitMenu}
               className="flex h-full w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-semibold text-zinc-800 outline-none transition-colors hover:bg-white focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:focus:border-zinc-500 dark:[color-scheme:dark]"
               aria-haspopup="listbox"
               aria-expanded={unitMenuOpen}
@@ -485,16 +572,7 @@ export default function QuantityPicker({
               <span className="truncate">{unitLabel(customUnit)}</span>
               <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${unitMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-            {unitMenuOpen && (
-              <div
-                role="listbox"
-                className="absolute right-0 top-full z-[100] mt-1 max-h-64 w-52 overflow-y-auto overflow-x-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-              >
-                <ChoiceSection title="Servings" choices={choiceGroups.servings} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
-                <ChoiceSection title="Weight" choices={choiceGroups.weight} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
-                <ChoiceSection title="Volume" choices={choiceGroups.volume} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
-              </div>
-            )}
+            {inlineUnitMenu}
           </div>
         </div>
       ) : mode === 'quick' ? (
