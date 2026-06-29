@@ -24,12 +24,57 @@ describe('servingOptions', () => {
 
     assert.ok(cupServing)
     assert.ok(cupUnit)
+    assert.equal(groups.servings.some(choice => choice.label === '100 g'), false)
     assert.equal(cupServing.quantity, 1)
     assert.equal(cupServing.unit, 'cup')
 
     const effective = variantForServingChoice({ ...variant, nutrition }, cupUnit)
     assert.equal(Math.round(scalingFactor(effective, 1, 'cup') * 100), 122)
     assert.equal(Math.round(scalingFactor(effective, 0.5, 'cup') * 100), 61)
+  })
+
+  it('uses a volume-only display label plus gram serving weight as a bridge', () => {
+    const variant = {
+      servingSize: 100,
+      servingUnit: 'g' as const,
+      displayLabel: '1 cup',
+      gramsPerServing: 240,
+      nutrition,
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+    const cupServing = groups.servings.find(choice => choice.label === '1 cup')
+    const cupUnit = groups.volume.find(choice => choice.unit === 'cup')
+
+    assert.ok(cupServing)
+    assert.ok(cupUnit)
+    assert.equal(groups.servings.some(choice => choice.label === '100 g'), false)
+    assert.equal(cupServing.quantity, 1)
+    assert.equal(cupServing.unit, 'cup')
+
+    const effective = variantForServingChoice({ ...variant, nutrition }, cupServing)
+    assert.equal(Math.round(scalingFactor(effective, 1, 'cup') * 100), 240)
+  })
+
+  it('hides numeric-only primary labels but keeps meaningful discrete servings', () => {
+    const variant = {
+      servingSize: 1,
+      servingUnit: 'each' as const,
+      displayLabel: '1',
+      alternateServings: [{ label: '1 large (50g)', multiplier: 1 }],
+      nutrition,
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+
+    assert.equal(groups.servings.some(choice => choice.label === '1'), false)
+    assert.ok(groups.servings.some(choice =>
+      choice.label === '1 large (50g)' &&
+      choice.quantity === 1 &&
+      choice.unit === 'each' &&
+      choice.gramsPerServing === 50
+    ))
+    assert.ok(groups.weight.some(choice => choice.unit === 'g'))
   })
 
   it('uses native cup plus gramsPerServing as a weight bridge', () => {
