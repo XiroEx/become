@@ -728,6 +728,7 @@ function TimelineClient() {
     if (!addFoodFor) return
     const useTag = tag || addFoodFor.tag
     const extra = entry as typeof entry & {
+      servingLabel?: string
       loggedQuantity?: number
       loggedUnit?: string
       loggedGramsPerServing?: number
@@ -743,6 +744,7 @@ function TimelineClient() {
       servingUnit: entry.servingUnit,
       servings: entry.servings,
       nutrition: entry.nutrition,
+      servingLabel: extra.servingLabel,
       loggedQuantity: extra.loggedQuantity,
       loggedUnit: extra.loggedUnit,
       loggedGramsPerServing: extra.loggedGramsPerServing,

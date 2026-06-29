@@ -202,6 +202,32 @@ function preferredServingLabel(food: FoodResult): string {
   return base
 }
 
+function variantFriendlyLabel(variant: FoodVariant | null): string {
+  if (!variant) return ''
+  if (variant.displayLabel?.trim()) return prettifyUnitCodes(variant.displayLabel.trim())
+  const alt = variant.alternateServings?.find(s => s.label?.trim())
+  return alt ? prettifyUnitCodes(alt.label.trim()) : ''
+}
+
+function positiveDecimal(value: string): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function scaleNutrition(n: FoodNutrition | undefined, factor: number): FoodNutrition {
+  const safe = Number.isFinite(factor) && factor > 0 ? factor : 0
+  return {
+    calories: (n?.calories ?? 0) * safe,
+    protein: (n?.protein ?? 0) * safe,
+    carbs: (n?.carbs ?? 0) * safe,
+    fats: (n?.fats ?? 0) * safe,
+    fiber: n?.fiber != null ? n.fiber * safe : undefined,
+    sugar: n?.sugar != null ? n.sugar * safe : undefined,
+    sodium: n?.sodium != null ? n.sodium * safe : undefined,
+    saturatedFat: n?.saturatedFat != null ? n.saturatedFat * safe : undefined,
+  }
+}
+
 function titleCaseTag(tag: string): string {
   return tag
     .split(/[-_\s]+/)
@@ -264,8 +290,12 @@ export default function FoodSearchModal({
   // first value (which it does on mount), then a complete spec of what the user
   // is about to log.
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
+  const [addQuantity, setAddQuantity] = useState('1')
+  const [servingLabelDraft, setServingLabelDraft] = useState('')
+  const [servingLabelEditing, setServingLabelEditing] = useState(false)
   // Index into selectedFood.variants — defaults to the variant marked isDefault.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
+  const [variantMenuOpen, setVariantMenuOpen] = useState(false)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
   const addingRef = useRef(false)
@@ -549,6 +579,18 @@ export default function FoodSearchModal({
     if (!selectedFood) return null
     return getActiveVariant(selectedFood, selectedVariantIdx)
   }, [selectedFood, selectedVariantIdx])
+  const addQuantityMultiplier = positiveDecimal(addQuantity)
+  const previewNutrition = useMemo(
+    () => scaleNutrition(selection?.nutrition, addQuantityMultiplier || 1),
+    [selection, addQuantityMultiplier],
+  )
+
+  useEffect(() => {
+    setServingLabelDraft(variantFriendlyLabel(activeVariant))
+    setServingLabelEditing(false)
+    setAddQuantity('1')
+    setVariantMenuOpen(false)
+  }, [selectedFood?._id, selectedVariantIdx, activeVariant])
 
   // Copy-on-pick: external (usda-/off-) results get persisted to our Food
   // collection before being logged. Returns the resolved foodId + variants.
@@ -809,7 +851,7 @@ export default function FoodSearchModal({
   }
 
   const handleAddFood = async () => {
-    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0) return
+    if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0) return
     if (addingRef.current) return
     addingRef.current = true
     setAdding(true)
@@ -830,9 +872,10 @@ export default function FoodSearchModal({
 
       // Build the legacy IFoodEntry shape, but extend with the new
       // logged{Quantity,Unit,GramsPerServing,MlPerServing} fields the API
-      // tolerates. The math now lives in `selection`: nutrition is scaled,
-      // and `multiplier` plays the role of "servings" for back-compat readers.
+      // tolerates. Nutrition stays as a per-serving snapshot; `servings`
+      // carries the selected amount and quantity multiplier for server totals.
       const entry: IFoodEntry & {
+        servingLabel?: string
         loggedQuantity?: number
         loggedUnit?: Unit
         loggedGramsPerServing?: number
@@ -844,38 +887,25 @@ export default function FoodSearchModal({
         variantName: resolvedVariantName,
         name: selectedFood.name,
         brand: selectedFood.brand,
+        servingLabel: servingLabelDraft.trim() || undefined,
         servingSize: activeVariant.servingSize,
         servingUnit: activeVariant.servingUnit,
         // `servings` here is the back-compat "× per-variant-serving" multiplier.
         // New consumers should prefer loggedQuantity + loggedUnit.
-        servings: selection.multiplier,
+        servings: selection.multiplier * addQuantityMultiplier,
         nutrition: {
-          calories: selection.nutrition.calories,
-          protein: selection.nutrition.protein,
-          carbs: selection.nutrition.carbs,
-          fats: selection.nutrition.fats,
-          fiber: selection.nutrition.fiber,
-          sugar: selection.nutrition.sugar,
-          sodium: selection.nutrition.sodium,
+          calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
+          protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
+          carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
+          fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
+          fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
+          sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
+          sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
         },
-        loggedQuantity: selection.quantity,
+        loggedQuantity: selection.quantity * addQuantityMultiplier,
         loggedUnit: selection.unit,
-        loggedGramsPerServing: activeVariant.gramsPerServing,
-        loggedMlPerServing: activeVariant.mlPerServing,
-      }
-
-      // Per-serving nutrition is what the API expects; the multiplier (`servings`)
-      // does the scaling on the server. Recompute the per-serving snapshot from
-      // the variant rather than from the scaled selection so the value stays
-      // stable across re-edits at any quantity.
-      entry.nutrition = {
-        calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
-        protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
-        carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
-        fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
-        fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
-        sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
-        sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
+        loggedGramsPerServing: selection.gramsPerServing ?? activeVariant.gramsPerServing,
+        loggedMlPerServing: selection.mlPerServing ?? activeVariant.mlPerServing,
       }
 
       // Compute loggedAt — only sent in log mode. When the user picked a date
@@ -904,6 +934,9 @@ export default function FoodSearchModal({
       )
       setSelectedFood(null)
       setSelection(null)
+      setAddQuantity('1')
+      setServingLabelDraft('')
+      setServingLabelEditing(false)
       setSelectedVariantIdx(0)
       setCustomDate(null)
       setDateEditOpen(false)
@@ -1386,7 +1419,10 @@ export default function FoodSearchModal({
                       food.isSaved !== true &&
                       prev?.isSaved === true
                     return (
-                  <div key={food._id}>
+                  <div
+                    key={food._id}
+                    className={`relative ${selectedFood?._id === food._id ? 'z-[70]' : 'z-0'}`}
+                  >
                     {showMyFoodsHeader && (
                       <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-amber-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 backdrop-blur dark:bg-amber-900/30 dark:text-amber-200">
                         <Bookmark className="h-3 w-3 fill-current" />
@@ -1514,11 +1550,11 @@ export default function FoodSearchModal({
                       <AnimatePresence>
                         {selectedFood?._id === food._id && (
                           <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
+                            initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+                            animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+                            exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
                             transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
+                            className="relative z-[80] overflow-visible"
                           >
                             <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/50">
                               {/* Variant picker — only shown when a food has >1 variant */}
@@ -1527,33 +1563,54 @@ export default function FoodSearchModal({
                                   <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                                     Preparation
                                   </p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {food.variants.map((variant, vIdx) => {
-                                      const isActive = selectedVariantIdx === vIdx
-                                      return (
-                                        <button
-                                          key={variant._id ?? vIdx}
-                                          onClick={() => {
-                                            setSelectedVariantIdx(vIdx)
-                                            // QuantityPicker resets to its
-                                            // defaults on variant change.
-                                            setSelection(null)
-                                          }}
-                                          className={`flex flex-col items-start gap-0.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
-                                            isActive
-                                              ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
-                                              : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                                          }`}
-                                        >
-                                          <span className="font-semibold">{variant.name}</span>
-                                          <span className={`text-[10px] tabular-nums ${isActive ? 'opacity-80' : 'opacity-70'}`}>
-                                            {Math.round(variant.nutrition.calories)} cal
-                                            {' · '}
-                                            {Math.round(variant.nutrition.protein * 10) / 10}g protein
-                                          </span>
-                                        </button>
-                                      )
-                                    })}
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setVariantMenuOpen(open => !open)}
+                                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-50 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                                      aria-haspopup="listbox"
+                                      aria-expanded={variantMenuOpen}
+                                    >
+                                      <span className="min-w-0 truncate">{activeVariant?.name ?? 'Select preparation'}</span>
+                                      <span className="flex shrink-0 items-center gap-2 text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
+                                        {activeVariant && (
+                                          <>
+                                            {Math.round(activeVariant.nutrition.calories)} cal
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${variantMenuOpen ? 'rotate-180' : ''}`} />
+                                          </>
+                                        )}
+                                      </span>
+                                    </button>
+                                    {variantMenuOpen && (
+                                      <div
+                                        role="listbox"
+                                        className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+                                      >
+                                        {food.variants.map((variant, vIdx) => {
+                                          const isActive = selectedVariantIdx === vIdx
+                                          return (
+                                            <button
+                                              key={variant._id ?? vIdx}
+                                              type="button"
+                                              role="option"
+                                              aria-selected={isActive}
+                                              onClick={() => {
+                                                setSelectedVariantIdx(vIdx)
+                                                setSelection(null)
+                                                setVariantMenuOpen(false)
+                                              }}
+                                              className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                                            >
+                                              <Check className={`h-4 w-4 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0'}`} />
+                                              <span className="min-w-0 flex-1 truncate font-medium">{variant.name}</span>
+                                              <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+                                                {Math.round(variant.nutrition.calories)} cal
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               )}
@@ -1562,31 +1619,72 @@ export default function FoodSearchModal({
                                   Resolves nutrition for any (quantity, unit) within the
                                   variant's domain (or its bridged cross-family). */}
                               {selectedFood?._id === food._id && activeVariant && (
-                                <div className="mb-2.5">
-                                  <QuantityPicker
-                                    variant={activeVariant}
-                                    onChange={setSelection}
-                                  />
-                                </div>
-                              )}
+                                <>
+                                  {(servingLabelDraft || servingLabelEditing) && (
+                                    <div className="mb-2 flex min-h-7 items-center gap-2">
+                                      {servingLabelEditing ? (
+                                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                                          <input
+                                            type="text"
+                                            value={servingLabelDraft}
+                                            onChange={(e) => setServingLabelDraft(e.target.value)}
+                                            onBlur={() => setServingLabelEditing(false)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                setServingLabelEditing(false)
+                                              }
+                                            }}
+                                            autoFocus
+                                            className="min-w-0 basis-2/3 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                                            aria-label="Friendly serving name"
+                                          />
+                                          <span className="inline-flex min-w-0 basis-1/3 items-center justify-center gap-1 rounded-full bg-zinc-100 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                                            <PencilLine className="h-3 w-3" />
+                                            <span className="truncate">Label only</span>
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <span className="min-w-0 truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                                          {servingLabelDraft}
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setServingLabelEditing(true)}
+                                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                                        aria-label="Edit friendly serving name"
+                                      >
+                                        <PencilLine className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
 
-                              {/* Live nutrition preview from the resolved selection. */}
-                              <div className="flex items-center justify-end gap-3">
-                                <div className="text-right">
-                                  <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
-                                    <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                      {Math.round(selection?.nutrition.calories ?? 0)} cal
-                                    </span>
-                                  </p>
-                                  <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                    P: {Math.round(selection?.nutrition.protein ?? 0)}g
-                                    {' '}&middot;{' '}
-                                    C: {Math.round(selection?.nutrition.carbs ?? 0)}g
-                                    {' '}&middot;{' '}
-                                    F: {Math.round(selection?.nutrition.fats ?? 0)}g
-                                  </p>
-                                </div>
-                              </div>
+                                  <div className="mb-2.5 grid grid-cols-3 items-start gap-2">
+                                    <div className="col-span-2">
+                                      <QuantityPicker
+                                        variant={activeVariant}
+                                        layout="inline"
+                                        onChange={setSelection}
+                                      />
+                                    </div>
+                                    <div className="pt-0.5 text-right">
+                                      <p className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400">
+                                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                                          {Math.round(previewNutrition.calories)} cal
+                                        </span>
+                                      </p>
+                                      <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                                        P: {Math.round(previewNutrition.protein)}g
+                                        {' '}&middot;{' '}
+                                        C: {Math.round(previewNutrition.carbs)}g
+                                        {' '}&middot;{' '}
+                                        F: {Math.round(previewNutrition.fats)}g
+                                      </p>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                               {/* Date-only picker — defaults to "Now" (today @ current
                                   wall-clock time). Tap to backdate to a past day. No time
                                   is ever surfaced: submission grafts the current wall-clock
@@ -1594,39 +1692,44 @@ export default function FoodSearchModal({
                                   carry the page-supplied plannedDate). */}
                               {!isPlanMode && (
                                 <div className="mt-2.5 flex flex-col gap-2">
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => setDateEditOpen(v => !v)}
-                                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                                        customDate
-                                          ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
-                                          : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
-                                      }`}
-                                      aria-expanded={dateEditOpen}
-                                      aria-label={customDate ? `Logging for ${formatDatePillLabel(customDate)}, tap to change date` : 'Log date: now, tap to choose a past date'}
-                                    >
-                                      <CalendarDays className="h-3 w-3" />
-                                      <span className="tabular-nums">
-                                        {formatDatePillLabel(customDate)}
-                                      </span>
-                                    </button>
-                                    {customDate && (
+                                  <div className="grid grid-cols-4 items-center gap-2">
+                                    <div className="col-span-3 flex min-w-0 items-center gap-1.5">
                                       <button
                                         type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          setCustomDate(null)
-                                          setDateEditOpen(false)
-                                        }}
-                                        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
-                                        aria-label="Clear date"
+                                        onClick={() => setDateEditOpen(v => !v)}
+                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                          customDate
+                                            ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60'
+                                            : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600'
+                                        }`}
+                                        aria-expanded={dateEditOpen}
+                                        aria-label={customDate ? `Logging for ${formatDatePillLabel(customDate)}, tap to change date` : 'Log date: now, tap to choose a past date'}
                                       >
-                                        <X className="h-3 w-3" />
+                                        <CalendarDays className="h-3 w-3" />
+                                        <span className="tabular-nums">
+                                          {formatDatePillLabel(customDate)}
+                                        </span>
                                       </button>
-                                    )}
-                                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                                      {customDate ? 'Logged on chosen day' : 'Logged now'}
+                                      {customDate && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setCustomDate(null)
+                                            setDateEditOpen(false)
+                                          }}
+                                          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+                                          aria-label="Clear date"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      )}
+                                      <span className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">
+                                        {customDate ? 'Logged on chosen day' : 'Logged now'}
+                                      </span>
+                                    </div>
+                                    <span className="min-w-0 self-end text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                      Quantity
                                     </span>
                                   </div>
                                   <AnimatePresence initial={false}>
@@ -1721,29 +1824,44 @@ export default function FoodSearchModal({
                                   )}
                                 </div>
                               )}
-                              <button
-                                onClick={handleAddFood}
-                                disabled={adding || !selection || selection.quantity <= 0}
-                                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                              >
-                                {adding ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    {isPlanMode ? 'Planning…' : 'Adding…'}
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="h-4 w-4" />
-                                    {isPlanMode
-                                      ? (
-                                          repeatOpen && repeatCount > 1
-                                            ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
-                                            : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
-                                        )
-                                      : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
-                                  </>
-                                )}
-                              </button>
+                              <div className="mt-2 grid grid-cols-4 gap-2">
+                                <button
+                                  onClick={handleAddFood}
+                                  disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
+                                  className="col-span-3 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                >
+                                  {adding ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      {isPlanMode ? 'Planning…' : 'Adding…'}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="h-4 w-4" />
+                                      {isPlanMode
+                                        ? (
+                                            repeatOpen && repeatCount > 1
+                                              ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
+                                              : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                          )
+                                        : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                    </>
+                                  )}
+                                </button>
+                                <input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  inputMode="decimal"
+                                  value={addQuantity}
+                                  onChange={(e) => setAddQuantity(e.target.value)}
+                                  onBlur={() => {
+                                    if (positiveDecimal(addQuantity) <= 0) setAddQuantity('1')
+                                  }}
+                                  aria-label="Quantity"
+                                  className="min-w-0 rounded-lg border border-zinc-200 bg-white px-2 text-center text-sm font-semibold tabular-nums text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                                />
+                              </div>
                             </div>
                           </motion.div>
                         )}

@@ -11,6 +11,28 @@ interface ImagePayload {
   dataUrl: string // "data:image/png;base64,..."
 }
 
+const ALLOWED_TYPES = new Set(['bug', 'feature', 'general', 'nutrition_generation'])
+
+function sanitizeMetadata(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  try {
+    const json = JSON.stringify(value)
+    if (json.length > 12000) {
+      return { truncated: true, reason: 'metadata_too_large' }
+    }
+    return JSON.parse(json) as Record<string, unknown>
+  } catch {
+    return { dropped: true, reason: 'metadata_not_serializable' }
+  }
+}
+
+function typeLabel(type: string): string {
+  return type
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
 export async function POST(request: NextRequest) {
   const auth = await verifyAuth(request)
   if (!auth.success) {
@@ -18,10 +40,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { type, message, images } = await request.json() as {
+    const { type, message, images, metadata } = await request.json() as {
       type?: string
       message?: string
       images?: ImagePayload[]
+      metadata?: unknown
     }
 
     if (!message?.trim()) {
@@ -30,14 +53,16 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const feedbackType = type || 'general'
+    const feedbackType = type && ALLOWED_TYPES.has(type) ? type : 'general'
     const trimmedMessage = message.trim()
+    const safeMetadata = sanitizeMetadata(metadata)
 
     const feedback = await Feedback.create({
       userId: auth.userId,
       email: auth.email,
       type: feedbackType,
       message: trimmedMessage,
+      ...(safeMetadata ? { metadata: safeMetadata } : {}),
     })
 
     // Build nodemailer CID attachments from base64 data URLs
@@ -67,12 +92,12 @@ export async function POST(request: NextRequest) {
           .join('')}</div>`
       : ''
 
-    const typeLabel = feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)
+    const label = typeLabel(feedbackType)
 
     sendEmail({
       to: 'george@redbtn.io',
       from: '"BECOME" <agent@redbtn.io>',
-      subject: `[${appName}] New ${typeLabel} Feedback from ${auth.email}`,
+      subject: `[${appName}] New ${label} Feedback from ${auth.email}`,
       attachments,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -81,7 +106,7 @@ export async function POST(request: NextRequest) {
           </div>
           <div style="background: #fff; padding: 24px; border: 1px solid #e4e4e7; border-top: none; border-radius: 0 0 12px 12px;">
             <p style="margin: 0 0 8px; font-size: 14px; color: #71717a;">
-              <strong>Type:</strong> ${typeLabel}
+              <strong>Type:</strong> ${label}
             </p>
             <p style="margin: 0 0 16px; font-size: 14px; color: #71717a;">
               <strong>From:</strong> ${auth.email}

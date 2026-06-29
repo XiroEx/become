@@ -53,7 +53,6 @@ const ML: Record<'ml' | 'fl_oz' | 'cup' | 'tbsp' | 'tsp', number> = {
 
 const MASS_UNITS = new Set<Unit>(['g', 'oz', 'lb'])
 const VOLUME_UNITS = new Set<Unit>(['ml', 'fl_oz', 'cup', 'tbsp', 'tsp'])
-const DISCRETE_UNITS = new Set<Unit>(['each', 'slice', 'scoop', 'serving'])
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -380,7 +379,7 @@ const UNIT_ALIASES: Record<string, Unit> = {
   'ml': 'ml', 'milliliter': 'ml', 'milliliters': 'ml',
   'millilitre': 'ml', 'millilitres': 'ml', 'mls': 'ml',
   'floz': 'fl_oz', 'fl_oz': 'fl_oz', 'fluidounce': 'fl_oz', 'fluidounces': 'fl_oz',
-  'cup': 'cup', 'cups': 'cup', 'c': 'cup',
+  'cup': 'cup', 'cups': 'cup', 'c': 'cup', 'c.': 'cup',
   'tbsp': 'tbsp', 'tbs': 'tbsp', 'tablespoon': 'tbsp', 'tablespoons': 'tbsp', 'tbl': 'tbsp',
   'tsp': 'tsp', 'teaspoon': 'tsp', 'teaspoons': 'tsp',
   // discrete
