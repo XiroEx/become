@@ -85,14 +85,15 @@ export function findBestBridgeForUnit(
 function buildServingChoices(variant: ServingOptionVariant): ServingChoice[] {
   const choices: ServingChoice[] = []
   const native = variant.servingUnit as Unit
+  const primaryLabel = variant.displayLabel || formatQuantity(primaryQuantity(variant), native)
   const primary = choiceFromLabel({
     id: 'serving-primary',
-    label: variant.displayLabel || formatQuantity(primaryQuantity(variant), native),
+    label: primaryLabel,
     fallbackQuantity: primaryQuantity(variant),
     fallbackUnit: native,
     variant,
   })
-  if (primary) choices.push(primary)
+  if (primary && shouldShowServingChoice(primary, primaryLabel, variant, true)) choices.push(primary)
 
   for (const [idx, alt] of (variant.alternateServings ?? []).entries()) {
     if (!alt?.label || !(alt.multiplier > 0)) continue
@@ -104,7 +105,7 @@ function buildServingChoices(variant: ServingOptionVariant): ServingChoice[] {
       fallbackUnit: native,
       variant,
     })
-    if (choice) choices.push(choice)
+    if (choice && shouldShowServingChoice(choice, alt.label, variant, false)) choices.push(choice)
   }
 
   return dedupeChoices(choices)
@@ -121,7 +122,7 @@ function choiceFromLabel(args: {
   if (!label || !(args.fallbackQuantity > 0)) return null
 
   const parsed = parseServingLabel(label)
-  const bridge = deriveBridge(args.variant, parsed)
+  const bridge = deriveBridge(args.variant, parsed, args.fallbackQuantity, args.fallbackUnit)
 
   let quantity = args.fallbackQuantity
   let unit = args.fallbackUnit
@@ -129,9 +130,15 @@ function choiceFromLabel(args: {
   if (parsed.volume && bridge) {
     quantity = parsed.volume.value
     unit = parsed.volume.unit
+  } else if (DISCRETE_UNITS.has(args.fallbackUnit) && hasServingWords(label)) {
+    quantity = args.fallbackQuantity
+    unit = args.fallbackUnit
   } else if (parsed.mass) {
     quantity = parsed.mass.value
     unit = parsed.mass.unit
+  } else if (parsed.volume) {
+    quantity = parsed.volume.value
+    unit = parsed.volume.unit
   } else if (DISCRETE_UNITS.has(args.fallbackUnit)) {
     quantity = args.fallbackQuantity
     unit = args.fallbackUnit
@@ -204,7 +211,19 @@ function bestDerivedBridge(
   choices: ServingChoice[],
 ): Pick<ServingChoice, 'gramsPerServing' | 'mlPerServing' | 'derivedFromLabel'> | null {
   const nativeFamily = familyOf(variant.servingUnit as Unit)
-  const desired = nativeFamily === 'mass' || nativeFamily === 'discrete' ? 'mlPerServing' : 'gramsPerServing'
+  if (nativeFamily === 'discrete') {
+    const match = choices.find(choice => choice.gramsPerServing != null || choice.mlPerServing != null)
+    if (match) {
+      return {
+        gramsPerServing: match.gramsPerServing,
+        mlPerServing: match.mlPerServing,
+        derivedFromLabel: match.derivedFromLabel,
+      }
+    }
+    return null
+  }
+
+  const desired = nativeFamily === 'mass' ? 'mlPerServing' : 'gramsPerServing'
   const match = choices.find(choice => choice[desired] != null)
   if (match) {
     return {
@@ -238,31 +257,53 @@ function parseServingLabel(label: string): {
 function deriveBridge(
   variant: ServingOptionVariant,
   parsed: ReturnType<typeof parseServingLabel>,
+  fallbackQuantity: number,
+  fallbackUnit: Unit,
 ): Pick<ServingChoice, 'gramsPerServing' | 'mlPerServing'> | null {
-  if (!parsed.mass || !parsed.volume) return null
-
-  const labelGrams = convert(parsed.mass.value, parsed.mass.unit, 'g')
-  const labelMl = convert(parsed.volume.value, parsed.volume.unit, 'ml')
-  if (!(labelGrams > 0) || !(labelMl > 0)) return null
+  const labelGrams = parsed.mass ? convert(parsed.mass.value, parsed.mass.unit, 'g') : null
+  const labelMl = parsed.volume ? convert(parsed.volume.value, parsed.volume.unit, 'ml') : null
 
   const native = variant.servingUnit as Unit
   const nativeFamily = familyOf(native)
 
-  if (nativeFamily === 'mass') {
+  if (labelGrams != null && labelMl != null && labelGrams > 0 && labelMl > 0 && nativeFamily === 'mass') {
     const nativeGrams = convert(variant.servingSize, native, 'g')
     return { mlPerServing: (nativeGrams / labelGrams) * labelMl }
   }
 
-  if (nativeFamily === 'volume') {
+  if (labelGrams != null && labelMl != null && labelGrams > 0 && labelMl > 0 && nativeFamily === 'volume') {
     const nativeMl = convert(variant.servingSize, native, 'ml')
     return { gramsPerServing: (nativeMl / labelMl) * labelGrams }
   }
 
-  if (nativeFamily === 'discrete') {
+  if (labelGrams != null && labelMl != null && labelGrams > 0 && labelMl > 0 && nativeFamily === 'discrete') {
     const grams = variant.gramsPerServing
     const ml = variant.mlPerServing
     if (grams != null && grams > 0) return { mlPerServing: (grams / labelGrams) * labelMl }
     if (ml != null && ml > 0) return { gramsPerServing: (ml / labelMl) * labelGrams }
+    return {
+      gramsPerServing: bridgePerNativeServing(labelGrams, variant, fallbackQuantity, fallbackUnit),
+      mlPerServing: bridgePerNativeServing(labelMl, variant, fallbackQuantity, fallbackUnit),
+    }
+  }
+
+  if (labelMl != null && labelMl > 0 && nativeFamily === 'mass' && variant.gramsPerServing != null && variant.gramsPerServing > 0) {
+    const nativeGrams = convert(variant.servingSize, native, 'g')
+    return { mlPerServing: (nativeGrams / variant.gramsPerServing) * labelMl }
+  }
+
+  if (labelGrams != null && labelGrams > 0 && nativeFamily === 'volume' && variant.mlPerServing != null && variant.mlPerServing > 0) {
+    const nativeMl = convert(variant.servingSize, native, 'ml')
+    return { gramsPerServing: (nativeMl / variant.mlPerServing) * labelGrams }
+  }
+
+  if (nativeFamily === 'discrete') {
+    if (labelGrams != null && labelGrams > 0) {
+      return { gramsPerServing: bridgePerNativeServing(labelGrams, variant, fallbackQuantity, fallbackUnit) }
+    }
+    if (labelMl != null && labelMl > 0) {
+      return { mlPerServing: bridgePerNativeServing(labelMl, variant, fallbackQuantity, fallbackUnit) }
+    }
   }
 
   return null
@@ -298,6 +339,51 @@ function primaryQuantity(variant: ServingOptionVariant): number {
     return variant.mlPerServing
   }
   return variant.servingSize
+}
+
+function bridgePerNativeServing(
+  labelAmount: number,
+  variant: ServingOptionVariant,
+  fallbackQuantity: number,
+  fallbackUnit: Unit,
+): number {
+  const native = variant.servingUnit as Unit
+  if (fallbackUnit === native && fallbackQuantity > 0 && variant.servingSize > 0) {
+    return (labelAmount / fallbackQuantity) * variant.servingSize
+  }
+  return labelAmount
+}
+
+function shouldShowServingChoice(
+  choice: ServingChoice,
+  rawLabel: string,
+  variant: ServingOptionVariant,
+  isPrimary: boolean,
+): boolean {
+  const label = prettifyUnitCodes(rawLabel).trim()
+  if (!label || isBareNumberLabel(label)) return false
+
+  const native = variant.servingUnit as Unit
+  const nativeFamily = familyOf(native)
+  if (isPrimary && (nativeFamily === 'mass' || nativeFamily === 'volume') && familyOf(choice.unit) === nativeFamily) {
+    return false
+  }
+
+  return true
+}
+
+function isBareNumberLabel(label: string): boolean {
+  return parseQuantityString(`${label} g`) != null && !/[a-z]/i.test(label)
+}
+
+function hasServingWords(label: string): boolean {
+  const withoutMeasuredAmounts = label
+    .replace(QUANTITY_WITH_UNIT_RE, ' ')
+    .replace(/[()\[\],.]/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ')
+    .replace(/[½¼¾⅓⅔⅛⅜⅝⅞]/g, ' ')
+    .trim()
+  return /[a-z]/i.test(withoutMeasuredAmounts)
 }
 
 function dedupeChoices(choices: ServingChoice[]): ServingChoice[] {

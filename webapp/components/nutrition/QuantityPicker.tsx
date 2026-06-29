@@ -310,6 +310,7 @@ export default function QuantityPicker({
   const dropdownChoices = choiceGroups.all
   const isInline = layout === 'inline'
   const primaryOption = quickOptions[0]
+  const inlineDefaultChoice = choiceGroups.servings[0] ?? null
 
   // ── Initial state derivation ──────────────────────────────────────────
   // If `initial` matches one of the quick chips, start in chip mode; otherwise
@@ -327,15 +328,16 @@ export default function QuantityPicker({
       // Render the unbridged number portion only — the unit dropdown holds the unit.
       return formatNumberForInput(initial.quantity)
     }
-    if (isInline) return formatNumberForInput(primaryOption?.quantity ?? variant.servingSize)
+    if (isInline) return formatNumberForInput(inlineDefaultChoice?.quantity ?? primaryOption?.quantity ?? variant.servingSize)
     return ''
   })
 
   const [customUnit, setCustomUnit] = useState<Unit>(() => {
     if (initial) return initial.unit
-    if (isInline) return primaryOption?.unit ?? (variant.servingUnit as Unit)
+    if (isInline) return inlineDefaultChoice?.unit ?? primaryOption?.unit ?? (variant.servingUnit as Unit)
     return defaultCustomUnit(variant, weightPref)
   })
+  const [selectedInlineChoiceId, setSelectedInlineChoiceId] = useState(() => isInline ? (inlineDefaultChoice?.id ?? '') : '')
   const [unitMenuOpen, setUnitMenuOpen] = useState(false)
   const unitButtonRef = useRef<HTMLButtonElement>(null)
   const [unitMenuPosition, setUnitMenuPosition] = useState<UnitMenuPosition | null>(null)
@@ -373,11 +375,25 @@ export default function QuantityPicker({
 
     setUnitMenuPosition({ left, top, width, maxHeight })
   }, [])
-  const selectedChoiceId = useMemo(() => {
-    const unitChoice = dropdownChoices.find(choice => choice.unit === customUnit && choice.group !== 'servings')
-    const servingChoice = dropdownChoices.find(choice => choice.unit === customUnit)
-    return unitChoice?.id ?? servingChoice?.id ?? ''
-  }, [dropdownChoices, customUnit])
+  const selectedChoice = useMemo(() => {
+    const numeric = parseLeadingNumber(customValue)
+    const explicit = dropdownChoices.find(choice => choice.id === selectedInlineChoiceId)
+    if (explicit && explicit.unit === customUnit) {
+      if (explicit.group !== 'servings') return explicit
+      if (numeric != null && Math.abs(explicit.quantity - numeric) < QTY_EPSILON) return explicit
+    }
+
+    if (numeric != null) {
+      const servingChoice = choiceGroups.servings.find(choice =>
+        choice.unit === customUnit && Math.abs(choice.quantity - numeric) < QTY_EPSILON
+      )
+      if (servingChoice) return servingChoice
+    }
+
+    return dropdownChoices.find(choice => choice.group !== 'servings' && choice.unit === customUnit) ?? null
+  }, [choiceGroups.servings, customUnit, customValue, dropdownChoices, selectedInlineChoiceId])
+  const selectedChoiceId = selectedChoice?.id ?? ''
+  const unitButtonLabel = selectedChoice?.group === 'servings' ? selectedChoice.label : unitLabel(customUnit)
 
   useEffect(() => {
     if (!unitMenuOpen) return
@@ -408,10 +424,11 @@ export default function QuantityPicker({
 
     setMode(isInline ? 'custom' : 'quick')
     setActiveOptionId(quickOptions[0]?.id ?? 'primary')
-    setCustomValue(isInline ? formatNumberForInput(quickOptions[0]?.quantity ?? variant.servingSize) : '')
-    setCustomUnit(isInline ? (quickOptions[0]?.unit ?? (variant.servingUnit as Unit)) : defaultCustomUnit(variant, weightPref))
+    setCustomValue(isInline ? formatNumberForInput(inlineDefaultChoice?.quantity ?? quickOptions[0]?.quantity ?? variant.servingSize) : '')
+    setCustomUnit(isInline ? (inlineDefaultChoice?.unit ?? quickOptions[0]?.unit ?? (variant.servingUnit as Unit)) : defaultCustomUnit(variant, weightPref))
+    setSelectedInlineChoiceId(isInline ? (inlineDefaultChoice?.id ?? '') : '')
     setUnitMenuOpen(false)
-  }, [variant, variantKey, quickOptions, weightPref, isInline])
+  }, [variant, variantKey, quickOptions, weightPref, isInline, inlineDefaultChoice])
 
   // ── Resolve selection ─────────────────────────────────────────────────
   const variantForMath = useMemo<VariantForMath>(() => ({
@@ -470,6 +487,7 @@ export default function QuantityPicker({
 
   // ── Custom-mode: paste-of-string handling ─────────────────────────────
   const onCustomValueChange = (value: string) => {
+    setSelectedInlineChoiceId('')
     setCustomValue(value)
     const parsed = parseQuantityString(value)
     if (parsed && dropdownChoices.some(choice => choice.unit === parsed.unit)) {
@@ -477,6 +495,9 @@ export default function QuantityPicker({
       // numeric portion in the input. Strip the unit from the visible text
       // so the field doesn't read "240ml ml" after re-render.
       setCustomUnit(parsed.unit)
+      setSelectedInlineChoiceId(
+        dropdownChoices.find(choice => choice.group !== 'servings' && choice.unit === parsed.unit)?.id ?? ''
+      )
       setCustomValue(formatNumberForInput(parsed.value))
     }
   }
@@ -488,11 +509,15 @@ export default function QuantityPicker({
     const parsed = parseQuantityString(customValue)
     if (parsed && dropdownChoices.some(choice => choice.unit === parsed.unit)) {
       setCustomUnit(parsed.unit)
+      setSelectedInlineChoiceId(
+        dropdownChoices.find(choice => choice.group !== 'servings' && choice.unit === parsed.unit)?.id ?? ''
+      )
       setCustomValue(formatNumberForInput(parsed.value))
     }
   }
 
   const onInlineChoiceSelect = (choice: ServingChoice) => {
+    setSelectedInlineChoiceId(choice.id)
     if (choice.group === 'servings') {
       setCustomValue(formatNumberForInput(choice.quantity))
       setCustomUnit(choice.unit)
@@ -537,9 +562,9 @@ export default function QuantityPicker({
             maxHeight: unitMenuPosition.maxHeight,
           }}
         >
-          <ChoiceSection title="Servings" choices={choiceGroups.servings} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
-          <ChoiceSection title="Weight" choices={choiceGroups.weight} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
-          <ChoiceSection title="Volume" choices={choiceGroups.volume} customUnit={customUnit} onSelect={onInlineChoiceSelect} />
+          <ChoiceSection title="Servings" choices={choiceGroups.servings} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+          <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+          <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
         </div>,
         document.body,
       )
@@ -569,7 +594,7 @@ export default function QuantityPicker({
               aria-haspopup="listbox"
               aria-expanded={unitMenuOpen}
             >
-              <span className="truncate">{unitLabel(customUnit)}</span>
+              <span className="truncate">{unitButtonLabel}</span>
               <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${unitMenuOpen ? 'rotate-180' : ''}`} />
             </button>
             {inlineUnitMenu}
@@ -736,12 +761,12 @@ function resolve(variantForMath: VariantForMath, quantity: number, unit: Unit): 
 function ChoiceSection({
   title,
   choices,
-  customUnit,
+  selectedChoiceId,
   onSelect,
 }: {
   title: string
   choices: ServingChoice[]
-  customUnit: Unit
+  selectedChoiceId: string
   onSelect: (choice: ServingChoice) => void
 }) {
   if (choices.length === 0) return null
@@ -756,11 +781,11 @@ function ChoiceSection({
           key={choice.id}
           type="button"
           role="option"
-          aria-selected={customUnit === choice.unit}
+          aria-selected={selectedChoiceId === choice.id}
           onClick={() => onSelect(choice)}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
         >
-          <Check className={`h-4 w-4 shrink-0 ${customUnit === choice.unit ? 'opacity-100' : 'opacity-0'}`} />
+          <Check className={`h-4 w-4 shrink-0 ${selectedChoiceId === choice.id ? 'opacity-100' : 'opacity-0'}`} />
           <span className="min-w-0 truncate">{choice.label}</span>
         </button>
       ))}
