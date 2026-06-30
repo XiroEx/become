@@ -49,23 +49,36 @@ test('serving size change recomputes macros', async ({ page, context }) => {
   const row = sel.locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
   const calBefore = (await row.getByText(/\d+\s*cal/).first().innerText()).trim()
 
-  // Pick a different option value than the currently selected one.
+  // Read the option set.
   const optionValues = await sel.locator('option').evaluateAll(
     (os: HTMLOptionElement[]) => os.map((o) => ({ value: o.value, label: o.textContent || '' }))
   )
-  const current = await sel.inputValue()
-  const next = optionValues.find((o) => o.value && o.value !== current)
-  console.log('REPRO: options =', JSON.stringify(optionValues), 'current=', current, 'next=', next)
-  expect(next).toBeTruthy()
+  console.log('REPRO: options =', JSON.stringify(optionValues))
 
+  // Requirement: a richer unit set (more than just g/oz/lb).
+  expect(optionValues.length, 'dropdown should offer a rich unit set').toBeGreaterThanOrEqual(6)
+
+  // The persistent "current" friendly serving option.
+  const currentOpt = optionValues.find((o) => o.value === '__current__')
+  expect(currentOpt, 'a persistent current/friendly option should exist').toBeTruthy()
+  const friendlyLabel = currentOpt!.label
+
+  // Pick a different unit option (not the current one).
+  const next = optionValues.find((o) => o.value && o.value !== '__current__')
+  expect(next).toBeTruthy()
   await sel.selectOption(next!.value)
   await page.waitForTimeout(1200)
 
+  // Bug fix #1: the friendly serving must STILL be in the dropdown.
+  const optionsAfter = await sel.locator('option').evaluateAll(
+    (os: HTMLOptionElement[]) => os.map((o) => o.textContent || '')
+  )
+  console.log('REPRO: friendly="' + friendlyLabel + '" options after =', JSON.stringify(optionsAfter))
+  expect(optionsAfter, 'friendly serving should remain in the dropdown after a unit change').toContain(friendlyLabel)
+
+  // Bug fix #2: macros recompute on serving change.
   const calAfter = (await row.getByText(/\d+\s*cal/).first().innerText()).trim()
   console.log(`REPRO: cal before="${calBefore}" after="${calAfter}"`)
-
   await page.screenshot({ path: 'tests/e2e/screenshots/serving-bug.png', fullPage: true }).catch(() => {})
-
-  // The bug: calAfter === calBefore. The fix should make them differ.
   expect(calAfter, 'macros should change when serving size changes').not.toEqual(calBefore)
 })
