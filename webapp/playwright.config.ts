@@ -68,6 +68,18 @@ export default defineConfig({
       use: { ...devices['Pixel 5'], video: 'off' },
     },
     {
+      name: 'serving-units-audit',
+      testMatch: '**/serving-units-audit.spec.ts',
+      timeout: 240_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'off',
+        screenshot: 'off',
+      },
+    },
+    {
       name: 'serving-bug',
       testMatch: '**/serving-bug-repro.spec.ts',
       timeout: 200_000,

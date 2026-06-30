@@ -109,6 +109,11 @@ interface ReviewItem extends EstimatedPlateItem {
   /** A freeform friendly label the user typed (overrides the computed amount).
    *  Cleared when the user changes the count, so it never goes stale. */
   labelOverride?: string
+  /** True when the matched food's serving could be reconciled with the AI's
+   *  unit (real unit math, not a calorie-ratio fallback). When false, the food's
+   *  serving shape is NOT trustworthy for unit conversions, so the dropdown is
+   *  anchored to the AI estimate instead. */
+  matchServingReliable?: boolean
   /** The serving-size dropdown choice the user picked (id from the matched
    *  food's serving options). Drives the Serving Size box selection. */
   servingChoiceId?: string
@@ -288,8 +293,15 @@ function variantFromMatch(m: DbMatch | null | undefined): QuantityPickerVariant 
  *  dropdown (just its own unit). `nutrition` is per ONE unit, matching how
  *  ReviewItem stores it, so the math stays accurate to that food. */
 function buildVariantForItem(item: ReviewItem): QuantityPickerVariant {
-  const matched = variantFromMatch(item.match)
-  if (matched) return matched
+  // Use the matched food's full serving shape ONLY when it reconciled with the
+  // AI's unit — otherwise its grams/serving are unreliable and the conversions
+  // come out wrong (e.g. a blueberry food stored at 317 cal/100g). In that case,
+  // and for unmatched items, synthesize a one-unit variant anchored to the AI's
+  // own (correct) per-unit estimate so every unit scales sensibly.
+  if (item.match && item.matchServingReliable) {
+    const matched = variantFromMatch(item.match)
+    if (matched) return matched
+  }
   const known = toKnownUnit(item.unitLabel)
   return {
     servingSize: 1,
@@ -437,6 +449,11 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
         // unitLabel + multiplier (the AI's natural count) are preserved.
         matchChecked: true,
         match: m,
+        // Only trust the food's serving shape for unit conversions when the AI's
+        // unit actually reconciled with it (aligned != null). A calorie-ratio
+        // fallback means the food's grams/serving don't line up with the
+        // description — using them for the dropdown produces nonsense numbers.
+        matchServingReliable: aligned != null,
         // Re-snapshot to the matched serving so the dropdown's "current" option
         // restores what the user actually sees after reconcile.
         origServing: { nutrition: perUnit, unitLabel: it.unitLabel, multiplier: qty, label: formatAmount(qty, it.unitLabel) },
