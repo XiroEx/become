@@ -410,6 +410,10 @@ export default function SnapPlateModal({
   // freshly generated estimate (or when re-opening one); reused so corrections
   // and logging UPDATE that record instead of creating duplicates.
   const [savedScanId, setSavedScanId] = useState<string | null>(null)
+  // The description the user typed for this estimate (describe text or photo
+  // note). Kept in a ref so it survives into the background persist without
+  // re-running the persist callback, and is saved to history as the scan note.
+  const noteRef = useRef('')
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
@@ -420,7 +424,7 @@ export default function SnapPlateModal({
   // sync-to-prop effect (modal state follows open/initialPhase/initialImage).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false) }
+    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false); noteRef.current = '' }
     else {
       setSelectedTag(tag) // default to the page's time-of-day meal on open
       // Re-opening a saved estimate links its record so edits/logs update it;
@@ -494,6 +498,7 @@ export default function SnapPlateModal({
         source: imageThumb ? 'photo' : 'describe',
         tag: selectedTag,
         items: scanItems,
+        ...(noteRef.current ? { note: noteRef.current } : {}),
         ...(thumb ? { thumb } : {}),
         ...(imageUrl ? { imageUrl } : {}),
         ...(opts?.mealLogId ? { mealLogId: opts.mealLogId } : {}),
@@ -555,6 +560,7 @@ export default function SnapPlateModal({
   const handleDescribe = () => {
     const t = describeText.trim()
     if (!t) return
+    noteRef.current = t
     runEstimate(
       () => plateEstimator.estimateFromText({ description: t }, { userId: '' }),
       '',
@@ -566,6 +572,7 @@ export default function SnapPlateModal({
   // Submit the compose phase: photo + optional note → vision estimate.
   const handleComposeEstimate = (dataUrl: string, note: string) => {
     const noteArg = note.trim() || undefined
+    noteRef.current = noteArg ?? ''
     runEstimate(
       () => plateEstimator.estimate(dataUrl, { userId: '' }, noteArg),
       dataUrl,
