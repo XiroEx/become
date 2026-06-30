@@ -28,7 +28,15 @@ import {
   buildServingChoiceGroups,
   type ServingChoice,
 } from '@/lib/nutrition/servingOptions'
+import { formatQuantity } from '@/lib/units'
 import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
+
+/** A weight/volume choice is stored at quantity 1 with a bare unit label ("g").
+ *  Render it as "1 g" so the dropdown reads like the reference design; named
+ *  servings keep their friendly label as-is. */
+function optionLabel(c: ServingChoice): string {
+  return c.group === 'servings' ? c.label : formatQuantity(c.quantity, c.unit)
+}
 
 function round(n: number, dp = 2): number {
   const f = 10 ** dp
@@ -93,21 +101,21 @@ export default function ServingQuantityControls({
               {groups!.servings.length > 0 && (
                 <optgroup label="Servings">
                   {groups!.servings.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
+                    <option key={c.id} value={c.id}>{optionLabel(c)}</option>
                   ))}
                 </optgroup>
               )}
               {groups!.weight.length > 0 && (
                 <optgroup label="Weight">
                   {groups!.weight.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
+                    <option key={c.id} value={c.id}>{optionLabel(c)}</option>
                   ))}
                 </optgroup>
               )}
               {groups!.volume.length > 0 && (
                 <optgroup label="Volume">
                   {groups!.volume.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
+                    <option key={c.id} value={c.id}>{optionLabel(c)}</option>
                   ))}
                 </optgroup>
               )}
