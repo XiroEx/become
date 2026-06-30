@@ -29,6 +29,7 @@ import mongoose from 'mongoose'
 import path from 'path'
 import fs from 'fs'
 import * as dotenv from 'dotenv'
+import { convert } from '@/lib/units'
 
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
 
@@ -59,15 +60,16 @@ function defaultVariant(f: FoodDoc): Variant | undefined {
   return vs.find((v) => v.isDefault) ?? vs[0]
 }
 
-/** Grams (or ml) in ONE serving, for normalising to per-100. */
-function basisGrams(v: Variant): number | null {
+/** The amount (g or ml) the nutrition is actually PER. Nutrition is stored per
+ *  `servingSize × servingUnit`, so for a mass/volume native food that's the
+ *  converted servingSize — NOT gramsPerServing (a household-serving bridge that
+ *  can disagree). Discrete native units fall back to the gram/ml bridge. */
+function basis(v: Variant): number | null {
+  const u = (v.servingUnit || '').toLowerCase()
+  if (MASS.has(u) && v.servingSize && v.servingSize > 0) { try { return convert(v.servingSize, u as never, 'g') } catch { return null } }
+  if (VOL.has(u) && v.servingSize && v.servingSize > 0) { try { return convert(v.servingSize, u as never, 'ml') } catch { return null } }
   if (v.gramsPerServing && v.gramsPerServing > 0) return v.gramsPerServing
   if (v.mlPerServing && v.mlPerServing > 0) return v.mlPerServing
-  const u = (v.servingUnit || '').toLowerCase()
-  if ((MASS.has(u) || VOL.has(u)) && v.servingSize && v.servingSize > 0) {
-    // crude: treat the native serving size as the basis (g≈ml for water-like)
-    return v.servingSize
-  }
   return null
 }
 
@@ -75,7 +77,7 @@ function basisGrams(v: Variant): number | null {
 function per100(v: Variant): { cal: number; p: number; c: number; f: number } | null {
   const n = v.nutrition
   if (!n) return null
-  const g = basisGrams(v)
+  const g = basis(v)
   if (!g) return null
   const k = 100 / g
   return { cal: num(n.calories) * k, p: num(n.protein) * k, c: num(n.carbs) * k, f: num(n.fats) * k }

@@ -32,6 +32,7 @@ import path from 'path'
 import fs from 'fs'
 import * as dotenv from 'dotenv'
 import { fetchUSDAById, mapUSDAFood } from '@/lib/usda'
+import { convert } from '@/lib/units'
 
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
 
@@ -57,16 +58,22 @@ interface FoodDoc { _id: mongoose.Types.ObjectId; name?: string; brand?: string;
 
 const MASS = new Set(['g', 'oz', 'lb', 'kg', 'mg'])
 const VOL = new Set(['ml', 'fl_oz', 'cup', 'tbsp', 'tsp', 'pint', 'quart', 'liter'])
-function basisGrams(v: Variant): number | null {
+/** The amount (grams or ml) the variant's nutrition is actually PER. The
+ *  nutrition is stored per `servingSize × servingUnit`, so for a mass/volume
+ *  native food that's the converted servingSize — NOT gramsPerServing (which is
+ *  a cross-unit bridge to a household serving and can disagree). Only a discrete
+ *  native unit (each/slice/serving) has to fall back to the gram/ml bridge. */
+function basis(v: Variant): number | null {
+  const u = (v.servingUnit || '').toLowerCase()
+  if (MASS.has(u) && v.servingSize && v.servingSize > 0) { try { return convert(v.servingSize, u as never, 'g') } catch { return null } }
+  if (VOL.has(u) && v.servingSize && v.servingSize > 0) { try { return convert(v.servingSize, u as never, 'ml') } catch { return null } }
   if (v.gramsPerServing && v.gramsPerServing > 0) return v.gramsPerServing
   if (v.mlPerServing && v.mlPerServing > 0) return v.mlPerServing
-  const u = (v.servingUnit || '').toLowerCase()
-  if ((MASS.has(u) || VOL.has(u)) && v.servingSize && v.servingSize > 0) return v.servingSize
   return null
 }
 function per100(v: Variant): { cal: number; p: number; c: number; f: number } | null {
   const n = v.nutrition; if (!n) return null
-  const g = basisGrams(v); if (!g) return null
+  const g = basis(v); if (!g) return null
   const k = 100 / g
   return { cal: num(n.calories) * k, p: num(n.protein) * k, c: num(n.carbs) * k, f: num(n.fats) * k }
 }
@@ -211,7 +218,7 @@ async function main() {
         } })
       } else {
         // OFF: correct per-100 macros only (serving handled separately by reimport).
-        const g = basisGrams(cur) || 100
+        const g = basis(cur) || 100
         const k = g / 100
         await Foods.updateOne({ _id: f._id }, { $set: { [`variants.${di}.nutrition`]: {
           calories: Math.round(srcPer100.cal * k), protein: r1(srcPer100.p * k), carbs: r1(srcPer100.c * k), fats: r1(srcPer100.f * k),
