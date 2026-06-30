@@ -78,6 +78,11 @@ function per100(v: Variant): { cal: number; p: number; c: number; f: number } | 
   return { cal: num(n.calories) * k, p: num(n.protein) * k, c: num(n.carbs) * k, f: num(n.fats) * k }
 }
 const macrosPositive = (x: { p: number; c: number; f: number; cal: number }) => x.cal > 0 && (x.p + x.c + x.f) > 0
+// A per-100 figure that's physically possible for real food: calories can't
+// exceed ~900/100 g (pure fat) and no single macro can exceed 100 g per 100 g.
+// Guards against writing garbage when the SOURCE record itself is malformed.
+const plausiblePer100 = (x: { p: number; c: number; f: number; cal: number }) =>
+  x.cal <= 920 && x.p <= 100 && x.c <= 100 && x.f <= 100
 function close(a: number, b: number, tol = 0.15): boolean {
   const m = Math.max(Math.abs(a), Math.abs(b), 1)
   return Math.abs(a - b) / m <= tol
@@ -160,8 +165,10 @@ async function main() {
         if (!mapped) { reach = 'missing' }
         else {
           mappedForFix = mapped
-          const g = mapped.gramsPerServing && mapped.gramsPerServing > 0 ? mapped.gramsPerServing
-            : (mapped.servingUnit === 'g' ? mapped.servingSize : null)
+          // Use the SAME basis() as the stored side (convert servingSize by unit)
+          // — NOT gramsPerServing, which is a household bridge (e.g. "2 pieces =
+          // 2.8 g") and inflates per-100 wildly when used as the divisor.
+          const g = basis(mapped as unknown as Variant)
           if (g) { const k = 100 / g; const n = mapped.nutrition; srcPer100 = { cal: num(n.calories) * k, p: num(n.protein) * k, c: num(n.carbs) * k, f: num(n.fats) * k }; reach = 'ok' }
           else reach = 'missing'
         }
@@ -181,9 +188,12 @@ async function main() {
     } else { counts['no-source']++; continue }
 
     if (reach === 'error') { counts['source-unreachable']++; continue }
-    if (reach === 'missing' || !srcPer100 || !macrosPositive(srcPer100)) {
+    if (reach === 'missing' || !srcPer100 || !macrosPositive(srcPer100) || !plausiblePer100(srcPer100)) {
       counts['broken-at-source']++
-      brokenAtSource.push({ id: String(f._id), name: f.name, source: f.source, externalId: f.externalId || f.barcode, reason: reach === 'missing' ? 'not found / no usable data at source' : 'source has zero macros' })
+      const reason = reach === 'missing' ? 'not found / no usable data at source'
+        : (srcPer100 && !plausiblePer100(srcPer100)) ? `source per-100 implausible (${Math.round(srcPer100.cal)} cal)`
+        : 'source has zero macros'
+      brokenAtSource.push({ id: String(f._id), name: f.name, source: f.source, externalId: f.externalId || f.barcode, reason })
       continue
     }
 
