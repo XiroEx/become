@@ -121,6 +121,25 @@ async function matchOne(
     // loosen against the giant global catalog).
     const isOwn = !!f.createdBy && String(f.createdBy) === userId
     if (cov < 1 && !(isOwn && subsetMatch(f.name))) continue
+
+    // Don't slap an unrequested brand or extra ingredients onto a plain
+    // description. "chicken breast" must not silently become "HEB Chicken
+    // Breast In Basil Pesto Sauce" just because that branded import happens to
+    // contain the words "chicken" and "breast". These guards only apply to the
+    // global catalog — the user's OWN saved foods keep the looser subset match
+    // (they chose that name/brand themselves).
+    if (!isOwn) {
+      // (a) Brand evidence: only adopt a brand the query actually names.
+      const brandWords = words(f.brand ?? '')
+      const brandRequested = brandWords.length > 0
+        && brandWords.some((bw) => fullQueryWords.some((qw) => stemMatch(bw, qw)))
+      if (brandWords.length > 0 && !brandRequested) continue
+      // (b) No unmentioned identity: reject a candidate whose own identity words
+      //     (e.g. "basil pesto sauce") aren't mostly explained by the query.
+      const candIdentity = contentWords(`${f.name} ${f.brand ?? ''}`)
+      if (coverage(candIdentity, content) < 0.6) continue
+    }
+
     const flat = flattenFoodForResponse(f)
     // Brand + full-phrase agreement raise confidence (and ranking).
     const brandHit = brand ? words(brand).every((bw) => candWords.some((cw) => stemMatch(bw, cw))) : false
