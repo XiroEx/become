@@ -45,8 +45,8 @@ test('serving size change recomputes macros', async ({ page, context }) => {
   expect(target).toBeGreaterThanOrEqual(0)
 
   const sel = selects.nth(target)
-  // The macro line for that row — climb to the row container and read its cal text.
-  const row = sel.locator('xpath=ancestor::div[contains(@class,"py-1")][1]')
+  // The macro line for that row — climb to the item card and read its cal text.
+  const row = sel.locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]')
   const calBefore = (await row.getByText(/\d+\s*cal/).first().innerText()).trim()
 
   // Pick a different option value than the currently selected one.
