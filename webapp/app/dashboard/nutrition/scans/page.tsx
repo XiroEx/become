@@ -9,7 +9,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
-import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2 } from 'lucide-react'
+import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2, X, Maximize2 } from 'lucide-react'
 
 interface ScanItem {
   foodId?: string
@@ -57,6 +57,9 @@ export default function ScanHistoryPage() {
   const [scans, setScans] = useState<Scan[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Full-image lightbox — holds the src of the photo being viewed (full-res
+  // imageUrl when we have it, else the inline thumb).
+  const [lightbox, setLightbox] = useState<string | null>(null)
   const { toast, showToast } = useToast(3000)
 
   const load = useCallback(async () => {
@@ -137,9 +140,19 @@ export default function ScanHistoryPage() {
             <Card key={scan._id} className="!p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  {scan.thumb ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={scan.thumb} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+                  {scan.thumb || scan.imageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setLightbox(scan.imageUrl || scan.thumb || null)}
+                      aria-label="View full photo"
+                      className="group relative h-10 w-10 shrink-0 overflow-hidden rounded-lg"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={scan.thumb || scan.imageUrl} alt="Meal photo" className="h-10 w-10 object-cover" />
+                      <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
+                        <Maximize2 className="h-3.5 w-3.5 text-white" />
+                      </span>
+                    </button>
                   ) : (
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
                       {scan.source === 'describe' ? <PencilLine className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
@@ -200,9 +213,40 @@ export default function ScanHistoryPage() {
                   </div>
                 ))}
               </div>
-              {scan.note && <p className="mt-2 text-xs italic text-zinc-400">“{scan.note}”</p>}
+              {scan.note && (
+                <p className="mt-3 border-t border-zinc-100 pt-2 text-xs italic text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                  “{scan.note}”
+                </p>
+              )}
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Full-image lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Meal photo"
+        >
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            aria-label="Close photo"
+            className="absolute right-4 top-[calc(env(safe-area-inset-top)+1rem)] flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Meal photo"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-xl object-contain"
+          />
         </div>
       )}
     </PageTransition>
