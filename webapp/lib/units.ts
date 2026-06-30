@@ -25,9 +25,9 @@ export type UnitFamily = 'mass' | 'volume' | 'discrete'
  */
 export type Unit =
   // mass
-  | 'g' | 'oz' | 'lb'
+  | 'mg' | 'g' | 'oz' | 'lb' | 'kg'
   // volume
-  | 'ml' | 'fl_oz' | 'cup' | 'tbsp' | 'tsp'
+  | 'ml' | 'fl_oz' | 'cup' | 'tbsp' | 'tsp' | 'pint' | 'quart' | 'liter'
   // discrete (no cross-conversion without a bridge)
   | 'each' | 'slice' | 'scoop' | 'serving'
 
@@ -36,23 +36,28 @@ export type Unit =
 // ---------------------------------------------------------------------------
 
 /** Grams per unit of mass. */
-const GRAMS: Record<'g' | 'oz' | 'lb', number> = {
+const GRAMS: Record<'mg' | 'g' | 'oz' | 'lb' | 'kg', number> = {
+  mg: 0.001,
   g: 1,
   oz: 28.3495,
   lb: 453.592,
+  kg: 1000,
 }
 
 /** Milliliters per unit of volume. US-defined. */
-const ML: Record<'ml' | 'fl_oz' | 'cup' | 'tbsp' | 'tsp', number> = {
+const ML: Record<'ml' | 'fl_oz' | 'cup' | 'tbsp' | 'tsp' | 'pint' | 'quart' | 'liter', number> = {
   ml: 1,
   fl_oz: 29.5735, // US fluid ounce
   cup: 240,        // US legal cup
   tbsp: 14.7868,   // US tablespoon
   tsp: 4.92892,    // US teaspoon
+  pint: 473.176,   // US liquid pint
+  quart: 946.353,  // US liquid quart
+  liter: 1000,
 }
 
-const MASS_UNITS = new Set<Unit>(['g', 'oz', 'lb'])
-const VOLUME_UNITS = new Set<Unit>(['ml', 'fl_oz', 'cup', 'tbsp', 'tsp'])
+const MASS_UNITS = new Set<Unit>(['mg', 'g', 'oz', 'lb', 'kg'])
+const VOLUME_UNITS = new Set<Unit>(['ml', 'fl_oz', 'cup', 'tbsp', 'tsp', 'pint', 'quart', 'liter'])
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -81,7 +86,7 @@ export function convert(value: number, from: Unit, to: Unit): number {
     throw new Error('cross-family conversion requires bridge')
   }
   if (fa === 'mass') {
-    return value * GRAMS[from as 'g' | 'oz' | 'lb'] / GRAMS[to as 'g' | 'oz' | 'lb']
+    return value * GRAMS[from as keyof typeof GRAMS] / GRAMS[to as keyof typeof GRAMS]
   }
   if (fa === 'volume') {
     return value * ML[from as keyof typeof ML] / ML[to as keyof typeof ML]
@@ -262,14 +267,19 @@ export function prettifyUnitCodes(label: string): string {
  */
 export function unitLabel(u: Unit): string {
   switch (u) {
+    case 'mg':      return 'mg'
     case 'g':       return 'g'
     case 'oz':      return 'oz'
     case 'lb':      return 'lb'
+    case 'kg':      return 'kg'
     case 'ml':      return 'ml'
     case 'fl_oz':   return 'fl oz'
     case 'cup':     return 'cup'
     case 'tbsp':    return 'tbsp'
     case 'tsp':     return 'tsp'
+    case 'pint':    return 'pint'
+    case 'quart':   return 'quart'
+    case 'liter':   return 'liter'
     case 'each':    return 'each'
     case 'slice':   return 'slice'
     case 'scoop':   return 'scoop'
@@ -373,6 +383,8 @@ const UNICODE_FRACTIONS: Record<string, number> = {
 const UNIT_ALIASES: Record<string, Unit> = {
   // mass
   'g': 'g', 'gram': 'g', 'grams': 'g', 'gr': 'g',
+  'mg': 'mg', 'milligram': 'mg', 'milligrams': 'mg',
+  'kg': 'kg', 'kilogram': 'kg', 'kilograms': 'kg', 'kgs': 'kg',
   'oz': 'oz', 'ounce': 'oz', 'ounces': 'oz',
   'lb': 'lb', 'lbs': 'lb', 'pound': 'lb', 'pounds': 'lb',
   // volume
@@ -382,6 +394,9 @@ const UNIT_ALIASES: Record<string, Unit> = {
   'cup': 'cup', 'cups': 'cup', 'c': 'cup', 'c.': 'cup',
   'tbsp': 'tbsp', 'tbs': 'tbsp', 'tablespoon': 'tbsp', 'tablespoons': 'tbsp', 'tbl': 'tbsp',
   'tsp': 'tsp', 'teaspoon': 'tsp', 'teaspoons': 'tsp',
+  'pint': 'pint', 'pints': 'pint', 'pt': 'pint',
+  'quart': 'quart', 'quarts': 'quart', 'qt': 'quart',
+  'liter': 'liter', 'liters': 'liter', 'litre': 'liter', 'litres': 'liter', 'l': 'liter',
   // discrete
   'each': 'each', 'ea': 'each',
   'slice': 'slice', 'slices': 'slice',

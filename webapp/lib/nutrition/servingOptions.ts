@@ -39,18 +39,79 @@ export interface ServingChoiceGroups {
   all: ServingChoice[]
 }
 
-const MASS_UNITS: Unit[] = ['g', 'oz', 'lb']
-const VOLUME_UNITS: Unit[] = ['ml', 'fl_oz', 'cup', 'tbsp', 'tsp']
+// Generic metric units offered per dimension — broad, so the dropdown gives
+// real variety (mirrors the reference food-logger). Order = most→least common.
+const MASS_UNITS: Unit[] = ['g', 'oz', 'lb', 'kg', 'mg']
+const VOLUME_UNITS: Unit[] = ['tsp', 'tbsp', 'fl_oz', 'ml', 'cup', 'pint', 'quart', 'liter']
 const DISCRETE_UNITS = new Set<Unit>(['each', 'slice', 'scoop', 'serving'])
 
 const QUANTITY_WITH_UNIT_RE =
-  /(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d*\.?\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:fl\s*oz|fluid\s*ounces?|milliliters?|millilitres?|grams?|ounces?|pounds?|cups?|tablespoons?|teaspoons?|mls?|gr|g|oz|lbs?|lb|c\.?|tbsp|tbs|tbl|tsp)\b/gi
+  /(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d*\.?\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:fl\s*oz|fluid\s*ounces?|milliliters?|millilitres?|kilograms?|milligrams?|grams?|ounces?|pounds?|cups?|tablespoons?|teaspoons?|pints?|quarts?|liters?|litres?|mls?|gr|g|oz|lbs?|lb|kgs?|kg|mg|c\.?|tbsp|tbs|tbl|tsp|pt|qt)\b/gi
+
+function roundReadable(n: number): number {
+  if (Math.abs(n - Math.round(n)) < 0.05) return Math.round(n)
+  return Math.round(n * 10) / 10
+}
+
+function safeConvert(value: number, from: Unit, to: Unit): number | null {
+  try { return convert(value, from, to) } catch { return null }
+}
+
+/** One serving expressed in its base metric ("113 g", "177 ml") — the handy
+ *  whole-serving-in-grams/ml option the reference logger surfaces. */
+function buildMetricEquivalent(
+  variant: ServingOptionVariant,
+  fam: 'mass' | 'volume',
+  derivedBridge: Pick<ServingChoice, 'gramsPerServing' | 'mlPerServing' | 'derivedFromLabel'> | null,
+): ServingChoice | null {
+  const baseUnit: Unit = fam === 'mass' ? 'g' : 'ml'
+  const nativeFamily = familyOf(variant.servingUnit as Unit)
+  let amount: number | null
+  if (fam === 'mass') {
+    amount = variant.gramsPerServing != null && variant.gramsPerServing > 0
+      ? variant.gramsPerServing
+      : (nativeFamily === 'mass' ? safeConvert(variant.servingSize, variant.servingUnit as Unit, 'g') : null)
+  } else {
+    amount = variant.mlPerServing != null && variant.mlPerServing > 0
+      ? variant.mlPerServing
+      : (nativeFamily === 'volume' ? safeConvert(variant.servingSize, variant.servingUnit as Unit, 'ml') : null)
+  }
+  if (amount == null || !(amount > 0)) return null
+  const rounded = roundReadable(amount)
+  if (Math.abs(rounded - 1) < 0.001) return null // "1 g"/"1 ml" is already in the unit list
+  const bridge = bridgeForUnit(baseUnit, variant, derivedBridge)
+  const choice: ServingChoice = {
+    id: `equiv-${baseUnit}`,
+    group: fam === 'mass' ? 'weight' : 'volume',
+    label: `${rounded} ${unitLabel(baseUnit)}`,
+    quantity: rounded,
+    unit: baseUnit,
+    gramsPerServing: bridge?.gramsPerServing,
+    mlPerServing: bridge?.mlPerServing,
+    derivedFromLabel: bridge?.derivedFromLabel,
+  }
+  return canResolveChoice(variant, choice) ? choice : null
+}
 
 export function buildServingChoiceGroups(variant: ServingOptionVariant): ServingChoiceGroups {
   const servings = buildServingChoices(variant)
   const bridge = bestDerivedBridge(variant, servings)
+  // A unit family only appears when the food can resolve it (natively or via a
+  // bridge) — that's what keeps mass-only foods off volume units and vice versa.
   const weight = buildUnitChoices('weight', MASS_UNITS, variant, bridge)
   const volume = buildUnitChoices('volume', VOLUME_UNITS, variant, bridge)
+
+  // Add the whole-serving-in-base-metric option ("113 g" / "177 ml") to each
+  // resolvable family, deduped against the existing quantity-1 entries.
+  const addEquiv = (group: ServingChoice[], fam: 'mass' | 'volume') => {
+    if (group.length === 0) return
+    const equiv = buildMetricEquivalent(variant, fam, bridge)
+    if (equiv && !group.some(c => c.unit === equiv.unit && Math.abs(c.quantity - equiv.quantity) < 0.001)) {
+      group.unshift(equiv)
+    }
+  }
+  addEquiv(weight, 'mass')
+  addEquiv(volume, 'volume')
 
   return {
     servings,

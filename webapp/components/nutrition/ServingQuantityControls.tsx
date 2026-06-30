@@ -52,6 +52,9 @@ export interface ServingQuantityControlsProps {
   /** What the serving box shows when no DB choice is selected yet (the AI's
    *  own amount, e.g. "6 bites") — also the freeform value for unmatched items. */
   servingLabel: string
+  /** The item's ORIGINAL friendly serving — shown as a persistent "current"
+   *  option so it never disappears from the menu after the user tries a unit. */
+  originalLabel?: string
   /** Current quantity (count of the selected serving). */
   count: number
   stepDelta?: number
@@ -59,21 +62,27 @@ export interface ServingQuantityControlsProps {
   disabled?: boolean
   /** A DB serving choice was picked from the dropdown. */
   onSelectServing: (choice: ServingChoice) => void
+  /** The user re-picked the original serving (the "current" option). */
+  onResetToOriginal?: () => void
   /** Quantity stepper. */
   onStep: (delta: number) => void
   /** Freeform relabel (unmatched items only). */
   onFreeformLabel?: (label: string) => void
 }
 
+const CURRENT_OPTION = '__current__'
+
 export default function ServingQuantityControls({
   variant,
   servingChoiceId,
   servingLabel,
+  originalLabel,
   count,
   stepDelta = 1,
   stepFloor = 0.5,
   disabled,
   onSelectServing,
+  onResetToOriginal,
   onStep,
   onFreeformLabel,
 }: ServingQuantityControlsProps) {
@@ -88,16 +97,17 @@ export default function ServingQuantityControls({
           <div className="relative">
             <select
               aria-label="Serving size"
-              value={servingChoiceId ?? ''}
+              value={servingChoiceId ?? CURRENT_OPTION}
               onChange={(e) => {
+                if (e.target.value === CURRENT_OPTION) { onResetToOriginal?.(); return }
                 const choice = groups!.all.find((c) => c.id === e.target.value)
                 if (choice) onSelectServing(choice)
               }}
               className="w-full appearance-none truncate rounded-lg border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm font-medium text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
             >
-              {/* When nothing is picked yet, show the AI's current amount as a
-                  leading, selected option so the box isn't misleading. */}
-              {!servingChoiceId && <option value="">{servingLabel || 'Choose a serving'}</option>}
+              {/* The item's original friendly serving — ALWAYS present (never
+                  removed when another unit is picked) so the user can switch back. */}
+              <option value={CURRENT_OPTION}>{originalLabel || servingLabel || 'Current serving'}</option>
               {groups!.servings.length > 0 && (
                 <optgroup label="Servings">
                   {groups!.servings.map((c) => (

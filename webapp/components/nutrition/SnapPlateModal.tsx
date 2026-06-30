@@ -115,6 +115,15 @@ interface ReviewItem extends EstimatedPlateItem {
   /** The per-serving label for the picked choice ("1 cup (240 g)") — combined
    *  with the quantity to form the stored serving label. */
   servingLabelBase?: string
+  /** Snapshot of the item's original (estimate/match) serving so the dropdown's
+   *  always-present "current" option can restore it after the user tries other
+   *  units — the friendly serving never disappears from the menu. */
+  origServing?: {
+    nutrition: { calories: number; protein: number; carbs: number; fats: number }
+    unitLabel: string
+    multiplier: number
+    label: string
+  }
 }
 
 type ModalState =
@@ -300,15 +309,17 @@ function toReviewItems(est: PlateEstimate): ReviewItem[] {
   return (est.items ?? []).map((item) => {
     const { qty, unit } = parseServing(item.estimatedServing)
     // The AI's nutrition is for the whole portion (qty units) → store per-unit.
+    const perUnit = perUnitNutrition(item.nutrition, qty)
     return {
       ...item,
-      nutrition: perUnitNutrition(item.nutrition, qty),
+      nutrition: perUnit,
       confidence: normalizeConfidence(item.confidence),
       multiplier: qty,
       unitLabel: unit,
       removed: false,
       matchChecked: false,
       match: null,
+      origServing: { nutrition: perUnit, unitLabel: unit, multiplier: qty, label: formatAmount(qty, unit) },
     }
   })
 }
@@ -426,6 +437,9 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
         // unitLabel + multiplier (the AI's natural count) are preserved.
         matchChecked: true,
         match: m,
+        // Re-snapshot to the matched serving so the dropdown's "current" option
+        // restores what the user actually sees after reconcile.
+        origServing: { nutrition: perUnit, unitLabel: it.unitLabel, multiplier: qty, label: formatAmount(qty, it.unitLabel) },
       }
     })
   } catch {
@@ -507,6 +521,12 @@ export default function SnapPlateModal({
             source: si.matchKind,
             confidence: si.confidence ?? 1,
           } : null,
+          origServing: {
+            nutrition: si.nutrition,
+            unitLabel: si.servingUnit ?? 'serving',
+            multiplier: si.servings ?? 1,
+            label: formatAmount(si.servings ?? 1, si.servingUnit ?? 'serving'),
+          },
         }))
         setState({ phase: 'review', items, imageThumb: initialImageUrl || '' })
       } else if (initialPhase === 'describe') {
@@ -714,6 +734,29 @@ export default function SnapPlateModal({
     setState({
       ...state,
       items: state.items.map((it, i) => (i === idx ? { ...it, labelOverride: label } : it)),
+    })
+  }
+
+  // Restore the item's original serving (the dropdown's persistent "current"
+  // option). Lets the user back out of a unit change without losing the
+  // friendly serving.
+  const resetServing = (idx: number) => {
+    if (state.phase !== 'review') return
+    setState({
+      ...state,
+      items: state.items.map((it, i) => {
+        if (i !== idx || !it.origServing) return it
+        const o = it.origServing
+        return {
+          ...it,
+          nutrition: o.nutrition,
+          unitLabel: o.unitLabel,
+          multiplier: o.multiplier,
+          labelOverride: o.label,
+          servingChoiceId: undefined,
+          servingLabelBase: undefined,
+        }
+      }),
     })
   }
 
@@ -1157,6 +1200,7 @@ export default function SnapPlateModal({
                     onSetMultiplier={setMultiplier}
                     onSetLabel={setItemLabel}
                     onSetServing={setServing}
+                    onResetServing={resetServing}
                     onToggleRemove={toggleRemove}
                     onCorrect={(text) => handleCorrect(state.items, state.imageThumb, text)}
                     onFeedback={() => setFeedbackOpen(true)}
@@ -1270,12 +1314,13 @@ interface ReviewBodyProps {
   onSetMultiplier: (idx: number, delta: number) => void
   onSetLabel: (idx: number, label: string) => void
   onSetServing: (idx: number, choice: ServingChoice) => void
+  onResetServing: (idx: number) => void
   onToggleRemove: (idx: number) => void
   onCorrect: (text: string) => void
   onFeedback: () => void
 }
 
-function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServing, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
+function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServing, onResetServing, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
   const [fix, setFix] = useState('')
 
   const submitFix = () => {
@@ -1361,10 +1406,12 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
                   variant={variant}
                   servingChoiceId={item.servingChoiceId}
                   servingLabel={item.labelOverride || formatAmount(item.multiplier, item.unitLabel)}
+                  originalLabel={item.origServing?.label}
                   count={item.multiplier}
                   stepDelta={stepForUnit(item.unitLabel)}
                   stepFloor={floorForUnit(item.unitLabel)}
                   onSelectServing={(choice) => onSetServing(idx, choice)}
+                  onResetToOriginal={() => onResetServing(idx)}
                   onStep={(delta) => onSetMultiplier(idx, delta)}
                   onFreeformLabel={(label) => onSetLabel(idx, label)}
                 />
