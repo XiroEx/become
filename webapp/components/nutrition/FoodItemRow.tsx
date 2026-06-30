@@ -135,9 +135,11 @@ function RowHeader({
           className="mt-0.5 w-full rounded border border-emerald-300 bg-white px-1.5 py-0.5 text-xs text-zinc-900 focus:outline-none dark:border-emerald-700 dark:bg-zinc-900 dark:text-white"
         />
       ) : (
-        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {brand && <span className="text-zinc-400 dark:text-zinc-500">{brand} &middot; </span>}
-          {onLabelChange ? (
+        // The amount line is omitted entirely when there's neither a serving
+        // label nor an editable handle (e.g. the plate review, where serving +
+        // quantity live in their own boxes below). Avoids a dangling "Brand ·".
+        (() => {
+          const amount = onLabelChange ? (
             <button
               type="button"
               onClick={startEdit}
@@ -145,11 +147,18 @@ function RowHeader({
             >
               {servingLabel || hardAmount || 'Set amount'}
             </button>
-          ) : (servingLabel || hardAmount || '')}
-          {showHard && servingLabel && (
-            <span className="text-zinc-400 dark:text-zinc-500"> &middot; {hardAmount}</span>
-          )}
-        </p>
+          ) : (servingLabel || hardAmount || null)
+          if (!brand && !amount) return null
+          return (
+            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+              {brand && <span className="text-zinc-400 dark:text-zinc-500">{brand}{amount ? ' · ' : ''}</span>}
+              {amount}
+              {showHard && servingLabel && (
+                <span className="text-zinc-400 dark:text-zinc-500"> &middot; {hardAmount}</span>
+              )}
+            </p>
+          )
+        })()
       )}
     </div>
   )

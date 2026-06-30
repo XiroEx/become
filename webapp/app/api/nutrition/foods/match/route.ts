@@ -49,6 +49,9 @@ interface MatchResult {
   gramsPerServing?: number
   mlPerServing?: number
   displayLabel?: string
+  /** Named alternate servings — lets the plate review's serving-size dropdown
+   *  offer the food's real friendly servings, not just raw units. */
+  alternateServings?: Array<{ label: string; multiplier: number }>
 }
 
 // Text helpers (stemMatch/words/STOP/PREP/contentWords/coverage) are shared with
@@ -158,6 +161,7 @@ async function matchOne(
       gramsPerServing: flat.gramsPerServing,
       mlPerServing: flat.mlPerServing,
       displayLabel: flat.displayLabel,
+      alternateServings: flat.alternateServings,
     })
   }
 

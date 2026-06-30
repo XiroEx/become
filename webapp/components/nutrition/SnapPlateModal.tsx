@@ -16,7 +16,10 @@ import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { useLockScroll } from '@/lib/useLockScroll'
 import FoodItemRow from '@/components/nutrition/FoodItemRow'
-import { scalingFactor } from '@/lib/foodMath'
+import ServingQuantityControls from '@/components/nutrition/ServingQuantityControls'
+import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
+import { scalingFactor, nutritionForQuantity } from '@/lib/foodMath'
+import { variantForServingChoice, type ServingChoice } from '@/lib/nutrition/servingOptions'
 import type { Unit } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
 
@@ -84,6 +87,8 @@ interface DbMatch {
   gramsPerServing?: number
   mlPerServing?: number
   displayLabel?: string
+  /** The food's named alternate servings — feeds the serving-size dropdown. */
+  alternateServings?: Array<{ label: string; multiplier: number }>
 }
 
 interface ReviewItem extends EstimatedPlateItem {
@@ -104,6 +109,12 @@ interface ReviewItem extends EstimatedPlateItem {
   /** A freeform friendly label the user typed (overrides the computed amount).
    *  Cleared when the user changes the count, so it never goes stale. */
   labelOverride?: string
+  /** The serving-size dropdown choice the user picked (id from the matched
+   *  food's serving options). Drives the Serving Size box selection. */
+  servingChoiceId?: string
+  /** The per-serving label for the picked choice ("1 cup (240 g)") — combined
+   *  with the quantity to form the stored serving label. */
+  servingLabelBase?: string
 }
 
 type ModalState =
@@ -243,6 +254,27 @@ function alignedServingsOfFood(qty: number, aiUnit: string, m: DbMatch): number 
     return qty / m.servingSize
   }
   return null
+}
+
+/** A matched DB food → the serving-basis variant the serving-size dropdown and
+ *  per-serving math run on. Returns null when there's no matched food. */
+function variantFromMatch(m: DbMatch | null | undefined): QuantityPickerVariant | null {
+  if (!m) return null
+  return {
+    servingSize: m.servingSize,
+    servingUnit: m.servingUnit as ServingUnit,
+    displayLabel: m.displayLabel,
+    alternateServings: m.alternateServings,
+    nutrition: m.nutrition,
+    gramsPerServing: m.gramsPerServing,
+    mlPerServing: m.mlPerServing,
+  }
+}
+
+/** Combine a per-serving label with a count: "1 cup (240 g)" + 2 → "2 × 1 cup (240 g)". */
+function combinedServingLabel(base: string, count: number): string {
+  const n = Math.round(count * 100) / 100
+  return n === 1 ? base : `${n} × ${base}`
 }
 
 function toReviewItems(est: PlateEstimate): ReviewItem[] {
@@ -647,12 +679,14 @@ export default function SnapPlateModal({
     if (state.phase !== 'review') return
     setState({
       ...state,
-      items: state.items.map((it, i) =>
-        i === idx
-          // Changing the count clears any freeform label so it can't go stale.
-          ? { ...it, multiplier: Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2))), labelOverride: undefined }
-          : it
-      ),
+      items: state.items.map((it, i) => {
+        if (i !== idx) return it
+        const multiplier = Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2)))
+        // When a DB serving is selected, keep the combined "N × serving" label in
+        // sync; otherwise clear any stale freeform label.
+        const labelOverride = it.servingLabelBase ? combinedServingLabel(it.servingLabelBase, multiplier) : undefined
+        return { ...it, multiplier, labelOverride }
+      }),
     })
   }
 
@@ -661,6 +695,46 @@ export default function SnapPlateModal({
     setState({
       ...state,
       items: state.items.map((it, i) => (i === idx ? { ...it, labelOverride: label } : it)),
+    })
+  }
+
+  // Pick a serving size from the matched food's serving options. Recomputes the
+  // item's PER-SERVING nutrition for that choice and resets the count to 1 (one
+  // serving), mirroring how the reference UI behaves.
+  const setServing = (idx: number, choice: ServingChoice) => {
+    if (state.phase !== 'review') return
+    setState({
+      ...state,
+      items: state.items.map((it, i) => {
+        if (i !== idx) return it
+        const variant = variantFromMatch(it.match)
+        if (!variant) return it
+        // One "serving" = `choice.quantity` of `choice.unit`. Apply any bridge the
+        // choice carries (e.g. a label-derived grams-per-cup) before the math.
+        const vForMath = variantForServingChoice({
+          servingSize: variant.servingSize,
+          servingUnit: variant.servingUnit,
+          nutrition: variant.nutrition,
+          gramsPerServing: variant.gramsPerServing,
+          mlPerServing: variant.mlPerServing,
+        }, choice)
+        let perServing: Macros
+        try {
+          perServing = nutritionForQuantity(vForMath, choice.quantity, choice.unit)
+        } catch {
+          return it // unit not reconcilable with this food — leave unchanged
+        }
+        const unitLabel = choice.group === 'servings' ? 'serving' : String(choice.unit)
+        return {
+          ...it,
+          nutrition: perServing,
+          unitLabel,
+          multiplier: 1,
+          servingChoiceId: choice.id,
+          servingLabelBase: choice.label,
+          labelOverride: choice.label,
+        }
+      }),
     })
   }
 
@@ -1064,6 +1138,7 @@ export default function SnapPlateModal({
                     imageThumb={state.imageThumb}
                     onSetMultiplier={setMultiplier}
                     onSetLabel={setItemLabel}
+                    onSetServing={setServing}
                     onToggleRemove={toggleRemove}
                     onCorrect={(text) => handleCorrect(state.items, state.imageThumb, text)}
                     onFeedback={() => setFeedbackOpen(true)}
@@ -1176,12 +1251,13 @@ interface ReviewBodyProps {
   imageThumb: string
   onSetMultiplier: (idx: number, delta: number) => void
   onSetLabel: (idx: number, label: string) => void
+  onSetServing: (idx: number, choice: ServingChoice) => void
   onToggleRemove: (idx: number) => void
   onCorrect: (text: string) => void
   onFeedback: () => void
 }
 
-function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
+function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServing, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
   const [fix, setFix] = useState('')
 
   const submitFix = () => {
@@ -1238,25 +1314,36 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onToggleRe
             : item.matchChecked
               ? [{ label: 'New', tone: 'zinc' as const }]
               : []
+          const variant = variantFromMatch(item.match)
           return (
-            <FoodItemRow
-              key={idx}
-              layout="review"
-              name={item.name}
-              brand={item.brand}
-              servingLabel={item.labelOverride || formatAmount(item.multiplier, item.unitLabel)}
-              calories={scaled.calories}
-              macros={{ protein: scaled.protein, carbs: scaled.carbs, fats: scaled.fats }}
-              confidence={item.confidence}
-              badges={badges}
-              dimmed={item.removed}
-              count={item.multiplier}
-              stepDelta={stepForUnit(item.unitLabel)}
-              stepFloor={floorForUnit(item.unitLabel)}
-              onStep={(delta) => onSetMultiplier(idx, delta)}
-              onServingLabelChange={(label) => onSetLabel(idx, label)}
-              onRemove={() => onToggleRemove(idx)}
-            />
+            <div key={idx} className="py-1">
+              {/* Header + macros + remove. The serving/quantity editing moved to
+                  the two boxes below, so the row itself is display-only. */}
+              <FoodItemRow
+                layout="review"
+                name={item.name}
+                brand={item.brand}
+                calories={scaled.calories}
+                macros={{ protein: scaled.protein, carbs: scaled.carbs, fats: scaled.fats }}
+                confidence={item.confidence}
+                badges={badges}
+                dimmed={item.removed}
+                onRemove={() => onToggleRemove(idx)}
+              />
+              {!item.removed && (
+                <ServingQuantityControls
+                  variant={variant}
+                  servingChoiceId={item.servingChoiceId}
+                  servingLabel={item.labelOverride || formatAmount(item.multiplier, item.unitLabel)}
+                  count={item.multiplier}
+                  stepDelta={stepForUnit(item.unitLabel)}
+                  stepFloor={floorForUnit(item.unitLabel)}
+                  onSelectServing={(choice) => onSetServing(idx, choice)}
+                  onStep={(delta) => onSetMultiplier(idx, delta)}
+                  onFreeformLabel={(label) => onSetLabel(idx, label)}
+                />
+              )}
+            </div>
           )
         })}
       </div>
