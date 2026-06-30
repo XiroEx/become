@@ -271,6 +271,25 @@ function variantFromMatch(m: DbMatch | null | undefined): QuantityPickerVariant 
   }
 }
 
+/** Every review item gets a serving-basis variant so EVERY row shows a serving
+ *  dropdown — not just matched foods. For an unmatched AI item we synthesize a
+ *  one-unit variant from its own estimate: when its unit is a real mass/volume
+ *  unit (g, tbsp, cup…) the dropdown can offer accurate same-family conversions;
+ *  a count word ("bite", "kiwi") maps to a discrete `each` so it still gets a
+ *  dropdown (just its own unit). `nutrition` is per ONE unit, matching how
+ *  ReviewItem stores it, so the math stays accurate to that food. */
+function buildVariantForItem(item: ReviewItem): QuantityPickerVariant {
+  const matched = variantFromMatch(item.match)
+  if (matched) return matched
+  const known = toKnownUnit(item.unitLabel)
+  return {
+    servingSize: 1,
+    servingUnit: (known ?? 'each') as ServingUnit,
+    displayLabel: formatAmount(1, item.unitLabel),
+    nutrition: item.nutrition,
+  }
+}
+
 /** Combine a per-serving label with a count: "1 cup (240 g)" + 2 → "2 × 1 cup (240 g)". */
 function combinedServingLabel(base: string, count: number): string {
   const n = Math.round(count * 100) / 100
@@ -707,8 +726,7 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) => {
         if (i !== idx) return it
-        const variant = variantFromMatch(it.match)
-        if (!variant) return it
+        const variant = buildVariantForItem(it)
         // One "serving" = `choice.quantity` of `choice.unit`. Apply any bridge the
         // choice carries (e.g. a label-derived grams-per-cup) before the math.
         const vForMath = variantForServingChoice({
@@ -1305,8 +1323,8 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
         </button>
       </div>
 
-      {/* Item rows — the shared FoodItemRow (review layout) */}
-      <div className="divide-y divide-zinc-100 dark:divide-zinc-800 px-4">
+      {/* Item rows — each food in its own card so the separation is distinct. */}
+      <div className="space-y-2.5 px-4">
         {items.map((item, idx) => {
           const scaled = scaledNutrition(item, item.multiplier)
           const badges = item.match
@@ -1314,11 +1332,19 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
             : item.matchChecked
               ? [{ label: 'New', tone: 'zinc' as const }]
               : []
-          const variant = variantFromMatch(item.match)
+          // Every item gets a serving-basis variant → every row shows a dropdown.
+          const variant = buildVariantForItem(item)
           return (
-            <div key={idx} className="py-1">
-              {/* Header + macros + remove. The serving/quantity editing moved to
-                  the two boxes below, so the row itself is display-only. */}
+            <div
+              key={idx}
+              className={`rounded-2xl border px-3 pt-2 pb-3 transition-colors ${
+                item.removed
+                  ? 'border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40'
+                  : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900'
+              }`}
+            >
+              {/* Header + macros + remove. Serving/quantity editing lives in the
+                  two boxes below, so the row itself is display-only. */}
               <FoodItemRow
                 layout="review"
                 name={item.name}
