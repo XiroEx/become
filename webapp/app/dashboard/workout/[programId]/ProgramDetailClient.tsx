@@ -687,20 +687,21 @@ export default function ProgramDetailClient({ program }: Props) {
             </p>
           </div>
 
-          {/* Start button */}
-          <div className="mt-4 flex gap-3 sm:mt-6">
-            <button 
+          {/* Action buttons — items-center so a longer label never stretches the
+              others; wrap + nowrap so nothing splits onto a 2nd line inside a button. */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 sm:mt-6 sm:gap-3">
+            <button
               onClick={handleStartProgram}
               disabled={enrolling}
-              className="rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-6 py-2.5 font-semibold text-white shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed sm:px-8 sm:py-3"
+              className="whitespace-nowrap rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-5 py-2.5 font-semibold text-white shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed sm:px-7 sm:py-3"
             >
-              {enrolling ? "Starting..." : activeProgram ? "Continue Program" : "Start Program"}
+              {enrolling ? "Starting..." : activeProgram ? "Continue" : "Start Program"}
             </button>
-            <button 
+            <button
               onClick={() => router.push(`/dashboard/workout/${program.program_id}/workout/live`)}
-              className={`flex items-center gap-2 rounded-full px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all sm:px-6 sm:py-3 ${
-                hasInProgressWorkout 
-                  ? "bg-yellow-500/20 hover:bg-yellow-500/30 ring-1 ring-yellow-500/50" 
+              className={`flex items-center gap-2 whitespace-nowrap rounded-full px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all sm:px-6 sm:py-3 ${
+                hasInProgressWorkout
+                  ? "bg-yellow-500/20 hover:bg-yellow-500/30 ring-1 ring-yellow-500/50"
                   : "bg-white/10 hover:bg-white/20"
               }`}
             >
@@ -723,7 +724,7 @@ export default function ProgramDetailClient({ program }: Props) {
             <ShareButton
               kind="program"
               programId={program.program_id}
-              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:px-6 sm:py-3"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/10 px-4 py-2.5 font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20 sm:px-5 sm:py-3"
             />
           </div>
 
@@ -899,8 +900,11 @@ export default function ProgramDetailClient({ program }: Props) {
               {/* Abandon Program Button */}
               <button
                 onClick={() => setShowAbandonDialog(true)}
-                className="mt-3 text-sm text-zinc-400 hover:text-red-400 transition-colors underline underline-offset-2"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-red-500/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
               >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
                 Abandon program
               </button>
             </div>
