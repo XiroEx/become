@@ -393,7 +393,10 @@ export default function QuantityPicker({
     return dropdownChoices.find(choice => choice.group !== 'servings' && choice.unit === customUnit) ?? null
   }, [choiceGroups.servings, customUnit, customValue, dropdownChoices, selectedInlineChoiceId])
   const selectedChoiceId = selectedChoice?.id ?? ''
-  const unitButtonLabel = selectedChoice?.group === 'servings' ? selectedChoice.label : unitLabel(customUnit)
+  // Servings are SHORTCUTS, not a selected "unit" — the unit button always shows
+  // the real measurable unit (g / cup / …). Picking a serving fills the amount
+  // and this unit; the serving itself just shows a ✓ in the menu when they match.
+  const unitButtonLabel = unitLabel(customUnit)
 
   useEffect(() => {
     if (!unitMenuOpen) return
