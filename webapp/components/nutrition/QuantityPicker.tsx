@@ -565,17 +565,17 @@ export default function QuantityPicker({
             maxHeight: unitMenuPosition.maxHeight,
           }}
         >
-          <ChoiceSection title="Servings" choices={choiceGroups.servings} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+          <ChoiceSection title="Servings" choices={choiceGroups.servings} selectedChoiceId={selectedChoiceId} activeUnit={customUnit} onSelect={onInlineChoiceSelect} />
           {/* Unit group matching the food's own dimension comes first. */}
           {choiceGroups.primaryFamily === 'volume' ? (
             <>
-              <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
-              <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+              <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} activeUnit={customUnit} onSelect={onInlineChoiceSelect} />
+              <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} activeUnit={customUnit} onSelect={onInlineChoiceSelect} />
             </>
           ) : (
             <>
-              <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
-              <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+              <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} activeUnit={customUnit} onSelect={onInlineChoiceSelect} />
+              <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} activeUnit={customUnit} onSelect={onInlineChoiceSelect} />
             </>
           )}
         </div>,
@@ -772,11 +772,15 @@ function ChoiceSection({
   title,
   choices,
   selectedChoiceId,
+  activeUnit,
   onSelect,
 }: {
   title: string
   choices: ServingChoice[]
   selectedChoiceId: string
+  /** The unit currently in the unit box — so the matching measurable row shows
+   *  a ✓ too (e.g. "fl oz" when the amount is 12 fl oz), alongside the serving. */
+  activeUnit?: Unit
   onSelect: (choice: ServingChoice) => void
 }) {
   if (choices.length === 0) return null
@@ -786,19 +790,23 @@ function ChoiceSection({
       <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
         {title}
       </div>
-      {choices.map(choice => (
-        <button
-          key={choice.id}
-          type="button"
-          role="option"
-          aria-selected={selectedChoiceId === choice.id}
-          onClick={() => onSelect(choice)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
-        >
-          <Check className={`h-4 w-4 shrink-0 ${selectedChoiceId === choice.id ? 'opacity-100' : 'opacity-0'}`} />
-          <span className="min-w-0 truncate">{choice.label}</span>
-        </button>
-      ))}
+      {choices.map(choice => {
+        const checked = selectedChoiceId === choice.id
+          || (choice.group !== 'servings' && activeUnit != null && choice.unit === activeUnit)
+        return (
+          <button
+            key={choice.id}
+            type="button"
+            role="option"
+            aria-selected={checked}
+            onClick={() => onSelect(choice)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            <Check className={`h-4 w-4 shrink-0 ${checked ? 'opacity-100' : 'opacity-0'}`} />
+            <span className="min-w-0 truncate">{choice.label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
