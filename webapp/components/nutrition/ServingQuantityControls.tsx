@@ -108,20 +108,17 @@ export default function ServingQuantityControls({
                   <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </optgroup>
-              {groups!.weight.length > 0 && (
-                <optgroup label="Weight">
-                  {groups!.weight.map((c) => (
+              {/* Unit group matching the food's own dimension comes first. */}
+              {(groups!.primaryFamily === 'volume'
+                ? [['Volume', groups!.volume], ['Weight', groups!.weight]] as const
+                : [['Weight', groups!.weight], ['Volume', groups!.volume]] as const
+              ).map(([title, list]) => list.length > 0 && (
+                <optgroup key={title} label={title}>
+                  {list.map((c) => (
                     <option key={c.id} value={c.id}>{optionLabel(c)}</option>
                   ))}
                 </optgroup>
-              )}
-              {groups!.volume.length > 0 && (
-                <optgroup label="Volume">
-                  {groups!.volume.map((c) => (
-                    <option key={c.id} value={c.id}>{optionLabel(c)}</option>
-                  ))}
-                </optgroup>
-              )}
+              ))}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           </div>
