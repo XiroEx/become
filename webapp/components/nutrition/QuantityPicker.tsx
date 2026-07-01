@@ -566,8 +566,18 @@ export default function QuantityPicker({
           }}
         >
           <ChoiceSection title="Servings" choices={choiceGroups.servings} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
-          <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
-          <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+          {/* Unit group matching the food's own dimension comes first. */}
+          {choiceGroups.primaryFamily === 'volume' ? (
+            <>
+              <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+              <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+            </>
+          ) : (
+            <>
+              <ChoiceSection title="Weight" choices={choiceGroups.weight} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+              <ChoiceSection title="Volume" choices={choiceGroups.volume} selectedChoiceId={selectedChoiceId} onSelect={onInlineChoiceSelect} />
+            </>
+          )}
         </div>,
         document.body,
       )
@@ -659,20 +669,17 @@ export default function QuantityPicker({
                   ))}
                 </optgroup>
               )}
-              {choiceGroups.weight.length > 0 && (
-                <optgroup label="Weight">
-                  {choiceGroups.weight.map(choice => (
+              {/* Unit group matching the food's own dimension comes first. */}
+              {(choiceGroups.primaryFamily === 'volume'
+                ? [['Volume', choiceGroups.volume], ['Weight', choiceGroups.weight]] as const
+                : [['Weight', choiceGroups.weight], ['Volume', choiceGroups.volume]] as const
+              ).map(([title, list]) => list.length > 0 && (
+                <optgroup key={title} label={title}>
+                  {list.map(choice => (
                     <option key={choice.id} value={choice.id}>{choice.label}</option>
                   ))}
                 </optgroup>
-              )}
-              {choiceGroups.volume.length > 0 && (
-                <optgroup label="Volume">
-                  {choiceGroups.volume.map(choice => (
-                    <option key={choice.id} value={choice.id}>{choice.label}</option>
-                  ))}
-                </optgroup>
-              )}
+              ))}
             </select>
           </div>
           <button

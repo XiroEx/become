@@ -37,6 +37,10 @@ export interface ServingChoiceGroups {
   weight: ServingChoice[]
   volume: ServingChoice[]
   all: ServingChoice[]
+  /** The food's own measurable dimension (from its serving) — the UI shows this
+   *  unit group FIRST, so a drink lists Volume before Weight and a solid the
+   *  reverse. undefined when the food is discrete with no bridge. */
+  primaryFamily?: 'mass' | 'volume'
 }
 
 // Generic metric units offered per dimension — broad, so the dropdown gives
@@ -59,11 +63,23 @@ export function buildServingChoiceGroups(variant: ServingOptionVariant): Serving
   const weight = buildUnitChoices('weight', MASS_UNITS, variant, bridge)
   const volume = buildUnitChoices('volume', VOLUME_UNITS, variant, bridge)
 
+  // Order the two unit groups by the food's OWN dimension: a drink ("12 fl oz")
+  // lists Volume first, a solid ("112 g") lists Weight first.
+  const primUnit = (servings[0]?.unit ?? variant.servingUnit) as Unit
+  const primFam = familyOf(primUnit)
+  const primaryFamily: 'mass' | 'volume' | undefined =
+    primFam === 'mass' || primFam === 'volume' ? primFam
+      : variant.mlPerServing ? 'volume'
+      : variant.gramsPerServing ? 'mass'
+      : undefined
+  const orderedMeasurable = primaryFamily === 'volume' ? [...volume, ...weight] : [...weight, ...volume]
+
   return {
     servings,
     weight,
     volume,
-    all: [...servings, ...weight, ...volume],
+    all: [...servings, ...orderedMeasurable],
+    primaryFamily,
   }
 }
 
