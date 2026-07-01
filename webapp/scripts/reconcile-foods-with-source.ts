@@ -143,7 +143,9 @@ async function main() {
   const brokenAtSource: Array<Record<string, unknown>> = []
   let applied = 0
 
+  let processed = 0
   for (const f of all) {
+    if (++processed % 50 === 0) console.log(`PROGRESS ${processed}/${all.length}  match=${counts['matches-source']} fixable=${counts.fixable} applied=${applied} broken=${counts['broken-at-source']} unreachable=${counts['source-unreachable']}`)
     const label = `${f.name}${f.brand ? ` (${f.brand})` : ''}`
     const vs = f.variants ?? []
     let di = vs.findIndex((v) => v.isDefault); if (di < 0) di = 0
