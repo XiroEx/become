@@ -70,19 +70,15 @@ export interface ServingQuantityControlsProps {
   onFreeformLabel?: (label: string) => void
 }
 
-const CURRENT_OPTION = '__current__'
-
 export default function ServingQuantityControls({
   variant,
   servingChoiceId,
   servingLabel,
-  originalLabel,
   count,
   stepDelta = 1,
   stepFloor = 0.5,
   disabled,
   onSelectServing,
-  onResetToOriginal,
   onStep,
   onFreeformLabel,
 }: ServingQuantityControlsProps) {
@@ -97,24 +93,20 @@ export default function ServingQuantityControls({
           <div className="relative">
             <select
               aria-label="Serving size"
-              value={servingChoiceId ?? CURRENT_OPTION}
+              value={servingChoiceId ?? groups!.servings[0]?.id ?? groups!.all[0]?.id ?? ''}
               onChange={(e) => {
-                if (e.target.value === CURRENT_OPTION) { onResetToOriginal?.(); return }
                 const choice = groups!.all.find((c) => c.id === e.target.value)
                 if (choice) onSelectServing(choice)
               }}
               className="w-full appearance-none truncate rounded-lg border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm font-medium text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
             >
-              {/* Servings section (always present — every food has ≥1 serving).
-                  The item's original friendly serving leads, never removed when
-                  another unit is picked, so the user can always switch back. */}
+              {/* Servings first — cosmetic shortcuts (picking one fills quantity +
+                  unit, and shows checked when the two inputs match it). Always ≥1.
+                  Then the measurable units grouped by Weight / Volume. */}
               <optgroup label="Servings">
-                <option value={CURRENT_OPTION}>{originalLabel || servingLabel || 'Current serving'}</option>
-                {groups!.servings
-                  .filter((c) => optionLabel(c) !== (originalLabel || servingLabel))
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>{optionLabel(c)}</option>
-                  ))}
+                {groups!.servings.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
               </optgroup>
               {groups!.weight.length > 0 && (
                 <optgroup label="Weight">

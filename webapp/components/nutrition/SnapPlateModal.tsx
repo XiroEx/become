@@ -19,7 +19,7 @@ import FoodItemRow from '@/components/nutrition/FoodItemRow'
 import ServingQuantityControls from '@/components/nutrition/ServingQuantityControls'
 import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
 import { scalingFactor, nutritionForQuantity } from '@/lib/foodMath'
-import { variantForServingChoice, type ServingChoice } from '@/lib/nutrition/servingOptions'
+import { variantForServingChoice, buildServingChoiceGroups, type ServingChoice } from '@/lib/nutrition/servingOptions'
 import type { Unit } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
 
@@ -309,6 +309,19 @@ function buildVariantForItem(item: ReviewItem): QuantityPickerVariant {
     displayLabel: formatAmount(1, item.unitLabel),
     nutrition: item.nutrition,
   }
+}
+
+/** Which dropdown choice the item's current (quantity, unit) matches — so the
+ *  serving-size dropdown checks the right row. A serving matches when BOTH its
+ *  quantity and unit line up; otherwise the measurable unit row matches; else we
+ *  fall back to the primary serving so the Servings section always shows one. */
+function matchingChoiceId(item: ReviewItem): string | undefined {
+  const groups = buildServingChoiceGroups(buildVariantForItem(item))
+  const s = groups.servings.find((c) => String(c.unit) === item.unitLabel && Math.abs(c.quantity - item.multiplier) < 0.01)
+  if (s) return s.id
+  const u = [...groups.weight, ...groups.volume].find((c) => String(c.unit) === item.unitLabel)
+  if (u) return u.id
+  return groups.servings[0]?.id
 }
 
 /** Combine a per-serving label with a count: "1 cup (240 g)" + 2 → "2 × 1 cup (240 g)". */
@@ -796,21 +809,28 @@ export default function SnapPlateModal({
           gramsPerServing: variant.gramsPerServing,
           mlPerServing: variant.mlPerServing,
         }, choice)
-        let perServing: Macros
+        // Servings are SHORTCUTS: picking one fills the Quantity box with the
+        // serving's amount and selects its measurable unit (e.g. "1 portion
+        // (112 g)" → quantity 112, unit g). We store per-ONE-unit nutrition ×
+        // multiplier so the two inputs (quantity + unit) are the real state and
+        // a serving shows checked whenever they line up with it.
+        let perUnit: Macros
         try {
-          perServing = nutritionForQuantity(vForMath, choice.quantity, choice.unit)
+          perUnit = nutritionForQuantity(vForMath, 1, choice.unit)
         } catch {
           return it // unit not reconcilable with this food — leave unchanged
         }
-        const unitLabel = choice.group === 'servings' ? 'serving' : String(choice.unit)
+        const multiplier = choice.quantity > 0 ? choice.quantity : 1
         return {
           ...it,
-          nutrition: perServing,
-          unitLabel,
-          multiplier: 1,
+          nutrition: perUnit,
+          unitLabel: String(choice.unit),
+          multiplier,
           servingChoiceId: choice.id,
           servingLabelBase: choice.label,
-          labelOverride: choice.label,
+          // Serving picks keep the friendly label; a raw unit pick lets the
+          // amount+unit render naturally.
+          labelOverride: choice.group === 'servings' ? choice.label : undefined,
         }
       }),
     })
@@ -1421,7 +1441,7 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
               {!item.removed && (
                 <ServingQuantityControls
                   variant={variant}
-                  servingChoiceId={item.servingChoiceId}
+                  servingChoiceId={matchingChoiceId(item)}
                   servingLabel={item.labelOverride || formatAmount(item.multiplier, item.unitLabel)}
                   originalLabel={item.origServing?.label}
                   count={item.multiplier}
