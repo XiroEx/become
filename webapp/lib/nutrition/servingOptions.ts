@@ -115,7 +115,19 @@ function buildServingChoices(variant: ServingOptionVariant): ServingChoice[] {
     if (choice && shouldShowServingChoice(choice, alt.label, variant, false)) choices.push(choice)
   }
 
-  return dedupeChoices(choices)
+  const deduped = dedupeChoices(choices)
+  if (deduped.length > 0) return deduped
+
+  // EVERY food gets at least one serving — the "Servings" section anchors the
+  // dropdown and lets picking it fill quantity + unit. If the food only has a
+  // bare mass/volume native serving ("100 g"), that's fine, show it anyway
+  // (shouldShowServingChoice would otherwise suppress it as unit-redundant).
+  const forced = primary ?? choiceFromLabel({
+    id: 'serving-primary', label: primaryLabel,
+    fallbackQuantity: primaryQuantity(variant), fallbackUnit: native, variant,
+  })
+  if (forced) return [forced]
+  return [{ id: 'serving-primary', group: 'servings', label: primaryLabel, quantity: primaryQuantity(variant), unit: native }]
 }
 
 function choiceFromLabel(args: {

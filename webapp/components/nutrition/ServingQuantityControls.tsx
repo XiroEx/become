@@ -105,16 +105,17 @@ export default function ServingQuantityControls({
               }}
               className="w-full appearance-none truncate rounded-lg border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm font-medium text-zinc-900 focus:border-emerald-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:[color-scheme:dark]"
             >
-              {/* The item's original friendly serving — ALWAYS present (never
-                  removed when another unit is picked) so the user can switch back. */}
-              <option value={CURRENT_OPTION}>{originalLabel || servingLabel || 'Current serving'}</option>
-              {groups!.servings.length > 0 && (
-                <optgroup label="Servings">
-                  {groups!.servings.map((c) => (
+              {/* Servings section (always present — every food has ≥1 serving).
+                  The item's original friendly serving leads, never removed when
+                  another unit is picked, so the user can always switch back. */}
+              <optgroup label="Servings">
+                <option value={CURRENT_OPTION}>{originalLabel || servingLabel || 'Current serving'}</option>
+                {groups!.servings
+                  .filter((c) => optionLabel(c) !== (originalLabel || servingLabel))
+                  .map((c) => (
                     <option key={c.id} value={c.id}>{optionLabel(c)}</option>
                   ))}
-                </optgroup>
-              )}
+              </optgroup>
               {groups!.weight.length > 0 && (
                 <optgroup label="Weight">
                   {groups!.weight.map((c) => (
