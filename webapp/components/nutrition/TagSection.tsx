@@ -18,6 +18,10 @@ import {
   MoreVertical,
   CalendarDays,
   ChefHat,
+  Camera,
+  ScanBarcode,
+  Upload,
+  PencilLine,
   Trash2,
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
@@ -53,12 +57,14 @@ export interface MealLogLite {
   totalNutrition?: { calories: number; protein: number; carbs: number; fats: number }
   mealId?: string
   mealName?: string
+  source?: 'photo' | 'barcode' | 'upload' | 'describe' | 'search' | 'manual'
   notes?: string
 }
 
 interface FlattenedItem {
   logId: string
   mealName?: string
+  source?: MealLogLite['source']
   item: IMealItem & { _id?: string }
 }
 
@@ -199,7 +205,7 @@ export default function TagSection({
   const flat: FlattenedItem[] = []
   for (const log of logs) {
     for (const item of log.items) {
-      flat.push({ logId: log._id, mealName: log.mealName, item })
+      flat.push({ logId: log._id, mealName: log.mealName, source: log.source, item })
     }
   }
 
@@ -235,13 +241,13 @@ export default function TagSection({
 
   // Group flattened items by mealName so meal-template logs render as a
   // mini-block with a "From: …" header.
-  type Group = { key: string; mealName?: string; items: FlattenedItem[] }
+  type Group = { key: string; mealName?: string; source?: MealLogLite['source']; items: FlattenedItem[] }
   const groups: Group[] = []
   let lastKey = ''
   for (const fi of flat) {
     const key = fi.mealName ? `meal:${fi.logId}` : `loose:${fi.logId}`
     if (key !== lastKey) {
-      groups.push({ key, mealName: fi.mealName, items: [] })
+      groups.push({ key, mealName: fi.mealName, source: fi.source, items: [] })
       lastKey = key
     }
     groups[groups.length - 1].items.push(fi)
@@ -414,6 +420,16 @@ export default function TagSection({
                         onRemoveEntry={onRemoveEntry}
                         onAddToMeal={onAddToMeal}
                       />
+                    ) : group.source && group.source !== 'manual' && group.source !== 'search' && group.items.length > 1 ? (
+                      // Multi-food capture that isn't a saved meal — group it under
+                      // a source-colored card (camera / barcode / upload / describe).
+                      <CaptureGroupCard
+                        key={group.key}
+                        source={group.source as 'photo' | 'barcode' | 'upload' | 'describe'}
+                        items={group.items}
+                        onEditEntry={onEditEntry}
+                        onRemoveEntry={onRemoveEntry}
+                      />
                     ) : (
                       <div key={group.key}>
                         <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -548,6 +564,60 @@ function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: 
                 Add food to this meal
               </button>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Capture group — a multi-food capture (photo / barcode / upload / describe)
+// that wasn't saved as a Meal. Groups the foods under a source-colored, bordered
+// card with the matching icon + label, so it reads as one capture at a glance. ──
+const captureVisuals: Record<'photo' | 'barcode' | 'upload' | 'describe', {
+  Icon: typeof Camera; label: string; text: string; border: string; bg: string; divide: string; chevron: string; hover: string
+}> = {
+  photo:    { Icon: Camera,      label: 'Photo',     text: 'text-emerald-600 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-900/40', bg: 'bg-emerald-50/40 dark:bg-emerald-900/10', divide: 'divide-emerald-100 dark:divide-emerald-900/30', chevron: 'text-emerald-400', hover: 'hover:bg-emerald-100/50 dark:hover:bg-emerald-900/20' },
+  upload:   { Icon: Upload,      label: 'Upload',    text: 'text-violet-600 dark:text-violet-300',   border: 'border-violet-200 dark:border-violet-900/40',  bg: 'bg-violet-50/40 dark:bg-violet-900/10',  divide: 'divide-violet-100 dark:divide-violet-900/30',  chevron: 'text-violet-400',  hover: 'hover:bg-violet-100/50 dark:hover:bg-violet-900/20' },
+  barcode:  { Icon: ScanBarcode, label: 'Barcode',   text: 'text-blue-600 dark:text-blue-300',       border: 'border-blue-200 dark:border-blue-900/40',      bg: 'bg-blue-50/40 dark:bg-blue-900/10',      divide: 'divide-blue-100 dark:divide-blue-900/30',      chevron: 'text-blue-400',    hover: 'hover:bg-blue-100/50 dark:hover:bg-blue-900/20' },
+  describe: { Icon: PencilLine,  label: 'Described',  text: 'text-cyan-600 dark:text-cyan-300',       border: 'border-cyan-200 dark:border-cyan-900/40',      bg: 'bg-cyan-50/40 dark:bg-cyan-900/10',      divide: 'divide-cyan-100 dark:divide-cyan-900/30',      chevron: 'text-cyan-400',    hover: 'hover:bg-cyan-100/50 dark:hover:bg-cyan-900/20' },
+}
+
+function CaptureGroupCard({ source, items, onEditEntry, onRemoveEntry }: {
+  source: 'photo' | 'barcode' | 'upload' | 'describe'
+  items: { logId: string; item: IMealItem & { _id?: string } }[]
+  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onRemoveEntry: (logId: string, itemId: string) => void
+}) {
+  const [open, setOpen] = useState(true)
+  const v = captureVisuals[source] ?? captureVisuals.photo
+  const totalCal = Math.round(items.reduce((s, fi) => s + (fi.item.nutrition?.calories ?? 0) * (fi.item.servings ?? 1), 0))
+  return (
+    <div className={`mx-3 my-2 overflow-hidden rounded-xl border ${v.border} ${v.bg}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex w-full items-center gap-1.5 px-3 py-2.5 text-left ${open ? `border-b ${v.border}` : ''}`}
+      >
+        <v.Icon className={`h-3.5 w-3.5 shrink-0 ${v.text}`} />
+        <span className={`shrink-0 text-[10px] font-semibold uppercase tracking-wide ${v.text} opacity-80`}>{v.label}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{items.length} items</span>
+        <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 ${v.chevron} transition-transform ${open ? '' : '-rotate-90'}`} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+            <div className={`divide-y ${v.divide}`}>
+              {items.map((fi, idx) => (
+                <ItemRow
+                  key={`${fi.logId}-${fi.item._id ?? idx}`}
+                  logId={fi.logId}
+                  item={fi.item}
+                  onEdit={() => onEditEntry(fi.logId, fi.item)}
+                  onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
+                />
+              ))}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
