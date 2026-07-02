@@ -155,6 +155,8 @@ export async function POST(request: NextRequest) {
       items,
       mealId,
       mealName: typeof body.mealName === 'string' ? body.mealName : undefined,
+      source: typeof body.source === 'string' && ['photo', 'barcode', 'upload', 'describe', 'search', 'manual'].includes(body.source)
+        ? body.source : undefined,
       tags: Array.isArray(body.tags) ? body.tags : [],
       notes: typeof body.notes === 'string' ? body.notes : undefined,
       totalNutrition: computeTotalNutrition(items),

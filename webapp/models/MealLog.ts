@@ -17,6 +17,11 @@ export interface IMealLog {
   mealId?: Types.ObjectId
   mealName?: string
 
+  // How this entry was captured — lets the day view group a multi-food capture
+  // (photo/barcode/upload/describe) under a source-colored card, even when it
+  // wasn't saved as a Meal. undefined = ordinary manual/search add.
+  source?: 'photo' | 'barcode' | 'upload' | 'describe' | 'search' | 'manual'
+
   tags: string[]
   notes?: string
 
@@ -77,6 +82,8 @@ const MealLogSchema = new Schema<IMealLog>({
 
   mealId: { type: Schema.Types.ObjectId, ref: 'Meal' },
   mealName: { type: String },
+
+  source: { type: String, enum: ['photo', 'barcode', 'upload', 'describe', 'search', 'manual'] },
 
   tags: { type: [String], default: [] },
   notes: { type: String },
