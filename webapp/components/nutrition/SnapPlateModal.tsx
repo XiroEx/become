@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare, ChevronDown } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
@@ -1359,6 +1359,14 @@ interface ReviewBodyProps {
 
 function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServing, onResetServing, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
   const [fix, setFix] = useState('')
+  // Serving/quantity boxes collapse by default so more items fit at a glance;
+  // tapping a row's amount reveals its two editors.
+  const [openRows, setOpenRows] = useState<Set<number>>(new Set())
+  const toggleRow = (idx: number) => setOpenRows((prev) => {
+    const next = new Set(prev)
+    if (next.has(idx)) next.delete(idx); else next.add(idx)
+    return next
+  })
 
   const submitFix = () => {
     const t = fix.trim()
@@ -1438,21 +1446,40 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
                 dimmed={item.removed}
                 onRemove={() => onToggleRemove(idx)}
               />
-              {!item.removed && (
-                <ServingQuantityControls
-                  variant={variant}
-                  servingChoiceId={matchingChoiceId(item)}
-                  servingLabel={item.labelOverride || formatAmount(item.multiplier, item.unitLabel)}
-                  originalLabel={item.origServing?.label}
-                  count={item.multiplier}
-                  stepDelta={stepForUnit(item.unitLabel)}
-                  stepFloor={floorForUnit(item.unitLabel)}
-                  onSelectServing={(choice) => onSetServing(idx, choice)}
-                  onResetToOriginal={() => onResetServing(idx)}
-                  onStep={(delta) => onSetMultiplier(idx, delta)}
-                  onFreeformLabel={(label) => onSetLabel(idx, label)}
-                />
-              )}
+              {!item.removed && (() => {
+                const open = openRows.has(idx)
+                const summary = item.labelOverride || formatAmount(item.multiplier, item.unitLabel)
+                return (
+                  <>
+                    {/* Collapsed by default — tap to reveal the serving + quantity
+                        editors so more items are visible at first glance. */}
+                    <button
+                      type="button"
+                      onClick={() => toggleRow(idx)}
+                      aria-expanded={open}
+                      className="mt-1.5 flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      <span className="truncate">{summary}</span>
+                      <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    {open && (
+                      <ServingQuantityControls
+                        variant={variant}
+                        servingChoiceId={matchingChoiceId(item)}
+                        servingLabel={summary}
+                        originalLabel={item.origServing?.label}
+                        count={item.multiplier}
+                        stepDelta={stepForUnit(item.unitLabel)}
+                        stepFloor={floorForUnit(item.unitLabel)}
+                        onSelectServing={(choice) => onSetServing(idx, choice)}
+                        onResetToOriginal={() => onResetServing(idx)}
+                        onStep={(delta) => onSetMultiplier(idx, delta)}
+                        onFreeformLabel={(label) => onSetLabel(idx, label)}
+                      />
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )
         })}
