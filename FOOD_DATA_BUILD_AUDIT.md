@@ -33,7 +33,14 @@
 ## 4. Fixes — HOW we build the data
 Each is independently shippable. Land at import time AND back-fill existing rows.
 
-**Phase 1 — Names & serving labels (highest visibility, low risk)**
+**Phase 1 — Names & serving labels (highest visibility, low risk) — ✅ SHIPPED 2026-07-02**
+Implemented as `lib/foodNameClean.ts` (`cleanFoodName` + `sanitizeServingLabel`),
+wired into both `mapUSDAFood` paths in `lib/usda.ts` so new imports land clean.
+Back-filled prod via `scripts/fix-food-names.ts --apply`: **541 names + 178 labels
+across 692 docs**; Beverages-prefixed names 48 → 2. Reversible backup at
+`webapp/scripts/.backup-food-names.json`. Deployed (build #1788). Note: the merge
+guardrails only stop leading FOOD-GROUP words (Beverages/Snacks/Fast foods/…), NOT
+singular head nouns (Beef/Coffee/Soup), and protect acronyms (USDA).
 - `cleanFoodName(description, category)`: strip a leading category segment (Beverages,
   Snacks, Poultry Products, …); reorder comma-form USDA descriptions so the head noun
   leads ("Coffee, brewed, prepared" → "Coffee (brewed)"); collapse ALL-CAPS; trim
