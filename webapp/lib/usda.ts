@@ -8,6 +8,7 @@
  */
 
 import { parseQuantityString, convert, familyOf } from '@/lib/units'
+import { cleanFoodName, sanitizeServingLabel } from '@/lib/foodNameClean'
 
 const API_BASE = 'https://api.nal.usda.gov/fdc/v1'
 
@@ -257,10 +258,10 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
 
         return {
           _id: `usda-${food.fdcId}`,
-          name: food.description,
+          name: cleanFoodName(food.description),
           brand: food.brandOwner || food.brandName || undefined,
           category: mapCategory(food.foodCategory),
-          displayLabel: food.householdServingFullText || undefined,
+          displayLabel: sanitizeServingLabel(food.householdServingFullText) || undefined,
           servingSize,
           servingUnit: servingUnit === 'ml' ? 'ml' : 'g',
           alternateServings: alternateServings.length > 0 ? alternateServings : undefined,
@@ -330,10 +331,10 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
 
   return {
     _id: `usda-${food.fdcId}`,
-    name: food.description,
+    name: cleanFoodName(food.description),
     brand: food.brandOwner || food.brandName || undefined,
     category: mapCategory(food.foodCategory),
-    displayLabel: food.householdServingFullText || undefined,
+    displayLabel: sanitizeServingLabel(food.householdServingFullText) || undefined,
     servingSize,
     servingUnit: servingUnit === 'ml' ? 'ml' : 'g',
     alternateServings: alternateServings.length > 0 ? alternateServings : undefined,
