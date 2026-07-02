@@ -847,12 +847,19 @@ export async function importFromOpenFoodFacts(
         barcode: offCandidate.barcode,
         isVerified: offCandidate.isVerified,
         variantsCount: offCandidate.variants.length,
+        nutritionProfile: extractFoodNutritionProfile(offCandidate),
       }
       const candidateSide: VariantMergeCandidate = {
         source: 'openfoodfacts',
         groupKey: offGroupKey,
         brand: off.brands,
         barcode: off.code,
+        nutritionProfile: {
+          calories: typeof variant.nutrition?.calories === 'number' ? variant.nutrition.calories : null,
+          protein: typeof variant.nutrition?.protein === 'number' ? variant.nutrition.protein : null,
+          carbs: typeof variant.nutrition?.carbs === 'number' ? variant.nutrition.carbs : null,
+          fats: typeof variant.nutrition?.fats === 'number' ? variant.nutrition.fats : null,
+        },
       }
       const decision = canAutoMergeAsVariant(parentSide, candidateSide)
       if (decision.ok) {

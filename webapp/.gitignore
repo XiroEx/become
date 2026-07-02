@@ -43,3 +43,4 @@ yarn-error.log*
 next-env.d.ts
 scripts/reports/
 scripts/.backup-food-names.json
+scripts/.backup-dedupe-variants.json

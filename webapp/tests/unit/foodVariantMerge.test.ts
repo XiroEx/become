@@ -75,6 +75,25 @@ test('USDA non-Branded: groupKey match → MERGE (regression of current behavior
   assert.equal(d.reason, 'usda-non-branded-groupkey-match')
 })
 
+test('USDA non-Branded: brewed tea (1 cal) vs tea powder (401 cal) → BLOCK divergent', () => {
+  const powder: VariantMergeCandidate = {
+    ...usdaNonBrandedCandidate,
+    nutritionProfile: { calories: 401, protein: 8, carbs: 80, fats: 1 },
+  }
+  const d = canAutoMergeAsVariant(usdaNonBrandedParent, powder)
+  assert.equal(d.ok, false)
+  assert.equal(d.reason, 'usda-non-branded-calorie-divergent')
+})
+
+test('USDA non-Branded: brewed 1 vs light 4 cal → still MERGE (small spread)', () => {
+  const light: VariantMergeCandidate = {
+    ...usdaNonBrandedCandidate,
+    nutritionProfile: { calories: 4, protein: 0, carbs: 0.9, fats: 0 },
+  }
+  const d = canAutoMergeAsVariant(usdaNonBrandedParent, light)
+  assert.equal(d.ok, true)
+})
+
 // ---------------------------------------------------------------------------
 // 2. USDA Branded
 // ---------------------------------------------------------------------------

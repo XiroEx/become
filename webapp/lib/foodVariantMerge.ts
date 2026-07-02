@@ -99,6 +99,31 @@ export function nutritionWithinTolerance(
   return true
 }
 
+/**
+ * Guard against merging grossly different PREPARATIONS that happen to share a
+ * groupKey — the classic failure was 1 kcal brewed tea and 401 kcal instant tea
+ * powder both collapsing into one "Tea" food (see FOOD_DATA_BUILD_AUDIT.md §3B).
+ * Both profiles here are per-default-serving (≈per-100g for USDA non-Branded /
+ * generic OFF), so calorie density is directly comparable.
+ *
+ * Returns true (block merge) only when the gap is unambiguous: a large absolute
+ * difference AND either one side is ~0 while the other is substantial, or a
+ * >2.5× density ratio. Small spreads (brewed 1 vs light 4 vs 27) still cluster.
+ */
+export function caloriesGrosslyDivergent(
+  a: NutritionProfile | null | undefined,
+  b: NutritionProfile | null | undefined,
+): boolean {
+  const av = a?.calories
+  const bv = b?.calories
+  if (typeof av !== 'number' || typeof bv !== 'number') return false
+  const hi = Math.max(av, bv)
+  const lo = Math.min(av, bv)
+  if (hi - lo < 40) return false          // small absolute gap → same food
+  if (lo <= 1) return hi >= 40            // ~0 vs substantial → different prep
+  return hi / lo > 2.5                    // >2.5× density gap → different prep
+}
+
 function canMergeUSDA(
   parent: VariantMergeParent,
   candidate: VariantMergeCandidate,
@@ -113,7 +138,11 @@ function canMergeUSDA(
   }
 
   if (!parentIsBranded) {
-    // Non-Branded: groupKey match (checked by caller) is sufficient.
+    // Non-Branded: groupKey match (checked by caller) is sufficient — but block
+    // grossly divergent preparations (brewed tea vs tea powder) from merging.
+    if (caloriesGrosslyDivergent(parent.nutritionProfile, candidate.nutritionProfile)) {
+      return { ok: false, reason: 'usda-non-branded-calorie-divergent' }
+    }
     return { ok: true, reason: 'usda-non-branded-groupkey-match' }
   }
 
@@ -148,14 +177,22 @@ function canMergeOFF(
     return { ok: false, reason: 'off-different-brand' }
   }
 
-  // Shared brand: same product family, different variants → merge.
+  // Shared brand: same product family, different variants → merge, UNLESS the
+  // calorie density is grossly different (regular vs zero/diet are distinct
+  // products, not variants of one food).
   if (pBrand && cBrand && pBrand === cBrand) {
+    if (caloriesGrosslyDivergent(parent.nutritionProfile, candidate.nutritionProfile)) {
+      return { ok: false, reason: 'off-shared-brand-calorie-divergent' }
+    }
     return { ok: true, reason: 'off-shared-brand' }
   }
 
   // Both barcode-absent AND both brand-absent: generic OFF entries with no
   // distinguishing features → accept on groupKey match.
   if (!parent.barcode && !candidate.barcode && !pBrand && !cBrand) {
+    if (caloriesGrosslyDivergent(parent.nutritionProfile, candidate.nutritionProfile)) {
+      return { ok: false, reason: 'off-calorie-divergent' }
+    }
     return { ok: true, reason: 'off-no-barcodes-no-brand' }
   }
 
