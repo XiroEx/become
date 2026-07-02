@@ -49,7 +49,24 @@ singular head nouns (Beef/Coffee/Soup), and protect acronyms (USDA).
   and fall back to the plain unit when the label is garbled. (Feeds the "always ≥1
   serving" logic that already exists.)
 
-**Phase 2 — Variant merge guardrails & default selection**
+**Phase 2 — Variant merge guardrails & default selection — ✅ GUARDRAIL SHIPPED 2026-07-02 (2b split pending)**
+Build guardrail: `caloriesGrosslyDivergent()` in `lib/foodVariantMerge.ts` now gates
+the non-Branded USDA path (was groupKey-only, zero nutrient check — the root cause)
+and the OFF shared-brand / no-brand paths; `nutritionProfile` wired into the OFF
+merge sides in `lib/foodImport.ts`. +2 unit tests (26 pass). This stops brewed-tea
+(1 cal) + tea-powder (401 cal) — and regular vs zero-cal soda — from merging going
+forward. Data: `scripts/dedupe-variants.ts --apply` removed 23 exact-duplicate
+variants across 20 foods (reversible backup) and REPORTED 18 already-merged
+grossly-divergent foods for a reviewed **Phase 2b split** (NOT auto-repicked — a
+wrong default is what the user flagged):
+Tea (1–401), Coffee (1–509), Alcoholic Beverage, McDONALD'S, Beef Cured/New/Variety,
+Wild rice, Vinegar, Infant Formula, Beans Kidney, Beverages, Abbott, Cereal, Sour
+Cream, Sweet Potato, Ginger Root, Blueberries (fresh+dried). 2b = delete+re-import
+under the new guardrail (they'll land as separate foods), or split in place; needs
+care re: MealLog `foodId` references. The `pickDefaultVariant` heuristic below is
+still TODO and only meaningful after the split.
+
+Original plan:
 - In `foodVariantMerge`, DON'T merge a form that changes the food's identity into a
   plain generic: block `meatless|vegan|powder|concentrate|dehydrated|dry mix|substitute`
   from joining a plain-named parent (they become their own foods). Tighten the
