@@ -49,6 +49,16 @@ singular head nouns (Beef/Coffee/Soup), and protect acronyms (USDA).
   and fall back to the plain unit when the label is garbled. (Feeds the "always ≥1
   serving" logic that already exists.)
 
+**Identity guardrail — ✅ SHIPPED 2026-07-02.** The calorie guard can't catch a
+meat/dairy SUBSTITUTE merged into the real food (meatless chicken ≈ chicken in
+calories). Added `hasSubstituteIdentity()` + a universal gate in
+`canAutoMergeAsVariant` blocking a merge when exactly one side carries a
+meatless/vegan/plant-based/imitation/non-dairy identity; food name threaded into
+both merge sides. A source-level sweep (re-fetched 312/313 variant USDA
+descriptions across all 86 multi-variant USDA foods) found EXACTLY 2 identity
+mismatches, both split off in prod: Chicken→"Chicken (canned)"+"Meatless Chicken";
+Sour Cream→(light/reduced/fat-free, default reduced-fat)+"Imitation Sour Cream".
+
 **Phase 2 — Variant merge guardrails & default selection — ✅ GUARDRAIL SHIPPED 2026-07-02 (2b split pending)**
 Build guardrail: `caloriesGrosslyDivergent()` in `lib/foodVariantMerge.ts` now gates
 the non-Branded USDA path (was groupKey-only, zero nutrient check — the root cause)
