@@ -53,6 +53,32 @@ interface QuickSessionSaveRequest {
   activeSeconds?: number
   notes?: string
   tz?: number
+  /** Optional backdate — ISO string / YYYY-MM-DD for a workout performed earlier. */
+  performedAt?: string
+}
+
+/**
+ * Resolve the date a workout was performed. Accepts an optional client-supplied
+ * `performedAt` (for logging a past session) and clamps it to a sane window:
+ * a valid date, no further in the future than the end of the caller's local
+ * today, and no older than one year. Falls back to now on anything invalid.
+ */
+function resolvePerformedAt(performedAt: string | undefined, tzOffset: number): Date {
+  const now = new Date()
+  if (!performedAt || typeof performedAt !== 'string') return now
+  // Bare YYYY-MM-DD → anchor at local noon so it lands on the intended day
+  // regardless of tz offset when later bucketed into a local-day window.
+  const raw = /^\d{4}-\d{2}-\d{2}$/.test(performedAt) ? `${performedAt}T12:00:00` : performedAt
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return now
+  // End of caller's local today (tzOffset is getTimezoneOffset()-style minutes).
+  const endOfToday = new Date(now.getTime() - tzOffset * 60_000)
+  endOfToday.setUTCHours(23, 59, 59, 999)
+  const maxAllowed = new Date(endOfToday.getTime() + tzOffset * 60_000)
+  const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+  if (d.getTime() > maxAllowed.getTime()) return now      // no future dates
+  if (d.getTime() < oneYearAgo.getTime()) return now      // absurdly old → now
+  return d
 }
 
 // GET: Fetch today's workout progress for a program
@@ -511,6 +537,8 @@ async function handleQuickSessionSave(
 
   const tzOffset = readTzOffsetFromBody(body)
   captureUserTimezone(payload.userId, tzOffset)
+  // Honor an optional backdate so users can log a session they did earlier.
+  const workoutDate = resolvePerformedAt(body.performedAt, tzOffset)
 
   // Update-if-exists (matched by sessionId), capturing the prior state so we
   // can tell whether this completion is the first one (gates streak/PR side
@@ -527,6 +555,12 @@ async function handleQuickSessionSave(
         ...(focus !== undefined && { 'workoutLogs.$[elem].focus': focus }),
         ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
         ...(notes !== undefined && { 'workoutLogs.$[elem].notes': notes }),
+        // Backdate only when the client explicitly sends performedAt — autosaves
+        // omit it, so they never disturb the log's date.
+        ...(body.performedAt && {
+          'workoutLogs.$[elem].date': workoutDate,
+          'workoutLogs.$[elem].startedAt': workoutDate,
+        }),
         updatedAt: new Date(),
       },
     },
@@ -538,7 +572,6 @@ async function handleQuickSessionSave(
   ) as QuickProgressDoc | null
 
   let wasAlreadyComplete = false
-  const workoutDate = new Date()
 
   if (docBefore) {
     const oldLog = docBefore.workoutLogs?.find((log) => log.sessionId === sessionId)
