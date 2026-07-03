@@ -46,3 +46,4 @@ scripts/.backup-food-names.json
 scripts/.backup-dedupe-variants.json
 scripts/.backup-generic-renames.json
 scripts/.backup-chicken-split.json
+scripts/.backup-sourcream-split.json
