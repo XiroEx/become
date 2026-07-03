@@ -66,6 +66,24 @@ under the new guardrail (they'll land as separate foods), or split in place; nee
 care re: MealLog `foodId` references. The `pickDefaultVariant` heuristic below is
 still TODO and only meaningful after the split.
 
+**Identity guardrail ADDED 2026-07-02:** the calorie guard missed "Chicken" +
+"meatless" merges (meatless chicken ≈ real chicken by calories). Added
+`hasSubstituteIdentity()` + a universal gate in `canAutoMergeAsVariant` blocking a
+merge when exactly one side carries a meat/dairy-substitute token
+(meatless/vegan/plant-based/imitation/mock/non-dairy/…); food names now flow into
+both USDA + OFF merge sides. +2 tests (28 pass). Data: split the "Chicken" doc →
+"Chicken (canned)" + a standalone "Meatless Chicken"; a full scan found NO other
+plain food hiding a substitute variant. Also renamed 11 generics (`Spices, X`→`X`,
+`Sausage X`→`X Sausage`). Backups: `.backup-chicken-split.json`,
+`.backup-generic-renames.json`.
+
+**Generic-foods audit (535 no-brand foods, 2026-07-02):** data itself mostly
+correct (only 2 truly-implausible: user AI-describe items saved at servingSize 1 g).
+Remaining 2b work: ~21 bad-merge splits (Tea/Coffee/rice cooked+dry/Blueberries
+fresh+dried), ~4 wrong defaults, ~8 bare-category-word parent foods (Soup/Snacks/
+Beverages/Fast Foods), and ~30 branded OFF products with an empty brand field
+polluting the generic set + ranking.
+
 Original plan:
 - In `foodVariantMerge`, DON'T merge a form that changes the food's identity into a
   plain generic: block `meatless|vegan|powder|concentrate|dehydrated|dry mix|substitute`
