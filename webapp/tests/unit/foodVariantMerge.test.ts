@@ -94,6 +94,37 @@ test('USDA non-Branded: brewed 1 vs light 4 cal → still MERGE (small spread)',
   assert.equal(d.ok, true)
 })
 
+test('Identity: "Chicken, meatless" must NOT merge into plain "Chicken"', () => {
+  const chicken: VariantMergeParent = {
+    source: 'usda', externalDataType: 'SR Legacy', groupKey: 'chicken',
+    isVerified: false, variantsCount: 1, name: 'Chicken, canned, meat only',
+    nutritionProfile: { calories: 133, protein: 25, carbs: 0, fats: 3 },
+  }
+  const meatless: VariantMergeCandidate = {
+    source: 'usda', externalDataType: 'SR Legacy', groupKey: 'chicken',
+    name: 'Chicken, meatless',
+    nutritionProfile: { calories: 90, protein: 20, carbs: 4, fats: 1 },
+  }
+  const d = canAutoMergeAsVariant(chicken, meatless)
+  assert.equal(d.ok, false)
+  assert.equal(d.reason, 'substitute-identity-mismatch')
+})
+
+test('Identity: both meatless → still MERGE (same product family)', () => {
+  const p: VariantMergeParent = {
+    source: 'usda', externalDataType: 'SR Legacy', groupKey: 'chicken',
+    isVerified: false, variantsCount: 1, name: 'Chicken, meatless, breaded',
+    nutritionProfile: { calories: 200, protein: 18, carbs: 12, fats: 9 },
+  }
+  const cand: VariantMergeCandidate = {
+    source: 'usda', externalDataType: 'SR Legacy', groupKey: 'chicken',
+    name: 'Chicken, meatless, fried',
+    nutritionProfile: { calories: 220, protein: 17, carbs: 13, fats: 11 },
+  }
+  const d = canAutoMergeAsVariant(p, cand)
+  assert.equal(d.ok, true)
+})
+
 // ---------------------------------------------------------------------------
 // 2. USDA Branded
 // ---------------------------------------------------------------------------

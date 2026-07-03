@@ -51,6 +51,8 @@ export interface VariantMergeParent {
   isVerified?: boolean | null
   variantsCount: number
   nutritionProfile?: NutritionProfile | null
+  /** Food name/description — used for the substitute-identity guard. */
+  name?: string | null
 }
 
 export interface VariantMergeCandidate {
@@ -61,11 +63,28 @@ export interface VariantMergeCandidate {
   brand?: string | null
   barcode?: string | null
   nutritionProfile?: NutritionProfile | null
+  /** Food name/description — used for the substitute-identity guard. */
+  name?: string | null
 }
 
 export interface MergeDecision {
   ok: boolean
   reason: string
+}
+
+/**
+ * Tokens that make a food a DIFFERENT thing, not a variant — a meat/dairy
+ * substitute or imitation. "Chicken, meatless" must never merge into "Chicken"
+ * (that produced the infamous plain-Chicken-with-a-Meatless-variant, see
+ * FOOD_DATA_BUILD_AUDIT.md). Calorie density alone doesn't catch this (meatless
+ * chicken ≈ real chicken), so we gate on identity words.
+ */
+const SUBSTITUTE_IDENTITY = /\b(meatless|meat[- ]?free|plant[- ]?based|vegan|vegetarian|veggie|substitute|imitation|meat substitute|mock|faux|analog(?:ue)?|non[- ]?dairy|dairy[- ]?free|plant protein)\b/i
+
+/** True when a name/description carries a meat/dairy-substitute identity. */
+export function hasSubstituteIdentity(name: string | null | undefined): boolean {
+  if (!name) return false
+  return SUBSTITUTE_IDENTITY.test(name)
 }
 
 /** Lowercase + collapse whitespace; null/empty input → null. */
@@ -231,6 +250,13 @@ export function canAutoMergeAsVariant(
   if (pGroup.length < 2) return { ok: false, reason: 'parent-empty-groupkey' }
   if (cGroup.length < 2) return { ok: false, reason: 'candidate-empty-groupkey' }
   if (pGroup !== cGroup) return { ok: false, reason: 'groupkey-mismatch' }
+
+  // Identity gate: a meat/dairy SUBSTITUTE is a different food, not a variant.
+  // Block when exactly one side carries a substitute identity (meatless chicken
+  // vs chicken). Both-substitute or neither-substitute is fine.
+  if (hasSubstituteIdentity(parent.name) !== hasSubstituteIdentity(candidate.name)) {
+    return { ok: false, reason: 'substitute-identity-mismatch' }
+  }
 
   switch (parent.source) {
     case 'usda':

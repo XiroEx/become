@@ -445,6 +445,7 @@ export async function importFromUSDA(
           isVerified: candidate.isVerified,
           variantsCount: candidate.variants.length,
           nutritionProfile: extractFoodNutritionProfile(candidate),
+          name: candidate.name,
         }
       : null
 
@@ -454,6 +455,7 @@ export async function importFromUSDA(
       groupKey,
       brand: usda.brandOwner ?? usda.brandName ?? null,
       nutritionProfile: extractMappedNutritionProfile(mapped),
+      name: usda.description ?? mapped.name,
     }
 
     const decision = canAutoMergeAsVariant(candidateParent, incomingCandidate)
@@ -848,12 +850,14 @@ export async function importFromOpenFoodFacts(
         isVerified: offCandidate.isVerified,
         variantsCount: offCandidate.variants.length,
         nutritionProfile: extractFoodNutritionProfile(offCandidate),
+        name: offCandidate.name,
       }
       const candidateSide: VariantMergeCandidate = {
         source: 'openfoodfacts',
         groupKey: offGroupKey,
         brand: off.brands,
         barcode: off.code,
+        name: off.product_name,
         nutritionProfile: {
           calories: typeof variant.nutrition?.calories === 'number' ? variant.nutrition.calories : null,
           protein: typeof variant.nutrition?.protein === 'number' ? variant.nutrition.protein : null,
