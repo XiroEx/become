@@ -593,7 +593,7 @@ export default function ProgramDetailClient({ program }: Props) {
           so they reveal as the panel slides up. */}
       <div
         ref={heroRef}
-        className="sticky top-0 z-0 flex h-[calc(52vh+1rem)] sm:h-[calc(52vh+1.5rem)] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 -mt-4 sm:mx-0 sm:-mt-6"
+        className="sticky top-0 z-0 flex min-h-[calc(52vh+1rem)] sm:min-h-[calc(52vh+1.5rem)] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 -mt-4 sm:mx-0 sm:-mt-6"
       >
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
@@ -630,7 +630,7 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
         )}
 
-        <div className="relative flex h-full flex-col px-4 pb-6 pt-1 sm:px-6 sm:pb-8 sm:pt-2">
+        <div className="relative flex flex-1 flex-col px-4 pb-6 pt-1 sm:px-6 sm:pb-8 sm:pt-2">
           {/* Top nav row */}
           <div className="mb-4 flex items-center justify-between sm:mb-6">
             <button
