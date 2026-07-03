@@ -8,13 +8,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus } from 'lucide-react'
+import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
 import MyProgramsClient from '../../programs/mine/MyProgramsClient'
 import SessionBuilder from '@/components/SessionBuilder'
 import { BackButton } from '@/components/ui/BackButton'
+import { stashQuickSession, quickSessionOverviewHref } from '@/lib/quickSession/store'
 
 type TabKey = 'exercises' | 'sessions' | 'programs'
 
@@ -57,9 +58,35 @@ function formatDate(iso: string): string {
 }
 
 function SessionsTab() {
+  const router = useRouter()
   const [sessions, setSessions] = useState<SessionLog[]>([])
   const [loading, setLoading] = useState(true)
   const [building, setBuilding] = useState(false)
+  const [opening, setOpening] = useState<string | null>(null)
+
+  // Tapping a past session rebuilds one by its focus and opens the overview,
+  // where you can Start it or "Log a past date". Mirrors the Quick Session
+  // modal's Repeat so behaviour is consistent.
+  async function openSession(log: SessionLog) {
+    const key = log.sessionId ?? log.date
+    if (opening) return
+    setOpening(key)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/generate/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+        body: JSON.stringify({ focus: log.focus || 'full_body' }),
+      })
+      if (!res.ok) throw new Error('generate failed')
+      const data = (await res.json()) as { session?: import('@/lib/quickSession/types').DraftSession }
+      if (!data.session) throw new Error('no session')
+      const id = stashQuickSession(data.session)
+      router.push(quickSessionOverviewHref(id))
+    } catch {
+      setOpening(null)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -135,7 +162,8 @@ function SessionsTab() {
             <Card
               key={`${log.sessionId ?? log.date}-${i}`}
               accent="info"
-              className="flex items-center gap-3"
+              onClick={() => openSession(log)}
+              className={`flex items-center gap-3 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 ${opening ? 'opacity-60' : 'cursor-pointer'}`}
             >
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
                 <Sparkles className="h-5 w-5" />
@@ -160,6 +188,7 @@ function SessionsTab() {
                   ) : null}
                 </div>
               </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
             </Card>
           ))}
         </div>
