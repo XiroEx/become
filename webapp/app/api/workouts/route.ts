@@ -193,7 +193,7 @@ export async function GET(request: NextRequest) {
 
     // Find most recent incomplete workout from a previous day (stale, within cutoff window)
     type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
-    const staleLog = (userProgress.workoutLogs as WorkoutLog[])
+    let staleLog: WorkoutLog | null = (userProgress.workoutLogs as WorkoutLog[])
       .filter(log =>
         log.programId === programId &&
         !log.completed &&
@@ -201,6 +201,31 @@ export async function GET(request: NextRequest) {
         new Date(log.date) >= staleCutoff
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
+
+    // Coordinate with the calendar/home "Skip": if this day was already resolved
+    // there (status skipped or completed), the leftover incomplete log is
+    // orphaned — don't re-prompt (that was the "asked twice" bug); drop it so the
+    // two features agree. Matched by dayLabel within a ±14-day window.
+    if (staleLog) {
+      const logDay = staleLog.day
+      const logMs = new Date(staleLog.date).getTime()
+      const RESOLVED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+      const sched = await Schedule.findOne({ userId: payload.userId, programId })
+        .select('scheduledWorkouts')
+        .lean<{ scheduledWorkouts?: Array<{ dayLabel: string; date: Date; status: string }> } | null>()
+      const alreadyResolved = (sched?.scheduledWorkouts ?? []).some(w =>
+        w.dayLabel === logDay &&
+        (w.status === 'skipped' || w.status === 'completed') &&
+        Math.abs(new Date(w.date).getTime() - logMs) <= RESOLVED_WINDOW_MS
+      )
+      if (alreadyResolved) {
+        UserProgress.updateOne(
+          { userId: payload.userId },
+          { $pull: { workoutLogs: { programId, day: logDay, completed: false, date: staleLog.date } } }
+        ).catch(() => {})
+        staleLog = null
+      }
+    }
 
     const staleIncomplete = staleLog ? {
       day: staleLog.day,

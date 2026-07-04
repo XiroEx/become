@@ -428,7 +428,30 @@ export async function PATCH(request: NextRequest) {
 
     switch (action) {
       case 'skip': {
-        schedule.scheduledWorkouts[targetIdx].status = 'skipped'
+        const slot = schedule.scheduledWorkouts[targetIdx]
+        slot.status = 'skipped'
+        // Coordinate with the "unfinished workout" prompt: an abandoned/partial
+        // log for this day is exactly what makes that modal re-appear. Skipping
+        // here must also clear it, so the calendar/home skip and the modal agree
+        // (mirrors resolve-incomplete action='skip'). Matched by dayLabel within
+        // a ±14-day window of the slot so we don't touch a different occurrence.
+        const SKIP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+        await UserProgress.updateOne(
+          { userId: payload.userId },
+          {
+            $pull: {
+              workoutLogs: {
+                programId,
+                day: slot.dayLabel,
+                completed: false,
+                date: {
+                  $gte: new Date(targetDate.getTime() - SKIP_WINDOW_MS),
+                  $lte: new Date(targetDate.getTime() + SKIP_WINDOW_MS),
+                },
+              },
+            },
+          },
+        ).catch(() => {})
         break
       }
 
