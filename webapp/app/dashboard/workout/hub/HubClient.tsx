@@ -8,14 +8,15 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight } from 'lucide-react'
+import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight, CalendarClock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
 import MyProgramsClient from '../../programs/mine/MyProgramsClient'
 import SessionBuilder from '@/components/SessionBuilder'
 import { BackButton } from '@/components/ui/BackButton'
-import { stashQuickSession, quickSessionOverviewHref } from '@/lib/quickSession/store'
+import { stashQuickSession, stashQuickSessionWithId, quickSessionOverviewHref } from '@/lib/quickSession/store'
+import { isFocusKey, type DraftExercise } from '@/lib/quickSession/types'
 
 type TabKey = 'exercises' | 'sessions' | 'programs'
 
@@ -41,6 +42,27 @@ interface SessionLog {
   sessionId?: string
 }
 
+interface PlannedSession {
+  sessionId: string
+  title: string
+  focus?: string
+  date: string
+  exerciseCount: number
+  exercises: DraftExercise[]
+}
+
+function formatPlannedDate(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const diffDays = Math.round((startOfDay.getTime() - startOfToday.getTime()) / 86_400_000)
+  if (diffDays === 0) return 'Today'
+  if (diffDays === 1) return 'Tomorrow'
+  if (diffDays < 7) return d.toLocaleDateString('en-US', { weekday: 'long' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
@@ -60,9 +82,22 @@ function formatDate(iso: string): string {
 function SessionsTab() {
   const router = useRouter()
   const [sessions, setSessions] = useState<SessionLog[]>([])
+  const [planned, setPlanned] = useState<PlannedSession[]>([])
   const [loading, setLoading] = useState(true)
   const [building, setBuilding] = useState(false)
   const [opening, setOpening] = useState<string | null>(null)
+
+  // Open a planned session under its OWN sessionId so finishing it consumes the
+  // plan (updates the same log to completed) rather than creating a new one.
+  function startPlanned(p: PlannedSession) {
+    if (opening) return
+    setOpening(p.sessionId)
+    stashQuickSessionWithId(
+      { title: p.title, ...(isFocusKey(p.focus) ? { focus: p.focus } : {}), exercises: p.exercises },
+      p.sessionId,
+    )
+    router.push(quickSessionOverviewHref(p.sessionId))
+  }
 
   // Tapping a past session rebuilds one by its focus and opens the overview,
   // where you can Start it or "Log a past date". Mirrors the Quick Session
@@ -96,12 +131,17 @@ function SessionsTab() {
           setLoading(false)
           return
         }
-        const res = await fetch('/api/workouts/logs', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const [res, plannedRes] = await Promise.all([
+          fetch('/api/workouts/logs', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch('/api/workouts/planned', { headers: { Authorization: `Bearer ${token}` } }),
+        ])
         if (res.ok) {
           const data = (await res.json()) as { logs?: SessionLog[] }
           setSessions((data.logs ?? []).filter((l) => l.kind === 'quick'))
+        }
+        if (plannedRes.ok) {
+          const pdata = (await plannedRes.json()) as { planned?: PlannedSession[] }
+          setPlanned(pdata.planned ?? [])
         }
       } catch (error) {
         console.error('Error loading sessions:', error)
@@ -114,6 +154,40 @@ function SessionsTab() {
 
   return (
     <div className="pb-6">
+      {/* Planned (upcoming) sessions — future-dated ones you set with "Log or
+          plan". Tap to review + start; finishing consumes the plan. */}
+      {planned.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 flex items-center gap-1.5 text-lg font-semibold text-zinc-900 dark:text-white">
+            <CalendarClock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Planned
+          </h2>
+          <div className="space-y-3">
+            {planned.map((p) => (
+              <Card
+                key={p.sessionId}
+                accent="success"
+                onClick={() => startPlanned(p)}
+                className={`flex items-center gap-3 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 ${opening ? 'opacity-60' : 'cursor-pointer'}`}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <CalendarClock className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{p.title}</h3>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-zinc-500 dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                      <Calendar className="h-3 w-3" /> {formatPlannedDate(p.date)}
+                    </span>
+                    <span>{p.exerciseCount} {p.exerciseCount === 1 ? 'exercise' : 'exercises'}</span>
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Header + create toggle (mirrors the Exercises tab) */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Your sessions</h2>

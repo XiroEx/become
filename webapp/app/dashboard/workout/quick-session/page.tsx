@@ -83,7 +83,7 @@ export default function QuickSessionOverviewPage() {
         }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Failed to save session')
-      router.push(done ? '/dashboard/history' : '/dashboard/calendar')
+      router.push(done ? '/dashboard/history' : '/dashboard/workout/hub?tab=sessions')
     } catch (e) {
       setLogError(e instanceof Error ? e.message : 'Failed to save session')
       setLogging(false)

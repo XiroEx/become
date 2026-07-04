@@ -46,6 +46,21 @@ export function stashQuickSession(session: DraftSession): string {
   return sessionId
 }
 
+/**
+ * Persist a draft under a SPECIFIC id (used to resume/start a planned session by
+ * its existing sessionId, so completing it updates the same log — consuming the
+ * plan — rather than creating a new one).
+ */
+export function stashQuickSessionWithId(session: DraftSession, sessionId: string): string {
+  const payload: StoredQuickSession = { ...session, sessionId }
+  try {
+    localStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(payload))
+  } catch {
+    /* storage unavailable — live client falls back gracefully */
+  }
+  return sessionId
+}
+
 /** Read back a stashed session by id (null if missing/corrupt). */
 export function readQuickSession(sessionId: string): StoredQuickSession | null {
   try {
