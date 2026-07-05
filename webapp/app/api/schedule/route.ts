@@ -554,8 +554,42 @@ export async function PATCH(request: NextRequest) {
         break
       }
 
+      case 'uncomplete': {
+        // Revert a mis-logged / accidentally-completed workout: slot back to
+        // scheduled (GET derives 'missed' if it's in the past), remove the
+        // completed log, and give the completed-count back.
+        const slot = schedule.scheduledWorkouts[targetIdx]
+        if (slot.status === 'completed') {
+          const completedAtMs = slot.completedAt ? new Date(slot.completedAt).getTime() : targetDate.getTime()
+          slot.status = 'scheduled'
+          slot.completedAt = undefined
+          const UNDO_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
+          await UserProgress.updateOne(
+            { userId: payload.userId },
+            {
+              $pull: {
+                workoutLogs: {
+                  programId,
+                  day: slot.dayLabel,
+                  completed: true,
+                  date: {
+                    $gte: new Date(completedAtMs - UNDO_WINDOW_MS),
+                    $lte: new Date(completedAtMs + UNDO_WINDOW_MS),
+                  },
+                },
+              },
+            },
+          ).catch(() => {})
+          await UserProgress.updateOne(
+            { userId: payload.userId, 'activePrograms.programId': programId, 'activePrograms.completedWorkouts': { $gt: 0 } },
+            { $inc: { 'activePrograms.$.completedWorkouts': -1 }, $set: { 'activePrograms.$.status': 'in-progress' } },
+          ).catch(() => {})
+        }
+        break
+      }
+
       default:
-        return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip, shift, pause, resume' }, { status: 400 })
+        return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip, uncomplete, shift, pause, resume' }, { status: 400 })
     }
 
     // ScheduledWorkoutSchema is declared with `_id: false`, which means

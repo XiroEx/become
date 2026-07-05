@@ -63,3 +63,48 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// DELETE /api/workouts/session?id=<sessionId> — remove a quick session log.
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success) return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 })
+    const id = new URL(request.url).searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    await dbConnect()
+    await UserProgress.updateOne(
+      { userId: auth.userId },
+      { $pull: { workoutLogs: { kind: 'quick', sessionId: id } } },
+    )
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting quick session:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// PATCH /api/workouts/session — re-date a quick session. Body: { id, date }
+// (date = YYYY-MM-DD or ISO). Moves the log to another day on the calendar.
+export async function PATCH(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success) return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 })
+    const body = await request.json().catch(() => ({})) as { id?: string; date?: string }
+    const id = body.id
+    if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    if (!body.date) return NextResponse.json({ error: 'date is required' }, { status: 400 })
+    const raw = /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? `${body.date}T12:00:00` : body.date
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 })
+    await dbConnect()
+    await UserProgress.updateOne(
+      { userId: auth.userId },
+      { $set: { 'workoutLogs.$[elem].date': d, 'workoutLogs.$[elem].startedAt': d } },
+      { arrayFilters: [{ 'elem.sessionId': id, 'elem.kind': 'quick' }] },
+    )
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error re-dating quick session:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
