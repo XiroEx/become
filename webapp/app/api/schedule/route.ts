@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Schedule from '@/models/Schedule'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { generateScheduledWorkouts, regenerateSchedule, type PhaseData } from '@/lib/schedule'
 import { readTzOffset, readTzOffsetFromBody, localDateKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
@@ -452,6 +453,33 @@ export async function PATCH(request: NextRequest) {
             },
           },
         ).catch(() => {})
+
+        // Gap 1 — pointer parity: if the skipped slot IS the program's current
+        // day, advance currentDay/currentPhase (mirrors resolve-incomplete
+        // action='skip'). "Up Next" is schedule-driven so this only keeps the
+        // fallback pointer + modal's next-day math consistent. Skipping a PAST
+        // missed day (not the current one) leaves the pointer alone.
+        try {
+          const upDoc = await UserProgress.findOne(
+            { userId: payload.userId, 'activePrograms.programId': programId },
+            { 'activePrograms.$': 1 },
+          ).lean<{ activePrograms?: Array<{ currentDay?: string; currentPhase?: number }> }>()
+          const ap = upDoc?.activePrograms?.[0]
+          if (ap && ap.currentDay === slot.dayLabel && (ap.currentPhase ?? slot.phase) === slot.phase) {
+            const prog = await ProgramModel.findOne({ program_id: programId }).lean()
+            if (prog?.phases) {
+              const { nextDay, nextPhase } = calculateNextDay(
+                slot.dayLabel,
+                slot.phase,
+                prog.phases as Parameters<typeof calculateNextDay>[2],
+              )
+              await UserProgress.updateOne(
+                { userId: payload.userId, 'activePrograms.programId': programId },
+                { $set: { 'activePrograms.$.currentDay': nextDay, 'activePrograms.$.currentPhase': nextPhase } },
+              ).catch(() => {})
+            }
+          }
+        } catch { /* pointer advance is best-effort, never blocks the skip */ }
         break
       }
 
