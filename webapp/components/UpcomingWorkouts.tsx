@@ -91,6 +91,7 @@ const slideVariants = {
 export default function UpcomingWorkouts() {
   const router = useRouter()
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
+  const [quick, setQuick] = useState<Array<{ date: string; completed: boolean }>>([])
   const [loading, setLoading] = useState(true)
   const [hasSchedules, setHasSchedules] = useState(false)
   // Week navigation: 0 = current week, negative = past, positive = future.
@@ -129,6 +130,23 @@ export default function UpcomingWorkouts() {
     fetchSchedule()
   }, [])
 
+  // Quick (one-off) sessions — so "This Week" reflects them on their day too
+  // (matching the calendar), not just program-scheduled workouts.
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch('/api/workouts/logs?includeIncomplete=true', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = (await res.json()) as { logs?: Array<{ kind: string; date: string; completed: boolean }> }
+        setQuick((data.logs ?? []).filter((l) => l.kind === 'quick').map((l) => ({ date: l.date, completed: l.completed })))
+      } catch { /* non-fatal */ }
+    })()
+  }, [])
+
   // Swipe navigation (mirrors the calendar week view).
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
@@ -165,7 +183,7 @@ export default function UpcomingWorkouts() {
     )
   }
 
-  if (!hasSchedules) {
+  if (!hasSchedules && quick.length === 0) {
     return (
       <Card>
         <div className="flex items-center justify-between mb-3">
@@ -203,6 +221,15 @@ export default function UpcomingWorkouts() {
       existing.push({ ...w, programName: schedule.programName })
       workoutsByDate.set(key, existing)
     }
+  }
+
+  // Quick sessions bucketed by LOCAL date (they're logged at a real timestamp).
+  const quickByDate = new Map<string, Array<{ completed: boolean }>>()
+  for (const q of quick) {
+    const key = toLocalDateKey(new Date(q.date))
+    const existing = quickByDate.get(key) || []
+    existing.push({ completed: q.completed })
+    quickByDate.set(key, existing)
   }
 
   return (
@@ -271,9 +298,11 @@ export default function UpcomingWorkouts() {
               const key = toLocalDateKey(day)
               const workouts = workoutsByDate.get(key)
               const workout = workouts?.[0] // Primary workout for display
+              const dayQuick = quickByDate.get(key)
+              const hasQuick = !!dayQuick && dayQuick.length > 0
               const isToday = isSameDay(day, today)
               const isPast = day < today
-              const isRest = !workouts || workouts.length === 0
+              const isRest = (!workouts || workouts.length === 0) && !hasQuick
 
               const inner = (
                 <>
@@ -291,10 +320,16 @@ export default function UpcomingWorkouts() {
                     {day.getDate()}
                   </span>
 
-                  {/* Status indicator */}
+                  {/* Status indicator (program slot, else quick session, else rest) */}
                   <div className="mt-0.5 flex h-5 items-center justify-center">
                     {workout ? (
                       <StatusIcon status={workout.status} />
+                    ) : hasQuick ? (
+                      dayQuick!.some((q) => q.completed) ? (
+                        <StatusIcon status="completed" />
+                      ) : (
+                        <span className="h-2 w-2 rounded-full bg-purple-400 ring-1 ring-purple-300" />
+                      )
                     ) : isRest ? (
                       <span className="text-[9px] text-zinc-400 dark:text-zinc-600">Rest</span>
                     ) : null}
