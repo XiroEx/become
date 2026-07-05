@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import QuickSessionSummary from '@/components/QuickSessionSummary'
+import { continueQuickSession } from '@/lib/quickSession/openQuick'
 import { BackButton } from '@/components/ui/BackButton'
 import {
     ChevronLeft,
@@ -220,6 +222,7 @@ export default function CalendarClient() {
   })
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [quick, setQuick] = useState<QuickCalItem[]>([])
+  const [summaryId, setSummaryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
     const dateParam = searchParams.get('date')
@@ -757,7 +760,12 @@ export default function CalendarClient() {
                       return (
                         <button
                           key={`sq${i}`}
-                          onClick={() => router.push(q.status === 'completed' ? '/dashboard/history?filter=quick' : '/dashboard/workout/hub?tab=sessions')}
+                          onClick={async () => {
+                            if (!q.sessionId) { router.push('/dashboard/workout/hub?tab=sessions'); return }
+                            if (q.status === 'completed') { setSummaryId(q.sessionId); return }
+                            const href = await continueQuickSession(q.sessionId)
+                            router.push(href ?? '/dashboard/workout/hub?tab=sessions')
+                          }}
                           className="flex w-full items-center gap-2 rounded-lg border border-purple-200 bg-purple-50/40 p-3 text-left transition-colors hover:bg-purple-50 dark:border-purple-900/40 dark:bg-purple-900/10 dark:hover:bg-purple-900/20"
                         >
                           <div className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-purple-400 ${dot}`} />
@@ -916,6 +924,10 @@ export default function CalendarClient() {
 
       {/* Workout Log Summary Overlay */}
       <AnimatePresence>
+        {summaryId && (
+          <QuickSessionSummary sessionId={summaryId} onClose={() => setSummaryId(null)} />
+        )}
+
         {logSummary && (
           <WorkoutSummary
             programCompleted={false}

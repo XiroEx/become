@@ -194,9 +194,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Find most recent incomplete workout from a previous day (stale, within cutoff window)
-    type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
+    type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; kind?: string; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
     let staleLog: WorkoutLog | null = (userProgress.workoutLogs as WorkoutLog[])
       .filter(log =>
+        // Program prompt is program-scoped AND never picks up quick sessions —
+        // those live in their own sessionId namespace (no cross-contamination).
+        log.kind !== 'quick' &&
         log.programId === programId &&
         !log.completed &&
         new Date(log.date) < today &&

@@ -6,10 +6,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Dumbbell, Sparkles, Clock, Calendar, History as HistoryIcon } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
+import QuickSessionSummary from '@/components/QuickSessionSummary'
+import { continueQuickSession } from '@/lib/quickSession/openQuick'
 
 interface SessionLog {
   kind: 'program' | 'quick'
@@ -48,9 +51,11 @@ function formatDate(iso: string): string {
 }
 
 export default function HistoryClient() {
+  const router = useRouter()
   const [logs, setLogs] = useState<SessionLog[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [summaryId, setSummaryId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -197,19 +202,32 @@ export default function HistoryClient() {
                 </div>
               </Card>
             )
-            // Program sessions deep-link to their program; quick sessions link to
-            // the Sessions tab (view / repeat / start-or-continue).
+            // Program sessions deep-link to their program; quick sessions open a
+            // summary (completed) or resume (incomplete).
             return log.kind === 'program' && log.programId ? (
               <Link key={`${log.sessionId ?? log.date}-${i}`} href={`/dashboard/workout/${log.programId}`} className="block">
                 {Inner}
               </Link>
             ) : (
-              <Link key={`${log.sessionId ?? log.date}-${i}`} href="/dashboard/workout/hub?tab=sessions" className="block">
+              <button
+                key={`${log.sessionId ?? log.date}-${i}`}
+                onClick={async () => {
+                  if (!log.sessionId) { router.push('/dashboard/workout/hub?tab=sessions'); return }
+                  if (log.completed) { setSummaryId(log.sessionId); return }
+                  const href = await continueQuickSession(log.sessionId)
+                  router.push(href ?? '/dashboard/workout/hub?tab=sessions')
+                }}
+                className="block w-full text-left"
+              >
                 {Inner}
-              </Link>
+              </button>
             )
           })}
         </div>
+      )}
+
+      {summaryId && (
+        <QuickSessionSummary sessionId={summaryId} onClose={() => setSummaryId(null)} />
       )}
     </PageTransition>
   )
