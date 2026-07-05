@@ -93,6 +93,7 @@ export default function LiveWorkoutPage() {
   const searchParams = useSearchParams();
   const programId = params.programId as string;
   const requestedDay = searchParams.get("day");
+  const scheduledDate = searchParams.get("sd"); // exact Schedule slot date (program mode only; gap 3)
   // Quick (program-less) session mode — routed through this same component via
   // the sentinel programId `quick` + a sessionStorage-stashed draft keyed by
   // ?session=<id>. In quick mode we skip program/current-workout/schedule
@@ -777,6 +778,7 @@ export default function LiveWorkoutPage() {
             exercises: exercisesToSave,
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
+            ...(scheduledDate && { scheduledDate }),
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
             tz: new Date().getTimezoneOffset(),
           };
@@ -805,7 +807,7 @@ export default function LiveWorkoutPage() {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta, scheduledDate]);
 
   // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
   // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension

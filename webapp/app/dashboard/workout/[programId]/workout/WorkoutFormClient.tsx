@@ -270,6 +270,7 @@ export default function WorkoutFormPage() {
   const searchParams = useSearchParams();
   const programId = params.programId as string;
   const requestedDay = searchParams.get("day");
+  const scheduledDate = searchParams.get("sd"); // exact Schedule slot date this log fulfills (gap 3)
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [currentPhase, setCurrentPhase] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -581,6 +582,7 @@ export default function WorkoutFormPage() {
           exercises,
           completed: isComplete,
           tz: new Date().getTimezoneOffset(),
+          ...(scheduledDate && { scheduledDate }),
           ...(workoutNotes.trim() && { notes: workoutNotes.trim() })
         })
       });
@@ -596,7 +598,7 @@ export default function WorkoutFormPage() {
     } catch (error) {
       console.error("Error auto-saving:", error);
     }
-  }, [programId, workout, currentPhase, swappedExercises]);
+  }, [programId, workout, currentPhase, swappedExercises, scheduledDate]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -905,7 +907,7 @@ export default function WorkoutFormPage() {
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               />
               <button
-                onClick={() => router.push(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}`)}
+                onClick={() => router.push(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`)}
                 className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-sm font-medium text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-600"
               >
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">

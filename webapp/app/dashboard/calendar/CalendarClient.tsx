@@ -820,7 +820,7 @@ export default function CalendarClient() {
                                 {w.status === 'scheduled' && (
                                   <>
                                     <Link
-                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}&sd=${encodeURIComponent(w.date)}`}
                                       className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                     >
                                       <Dumbbell className="h-3 w-3" />
@@ -838,7 +838,7 @@ export default function CalendarClient() {
                                 {w.status === 'missed' && (
                                   <>
                                     <Link
-                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}&sd=${encodeURIComponent(w.date)}`}
                                       className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                     >
                                       <Dumbbell className="h-3 w-3" />

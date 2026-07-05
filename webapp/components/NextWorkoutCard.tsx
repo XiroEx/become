@@ -170,7 +170,7 @@ export default function NextWorkoutCard() {
                   </div>
                   <div className="flex shrink-0 gap-1.5">
                     <Link
-                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}&sd=${encodeURIComponent(w.date)}`}
                       className="rounded-lg bg-red-600 px-2.5 py-1 text-[10px] font-semibold text-white hover:bg-red-700"
                     >
                       Do It
@@ -211,7 +211,7 @@ export default function NextWorkoutCard() {
             </Link>
           </div>
           <Link
-            href={`/dashboard/workout/${nextWorkout.programId}/workout?day=${encodeURIComponent(nextWorkout.dayLabel)}`}
+            href={`/dashboard/workout/${nextWorkout.programId}/workout?day=${encodeURIComponent(nextWorkout.dayLabel)}&sd=${encodeURIComponent(nextWorkout.date)}`}
             className="flex items-center gap-3 rounded-lg bg-blue-50 p-3 transition-colors hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/30"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">

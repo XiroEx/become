@@ -48,6 +48,10 @@ export interface IWorkoutLog {
   programId?: string
   phase?: number
   day?: string
+  // The exact Schedule.scheduledWorkouts[].date this program log fulfills (gap 3).
+  // Lets skip/complete/count target the EXACT calendar slot instead of a
+  // dayLabel±14d heuristic. Absent on legacy logs and on quick sessions.
+  scheduledDate?: Date
   // 'program' (default, legacy) = part of an enrolled program; 'quick' = an
   // ad-hoc session not attached to any program.
   kind?: 'program' | 'quick'
@@ -231,6 +235,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   programId: { type: String },
   phase: { type: Number },
   day: { type: String },
+  scheduledDate: { type: Date },
   kind: { type: String, enum: ['program', 'quick'], default: 'program' },
   title: { type: String },
   sessionId: { type: String },

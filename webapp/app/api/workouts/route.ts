@@ -40,6 +40,8 @@ interface WorkoutSaveRequest {
   activeSeconds?: number
   notes?: string
   tz?: number
+  /** ISO date of the exact Schedule slot this log fulfills (gap 3). */
+  scheduledDate?: string
 }
 
 interface QuickSessionSaveRequest {
@@ -275,7 +277,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: WorkoutSaveRequest = rawBody
-    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes } = body
+    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes, scheduledDate } = body
 
     if (!programId || phase === undefined || !day) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -292,6 +294,7 @@ export async function POST(request: NextRequest) {
       programId,
       phase,
       day,
+      ...(scheduledDate && { scheduledDate: new Date(scheduledDate) }),
       completed,
       duration,
       startedAt: new Date(),
@@ -401,13 +404,22 @@ export async function POST(request: NextRequest) {
             )
             const byDateAsc = (a: { date: Date }, b: { date: Date }) =>
               new Date(a.date).getTime() - new Date(b.date).getTime()
+            // Gap 3: if the log carries the exact slot date, resolve THAT slot —
+            // never a neighbouring same-dayLabel slot. Compare UTC date-portion
+            // (slots are stored as UTC-midnight of the intended local day).
+            const exact = scheduledDate
+              ? candidates.find(
+                  (w) => new Date(w.date).toISOString().split('T')[0]
+                       === new Date(scheduledDate).toISOString().split('T')[0]
+                )
+              : undefined
             const overdue = candidates
               .filter((w) => dateKey(new Date(w.date), tzOffset) <= todayKey)
               .sort(byDateAsc)
             const upcoming = candidates
               .filter((w) => dateKey(new Date(w.date), tzOffset) > todayKey)
               .sort(byDateAsc)
-            const match = overdue[0] ?? upcoming[0]
+            const match = exact ?? overdue[0] ?? upcoming[0]
 
             if (match) {
               await Schedule.updateOne(
