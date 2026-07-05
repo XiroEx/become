@@ -224,6 +224,7 @@ export default function CalendarClient() {
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [quick, setQuick] = useState<QuickCalItem[]>([])
   const [summaryId, setSummaryId] = useState<string | null>(null)
+  const [redateId, setRedateId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
     const dateParam = searchParams.get('date')
@@ -367,6 +368,26 @@ export default function CalendarClient() {
         method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) await fetchQuick()
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchQuick])
+
+  // Re-date a quick session log to another day, then refresh + collapse the picker.
+  const reDateQuick = useCallback(async (sessionId: string, date: string) => {
+    const token = localStorage.getItem('token')
+    if (!token || !date) return
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/workouts/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: sessionId, date }),
+      })
+      if (res.ok) {
+        setRedateId(null)
+        await fetchQuick()
+      }
     } finally {
       setActionLoading(false)
     }
@@ -768,6 +789,10 @@ export default function CalendarClient() {
               <div className="h-2 w-2 rounded-full bg-amber-400" />
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Skipped</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-purple-500 ring-1 ring-purple-300" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Quick session</span>
+            </div>
           </div>
 
           {/* Selected Day Detail Panel */}
@@ -788,11 +813,11 @@ export default function CalendarClient() {
                 {selectedQuick.length > 0 && (
                   <div className="mb-3 space-y-2">
                     {selectedQuick.map((q, i) => {
-                      const label = q.status === 'completed' ? 'Completed' : q.status === 'planned' ? 'Planned' : 'Incomplete'
-                      const pill = q.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : q.status === 'planned' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      // Map the quick-session status onto the shared StatusBadge vocabulary
+                      // so quick + program cards read identically.
+                      const badgeStatus = q.status === 'completed' ? 'completed' : q.status === 'planned' ? 'scheduled' : 'missed'
                       const dot = q.status === 'completed' ? 'bg-green-700' : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
+                      const isRedating = redateId === q.sessionId
                       return (
                         <div key={`sq${i}`} className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 dark:border-purple-900/40 dark:bg-purple-900/10">
                           <div className="flex items-start justify-between gap-2">
@@ -805,7 +830,7 @@ export default function CalendarClient() {
                                 </p>
                               </div>
                             </div>
-                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${pill}`}>{label}</span>
+                            <div className="shrink-0"><StatusBadge status={badgeStatus} /></div>
                           </div>
                           {/* Actions — unified with the program card */}
                           <div className="mt-3 flex flex-wrap gap-2">
@@ -829,6 +854,13 @@ export default function CalendarClient() {
                               </button>
                             )}
                             <button
+                              onClick={() => q.sessionId && setRedateId(isRedating ? null : (q.sessionId ?? null))}
+                              disabled={actionLoading || !q.sessionId}
+                              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            >
+                              <CalendarDays className="h-3 w-3" /> Move
+                            </button>
+                            <button
                               onClick={() => q.sessionId && deleteQuick(q.sessionId)}
                               disabled={actionLoading || !q.sessionId}
                               className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
@@ -836,6 +868,19 @@ export default function CalendarClient() {
                               <X className="h-3 w-3" /> Delete
                             </button>
                           </div>
+                          {/* Inline re-date picker (Move) */}
+                          {isRedating && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <input
+                                type="date"
+                                defaultValue={toDateKey(new Date(q.date))}
+                                onChange={(e) => e.target.value && q.sessionId && reDateQuick(q.sessionId, e.target.value)}
+                                disabled={actionLoading}
+                                className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                              />
+                              <span className="text-[11px] text-zinc-400">Pick a new day</span>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -973,6 +1018,13 @@ export default function CalendarClient() {
                                     >
                                       <RotateCcw className="h-3 w-3" />
                                       Un-complete
+                                    </button>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Manage
                                     </button>
                                   </div>
                                 )}
