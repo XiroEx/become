@@ -197,14 +197,16 @@ export default function HistoryClient() {
                 </div>
               </Card>
             )
-            // Program sessions deep-link to their program; quick sessions have
-            // nowhere to navigate yet, so they render as a static card.
+            // Program sessions deep-link to their program; quick sessions link to
+            // the Sessions tab (view / repeat / start-or-continue).
             return log.kind === 'program' && log.programId ? (
               <Link key={`${log.sessionId ?? log.date}-${i}`} href={`/dashboard/workout/${log.programId}`} className="block">
                 {Inner}
               </Link>
             ) : (
-              <div key={`${log.sessionId ?? log.date}-${i}`}>{Inner}</div>
+              <Link key={`${log.sessionId ?? log.date}-${i}`} href="/dashboard/workout/hub?tab=sessions" className="block">
+                {Inner}
+              </Link>
             )
           })}
         </div>

@@ -50,6 +50,18 @@ interface ScheduleData {
   scheduledWorkouts: ScheduledWorkout[]
 }
 
+// One-off / generated "quick" sessions (kind:'quick' logs) surfaced on the
+// calendar alongside program workouts.
+interface QuickCalItem {
+  sessionId?: string
+  title: string
+  date: string
+  completed: boolean
+  exerciseCount: number
+  duration?: number
+  status: 'completed' | 'planned' | 'incomplete'
+}
+
 type ViewMode = 'month' | 'week'
 
 // ------ Helpers ------
@@ -207,6 +219,7 @@ export default function CalendarClient() {
     return new Date()
   })
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
+  const [quick, setQuick] = useState<QuickCalItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
     const dateParam = searchParams.get('date')
@@ -290,6 +303,36 @@ export default function CalendarClient() {
     fetchSchedules()
   }, [fetchSchedules])
 
+  // Quick (one-off) sessions — loaded once; bucketed onto the calendar by date.
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch('/api/workouts/logs?includeIncomplete=true', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = (await res.json()) as { logs?: Array<{ kind: string; title: string; date: string; completed: boolean; exerciseCount: number; duration?: number; sessionId?: string }> }
+        const startOfToday = new Date()
+        startOfToday.setHours(0, 0, 0, 0)
+        setQuick(
+          (data.logs ?? [])
+            .filter((l) => l.kind === 'quick')
+            .map((l) => ({
+              sessionId: l.sessionId,
+              title: l.title,
+              date: l.date,
+              completed: l.completed,
+              exerciseCount: l.exerciseCount,
+              duration: l.duration,
+              status: l.completed ? 'completed' : (new Date(l.date) >= startOfToday ? 'planned' : 'incomplete'),
+            })),
+        )
+      } catch { /* non-fatal */ }
+    })()
+  }, [])
+
   const fetchWorkoutLog = async (w: ScheduledWorkout & { programName: string; programId: string }) => {
     setLogSummaryLoading(true)
     try {
@@ -328,6 +371,15 @@ export default function CalendarClient() {
       existing.push({ ...w, programName: schedule.programName, programId: schedule.programId })
       workoutsByDate.set(key, existing)
     }
+  }
+
+  // Bucket quick sessions by local calendar date.
+  const quickByDate = new Map<string, QuickCalItem[]>()
+  for (const q of quick) {
+    const key = toDateKey(new Date(q.date))
+    const existing = quickByDate.get(key) || []
+    existing.push(q)
+    quickByDate.set(key, existing)
   }
 
   // Navigation
@@ -418,6 +470,7 @@ export default function CalendarClient() {
       })()
 
   // Selected day detail
+  const selectedQuick = selectedDate ? quickByDate.get(toDateKey(selectedDate)) || [] : []
   const selectedWorkouts = selectedDate
     ? workoutsByDate.get(toDateKey(selectedDate)) || []
     : []
@@ -585,6 +638,7 @@ export default function CalendarClient() {
                 const isToday_ = isSameDay(day, today)
                 const isSelected = selectedDate && isSameDay(day, selectedDate)
                 const dayWorkouts = workoutsByDate.get(key) || []
+                const dayQuick = quickByDate.get(key) || []
 
                 return (
                   <button
@@ -609,8 +663,8 @@ export default function CalendarClient() {
                       {day.getDate()}
                     </span>
 
-                    {/* Workout dots */}
-                    {dayWorkouts.length > 0 && (
+                    {/* Workout dots (program + quick sessions) */}
+                    {(dayWorkouts.length > 0 || dayQuick.length > 0) && (
                       <div className="mt-0.5 flex flex-wrap justify-center gap-0.5">
                         {dayWorkouts.map((w, i) => {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
@@ -622,6 +676,12 @@ export default function CalendarClient() {
                             w.status === 'skipped' ? 'bg-amber-400' :
                             colors.dot
                           return <div key={i} className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
+                        })}
+                        {dayQuick.map((q, i) => {
+                          // Quick sessions use a ring to distinguish them from program dots.
+                          const c = q.status === 'completed' ? 'bg-green-700' :
+                            q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
+                          return <div key={`q${i}`} className={`h-1.5 w-1.5 rounded-full ring-1 ring-purple-400 ${c}`} />
                         })}
                       </div>
                     )}
@@ -685,9 +745,38 @@ export default function CalendarClient() {
                   {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </h3>
 
-                {selectedWorkouts.length === 0 ? (
+                {/* Quick (one-off) sessions on this day — tappable */}
+                {selectedQuick.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {selectedQuick.map((q, i) => {
+                      const label = q.status === 'completed' ? 'Completed' : q.status === 'planned' ? 'Planned' : 'Incomplete'
+                      const pill = q.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : q.status === 'planned' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                      const dot = q.status === 'completed' ? 'bg-green-700' : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
+                      return (
+                        <button
+                          key={`sq${i}`}
+                          onClick={() => router.push(q.status === 'completed' ? '/dashboard/history?filter=quick' : '/dashboard/workout/hub?tab=sessions')}
+                          className="flex w-full items-center gap-2 rounded-lg border border-purple-200 bg-purple-50/40 p-3 text-left transition-colors hover:bg-purple-50 dark:border-purple-900/40 dark:bg-purple-900/10 dark:hover:bg-purple-900/20"
+                        >
+                          <div className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-purple-400 ${dot}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{q.title}</p>
+                            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                              Quick session · {q.exerciseCount} {q.exerciseCount === 1 ? 'exercise' : 'exercises'}{q.duration ? ` · ${q.duration} min` : ''}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${pill}`}>{label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {selectedWorkouts.length === 0 && selectedQuick.length === 0 ? (
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Rest day — no workouts scheduled.</p>
-                ) : (
+                ) : selectedWorkouts.length === 0 ? null : (
                   <div className="space-y-3">
                     {selectedWorkouts.map((w, idx) => {
                       const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
