@@ -85,9 +85,23 @@ export async function GET(request: NextRequest) {
       const nonRest = slots.filter((s) => s.status !== 'rest')
       if (nonRest.length === 0) continue
       const completed = nonRest.filter((s) => s.status === 'completed').length
+      const skipped = nonRest.filter((s) => s.status === 'skipped').length
       // A future-dated missed slot is self-healed to scheduled below, so it counts as "future work still on the calendar".
       const hasFuture = slots.some((s) => (s.status === 'scheduled' || s.status === 'missed') && new Date(s.date) >= now)
-      if (hasFuture || completed >= nonRest.length) continue // not stuck
+      if (hasFuture) continue // work still on the calendar — not stuck
+
+      // No upcoming slots. If every session is resolved (completed or firmly
+      // skipped), the program is done — mark it complete so it stops showing
+      // "continue" with an empty calendar. Otherwise there's fell-behind (missed)
+      // work to catch up on → reflow only that, respecting skips.
+      if (completed + skipped >= nonRest.length) {
+        await UserProgress.updateOne(
+          { userId: payload.userId, 'activePrograms.programId': schedule.programId },
+          { $set: { 'activePrograms.$.status': 'completed' } },
+        ).catch(() => {})
+        programStatusMap.set(schedule.programId, 'completed')
+        continue
+      }
 
       const program = await ProgramModel.findOne({ program_id: schedule.programId }).lean()
       if (!program) continue

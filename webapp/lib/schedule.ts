@@ -181,13 +181,17 @@ export function regenerateSchedule(
  * still say "continue". This re-offers the outstanding work on upcoming training
  * days so every surface agrees.
  *
- * Keeps the COMPLETED slots as immutable history and re-schedules every not-yet-
- * completed program workout starting at `fromDate`. Past missed/skipped slots are
- * intentionally dropped — they're superseded by the fresh upcoming slots — so the
- * total session count stays equal to the program length (no double-counting).
+ * Skips are respected as firm decisions: COMPLETED and SKIPPED slots are both kept
+ * as immutable history and are NOT re-offered. Only genuinely-unresolved sessions
+ * (fell-behind / missed — never done, never deliberately skipped) are re-scheduled
+ * onto upcoming training days from `fromDate`. This keeps a deliberate skip from
+ * being resurrected in a jumbled order, and keeps the total session count equal to
+ * the program length (no double-counting).
  *
- * Returns the new full slot array, or null when there's nothing to reflow
- * (program actually complete, or no training days configured).
+ * Returns the new full slot array, or null when there's nothing to reflow — i.e.
+ * every session is already completed or skipped (the program is effectively done),
+ * or no training days are configured. A null return signals the caller that the
+ * program is resolved and should be marked complete rather than left "in progress".
  */
 export function reflowStuckSchedule(
   existingWorkouts: IScheduledWorkout[],
@@ -199,14 +203,17 @@ export function reflowStuckSchedule(
   const sortedDays = [...trainingDays].sort((a, b) => a - b)
   if (sortedDays.length === 0) return null
 
-  // Completed slots are history — preserve them (dates + completedAt) untouched.
-  const completedPast = existingWorkouts.filter((w) => w.status === 'completed')
+  // Completed + skipped are history — preserve them (dates, status, completedAt)
+  // untouched. A skip is a firm "not doing this session", so it is never re-offered.
+  const resolvedPast = existingWorkouts.filter(
+    (w) => w.status === 'completed' || w.status === 'skipped'
+  )
 
-  // Remaining = every program workout minus the ones already completed.
-  const completedCounts = new Map<string, number>()
-  for (const w of completedPast) {
+  // Remaining = every program workout minus the ones already resolved (done or skipped).
+  const resolvedCounts = new Map<string, number>()
+  for (const w of resolvedPast) {
     const key = `${w.phase}-${w.dayLabel}`
-    completedCounts.set(key, (completedCounts.get(key) || 0) + 1)
+    resolvedCounts.set(key, (resolvedCounts.get(key) || 0) + 1)
   }
   const remaining: { phase: number; dayLabel: string; title: string }[] = []
   const usedCounts = new Map<string, number>()
@@ -217,8 +224,8 @@ export function reflowStuckSchedule(
       for (const w of workouts) {
         const key = `${i + 1}-${w.day}`
         const used = usedCounts.get(key) || 0
-        const completed = completedCounts.get(key) || 0
-        if (used < completed) usedCounts.set(key, used + 1)
+        const resolved = resolvedCounts.get(key) || 0
+        if (used < resolved) usedCounts.set(key, used + 1)
         else remaining.push({ phase: i + 1, dayLabel: w.day, title: w.title })
       }
     }
@@ -248,5 +255,5 @@ export function reflowStuckSchedule(
     current.setUTCDate(current.getUTCDate() + 1)
   }
 
-  return [...completedPast, ...future] as IScheduledWorkout[]
+  return [...resolvedPast, ...future] as IScheduledWorkout[]
 }

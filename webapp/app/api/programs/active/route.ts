@@ -125,6 +125,19 @@ export async function GET(request: NextRequest) {
           ).catch(() => {})
           effectiveStatus = 'in-progress'
         }
+
+        // Forward self-heal: every session is resolved (completed or firmly
+        // skipped) with nothing left to do → the program is complete. Only fires
+        // at the dead-end, since any remaining scheduled/missed session is
+        // unresolved and keeps completed+skipped below the total.
+        const skippedCount = sessions.filter((w) => w.status === 'skipped').length
+        if (effectiveStatus !== 'completed' && totalWorkouts > 0 && completedWorkouts + skippedCount >= totalWorkouts) {
+          UserProgress.updateOne(
+            { userId: payload.userId, 'activePrograms.programId': program.programId },
+            { $set: { 'activePrograms.$.status': 'completed' } }
+          ).catch(() => {})
+          effectiveStatus = 'completed'
+        }
       }
 
       // Exclude truly completed programs from this endpoint's response
