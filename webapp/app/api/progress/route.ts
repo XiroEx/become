@@ -123,6 +123,10 @@ export async function GET(request: NextRequest) {
     let scheduleNextWorkoutDay: string | undefined
     let scheduleTotalWeeks: number | undefined
     let scheduleCurrentWeek: number | undefined
+    // Session-based progress (matches the workout hub's completed/total) so the
+    // dashboard % agrees with it instead of the coarser week-based ratio.
+    let scheduleCompleted: number | undefined
+    let scheduleTotal: number | undefined
 
     if (activeProgram) {
       const schedule = await Schedule.findOne({
@@ -175,6 +179,8 @@ export async function GET(request: NextRequest) {
             return false
           }).length
         scheduleCurrentWeek = Math.max(1, Math.ceil(reconciledCompleted / daysPerWeek))
+        scheduleCompleted = reconciledCompleted
+        scheduleTotal = sessions.length
       }
 
       // totalWeeks from the real program data
@@ -188,7 +194,9 @@ export async function GET(request: NextRequest) {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
       currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1)
+      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1),
+      completedWorkouts: scheduleCompleted ?? activeProgram.completedWorkouts ?? 0,
+      totalWorkouts: scheduleTotal ?? activeProgram.totalWorkouts ?? 0,
     } : progress.currentProgram?.programId ? progress.currentProgram : null
 
     // Format and return progress data

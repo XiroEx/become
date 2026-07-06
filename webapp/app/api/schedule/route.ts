@@ -5,7 +5,8 @@ import Schedule from '@/models/Schedule'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
-import { generateScheduledWorkouts, regenerateSchedule, type PhaseData } from '@/lib/schedule'
+import { generateScheduledWorkouts, regenerateSchedule, reflowStuckSchedule, type PhaseData } from '@/lib/schedule'
+import type { IScheduledWorkout } from '@/models/Schedule'
 import { readTzOffset, readTzOffsetFromBody, localDateKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
 // GET: Fetch schedule(s) for a user
@@ -67,6 +68,39 @@ export async function GET(request: NextRequest) {
     const programStatusMap = new Map<string, string>()
     for (const p of activePrograms as Array<{ programId: string; status: string }>) {
       programStatusMap.set(p.programId, p.status)
+    }
+
+    // ── Catch-up reflow ────────────────────────────────────────────────────
+    // An in-progress program can run out of upcoming slots when the user falls
+    // behind: every remaining dated slot lapses into the past, so the calendar
+    // looks "finished" while the dashboard/hub (which track completion, not
+    // dates) still say "continue". When we hit that genuine dead-end — no future
+    // slots left AND the program isn't actually finished — re-offer the
+    // outstanding workouts on upcoming training days so all surfaces agree.
+    // Fires only at the dead-end, so a normal single skip (which leaves plenty
+    // of future slots) is untouched; idempotent once future slots exist again.
+    for (const schedule of schedules) {
+      if ((programStatusMap.get(schedule.programId) || '') !== 'in-progress') continue
+      const slots = (schedule.scheduledWorkouts || []) as Array<{ date: Date; status: string; dayLabel: string; phase: number }>
+      const nonRest = slots.filter((s) => s.status !== 'rest')
+      if (nonRest.length === 0) continue
+      const completed = nonRest.filter((s) => s.status === 'completed').length
+      // A future-dated missed slot is self-healed to scheduled below, so it counts as "future work still on the calendar".
+      const hasFuture = slots.some((s) => (s.status === 'scheduled' || s.status === 'missed') && new Date(s.date) >= now)
+      if (hasFuture || completed >= nonRest.length) continue // not stuck
+
+      const program = await ProgramModel.findOne({ program_id: schedule.programId }).lean()
+      if (!program) continue
+      const phases = (program.phases || []) as PhaseData[]
+      const settingsDays = (schedule.settings as { trainingDays?: number[] } | undefined)?.trainingDays
+      const trainingDays: number[] = Array.isArray(settingsDays) && settingsDays.length
+        ? settingsDays
+        : Array.from(new Set(slots.map((s) => new Date(s.date).getUTCDay()))).sort((a, b) => a - b)
+      const reflowed = reflowStuckSchedule(slots as unknown as IScheduledWorkout[], phases, trainingDays, now, schedule.programId)
+      if (reflowed && reflowed.length) {
+        await Schedule.updateOne({ _id: schedule._id }, { $set: { scheduledWorkouts: reflowed } }).catch(() => {})
+        schedule.scheduledWorkouts = reflowed as typeof schedule.scheduledWorkouts
+      }
     }
 
     // Process schedules: compute statuses across the FULL schedule first,

@@ -42,6 +42,8 @@ export interface UserProgressData {
     currentPhase: number
     currentWeek: number
     totalWeeks: number
+    completedWorkouts?: number
+    totalWorkouts?: number
     nextWorkout: string
     nextWorkoutDay?: string
   } | null

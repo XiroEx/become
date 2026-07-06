@@ -545,19 +545,29 @@ export default function DashboardClient() {
               </p>
             </div>
 
-            {/* Progress Bar */}
-            <div className="mb-3 sm:mb-4">
-              <div className="mb-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
-                <Link href="/dashboard/progress#records" className="hover:text-zinc-700 dark:hover:text-zinc-200">Progress</Link>
-                <span>{Math.round((data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100)}%</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                <div
-                  className="h-full bg-green-500 transition-all duration-300"
-                  style={{ width: `${(data.currentProgram.currentWeek / data.currentProgram.totalWeeks) * 100}%` }}
-                />
-              </div>
-            </div>
+            {/* Progress Bar — session-based (completed/total) so it matches the
+                workout hub's %. Falls back to the week ratio only when session
+                counts aren't available. */}
+            {(() => {
+              const cp = data.currentProgram
+              const pct = (cp.totalWorkouts && cp.totalWorkouts > 0 && cp.completedWorkouts != null)
+                ? Math.round((cp.completedWorkouts / cp.totalWorkouts) * 100)
+                : Math.round((cp.currentWeek / cp.totalWeeks) * 100)
+              return (
+                <div className="mb-3 sm:mb-4">
+                  <div className="mb-1 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
+                    <Link href="/dashboard/progress#records" className="hover:text-zinc-700 dark:hover:text-zinc-200">Progress</Link>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div
+                      className="h-full bg-green-500 transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })()}
 
             <Link
               href={`/dashboard/workout/${data.currentProgram.programId}/workout${data.currentProgram.nextWorkoutDay ? `?day=${encodeURIComponent(data.currentProgram.nextWorkoutDay)}` : ''}`}

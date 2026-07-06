@@ -171,3 +171,82 @@ export function regenerateSchedule(
     allWorkouts: [...pastWorkouts, ...futureWorkouts] as IScheduledWorkout[],
   }
 }
+
+/**
+ * Catch-up reflow for a "stuck" schedule.
+ *
+ * A program still in progress can run out of upcoming slots when the user falls
+ * behind: every remaining dated slot lapses into the past, so the calendar looks
+ * "finished" even though the dashboard/hub (which track completion, not dates)
+ * still say "continue". This re-offers the outstanding work on upcoming training
+ * days so every surface agrees.
+ *
+ * Keeps the COMPLETED slots as immutable history and re-schedules every not-yet-
+ * completed program workout starting at `fromDate`. Past missed/skipped slots are
+ * intentionally dropped — they're superseded by the fresh upcoming slots — so the
+ * total session count stays equal to the program length (no double-counting).
+ *
+ * Returns the new full slot array, or null when there's nothing to reflow
+ * (program actually complete, or no training days configured).
+ */
+export function reflowStuckSchedule(
+  existingWorkouts: IScheduledWorkout[],
+  phases: PhaseData[],
+  trainingDays: number[],
+  fromDate: Date,
+  programId: string
+): IScheduledWorkout[] | null {
+  const sortedDays = [...trainingDays].sort((a, b) => a - b)
+  if (sortedDays.length === 0) return null
+
+  // Completed slots are history — preserve them (dates + completedAt) untouched.
+  const completedPast = existingWorkouts.filter((w) => w.status === 'completed')
+
+  // Remaining = every program workout minus the ones already completed.
+  const completedCounts = new Map<string, number>()
+  for (const w of completedPast) {
+    const key = `${w.phase}-${w.dayLabel}`
+    completedCounts.set(key, (completedCounts.get(key) || 0) + 1)
+  }
+  const remaining: { phase: number; dayLabel: string; title: string }[] = []
+  const usedCounts = new Map<string, number>()
+  for (let i = 0; i < phases.length; i++) {
+    const workouts = normalizeWorkouts(phases[i].workouts)
+    const numWeeks = parsePhaseWeeks(phases[i].weeks || '1')
+    for (let week = 0; week < numWeeks; week++) {
+      for (const w of workouts) {
+        const key = `${i + 1}-${w.day}`
+        const used = usedCounts.get(key) || 0
+        const completed = completedCounts.get(key) || 0
+        if (used < completed) usedCounts.set(key, used + 1)
+        else remaining.push({ phase: i + 1, dayLabel: w.day, title: w.title })
+      }
+    }
+  }
+  if (remaining.length === 0) return null
+
+  // Lay the remaining workouts on upcoming training days from fromDate.
+  const future: Array<Omit<IScheduledWorkout, 'completedAt' | 'notes'>> = []
+  const current = new Date(fromDate)
+  current.setUTCHours(0, 0, 0, 0)
+  const maxDate = new Date(current)
+  maxDate.setFullYear(maxDate.getFullYear() + 1)
+  let widx = 0
+  while (widx < remaining.length && current < maxDate) {
+    if (sortedDays.includes(current.getUTCDay())) {
+      const w = remaining[widx]
+      future.push({
+        date: new Date(current),
+        programId,
+        phase: w.phase,
+        dayLabel: w.dayLabel,
+        workoutTitle: w.title,
+        status: 'scheduled',
+      })
+      widx++
+    }
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  return [...completedPast, ...future] as IScheduledWorkout[]
+}
