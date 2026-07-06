@@ -46,9 +46,10 @@ test.describe('Calendar', () => {
   })
 
   test('day-detail renders management controls', async ({ page }) => {
-    // The calendar auto-selects today; today (in the app's world) has a quick
-    // session. Assert the unified quick card shows management buttons.
-    const detail = page.locator('text=Quick session').first()
+    // Assert the unified quick card (if any is on the selected day) shows the
+    // management buttons. Scope to the card via its "·" separator so the legend
+    // entry (bare "Quick session") doesn't trip the guard.
+    const detail = page.locator('text=/Quick session ·/').first()
     if (await detail.isVisible({ timeout: 4000 }).catch(() => false)) {
       // Unified quick card: View Summary (completed) or Start/Continue, plus Delete
       await expect(page.getByRole('button', { name: /View Summary|Continue|Start/ }).first()).toBeVisible()
