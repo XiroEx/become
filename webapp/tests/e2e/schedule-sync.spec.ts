@@ -151,3 +151,86 @@ test.describe('skip ↔ schedule live round-trip', () => {
     expect(statusOn(restored, target!.date)).toBe('scheduled')
   })
 })
+
+// Drives the DEPLOYED reflow through the real GET /api/schedule: seeds a schedule
+// whose every slot is already in the past (a "stuck" program that would otherwise
+// show an empty calendar), then confirms the endpoint re-offers the outstanding
+// work on upcoming days AND leaves a deliberately-skipped slot skipped in place.
+// Self-restoring: re-seeds a clean present-day schedule in `finally`.
+test.describe('reflow — deployed end-to-end (seeded, self-restoring)', () => {
+  const PROG = 'strength-size-20' // the test user is enrolled; used only as a scratch schedule
+  const auth = { Authorization: `Bearer ${AUTH_TOKEN}` }
+  const isoDay = (offsetDays: number) => {
+    const d = new Date(); d.setDate(d.getDate() + offsetDays)
+    return d.toISOString().split('T')[0]
+  }
+
+  test('a stuck (all-past) schedule is re-offered onto upcoming days; a skip stays put', async ({ request }) => {
+    const postSchedule = (startDate: string) => request.post(`${BASE_URL}/api/schedule`, {
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      data: { programId: PROG, trainingDays: [1, 2, 3, 4, 5], startDate },
+    })
+    const getSlots = async (): Promise<Array<{ date: string; status: string; dayLabel: string }>> => {
+      const res = await request.get(`${BASE_URL}/api/schedule?programId=${PROG}&view=all`, { headers: auth })
+      expect(res.ok(), `schedule GET ${res.status()}`).toBeTruthy()
+      return (await res.json()).schedules?.[0]?.scheduledWorkouts ?? []
+    }
+
+    // Seed: startDate ~10 weeks ago so all sessions land in the past → stuck.
+    const seeded = await postSchedule(isoDay(-70))
+    test.skip(!seeded.ok(), `could not seed ${PROG} (status ${seeded.status()})`)
+
+    try {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      // First read triggers the catch-up reflow: past sessions get re-offered ahead.
+      let slots = await getSlots()
+      const upcoming = slots.filter((s) => s.status === 'scheduled' && new Date(s.date) >= today)
+      expect(upcoming.length, 'reflow should re-offer sessions on upcoming days').toBeGreaterThan(0)
+
+      // Skip the earliest upcoming session, then read again. It must stay skipped in
+      // place (other upcoming sessions keep the program off the dead-end path).
+      const earliest = [...upcoming].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
+      const skipRes = await request.patch(`${BASE_URL}/api/schedule`, {
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        data: { programId: PROG, action: 'skip', workoutDate: earliest.date, tz: new Date().getTimezoneOffset() },
+      })
+      expect(skipRes.ok()).toBeTruthy()
+
+      slots = await getSlots()
+      const skipped = slots.find((s) => new Date(s.date).getTime() === new Date(earliest.date).getTime())
+      expect(skipped?.status, 'a deliberate skip is never resurrected by reflow').toBe('skipped')
+    } finally {
+      // Restore a clean, present-day schedule so the scratch program is left sane.
+      await postSchedule(isoDay(0)).catch(() => {})
+    }
+  })
+})
+
+// Read-only: the dashboard "Current Program" and the workout-hub "Continue Training"
+// must report the SAME session-based progress for the same program (Fix A — no more
+// 50%-vs-45% split from two different denominators).
+test.describe('progress % — dashboard and hub agree', () => {
+  test('same completed/total and same rounded percentage across surfaces', async ({ request }) => {
+    const auth = { Authorization: `Bearer ${AUTH_TOKEN}` }
+    const [progRes, activeRes] = await Promise.all([
+      request.get(`${BASE_URL}/api/progress`, { headers: auth }),
+      request.get(`${BASE_URL}/api/programs/active`, { headers: auth }),
+    ])
+    expect(progRes.ok()).toBeTruthy()
+    expect(activeRes.ok()).toBeTruthy()
+    const cp = (await progRes.json()).currentProgram as { programId: string; completedWorkouts?: number; totalWorkouts?: number } | null
+    const activeList: Array<{ programId: string; completedWorkouts: number; totalWorkouts: number; progress: number }> =
+      (await activeRes.json()).activePrograms ?? []
+
+    test.skip(!cp || cp.completedWorkouts == null || !cp.totalWorkouts, 'no schedule-backed current program')
+    const match = activeList.find((p) => p.programId === cp!.programId)
+    test.skip(!match, 'current program not present in active list')
+
+    // Same source of truth → identical session counts.
+    expect(cp!.completedWorkouts).toBe(match!.completedWorkouts)
+    expect(cp!.totalWorkouts).toBe(match!.totalWorkouts)
+    // The percentage the dashboard renders equals the hub's.
+    const dashPct = Math.round((cp!.completedWorkouts! / cp!.totalWorkouts!) * 100)
+    expect(dashPct).toBe(match!.progress)
+  })
+})
