@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     // Workout logs for cross-referencing historical completions (sessions done before schedule-sync fix
     // may still show status='scheduled' in the DB even though they were completed via workout logs)
-    type WorkoutLog = { programId: string; day: string; completed: boolean }
+    type WorkoutLog = { programId: string; day: string; completed: boolean; date: Date | string }
     const workoutLogs = (userProgress.workoutLogs || []) as WorkoutLog[]
 
     type CandidateProgram = {
@@ -94,9 +94,20 @@ export async function GET(request: NextRequest) {
         // Uses greedy chronological matching to handle repeating dayLabels
         // (e.g. "Day 1" appears 5× in a 5-week program — one log entry of "Day 1"
         // should only count as one completion, not five).
+        //
+        // Only logs from the CURRENT enrollment (on/after its startDate) count.
+        // Otherwise, abandoning + re-enrolling a program would resurrect the old
+        // progress: the prior enrollment's completed logs would match the fresh
+        // schedule's day labels and the "restart" would show old %, not 0.
+        const enrollStart = program.startDate ? new Date(program.startDate) : null
+        if (enrollStart) enrollStart.setUTCHours(0, 0, 0, 0)
         const availableLogs = new Map<string, number>()
         for (const log of workoutLogs) {
-          if (log.programId === program.programId && log.completed) {
+          if (
+            log.programId === program.programId &&
+            log.completed &&
+            (!enrollStart || new Date(log.date) >= enrollStart)
+          ) {
             availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
           }
         }
