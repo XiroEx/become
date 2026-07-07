@@ -341,9 +341,10 @@ export default function CalendarClient() {
 
   // Shared management helpers -------------------------------------------------
   // Per-workout schedule PATCH (skip / unskip / uncomplete / reschedule …).
-  const patchWorkout = useCallback(async (programId: string, action: string, workoutDate: string, extra: Record<string, unknown> = {}) => {
+  const patchWorkout = useCallback(async (programId: string, action: string, workoutDate: string, extra: Record<string, unknown> = {}, confirmMsg?: string) => {
     const token = localStorage.getItem('token')
     if (!token) return
+    if (confirmMsg && typeof window !== 'undefined' && !window.confirm(confirmMsg)) return
     setActionLoading(true)
     try {
       const res = await fetch('/api/schedule', {
@@ -478,6 +479,11 @@ export default function CalendarClient() {
   // Schedule actions
   const handleAction = async (action: string) => {
     if (!actionMenuWorkout) return
+    // Confirm state-changing actions so an accidental tap can't quietly alter history.
+    const confirmMsg: Record<string, string> = {
+      skip: 'Skip this workout? It’ll be marked skipped and won’t count as completed.',
+    }
+    if (confirmMsg[action] && typeof window !== 'undefined' && !window.confirm(confirmMsg[action])) return
     setActionLoading(true)
 
     try {
@@ -959,6 +965,7 @@ export default function CalendarClient() {
                                     </Link>
                                     <button
                                       onClick={async () => {
+                                        if (typeof window !== 'undefined' && !window.confirm('Skip this workout? It’ll be marked skipped and won’t count as completed.')) return
                                         const token = localStorage.getItem('token')
                                         if (!token) return
                                         setActionLoading(true)
@@ -1012,7 +1019,7 @@ export default function CalendarClient() {
                                       View Summary
                                     </button>
                                     <button
-                                      onClick={() => patchWorkout(w.programId, 'uncomplete', w.date)}
+                                      onClick={() => patchWorkout(w.programId, 'uncomplete', w.date, {}, 'Un-complete this workout? The sets you logged for it will be removed and it returns to scheduled.')}
                                       disabled={actionLoading}
                                       className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                                     >
@@ -1038,7 +1045,7 @@ export default function CalendarClient() {
                                       Do It Now
                                     </Link>
                                     <button
-                                      onClick={() => patchWorkout(w.programId, 'unskip', w.date)}
+                                      onClick={() => patchWorkout(w.programId, 'unskip', w.date, {}, 'Un-skip this workout? It returns to your schedule as upcoming.')}
                                       disabled={actionLoading}
                                       className="flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
                                     >
@@ -1403,6 +1410,7 @@ export default function CalendarClient() {
                   ) : (
                     <button
                       onClick={async () => {
+                        if (typeof window !== 'undefined' && !window.confirm('Pause this program? All its workouts are frozen until you resume.')) return
                         const token = localStorage.getItem('token')
                         if (!token) return
                         setActionLoading(true)
