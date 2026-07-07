@@ -83,28 +83,43 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-// PATCH /api/workouts/session — re-date a quick session. Body: { id, date }
-// (date = YYYY-MM-DD or ISO). Moves the log to another day on the calendar.
+// PATCH /api/workouts/session — manage a quick session. Body: { id, ... }
+//   { id, date }            → re-date (date = YYYY-MM-DD or ISO): move to another day
+//   { id, skipped: true }   → mark the planned session skipped
+//   { id, skipped: false }  → un-skip (back to planned)
+// Re-date and skip can be sent together or separately.
 export async function PATCH(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
     if (!auth.success) return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 })
-    const body = await request.json().catch(() => ({})) as { id?: string; date?: string }
+    const body = await request.json().catch(() => ({})) as { id?: string; date?: string; skipped?: boolean }
     const id = body.id
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    if (!body.date) return NextResponse.json({ error: 'date is required' }, { status: 400 })
-    const raw = /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? `${body.date}T12:00:00` : body.date
-    const d = new Date(raw)
-    if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 })
+    if (body.date === undefined && body.skipped === undefined) {
+      return NextResponse.json({ error: 'date or skipped is required' }, { status: 400 })
+    }
+
+    const set: Record<string, unknown> = {}
+    if (body.date !== undefined) {
+      const raw = /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? `${body.date}T12:00:00` : body.date
+      const d = new Date(raw)
+      if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 })
+      set['workoutLogs.$[elem].date'] = d
+      set['workoutLogs.$[elem].startedAt'] = d
+    }
+    if (body.skipped !== undefined) {
+      set['workoutLogs.$[elem].skipped'] = !!body.skipped
+    }
+
     await dbConnect()
     await UserProgress.updateOne(
       { userId: auth.userId },
-      { $set: { 'workoutLogs.$[elem].date': d, 'workoutLogs.$[elem].startedAt': d } },
+      { $set: set },
       { arrayFilters: [{ 'elem.sessionId': id, 'elem.kind': 'quick' }] },
     )
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error re-dating quick session:', error)
+    console.error('Error updating quick session:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

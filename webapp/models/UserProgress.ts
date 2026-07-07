@@ -64,6 +64,9 @@ export interface IWorkoutLog {
   // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
   focus?: string
   completed: boolean
+  // Quick sessions only: a planned session the user deliberately skipped. Never
+  // set on program logs (those track skips on the Schedule slot instead).
+  skipped?: boolean
   duration?: number // in minutes (final, set on completion)
   startedAt?: Date // First time the live view was opened / first set saved
   activeSeconds?: number // Accumulated active seconds across all sessions
@@ -241,6 +244,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   sessionId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },
+  skipped: { type: Boolean },
   duration: { type: Number },
   startedAt: { type: Date },
   activeSeconds: { type: Number, default: 0 },

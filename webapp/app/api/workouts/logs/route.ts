@@ -19,6 +19,7 @@ type RawLog = {
   focus?: string
   sessionId?: string
   completed: boolean
+  skipped?: boolean
   date: Date
   duration?: number
   exercises?: Array<{ sets?: Array<{ completed?: boolean }> }>
@@ -97,6 +98,7 @@ export async function GET(request: NextRequest) {
           phase: log.phase,
           sessionId: log.sessionId,
           completed: log.completed,
+          skipped: !!log.skipped,
           date: new Date(log.date).toISOString(),
           duration: log.duration,
           exerciseCount,

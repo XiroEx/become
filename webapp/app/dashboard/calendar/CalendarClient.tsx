@@ -60,9 +60,10 @@ interface QuickCalItem {
   title: string
   date: string
   completed: boolean
+  skipped?: boolean
   exerciseCount: number
   duration?: number
-  status: 'completed' | 'planned' | 'incomplete'
+  status: 'completed' | 'planned' | 'incomplete' | 'skipped'
 }
 
 type ViewMode = 'month' | 'week'
@@ -224,7 +225,9 @@ export default function CalendarClient() {
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
   const [quick, setQuick] = useState<QuickCalItem[]>([])
   const [summaryId, setSummaryId] = useState<string | null>(null)
-  const [redateId, setRedateId] = useState<string | null>(null)
+  // Quick-session Manage sheet (parity with the program workout Manage sheet).
+  const [quickMenu, setQuickMenu] = useState<QuickCalItem | null>(null)
+  const [showQuickDatePicker, setShowQuickDatePicker] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
     const dateParam = searchParams.get('date')
@@ -318,7 +321,7 @@ export default function CalendarClient() {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) return
-      const data = (await res.json()) as { logs?: Array<{ kind: string; title: string; date: string; completed: boolean; exerciseCount: number; duration?: number; sessionId?: string }> }
+      const data = (await res.json()) as { logs?: Array<{ kind: string; title: string; date: string; completed: boolean; skipped?: boolean; exerciseCount: number; duration?: number; sessionId?: string }> }
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
       setQuick(
@@ -329,9 +332,10 @@ export default function CalendarClient() {
             title: l.title,
             date: l.date,
             completed: l.completed,
+            skipped: l.skipped,
             exerciseCount: l.exerciseCount,
             duration: l.duration,
-            status: l.completed ? 'completed' : (new Date(l.date) >= startOfToday ? 'planned' : 'incomplete'),
+            status: l.completed ? 'completed' : l.skipped ? 'skipped' : (new Date(l.date) >= startOfToday ? 'planned' : 'incomplete'),
           })),
       )
     } catch { /* non-fatal */ }
@@ -368,13 +372,16 @@ export default function CalendarClient() {
       const res = await fetch(`/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
       })
-      if (res.ok) await fetchQuick()
+      if (res.ok) {
+        setQuickMenu(null)
+        await fetchQuick()
+      }
     } finally {
       setActionLoading(false)
     }
   }, [fetchQuick])
 
-  // Re-date a quick session log to another day, then refresh + collapse the picker.
+  // Re-date a quick session log to another day, then refresh + close the sheet.
   const reDateQuick = useCallback(async (sessionId: string, date: string) => {
     const token = localStorage.getItem('token')
     if (!token || !date) return
@@ -386,7 +393,28 @@ export default function CalendarClient() {
         body: JSON.stringify({ id: sessionId, date }),
       })
       if (res.ok) {
-        setRedateId(null)
+        setShowQuickDatePicker(false)
+        setQuickMenu(null)
+        await fetchQuick()
+      }
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchQuick])
+
+  // Skip / un-skip a planned quick session, then refresh + close the sheet.
+  const skipQuick = useCallback(async (sessionId: string, skipped: boolean) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/workouts/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: sessionId, skipped }),
+      })
+      if (res.ok) {
+        setQuickMenu(null)
         await fetchQuick()
       }
     } finally {
@@ -821,9 +849,12 @@ export default function CalendarClient() {
                     {selectedQuick.map((q, i) => {
                       // Map the quick-session status onto the shared StatusBadge vocabulary
                       // so quick + program cards read identically.
-                      const badgeStatus = q.status === 'completed' ? 'completed' : q.status === 'planned' ? 'scheduled' : 'missed'
-                      const dot = q.status === 'completed' ? 'bg-green-700' : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
-                      const isRedating = redateId === q.sessionId
+                      const badgeStatus = q.status === 'completed' ? 'completed'
+                        : q.status === 'skipped' ? 'skipped'
+                        : q.status === 'planned' ? 'scheduled' : 'missed'
+                      const dot = q.status === 'completed' ? 'bg-green-700'
+                        : q.status === 'skipped' ? 'bg-amber-400'
+                        : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
                       return (
                         <div key={`sq${i}`} className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 dark:border-purple-900/40 dark:bg-purple-900/10">
                           <div className="flex items-start justify-between gap-2">
@@ -838,7 +869,7 @@ export default function CalendarClient() {
                             </div>
                             <div className="shrink-0"><StatusBadge status={badgeStatus} /></div>
                           </div>
-                          {/* Actions — unified with the program card */}
+                          {/* Actions — same "Start Workout + Manage" pattern as program workouts */}
                           <div className="mt-3 flex flex-wrap gap-2">
                             {q.status === 'completed' ? (
                               <button
@@ -856,37 +887,17 @@ export default function CalendarClient() {
                                 }}
                                 className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                               >
-                                <Dumbbell className="h-3 w-3" /> {q.status === 'planned' ? 'Start' : 'Continue'}
+                                <Dumbbell className="h-3 w-3" /> {q.status === 'incomplete' ? 'Continue' : 'Start Workout'}
                               </button>
                             )}
                             <button
-                              onClick={() => q.sessionId && setRedateId(isRedating ? null : (q.sessionId ?? null))}
-                              disabled={actionLoading || !q.sessionId}
-                              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                              onClick={() => setQuickMenu(q)}
+                              disabled={!q.sessionId}
+                              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                             >
-                              <CalendarDays className="h-3 w-3" /> Move
-                            </button>
-                            <button
-                              onClick={() => q.sessionId && deleteQuick(q.sessionId)}
-                              disabled={actionLoading || !q.sessionId}
-                              className="flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-900/20"
-                            >
-                              <X className="h-3 w-3" /> Delete
+                              <Settings className="h-3 w-3" /> Manage
                             </button>
                           </div>
-                          {/* Inline re-date picker (Move) */}
-                          {isRedating && (
-                            <div className="mt-2 flex items-center gap-2">
-                              <input
-                                type="date"
-                                defaultValue={toDateKey(new Date(q.date))}
-                                onChange={(e) => e.target.value && q.sessionId && reDateQuick(q.sessionId, e.target.value)}
-                                disabled={actionLoading}
-                                className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-                              />
-                              <span className="text-[11px] text-zinc-400">Pick a new day</span>
-                            </div>
-                          )}
                         </div>
                       )
                     })}
@@ -1107,6 +1118,122 @@ export default function CalendarClient() {
             }}
             onDone={() => setLogSummary(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Quick-session Manage sheet — same actions surface as program workouts */}
+      <AnimatePresence>
+        {quickMenu && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setQuickMenu(null); setShowQuickDatePicker(false) }} />
+            <motion.div
+              initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
+            >
+              {actionLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm dark:bg-zinc-900/80">
+                  <svg className="h-8 w-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                </div>
+              )}
+              <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-white">Manage Session</h3>
+              <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+                {quickMenu.title} · {new Date(quickMenu.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </p>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    if (!quickMenu.sessionId) return
+                    const d = new Date(quickMenu.date); d.setDate(d.getDate() + 1)
+                    reDateQuick(quickMenu.sessionId, toDateKey(d))
+                  }}
+                  disabled={actionLoading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Next Day</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Push this session one day forward</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setShowQuickDatePicker((v) => !v)}
+                  disabled={actionLoading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Date</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Pick any day for this session</p>
+                  </div>
+                </button>
+                {showQuickDatePicker && (
+                  <input
+                    type="date"
+                    defaultValue={toDateKey(new Date(quickMenu.date))}
+                    onChange={(e) => e.target.value && quickMenu.sessionId && reDateQuick(quickMenu.sessionId, e.target.value)}
+                    disabled={actionLoading}
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                )}
+
+                {quickMenu.status !== 'completed' && (
+                  quickMenu.status === 'skipped' ? (
+                    <button
+                      onClick={() => quickMenu.sessionId && skipQuick(quickMenu.sessionId, false)}
+                      disabled={actionLoading}
+                      className="flex w-full items-center gap-3 rounded-xl border border-amber-300 p-3 text-left transition-colors hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:hover:bg-amber-900/20"
+                    >
+                      <RotateCcw className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">Un-skip Session</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Put it back as planned</p>
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (!quickMenu.sessionId) return
+                        if (typeof window !== 'undefined' && !window.confirm('Skip this session? It’ll be marked skipped and won’t count as done.')) return
+                        skipQuick(quickMenu.sessionId, true)
+                      }}
+                      disabled={actionLoading}
+                      className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      <SkipForward className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">Skip Session</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Mark as skipped</p>
+                      </div>
+                    </button>
+                  )
+                )}
+
+                <button
+                  onClick={() => quickMenu.sessionId && deleteQuick(quickMenu.sessionId)}
+                  disabled={actionLoading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-red-200 p-3 text-left transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                >
+                  <X className="h-4 w-4 text-red-500" />
+                  <div>
+                    <p className="text-sm font-medium text-red-600 dark:text-red-400">Delete Session</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Remove it permanently</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => { setQuickMenu(null); setShowQuickDatePicker(false) }}
+                className="mt-4 w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
