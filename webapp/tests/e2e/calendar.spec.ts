@@ -51,9 +51,9 @@ test.describe('Calendar', () => {
     // entry (bare "Quick session") doesn't trip the guard.
     const detail = page.locator('text=/Quick session ·/').first()
     if (await detail.isVisible({ timeout: 4000 }).catch(() => false)) {
-      // Unified quick card: View Summary (completed) or Start/Continue, plus Delete
-      await expect(page.getByRole('button', { name: /View Summary|Continue|Start/ }).first()).toBeVisible()
-      await expect(page.getByRole('button', { name: 'Delete' }).first()).toBeVisible()
+      // Unified quick card: a primary action (View Summary / Start Workout / Continue) + Manage
+      await expect(page.getByRole('button', { name: /View Summary|Start Workout|Continue/ }).first()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Manage' }).first()).toBeVisible()
       // View Summary opens the summary sheet (non-destructive)
       const viewBtn = page.getByRole('button', { name: 'View Summary' }).first()
       if (await viewBtn.isVisible().catch(() => false)) {
@@ -165,25 +165,72 @@ test.describe('Calendar — quick-session lifecycle round-trip', () => {
       // Our uniquely-titled card renders in the day detail.
       await expect(page.getByText(title).first()).toBeVisible({ timeout: 20_000 })
 
-      // Scope actions to the card containing our unique title.
+      // The card offers the same "primary + Manage" pair as program workouts.
       const card = page.locator('[class*="border-purple-200"]').filter({ hasText: title }).first()
       await expect(card.getByRole('button', { name: 'View Summary' })).toBeVisible()
-      await expect(card.getByRole('button', { name: 'Delete' })).toBeVisible()
+      await expect(card.getByRole('button', { name: 'Manage' })).toBeVisible()
 
-      // Move opens the inline re-date picker.
-      await card.getByRole('button', { name: 'Move' }).click()
-      await expect(card.locator('input[type="date"]')).toBeVisible({ timeout: 5_000 })
-      // Collapse it again (toggle) so it doesn't intercept the delete click.
-      await card.getByRole('button', { name: 'Move' }).click()
+      // Manage opens a sheet with the full action surface.
+      await card.getByRole('button', { name: 'Manage' }).click()
+      await expect(page.getByText('Manage Session')).toBeVisible({ timeout: 5_000 })
+      await expect(page.getByRole('button', { name: 'Move to Next Day' })).toBeVisible()
+      // Move to Date reveals a date picker.
+      await page.getByRole('button', { name: 'Move to Date' }).click()
+      await expect(page.locator('input[type="date"]')).toBeVisible({ timeout: 5_000 })
 
-      // Delete via the UI, auto-accepting the confirm dialog.
+      // Delete via the sheet, auto-accepting the confirm dialog.
       page.once('dialog', (d) => d.accept())
-      await card.getByRole('button', { name: 'Delete' }).click()
+      await page.getByRole('button', { name: 'Delete Session' }).click()
 
       // The card disappears after the refresh.
       await expect(page.getByText(title)).toHaveCount(0, { timeout: 20_000 })
     } finally {
       // Safety net: ensure the seeded log is gone even if the UI path failed.
+      await request
+        .delete(`${BASE_URL}/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
+          headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+        })
+        .catch(() => {})
+    }
+  })
+
+  test('quick-session Manage sheet skips and un-skips a planned session', async ({ page, context, request }) => {
+    const stamp = Date.now()
+    const sessionId = `e2e-skip-${stamp}`
+    const title = `E2E Skip ${stamp}`
+    const dateKey = todayKey()
+    const auth = { Authorization: `Bearer ${AUTH_TOKEN}`, 'Content-Type': 'application/json' }
+
+    // Seed a PLANNED (not completed) quick session dated today.
+    const seed = await request.post(`${BASE_URL}/api/workouts`, {
+      headers: auth,
+      data: {
+        kind: 'quick', sessionId, title, focus: 'e2e', completed: false, performedAt: dateKey,
+        exercises: [{ name: 'E2E Skip Move', exerciseSlug: '', sets: [{ setNumber: 1, reps: 5, weight: 10, completed: false }] }],
+      },
+    })
+    expect(seed.ok(), `seed POST failed: ${seed.status()}`).toBeTruthy()
+
+    try {
+      await authenticate(page, context)
+      await page.goto(`${BASE_URL}/dashboard/calendar?date=${dateKey}`)
+      await page.waitForLoadState('domcontentloaded')
+      const card = page.locator('[class*="border-purple-200"]').filter({ hasText: title }).first()
+      await expect(card.getByText(title)).toBeVisible({ timeout: 20_000 })
+
+      // Skip via Manage → the card badge flips to "Skipped".
+      await card.getByRole('button', { name: 'Manage' }).click()
+      await expect(page.getByText('Manage Session')).toBeVisible({ timeout: 5_000 })
+      page.once('dialog', (d) => d.accept())
+      await page.getByRole('button', { name: 'Skip Session' }).click()
+      await expect(card.getByText('Skipped')).toBeVisible({ timeout: 15_000 })
+
+      // Un-skip via Manage → the "Skipped" badge clears.
+      await card.getByRole('button', { name: 'Manage' }).click()
+      await expect(page.getByText('Manage Session')).toBeVisible({ timeout: 5_000 })
+      await page.getByRole('button', { name: 'Un-skip Session' }).click()
+      await expect(card.getByText('Skipped')).toHaveCount(0, { timeout: 15_000 })
+    } finally {
       await request
         .delete(`${BASE_URL}/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
           headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
