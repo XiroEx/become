@@ -94,6 +94,41 @@ test.describe('Calendar', () => {
     await page.waitForTimeout(300)
     await expect(page.getByRole('button', { name: 'Month' })).toBeVisible()
   })
+
+  test('destructive actions ask for confirmation (Skip This Workout is gated)', async ({ page, context, request }) => {
+    // Seed a scheduled program workout on today so the day detail exposes Manage.
+    const PROG = 'strength-size-20'
+    const headers = { Authorization: `Bearer ${AUTH_TOKEN}`, 'Content-Type': 'application/json' }
+    const today = todayKey()
+    await request.post(`${BASE_URL}/api/programs/enroll`, { headers, data: { programId: PROG, startDate: today } }).catch(() => {})
+    const seeded = await request.post(`${BASE_URL}/api/schedule`, {
+      headers, data: { programId: PROG, trainingDays: [0, 1, 2, 3, 4, 5, 6], startDate: today },
+    })
+    test.skip(!seeded.ok(), `could not seed ${PROG}`)
+
+    await authenticate(page, context)
+    await page.goto(`${BASE_URL}/dashboard/calendar?date=${today}`)
+    await page.waitForLoadState('domcontentloaded')
+
+    // Open the workout's Manage sheet.
+    const manage = page.getByRole('button', { name: 'Manage' }).first()
+    test.skip(!(await manage.isVisible({ timeout: 10_000 }).catch(() => false)), 'no scheduled workout in day detail')
+    await manage.click()
+    await expect(page.getByText('Manage Workout')).toBeVisible({ timeout: 5000 })
+
+    // Clicking "Skip This Workout" must raise a confirm dialog. Dismiss it → no change.
+    let dialogText = ''
+    page.once('dialog', (d) => { dialogText = d.message(); d.dismiss() })
+    await page.getByRole('button', { name: /Skip This Workout/ }).click()
+    await page.waitForTimeout(500)
+    expect(dialogText, 'Skip This Workout must ask for confirmation').toContain('Skip')
+
+    // Dismissed → today's slot is still scheduled (the action was gated, not run).
+    const slots = (await (await request.get(`${BASE_URL}/api/schedule?programId=${PROG}&view=all`, { headers })).json())
+      .schedules?.[0]?.scheduledWorkouts ?? []
+    const todaySlot = slots.find((s: { date: string }) => new Date(s.date).toISOString().split('T')[0] === today)
+    expect(todaySlot?.status, 'a dismissed skip must not change the slot').toBe('scheduled')
+  })
 })
 
 // Destructive-but-self-cleaning: seeds a real quick session for the test user via

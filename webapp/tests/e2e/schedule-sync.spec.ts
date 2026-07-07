@@ -206,6 +206,44 @@ test.describe('reflow — deployed end-to-end (seeded, self-restoring)', () => {
   })
 })
 
+// Abandoning a program keeps its workout logs (history), but a re-enrollment must
+// start fresh — not inherit the old completions. Drives abandon → re-enroll →
+// re-schedule and asserts the hub reports 0 completed for the fresh enrollment.
+// Leaves the program freshly enrolled (self-restoring).
+test.describe('abandon → re-enroll starts fresh', () => {
+  test('a re-enrolled program does not inherit the previous enrollment’s progress', async ({ request }) => {
+    const PROG = 'program_1_become' // test user has prior (pre-today) completions here
+    const auth = { Authorization: `Bearer ${AUTH_TOKEN}` }
+    const today = new Date().toISOString().split('T')[0]
+
+    // Abandon (removes the active enrollment + schedule; keeps historical logs).
+    await request.post(`${BASE_URL}/api/programs/abandon`, {
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      data: { programId: PROG },
+    }).catch(() => {})
+
+    // Re-enroll fresh (startDate = today) and lay a new schedule.
+    const enroll = await request.post(`${BASE_URL}/api/programs/enroll`, {
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      data: { programId: PROG, startDate: today },
+    })
+    expect(enroll.ok(), `enroll ${enroll.status()}`).toBeTruthy()
+    const sched = await request.post(`${BASE_URL}/api/schedule`, {
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      data: { programId: PROG, trainingDays: [1, 2, 3, 4], startDate: today },
+    })
+    expect(sched.ok(), `schedule ${sched.status()}`).toBeTruthy()
+
+    // The hub must report the fresh enrollment at 0 completed — the pre-today logs
+    // (from the prior enrollment) must NOT carry over.
+    const active = await (await request.get(`${BASE_URL}/api/programs/active`, { headers: auth })).json()
+    const p = (active.activePrograms ?? []).find((x: { programId: string }) => x.programId === PROG)
+    expect(p, 'program should be enrolled after re-enroll').toBeTruthy()
+    expect(p.completedWorkouts, 'a re-enrolled program must start at 0 completed').toBe(0)
+    expect(p.progress).toBe(0)
+  })
+})
+
 // Read-only: the dashboard "Current Program" and the workout-hub "Continue Training"
 // must report the SAME session-based progress for the same program (Fix A — no more
 // 50%-vs-45% split from two different denominators).
