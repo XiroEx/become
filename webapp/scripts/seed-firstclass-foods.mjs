@@ -69,15 +69,13 @@ for (const food of raw){
   }
   const wu = isLiquid?'ml':'g'
   const lbl = (label, m) => (/\d\s*(g|ml)\b/i.test(label) || /\(/.test(label)) ? label : `${label} (${m} ${wu})`
-  // The picker suppresses a PRIMARY serving whose unit is mass/volume (redundant
-  // with the weight/volume unit selectors), so "3 oz cooked" / "1 cup" would vanish.
-  // Discrete units (each/slice/serving) are never suppressed — use the food's own
-  // discrete unit if it has one, else 'serving', so the real label always shows.
-  const DISCRETE = ['each','slice','scoop','serving']
-  const unit = DISCRETE.includes(def.unit) ? def.unit : 'serving'
+  // Use the food's REAL serving unit (oz/cup/each/tbsp/…) + count so the picker's
+  // number+unit input shows the true metric ("3 oz", "1 cup"). The servingOptions
+  // suppression only hides bare "100 g" primaries, so real named servings survive.
+  const unit = UNITS.has(def.unit) ? def.unit : (isLiquid?'ml':'g')
   const variant = {
     name: 'Default', isDefault: true,
-    servingSize: unit === 'serving' ? 1 : (Number(def.count)||1),
+    servingSize: Number(def.count)||1,
     servingUnit: unit,
     displayLabel: lbl(def.label, defM),
     alternateServings: servings.slice(1).map(s=>({
