@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
+import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import type { IMealItem } from '@/models/Meal'
 import type { ServingUnit } from '@/models/Food'
 import type { Unit } from '@/lib/units'
@@ -98,6 +99,11 @@ export default function EditFoodModal({
   const [bridge, setBridge] = useState<BridgeValues>({})
 
   useLockScroll(isOpen)
+
+  // Lift the bottom-anchored sheet above the software keyboard (iOS keeps the
+  // layout viewport full-height when the keyboard opens, so the Save/Cancel row
+  // would otherwise sit hidden behind the keypad).
+  const keyboardInset = useKeyboardInset(isOpen)
 
   // Fresh derive on each item change so the picker opens with the right state.
   const derived = useMemo(() => (item ? deriveVariantAndInitial(item) : null), [item])
@@ -237,7 +243,8 @@ export default function EditFoodModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm touch-none sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm touch-none transition-[padding] duration-150 ease-out sm:items-center sm:p-4"
+          style={{ paddingBottom: keyboardInset || undefined }}
           onClick={handleClose}
         >
           <motion.div
@@ -245,7 +252,7 @@ export default function EditFoodModal({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            className="w-full max-w-md rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl sm:p-6"
+            className="max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:rounded-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check, ChevronDown, Tag as TagIcon, Loader2, Apple, Repeat, CalendarDays } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
+import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import QuantityPicker, {
   type QuantityPickerSelection,
   type QuantityPickerVariant,
@@ -154,6 +155,10 @@ export default function FoodLogSheet({
   const [repeatCount, setRepeatCount] = useState<number>(6)
 
   useLockScroll(isOpen)
+
+  // Lift the bottom-anchored sheet above the software keyboard so the Log button
+  // isn't hidden behind the keypad when editing the amount (see useKeyboardInset).
+  const keyboardInset = useKeyboardInset(isOpen)
 
   useEffect(() => {
     if (isOpen) {
@@ -306,7 +311,8 @@ export default function FoodLogSheet({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 transition-[padding] duration-150 ease-out sm:items-center sm:p-4"
+          style={{ paddingBottom: keyboardInset || undefined }}
           onClick={() => !logging && onClose()}
         >
           <motion.div
