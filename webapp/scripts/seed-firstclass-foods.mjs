@@ -15,6 +15,37 @@ const UNITS = new Set(['g','oz','cup','each','ml','tbsp','tsp','slice','scoop','
 function slugify(s){ return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') }
 function r1(n){ return Math.round((Number(n)||0)*10)/10 }
 function r3(n){ return Math.round((Number(n)||0)*1000)/1000 }
+const FL_OZ_ML = 29.5735
+// "1/2" → 0.5, "1 1/2" → 1.5, "1.55" → 1.55, "3" → 3
+function parseNum(t){ t=String(t).trim(); let m
+  if((m=t.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)$/))) return (+m[1])+((+m[2])/(+m[3]))
+  if((m=t.match(/^(\d+)\s*\/\s*(\d+)$/))) return (+m[1])/(+m[2])
+  const n=parseFloat(t); return Number.isFinite(n)?n:1 }
+function normUnit(u){ u=String(u).toLowerCase().replace(/\s+/g,' ').trim().replace(/s$/,'')
+  if(/^fl ?o/.test(u)) return 'fl_oz'
+  return ({gram:'g',ounce:'oz',milliliter:'ml',tablespoon:'tbsp',teaspoon:'tsp'})[u] || u }
+// Derive servingSize + servingUnit that match the quantity the picker parses from
+// displayLabel, so the default choice resolves to exactly 1× (see caller note).
+function deriveServing(label, def, isLiquid, defM){
+  const s = String(label||'')
+  // Leading "<qty> <unit>" — the food's real named metric ("3 oz", "1/2 cup").
+  const lead = s.match(/^\s*(\d+(?:\s+\d+\s*\/\s*\d+|\s*\.\s*\d+|\s*\/\s*\d+)?)\s*(fl\s*oz|grams?|milliliters?|ounces?|tablespoons?|teaspoons?|cups?|tbsp|tsp|oz|ml|g|slices?)?\b/i)
+  const num = lead ? parseNum(lead[1]) : (Number(def.count)||1)
+  const u = lead && lead[2] ? normUnit(lead[2]) : null
+  if(u === 'fl_oz') return { size: Math.round(num*FL_OZ_ML*100)/100, unit: 'ml' }
+  if(u && UNITS.has(u)) return { size: num, unit: u }
+  // No measurable leading unit (discrete "1 medium"/"1 bar", or liquid "1 can").
+  if(isLiquid){
+    // Prefer a volume measure anywhere (e.g. paren "12 fl oz") — matches the picker.
+    const vol = s.match(/(\d+(?:\.\d+|\s*\/\s*\d+)?)\s*(fl\s*oz|cups?|tbsp|tsp|ml)\b/i)
+    if(vol){ const q=parseNum(vol[1]), vu=normUnit(vol[2])
+      if(vu==='fl_oz') return { size: Math.round(q*FL_OZ_ML*100)/100, unit: 'ml' }
+      if(UNITS.has(vu)) return { size: q, unit: vu } }
+    return { size: defM, unit: 'ml' }
+  }
+  const du = UNITS.has(def.unit) && def.unit!=='serving' ? def.unit : (/slice/i.test(s) ? 'slice' : 'each')
+  return { size: (Number.isFinite(num) && num>0 ? num : (Number(def.count)||1)) || 1, unit: du }
+}
 
 const files = readdirSync('/tmp').filter(f=>/^foods_[A-Z]\.json$/.test(f)).sort().map(f=>`/tmp/${f}`)
 console.log('batch files:', files.map(f=>f.replace('/tmp/','')).join(', '))
@@ -69,13 +100,18 @@ for (const food of raw){
   }
   const wu = isLiquid?'ml':'g'
   const lbl = (label, m) => (/\d\s*(g|ml)\b/i.test(label) || /\(/.test(label)) ? label : `${label} (${m} ${wu})`
-  // Use the food's REAL serving unit (oz/cup/each/tbsp/…) + count so the picker's
-  // number+unit input shows the true metric ("3 oz", "1 cup"). The servingOptions
-  // suppression only hides bare "100 g" primaries, so real named servings survive.
-  const unit = UNITS.has(def.unit) ? def.unit : (isLiquid?'ml':'g')
+  // Derive servingSize + servingUnit so they MATCH the quantity the picker parses
+  // out of displayLabel. The picker's default choice = parse(displayLabel), and
+  // scalingFactor = parsedQty / servingSize — so if servingSize ≠ the label's
+  // leading quantity the default renders a wrong fraction/multiple (e.g. "1/2 cup"
+  // or "12 fl oz" with servingSize 1 computed 2×/30× the macros). fl_oz is not in
+  // the unit enum, so it maps to ml via the same 29.5735 factor the picker uses.
+  // NOTE: scripts/fix-serving-scale.ts is the authoritative post-seed verifier —
+  // run it after every seed to catch any label the picker parses differently.
+  const { size: servingSize, unit } = deriveServing(lbl(def.label, defM), def, isLiquid, defM)
   const variant = {
     name: 'Default', isDefault: true,
-    servingSize: Number(def.count)||1,
+    servingSize,
     servingUnit: unit,
     displayLabel: lbl(def.label, defM),
     alternateServings: servings.slice(1).map(s=>({
