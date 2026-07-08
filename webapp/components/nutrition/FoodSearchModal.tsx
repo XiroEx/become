@@ -1674,13 +1674,11 @@ export default function FoodSearchModal({
                                           {Math.round(previewNutrition.calories)} cal
                                         </span>
                                       </p>
-                                      <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                        P: {Math.round(previewNutrition.protein)}g
-                                        {' '}&middot;{' '}
-                                        C: {Math.round(previewNutrition.carbs)}g
-                                        {' '}&middot;{' '}
-                                        F: {Math.round(previewNutrition.fats)}g
-                                      </p>
+                                      <div className="flex flex-wrap justify-end gap-x-1.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                                        <span className="whitespace-nowrap">P: {Math.round(previewNutrition.protein)}g</span>
+                                        <span className="whitespace-nowrap">C: {Math.round(previewNutrition.carbs)}g</span>
+                                        <span className="whitespace-nowrap">F: {Math.round(previewNutrition.fats)}g</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </>
