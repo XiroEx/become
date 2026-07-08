@@ -464,46 +464,6 @@ export async function GET(request: NextRequest) {
     const sortedFoods = kept.map(s => s.item)
     const paged = sortedFoods.slice(offset, offset + limit)
 
-    // TEMP diagnostic — remove after root-causing the "USDA dropped for produce" bug.
-    if (searchParams.get('debug') === '1') {
-      // Probe USDA from inside the prod app: report the key mode (never the value)
-      // and the live HTTP status / rate-limit headers the app actually sees.
-      let usdaProbe: Record<string, unknown> = {}
-      try {
-        const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
-        const pp = new URLSearchParams({ query: q, api_key: apiKey, pageSize: '3', dataType: 'Foundation,SR Legacy,Branded' })
-        const pr = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${pp}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) })
-        usdaProbe = {
-          keyMode: apiKey === 'DEMO_KEY' ? 'demo/unset' : 'set',
-          status: pr.status,
-          rateLimitRemaining: pr.headers.get('x-ratelimit-remaining'),
-          rateLimitLimit: pr.headers.get('x-ratelimit-limit'),
-          hits: pr.ok ? ((await pr.json()).totalHits ?? null) : null,
-        }
-      } catch (e) {
-        usdaProbe = { keyMode: (process.env.USDA_API_KEY || 'DEMO_KEY') === 'DEMO_KEY' ? 'demo/unset' : 'set', error: e instanceof Error ? e.message : String(e) }
-      }
-      return NextResponse.json({
-        q,
-        usdaProbe,
-        counts: {
-          customFoods: customFoods.length,
-          usdaRaw: usdaResults.length,
-          offMirror: offFoods.length,
-          dedupedUsda: dedupedUsda.length,
-          usdaWithFlag: usdaWithFlag.length,
-          offWithFlag: offWithFlag.length,
-          combined: combined.length,
-          maxCovered: scored.reduce((m, s) => Math.max(m, s.covered), 0),
-          kept: kept.length,
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        usdaRawSample: usdaResults.slice(0, 6).map((x: any) => ({ name: x.name, dataType: x.dataType, covered: coveredCount(x.name, x.brand) })),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        usdaFlagSample: usdaWithFlag.slice(0, 6).map((x: any) => ({ name: x.name, covered: coveredCount(x.name, x.brand), rel: relevanceScore(x.name, x.brand, x.dataType) })),
-      })
-    }
-
     // Best Match: crown the single top result on the first page when the query
     // confidently matches it (the frontend renders a "Best Match" badge).
     // Because we dedupe + rank across our DB + USDA + OFF first, this points at
