@@ -1,5 +1,5 @@
 import { createRequire } from 'module'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, existsSync, readdirSync } from 'fs'
 const require = createRequire(import.meta.url)
 const mongoose = require('mongoose')
 
@@ -16,7 +16,8 @@ function slugify(s){ return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g
 function r1(n){ return Math.round((Number(n)||0)*10)/10 }
 function r3(n){ return Math.round((Number(n)||0)*1000)/1000 }
 
-const files = ['A','B','C','D'].map(x=>`/tmp/foods_${x}.json`)
+const files = readdirSync('/tmp').filter(f=>/^foods_[A-Z]\.json$/.test(f)).sort().map(f=>`/tmp/${f}`)
+console.log('batch files:', files.map(f=>f.replace('/tmp/','')).join(', '))
 let raw = []
 for (const f of files){
   if (!existsSync(f)) { console.log('MISSING', f); continue }
@@ -37,10 +38,15 @@ for (const food of raw){
   if (!CATEGORIES.has(food.category)) warnings.push(`${name}: bad category "${food.category}" → Other`)
   const p = food.per100 || {}
   if (!(Number(p.calories)>0)) { warnings.push(`${name}: no per100 calories — SKIP`); continue }
-  const servings = Array.isArray(food.servings) ? food.servings.filter(s=>s && (Number(s.grams)>0||Number(s.ml)>0)) : []
-  if (servings.length === 0) { warnings.push(`${name}: no valid servings — SKIP`); continue }
   const isLiquid = !!food.liquid
   const measure = (s)=> isLiquid ? Number(s.ml)||Number(s.grams) : Number(s.grams)||Number(s.ml)
+  const allServings = Array.isArray(food.servings) ? food.servings.filter(s=>s && (Number(s.grams)>0||Number(s.ml)>0)) : []
+  if (allServings.length === 0) { warnings.push(`${name}: no valid servings — SKIP`); continue }
+  // "100 g"/"100 ml" is arbitrary — nobody eats exactly 100 of anything. Drop it
+  // UNLESS it's the only serving (grams can still be entered via the weight unit).
+  const is100 = (s)=> /^\s*100\s*(g|ml)\b/i.test(String(s.label||'')) || (measure(s)===100 && /^(g|ml)$/.test(String(s.unit)))
+  let servings = allServings.filter(s=>!is100(s))
+  if (servings.length === 0) servings = allServings
   const def = servings[0]
   const defM = measure(def)
   if (!(defM>0)) { warnings.push(`${name}: default serving has no weight — SKIP`); continue }
@@ -61,12 +67,17 @@ for (const food of raw){
     sodium: r3(((Number(p.sodium_mg)||0)*scale)/1000),
     saturatedFat: r1((Number(p.saturatedFat)||0)*scale),
   }
-  const unit = UNITS.has(def.unit) ? def.unit : (isLiquid?'ml':'g')
   const wu = isLiquid?'ml':'g'
   const lbl = (label, m) => (/\d\s*(g|ml)\b/i.test(label) || /\(/.test(label)) ? label : `${label} (${m} ${wu})`
+  // The picker suppresses a PRIMARY serving whose unit is mass/volume (redundant
+  // with the weight/volume unit selectors), so "3 oz cooked" / "1 cup" would vanish.
+  // Discrete units (each/slice/serving) are never suppressed — use the food's own
+  // discrete unit if it has one, else 'serving', so the real label always shows.
+  const DISCRETE = ['each','slice','scoop','serving']
+  const unit = DISCRETE.includes(def.unit) ? def.unit : 'serving'
   const variant = {
     name: 'Default', isDefault: true,
-    servingSize: Number(def.count)||1,
+    servingSize: unit === 'serving' ? 1 : (Number(def.count)||1),
     servingUnit: unit,
     displayLabel: lbl(def.label, defM),
     alternateServings: servings.slice(1).map(s=>({
@@ -109,7 +120,12 @@ for (const d of docs){
     const isUserFood = existing.source === 'manual' && existing.createdBy && !existing.isFirstClass
     if (isUserFood){ skipped++; console.log('  skip user food:', d.slug); continue }
     const set = { ...d }; delete set._id
-    await coll.updateOne({ _id: existing._id }, { $set: { ...set, updatedAt: new Date() } })
+    // Strip stale external provenance so a promoted usda/off import renders as a
+    // clean curated food (no green/blue globe, no leftover brand subtitle).
+    await coll.updateOne({ _id: existing._id }, {
+      $set: { ...set, updatedAt: new Date() },
+      $unset: { brand: '', externalId: '', externalDataType: '', nutriscore_grade: '', imageUrl: '' },
+    })
     updated++
   } else {
     await coll.insertOne({ ...d, createdAt: new Date(), updatedAt: new Date() })
