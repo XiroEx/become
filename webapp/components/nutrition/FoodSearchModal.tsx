@@ -1692,8 +1692,8 @@ export default function FoodSearchModal({
                                   carry the page-supplied plannedDate). */}
                               {!isPlanMode && (
                                 <div className="mt-2.5 flex flex-col gap-2">
-                                  <div className="grid grid-cols-4 items-center gap-2">
-                                    <div className="col-span-3 flex min-w-0 items-center gap-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
                                       <button
                                         type="button"
                                         onClick={() => setDateEditOpen(v => !v)}
@@ -1728,9 +1728,6 @@ export default function FoodSearchModal({
                                         {customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
-                                    <span className="min-w-0 self-end text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                      Quantity
-                                    </span>
                                   </div>
                                   <AnimatePresence initial={false}>
                                     {dateEditOpen && (
@@ -1824,11 +1821,13 @@ export default function FoodSearchModal({
                                   )}
                                 </div>
                               )}
-                              <div className="mt-2 grid grid-cols-4 gap-2">
+                              {/* Quantity multiplier box removed — the picker's own
+                                  amount+unit is the single source of "how much". */}
+                              <div className="mt-2">
                                 <button
                                   onClick={handleAddFood}
                                   disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
-                                  className="col-span-3 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                 >
                                   {adding ? (
                                     <>
@@ -1848,19 +1847,6 @@ export default function FoodSearchModal({
                                     </>
                                   )}
                                 </button>
-                                <input
-                                  type="number"
-                                  min="0.1"
-                                  step="0.1"
-                                  inputMode="decimal"
-                                  value={addQuantity}
-                                  onChange={(e) => setAddQuantity(e.target.value)}
-                                  onBlur={() => {
-                                    if (positiveDecimal(addQuantity) <= 0) setAddQuantity('1')
-                                  }}
-                                  aria-label="Quantity"
-                                  className="min-w-0 rounded-lg border border-zinc-200 bg-white px-2 text-center text-sm font-semibold tabular-nums text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-                                />
                               </div>
                             </div>
                           </motion.div>
