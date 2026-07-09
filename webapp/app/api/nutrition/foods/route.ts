@@ -21,6 +21,7 @@ import {
 import { parseQuantityString, convert } from '@/lib/units'
 import { synthMergeUsdaResults } from '@/lib/usdaSynthMerge'
 import { dedupeBySource, type CustomFoodForDedupe } from '@/lib/foodSearchDedupe'
+import { groupServingPenalty } from '@/lib/foodSearchServingWeight'
 import { fetchUSDAFoodsBatch } from '@/lib/usdaBatchFetch'
 
 // ---------------------------------------------------------------------------
@@ -427,10 +428,16 @@ export async function GET(request: NextRequest) {
     // so they always surface above any USDA / OFF external result for the same query.
     // Without this, USDA Foundation/SR-Legacy type bonuses (-10/-5) make items like
     // "Fat, beef tallow" rank above "Ground Beef 85/15" for a "beef" search.
+    // groupServingPenalty softly demotes bulk/group servings (a 2 L bottle, a
+    // family-size bag) so a normal individual serving of the same food wins the
+    // top slot / Best Match. Capped well under a coverage step so relevance still
+    // dominates and normal foods stay at 0.
     const scored = combined.map(item => ({
       item,
       covered: coveredCount(item.name, item.brand),
-      rel: relevanceScore(item.name, item.brand, item.dataType) - (item.isFirstClass ? 500 : 0),
+      rel: relevanceScore(item.name, item.brand, item.dataType)
+        - (item.isFirstClass ? 500 : 0)
+        + groupServingPenalty(item),
       src: item.isSaved ? -1 : fromOurDb(item) ? 0 : item.source === 'usda' ? 1 : 2,
     }))
 
