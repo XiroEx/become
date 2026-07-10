@@ -4,13 +4,13 @@ import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
 
-const BOOTSTRAP_TOKEN = 'e2e-user-setup-2026'
+const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN
 const E2E_EMAIL = 'e2etest@become.io'
 
 export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('x-bootstrap-token')
-    if (token !== BOOTSTRAP_TOKEN) {
+    if (!BOOTSTRAP_TOKEN || token !== BOOTSTRAP_TOKEN) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

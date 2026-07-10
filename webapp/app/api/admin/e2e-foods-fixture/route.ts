@@ -17,10 +17,10 @@ import mongoose from 'mongoose'
 import connectDB from '@/lib/mongodb'
 import Food from '@/models/Food'
 
-const BOOTSTRAP_TOKEN = 'e2e-user-setup-2026'
+const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN
 
 function unauthorized(req: NextRequest): NextResponse | null {
-  if (req.headers.get('x-bootstrap-token') !== BOOTSTRAP_TOKEN) {
+  if (!BOOTSTRAP_TOKEN || req.headers.get('x-bootstrap-token') !== BOOTSTRAP_TOKEN) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return null
