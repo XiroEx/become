@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const ATLAS_URI = 'mongodb+srv://george8794:iLmYV8dMSgJoVEwx@jondonfit.ctp0tfj.mongodb.net/?appName=jondonfit';
+const ATLAS_URI = process.env.MONGODB_URI || '';
 
 // Real videos mapping - exercises with actual video files
 const REAL_VIDEOS = {

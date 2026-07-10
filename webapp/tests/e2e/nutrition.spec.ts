@@ -12,7 +12,7 @@ import fs from 'fs'
 import path from 'path'
 
 const BASE_URL = 'https://become.redbtn.io'
-const BOOTSTRAP_TOKEN = 'e2e-user-setup-2026'
+const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN || ''
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots')
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })
 

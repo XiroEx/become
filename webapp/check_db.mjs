@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-const prodUri = 'mongodb+srv://george8794:iLmYV8dMSgJoVEwx@jondonfit.ctp0tfj.mongodb.net/?appName=jondonfit';
+const prodUri = process.env.MONGODB_URI || '';
 
 await mongoose.connect(prodUri);
 const adminDb = mongoose.connection.db.admin();
