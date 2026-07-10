@@ -678,26 +678,31 @@ export default function CalendarClient() {
             <div key={i} className="h-16 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800 sm:h-20" />
           ))}
         </div>
-      ) : schedules.length === 0 ? (
-        <div className="mt-12 flex flex-col items-center gap-4 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-            <Calendar className="h-8 w-8 text-zinc-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">No schedules yet</h3>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Enroll in a program and set up a schedule to see your workouts here.
-            </p>
-          </div>
-          <Link
-            href="/dashboard/workout#browse-programs"
-            className="rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            Browse Programs
-          </Link>
-        </div>
       ) : (
         <>
+          {/* Not-on-a-program CTA — a banner, NOT a replacement for the calendar.
+              The grid still renders below so logged one-off sessions + history are
+              always visible; enrolling just adds planned program workouts. */}
+          {schedules.length === 0 && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                  <Calendar className="h-5 w-5 text-zinc-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Not on a program</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Your logged sessions still show below. Enroll to plan workouts ahead.</p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/workout#browse-programs"
+                className="shrink-0 rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                Browse
+              </Link>
+            </div>
+          )}
+
           {/* Calendar Grid */}
           <div
             className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden"
