@@ -1251,7 +1251,10 @@ export default function LiveWorkoutPage() {
                 e.stopPropagation();
                 // Quick sessions return to their overview (persisted) so closing
                 // live never strands the user with no way back into the session.
-                if (isQuick && quickSessionId) router.push(quickSessionOverviewHref(quickSessionId));
+                // REPLACE, not push: otherwise the live entry lingers behind the
+                // overview, and the overview's Back (router.back) returns INTO live
+                // — the two ping-pong and the user can't leave the session (back loop).
+                if (isQuick && quickSessionId) router.replace(quickSessionOverviewHref(quickSessionId));
                 else router.back();
               }}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
