@@ -11,7 +11,9 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
-import { readQuickSession, clearQuickSession, quickSessionOverviewHref, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
+import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 
 interface SetData {
@@ -365,7 +367,19 @@ export default function LiveWorkoutPage() {
           const token = localStorage.getItem("token");
           const lastPerformance = token ? await fetchLastPerformance(token, exs) : {};
           const { data, flow } = initializeExercises(exs, lastPerformance);
-          setExerciseData(data);
+          // Restore shared progress from the Track view (reps/weight/completed) so
+          // flipping the Track|Live tab never loses entered sets.
+          const savedQP = quickSessionId ? readQuickProgress(quickSessionId) : null;
+          const restored = savedQP?.exercises?.length
+            ? data.map((sets, i) => {
+                const savedEx = savedQP.exercises[i];
+                return sets.map((s, si) => {
+                  const ss = savedEx?.sets?.[si];
+                  return ss ? { ...s, reps: ss.reps ?? s.reps, weight: ss.weight ?? s.weight, completed: ss.completed ?? s.completed } : s;
+                });
+              })
+            : data;
+          setExerciseData(restored);
           setWorkoutFlow(flow);
           setLoading(false);
           return;
@@ -606,6 +620,20 @@ export default function LiveWorkoutPage() {
     loadWorkout();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId, requestedDay, loadKey, isQuick, quickSessionId]);
+
+  // Mirror live progress into the shared quick-session draft so the Track (form)
+  // view resumes with the same reps/weight/completed when the user flips the tab.
+  useEffect(() => {
+    if (!isQuick || !quickSessionId || !workout) return;
+    writeQuickProgress(
+      quickSessionId,
+      workout.exercises.map((ex, i) => ({
+        name: ex.name,
+        ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+        sets: (exerciseData[i] ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed })),
+      })),
+    );
+  }, [isQuick, quickSessionId, workout, exerciseData]);
 
   // Find the first incomplete step in the flow
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
@@ -1263,6 +1291,19 @@ export default function LiveWorkoutPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+
+            {/* Quick session: Track|Live tab (this is the Live view). Progress is
+                shared, so switching to Track keeps every entered set. */}
+            {isQuick && quickSessionId && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <WorkoutViewToggle
+                  active="live"
+                  trackHref={quickSessionTrackHref(quickSessionId)}
+                  liveHref={quickSessionLiveHref(quickSessionId)}
+                  onDark
+                />
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               {/* Resume indicator */}
