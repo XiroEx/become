@@ -11,6 +11,11 @@ const TTL_MS = 60 * 60 * 1000
  * cron uses this to send notifications at a reasonable LOCAL hour instead of
  * a fixed UTC window.
  *
+ * IMPORTANT: pass only a GENUINELY-reported offset. Callers must gate on
+ * `readOptionalTzOffsetFromBody(body) !== null` — never feed the 0-default of
+ * `readTzOffsetFromBody`, because persisting a fabricated 0 marks the user as
+ * UTC and makes the cron fire their morning reminder at ~3am local.
+ *
  * Skipped when the offset is unknown (NaN/undefined) or already captured for
  * this user in the last hour by this process.
  */
