@@ -634,7 +634,9 @@ export default function LiveWorkoutPage() {
   // Mirror live progress into the shared quick-session draft so the Track (form)
   // view resumes with the same reps/weight/completed when the user flips the tab.
   useEffect(() => {
-    if (!isQuick || !quickSessionId || !workout) return;
+    // Guard on `loading`: on mount exerciseData is [] and this effect would otherwise
+    // clobber the shared draft with empty data BEFORE the load restores it (race).
+    if (!isQuick || !quickSessionId || !workout || loading) return;
     // Snapshot exerciseData with the in-progress active-set inputs merged in, so a
     // value typed in Live (before the set is marked done) still reaches the Track view.
     const snap = exerciseData.map((sets) => sets.map((s) => ({ ...s })));
@@ -652,7 +654,7 @@ export default function LiveWorkoutPage() {
         sets: (snap[i] ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed })),
       })),
     );
-  }, [isQuick, quickSessionId, workout, exerciseData, workoutFlow, currentStepIndex, currentWeight, currentReps]);
+  }, [isQuick, quickSessionId, workout, exerciseData, workoutFlow, currentStepIndex, currentWeight, currentReps, loading]);
 
   // Find the first incomplete step in the flow
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
