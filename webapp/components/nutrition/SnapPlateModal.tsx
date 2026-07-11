@@ -16,6 +16,8 @@ import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { useLockScroll } from '@/lib/useLockScroll'
 import FoodItemRow from '@/components/nutrition/FoodItemRow'
+import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import type { IFoodEntry } from '@/lib/nutritionTypes'
 import ServingQuantityControls from '@/components/nutrition/ServingQuantityControls'
 import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
 import { scalingFactor, nutritionForQuantity } from '@/lib/foodMath'
@@ -208,7 +210,9 @@ function formatAmount(qty: number, unit: string): string {
 }
 function stepForUnit(unit: string): number {
   if (unit === 'g' || unit === 'ml') return 10
-  return 1
+  // 0.5 so a fractional AI estimate (0.5) walks through whole numbers:
+  // 0.5 → 1 → 1.5 → 2 (was 1, which stepped 0.5 → 1.5 → 2.5, skipping wholes).
+  return 0.5
 }
 function floorForUnit(unit: string): number {
   return MASS_UNITS.has(unit) ? stepForUnit(unit) : 0.5
@@ -347,6 +351,56 @@ function toReviewItems(est: PlateEstimate): ReviewItem[] {
       origServing: { nutrition: perUnit, unitLabel: unit, multiplier: qty, label: formatAmount(qty, unit) },
     }
   })
+}
+
+/** Build a review row from a food picked in the "Add more" search. It's a real DB
+ *  food (foodId + per-serving nutrition), so it comes in pre-matched and logs
+ *  exactly like the estimate's own items. `entry.nutrition` is PER-SERVING and
+ *  `entry.servings` is the count, so total = nutrition × servings; the review row
+ *  stores per-loggedUnit nutrition with the logged quantity as its multiplier. */
+function entryToReviewItem(entry: IFoodEntry): ReviewItem {
+  const servings = Number(entry.servings) || 1
+  const qty = Number(entry.loggedQuantity ?? servings) || 1
+  const unit = String(entry.loggedUnit ?? entry.servingUnit ?? 'serving')
+  const n = entry.nutrition
+  const total = {
+    calories: (n.calories || 0) * servings,
+    protein: (n.protein || 0) * servings,
+    carbs: (n.carbs || 0) * servings,
+    fats: (n.fats || 0) * servings,
+  }
+  const perUnit = perUnitNutrition(total, qty)
+  const foodId = entry.foodId ? String(entry.foodId) : ''
+  const match: DbMatch | null = foodId
+    ? {
+        kind: 'food',
+        id: foodId,
+        name: entry.name,
+        brand: entry.brand,
+        servingSize: Number(entry.servingSize) || 1,
+        servingUnit: String(entry.servingUnit || 'serving'),
+        nutrition: { calories: n.calories || 0, protein: n.protein || 0, carbs: n.carbs || 0, fats: n.fats || 0 },
+        source: 'db',
+        confidence: 1,
+        gramsPerServing: entry.loggedGramsPerServing,
+        mlPerServing: entry.loggedMlPerServing,
+        displayLabel: entry.servingLabel,
+      }
+    : null
+  return {
+    name: entry.name,
+    brand: entry.brand,
+    estimatedServing: entry.servingLabel || formatAmount(qty, unit),
+    nutrition: perUnit,
+    confidence: 1,
+    multiplier: qty,
+    unitLabel: unit,
+    removed: false,
+    matchChecked: true,
+    match,
+    matchServingReliable: true,
+    origServing: { nutrition: perUnit, unitLabel: unit, multiplier: qty, label: formatAmount(qty, unit) },
+  }
 }
 
 /** Map review items → the PlateScan history item shape (used for both the
@@ -510,6 +564,7 @@ export default function SnapPlateModal({
   // re-running the persist callback, and is saved to history as the scan note.
   const noteRef = useRef('')
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [addMoreOpen, setAddMoreOpen] = useState(false)
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
 
@@ -1244,6 +1299,7 @@ export default function SnapPlateModal({
                     onToggleRemove={toggleRemove}
                     onCorrect={(text) => handleCorrect(state.items, state.imageThumb, text)}
                     onFeedback={() => setFeedbackOpen(true)}
+                    onAddMore={() => setAddMoreOpen(true)}
                   />
                 )}
 
@@ -1280,6 +1336,23 @@ export default function SnapPlateModal({
                 onSent={() => showToast('Feedback saved. Thank you.', 'success')}
               />
             )}
+
+            {/* Add more — search-only (no camera/upload/describe). The picked food
+                becomes another row on the plate, logged with everything else. */}
+            <FoodSearchModal
+              isOpen={addMoreOpen && state.phase === 'review'}
+              searchOnly
+              currentTag={selectedTag}
+              showTagPicker={false}
+              onClose={() => setAddMoreOpen(false)}
+              onSelectFood={(entry) => {
+                setState((prev) => (prev.phase === 'review'
+                  ? { ...prev, items: [...prev.items, entryToReviewItem(entry as IFoodEntry)] }
+                  : prev))
+                setAddMoreOpen(false)
+                showToast('Added to your plate.', 'success')
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -1358,9 +1431,10 @@ interface ReviewBodyProps {
   onToggleRemove: (idx: number) => void
   onCorrect: (text: string) => void
   onFeedback: () => void
+  onAddMore: () => void
 }
 
-function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServing, onResetServing, onToggleRemove, onCorrect, onFeedback }: ReviewBodyProps) {
+function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServing, onResetServing, onToggleRemove, onCorrect, onFeedback, onAddMore }: ReviewBodyProps) {
   const [fix, setFix] = useState('')
   // Serving/quantity boxes collapse by default so more items fit at a glance;
   // tapping a row's amount reveals its two editors.
@@ -1501,6 +1575,18 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
           {' '}if this estimate missed.
         </p>
       </div>
+
+      {/* Add more — search-only add for a food the estimate missed. Opens the
+          regular tracking search minus photo/upload/describe so you can't loop
+          back into another AI capture. */}
+      <button
+        type="button"
+        onClick={onAddMore}
+        className="mx-4 mt-2 flex w-[calc(100%-2rem)] items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-transparent px-3 py-3 text-sm font-medium text-zinc-600 transition-colors hover:border-emerald-400 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-emerald-500 dark:hover:text-emerald-300"
+      >
+        <Plus className="h-4 w-4" />
+        <span>Missing something? <span className="font-semibold">Add here</span></span>
+      </button>
     </div>
   )
 }

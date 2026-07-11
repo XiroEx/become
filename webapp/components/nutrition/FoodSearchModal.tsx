@@ -53,6 +53,10 @@ interface FoodSearchModalProps {
   onUpload?: () => void
   // Receives the current search-box text to seed the describe flow.
   onDescribe?: (text: string) => void
+  // Search-only mode: hides the camera / upload / barcode / describe capture
+  // affordances, leaving just search → pick → add. Used by the estimate review's
+  // "Add more" so you can't loop back into another AI capture.
+  searchOnly?: boolean
 }
 
 interface AlternateServing {
@@ -269,6 +273,7 @@ export default function FoodSearchModal({
   onSnapPhoto,
   onUpload,
   onDescribe,
+  searchOnly = false,
 }: FoodSearchModalProps) {
   const isPlanMode = mode === 'plan'
   const tagPickerEnabled = showTagPicker ?? Boolean(currentTag)
@@ -1125,7 +1130,7 @@ export default function FoodSearchModal({
                 {/* Describe send — slides in beside the bar (which shrinks to make
                     room) and is vertically centered via the flex row. */}
                 <AnimatePresence initial={false}>
-                  {query.trim() && onDescribe && (
+                  {query.trim() && onDescribe && !searchOnly && (
                     <motion.div
                       key="describe-send"
                       initial={{ width: 0, opacity: 0, marginLeft: 0 }}
@@ -1152,7 +1157,7 @@ export default function FoodSearchModal({
                   away (shrink + fade) the moment the user starts typing a search,
                   so the results get the space. */}
               <AnimatePresence initial={false}>
-                {!query.trim() && (
+                {!query.trim() && !searchOnly && (
                   <motion.div
                     key="capture-row"
                     initial={{ height: 0, opacity: 0, marginTop: 0 }}
