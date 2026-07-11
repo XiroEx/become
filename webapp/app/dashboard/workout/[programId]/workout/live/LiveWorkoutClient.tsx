@@ -381,6 +381,16 @@ export default function LiveWorkoutPage() {
             : data;
           setExerciseData(restored);
           setWorkoutFlow(flow);
+          // The active-set inputs bind to currentWeight/currentReps (not exerciseData
+          // directly), so seed them from the restored first step — otherwise progress
+          // entered in the Track view wouldn't appear in the Live inputs.
+          const firstStep = flow[0];
+          const firstSet = firstStep ? restored[firstStep.exerciseIndex]?.[firstStep.setIndex] : null;
+          if (firstSet) {
+            setCurrentReps(firstSet.reps || "");
+            setCurrentWeight(firstSet.weight || "");
+            setCurrentSpeed(firstSet.speed ?? "");
+          }
           setLoading(false);
           return;
         }
@@ -625,15 +635,24 @@ export default function LiveWorkoutPage() {
   // view resumes with the same reps/weight/completed when the user flips the tab.
   useEffect(() => {
     if (!isQuick || !quickSessionId || !workout) return;
+    // Snapshot exerciseData with the in-progress active-set inputs merged in, so a
+    // value typed in Live (before the set is marked done) still reaches the Track view.
+    const snap = exerciseData.map((sets) => sets.map((s) => ({ ...s })));
+    const step = workoutFlow[currentStepIndex];
+    const active = step ? snap[step.exerciseIndex]?.[step.setIndex] : null;
+    if (active) {
+      if (currentWeight) active.weight = currentWeight;
+      if (currentReps) active.reps = currentReps;
+    }
     writeQuickProgress(
       quickSessionId,
       workout.exercises.map((ex, i) => ({
         name: ex.name,
         ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
-        sets: (exerciseData[i] ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed })),
+        sets: (snap[i] ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed })),
       })),
     );
-  }, [isQuick, quickSessionId, workout, exerciseData]);
+  }, [isQuick, quickSessionId, workout, exerciseData, workoutFlow, currentStepIndex, currentWeight, currentReps]);
 
   // Find the first incomplete step in the flow
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
