@@ -16,7 +16,7 @@ import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
-import { readQuickSession, clearQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -893,6 +893,7 @@ export default function WorkoutFormPage() {
       exerciseSlug: alternative.slug,
       name: alternative.name,
       type: alternative.category,
+      trackingType: alternative.trackingType,
       videoUrl: undefined,
       videoWidth: null,
       videoHeight: null,
@@ -901,8 +902,17 @@ export default function WorkoutFormPage() {
 
     setWorkout({ ...workout, exercises: updatedExercises });
 
+    // Quick session: persist the swap into the stash so the Live view reflects it.
+    if (isQuick && quickSessionId) {
+      swapQuickSessionExercise(quickSessionId, exerciseIndex, {
+        name: alternative.name,
+        exerciseSlug: alternative.slug,
+        trackingType: alternative.trackingType,
+      });
+    }
+
     // Save permanent swap if scope is 'program'
-    if (scope === 'program') {
+    if (scope === 'program' && !isQuick) {
       const token = localStorage.getItem("token");
       if (token) {
         fetch("/api/programs/swap", {
@@ -940,7 +950,7 @@ export default function WorkoutFormPage() {
     });
 
     setShowSwapModal(false);
-  }, [workout, swappedExercises, autoSave, programId]);
+  }, [workout, swappedExercises, autoSave, programId, isQuick, quickSessionId]);
 
   const getExerciseCompletion = (exerciseIndex: number) => {
     const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
@@ -986,7 +996,9 @@ export default function WorkoutFormPage() {
       {/* Header */}
       <div className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur-lg dark:border-zinc-800 dark:bg-zinc-900/80">
         <div className="mx-auto max-w-4xl px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex items-center justify-between">
+          {/* Back (left) · Track|Live toggle (centered) · Share (right). The toggle
+              is shown for BOTH program and quick workouts. */}
+          <div className="relative flex items-center justify-between gap-2">
             <button
               onClick={() => router.back()}
               className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
@@ -997,42 +1009,37 @@ export default function WorkoutFormPage() {
               Back
             </button>
 
-            <div className="text-center">
-              <h1 className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">
-                {workout.title}
-              </h1>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">{workout.day}</p>
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+              <WorkoutViewToggle
+                active="track"
+                trackHref={isQuick
+                  ? quickSessionTrackHref(quickSessionId)
+                  : `/dashboard/workout/${programId}/workout?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`}
+                liveHref={isQuick
+                  ? quickSessionLiveHref(quickSessionId)
+                  : `/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`}
+              />
             </div>
 
             <div className="flex items-center gap-2">
-              {isQuick ? (
-                /* Quick session: Track|Live tab (this is the Track view). */
-                <WorkoutViewToggle
-                  active="track"
-                  trackHref={quickSessionTrackHref(quickSessionId)}
-                  liveHref={quickSessionLiveHref(quickSessionId)}
+              {!isQuick && (
+                <ShareButton
+                  kind="workout"
+                  programId={programId}
+                  day={workout.day}
+                  label=""
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                 />
-              ) : (
-              <>
-              <ShareButton
-                kind="workout"
-                programId={programId}
-                day={workout.day}
-                label=""
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-              />
-              <button
-                onClick={() => router.push(`/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`)}
-                className="flex items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-sm font-medium text-white shadow-lg shadow-green-500/25 transition-all hover:bg-green-600"
-              >
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                Live
-              </button>
-              </>
               )}
             </div>
+          </div>
+
+          {/* Title below the bar so the toggle can sit centered. */}
+          <div className="mt-2 text-center">
+            <h1 className="text-lg font-bold text-zinc-900 dark:text-white sm:text-xl">
+              {workout.title}
+            </h1>
+            {!isQuick && <p className="text-xs text-zinc-500 dark:text-zinc-400">{workout.day}</p>}
           </div>
 
           {/* Progress bar */}
@@ -1735,6 +1742,7 @@ export default function WorkoutFormPage() {
           exerciseName={workout.exercises[swapExerciseIndex].name}
           workoutExerciseSlugs={workout.exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
           programRole={workout.exercises[swapExerciseIndex].type === "conditioning" ? undefined : undefined}
+          sessionScopeOnly={isQuick}
         />
       )}
     </PageTransition>

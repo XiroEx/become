@@ -57,6 +57,9 @@ interface ExerciseSwapModalProps {
   workoutExerciseSlugs: string[];
   /** Role override from the program context */
   programRole?: string;
+  /** Quick sessions have no program — only offer a session-scope swap and hide the
+   *  "Swap … for All Future Workouts" (program-wide) button. */
+  sessionScopeOnly?: boolean;
 }
 
 // ─── Equipment display helpers ──────────────────────────────────────────────
@@ -197,6 +200,7 @@ export default function ExerciseSwapModal({
   exerciseName,
   workoutExerciseSlugs,
   programRole,
+  sessionScopeOnly = false,
 }: ExerciseSwapModalProps) {
   const [alternatives, setAlternatives] = useState<AlternativeExercise[]>([]);
   const [source, setSource] = useState<SourceExercise | null>(null);
@@ -850,6 +854,7 @@ export default function ExerciseSwapModal({
                           isSelected={selectedSlug === alt.slug}
                           onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
                           onSwap={(scope) => handleSwap(alt, scope)}
+                          sessionScopeOnly={sessionScopeOnly}
                           source={source}
                           variations={variationsCache[alt.slug] || null}
                           selectedVariationSlug={selectedVariants[alt.slug] ?? alt.slug}
@@ -939,6 +944,7 @@ function AlternativeCard({
   isSelected,
   onSelect,
   onSwap,
+  sessionScopeOnly = false,
   source,
   variations,
   selectedVariationSlug,
@@ -948,6 +954,7 @@ function AlternativeCard({
   isSelected: boolean;
   onSelect: () => void;
   onSwap: (scope: SwapScope) => void;
+  sessionScopeOnly?: boolean;
   source: SourceExercise | null;
   variations: ExerciseVariation[] | null;
   selectedVariationSlug: string;
@@ -1123,26 +1130,41 @@ function AlternativeCard({
                 </div>
               )}
 
-              {/* Swap buttons */}
+              {/* Swap buttons. Quick sessions have no program, so only a single
+                  session-scope swap is offered (no "All Future Workouts"). */}
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSwap('program');
-                  }}
-                  className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
-                >
-                  Swap {chosenVariation ? `"${chosenVariation.name}"` : ""} for All Future Workouts
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSwap('session');
-                  }}
-                  className="w-full rounded-lg border border-zinc-300 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Just This Session
-                </button>
+                {sessionScopeOnly ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSwap('session');
+                    }}
+                    className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
+                  >
+                    Swap {chosenVariation ? `"${chosenVariation.name}"` : "Exercise"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwap('program');
+                      }}
+                      className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
+                    >
+                      Swap {chosenVariation ? `"${chosenVariation.name}"` : ""} for All Future Workouts
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwap('session');
+                      }}
+                      className="w-full rounded-lg border border-zinc-300 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Just This Session
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
