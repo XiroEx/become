@@ -7,7 +7,7 @@ import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
-import { readTzOffset, readTzOffsetFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
+import { readTzOffset, readTzOffsetFromBody, readOptionalTzOffsetFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
@@ -255,7 +255,11 @@ export async function POST(request: NextRequest) {
 
     // Find today's date range in the user's local timezone
     const tzOffset = readTzOffsetFromBody(body)
-    captureUserTimezone(payload.userId, tzOffset)
+    // Only persist a genuinely-reported offset — a MISSING `tz` must not be
+    // stored as UTC (that poisons the cron into sending the morning reminder
+    // at ~3am the user's real local time).
+    const reportedTz = readOptionalTzOffsetFromBody(body)
+    if (reportedTz !== null) captureUserTimezone(payload.userId, reportedTz)
     const todayKey = localDateKey(null, tzOffset)
     const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
 
@@ -509,8 +513,11 @@ async function handleQuickSessionSave(
 
   await dbConnect()
 
-  const tzOffset = readTzOffsetFromBody(body)
-  captureUserTimezone(payload.userId, tzOffset)
+  // Only persist a genuinely-reported offset — a MISSING `tz` must not be
+  // stored as UTC (that poisons the cron into sending the morning reminder at
+  // ~3am the user's real local time).
+  const reportedTz = readOptionalTzOffsetFromBody(body)
+  if (reportedTz !== null) captureUserTimezone(payload.userId, reportedTz)
 
   // Update-if-exists (matched by sessionId), capturing the prior state so we
   // can tell whether this completion is the first one (gates streak/PR side
