@@ -15,6 +15,9 @@ import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
+import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
+import { readQuickSession, clearQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref } from "@/lib/quickSession/store";
+import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -271,6 +274,10 @@ export default function WorkoutFormPage() {
   const programId = params.programId as string;
   const requestedDay = searchParams.get("day");
   const scheduledDate = searchParams.get("sd"); // exact Schedule slot date this log fulfills (gap 3)
+  // Quick-session (one-off) mode: no program/phase/day; exercises come from the
+  // stashed draft and progress is shared with the Live view via localStorage.
+  const quickSessionId = searchParams.get("session") || "";
+  const isQuick = programId === QUICK_PROGRAM_ID || !!quickSessionId;
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [currentPhase, setCurrentPhase] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -350,6 +357,44 @@ export default function WorkoutFormPage() {
   useEffect(() => {
     const loadWorkout = async () => {
       try {
+        // ── Quick-session mode: stashed draft + shared progress, no program fetches.
+        //    Mirrors LiveWorkoutClient's isQuick path so Track and Live are parity. ──
+        if (isQuick) {
+          const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
+          const exs = (stored?.exercises ?? []).map((d) => ({
+            name: d.name,
+            exerciseSlug: d.exerciseSlug,
+            trackingType: d.trackingType,
+            sets: d.sets,
+            reps: d.reps,
+            ...(d.rest && { rest: d.rest }),
+            ...(d.duration && { duration: d.duration }),
+          }));
+          const title = stored?.title || "Quick Session";
+          const wd: WorkoutData = { day: title, title, exercises: exs.length ? exs : fallbackWorkout.exercises };
+          setWorkout(wd);
+          const saved = readQuickProgress(quickSessionId);
+          setExerciseProgress(
+            wd.exercises.map((ex, i) => {
+              const savedEx = saved?.exercises?.[i];
+              const n = Math.max(1, Number(ex.sets) || 1);
+              return {
+                exerciseIndex: i,
+                sets: Array.from({ length: n }, (_, si) => ({
+                  reps: savedEx?.sets?.[si]?.reps ?? "",
+                  weight: savedEx?.sets?.[si]?.weight ?? "",
+                  completed: savedEx?.sets?.[si]?.completed ?? false,
+                  duration: savedEx?.sets?.[si]?.duration ?? "",
+                  distance: savedEx?.sets?.[si]?.distance ?? "",
+                })),
+              };
+            })
+          );
+          if (saved?.exercises?.some((e) => e.sets?.some((s) => s.completed || s.reps || s.weight))) setIsResuming(true);
+          setLoading(false);
+          return;
+        }
+
         const token = localStorage.getItem("token");
         if (!token) {
           // Use fallback for unauthenticated users
@@ -532,7 +577,68 @@ export default function WorkoutFormPage() {
   // Auto-save function
   const autoSave = useCallback(async (progress: ExerciseProgress[]) => {
     if (!workout) return;
-    
+
+    // ── Quick-session mode: persist the shared progress draft (so the Live view
+    //    resumes with no loss), and POST kind:'quick' once every set is done. ──
+    if (isQuick) {
+      writeQuickProgress(
+        quickSessionId,
+        workout.exercises.map((ex, i) => {
+          const ep = progress.find((p) => p.exerciseIndex === i);
+          return {
+            name: ex.name,
+            ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+            sets: (ep?.sets ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed, duration: s.duration, distance: s.distance })),
+          };
+        })
+      );
+      const total = progress.reduce((a, ep) => a + ep.sets.length, 0);
+      const done = progress.reduce((a, ep) => a + ep.sets.filter((s) => s.completed).length, 0);
+      if (total > 0 && done === total) {
+        try {
+          const token = localStorage.getItem("token");
+          const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
+          const exercisesToSave = workout.exercises.map((ex, i) => {
+            const ep = progress.find((p) => p.exerciseIndex === i);
+            const isTimeBased = ["time", "time_distance", "intervals"].includes(ex.trackingType || "");
+            return {
+              name: ex.name,
+              ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+              sets: (ep?.sets ?? []).map((set, si) => ({
+                setNumber: si + 1,
+                reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
+                weight: parseFloat(set.weight) || 0,
+                completed: set.completed,
+                ...(set.duration && { duration: parseFloat(set.duration) }),
+                ...(set.distance && { distance: parseFloat(set.distance) }),
+              })),
+            };
+          });
+          await fetch("/api/workouts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+            body: JSON.stringify({
+              kind: "quick",
+              sessionId: quickSessionId,
+              title: workout.title,
+              ...(stored?.focus && { focus: stored.focus }),
+              exercises: exercisesToSave,
+              completed: true,
+              duration: Math.max(1, Math.round(total * 1.5)),
+              tz: new Date().getTimezoneOffset(),
+              ...(workoutNotes.trim() && { notes: workoutNotes.trim() }),
+            }),
+          });
+          clearQuickProgress(quickSessionId);
+          clearQuickSession(quickSessionId);
+          invalidateMindSession();
+        } catch (e) {
+          console.error("Error saving quick session:", e);
+        }
+      }
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -598,7 +704,7 @@ export default function WorkoutFormPage() {
     } catch (error) {
       console.error("Error auto-saving:", error);
     }
-  }, [programId, workout, currentPhase, swappedExercises, scheduledDate]);
+  }, [programId, workout, currentPhase, swappedExercises, scheduledDate, isQuick, quickSessionId, workoutNotes]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -899,6 +1005,15 @@ export default function WorkoutFormPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {isQuick ? (
+                /* Quick session: Track|Live tab (this is the Track view). */
+                <WorkoutViewToggle
+                  active="track"
+                  trackHref={quickSessionTrackHref(quickSessionId)}
+                  liveHref={quickSessionLiveHref(quickSessionId)}
+                />
+              ) : (
+              <>
               <ShareButton
                 kind="workout"
                 programId={programId}
@@ -915,6 +1030,8 @@ export default function WorkoutFormPage() {
                 </svg>
                 Live
               </button>
+              </>
+              )}
             </div>
           </div>
 

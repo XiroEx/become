@@ -89,3 +89,10 @@ export function quickSessionOverviewHref(sessionId: string): string {
 export function quickSessionLiveHref(sessionId: string): string {
   return `/dashboard/workout/${QUICK_PROGRAM_ID}/workout/live?session=${encodeURIComponent(sessionId)}`
 }
+
+/** The Track (form) route URL for a stashed quick session — the non-immersive,
+ *  per-set logging view, mirroring a program's workout form. Shares progress with
+ *  the live view via lib/quickSession/progress. */
+export function quickSessionTrackHref(sessionId: string): string {
+  return `/dashboard/workout/${QUICK_PROGRAM_ID}/workout?session=${encodeURIComponent(sessionId)}`
+}
