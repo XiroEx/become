@@ -61,6 +61,29 @@ export function stashQuickSessionWithId(session: DraftSession, sessionId: string
   return sessionId
 }
 
+/**
+ * Persist an exercise swap into the stashed quick session so BOTH the Track and Live
+ * views (which build their exercise list from this stash on load) reflect the swap.
+ * Replaces the exercise identity at exIdx, preserving its sets/reps/rest prescription.
+ */
+export function swapQuickSessionExercise(
+  sessionId: string,
+  exIdx: number,
+  next: { name: string; exerciseSlug?: string; trackingType?: string; primaryMuscles?: string[] },
+): void {
+  const s = readQuickSession(sessionId)
+  if (!s || !Array.isArray(s.exercises) || !s.exercises[exIdx]) return
+  const exercises = s.exercises.map((ex, i) => {
+    if (i !== exIdx) return ex
+    const patched = { ...ex, name: next.name }
+    if (next.exerciseSlug !== undefined) patched.exerciseSlug = next.exerciseSlug
+    if (next.trackingType) patched.trackingType = next.trackingType
+    if (next.primaryMuscles) patched.primaryMuscles = next.primaryMuscles
+    return patched
+  })
+  stashQuickSessionWithId({ ...(s as DraftSession), exercises }, sessionId)
+}
+
 /** Read back a stashed session by id (null if missing/corrupt). */
 export function readQuickSession(sessionId: string): StoredQuickSession | null {
   try {

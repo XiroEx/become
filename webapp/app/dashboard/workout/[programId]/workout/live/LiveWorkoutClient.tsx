@@ -11,7 +11,7 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
-import { readQuickSession, clearQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -1085,6 +1085,16 @@ export default function LiveWorkoutPage() {
     };
     setExercises(updatedExercises);
 
+    // Quick session: persist the swap into the stashed session so the Track view
+    // (which builds its exercise list from the stash) shows the same swapped exercise.
+    if (isQuick && quickSessionId) {
+      swapQuickSessionExercise(quickSessionId, exIdx, {
+        name: alternative.name,
+        exerciseSlug: alternative.slug,
+        trackingType: alternative.trackingType,
+      });
+    }
+
     // Save permanent swap if scope is 'program' (never for quick sessions —
     // they have no program to persist a swap against).
     if (scope === 'program' && !isQuick) {
@@ -1131,7 +1141,7 @@ export default function LiveWorkoutPage() {
 
     setShowSwapModal(false);
     setShowSkipModal(false);
-  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId, isQuick]);
+  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId, isQuick, quickSessionId]);
 
   const handleCompleteOrSkipSet = () => {
     // On the final step, empty inputs just finish the workout — don't prompt to skip
@@ -1313,14 +1323,18 @@ export default function LiveWorkoutPage() {
               </svg>
             </button>
 
-            {/* Quick session: Track|Live tab (this is the Live view). Progress is
-                shared, so switching to Track keeps every entered set. */}
-            {isQuick && quickSessionId && (
+            {/* Track|Live tab (centered) — shown for BOTH program and quick workouts.
+                Progress is shared, so switching to Track keeps every entered set. */}
+            {workout && (isQuick ? !!quickSessionId : true) && (
               <div onClick={(e) => e.stopPropagation()}>
                 <WorkoutViewToggle
                   active="live"
-                  trackHref={quickSessionTrackHref(quickSessionId)}
-                  liveHref={quickSessionLiveHref(quickSessionId)}
+                  trackHref={isQuick
+                    ? quickSessionTrackHref(quickSessionId || "")
+                    : `/dashboard/workout/${programId}/workout?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`}
+                  liveHref={isQuick
+                    ? quickSessionLiveHref(quickSessionId || "")
+                    : `/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`}
                   onDark
                 />
               </div>
@@ -2060,6 +2074,7 @@ export default function LiveWorkoutPage() {
         exerciseName={currentExercise?.name || ""}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         programRole={undefined}
+        sessionScopeOnly={isQuick}
       />
     </div>
   );
