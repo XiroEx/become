@@ -4,10 +4,13 @@ import BottomNav from '../../components/BottomNav'
 import TopNav from '../../components/TopNav'
 import AuthGuard from '../../components/AuthGuard'
 import MindSessionWarmer from '../../components/mind/MindSessionWarmer'
+import TutorialRoot from '../../components/tutorial/TutorialRoot'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
+      {/* Onboarding tour (redTutorial) — account-based progress, plays once. */}
+      <TutorialRoot>
       {/* Background: compose the AI Mind session on app open (cooldown-gated). */}
       <MindSessionWarmer />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
@@ -40,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Bottom nav — floating liquid-glass pill (fixed; overlays content) */}
         <BottomNav />
       </div>
+      </TutorialRoot>
     </AuthGuard>
   )
 }

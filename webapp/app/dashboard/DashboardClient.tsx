@@ -457,11 +457,12 @@ export default function DashboardClient() {
           smart-rotating tiles (and dashboard-surface suggestion cards) from
           the user's saved layout. Replaces the old separate StatTile grid and
           the dark IntelligenceRotator block. */}
-      <div>
+      <div data-tour="dashboard-tiles">
         <TileGrid layout={layout} statContext={tileCtx} />
         <div className="mt-2 flex justify-end">
           <button
             type="button"
+            data-tour="customize-tiles"
             onClick={() => setShowCustomize(true)}
             className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300"
           >
