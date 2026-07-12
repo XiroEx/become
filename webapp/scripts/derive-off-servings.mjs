@@ -76,13 +76,28 @@ async function main() {
 
   let set = 0, noCode = 0, noText = 0, unparsable = 0, missing = 0, sameAs100 = 0
   const ops = []
-  for (const d of targets) {
+  // Pace under OFF's ~100 req/min product-API limit. Concurrency >1 gets us 429'd
+  // straight into exponential backoff, which is slower than just going serial.
+  const CONC = 1
+  const batches = []
+  for (let i = 0; i < targets.length; i += CONC) batches.push(targets.slice(i, i + CONC))
+
+  for (const batch of batches) {
+    const fetched = await Promise.all(batch.map(async (d) => {
+      const code = (d.barcode || '').trim() ||
+        (String(d.externalId || '').replace(/^off:/i, '').match(/^\d{6,}$/) ? String(d.externalId).replace(/^off:/i, '') : '')
+      if (!code) return { d, noCode: true }
+      const off = await fetchOff(code)
+      return { d, off }
+    }))
+    await sleep(700)
+
+  for (const item of fetched) {
+    const d = item.d
     const v = (d.variants || [])[0]
     const liquid = (v.servingUnit || '').toLowerCase() === 'ml'
-    const code = (d.barcode || '').trim() ||
-      (String(d.externalId || '').replace(/^off:/i, '').match(/^\d{6,}$/) ? String(d.externalId).replace(/^off:/i, '') : '')
-    if (!code) { noCode++; continue }
-    const off = await fetchOff(code); await sleep(1100)
+    if (item.noCode) { noCode++; continue }
+    const off = item.off
     if (!off) { missing++; continue }
     if (off.missing) { missing++; continue }
     const text = (off.p.serving_size || '').trim()
@@ -113,6 +128,7 @@ async function main() {
       if (ops.length >= 20) { const res = await db.collection('foods').bulkWrite(ops.splice(0)); console.log(`  …flushed ${res.modifiedCount}`) }
     }
   }
+  } // end batch loop
   console.log(`\nreal serving set: ${set} | no barcode: ${noCode} | no serving text: ${noText} | unparsable: ${unparsable} | =100: ${sameAs100} | missing on OFF: ${missing}`)
   if (APPLY && ops.length) { const res = await db.collection('foods').bulkWrite(ops); console.log(`APPLIED: ${res.modifiedCount} modified`) }
   else if (!APPLY) console.log('(dry-run — re-run with --apply)')
