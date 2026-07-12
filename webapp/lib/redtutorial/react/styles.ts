@@ -18,7 +18,8 @@ export const CSS = `
   --rtut-border: rgba(23, 27, 38, 0.10);
   --rtut-radius: 14px;
   --rtut-shadow: 0 12px 40px rgba(9, 11, 17, 0.28), 0 2px 8px rgba(9, 11, 17, 0.14);
-  --rtut-font: inherit;
+  /* Safe modern default; set --rtut-font: inherit to adopt the app's body font. */
+  --rtut-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --rtut-ring: 0 0 0 2px rgba(229, 72, 77, 0.35);
   --rtut-dot: rgba(98, 106, 124, 0.35);
 }
