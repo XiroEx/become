@@ -19,6 +19,7 @@ import {
   importFromOpenFoodFacts,
 } from '@/lib/foodImport'
 import { parseQuantityString, convert } from '@/lib/units'
+import { plausibleOffKcal } from '@/lib/offEnergy'
 import { synthMergeUsdaResults } from '@/lib/usdaSynthMerge'
 import { dedupeBySource, type CustomFoodForDedupe } from '@/lib/foodSearchDedupe'
 import { fetchUSDAFoodsBatch } from '@/lib/usdaBatchFetch'
@@ -66,7 +67,7 @@ function mapOffToFoodResult(off: IOpenFoodFact & { _id: mongoose.Types.ObjectId 
   const n = off.nutriments
 
   const nutrition = {
-    calories: Math.round(n.energy_kcal_100g) || 0,
+    calories: plausibleOffKcal(n),
     protein: Math.round((n.proteins_100g ?? 0) * 10) / 10,
     carbs: Math.round((n.carbohydrates_100g ?? 0) * 10) / 10,
     fats: Math.round((n.fat_100g ?? 0) * 10) / 10,
@@ -141,7 +142,12 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 100)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
-    const baseFilter: Record<string, unknown> = {}
+    // Exclude foods explicitly hidden from search — a narrow flag set only on
+    // entries with physically-impossible, unrecoverable source data (e.g. a
+    // per-100 of 18000 cal) so a serving change can't expose the garbage value.
+    // NOT the same as `needsReview`, which is a broad import-quality queue flag
+    // on thousands of otherwise-fine foods. Spread into every query via baseFilter.
+    const baseFilter: Record<string, unknown> = { hiddenFromSearch: { $ne: true } }
     if (category) baseFilter.category = category
 
     // Fetch the user's saved-food id set once per request — used to flag results
