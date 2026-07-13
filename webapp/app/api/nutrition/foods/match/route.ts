@@ -122,7 +122,14 @@ async function matchOne(
     // Full coverage for any food; OR a subset match for the user's OWN saved
     // food (so "everyday coffee" finds their custom "Coffee" — but we don't
     // loosen against the giant global catalog).
-    const isOwn = !!f.createdBy && String(f.createdBy) === userId
+    //
+    // "Own" means the user AUTHORED this food (source 'manual') — not merely that
+    // they were the first to trigger its import. USDA/OFF catalog rows also carry
+    // `createdBy` (whoever imported them), and counting those as owned both
+    // skipped the anti-hijack guards below AND gave them top sort priority. That
+    // is why "cherries" resolved to USDA's "Pie Cherry" — which is actually a
+    // slice of cherry pie (260 cal/100 g) — instead of plain Cherries.
+    const isOwn = f.source === 'manual' && !!f.createdBy && String(f.createdBy) === userId
     if (cov < 1 && !(isOwn && subsetMatch(f.name))) continue
 
     // Don't slap an unrequested brand or extra ingredients onto a plain
