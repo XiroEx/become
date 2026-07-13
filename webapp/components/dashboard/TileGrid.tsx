@@ -406,7 +406,9 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
           if (tile.kind === 'stat') {
             if (!isStatId(tile.id)) return null
             return (
-              <div key={key} className={cellClass}>
+              // data-tour anchors the onboarding tour to specific stat tiles
+              // (e.g. tile-streak, tile-mood) wherever the user has placed them.
+              <div key={key} className={cellClass} data-tour={`tile-${tile.id}`}>
                 <TileErrorBoundary label={TILE_DEFS[tile.id].label}>
                   {TILE_DEFS[tile.id].render(statContext, tile.size)}
                 </TileErrorBoundary>
@@ -477,7 +479,7 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
       {/* Suggestion banners live OUTSIDE the fixed-row grid so their natural
           height isn't clipped to a tile cell. */}
       {dashboardSuggestions.length > 0 && (
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 space-y-2" data-tour="nudge-card">
           {dashboardSuggestions.map((s) => (
             <SuggestionCard key={`sug-${s.id}`} suggestion={s} />
           ))}
