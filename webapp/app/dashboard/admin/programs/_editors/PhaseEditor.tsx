@@ -62,7 +62,8 @@ export default function PhaseEditor({
   };
 
   return (
-    <div className="border-b border-zinc-200 dark:border-zinc-800 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
+    // data-tour anchors the onboarding tour (first phase card wins the selector)
+    <div data-tour="phase-card" className="border-b border-zinc-200 dark:border-zinc-800 sm:overflow-hidden sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
       {/* Phase Header */}
       <div
         className="flex cursor-pointer items-center justify-between py-3 sm:bg-zinc-50 sm:px-6 sm:py-4 dark:sm:bg-zinc-800/50"
@@ -177,7 +178,7 @@ export default function PhaseEditor({
                   </div>
                 </div>
                 
-                <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-2" data-tour="workout-tabs">
                   {phase.workouts.map((workout, index) => (
                     <button
                       key={index}
