@@ -21,12 +21,14 @@ import { socialSection } from './sections/social'
 import { foodSection } from './sections/food'
 import { trackingSection } from './sections/tracking'
 import { accountSection } from './sections/account'
+import { programsSection } from './sections/programs'
 
 // ── SECTION REGISTRY (agents: add your section to this array) ────────────────
 const SECTIONS: TutorialSection[] = [
   coreSection,
   nutritionSection,
   workoutSection,
+  programsSection,
   mindSection,
   socialSection,
   foodSection,
