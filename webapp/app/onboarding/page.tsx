@@ -34,6 +34,10 @@ interface ProfileData {
   equipmentAccess?: EquipmentType[]
   injuryNotes?: string
   weeklyAvailability?: number
+  /** The unit the user actually typed in. Profile weights are always stored in
+   *  kg, but the weight LOG is stored raw in the user's display unit — so we
+   *  have to carry this through to seed the first log entry correctly. */
+  weightUnit?: 'lbs' | 'kg'
 }
 
 // ── Step configuration ────────────────────────────────────────────────────────
@@ -204,19 +208,31 @@ export default function OnboardingPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          profile: payload,
+          // The imperial/metric toggle defaults to lbs, so an untouched toggle
+          // must still persist 'lbs' rather than leaving weightUnit unset.
+          profile: { ...payload, weightUnit: payload.weightUnit ?? 'lbs' },
           onboardingCompleted: true,
           // Give every new user a starter profile icon matched to their goal.
           profileIcon: defaultIconForGoal(payload.fitnessGoal),
         }),
       })
 
-      // Seed the first weight log entry from the body stats step
+      // Seed the first weight log entry from the body stats step.
+      //
+      // The PROFILE stores weight in kg, but the weight LOG stores a raw number
+      // in the user's display unit (WeightModal is literally labelled "Weight
+      // (lbs)" and posts what you typed). Seeding it with the kg value meant a
+      // user who entered 175 lb got a first log entry of 79 — which then showed
+      // up as "79 lbs" on the dashboard/progress chart until they logged again.
       if (payload.currentWeightKg) {
+        const unit = payload.weightUnit ?? 'lbs'
+        const seedWeight = unit === 'lbs'
+          ? kgToLbs(payload.currentWeightKg)
+          : payload.currentWeightKg
         fetch('/api/weight', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ weight: payload.currentWeightKg, tz: new Date().getTimezoneOffset() }),
+          body: JSON.stringify({ weight: seedWeight, tz: new Date().getTimezoneOffset() }),
         }).catch(() => {}) // fire-and-forget
       }
 
@@ -568,6 +584,10 @@ function Step3({
       if (profile.targetWeightKg) setTargetKgDisplay(String(profile.targetWeightKg))
     }
     setUseImperial(toImperial)
+    // Persist the choice — the profile keeps weights in kg, but the weight LOG
+    // and every weight readout use this unit. Without it the toggle was purely
+    // local and a kg user's weights were later rendered as lbs.
+    onChange({ weightUnit: toImperial ? 'lbs' : 'kg' })
   }
 
   function handleHeightChange(ft: string, inches: string) {
