@@ -141,6 +141,15 @@ export interface IFood {
   needsReview?: boolean
 
   /**
+   * Hard-hidden from all user-facing search. Set only on entries whose source
+   * nutrition is physically impossible AND unrecoverable (e.g. an OFF per-100 of
+   * 18000 cal with no valid kJ fallback) — hiding prevents a serving change from
+   * exposing the garbage value. Distinct from `needsReview` (a broad admin queue
+   * flag on thousands of otherwise-usable foods). The search route excludes these.
+   */
+  hiddenFromSearch?: boolean
+
+  /**
    * Coarse grouping key used by future variant-merging passes — e.g. "Tea,
    * hot, herbal" → "tea". Lets us cluster the same conceptual food (Eggs,
    * Chicken Breast, Tea) across prep variants without committing to a hard
@@ -227,6 +236,7 @@ const FoodSchema = new Schema<IFood>({
   recipeId: { type: Schema.Types.ObjectId, ref: 'Recipe' },
 
   needsReview: { type: Boolean, default: false },
+  hiddenFromSearch: { type: Boolean, default: false },
   groupKey: { type: String },
 }, {
   timestamps: true,

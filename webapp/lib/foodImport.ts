@@ -8,6 +8,7 @@ import { baseGroupKey } from '@/lib/foodGrouping'
 import { canonicalFoodName } from '@/lib/foodCanonicalName'
 import { canAutoMergeAsVariant, type VariantMergeParent, type VariantMergeCandidate } from '@/lib/foodVariantMerge'
 import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import { plausibleOffKcal } from '@/lib/offEnergy'
 import { assessFoodImportQuality, foodQualityErrorMessage } from '@/lib/nutrition/foodQuality'
 
 const VALID_CATEGORIES: FoodCategory[] = [
@@ -732,7 +733,7 @@ function extractMlFromServingSize(text?: string): number | null {
 function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
   const n = off.nutriments
   const nutrition = {
-    calories: Math.round(n.energy_kcal_100g) || 0,
+    calories: plausibleOffKcal(n),
     protein: Math.round((n.proteins_100g ?? 0) * 10) / 10,
     carbs: Math.round((n.carbohydrates_100g ?? 0) * 10) / 10,
     fats: Math.round((n.fat_100g ?? 0) * 10) / 10,

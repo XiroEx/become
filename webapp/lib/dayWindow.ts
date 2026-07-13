@@ -30,6 +30,24 @@ export function readTzOffsetFromBody(body: unknown): number {
 }
 
 /**
+ * Read `tz` from a JSON body, returning `null` when it is ABSENT or not a
+ * finite number (rather than defaulting to 0 = UTC). Use this — never
+ * `readTzOffsetFromBody` — when the value is going to be PERSISTED as the
+ * user's timezone (see captureUserTimezone). Defaulting a missing `tz` to 0
+ * silently marks the user as UTC, which made the cron fire the workout
+ * reminder in the small hours of their real local morning (a US/Eastern user
+ * stored as offset 0 got the 7am-UTC nudge at ~3am local). A genuinely
+ * reported UTC user still sends `tz: 0`, which is a real number and preserved.
+ * Clamped to ±14h.
+ */
+export function readOptionalTzOffsetFromBody(body: unknown): number | null {
+  if (!body || typeof body !== 'object') return null
+  const raw = (body as Record<string, unknown>).tz
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
+  return Math.max(TZ_CLAMP_MIN, Math.min(TZ_CLAMP_MAX, raw))
+}
+
+/**
  * Resolve a YYYY-MM-DD calendar-day key for a caller in `tzOffsetMinutes`
  * (browser-style: positive WEST of UTC). When `dateStr` is provided and
  * well-formed, returns it verbatim (the caller's intended local day).
