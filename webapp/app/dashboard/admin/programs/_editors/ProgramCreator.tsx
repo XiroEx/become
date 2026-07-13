@@ -351,11 +351,13 @@ export default function ProgramCreator({
             {isEdit ? "Edit Program" : "Create New Program"}
           </h1>
           
-          {/* Progress Steps */}
-          <div className="mt-6 flex items-center gap-2">
+          {/* Progress Steps — data-tour anchors the onboarding tour to the
+              stepper as a whole and to individual pills (program-step-phases). */}
+          <div className="mt-6 flex items-center gap-2" data-tour="program-steps">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center">
                 <button
+                  data-tour={`program-step-${step.id}`}
                   onClick={() => {
                     if (index < currentStep || (index === currentStep + 1 && canProceed)) {
                       setCurrentStep(index);
@@ -397,7 +399,7 @@ export default function ProgramCreator({
               className="space-y-8"
             >
               {/* Program Name & Description */}
-              <div className="sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-6 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
+              <div data-tour="program-basics" className="sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-6 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Program Details
                 </h2>
@@ -445,7 +447,7 @@ export default function ProgramCreator({
               </div>
 
               {/* Duration & Frequency */}
-              <div className="sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-6 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
+              <div data-tour="program-schedule" className="sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-6 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Duration & Schedule
                 </h2>
@@ -512,7 +514,7 @@ export default function ProgramCreator({
               </div>
 
               {/* Equipment */}
-              <div className="sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-6 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
+              <div data-tour="program-equipment" className="sm:rounded-2xl sm:border sm:border-zinc-200 sm:bg-white sm:p-6 sm:shadow-sm dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
                   Required Equipment
                 </h2>
@@ -554,6 +556,7 @@ export default function ProgramCreator({
                 </h2>
                 <button
                   onClick={addPhase}
+                  data-tour="program-add-phase"
                   className="flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -687,7 +690,7 @@ export default function ProgramCreator({
         </AnimatePresence>
 
         {/* Navigation Buttons */}
-        <div className="mt-8 flex items-center justify-between">
+        <div className="mt-8 flex items-center justify-between" data-tour="program-wizard-nav">
           <button
             onClick={() => setCurrentStep((prev) => Math.max(0, prev - 1))}
             disabled={currentStep === 0}
@@ -757,6 +760,7 @@ export default function ProgramCreator({
         onClick={saveProgram}
         disabled={isSaving || !isStep1Valid || (isEdit && !isDirty)}
         aria-label={isEdit ? 'Update program' : 'Save program'}
+        data-tour="program-save"
         className={`fixed right-4 z-30 flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition-all ${
           isSaving || !isStep1Valid || (isEdit && !isDirty)
             ? 'cursor-not-allowed bg-zinc-300 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'

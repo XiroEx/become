@@ -376,6 +376,9 @@ export default function ChatPage() {
           </p>
         </div>
 
+        {/* data-tour wrapper: stable tour anchor across loading / empty / list
+            states. flex-1 flex-col so the empty state keeps centering. */}
+        <div className="flex flex-1 flex-col" data-tour="chat-conversations">
         {loading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
@@ -453,6 +456,7 @@ export default function ChatPage() {
             })}
           </div>
         )}
+        </div>
       </PageTransition>
     );
   }

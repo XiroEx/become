@@ -454,7 +454,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
 
         {/* Default meal time — the slot this meal pre-selects when logged. You
             can still log it to any meal (e.g. chili to lunch or dinner). */}
-        <div>
+        <div data-tour="meal-default-time">
           <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Default meal time
           </label>
@@ -626,6 +626,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
 
             <button
               onClick={() => setFoodSearchOpen(true)}
+              data-tour="meal-add-item"
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
             >
               <Plus className="h-4 w-4" />
@@ -654,6 +655,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
           <button
             onClick={handleSave}
             disabled={saving || !name.trim() || items.length === 0}
+            data-tour="meal-save"
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

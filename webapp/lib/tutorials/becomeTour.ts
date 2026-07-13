@@ -15,16 +15,30 @@ import type { TutorialSection } from './sections/types'
 // ── SECTION IMPORTS (agents: add your import here) ───────────────────────────
 import { coreSection } from './sections/core'
 import { nutritionSection } from './sections/nutrition'
+import { workoutSection } from './sections/workout'
+import { mindSection } from './sections/mind'
+import { socialSection } from './sections/social'
+import { foodSection } from './sections/food'
+import { trackingSection } from './sections/tracking'
+import { accountSection } from './sections/account'
+import { programsSection } from './sections/programs'
 
 // ── SECTION REGISTRY (agents: add your section to this array) ────────────────
 const SECTIONS: TutorialSection[] = [
   coreSection,
   nutritionSection,
+  workoutSection,
+  programsSection,
+  mindSection,
+  socialSection,
+  foodSection,
+  trackingSection,
+  accountSection,
 ]
 
 export const becomeOnboardingTour: TutorialDefinition = {
   id: 'become-onboarding',
-  version: 3, // bumped: full-app section rewrite (dashboard cards → concept, per-route sections)
+  version: 4, // full-app coverage: per-route sections across the whole dashboard
   title: 'Welcome to BECOME',
   steps: SECTIONS.flatMap((s) => s.steps),
   segments: Object.assign({}, ...SECTIONS.map((s) => s.segments)),

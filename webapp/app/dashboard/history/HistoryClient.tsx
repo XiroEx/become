@@ -111,7 +111,8 @@ export default function HistoryClient() {
       </header>
 
       {/* Filter toggles */}
-      <div className="mb-5 flex flex-wrap gap-2">
+      {/* data-tour anchors the tracking onboarding segment */}
+      <div className="mb-5 flex flex-wrap gap-2" data-tour="history-filters">
         {FILTERS.map((f) => (
           <button
             key={f.key}
@@ -154,7 +155,7 @@ export default function HistoryClient() {
           }
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="history-list">
           {filtered.map((log, i) => {
             const isQuick = log.kind === 'quick'
             const Inner = (

@@ -240,6 +240,7 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
             <div className="relative">
               <button
                 type="button"
+                data-tour="combine-exercises"
                 onClick={() => selectedForGroup.length >= 2 && setShowGroupMenu(!showGroupMenu)}
                 disabled={selectedForGroup.length < 2}
                 aria-label={
@@ -293,6 +294,7 @@ export default function WorkoutEditor({ workout, onUpdate }: WorkoutEditorProps)
             )}
             <button
               onClick={addExercise}
+              data-tour="add-exercise"
               className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition-all hover:bg-zinc-800 dark:bg-white dark:text-black"
             >
               <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

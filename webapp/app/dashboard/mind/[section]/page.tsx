@@ -47,7 +47,8 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
 
   return (
     <PageTransition className="flex flex-col">
-      <header className="mb-5">
+      {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+      <header className="mb-5" data-tour="mind-section-header">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/dashboard/mind')}
@@ -59,7 +60,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
         </div>
       </header>
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1" data-tour="mind-section-body">
         {section === 'state-shift'   && <StateShiftTab />}
         {section === 'self-image'    && <SelfImageTab streak={streak} />}
         {section === 'mission'       && <MissionTab />}

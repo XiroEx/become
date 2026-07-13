@@ -17,14 +17,17 @@ export default function SegmentedControl<T extends string>({
   value,
   onChange,
   className = '',
+  'data-tour': dataTour,
 }: {
   segments: Segment<T>[]
   value: T
   onChange: (value: T) => void
   className?: string
+  /** Onboarding-tour anchor (see lib/tutorials) — same passthrough pattern as HeaderPillLink. */
+  'data-tour'?: string
 }) {
   return (
-    <div className={`inline-flex w-full rounded-xl border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900 ${className}`}>
+    <div data-tour={dataTour} className={`inline-flex w-full rounded-xl border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-900 ${className}`}>
       {segments.map(({ value: v, label, Icon }) => (
         <button
           key={v}

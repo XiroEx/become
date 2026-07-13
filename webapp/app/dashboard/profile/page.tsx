@@ -98,7 +98,7 @@ export default function ProfilePage() {
       </header>
 
       {/* Identity hero */}
-      <section className="flex flex-col items-center rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">
+      <section data-tour="profile-identity" className="flex flex-col items-center rounded-2xl border border-zinc-200 bg-white p-6 text-center dark:border-zinc-800 dark:bg-zinc-900">
         <Avatar icon={profile?.profileIcon} imageUrl={profile?.avatarUrl} size={96} />
         <h2 className="mt-4 text-xl font-bold text-zinc-900 dark:text-white">{profile?.name}</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">{profile?.email}</p>
@@ -118,7 +118,7 @@ export default function ProfilePage() {
 
       {/* Mindset progress */}
       {mind && (
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <section data-tour="profile-mind" className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-violet-500" />
