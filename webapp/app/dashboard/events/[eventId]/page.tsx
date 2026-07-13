@@ -60,7 +60,7 @@ export default function EventDetailPage() {
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{event.description}</p>
       </div>
 
-      <Card>
+      <Card data-tour="event-details">
         <div className="grid gap-3 text-sm text-zinc-600 dark:text-zinc-300">
           <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />{formatEventTime(event.startsAt)}</div>
           <div className="flex items-center gap-2">
@@ -69,7 +69,7 @@ export default function EventDetailPage() {
           </div>
           {group ? <Link href={`/dashboard/groups/${group.slug}`} className="font-medium text-zinc-900 hover:underline dark:text-white">{group.name}</Link> : null}
         </div>
-        <div className="mt-5 flex items-center gap-2">
+        <div className="mt-5 flex items-center gap-2" data-tour="event-detail-rsvp">
           <button
             onClick={toggleRsvp}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${event.isAttending ? 'border border-zinc-200 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200' : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'}`}
