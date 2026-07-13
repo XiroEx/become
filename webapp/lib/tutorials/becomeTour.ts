@@ -14,11 +14,13 @@ import type { TutorialSection } from './sections/types'
 
 // ── SECTION IMPORTS (agents: add your import here) ───────────────────────────
 import { coreSection } from './sections/core'
+import { mindSection } from './sections/mind'
 import { nutritionSection } from './sections/nutrition'
 
 // ── SECTION REGISTRY (agents: add your section to this array) ────────────────
 const SECTIONS: TutorialSection[] = [
   coreSection,
+  mindSection,
   nutritionSection,
 ]
 

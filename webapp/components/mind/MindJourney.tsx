@@ -268,7 +268,8 @@ export default function MindJourney() {
         </div>
 
         {/* Visual chapter path */}
-        <div className="mt-4 flex items-center">
+        {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+        <div className="mt-4 flex items-center" data-tour="mind-chapters">
           {CHAPTERS.map((c, i) => {
             const done = c.id < chapter
             const current = c.id === chapter
@@ -304,6 +305,7 @@ export default function MindJourney() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
             onClick={begin}
+            data-tour="mind-session"
             className="group relative w-full rounded-3xl bg-zinc-900 p-6 text-left text-white shadow-sm transition-transform active:scale-[0.98] dark:bg-zinc-800"
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-white/50">
@@ -347,6 +349,7 @@ export default function MindJourney() {
       {/* More → Arsenal */}
       <Link
         href="/dashboard/mind/arsenal"
+        data-tour="mind-arsenal-link"
         className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
       >
         <div>
@@ -361,6 +364,7 @@ export default function MindJourney() {
       {/* The Becoming — progression / training log */}
       <Link
         href="/dashboard/mind/becoming"
+        data-tour="mind-becoming-link"
         className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
       >
         <div>
