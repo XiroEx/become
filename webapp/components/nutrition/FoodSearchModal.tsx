@@ -1157,7 +1157,7 @@ export default function FoodSearchModal({
                   away (shrink + fade) the moment the user starts typing a search,
                   so the results get the space. */}
               <AnimatePresence initial={false}>
-                {!query.trim() && !searchOnly && (
+                {!query.trim() && (
                   <motion.div
                     key="capture-row"
                     initial={{ height: 0, opacity: 0, marginTop: 0 }}
@@ -1167,8 +1167,15 @@ export default function FoodSearchModal({
                     className="overflow-hidden"
                   >
                     {/* Three wider, shorter actions — describe now lives on the
-                        search box, so it's dropped from this row. */}
-                    <div className="grid grid-cols-3 gap-2">
+                        search box, so it's dropped from this row.
+
+                        In `searchOnly` mode (the plate estimate's "Add more") we
+                        keep Barcode but drop Snap/Upload: those re-enter the plate
+                        estimator, which is the loop searchOnly exists to prevent.
+                        A barcode resolves to one known food and feeds the same
+                        quantity-picker → onSelectFood path as a search result, so
+                        it lands on the plate like any other added item. */}
+                    <div className={searchOnly ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-3 gap-2'}>
                       <button
                         type="button"
                         onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
@@ -1178,24 +1185,28 @@ export default function FoodSearchModal({
                         <ScanBarcode className="h-4 w-4" />
                         <span className="text-xs font-semibold">Barcode</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onSnapPhoto?.()}
-                        disabled={!onSnapPhoto}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                      >
-                        <Camera className="h-4 w-4" />
-                        <span className="text-xs font-semibold">Snap</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onUpload?.()}
-                        disabled={!onUpload}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                      >
-                        <Upload className="h-4 w-4" />
-                        <span className="text-xs font-semibold">Upload</span>
-                      </button>
+                      {!searchOnly && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onSnapPhoto?.()}
+                            disabled={!onSnapPhoto}
+                            className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          >
+                            <Camera className="h-4 w-4" />
+                            <span className="text-xs font-semibold">Snap</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpload?.()}
+                            disabled={!onUpload}
+                            className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          >
+                            <Upload className="h-4 w-4" />
+                            <span className="text-xs font-semibold">Upload</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 )}

@@ -1337,8 +1337,11 @@ export default function SnapPlateModal({
               />
             )}
 
-            {/* Add more — search-only (no camera/upload/describe). The picked food
-                becomes another row on the plate, logged with everything else. */}
+            {/* Add more — search + barcode only. Snap/upload/describe are withheld
+                because they re-enter the plate estimator (that's the loop this
+                mode exists to avoid); a barcode just resolves to one known food.
+                The picked food becomes another row on the plate, logged with
+                everything else. */}
             <FoodSearchModal
               isOpen={addMoreOpen && state.phase === 'review'}
               searchOnly
