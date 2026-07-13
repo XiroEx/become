@@ -100,7 +100,7 @@ export default function IconPicker() {
   }
 
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+    <section data-tour="profile-icon-picker" className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-center gap-4">
         <Avatar icon={current} imageUrl={avatarUrl} size={56} />
         <div>
