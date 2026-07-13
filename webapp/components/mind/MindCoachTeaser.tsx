@@ -18,6 +18,7 @@ export default function MindCoachTeaser() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        data-tour="mind-coach"
         className="mt-3 w-full overflow-hidden rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-green-50 p-4 text-left transition-transform active:scale-[0.99] dark:border-violet-500/20 dark:from-violet-500/10 dark:to-green-500/10"
       >
         <div className="flex items-center gap-3">

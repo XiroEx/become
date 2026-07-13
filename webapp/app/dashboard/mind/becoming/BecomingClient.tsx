@@ -134,7 +134,8 @@ export default function BecomingClient() {
       </div>
 
       {/* Becoming score */}
-      <Card className="mb-4 overflow-hidden bg-gradient-to-br from-violet-600 to-violet-500 text-white">
+      {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+      <Card data-tour="becoming-score" className="mb-4 overflow-hidden bg-gradient-to-br from-violet-600 to-violet-500 text-white">
         <div className="flex items-center justify-between">
           <div>
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-white/70">
@@ -154,7 +155,7 @@ export default function BecomingClient() {
       </Card>
 
       {/* Then → Now → Next */}
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid grid-cols-3 gap-2" data-tour="becoming-journey">
         <Card className="p-3 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Then</p>
           <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">
@@ -256,7 +257,7 @@ export default function BecomingClient() {
       )}
 
       {/* Evidence wall */}
-      <Card>
+      <Card data-tour="becoming-wins">
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">Evidence wall</p>
         {wins.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
