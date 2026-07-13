@@ -51,6 +51,8 @@ export default function GroupsPage() {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Join focused community spaces for shared goals and accountability.</p>
       </div>
 
+      {/* data-tour wrapper: stable tour anchor across loading / empty / list states */}
+      <div data-tour="groups-list">
       {loading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />)}</div>
       ) : groups.length === 0 ? (
@@ -79,6 +81,7 @@ export default function GroupsPage() {
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={() => toggleJoin(group)}
+                  data-tour="group-join"
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${group.isMember ? 'border border-zinc-200 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200' : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'}`}
                 >
                   {group.isMember ? 'Leave' : 'Join'}
@@ -91,6 +94,7 @@ export default function GroupsPage() {
           ))}
         </div>
       )}
+      </div>
     </PageTransition>
   )
 }
