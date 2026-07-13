@@ -11,7 +11,7 @@ import {
   TutorialProvider,
   createFetchAdapter,
   createLocalStorageAdapter,
-} from '@/lib/redtutorial'
+} from '@redbtn/redtutorial'
 import { getToken } from '@/lib/clientAuth'
 import { becomeTutorials } from '@/lib/tutorials/becomeTour'
 

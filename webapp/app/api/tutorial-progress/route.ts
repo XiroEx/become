@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import { verifyAuth } from '@/lib/auth'
 import TutorialProgress from '@/models/TutorialProgress'
-import { parseProgressState } from '@/lib/redtutorial'
+import { parseProgressState } from '@redbtn/redtutorial'
 
 // Account-based tutorial progress for @redbtn/redtutorial's fetch adapter:
 // GET returns the user's progress blob (204 when none yet), PUT upserts it.

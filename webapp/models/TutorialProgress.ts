@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document, type Model } from 'mongoose'
-import type { TutorialProgressState } from '@/lib/redtutorial'
+import type { TutorialProgressState } from '@redbtn/redtutorial'
 
 // Per-user tutorial/tour progress (one blob per user, account-based so tours
 // don't replay on every device). Written by /api/tutorial-progress; the shape

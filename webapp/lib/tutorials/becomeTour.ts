@@ -1,7 +1,6 @@
-import type { TutorialDefinition } from '@/lib/redtutorial'
+import type { TutorialDefinition } from '@redbtn/redtutorial'
 
-// BECOME onboarding tour — built on @redbtn/redtutorial (vendored at
-// lib/redtutorial until the package is published).
+// BECOME onboarding tour — built on @redbtn/redtutorial (registry.redbtn.io).
 //
 // Segmented on purpose: instead of one long forced walkthrough, the "home"
 // segment plays the first time the user lands on the dashboard, and the
