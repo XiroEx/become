@@ -594,7 +594,7 @@ export default function CalendarClient() {
 
       {/* View Toggle + Nav */}
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+        <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800" data-tour="calendar-views">
           <button
             onClick={() => setViewMode('month')}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -705,6 +705,7 @@ export default function CalendarClient() {
 
           {/* Calendar Grid */}
           <div
+            data-tour="calendar-grid"
             className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
