@@ -385,6 +385,7 @@ export function TileGrid({ statContext, layout: layoutProp, className }: TileGri
           match. */}
       <div
         data-testid="tilegrid"
+        data-tour="tile-grid"
         className={cn(
           'grid grid-cols-2 gap-2 auto-rows-[6rem] sm:grid-cols-4 sm:gap-3 sm:auto-rows-[6.25rem]',
           className,
