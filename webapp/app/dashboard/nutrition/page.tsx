@@ -813,7 +813,7 @@ function NutritionPageInner() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <HeaderPillLink href="/dashboard/meals" Icon={ChefHat}>My Stuff</HeaderPillLink>
+            <HeaderPillLink href="/dashboard/meals" Icon={ChefHat} data-tour="nutrition-my-stuff">My Stuff</HeaderPillLink>
             {/* Timeline + Estimate history tucked into one dropdown */}
             <div className="relative">
               <button
@@ -847,6 +847,7 @@ function NutritionPageInner() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => openFoodSearch(getDefaultTagForNow())}
+            data-tour="nutrition-search"
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <Search className="h-4 w-4 shrink-0 text-zinc-400" />

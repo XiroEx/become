@@ -116,7 +116,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
       </div>
 
       {/* Macro bars */}
-      <div className="mt-5 space-y-3">
+      <div className="mt-5 space-y-3" data-tour="macro-rows">
         <MacroBar label="Protein" current={protein.current} goal={protein.goal} color="bg-blue-600" />
         <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color="bg-green-600" />
         <MacroBar label="Fats" current={fats.current} goal={fats.goal} color="bg-amber-500" />
