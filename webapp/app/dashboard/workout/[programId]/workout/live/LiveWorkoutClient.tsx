@@ -1358,7 +1358,7 @@ export default function LiveWorkoutPage() {
                 )}
               </AnimatePresence>
 
-              <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
+              <div data-tour="live-timer" className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
                 <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                 <span className="font-mono text-sm tabular-nums">{formatTime(elapsedTime)}</span>
               </div>
@@ -1462,6 +1462,7 @@ export default function LiveWorkoutPage() {
 
             {/* Dots */}
             <div
+              data-tour="live-exercise-dots"
               className="flex flex-col gap-2 cursor-pointer p-2"
               onClick={() => setShowExerciseList(!showExerciseList)}
             >
@@ -1567,7 +1568,7 @@ export default function LiveWorkoutPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Exercise info */}
-            <div className="mb-4">
+            <div data-tour="live-exercise-info" className="mb-4">
               <div className="flex items-center gap-2 text-sm text-white/60">
                 <span>Exercise {currentExerciseIndex + 1}/{totalExercises}</span>
                 <span>•</span>
@@ -1693,7 +1694,7 @@ export default function LiveWorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="relative flex gap-3 mb-6">
+                  <div data-tour="live-inputs" className="relative flex gap-3 mb-6">
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
@@ -1832,6 +1833,7 @@ export default function LiveWorkoutPage() {
               <button
                 onClick={handleCompleteOrSkipSet}
                 disabled={isResting || saving}
+                data-tour="live-complete-set"
                 className={`flex-1 rounded-full py-4 text-lg font-bold shadow-lg transition-all disabled:opacity-50 ${
                   isSkipping
                     ? "bg-zinc-600 shadow-zinc-600/30 hover:bg-zinc-500"
@@ -1874,6 +1876,7 @@ export default function LiveWorkoutPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
+            data-tour="live-set-progress"
             className="absolute left-4 right-4 z-10 flex gap-1"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4rem)' }}
           >

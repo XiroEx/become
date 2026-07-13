@@ -15,11 +15,13 @@ import type { TutorialSection } from './sections/types'
 // ── SECTION IMPORTS (agents: add your import here) ───────────────────────────
 import { coreSection } from './sections/core'
 import { nutritionSection } from './sections/nutrition'
+import { workoutSection } from './sections/workout'
 
 // ── SECTION REGISTRY (agents: add your section to this array) ────────────────
 const SECTIONS: TutorialSection[] = [
   coreSection,
   nutritionSection,
+  workoutSection,
 ]
 
 export const becomeOnboardingTour: TutorialDefinition = {

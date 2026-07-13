@@ -123,6 +123,7 @@ export default function JourneyPage() {
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, type: 'spring', stiffness: 220, damping: 22 }}
+        data-tour="journey-hero"
         className="mb-6 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-600/10 border border-yellow-500/30 p-4 sm:p-5 text-center"
       >
         <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20 ring-4 ring-yellow-500/30">
@@ -138,7 +139,7 @@ export default function JourneyPage() {
       </motion.div>
 
       {/* Key stats grid */}
-      <div className="mb-6 grid grid-cols-2 gap-3">
+      <div data-tour="journey-stats" className="mb-6 grid grid-cols-2 gap-3">
         <StatCard
           label="Sessions Completed"
           value={String(data.totalSessions)}
@@ -189,6 +190,7 @@ export default function JourneyPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          data-tour="journey-prs"
           className="mb-6"
         >
           <div className="mb-3 flex items-center gap-2">
@@ -228,6 +230,7 @@ export default function JourneyPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55 }}
+        data-tour="journey-next"
         className="space-y-2"
       >
         <button
