@@ -154,7 +154,7 @@ export default function CalendarSettingsPage() {
           <p className="text-sm text-zinc-500 dark:text-zinc-400">No schedules to manage.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4" data-tour="calendar-settings-schedules">
           {schedules.map((schedule) => {
             const isEditing = editingSchedule === schedule.programId
             const completedCount = schedule.scheduledWorkouts.filter(w => w.status === 'completed').length
