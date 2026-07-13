@@ -237,7 +237,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
         </div>
 
         {/* Stats */}
-        <div className="mb-6 grid grid-cols-3 gap-3">
+        <div data-tour="schedule-stats" className="mb-6 grid grid-cols-3 gap-3">
           <div className="rounded-xl bg-zinc-100 p-3 dark:bg-zinc-800/50">
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Completed</p>
             <p className="text-lg font-bold text-zinc-900 dark:text-white">{completed}/{total}</p>
@@ -275,7 +275,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
         )}
 
         {/* Actions */}
-        <div className="space-y-3">
+        <div data-tour="schedule-actions" className="space-y-3">
           <a
             href="/dashboard/calendar"
             className="block w-full rounded-xl bg-zinc-900 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
@@ -322,7 +322,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
       </div>
 
       {/* Progress Steps */}
-      <div className="mb-8 flex items-center gap-2">
+      <div data-tour="schedule-steps" className="mb-8 flex items-center gap-2">
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center gap-2 flex-1">
             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors ${
@@ -352,7 +352,7 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
               This program has {trainingDaysPerWeek} training days per week. Select your preferred days.
             </p>
 
-            <div className="mb-6 grid grid-cols-7 gap-2">
+            <div data-tour="schedule-days" className="mb-6 grid grid-cols-7 gap-2">
               {DAY_LABELS.map((label, idx) => (
                 <button
                   key={idx}

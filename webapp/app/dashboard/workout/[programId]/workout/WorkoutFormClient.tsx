@@ -1043,7 +1043,7 @@ export default function WorkoutFormPage() {
           </div>
 
           {/* Progress bar */}
-          <div className="mt-3">
+          <div data-tour="track-progress" className="mt-3">
             <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
               <span className="flex items-center gap-2">
                 Workout Progress
@@ -1080,7 +1080,7 @@ export default function WorkoutFormPage() {
 
       {/* Exercise List */}
       <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 sm:py-6">
-        <div className="space-y-3 sm:space-y-4">
+        <div data-tour="track-exercises" className="space-y-3 sm:space-y-4">
           {groupExercises(workout.exercises).map((group, groupIndex) => {
             const isGrouped = group.groupId !== null && group.exercises.length > 1;
             const groupStyle = isGrouped ? GROUP_STYLES[group.groupType || "superset"] || GROUP_STYLES.superset : null;
