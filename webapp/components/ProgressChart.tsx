@@ -97,7 +97,7 @@ export default function ProgressChart({
   const isWeightLike = activeChart === 'weight' || activeChart === 'bmi' || activeChart === 'body_fat' || activeChart === 'lean_mass'
 
   return (
-    <Card>
+    <Card data-tour="progress-chart">
       {/* Tab selector */}
       <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1 sm:gap-2 sm:mb-6">
         {allTabs.map((type) => (

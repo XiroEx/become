@@ -94,6 +94,7 @@ export default function BottomNav() {
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)' }}
     >
       <ul
+        data-tour="bottom-nav"
         className={`pointer-events-auto flex items-center gap-2 rounded-full border border-zinc-200/70 bg-white/80 px-3 py-1.5 shadow-lg shadow-black/10 backdrop-blur-xl transition-transform duration-300 ease-out dark:border-white/10 dark:bg-zinc-900/80 dark:shadow-black/40 ${
           condensed ? 'scale-[0.88]' : 'scale-100'
         }`}
