@@ -17,6 +17,12 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'nudge',
+      testMatch: '**/nudge-visibility.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'off' },
+    },
+    {
       name: 'swap-collapse',
       testMatch: '**/swap-collapse.spec.ts',
       timeout: 180_000,
