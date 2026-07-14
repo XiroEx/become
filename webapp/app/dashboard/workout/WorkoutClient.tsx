@@ -343,17 +343,21 @@ export default function WorkoutClient() {
       const tags = (program.tags ?? []).map(t => t.toLowerCase());
       const allText = [goalField, targetUser, ...tags].join(" ");
 
-      // Goal match
+      // Goal match. `?? []` is load-bearing: a profile can hold a goal that isn't
+      // a key of this map (legacy values like "build_muscle" predate the current
+      // enum), and an unguarded `undefined.some(...)` threw inside this filter and
+      // white-screened the ENTIRE Workout page ("This page couldn't load"). An
+      // unknown goal must degrade to "no recommendation", never crash the page.
       let goalMatch = false;
       if (userFitnessGoal) {
-        const keywords = GOAL_KEYWORDS[userFitnessGoal];
+        const keywords = GOAL_KEYWORDS[userFitnessGoal] ?? [];
         goalMatch = keywords.some(kw => allText.includes(kw));
       }
 
-      // Level match
+      // Level match — same guard, same reason.
       let levelMatch = false;
       if (userExperienceLevel) {
-        const levels = LEVEL_MAP[userExperienceLevel];
+        const levels = LEVEL_MAP[userExperienceLevel] ?? [];
         levelMatch = levels.some(l => targetUser.includes(l));
       }
 
