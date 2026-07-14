@@ -420,13 +420,25 @@ export async function POST(request: NextRequest) {
                        === new Date(scheduledDate).toISOString().split('T')[0]
                 )
               : undefined
+            // TODAY's own slot outranks the overdue backlog. `overdue` used to be
+            // `<= todayKey`, which swept today's slot into the backlog — so with
+            // Day 1 due both last Monday and today, doing today's workout resolved
+            // LAST Monday's slot ("Made up on Jul 13") and left today still
+            // "Scheduled" with nothing done. Backfilling an older miss is only
+            // right when today has no slot for this day (training on an off-day to
+            // catch up); it must never steal credit from the day you actually
+            // trained. Note the entry points don't all send `scheduledDate`, so
+            // this ordering — not `exact` — is what has to be correct.
+            const todaySlot = candidates.find(
+              (w) => dateKey(new Date(w.date), tzOffset) === todayKey
+            )
             const overdue = candidates
-              .filter((w) => dateKey(new Date(w.date), tzOffset) <= todayKey)
+              .filter((w) => dateKey(new Date(w.date), tzOffset) < todayKey)
               .sort(byDateAsc)
             const upcoming = candidates
               .filter((w) => dateKey(new Date(w.date), tzOffset) > todayKey)
               .sort(byDateAsc)
-            const match = exact ?? overdue[0] ?? upcoming[0]
+            const match = exact ?? todaySlot ?? overdue[0] ?? upcoming[0]
 
             if (match) {
               await Schedule.updateOne(
