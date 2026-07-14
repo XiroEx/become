@@ -17,6 +17,16 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'calendar-audit',
+      testMatch: '**/calendar-audit.spec.ts',
+      timeout: 180_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off', trace: 'off', screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'estimate-barcode',
       testMatch: '**/estimate-barcode.spec.ts',
       timeout: 240_000,

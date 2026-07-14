@@ -626,12 +626,14 @@ export default function CalendarClient() {
           </button>
           <button
             onClick={navigatePrev}
+            aria-label={viewMode === 'week' ? 'Previous week' : 'Previous month'}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             onClick={navigateNext}
+            aria-label={viewMode === 'week' ? 'Next week' : 'Next month'}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             <ChevronRight className="h-4 w-4" />
