@@ -57,7 +57,9 @@ test('estimate → Add more offers Barcode (not Snap/Upload), scanner opens abov
   await page.waitForTimeout(2000)
   await page.screenshot({ path: 'tests/e2e/screenshots/addmore-scanner.png' })
 
-  // Headless has no camera, so the scanner shows its manual-entry fallback.
-  const scannerSurface = page.locator('input[placeholder*="barcode" i], text=/enter.*barcode/i').first()
-  await expect(scannerSurface).toBeVisible({ timeout: 15_000 })
+  // The scanner surface itself must be on screen and on top — headless has no
+  // camera, so it falls back to the manual-entry form, but either way the
+  // scanner root has to win the stacking contest against the plate modal.
+  await expect(page.locator('[data-testid="barcode-scanner"]')).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('[data-testid="manual-barcode-form"]')).toBeVisible({ timeout: 15_000 })
 })
