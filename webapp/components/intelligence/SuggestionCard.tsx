@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import type {
   Suggestion,
@@ -20,24 +21,27 @@ const SEVERITY_STYLES: Record<
   SuggestionSeverity,
   { wrapper: string; badge: string; label: string }
 > = {
+  // Every severity needs BOTH a light and a dark treatment. These used to carry
+  // only the dark values (e.g. `bg-amber-950/40`), which in light mode rendered a
+  // translucent near-black amber — the muddy brown card with barely-legible text.
   info: {
-    wrapper: 'bg-zinc-900/60 ring-zinc-500/30',
-    badge: 'bg-zinc-700 text-zinc-100',
+    wrapper: 'bg-zinc-100 ring-zinc-300 dark:bg-zinc-900/60 dark:ring-zinc-500/30',
+    badge: 'bg-zinc-700 text-white dark:bg-zinc-700 dark:text-zinc-100',
     label: 'Info',
   },
   nudge: {
-    wrapper: 'bg-amber-950/40 ring-amber-500/40',
+    wrapper: 'bg-amber-50 ring-amber-300 dark:bg-amber-950/40 dark:ring-amber-500/40',
     badge: 'bg-amber-500 text-amber-950',
     label: 'Nudge',
   },
   warning: {
-    wrapper: 'bg-rose-950/40 ring-rose-500/40',
-    badge: 'bg-rose-500 text-rose-950',
+    wrapper: 'bg-rose-50 ring-rose-300 dark:bg-rose-950/40 dark:ring-rose-500/40',
+    badge: 'bg-rose-500 text-white dark:text-rose-950',
     label: 'Warning',
   },
   celebration: {
-    wrapper: 'bg-emerald-950/40 ring-emerald-500/40',
-    badge: 'bg-emerald-400 text-emerald-950',
+    wrapper: 'bg-emerald-50 ring-emerald-300 dark:bg-emerald-950/40 dark:ring-emerald-500/40',
+    badge: 'bg-emerald-500 text-white dark:bg-emerald-400 dark:text-emerald-950',
     label: 'Celebration',
   },
 }
@@ -102,29 +106,33 @@ export function SuggestionCard({
               {styles.label}
             </span>
           </div>
-          <h3 className="text-sm font-semibold text-zinc-100">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {suggestion.title}
           </h3>
-          <p className="mt-1 text-sm text-zinc-300">{suggestion.body}</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{suggestion.body}</p>
           {suggestion.primaryAction && (
             <Link
               href={suggestion.primaryAction.href}
               data-testid="suggestion-primary-action"
-              className="mt-2 inline-block rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-900 hover:bg-white"
+              className="mt-2 inline-block rounded-full bg-zinc-900 px-3 py-1 text-xs font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
             >
               {suggestion.primaryAction.label}
             </Link>
           )}
         </div>
         {suggestion.dismissible && (
+          // Was a bare "×" glyph at text-zinc-400 with p-1: no button affordance,
+          // a ~24px target, and effectively invisible against the card in light
+          // mode. Now a real chip — filled circle + ring, contrast in both themes,
+          // and a 36px tap target.
           <button
             type="button"
             onClick={handleDismiss}
             data-testid="suggestion-dismiss"
             aria-label={`Dismiss ${suggestion.title}`}
-            className="shrink-0 rounded-full p-1 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100"
+            className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900/5 text-zinc-500 ring-1 ring-zinc-900/10 transition-colors hover:bg-zinc-900/10 hover:text-zinc-900 dark:bg-white/10 dark:text-zinc-300 dark:ring-white/20 dark:hover:bg-white/20 dark:hover:text-white"
           >
-            <span aria-hidden="true">×</span>
+            <X className="h-4 w-4" strokeWidth={2.75} aria-hidden="true" />
           </button>
         )}
       </div>
