@@ -31,37 +31,20 @@ async function dismissOverlays(page: Page) {
       await page.waitForTimeout(300)
     } else break
   }
-  // The onboarding tour mounts a full-screen `.rtut-shield` that swallows pointer
-  // events. Removing the node isn't enough (React re-mounts it) — drive the tour
-  // to completion the way a user would.
+  // The onboarding tour mounts a `.rtut-shield` that (by design) gates the page
+  // until you skip or finish it. Dismiss it the way a user does — the control is
+  // labelled "Skip tour", NOT "close".
   if (await page.locator('.rtut-shield').count() > 0) {
-    problems.push('FINDING: onboarding tour `.rtut-shield` gates the whole calendar — every control is unclickable until the tour is finished/dismissed')
-    for (let i = 0; i < 30; i++) {
-      if (await page.locator('.rtut-shield').count() === 0) break
-      const next = page.getByRole('button', { name: /^(next|done|finish|got it)$/i }).first()
-      const close = page.locator('button[aria-label*="lose" i], button[aria-label*="kip" i]').first()
-      if (await next.isVisible({ timeout: 800 }).catch(() => false)) {
-        await next.click({ force: true }).catch(() => {})
-      } else if (await close.isVisible({ timeout: 800 }).catch(() => false)) {
-        await close.click({ force: true }).catch(() => {})
-      } else break
-      await page.waitForTimeout(400)
+    await page.locator('button[aria-label="Skip tour"]').first().click({ force: true }).catch(() => {})
+    await page.waitForTimeout(700)
+    if (await page.locator('.rtut-shield').count() > 0) {
+      problems.push('FINDING: tour shield still blocks the page after "Skip tour"')
     }
-    const still = await page.locator('.rtut-shield').count()
-    if (still > 0) problems.push('FINDING: tour shield still present after 30 dismiss attempts')
   }
 }
 
 test('calendar audit — views, statuses, actions', async ({ page, context }) => {
   watch(page)
-  // The onboarding tour's shield can't be clicked away reliably (React re-mounts
-  // it), so neutralize it for the audit. Recorded as a finding below regardless.
-  await context.addInitScript(() => {
-    const style = document.createElement('style')
-    style.textContent = '.rtut-shield,.rtut-root{display:none !important;pointer-events:none !important}'
-    document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style))
-    queueMicrotask(() => document.head?.appendChild(style))
-  })
   await authenticate(page, context)
   await page.goto(`${BASE_URL}/dashboard/calendar`)
   await page.waitForLoadState('domcontentloaded')
