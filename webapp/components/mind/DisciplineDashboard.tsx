@@ -13,6 +13,7 @@ import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -131,7 +132,7 @@ export default function DisciplineDashboard() {
   const [fightToday, setFightToday] = useState<number | null>(null) // today's fight-check score
   const [marking, setMarking] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
-  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
+  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -223,7 +224,7 @@ export default function DisciplineDashboard() {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'discipline', topic })
       const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
       if (r.ok && steps) {
-        setFlow({ title: topic, kind: 'protocol', steps })
+        setFlow({ title: topic, kind: 'protocol', steps, aiGenerated: true })
         return
       }
     } catch { /* fall through */ }
@@ -255,6 +256,7 @@ export default function DisciplineDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
+        onReflect={(flow.aiGenerated || flow.kind !== 'protocol') ? undefined : (a) => reflectOnAnswers('Discipline drill', a)}
         onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           const kind = flow.kind

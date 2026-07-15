@@ -16,6 +16,7 @@ import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -172,7 +173,7 @@ export default function SelfImageDashboard() {
   const [savingWin, setSavingWin] = useState(false)
   const [affirming, setAffirming] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
-  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
+  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -263,7 +264,7 @@ export default function SelfImageDashboard() {
     try {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'self-image', topic })
       const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
-      if (r.ok && steps) { setFlow({ title: topic, kind: 'protocol', steps }); return }
+      if (r.ok && steps) { setFlow({ title: topic, kind: 'protocol', steps, aiGenerated: true }); return }
     } catch { /* fall through */ }
     showToast("Using today's protocol", 'neutral')
     setFlow({ title: fallback.title, kind: 'protocol', steps: fallback.steps })
@@ -278,6 +279,7 @@ export default function SelfImageDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={flow.kind === 'define' ? 'The line is drawn.' : DONE_TEXT}
+        onReflect={(flow.aiGenerated || flow.kind === 'define') ? undefined : (a) => reflectOnAnswers('Self-Image rep', a)}
         onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           const kind = flow.kind

@@ -17,6 +17,7 @@ import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -306,7 +307,7 @@ export default function StateShiftDashboard() {
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   const [shifts, setShifts] = useState(0)
   const [lastState, setLastState] = useState<MindState | null>(null)
-  const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[] } | null>(null)
+  const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [breath, setBreath] = useState<BreathProtocol | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
 
@@ -369,7 +370,7 @@ export default function StateShiftDashboard() {
     try {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'state-shift', topic })
       const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
-      if (r.ok && steps) { setFlow({ title: topic, steps }); return }
+      if (r.ok && steps) { setFlow({ title: topic, steps, aiGenerated: true }); return }
     } catch { /* fall through */ }
     showToast("Using today's reset", 'neutral')
     setFlow({ title: fallback.title, steps: fallback.steps })
@@ -399,6 +400,7 @@ export default function StateShiftDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
+        onReflect={flow.aiGenerated ? undefined : (a) => reflectOnAnswers('State Shift reset', a)}
         onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           const title = flow.title

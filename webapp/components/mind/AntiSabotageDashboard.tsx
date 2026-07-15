@@ -11,6 +11,7 @@ import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -125,7 +126,7 @@ export default function AntiSabotageDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   const [caught, setCaught] = useState(0)
-  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
+  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [catching, setCatching] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   // Cooldown so the catch can't be machine-gunned into a meaningless number —
@@ -184,7 +185,7 @@ export default function AntiSabotageDashboard() {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'anti-sabotage', topic })
       const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
       if (r.ok && steps) {
-        setFlow({ title: topic, kind: 'protocol', steps })
+        setFlow({ title: topic, kind: 'protocol', steps, aiGenerated: true })
         return
       }
     } catch { /* fall through */ }
@@ -205,6 +206,7 @@ export default function AntiSabotageDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
+        onReflect={flow.aiGenerated ? undefined : (a) => reflectOnAnswers('Anti-Sabotage session', a)}
         onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           setFlow(null)

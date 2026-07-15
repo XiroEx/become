@@ -7,7 +7,7 @@
 // Finishes with a per-system check moment, then onComplete(answers). This is the
 // seam the AI engine will later generate steps into.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, Check, ArrowRight } from 'lucide-react'
 
@@ -31,6 +31,7 @@ export default function GuidedFlow({
   doneText = 'Done. That counts.',
   onComplete,
   onExit,
+  onReflect,
 }: {
   title: string
   steps: GuidedStep[]
@@ -40,17 +41,39 @@ export default function GuidedFlow({
   doneText?: string
   onComplete: (answers: { prompt: string; answer: string }[]) => void
   onExit: () => void
+  /** Adaptive close: given the answers the user just typed, return a short
+   *  personalized reflection that REPLACES the final canned step. Only used on
+   *  flows that collected typed input; a null/thrown result quietly falls back to
+   *  the static close so the flow can never break on an AI failure. */
+  onReflect?: (answers: { prompt: string; answer: string }[]) => Promise<string | null>
 }) {
   const [idx, setIdx] = useState(0)
   const [answers, setAnswers] = useState<{ prompt: string; answer: string }[]>([])
   const [input, setInput] = useState('')
   const [done, setDone] = useState(false)
+  const [reflection, setReflection] = useState<string | null>(null)
+  const [reflecting, setReflecting] = useState(false)
+  const reflectStarted = useRef(false)
 
   const step = steps[idx]
   const isLast = idx === steps.length - 1
   const isChoice = !!step.choices?.length
   const isScale = !!step.scale
   const isInput = !!step.inputPrompt
+  // The final step of a typed flow becomes a generated reflection that responds
+  // to what the user actually wrote — so it's not the same canned close forever.
+  const flowHasInput = steps.some((s) => !!s.inputPrompt)
+  const isReflectStep = isLast && !!onReflect && flowHasInput
+
+  useEffect(() => {
+    if (!isReflectStep || reflectStarted.current) return
+    reflectStarted.current = true
+    setReflecting(true)
+    Promise.resolve(onReflect!(answers))
+      .then((t) => setReflection(t && t.trim() ? t.trim() : null))
+      .catch(() => setReflection(null))
+      .finally(() => setReflecting(false))
+  }, [isReflectStep, answers, onReflect])
 
   // Record an answer (when the step produces one) and move forward.
   const commit = (answer?: string) => {
@@ -101,6 +124,39 @@ export default function GuidedFlow({
                 <Check className="h-10 w-10" strokeWidth={3} style={{ color: accent }} />
               </span>
               <p className="mt-5 text-lg font-bold">{doneText}</p>
+            </motion.div>
+          ) : isReflectStep ? (
+            /* Adaptive close — a reflection written from what the user just typed. */
+            <motion.div
+              key="reflect"
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.18 }}
+              className="flex w-full max-w-sm flex-col items-center"
+            >
+              <p className="text-xs uppercase tracking-widest text-white/40">{title}</p>
+              <h2 className="mt-4 text-2xl font-extrabold leading-snug">
+                {reflecting ? 'Taking it in…' : 'Here’s what I see'}
+              </h2>
+              {reflecting ? (
+                <div className="mt-6 flex items-center gap-2.5 text-white/60">
+                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span className="text-sm">Reading what you wrote…</span>
+                </div>
+              ) : (
+                <p className="mt-3 text-base leading-relaxed text-white/80">{reflection ?? step.body}</p>
+              )}
+              <button
+                onClick={() => commit()}
+                disabled={reflecting}
+                className="mt-8 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95 disabled:opacity-40"
+              >
+                Finish <ArrowRight className="h-5 w-5" />
+              </button>
             </motion.div>
           ) : (
             <motion.div
