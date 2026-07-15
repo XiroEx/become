@@ -15,7 +15,7 @@ import { Fingerprint, Flame, Eye, Sparkles, ShieldCheck, RefreshCcw, Skull, Chec
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
-import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -357,38 +357,14 @@ export default function SelfImageDashboard() {
         </button>
       )}
 
-      {/* Today's identity protocol */}
-      {featured && (
-        <DailyDrop
-          Icon={Sparkles}
-          eyebrow="Today’s identity rep"
-          title={featured.title}
-          blurb={featured.blurb}
-          ctaLabel="Run"
-          color="text-violet-500"
-          onClick={() => setFlow({ title: featured.title, kind: 'protocol', steps: featured.steps })}
-        />
-      )}
-
-      {/* Personalize with AI — grounded in the user's real data + current identity */}
-      <button
-        type="button"
-        disabled={aiLoading}
-        onClick={() => runAiFlow('become the person I said I would be', featured ?? PROTOCOLS[0])}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-300 py-3 text-sm font-semibold text-violet-500 transition-colors hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-violet-500/30 dark:hover:bg-violet-500/10"
-      >
-        {aiLoading ? (
-          <>
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Building your session…
-          </>
-        ) : (
-          <><Sparkles className="h-4 w-4" /> Personalize with AI</>
-        )}
-      </button>
+      {/* Today's session — adaptive + memory-aware (the headline daily action) */}
+      <AdaptiveSession
+        loading={aiLoading}
+        onStart={() => runAiFlow('become the person I said I would be', featured ?? PROTOCOLS[0])}
+        color="text-violet-500"
+        bg="border-violet-200 bg-violet-50 dark:border-violet-500/30 dark:bg-violet-500/10"
+        subtitle="Shaped by who you’re becoming and your recent reflections."
+      />
 
       {/* Evidence wall — proof the new identity is real */}
       <div>
@@ -427,7 +403,7 @@ export default function SelfImageDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Identity protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.filter((p) => p.id !== featured?.id).map((p) => (
+          {PROTOCOLS.map((p) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}

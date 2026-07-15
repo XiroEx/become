@@ -5,7 +5,56 @@
 // LAUNCH guided flows, track record). No dead text: every card does something.
 
 import type { LucideIcon } from 'lucide-react'
-import { ChevronRight, Play } from 'lucide-react'
+import { ChevronRight, Play, Sparkles } from 'lucide-react'
+
+// The headline "do one now" — an AI session generated from the user's real data
+// (mood, streak, mission, wins, workouts) AND their own recent reflections, so it
+// builds on what they actually said instead of repeating a static pool. This is
+// the primary daily action; the static protocols below it stay as the instant,
+// always-available toolkit + reliable fallback.
+export function AdaptiveSession({
+  loading, onStart, color, bg,
+  title = 'Built from where you are right now',
+  subtitle = 'Shaped by your recent check-ins, wins, and workouts.',
+}: {
+  loading: boolean
+  onStart: () => void
+  color: string
+  /** border + tint classes, e.g. 'border-cyan-200 bg-cyan-50 dark:...'. */
+  bg: string
+  title?: string
+  subtitle?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onStart}
+      disabled={loading}
+      className={`w-full overflow-hidden rounded-2xl border p-4 text-left transition-transform active:scale-[0.99] disabled:opacity-80 ${bg}`}
+    >
+      <div className="flex items-center gap-3">
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/70 dark:bg-black/30 ${color}`}>
+          <Sparkles className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className={`text-[10px] font-bold uppercase tracking-widest ${color}`}>Today’s session · built for you</p>
+          <p className="text-sm font-bold text-zinc-900 dark:text-white">{loading ? 'Building your session…' : title}</p>
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{loading ? 'Reading your recent reps…' : subtitle}</p>
+        </div>
+        <span className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold ${loading ? 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300' : 'bg-zinc-900 text-white dark:bg-white dark:text-black'}`}>
+          {loading ? (
+            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <><Play className="h-3 w-3 fill-current" /> Begin</>
+          )}
+        </span>
+      </div>
+    </button>
+  )
+}
 
 export function SystemHero({
   Icon, title, tagline, statValue, statLabel, color, bg,

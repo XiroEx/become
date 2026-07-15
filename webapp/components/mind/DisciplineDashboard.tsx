@@ -8,12 +8,11 @@
 // separate dedicated home (not here).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair, Sparkles } from 'lucide-react'
+import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
-import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
-import { dailyPick } from '@/lib/mind/rotation'
+import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -423,29 +422,15 @@ export default function DisciplineDashboard() {
         )}
       </div>
 
-      {/* Personalize with AI — generates a discipline flow tailored to the user's
-          current block. Falls back to "Do It Anyway" without hard-erroring. */}
-      <button
-        type="button"
-        disabled={aiLoading}
-        onClick={() => runAiFlow('do the hard thing I am avoiding today')}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-300 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:hover:bg-red-500/10"
-      >
-        {aiLoading ? (
-          <>
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Building your session…
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            Personalize with AI
-          </>
-        )}
-      </button>
+      {/* Today's session — adaptive + memory-aware (the headline daily action).
+          Falls back to "Do It Anyway" without hard-erroring. */}
+      <AdaptiveSession
+        loading={aiLoading}
+        onStart={() => runAiFlow('do the hard thing I am avoiding today')}
+        color="text-red-500"
+        bg="border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10"
+        subtitle="Aimed at the hard thing you’ve actually been dodging."
+      />
 
       {/* Protocols — guided runs */}
       <div>

@@ -12,11 +12,11 @@
 // GuidedFlows; everything lands in the track record.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Wind, Timer, Play, Pause, RotateCcw, X, Check, Sparkles, Waves, Focus, Zap, Activity, VolumeX } from 'lucide-react'
+import { Wind, Timer, Play, Pause, RotateCcw, X, Check, Waves, Focus, Zap, Activity, VolumeX } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
-import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -447,38 +447,14 @@ export default function StateShiftDashboard() {
         <p className="mt-2 text-[11px] text-zinc-400">Name it and we’ll take you straight into the reset that fits.</p>
       </div>
 
-      {/* Today's reset */}
-      {featured && (
-        <DailyDrop
-          Icon={Sparkles}
-          eyebrow="Today’s reset"
-          title={featured.title}
-          blurb={featured.blurb}
-          ctaLabel="Run"
-          color="text-cyan-500"
-          onClick={() => setFlow({ title: featured.title, steps: featured.steps })}
-        />
-      )}
-
-      {/* Personalize with AI — a reset tuned to where the user actually is */}
-      <button
-        type="button"
-        disabled={aiLoading}
-        onClick={() => runAiFlow('shift my current state right now', featured ?? RESET_FLOWS[0])}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-300 py-3 text-sm font-semibold text-cyan-600 transition-colors hover:bg-cyan-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/30 dark:text-cyan-400 dark:hover:bg-cyan-500/10"
-      >
-        {aiLoading ? (
-          <>
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Building your reset…
-          </>
-        ) : (
-          <><Sparkles className="h-4 w-4" /> Personalize with AI</>
-        )}
-      </button>
+      {/* Today's session — adaptive + memory-aware (the headline daily action) */}
+      <AdaptiveSession
+        loading={aiLoading}
+        onStart={() => runAiFlow('shift my current state right now', featured ?? RESET_FLOWS[0])}
+        color="text-cyan-500"
+        bg="border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10"
+        subtitle="A reset shaped by your recent state check-ins and reflections."
+      />
 
       {/* Guided breathwork — the animated sessions */}
       <div>
@@ -504,7 +480,7 @@ export default function StateShiftDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Reset protocols</p>
         <div className="space-y-2">
-          {RESET_FLOWS.filter((f) => f.id !== featured?.id && f.id !== 'protect-the-state').map((f) => (
+          {RESET_FLOWS.filter((f) => f.id !== 'protect-the-state').map((f) => (
             <ToolkitCard
               key={f.id}
               Icon={f.Icon}
