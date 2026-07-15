@@ -4,7 +4,7 @@ import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import StateShiftTab from '@/components/mind/StateShiftTab'
+import StateShiftDashboard from '@/components/mind/StateShiftDashboard'
 import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
 import MissionTab from '@/components/mind/MissionTab'
 import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
@@ -61,7 +61,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
       </header>
 
       <div className="min-h-0 flex-1" data-tour="mind-section-body">
-        {section === 'state-shift'   && <StateShiftTab />}
+        {section === 'state-shift'   && <StateShiftDashboard />}
         {section === 'self-image'    && <SelfImageDashboard />}
         {section === 'mission'       && <MissionTab />}
         {section === 'discipline'    && <DisciplineDashboard />}
