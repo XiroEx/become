@@ -12,7 +12,7 @@
 // adaptive close; the headline is the memory-aware adaptive session.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Compass, Search, Zap, UserRound, Navigation, Flame, Check, ArrowRight } from 'lucide-react'
+import { Compass, Search, Zap, UserRound, Navigation, Flame, Check, ArrowRight, Pencil } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
@@ -161,6 +161,8 @@ export default function MissionDashboard() {
   const [moving, setMoving] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<MissionData>({ purpose: '', whyItMatters: '', dailyAction: '' })
 
   const load = useCallback(async () => {
     try {
@@ -223,6 +225,24 @@ export default function MissionDashboard() {
     } catch { showToast('Could not save', 'error') }
   }
 
+  const openEditor = () => {
+    if (mission) setEditForm({ ...mission })
+    setEditing(true)
+  }
+
+  const submitEdit = async () => {
+    const purpose = editForm.purpose.trim(), whyItMatters = editForm.whyItMatters.trim(), dailyAction = editForm.dailyAction.trim()
+    if (!purpose || !whyItMatters || !dailyAction) { showToast('Fill in all three to save', 'error'); return }
+    try {
+      const res = await fetch('/api/mind/mission', {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ purpose, whyItMatters, dailyAction }),
+      })
+      if (res.ok) { showToast('Mission updated. 🧭', 'success'); setEditing(false); load() }
+      else showToast('Could not save', 'error')
+    } catch { showToast('Could not save', 'error') }
+  }
+
   const runAiFlow = async (topic: string, fallback: typeof PROTOCOLS[0]) => {
     if (aiLoading) return
     setAiLoading(true)
@@ -270,10 +290,56 @@ export default function MissionDashboard() {
       />
 
       {/* ── Your Mission — the fuel + the daily forward move ── */}
-      {mission ? (
+      {mission && editing ? (
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
-          <p className="text-xs font-semibold uppercase tracking-widest text-blue-500">Your mission</p>
-          <p className="mt-2 text-base font-bold leading-snug text-zinc-900 dark:text-white">{mission.purpose}</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-500">Edit your mission</p>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Your purpose</label>
+              <textarea
+                value={editForm.purpose}
+                onChange={(e) => setEditForm((f) => ({ ...f, purpose: e.target.value }))}
+                rows={2}
+                className="w-full resize-none rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-blue-400 focus:outline-none dark:border-blue-500/30 dark:bg-zinc-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Why it matters</label>
+              <textarea
+                value={editForm.whyItMatters}
+                onChange={(e) => setEditForm((f) => ({ ...f, whyItMatters: e.target.value }))}
+                rows={3}
+                className="w-full resize-none rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-blue-400 focus:outline-none dark:border-blue-500/30 dark:bg-zinc-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Your daily forward move</label>
+              <textarea
+                value={editForm.dailyAction}
+                onChange={(e) => setEditForm((f) => ({ ...f, dailyAction: e.target.value }))}
+                rows={2}
+                className="w-full resize-none rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-blue-400 focus:outline-none dark:border-blue-500/30 dark:bg-zinc-900 dark:text-white"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={submitEdit} className="flex-1 rounded-xl bg-blue-500 py-2.5 text-sm font-bold text-white transition-transform active:scale-[0.98]">Save</button>
+            <button onClick={() => setEditing(false)} className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-white dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancel</button>
+          </div>
+        </div>
+      ) : mission ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-blue-500">Your mission</p>
+            <button
+              onClick={openEditor}
+              aria-label="Edit mission"
+              className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-blue-500 transition-colors hover:bg-blue-100 dark:hover:bg-blue-500/20"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-1 text-base font-bold leading-snug text-zinc-900 dark:text-white">{mission.purpose}</p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Why: {mission.whyItMatters}</p>
 
           <div className="mt-3 rounded-xl border border-blue-200/70 bg-white/60 px-3 py-2.5 dark:border-blue-500/20 dark:bg-black/20">

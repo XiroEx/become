@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Check, ArrowRight } from 'lucide-react'
+import { X, Check, ArrowRight, ChevronLeft } from 'lucide-react'
 
 export interface GuidedStep {
   title: string
@@ -91,6 +91,27 @@ export default function GuidedFlow({
     }
   }
 
+  // Step back one screen. If the previous step recorded an answer (typed / choice
+  // / scale), drop it so re-answering doesn't duplicate, and restore a typed
+  // answer into the box so it can be edited. Resets the adaptive-close state so it
+  // regenerates if the user returns to the final step.
+  const back = () => {
+    if (idx === 0 || done) return
+    const prev = idx - 1
+    const prevStep = steps[prev]
+    const prevProduced = !!prevStep.inputPrompt || !!prevStep.choices?.length || !!prevStep.scale
+    if (prevProduced) {
+      setInput(prevStep.inputPrompt ? (answers[answers.length - 1]?.answer ?? '') : '')
+      setAnswers((a) => a.slice(0, -1))
+    } else {
+      setInput('')
+    }
+    reflectStarted.current = false
+    setReflection(null)
+    setReflecting(false)
+    setIdx(prev)
+  }
+
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black text-white">
       {/* Subtle system-accent glow at the top — per-system uniqueness. */}
@@ -101,8 +122,17 @@ export default function GuidedFlow({
       />
       {/* Top bar */}
       <div className="relative z-10 flex items-center gap-3 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
-        <button onClick={onExit} aria-label="Exit" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+        <button onClick={onExit} aria-label="Exit" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
           <X className="h-5 w-5" />
+        </button>
+        {/* Back — go to the previous step (hidden on the first step and the done screen). */}
+        <button
+          onClick={back}
+          aria-label="Back"
+          disabled={idx === 0 || done}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 transition-opacity ${idx === 0 || done ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        >
+          <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="flex flex-1 gap-1.5">
           {steps.map((_, i) => (
