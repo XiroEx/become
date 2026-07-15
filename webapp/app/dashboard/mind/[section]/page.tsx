@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import StateShiftDashboard from '@/components/mind/StateShiftDashboard'
 import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
-import MissionTab from '@/components/mind/MissionTab'
+import MissionDashboard from '@/components/mind/MissionDashboard'
 import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
 import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
 import SocialTab from '@/components/mind/SocialTab'
@@ -63,7 +63,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
       <div className="min-h-0 flex-1" data-tour="mind-section-body">
         {section === 'state-shift'   && <StateShiftDashboard />}
         {section === 'self-image'    && <SelfImageDashboard />}
-        {section === 'mission'       && <MissionTab />}
+        {section === 'mission'       && <MissionDashboard />}
         {section === 'discipline'    && <DisciplineDashboard />}
         {section === 'anti-sabotage' && <AntiSabotageDashboard />}
         {section === 'social'        && <SocialTab />}

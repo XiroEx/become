@@ -56,7 +56,7 @@ export interface UserContext {
   nutritionToday?: { calories: number; protein: number; goalCalories?: number; goalProtein?: number; daysAgo: number }
   identityStatement?: string
   futureSelf?: string
-  mission?: { purpose?: string; dailyAction?: string }
+  mission?: { purpose?: string; whyItMatters?: string; dailyAction?: string }
   mindChapter?: number
   recentWins?: string[]
   /** A compact plain-text rendering for direct prompt injection. */
@@ -252,7 +252,7 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     if (vision?.identityStatement) ctx.identityStatement = vision.identityStatement as string
   }
   if (identity?.futureSelf) ctx.futureSelf = identity.futureSelf as string
-  if (mission) ctx.mission = { purpose: mission.purpose as string, dailyAction: mission.dailyAction as string }
+  if (mission) ctx.mission = { purpose: mission.purpose as string, whyItMatters: mission.whyItMatters as string, dailyAction: mission.dailyAction as string }
   if (wins?.length) ctx.recentWins = wins.map((w) => w.win as string).filter(Boolean)
 
   ctx.summaryText = renderSummary(ctx)
@@ -299,9 +299,13 @@ function renderSummary(c: UserContext): string {
     const when = n.daysAgo === 0 ? 'today' : `${n.daysAgo}d ago`
     lines.push(`Nutrition (${when}): ${n.calories} kcal${n.goalCalories ? `/${n.goalCalories}` : ''}, ${n.protein}g protein${n.goalProtein ? `/${n.goalProtein}g` : ''}.`)
   }
+  // Mission + Vision are the fuel — surface them prominently so every Mind
+  // segment's AI reasons from the user's actual purpose and future self.
+  if (c.mission?.purpose) lines.push(`Their mission / purpose: "${c.mission.purpose}".`)
+  if (c.mission?.whyItMatters) lines.push(`Why it matters to them: ${c.mission.whyItMatters}.`)
   if (c.identityStatement) lines.push(`Identity statement: "${c.identityStatement}".`)
-  else if (c.futureSelf) lines.push(`Future self: ${c.futureSelf}.`)
-  if (c.mission?.dailyAction) lines.push(`Today's commitment: ${c.mission.dailyAction}.`)
+  else if (c.futureSelf) lines.push(`Future self they're becoming: ${c.futureSelf}.`)
+  if (c.mission?.dailyAction) lines.push(`Their daily forward move: ${c.mission.dailyAction}.`)
   if (c.recentWins?.length) lines.push(`Recent wins: ${c.recentWins.join('; ')}.`)
   return lines.join('\n')
 }
