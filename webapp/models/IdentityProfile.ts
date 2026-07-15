@@ -11,6 +11,12 @@ export interface IIdentityProfile extends Document {
   startingPoint: StartingPoint
   onboardingCompleted: boolean
   evolutionScore: number    // 0–100, persisted on each GET so history is trackable
+  // Daily affirmation of the future self — identity installation through
+  // repetition. A breakable streak (parallels Discipline's non-negotiables) that
+  // pulls the user back to the Self-Image system each day.
+  affirmStreak: number
+  longestAffirmStreak: number
+  lastAffirmedKey: string | null   // YYYY-MM-DD of the last affirmation (local day)
   updatedAt: Date
   createdAt: Date
 }
@@ -32,6 +38,9 @@ const IdentityProfileSchema = new Schema<IIdentityProfile>(
     },
     onboardingCompleted: { type: Boolean, default: false },
     evolutionScore: { type: Number, default: 0, min: 0, max: 100 },
+    affirmStreak: { type: Number, default: 0 },
+    longestAffirmStreak: { type: Number, default: 0 },
+    lastAffirmedKey: { type: String, default: null },
   },
   { timestamps: true }
 )

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import StateShiftTab from '@/components/mind/StateShiftTab'
-import SelfImageTab from '@/components/mind/SelfImageTab'
+import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
 import MissionTab from '@/components/mind/MissionTab'
 import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
 import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
@@ -62,7 +62,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
 
       <div className="min-h-0 flex-1" data-tour="mind-section-body">
         {section === 'state-shift'   && <StateShiftTab />}
-        {section === 'self-image'    && <SelfImageTab streak={streak} />}
+        {section === 'self-image'    && <SelfImageDashboard />}
         {section === 'mission'       && <MissionTab />}
         {section === 'discipline'    && <DisciplineDashboard />}
         {section === 'anti-sabotage' && <AntiSabotageDashboard />}
