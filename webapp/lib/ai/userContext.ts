@@ -56,6 +56,8 @@ export interface UserContext {
   nutritionToday?: { calories: number; protein: number; goalCalories?: number; goalProtein?: number; daysAgo: number }
   identityStatement?: string
   futureSelf?: string
+  /** The Vision powerhouse — the user's future self across life domains. */
+  visionDomains?: { habits?: string; mind?: string; body?: string; relationships?: string; environment?: string }
   mission?: { purpose?: string; whyItMatters?: string; dailyAction?: string }
   mindChapter?: number
   recentWins?: string[]
@@ -250,6 +252,16 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     ctx.mindChapter = mind.chapter as number
     const vision = mind.vision as Record<string, unknown> | undefined
     if (vision?.identityStatement) ctx.identityStatement = vision.identityStatement as string
+    // Vision is the powerhouse — the future self across every domain. Carry the
+    // domains so every Mind segment can reason from where the user is headed.
+    if (vision) {
+      const dom: NonNullable<UserContext['visionDomains']> = {}
+      for (const k of ['habits', 'mind', 'body', 'relationships', 'environment'] as const) {
+        const v = vision[k]
+        if (typeof v === 'string' && v.trim()) dom[k] = v.trim()
+      }
+      if (Object.keys(dom).length) ctx.visionDomains = dom
+    }
   }
   if (identity?.futureSelf) ctx.futureSelf = identity.futureSelf as string
   if (mission) ctx.mission = { purpose: mission.purpose as string, whyItMatters: mission.whyItMatters as string, dailyAction: mission.dailyAction as string }
@@ -305,6 +317,14 @@ function renderSummary(c: UserContext): string {
   if (c.mission?.whyItMatters) lines.push(`Why it matters to them: ${c.mission.whyItMatters}.`)
   if (c.identityStatement) lines.push(`Identity statement: "${c.identityStatement}".`)
   else if (c.futureSelf) lines.push(`Future self they're becoming: ${c.futureSelf}.`)
+  if (c.visionDomains) {
+    const d = c.visionDomains
+    const parts = [
+      d.body && `body: ${d.body}`, d.mind && `mind: ${d.mind}`, d.habits && `habits: ${d.habits}`,
+      d.relationships && `relationships: ${d.relationships}`, d.environment && `environment: ${d.environment}`,
+    ].filter(Boolean)
+    if (parts.length) lines.push(`Their vision (future self across life) — ${parts.join('; ')}.`)
+  }
   if (c.mission?.dailyAction) lines.push(`Their daily forward move: ${c.mission.dailyAction}.`)
   if (c.recentWins?.length) lines.push(`Recent wins: ${c.recentWins.join('; ')}.`)
   return lines.join('\n')

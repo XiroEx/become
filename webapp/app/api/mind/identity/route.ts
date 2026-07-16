@@ -154,15 +154,29 @@ export async function PATCH(request: NextRequest) {
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json().catch(() => ({}))
-    if (body.action !== 'affirm') {
-      return NextResponse.json({ error: 'action must be "affirm"' }, { status: 400 })
+    if (body.action !== 'affirm' && body.action !== 'edit') {
+      return NextResponse.json({ error: 'action must be "affirm" or "edit"' }, { status: 400 })
     }
-    const tz = readTzOffsetFromBody(body)
 
     await dbConnect()
     const doc = await IdentityProfile.findOne({ userId: auth.userId })
     if (!doc) return NextResponse.json({ error: 'Define your identity first' }, { status: 404 })
 
+    // Edit the current/future self without disturbing the obstacle/startingPoint
+    // or the affirmation streak (lets the Self-Image pencil update just the text).
+    if (body.action === 'edit') {
+      const currentSelf = typeof body.currentSelf === 'string' ? body.currentSelf.trim().slice(0, 500) : ''
+      const futureSelf = typeof body.futureSelf === 'string' ? body.futureSelf.trim().slice(0, 500) : ''
+      if (!currentSelf || !futureSelf) {
+        return NextResponse.json({ error: 'currentSelf and futureSelf are required' }, { status: 400 })
+      }
+      doc.currentSelf = currentSelf
+      doc.futureSelf = futureSelf
+      await doc.save()
+      return NextResponse.json({ profile: { currentSelf: doc.currentSelf, futureSelf: doc.futureSelf } })
+    }
+
+    const tz = readTzOffsetFromBody(body)
     const today = localDateKey(null, tz)
     const yesterday = localDateKey(null, tz, new Date(Date.now() - DAY_MS))
     if (doc.lastAffirmedKey !== today) {

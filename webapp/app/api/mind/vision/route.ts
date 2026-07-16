@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindProgress from '@/models/MindProgress'
+import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
+
+const DAY_MS = 86_400_000
+
+// "Vision alignment" — how in-line the user's days have been with the future they
+// described. The daily-return hook: a 1–5 check that lands in alignmentHistory.
+function alignmentView(
+  history: Array<{ date: string; score: number }> | undefined,
+  tz: number,
+) {
+  const today = localDateKey(null, tz)
+  const cutoff = localDateKey(null, tz, new Date(Date.now() - 6 * DAY_MS)) // 7-day window (inclusive)
+  const recent = (history ?? []).filter((h) => h.date >= cutoff)
+  const avg7 = recent.length ? Math.round((recent.reduce((s, h) => s + h.score, 0) / recent.length) * 10) / 10 : 0
+  const todayEntry = (history ?? []).find((h) => h.date === today)
+  return { avg7, entries7: recent.length, todayScore: todayEntry?.score ?? null, checkedToday: !!todayEntry }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,10 +27,47 @@ export async function GET(request: NextRequest) {
 
     await dbConnect()
 
+    const tz = readTzOffset(new URL(request.url).searchParams)
     const progress = await MindProgress.findOne({ userId: auth.userId }).lean()
-    return NextResponse.json({ vision: progress?.vision ?? null })
+    const vision = progress?.vision ?? null
+    return NextResponse.json({ vision, alignment: alignmentView(vision?.alignmentHistory, tz) })
   } catch (err) {
     console.error('GET /api/mind/vision error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+// PATCH { action: 'align', score, tz } — record today's alignment (1–5),
+// idempotent per local day (replaces today's entry). Keeps a 90-day trail.
+export async function PATCH(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const body = await request.json().catch(() => ({}))
+    if (body.action !== 'align') {
+      return NextResponse.json({ error: 'action must be "align"' }, { status: 400 })
+    }
+    const score = Math.round(Number(body.score))
+    if (!Number.isFinite(score) || score < 1 || score > 5) {
+      return NextResponse.json({ error: 'score must be 1–5' }, { status: 400 })
+    }
+    const tz = readTzOffsetFromBody(body)
+
+    await dbConnect()
+    const doc = await MindProgress.findOne({ userId: auth.userId })
+    if (!doc?.vision) return NextResponse.json({ error: 'Set your vision first' }, { status: 404 })
+
+    const today = localDateKey(null, tz)
+    const hist = (doc.vision.alignmentHistory ?? []).filter((h) => h.date !== today)
+    hist.push({ date: today, score })
+    hist.sort((a, b) => a.date.localeCompare(b.date))
+    doc.vision.alignmentHistory = hist.slice(-90) // keep a rolling 90 days
+    await doc.save()
+
+    return NextResponse.json({ alignment: alignmentView(doc.vision.alignmentHistory, tz) })
+  } catch (err) {
+    console.error('PATCH /api/mind/vision error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

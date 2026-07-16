@@ -11,7 +11,7 @@
 // Plus interactive identity protocols, an evidence wall, and AI personalization.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Fingerprint, Flame, Eye, Sparkles, ShieldCheck, RefreshCcw, Skull, Check, Plus, TrendingUp } from 'lucide-react'
+import { Fingerprint, Flame, Eye, Sparkles, ShieldCheck, RefreshCcw, Skull, Check, Plus, TrendingUp, Pencil } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
@@ -174,6 +174,25 @@ export default function SelfImageDashboard() {
   const [affirming, setAffirming] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState<{ futureSelf: string; currentSelf: string }>({ futureSelf: '', currentSelf: '' })
+
+  const openEditor = () => {
+    if (profile) setEditForm({ futureSelf: profile.futureSelf, currentSelf: profile.currentSelf })
+    setEditing(true)
+  }
+  const submitEdit = async () => {
+    const futureSelf = editForm.futureSelf.trim(), currentSelf = editForm.currentSelf.trim()
+    if (!futureSelf || !currentSelf) { showToast('Fill in both to save', 'error'); return }
+    try {
+      const res = await fetch('/api/mind/identity', {
+        method: 'PATCH', headers: authHeaders(),
+        body: JSON.stringify({ action: 'edit', currentSelf, futureSelf }),
+      })
+      if (res.ok) { showToast('Updated. That’s who you are now. 🧬', 'success'); setEditing(false); load() }
+      else showToast('Could not save', 'error')
+    } catch { showToast('Could not save', 'error') }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -307,10 +326,47 @@ export default function SelfImageDashboard() {
       />
 
       {/* ── Who you're becoming — the distinct centerpiece ── */}
-      {profile ? (
+      {profile && editing ? (
         <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-500/30 dark:bg-violet-500/10">
-          <p className="text-xs font-semibold uppercase tracking-widest text-violet-500">Who you’re becoming</p>
-          <p className="mt-2 text-base font-bold leading-snug text-zinc-900 dark:text-white">{profile.futureSelf}</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-violet-500">Edit who you’re becoming</p>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">Who you’re becoming</label>
+              <textarea
+                value={editForm.futureSelf}
+                onChange={(e) => setEditForm((f) => ({ ...f, futureSelf: e.target.value }))}
+                rows={2}
+                className="w-full resize-none rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-violet-400 focus:outline-none dark:border-violet-500/30 dark:bg-zinc-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">The old self you’re leaving</label>
+              <textarea
+                value={editForm.currentSelf}
+                onChange={(e) => setEditForm((f) => ({ ...f, currentSelf: e.target.value }))}
+                rows={2}
+                className="w-full resize-none rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-violet-400 focus:outline-none dark:border-violet-500/30 dark:bg-zinc-900 dark:text-white"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={submitEdit} className="flex-1 rounded-xl bg-violet-500 py-2.5 text-sm font-bold text-white transition-transform active:scale-[0.98]">Save</button>
+            <button onClick={() => setEditing(false)} className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-500 transition-colors hover:bg-white dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800">Cancel</button>
+          </div>
+        </div>
+      ) : profile ? (
+        <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-500/30 dark:bg-violet-500/10">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-violet-500">Who you’re becoming</p>
+            <button
+              onClick={openEditor}
+              aria-label="Edit identity"
+              className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-violet-500 transition-colors hover:bg-violet-100 dark:hover:bg-violet-500/20"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-1 text-base font-bold leading-snug text-zinc-900 dark:text-white">{profile.futureSelf}</p>
           <p className="mt-1 text-xs text-zinc-500 line-through dark:text-zinc-400">was: {profile.currentSelf}</p>
 
           {/* Evolution bar — grows from real behavior across the app */}

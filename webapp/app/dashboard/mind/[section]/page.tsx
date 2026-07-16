@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
@@ -10,7 +10,7 @@ import MissionDashboard from '@/components/mind/MissionDashboard'
 import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
 import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
 import SocialTab from '@/components/mind/SocialTab'
-import VisionTab from '@/components/mind/VisionTab'
+import VisionDashboard from '@/components/mind/VisionDashboard'
 
 const SECTION_LABELS: Record<string, string> = {
   'state-shift': 'State Shift',
@@ -27,16 +27,6 @@ const VALID_SECTIONS = new Set(Object.keys(SECTION_LABELS))
 export default function MindSectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = use(params)
   const router = useRouter()
-  const [streak, setStreak] = useState(0)
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-    fetch(`/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.streakDays != null) setStreak(data.streakDays) })
-      .catch(() => {})
-  }, [])
 
   if (!VALID_SECTIONS.has(section)) {
     router.replace('/dashboard/mind')
@@ -67,7 +57,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
         {section === 'discipline'    && <DisciplineDashboard />}
         {section === 'anti-sabotage' && <AntiSabotageDashboard />}
         {section === 'social'        && <SocialTab />}
-        {section === 'vision'        && <VisionTab streak={streak} />}
+        {section === 'vision'        && <VisionDashboard />}
       </div>
     </PageTransition>
   )
