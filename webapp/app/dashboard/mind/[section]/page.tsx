@@ -9,7 +9,7 @@ import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
 import MissionDashboard from '@/components/mind/MissionDashboard'
 import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
 import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
-import SocialTab from '@/components/mind/SocialTab'
+import SocialDashboard from '@/components/mind/SocialDashboard'
 import VisionDashboard from '@/components/mind/VisionDashboard'
 
 const SECTION_LABELS: Record<string, string> = {
@@ -56,7 +56,7 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
         {section === 'mission'       && <MissionDashboard />}
         {section === 'discipline'    && <DisciplineDashboard />}
         {section === 'anti-sabotage' && <AntiSabotageDashboard />}
-        {section === 'social'        && <SocialTab />}
+        {section === 'social'        && <SocialDashboard />}
         {section === 'vision'        && <VisionDashboard />}
       </div>
     </PageTransition>

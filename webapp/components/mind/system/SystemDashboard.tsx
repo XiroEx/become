@@ -161,6 +161,7 @@ const KIND_LABEL: Record<string, string> = {
   'did-the-hard-thing': 'Hard thing done',
   'nonnegotiable': 'Non-negotiable set',
   'fight-check': 'Fight check',
+  'connect': 'Reached out',
 }
 
 function relDay(d: string): string {
