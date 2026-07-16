@@ -11,8 +11,7 @@ import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import MindLevelUpModal from '@/components/mind/MindLevelUpModal'
 import { getDailyPiece, CONTENT_PIECES, type ContentPiece } from '@/lib/mindContent'
 import {
-  CHAPTERS, SYSTEM_INFO, getUnlockedSystems,
-  getLevelProgress, MAX_LEVEL,
+  CHAPTERS, SYSTEM_INFO, getXpToNextChapter, isReadyToLevelUp, getUnlockedSystems,
   type XpMilestone,
 } from '@/lib/mindXP'
 import { Card } from '@/components/ui'
@@ -211,9 +210,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
   const { profile, evolution } = identity
   const chapter = progress?.chapter ?? 1
   const xp = progress?.xp ?? 0
-  // 50-level layer (5 tiers × 10) derived from total XP — the engagement view on
-  // top of the per-tier unlock gating (chapter).
-  const lvl = getLevelProgress(xp)
+  const xpProgress = progress?.xpProgress ?? null
   const readyToLevelUp = progress?.readyToLevelUp ?? false
   const canSelfDeclare = progress?.canSelfDeclare ?? false
   const unlockedSystems = progress?.unlockedSystems ?? getUnlockedSystems(chapter)
@@ -258,7 +255,7 @@ export default function MindHub({ onNavigate, streak }: Props) {
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className={`text-xs font-bold uppercase tracking-widest ${currentChapterData.color} mb-0.5`}>
-                Level {lvl.level} / {MAX_LEVEL} · {currentChapterData.name}
+                Ch.{chapter} · {currentChapterData.name}
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 italic">&ldquo;{currentChapterData.theme}&rdquo;</p>
             </div>
@@ -314,26 +311,25 @@ export default function MindHub({ onNavigate, streak }: Props) {
           {/* Divider */}
           <div className="mt-3 mb-3 h-px bg-zinc-900/10 dark:bg-white/10" />
 
-          {/* XP bar — per-LEVEL progression (50-level layer). The next tier's
-              segment unlocks when this level crosses into it. */}
-          {!lvl.atMax ? (
+          {/* XP bar — chapter progression */}
+          {xpProgress && chapter < 5 ? (
             <div>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs text-zinc-500">{xp} XP</p>
                 <p className={`text-xs font-semibold ${currentChapterData.color}`}>
-                  {lvl.xpIntoLevel}/{lvl.xpForLevel} → Level {lvl.level + 1}
+                  {xpProgress.current}/{xpProgress.needed} → {nextChapterData?.name}
                 </p>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/30 dark:bg-zinc-900/30">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${lvl.pct}%` }}
+                  animate={{ width: `${xpProgress.pct}%` }}
                   transition={{ duration: 0.8, ease: 'easeOut' }}
                   className={`h-full rounded-full bg-gradient-to-r ${
-                    lvl.tier === 1 ? 'from-blue-400 to-blue-600' :
-                    lvl.tier === 2 ? 'from-amber-400 to-amber-600' :
-                    lvl.tier === 3 ? 'from-red-400 to-red-600' :
-                    lvl.tier === 4 ? 'from-orange-400 to-orange-600' :
+                    chapter === 1 ? 'from-blue-400 to-blue-600' :
+                    chapter === 2 ? 'from-amber-400 to-amber-600' :
+                    chapter === 3 ? 'from-red-400 to-red-600' :
+                    chapter === 4 ? 'from-orange-400 to-orange-600' :
                     'from-emerald-400 to-emerald-600'
                   }`}
                 />
