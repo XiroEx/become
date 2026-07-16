@@ -205,12 +205,22 @@ export interface MoveEngine {
 
 // ─── Scene contract (UI) ──────────────────────────────────────────────────────
 
+/** A reflective answer the user gave during a session move (a picked option, a
+ *  typed line). Reported up so the session can persist it to MindJournal and the
+ *  NEXT session can build on what they actually said (like the arsenal flows). */
+export interface SessionAnswer {
+  q: string
+  a: string
+}
+
 export interface SceneProps {
   move: Move
   /** Breath scenes: the resolved protocol (player resolves 'auto' from live state). */
   protocol?: BreathProtocol
-  /** Advance to the next move. */
-  onDone: () => void
+  /** Advance to the next move. Scenes that elicit a real reflection (a choice, a
+   *  typed answer) pass it so the session can remember it; recitation/structural
+   *  scenes just call onDone(). */
+  onDone: (answer?: SessionAnswer) => void
   /** state-check only: report the chosen state up to the player. */
   onState?: (state: MindState) => void
   /** Admin lab preview: scenes that persist (state/win/discipline) skip their

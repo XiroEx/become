@@ -7,7 +7,7 @@
 // state-check answer (which resolves the breath protocol), and completion (which
 // posts to /api/mind/session to award the daily XP once).
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
@@ -19,6 +19,7 @@ import {
   breathForState,
   type MindSessionPlan,
   type BreathProtocol,
+  type SessionAnswer,
 } from '@/lib/mind/moves'
 import StateCheckScene from './scenes/StateCheckScene'
 import BreathScene from './scenes/BreathScene'
@@ -104,12 +105,28 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const move =
     rawMove?.altPositive && liveState === 'locked_in' ? rawMove.altPositive : rawMove
 
+  // The reflective answers the user gave this session (a picked choice, etc.),
+  // deduped by question. Persisted to MindJournal on completion so the NEXT
+  // session can build on what they actually said — the same memory the arsenal
+  // flows use.
+  const answersRef = useRef<SessionAnswer[]>([])
+
   const complete = useCallback(async () => {
     setStage('payoff')
     // Admin lab preview: show the payoff but never write (no XP/streak/recency).
     if (preview) {
       setResult({ xpAwarded: 0, readyToLevelUp: false })
       return
+    }
+    // Remember this session's answers (best-effort) so tomorrow's session builds
+    // on them instead of asking from scratch.
+    if (answersRef.current.length) {
+      const lines = answersRef.current.map((x) => ({ prompt: x.q, answer: x.a }))
+      void fetch('/api/mind/journal', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ system: 'session', kind: 'session', title: plan.intro.title, lines }),
+      }).catch(() => {})
     }
     try {
       // Report the EFFECTIVE kinds the player actually showed — so a locked-in
@@ -133,9 +150,17 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
     } catch {
       /* payoff still shows; XP is best-effort */
     }
-  }, [plan.moves, liveState, preview])
+  }, [plan.moves, liveState, preview, plan.intro.title])
 
-  const next = useCallback(() => {
+  const next = useCallback((answer?: SessionAnswer) => {
+    // Capture a real reflection (keep the latest per question, so re-answering
+    // after a back overwrites instead of duplicating).
+    if (answer?.a) {
+      const arr = answersRef.current
+      const at = arr.findIndex((x) => x.q === answer.q)
+      if (at >= 0) arr[at] = answer
+      else arr.push(answer)
+    }
     // Public share: any attempt to advance prompts sign-in instead of progressing.
     if (gated) { onRequireAuth?.(); return }
     if (index >= total - 1) {

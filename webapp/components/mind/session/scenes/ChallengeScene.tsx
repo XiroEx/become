@@ -91,7 +91,7 @@ export default function ChallengeScene({ move, onDone, preview }: SceneProps) {
                   <p className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-green-300">
                     <Check className="h-4 w-4" /> Already done today
                   </p>
-                  <button onClick={onDone} className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95">
+                  <button onClick={() => onDone()} className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95">
                     Continue <ArrowRight className="h-5 w-5" />
                   </button>
                 </>
@@ -105,7 +105,7 @@ export default function ChallengeScene({ move, onDone, preview }: SceneProps) {
                     {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
                     I did it
                   </button>
-                  <button onClick={onDone} className="text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+                  <button onClick={() => onDone()} className="text-sm font-medium text-white/40 transition-colors hover:text-white/70">
                     Not today
                   </button>
                 </div>

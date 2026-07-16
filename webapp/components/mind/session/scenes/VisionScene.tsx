@@ -89,7 +89,7 @@ export default function VisionScene({ move, onDone }: SceneProps) {
         >
           Build your vision <ArrowRight className="h-4 w-4" />
         </Link>
-        <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+        <button onClick={() => onDone()} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
           Skip
         </button>
       </div>
