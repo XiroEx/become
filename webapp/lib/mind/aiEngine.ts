@@ -17,7 +17,7 @@
 
 import { buildMove } from './composeSession'
 import { runAiTask } from '@/lib/ai/runClient'
-import { stripMarkdown, clampWords } from '@/lib/ai/sanitize'
+import { stripMarkdown, clampTitle } from '@/lib/ai/sanitize'
 import {
   AFFIRM_STATEMENT_KINDS,
   type Move,
@@ -66,10 +66,12 @@ function clean(v: unknown): string | undefined {
   const c = stripMarkdown(s)
   return c || undefined
 }
-/** Title: cleaned + clamped to a sane length (questions can be long; runaway isn't). */
+/** Title: cleaned + clamped to a sane length. Questions run a full sentence or
+ *  two — those pass whole; only a runaway is trimmed, never chopped mid-sentence
+ *  (the old 16-word hard cap was cutting real questions off with no ending). */
 function cleanTitle(v: unknown): string | undefined {
   const c = clean(v)
-  return c ? clampWords(c, 16) : undefined
+  return c ? clampTitle(c, 30) : undefined
 }
 
 /** Validate AI options → 2–5 {label, response?} (coherent answer set). */

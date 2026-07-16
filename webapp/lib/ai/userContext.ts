@@ -299,7 +299,10 @@ function renderSummary(c: UserContext): string {
     const bits = [`${s.completed} done`, `${s.missed} missed`]
     if (s.overdue) bits.push(`${s.overdue} overdue`)
     let line = `Schedule: ${bits.join(', ')}.`
-    if (behind > 0) line += ` User is BEHIND on this program (${behind} session${behind === 1 ? '' : 's'}) — acknowledge it and help them restart, don't treat today as Day 1.`
+    // State it as a fact, not an instruction. The old imperative ("acknowledge it
+    // and help them restart") bled into the mind-session composer and made every
+    // move fixate on the workout backlog. Each consumer decides what to do with it.
+    if (behind > 0) line += ` User is ${behind} session${behind === 1 ? '' : 's'} behind on this program.`
     if (s.nextWorkout) {
       const when = s.nextWorkout.inDays === 0 ? 'today' : s.nextWorkout.inDays === 1 ? 'tomorrow' : `in ${s.nextWorkout.inDays}d`
       line += ` Next: ${s.nextWorkout.dayLabel ? `${s.nextWorkout.dayLabel} — ` : ''}${s.nextWorkout.title} (${when}).`

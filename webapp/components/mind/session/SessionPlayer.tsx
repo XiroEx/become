@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
+import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment } from '@/lib/mind/recommendSegment'
@@ -145,6 +145,16 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
     }
   }, [gated, onRequireAuth, index, total, complete])
 
+  // Step back one move (or back to the intro from the first move). Re-mounts the
+  // prior scene fresh — like the arsenal flows' back button — so the user can
+  // revisit / redo a beat instead of being locked forward.
+  const back = useCallback(() => {
+    if (stage !== 'move') return
+    if (index <= 0) { setStage('intro'); return }
+    setIndex((i) => Math.max(0, i - 1))
+  }, [stage, index])
+  const canGoBack = stage === 'move' && !gated
+
   const handleLevelUp = useCallback(async () => {
     if (advancing) return
     setAdvancing(true)
@@ -186,7 +196,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
       className="fixed inset-0 z-[100] flex flex-col bg-black text-white"
       style={{ paddingTop: 'env(safe-area-inset-top,0px)', paddingBottom: 'env(safe-area-inset-bottom,0px)' }}
     >
-      {/* Top bar: progress segments + exit */}
+      {/* Top bar: exit + back + progress segments */}
       <div className="flex items-center gap-3 px-4 pt-3">
         <button
           onClick={onExit}
@@ -195,6 +205,15 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
         >
           <X className="h-4 w-4" />
         </button>
+        {canGoBack && (
+          <button
+            onClick={back}
+            aria-label="Previous move"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        )}
         <div className="flex flex-1 gap-1.5">
           {Array.from({ length: total }).map((_, i) => (
             <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
