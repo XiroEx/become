@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
+import { recommendSegment } from '@/lib/mind/recommendSegment'
 import {
   BREATH_PROTOCOLS,
   breathForState,
@@ -70,6 +71,9 @@ export interface SessionPlayerProps {
    *  so the recipient is prompted to sign in to Become to continue. */
   gated?: boolean
   onRequireAuth?: () => void
+  /** Systems the user has unlocked — scopes the post-session "next segment" CTA
+   *  to what they can actually open. Defaults to all seven. */
+  unlockedSystems?: string[]
 }
 
 type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
@@ -81,7 +85,7 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth }: SessionPlayerProps) {
+export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth, unlockedSystems }: SessionPlayerProps) {
   const router = useRouter()
   // Gated (public share) runs are always read-only — never write progress.
   preview = preview || gated
@@ -158,6 +162,13 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
       setAdvancing(false)
     }
   }, [advancing, onExit])
+
+  // The segment to send them to when the session ends — chosen from how they
+  // checked in and what today's session leaned on.
+  const nextFocus = useMemo(
+    () => recommendSegment({ state: liveState, moveKinds: plan.moves.map((m) => m.kind), unlocked: unlockedSystems }),
+    [liveState, plan.moves, unlockedSystems],
+  )
 
   // Resolve the breath protocol from the live state-check answer ('auto').
   const resolvedProtocol = useMemo<BreathProtocol | undefined>(() => {
@@ -343,18 +354,18 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 </>
               ) : (
                 <>
+                  {/* Post-session bridge: send them to the ONE arsenal segment that
+                      fits how they came in + what today leaned on. */}
                   <button
-                    onClick={onExit}
-                    className="mt-10 w-full max-w-xs rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
+                    onClick={() => router.push(`/dashboard/mind/${nextFocus.systemId}`)}
+                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
                   >
-                    Done
+                    Next: {nextFocus.label}
+                    <ArrowRight className="h-5 w-5" />
                   </button>
-                  <button
-                    onClick={() => router.push('/dashboard/mind/arsenal')}
-                    className="mt-3 flex items-center gap-1 text-sm font-medium text-white/60 transition-colors hover:text-white"
-                  >
-                    Explore your arsenal
-                    <ArrowRight className="h-4 w-4" />
+                  <p className="mt-2.5 max-w-xs text-xs leading-relaxed text-white/50">{nextFocus.reason}</p>
+                  <button onClick={onExit} className="mt-4 text-sm font-medium text-white/50 transition-colors hover:text-white">
+                    Done for now
                   </button>
                 </>
               )}

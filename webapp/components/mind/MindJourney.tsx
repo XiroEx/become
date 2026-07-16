@@ -202,6 +202,7 @@ export default function MindJourney() {
     return (
       <SessionPlayer
         plan={effectivePlan}
+        unlockedSystems={progress?.unlockedSystems ?? getUnlockedSystems(progress?.chapter ?? 1)}
         onExit={() => {
           setPlaying(false)
           // Finished a session → drop the cache and warm a fresh one in the
