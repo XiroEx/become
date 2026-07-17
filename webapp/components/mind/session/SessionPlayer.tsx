@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
+import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2, Share2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
@@ -96,6 +96,8 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
   const [advancing, setAdvancing] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [shared, setShared] = useState(false)
 
   const total = plan.moves.length
   const rawMove = plan.moves[index]
@@ -179,6 +181,33 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
     setIndex((i) => Math.max(0, i - 1))
   }, [stage, index])
   const canGoBack = stage === 'move' && !gated
+
+  // Share the session you just did — snapshots the plan into a public, read-only
+  // link (recipients sign in to try it). Lives on the payoff, not the hub: you
+  // share a session after you've done it, not one you haven't started.
+  const handleShare = useCallback(async () => {
+    if (sharing) return
+    setSharing(true)
+    try {
+      const res = await fetch('/api/mind/share', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ kind: 'session', title: plan.intro.title, plan }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) {
+        const full = `${window.location.origin}${data.url}`
+        setShared(true)
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          try { await navigator.share({ title: 'A Become session for you', url: full }) } catch { /* dismissed */ }
+        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          try { await navigator.clipboard.writeText(full) } catch { /* no clipboard */ }
+        }
+      }
+    } finally {
+      setSharing(false)
+    }
+  }, [sharing, plan])
 
   const handleLevelUp = useCallback(async () => {
     if (advancing) return
@@ -417,6 +446,17 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                   <button onClick={onExit} className="mt-4 text-sm font-medium text-white/50 transition-colors hover:text-white">
                     Done for now
                   </button>
+                  {/* Share the session you just finished (not one you haven't started). */}
+                  {!preview && (
+                    <button
+                      onClick={handleShare}
+                      disabled={sharing}
+                      className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-white/40 transition-colors hover:text-white/70 disabled:opacity-60"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      {sharing ? 'Creating link…' : shared ? 'Link ready — copied' : 'Share this session'}
+                    </button>
+                  )}
                 </>
               )}
             </motion.div>

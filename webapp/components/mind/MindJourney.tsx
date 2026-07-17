@@ -8,7 +8,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Brain, ArrowRight, Check, ChevronRight, Flame, Share2 } from 'lucide-react'
+import { Brain, ArrowRight, Check, ChevronRight, Flame } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
@@ -65,8 +65,6 @@ export default function MindJourney() {
   const [progress, setProgress] = useState<ProgressData | null>(null)
   const [completedToday, setCompletedToday] = useState(false)
   const [streak, setStreak] = useState(0)
-  const [sharing, setSharing] = useState(false)
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [lastBreathAt, setLastBreathAt] = useState<number | null>(null)
@@ -170,32 +168,6 @@ export default function MindJourney() {
     setSessionSeed(Date.now())
     setPlaying(true)
   }, [])
-
-  // Share the current composed session — snapshots the plan into a public link.
-  const handleShare = useCallback(async () => {
-    if (!effectivePlan || sharing) return
-    setSharing(true)
-    try {
-      const res = await fetch('/api/mind/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` },
-        body: JSON.stringify({ kind: 'session', title: effectivePlan.intro.title, plan: effectivePlan }),
-      })
-      const data = await res.json().catch(() => null)
-      if (res.ok && data?.url) {
-        const full = `${window.location.origin}${data.url}`
-        setShareUrl(full)
-        // Native share sheet on mobile; clipboard fallback elsewhere.
-        if (typeof navigator !== 'undefined' && navigator.share) {
-          try { await navigator.share({ title: 'A Become session for you', url: full }) } catch { /* dismissed */ }
-        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          try { await navigator.clipboard.writeText(full) } catch { /* no clipboard */ }
-        }
-      }
-    } finally {
-      setSharing(false)
-    }
-  }, [effectivePlan, sharing])
 
   // ── Immersive session overlay ──
   if (playing && effectivePlan) {
@@ -332,18 +304,6 @@ export default function MindJourney() {
               </p>
             )}
           </button>
-          {/* Share this session as a public, read-only link. */}
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            <Share2 className="h-4 w-4" />
-            {sharing ? 'Creating link…' : shareUrl ? 'Link ready — copied' : 'Share this session'}
-          </button>
-          {shareUrl && (
-            <p className="mt-1.5 break-all text-center text-[11px] text-zinc-400">{shareUrl}</p>
-          )}
         </motion.div>
       ) : null}
 
