@@ -13,6 +13,7 @@ import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
+import TrainingGrounds from '@/components/mind/TrainingGrounds'
 import { composeSession } from '@/lib/mind/composeSession'
 import { readMindPlanCache, invalidateMindSession } from '@/lib/mind/sessionCache'
 import { precomposeMindSession } from '@/lib/mind/precompose'
@@ -20,12 +21,31 @@ import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
 
+interface LevelProgress { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
+
 interface ProgressData {
   chapter: number
   xp: number
   xpProgress: { pct: number } | null
   unlockedSystems: string[]
   vision: { identityStatement?: string } | null
+  // Split level/chapter model
+  level: number
+  levelProgress: LevelProgress | null
+  mainSessionCount: number
+  sessionsIntoChapter: { done: number; needed: number; toNext: number } | null
+  mainSessionAvailable: boolean
+  nextMainSessionAt: number | null
+}
+
+/** "in 12h 30m" until the next main session unlocks (null once available). */
+function untilLabel(ts: number | null): string | null {
+  if (!ts) return null
+  const ms = ts - Date.now()
+  if (ms <= 0) return null
+  const h = Math.floor(ms / 3_600_000)
+  const m = Math.floor((ms % 3_600_000) / 60_000)
+  return h > 0 ? `in ${h}h ${m}m` : `in ${m}m`
 }
 
 const MOVE_CHIP: Record<MoveKind, string> = {
@@ -63,7 +83,6 @@ export default function MindJourney() {
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
-  const [completedToday, setCompletedToday] = useState(false)
   const [streak, setStreak] = useState(0)
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
@@ -98,11 +117,16 @@ export default function MindJourney() {
           xpProgress: p.xpProgress ?? null,
           unlockedSystems: p.unlockedSystems ?? getUnlockedSystems(p.chapter ?? 1),
           vision: p.vision ?? null,
+          level: p.level ?? 1,
+          levelProgress: p.levelProgress ?? null,
+          mainSessionCount: p.mainSessionCount ?? 0,
+          sessionsIntoChapter: p.sessionsIntoChapter ?? null,
+          mainSessionAvailable: p.mainSessionAvailable ?? true,
+          nextMainSessionAt: p.nextMainSessionAt ?? null,
         })
       }
       if (sessionRes.ok) {
         const s = await sessionRes.json()
-        setCompletedToday(!!s.completedToday)
         setStreak(s.streak ?? 0)
         setLastBreathAt(typeof s.lastBreathAt === 'number' ? s.lastBreathAt : null)
         setRecentKinds(Array.isArray(s.recentKinds) ? s.recentKinds : [])
@@ -212,8 +236,12 @@ export default function MindJourney() {
 
   const chapter = progress?.chapter ?? 1
   const chapterName = CHAPTERS[chapter - 1]?.name ?? 'Reset'
-  const pct = progress?.xpProgress?.pct ?? 0
-  const unlockedCount = progress?.unlockedSystems.length ?? 1
+  const level = progress?.level ?? 1
+  const levelPct = progress?.levelProgress?.pct ?? 0
+  const xpToNext = progress?.levelProgress?.xpToNext ?? 0
+  const chSessions = progress?.sessionsIntoChapter ?? null
+  const available = progress?.mainSessionAvailable ?? true
+  const cooldownLabel = untilLabel(progress?.nextMainSessionAt ?? null)
 
   return (
     <PageTransition className="flex min-h-[78vh] flex-col pb-6">
@@ -231,13 +259,17 @@ export default function MindJourney() {
             </span>
           )}
         </div>
+        {/* LEVEL — per-user, XP-driven, uncapped (from ALL mind activity). */}
         <div className="mt-3 flex items-center gap-3">
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-            Ch.{chapter} · {chapterName}
+          <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+            Lv {level}
           </span>
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${levelPct}%` }} />
           </div>
+          <span className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
+            {xpToNext} XP
+          </span>
         </div>
 
         {/* Visual chapter path */}
@@ -267,6 +299,12 @@ export default function MindJourney() {
             )
           })}
         </div>
+        <p className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+          Ch.{chapter} · {chapterName}
+          {chapter < CHAPTERS.length && chSessions
+            ? ` — ${chSessions.done}/${chSessions.needed} sessions to Ch.${chapter + 1}`
+            : ' — final chapter'}
+        </p>
       </header>
 
       {/* Centered focus area — fills the space below the header */}
@@ -274,7 +312,8 @@ export default function MindJourney() {
       {/* The next move — always the instant (deterministic) session; if an
           AI-composed plan is cached it's used transparently. Never blocks on
           generation (that happens in the background on app open). */}
-      {effectivePlan ? (
+      {available && effectivePlan ? (
+        // Main session available (first ever, or 20h since the last one).
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
             onClick={begin}
@@ -282,7 +321,7 @@ export default function MindJourney() {
             className="group relative w-full rounded-3xl bg-zinc-900 p-6 text-left text-white shadow-sm transition-transform active:scale-[0.98] dark:bg-zinc-800"
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-white/50">
-              {completedToday ? 'Go again' : 'Today'}
+              Today&apos;s session
             </p>
             <h2 className="mt-2 text-3xl font-extrabold">{effectivePlan.intro.title}</h2>
             <p className="mt-2 max-w-xs text-sm text-white/70">{effectivePlan.intro.subtitle}</p>
@@ -294,33 +333,17 @@ export default function MindJourney() {
               ))}
             </div>
             <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 text-base font-bold text-zinc-900 transition-transform group-active:scale-95">
-              {completedToday ? 'Train again' : 'Begin'}
+              Begin
               <ArrowRight className="h-5 w-5" />
             </span>
-            {completedToday && (
-              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-white/60">
-                <Check className="h-3.5 w-3.5" />
-                Done today{streak > 0 ? ` · ${streak}-day streak` : ''}
-              </p>
-            )}
           </button>
         </motion.div>
-      ) : null}
-
-      {/* More → Arsenal */}
-      <Link
-        href="/dashboard/mind/arsenal"
-        data-tour="mind-arsenal-link"
-        className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-      >
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white">Your Arsenal</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Meditations, journaling, goals &amp; quick sessions — {unlockedCount} unlocked
-          </p>
-        </div>
-        <ChevronRight className="h-5 w-5 text-zinc-400" />
-      </Link>
+      ) : (
+        // In the 20h cooldown → Training Grounds (arsenal, no quick-play).
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <TrainingGrounds unlocked={progress?.unlockedSystems ?? []} nextInLabel={cooldownLabel} />
+        </motion.div>
+      )}
 
       {/* The Becoming — progression / training log */}
       <Link

@@ -10,7 +10,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2, Share2 } from 'lucide-react'
+import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Share2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
@@ -41,14 +41,21 @@ import ContrastScene from './scenes/ContrastScene'
 interface CompleteResult {
   xpAwarded: number
   completions?: number
-  readyToLevelUp: boolean
   streak?: number
-  /** Banked toward the lifetime Becoming score this rep (incl. training reps). */
-  banked?: number
   /** Lifetime Becoming score after this rep. */
   xpBank?: number
-  /** Daily progression XP is spent — this was a training rep (still banks score). */
+  /** This completion landed inside the 20h cooldown (didn't count toward chapter). */
   trainingMode?: boolean
+  // ── Split level/chapter model ──
+  level?: number
+  previousLevel?: number
+  leveledUp?: boolean
+  levelProgress?: { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
+  chapter?: number
+  chapterAdvanced?: boolean
+  newlyUnlocked?: string[]
+  currentChapter?: { name?: string; theme?: string }
+  sessionsIntoChapter?: { done: number; needed: number; toNext: number }
 }
 
 interface LevelUpResult {
@@ -95,7 +102,6 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const [liveState, setLiveState] = useState<MindState | null>(initialLiveState)
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
-  const [advancing, setAdvancing] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState(false)
 
@@ -117,7 +123,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
     setStage('payoff')
     // Admin lab preview: show the payoff but never write (no XP/streak/recency).
     if (preview) {
-      setResult({ xpAwarded: 0, readyToLevelUp: false })
+      setResult({ xpAwarded: 0 })
       return
     }
     // Remember this session's answers (best-effort) so tomorrow's session builds
@@ -208,24 +214,6 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
       setSharing(false)
     }
   }, [sharing, plan])
-
-  const handleLevelUp = useCallback(async () => {
-    if (advancing) return
-    setAdvancing(true)
-    try {
-      const res = await fetch('/api/mind/progress/levelup', { method: 'POST', headers: authHeaders() })
-      if (res.ok) {
-        setLevelUp((await res.json()) as LevelUpResult)
-        setStage('levelup')
-      } else {
-        onExit() // gracefully bail if it can't advance
-      }
-    } catch {
-      onExit()
-    } finally {
-      setAdvancing(false)
-    }
-  }, [advancing, onExit])
 
   // The segment to send them to when the session ends — chosen from how they
   // checked in and what today's session leaned on.
@@ -369,14 +357,14 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 <Check className="h-10 w-10" strokeWidth={3} />
               </motion.span>
               <h1 className="text-2xl font-extrabold">
-                {result && (result.completions ?? 1) > 1 ? 'Another rep in.' : 'You showed up.'}
+                {result?.leveledUp ? 'Level up.' : result?.trainingMode ? 'Another rep in.' : 'You showed up.'}
               </h1>
               <p className="mt-2 text-white/60">
-                {result && result.xpAwarded === 0
-                  ? "You've maxed today's XP — but reps still count."
+                {result?.leveledUp
+                  ? `You climbed to Level ${result.level}.`
                   : "That's how it's built — one rep at a time."}
               </p>
-              {result && result.xpAwarded > 0 ? (
+              {result && (result.xpAwarded ?? 0) > 0 && (
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -385,25 +373,28 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 >
                   +{result.xpAwarded} XP
                 </motion.p>
-              ) : result && result.trainingMode && (result.banked ?? 0) > 0 ? (
-                <motion.p
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="mt-5 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-violet-300"
-                >
-                  Training · +{result.banked} banked
-                </motion.p>
-              ) : null}
-              {result && typeof result.xpBank === 'number' && result.xpBank > 0 && (
-                <motion.p
+              )}
+              {/* Level bar — the per-user, XP-driven progress. */}
+              {result?.level != null && (
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.55 }}
-                  className="mt-3 text-xs font-medium uppercase tracking-widest text-white/40"
+                  transition={{ delay: 0.5 }}
+                  className="mt-4 w-full max-w-xs"
                 >
-                  Becoming score {result.xpBank.toLocaleString()}
-                </motion.p>
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className={result.leveledUp ? 'text-violet-300' : 'text-white/70'}>Level {result.level}</span>
+                    {result.levelProgress && <span className="text-white/40 tabular-nums">{result.levelProgress.xpToNext} XP to next</span>}
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-green-400 transition-all duration-700" style={{ width: `${result.levelProgress?.pct ?? 0}%` }} />
+                  </div>
+                </motion.div>
+              )}
+              {result?.trainingMode && (
+                <p className="mt-3 max-w-xs text-xs text-white/40">
+                  You&apos;re in cooldown — this rep leveled you up but didn&apos;t count toward your chapter.
+                </p>
               )}
               {result && typeof result.streak === 'number' && result.streak > 1 && (
                 <motion.p
@@ -417,15 +408,27 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 </motion.p>
               )}
 
-              {result?.readyToLevelUp ? (
+              {result?.chapterAdvanced ? (
                 <>
+                  {/* Chapters auto-advance on counted main sessions — the server
+                      already unlocked it; this just reveals what's new. */}
                   <button
-                    onClick={handleLevelUp}
-                    disabled={advancing}
-                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 py-4 text-base font-bold text-black transition-transform active:scale-95 disabled:opacity-70"
+                    onClick={() => {
+                      if (result.currentChapter) {
+                        setLevelUp({
+                          chapter: result.chapter ?? 0,
+                          newlyUnlocked: result.newlyUnlocked ?? [],
+                          currentChapter: result.currentChapter,
+                        })
+                        setStage('levelup')
+                      } else {
+                        onExit()
+                      }
+                    }}
+                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 py-4 text-base font-bold text-black transition-transform active:scale-95"
                   >
-                    {advancing ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChevronUp className="h-5 w-5" strokeWidth={3} />}
-                    Unlock next chapter
+                    <ChevronUp className="h-5 w-5" strokeWidth={3} />
+                    New chapter unlocked
                   </button>
                   <button onClick={onExit} className="mt-3 text-sm font-medium text-white/50 transition-colors hover:text-white">
                     Later
