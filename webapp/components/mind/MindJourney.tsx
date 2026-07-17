@@ -14,9 +14,13 @@ import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import TrainingGrounds from '@/components/mind/TrainingGrounds'
+import SuggestedActions from '@/components/mind/SuggestedActions'
 import { composeSession } from '@/lib/mind/composeSession'
 import { readMindPlanCache, invalidateMindSession } from '@/lib/mind/sessionCache'
 import { precomposeMindSession } from '@/lib/mind/precompose'
+import { suggestActions } from '@/lib/mind/suggestActions'
+import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
+import { runAiTask } from '@/lib/ai/runClient'
 import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
@@ -95,6 +99,9 @@ export default function MindJourney() {
   // the page loads so there's NO added wait at Begin: if it's ready we play it,
   // otherwise we fall back to the instant deterministic plan.
   const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null)
+  // Post-session suggested actions — AI-picked; null until the AI resolves (the
+  // deterministic set shows meanwhile).
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -193,6 +200,39 @@ export default function MindJourney() {
     setPlaying(true)
   }, [])
 
+  // Deterministic suggested actions — shown instantly (and the fallback if the AI
+  // drifts). The AI upgrade replaces them when it resolves.
+  const deterministicSuggestions = useMemo(
+    () => (progress ? suggestActions({ state: recentState, unlocked: progress.unlockedSystems, seed: dayOfYear() }) : []),
+    [progress, recentState],
+  )
+
+  // After a session (i.e. in the 20h cooldown → Training Grounds), ask the AI to
+  // pick 3 next protocols from the user's state + tendencies. Validated against
+  // the catalog client-side; only adopted if all 3 resolve.
+  useEffect(() => {
+    if (!progress || (progress.mainSessionAvailable ?? true)) return
+    let cancelled = false
+    runAiTask(
+      '/api/ai/mind/suggestions',
+      { context: { state: recentState, recentKinds, unlockedSystems: progress.unlockedSystems } },
+      { silent: true },
+    ).then((r) => {
+      if (cancelled || !r.ok || !r.result) return
+      const raw = (r.result as { suggestions?: Array<{ system: string; protocolId: string; reason?: string }> }).suggestions
+      if (!Array.isArray(raw)) return
+      const valid = raw
+        .map((x) => {
+          const p = findProtocol(x.system, x.protocolId)
+          return p ? { ...p, reason: (x.reason || '').trim() || p.blurb } : null
+        })
+        .filter((x): x is SuggestedAction => x !== null)
+        .slice(0, 3)
+      if (valid.length === 3) setAiSuggestions(valid)
+    })
+    return () => { cancelled = true }
+  }, [progress, recentState, recentKinds])
+
   // ── Immersive session overlay ──
   if (playing && effectivePlan) {
     return (
@@ -205,6 +245,7 @@ export default function MindJourney() {
           // background (non-blocking), so the next view shows a new AI session.
           invalidateMindSession()
           setAiPlan(null)
+          setAiSuggestions(null)
           precomposeMindSession()
           setLoading(true)
           load()
@@ -358,8 +399,9 @@ export default function MindJourney() {
           </button>
         </motion.div>
       ) : (
-        // In the 20h cooldown → Training Grounds (arsenal, no quick-play).
+        // In the 20h cooldown → suggested next actions + Training Grounds.
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <SuggestedActions actions={aiSuggestions ?? deterministicSuggestions} loading={!aiSuggestions} />
           <TrainingGrounds unlocked={progress?.unlockedSystems ?? []} nextInLabel={cooldownLabel} />
         </motion.div>
       )}
