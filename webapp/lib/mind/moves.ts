@@ -196,6 +196,12 @@ export interface MindSessionPlan {
   moves: Move[]
   /** Flat XP awarded once per day on first completion (gated server-side). */
   rewardXp: number
+  /** The arsenal segment this session leads into next, chosen by the composer
+   *  from what the session actually surfaced (their reflections + its theme), with
+   *  a second-person reason. The player prefers this over the deterministic pick,
+   *  falling back to it when absent/invalid — so the session flows INTO the
+   *  arsenal instead of dead-ending. */
+  cta?: { system: string; reason: string }
 }
 
 /** The contract both the deterministic composer and the future AI engine fulfill. */

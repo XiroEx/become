@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
-import { recommendSegment } from '@/lib/mind/recommendSegment'
+import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
 import {
   BREATH_PROTOCOLS,
   breathForState,
@@ -200,10 +200,16 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
 
   // The segment to send them to when the session ends — chosen from how they
   // checked in and what today's session leaned on.
-  const nextFocus = useMemo(
-    () => recommendSegment({ state: liveState, moveKinds: plan.moves.map((m) => m.kind), unlocked: unlockedSystems }),
-    [liveState, plan.moves, unlockedSystems],
-  )
+  const nextFocus = useMemo(() => {
+    // Prefer the composer's own CTA — it picked the segment from what THIS session
+    // surfaced (the user's reflections + its theme) — as long as it's a real,
+    // unlocked segment. Otherwise fall back to the deterministic recommendation.
+    const cta = plan.cta
+    if (cta && SEGMENT_LABELS[cta.system] && (!unlockedSystems || unlockedSystems.includes(cta.system))) {
+      return { systemId: cta.system, label: SEGMENT_LABELS[cta.system], reason: cta.reason }
+    }
+    return recommendSegment({ state: liveState, moveKinds: plan.moves.map((m) => m.kind), unlocked: unlockedSystems })
+  }, [plan.cta, liveState, plan.moves, unlockedSystems])
 
   // Resolve the breath protocol from the live state-check answer ('auto').
   const resolvedProtocol = useMemo<BreathProtocol | undefined>(() => {

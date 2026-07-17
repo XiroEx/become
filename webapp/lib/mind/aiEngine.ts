@@ -18,6 +18,7 @@
 import { buildMove } from './composeSession'
 import { runAiTask } from '@/lib/ai/runClient'
 import { stripMarkdown, clampTitle } from '@/lib/ai/sanitize'
+import { SEGMENT_LABELS } from './recommendSegment'
 import {
   AFFIRM_STATEMENT_KINDS,
   type Move,
@@ -54,6 +55,7 @@ interface AiPlan {
   intro?: { title?: string; subtitle?: string }
   moves?: AiMove[]
   rewardXp?: number
+  cta?: { system?: unknown; reason?: unknown }
 }
 
 function str(v: unknown): string | undefined {
@@ -109,6 +111,18 @@ function validateCompose(v: unknown): { template: string; blanks: string[][] } |
     blanks.push(words)
   }
   return blanks.length >= 1 ? { template, blanks } : undefined
+}
+
+/** Validate the AI's next-segment CTA → {system, reason}. system must be one of
+ *  the real arsenal segments; reason is cleaned. Returns undefined otherwise so
+ *  the player falls back to the deterministic recommendation. */
+function validateCta(v: unknown): { system: string; reason: string } | undefined {
+  if (!v || typeof v !== 'object') return undefined
+  const o = v as Record<string, unknown>
+  const system = str(o.system)
+  const reason = clean(o.reason)
+  if (!system || !reason || !(system in SEGMENT_LABELS)) return undefined
+  return { system, reason: clampTitle(reason, 30) }
 }
 
 /**
@@ -206,5 +220,7 @@ export async function composeSessionAI(ctx: SessionContext): Promise<MindSession
     },
     moves,
     rewardXp: 15,
+    // Where this session flows next in the arsenal, if the composer named it.
+    ...(validateCta(plan.cta) ? { cta: validateCta(plan.cta) } : {}),
   }
 }

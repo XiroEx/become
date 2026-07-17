@@ -5,7 +5,7 @@
 
 import type { MindState } from '@/lib/mindContent'
 
-const LABELS: Record<string, string> = {
+export const SEGMENT_LABELS: Record<string, string> = {
   'state-shift': 'State Shift',
   'vision': 'Vision',
   'self-image': 'Self-Image',
@@ -33,10 +33,10 @@ export function recommendSegment(opts: {
   moveKinds?: string[]
   unlocked?: string[]
 }): SegmentRec {
-  const unlocked = opts.unlocked && opts.unlocked.length ? opts.unlocked : Object.keys(LABELS)
+  const unlocked = opts.unlocked && opts.unlocked.length ? opts.unlocked : Object.keys(SEGMENT_LABELS)
   const has = (s: string) => unlocked.includes(s)
   const kinds = new Set(opts.moveKinds ?? [])
-  const rec = (systemId: string, reason: string): SegmentRec => ({ systemId, label: LABELS[systemId] ?? systemId, reason })
+  const rec = (systemId: string, reason: string): SegmentRec => ({ systemId, label: SEGMENT_LABELS[systemId] ?? systemId, reason })
 
   // 1. Came in off → regulate first, then everything else lands better.
   if (opts.state && NEGATIVE.includes(opts.state) && has('state-shift')) {
