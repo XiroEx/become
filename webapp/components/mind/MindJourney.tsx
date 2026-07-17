@@ -245,8 +245,8 @@ export default function MindJourney() {
 
   return (
     <PageTransition className="flex min-h-[78vh] flex-col pb-6">
-      {/* Header — calm, minimal */}
-      <header className="mb-5">
+      {/* Header — calm, minimal (compact in Training Grounds mode) */}
+      <header className={available ? 'mb-5' : 'mb-4'}>
         <div className="flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
             <Brain className="h-6 w-6 text-violet-500" />
@@ -259,56 +259,75 @@ export default function MindJourney() {
             </span>
           )}
         </div>
-        {/* LEVEL — per-user, XP-driven, uncapped (from ALL mind activity). */}
-        <div className="mt-3 flex items-center gap-3">
-          <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
-            Lv {level}
-          </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${levelPct}%` }} />
-          </div>
-          <span className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
-            {xpToNext} XP
-          </span>
-        </div>
+        {available ? (
+          <>
+            {/* LEVEL — per-user, XP-driven, uncapped (from ALL mind activity). */}
+            <div className="mt-3 flex items-center gap-3">
+              <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+                Lv {level}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${levelPct}%` }} />
+              </div>
+              <span className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
+                {xpToNext} XP
+              </span>
+            </div>
 
-        {/* Visual chapter path */}
-        {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
-        <div className="mt-4 flex items-center" data-tour="mind-chapters">
-          {CHAPTERS.map((c, i) => {
-            const done = c.id < chapter
-            const current = c.id === chapter
-            return (
-              <Fragment key={c.id}>
-                {i > 0 && (
-                  <div className={`h-0.5 flex-1 ${c.id <= chapter ? 'bg-violet-500' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
-                )}
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                    done
-                      ? 'bg-violet-500 text-white'
-                      : current
-                        ? 'bg-white text-violet-600 ring-2 ring-violet-500 dark:bg-zinc-900'
-                        : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
-                  }`}
-                  title={c.name}
-                >
-                  {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : c.id}
-                </div>
-              </Fragment>
-            )
-          })}
-        </div>
-        <p className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
-          Ch.{chapter} · {chapterName}
-          {chapter < CHAPTERS.length && chSessions
-            ? ` — ${chSessions.done}/${chSessions.needed} sessions to Ch.${chapter + 1}`
-            : ' — final chapter'}
-        </p>
+            {/* Visual chapter path */}
+            {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+            <div className="mt-4 flex items-center" data-tour="mind-chapters">
+              {CHAPTERS.map((c, i) => {
+                const done = c.id < chapter
+                const current = c.id === chapter
+                return (
+                  <Fragment key={c.id}>
+                    {i > 0 && (
+                      <div className={`h-0.5 flex-1 ${c.id <= chapter ? 'bg-violet-500' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
+                    )}
+                    <div
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                        done
+                          ? 'bg-violet-500 text-white'
+                          : current
+                            ? 'bg-white text-violet-600 ring-2 ring-violet-500 dark:bg-zinc-900'
+                            : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                      }`}
+                      title={c.name}
+                    >
+                      {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : c.id}
+                    </div>
+                  </Fragment>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+              Ch.{chapter} · {chapterName}
+              {chapter < CHAPTERS.length && chSessions
+                ? ` — ${chSessions.done}/${chSessions.needed} sessions to Ch.${chapter + 1}`
+                : ' — final chapter'}
+            </p>
+          </>
+        ) : (
+          // Training Grounds mode — level + chapter collapse onto ONE line so the
+          // grounds sit higher up.
+          <div className="mt-3 flex items-center gap-2.5">
+            <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+              Lv {level}
+            </span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+              <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${levelPct}%` }} />
+            </div>
+            <span className="shrink-0 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+              Ch.{chapter} · {chapterName}
+            </span>
+          </div>
+        )}
       </header>
 
-      {/* Centered focus area — fills the space below the header */}
-      <div className="flex flex-1 flex-col justify-center">
+      {/* Focus area — centered for the daily session, top-aligned for Training
+          Grounds so its tiles sit higher up. */}
+      <div className={`flex flex-1 flex-col ${available ? 'justify-center' : 'justify-start'}`}>
       {/* The next move — always the instant (deterministic) session; if an
           AI-composed plan is cached it's used transparently. Never blocks on
           generation (that happens in the background on app open). */}

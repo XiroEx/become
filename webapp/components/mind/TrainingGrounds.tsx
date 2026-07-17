@@ -16,18 +16,18 @@ import { SYSTEM_INFO } from '@/lib/mindXP'
 
 const ICONS: Record<string, LucideIcon> = { Wind, Sparkles, Eye, BookOpen, Sword, Shield, Users }
 
-// Per-segment gradient + accent for the colorful tiles (Tailwind needs literal
+// Per-segment solid tint + accent for the colorful tiles (Tailwind needs literal
 // class strings, so these are spelled out rather than derived).
-const TILE: Record<string, { grad: string; icon: string; ring: string }> = {
-  'state-shift':   { grad: 'from-blue-500/25 to-cyan-500/10',      icon: 'text-blue-500 dark:text-blue-300',     ring: 'border-blue-500/30' },
-  'vision':        { grad: 'from-amber-500/25 to-yellow-500/10',   icon: 'text-amber-500 dark:text-amber-300',   ring: 'border-amber-500/30' },
-  'self-image':    { grad: 'from-violet-500/25 to-fuchsia-500/10', icon: 'text-violet-500 dark:text-violet-300', ring: 'border-violet-500/30' },
-  'mission':       { grad: 'from-orange-500/25 to-amber-500/10',   icon: 'text-orange-500 dark:text-orange-300', ring: 'border-orange-500/30' },
-  'discipline':    { grad: 'from-red-500/25 to-rose-500/10',       icon: 'text-red-500 dark:text-red-300',       ring: 'border-red-500/30' },
-  'anti-sabotage': { grad: 'from-orange-500/25 to-red-500/10',     icon: 'text-orange-500 dark:text-orange-300', ring: 'border-orange-500/30' },
-  'social':        { grad: 'from-emerald-500/25 to-teal-500/10',   icon: 'text-emerald-500 dark:text-emerald-300', ring: 'border-emerald-500/30' },
+const TILE: Record<string, { bg: string; icon: string; ring: string }> = {
+  'state-shift':   { bg: 'bg-blue-500/10',    icon: 'text-blue-500 dark:text-blue-300',       ring: 'border-blue-500/30' },
+  'vision':        { bg: 'bg-amber-500/10',   icon: 'text-amber-500 dark:text-amber-300',     ring: 'border-amber-500/30' },
+  'self-image':    { bg: 'bg-violet-500/10',  icon: 'text-violet-500 dark:text-violet-300',   ring: 'border-violet-500/30' },
+  'mission':       { bg: 'bg-orange-500/10',  icon: 'text-orange-500 dark:text-orange-300',   ring: 'border-orange-500/30' },
+  'discipline':    { bg: 'bg-red-500/10',     icon: 'text-red-500 dark:text-red-300',         ring: 'border-red-500/30' },
+  'anti-sabotage': { bg: 'bg-orange-500/10',  icon: 'text-orange-500 dark:text-orange-300',   ring: 'border-orange-500/30' },
+  'social':        { bg: 'bg-emerald-500/10', icon: 'text-emerald-500 dark:text-emerald-300', ring: 'border-emerald-500/30' },
 }
-const FALLBACK = { grad: 'from-zinc-500/20 to-zinc-500/5', icon: 'text-zinc-500', ring: 'border-zinc-500/30' }
+const FALLBACK = { bg: 'bg-zinc-500/10', icon: 'text-zinc-500', ring: 'border-zinc-500/30' }
 
 export default function TrainingGrounds({
   unlocked, nextInLabel,
@@ -68,7 +68,7 @@ export default function TrainingGrounds({
             <Link
               key={id}
               href={`/dashboard/mind/${id}`}
-              className={`group relative overflow-hidden rounded-2xl border bg-gradient-to-br ${t.grad} ${t.ring} p-4 transition-transform active:scale-[0.97]`}
+              className={`group relative overflow-hidden rounded-2xl border ${t.bg} ${t.ring} p-4 transition-transform active:scale-[0.97]`}
             >
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 dark:bg-black/30">
                 <Icon className={`h-5 w-5 ${t.icon}`} />
