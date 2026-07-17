@@ -16,16 +16,18 @@ import { SYSTEM_INFO } from '@/lib/mindXP'
 
 const ICONS: Record<string, LucideIcon> = { Wind, Sparkles, Eye, BookOpen, Sword, Shield, Users }
 
-// Per-segment solid tint + accent for the colorful tiles (Tailwind needs literal
-// class strings, so these are spelled out rather than derived).
+// Per-segment solid tint + accent — MATCHED to each segment dashboard's own
+// signature color (state-shift=cyan, self-image=violet, mission=blue,
+// vision=emerald, social=pink, discipline=red, anti-sabotage=orange). Tailwind
+// needs literal class strings, so these are spelled out rather than derived.
 const TILE: Record<string, { bg: string; icon: string; ring: string }> = {
-  'state-shift':   { bg: 'bg-blue-500/10',    icon: 'text-blue-500 dark:text-blue-300',       ring: 'border-blue-500/30' },
-  'vision':        { bg: 'bg-amber-500/10',   icon: 'text-amber-500 dark:text-amber-300',     ring: 'border-amber-500/30' },
+  'state-shift':   { bg: 'bg-cyan-500/10',    icon: 'text-cyan-500 dark:text-cyan-300',       ring: 'border-cyan-500/30' },
   'self-image':    { bg: 'bg-violet-500/10',  icon: 'text-violet-500 dark:text-violet-300',   ring: 'border-violet-500/30' },
-  'mission':       { bg: 'bg-orange-500/10',  icon: 'text-orange-500 dark:text-orange-300',   ring: 'border-orange-500/30' },
+  'mission':       { bg: 'bg-blue-500/10',    icon: 'text-blue-500 dark:text-blue-300',       ring: 'border-blue-500/30' },
+  'vision':        { bg: 'bg-emerald-500/10', icon: 'text-emerald-500 dark:text-emerald-300', ring: 'border-emerald-500/30' },
+  'social':        { bg: 'bg-pink-500/10',    icon: 'text-pink-500 dark:text-pink-300',       ring: 'border-pink-500/30' },
   'discipline':    { bg: 'bg-red-500/10',     icon: 'text-red-500 dark:text-red-300',         ring: 'border-red-500/30' },
   'anti-sabotage': { bg: 'bg-orange-500/10',  icon: 'text-orange-500 dark:text-orange-300',   ring: 'border-orange-500/30' },
-  'social':        { bg: 'bg-emerald-500/10', icon: 'text-emerald-500 dark:text-emerald-300', ring: 'border-emerald-500/30' },
 }
 const FALLBACK = { bg: 'bg-zinc-500/10', icon: 'text-zinc-500', ring: 'border-zinc-500/30' }
 
