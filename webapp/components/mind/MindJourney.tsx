@@ -8,7 +8,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Brain, ArrowRight, Check, ChevronRight, Flame } from 'lucide-react'
+import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
@@ -19,6 +19,7 @@ import { composeSession } from '@/lib/mind/composeSession'
 import { readMindPlanCache, invalidateMindSession } from '@/lib/mind/sessionCache'
 import { precomposeMindSession } from '@/lib/mind/precompose'
 import { suggestActions } from '@/lib/mind/suggestActions'
+import { getPathSession } from '@/lib/mind/sessionPath'
 import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
 import { runAiTask } from '@/lib/ai/runClient'
 import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
@@ -167,6 +168,7 @@ export default function MindJourney() {
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       recentKinds,
+      pathFocus: getPathSession(progress.mainSessionCount),
       dayOfYear: dayOfYear(),
       seed: sessionSeed ?? undefined,
       now: Date.now(),
@@ -381,7 +383,7 @@ export default function MindJourney() {
             className="group relative w-full rounded-3xl bg-zinc-900 p-6 text-left text-white shadow-sm transition-transform active:scale-[0.98] dark:bg-zinc-800"
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-white/50">
-              Today&apos;s session
+              {(() => { const ps = getPathSession(progress?.mainSessionCount ?? 0); return ps ? `Session ${ps.n} of 50 · ${CHAPTERS[ps.chapter - 1]?.name ?? ''}` : "Today's session" })()}
             </p>
             <h2 className="mt-2 text-3xl font-extrabold">{effectivePlan.intro.title}</h2>
             <p className="mt-2 max-w-xs text-sm text-white/70">{effectivePlan.intro.subtitle}</p>
@@ -406,23 +408,48 @@ export default function MindJourney() {
         </motion.div>
       )}
 
-      {/* The Becoming — progression / training log */}
-      <Link
-        href="/dashboard/mind/becoming"
-        data-tour="mind-becoming-link"
-        className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-      >
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Where you started, where you are, what&apos;s next
-          </p>
+      {/* The Becoming — progression / training log. Unlocks after 5 main
+          sessions; until then it shows locked so the path ahead is visible. */}
+      {(progress?.mainSessionCount ?? 0) >= 5 ? (
+        <Link
+          href="/dashboard/mind/becoming"
+          data-tour="mind-becoming-link"
+          className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+        >
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Where you started, where you are, what&apos;s next
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-zinc-400" />
+        </Link>
+      ) : (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div>
+            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">The Becoming</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Your training log — unlocks after session 5
+            </p>
+          </div>
+          <Lock className="h-4 w-4 text-zinc-400" />
         </div>
-        <ChevronRight className="h-5 w-5 text-zinc-400" />
-      </Link>
+      )}
 
-      {/* AI coach — scaffolded (drops into the MoveEngine via redbtn later) */}
-      <MindCoachTeaser />
+      {/* AI coach — unlocks after 3 main sessions. */}
+      {(progress?.mainSessionCount ?? 0) >= 3 ? (
+        <MindCoachTeaser />
+      ) : (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div>
+            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">Your coach</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Talk it through — unlocks after session 3
+            </p>
+          </div>
+          <Lock className="h-4 w-4 text-zinc-400" />
+        </div>
+      )}
       </div>
     </PageTransition>
   )

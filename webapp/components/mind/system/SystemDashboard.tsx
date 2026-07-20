@@ -5,7 +5,7 @@
 // LAUNCH guided flows, track record). No dead text: every card does something.
 
 import type { LucideIcon } from 'lucide-react'
-import { ChevronRight, Play, Sparkles } from 'lucide-react'
+import { ChevronRight, Play, Sparkles, Lock as LockIcon } from 'lucide-react'
 
 // The headline "do one now" — an AI session generated from the user's real data
 // (mood, streak, mission, wins, workouts) AND their own recent reflections, so it
@@ -85,14 +85,34 @@ export function SystemHero({
 }
 
 export function ToolkitCard({
-  Icon, title, blurb, onClick, color,
+  Icon, title, blurb, onClick, color, locked = false, lockedHint,
 }: {
   Icon: LucideIcon
   title: string
   blurb: string
   onClick: () => void
   color: string
+  /** Progressive in-tool unlock: locked protocols preview but don't launch. */
+  locked?: boolean
+  /** Shown instead of the blurb while locked, e.g. "1 more rep to unlock". */
+  lockedHint?: string
 }) {
+  if (locked) {
+    return (
+      <div className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-4 text-left opacity-75 dark:border-zinc-800 dark:bg-zinc-900/40">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{title}</p>
+          <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">{lockedHint ?? blurb}</p>
+        </div>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-zinc-400 dark:bg-zinc-800">
+          <LockIcon className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    )
+  }
   return (
     <button
       type="button"

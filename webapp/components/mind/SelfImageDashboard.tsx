@@ -169,6 +169,9 @@ export default function SelfImageDashboard() {
   const [affirm, setAffirm] = useState<AffirmData>({ streak: 0, longest: 0, affirmedToday: false })
   const [wins, setWins] = useState<Win[]>([])
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
+  // Lifetime reps in this tool (all journal kinds) — drives progressive
+  // protocol unlocks: 1 + reps protocols are open.
+  const [reps, setReps] = useState(0)
   const [winInput, setWinInput] = useState('')
   const [savingWin, setSavingWin] = useState(false)
   const [affirming, setAffirming] = useState(false)
@@ -213,8 +216,10 @@ export default function SelfImageDashboard() {
       }
       if (wr.ok) setWins((await wr.json()).wins ?? [])
       if (jr.ok) {
-        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = (await jr.json()).entries ?? []
+        const jd = await jr.json()
+        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = jd.entries ?? []
         setEntries(raw.map((e) => ({ id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt })))
+        setReps(Object.values((jd.counts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0))
       }
     } catch { /* ignore */ }
   }, [])
@@ -461,13 +466,15 @@ export default function SelfImageDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Identity protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.map((p) => (
+          {PROTOCOLS.map((p, i) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}
               title={p.title}
               blurb={p.blurb}
               color="text-violet-500"
+              locked={i >= 1 + reps}
+              lockedHint={`${i - reps} more rep${i - reps === 1 ? '' : 's'} to unlock`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

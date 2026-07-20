@@ -4,6 +4,7 @@ import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import ToolIntroGate from '@/components/mind/ToolIntroGate'
 import StateShiftDashboard from '@/components/mind/StateShiftDashboard'
 import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
 import MissionDashboard from '@/components/mind/MissionDashboard'
@@ -51,13 +52,16 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
       </header>
 
       <div className="min-h-0 flex-1" data-tour="mind-section-body">
-        {section === 'state-shift'   && <StateShiftDashboard />}
-        {section === 'self-image'    && <SelfImageDashboard />}
-        {section === 'mission'       && <MissionDashboard />}
-        {section === 'discipline'    && <DisciplineDashboard />}
-        {section === 'anti-sabotage' && <AntiSabotageDashboard />}
-        {section === 'social'        && <SocialDashboard />}
-        {section === 'vision'        && <VisionDashboard />}
+        {/* First open of an unlocked tool runs its one-time onboarding intro. */}
+        <ToolIntroGate system={section}>
+          {section === 'state-shift'   && <StateShiftDashboard />}
+          {section === 'self-image'    && <SelfImageDashboard />}
+          {section === 'mission'       && <MissionDashboard />}
+          {section === 'discipline'    && <DisciplineDashboard />}
+          {section === 'anti-sabotage' && <AntiSabotageDashboard />}
+          {section === 'social'        && <SocialDashboard />}
+          {section === 'vision'        && <VisionDashboard />}
+        </ToolIntroGate>
       </div>
     </PageTransition>
   )

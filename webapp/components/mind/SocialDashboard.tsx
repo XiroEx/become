@@ -128,6 +128,8 @@ function authHeaders(): HeadersInit {
 export default function SocialDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
+  // Lifetime reps in this tool — 1 + reps protocols are open.
+  const [reps, setReps] = useState(0)
   const [connections, setConnections] = useState(0)
   const [reachedToday, setReachedToday] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -149,6 +151,7 @@ export default function SocialDashboard() {
       const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = d.entries ?? []
       setEntries(raw.map((e) => ({ id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt })))
       setConnections(d.counts?.['connect'] ?? 0)
+      setReps(Object.values((d.counts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0))
       const todayStr = new Date().toDateString()
       setReachedToday(raw.some((e) => e.kind === 'connect' && new Date(e.createdAt).toDateString() === todayStr))
     } catch { /* ignore */ }
@@ -263,13 +266,15 @@ export default function SocialDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Social protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.map((p) => (
+          {PROTOCOLS.map((p, i) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}
               title={p.title}
               blurb={p.blurb}
               color="text-pink-500"
+              locked={i >= 1 + reps}
+              lockedHint={`${i - reps} more rep${i - reps === 1 ? '' : 's'} to unlock`}
               onClick={() => setFlow({ title: p.title, steps: p.steps })}
             />
           ))}

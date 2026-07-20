@@ -180,6 +180,9 @@ export interface SessionContext {
   /** Effective move kinds from the user's PREVIOUS session — the composer avoids
    *  repeating them so back-to-back sessions feel different. */
   recentKinds?: string[] | null
+  /** The 50-session directed path: the focus this session is FOR (null once the
+   *  path is complete → fully adaptive). Prescribes the composer's spine. */
+  pathFocus?: { n: number; chapter: number; focus: string; directive: string } | null
   /** Deterministic rotation seed (day-of-year) so the same day is stable. */
   dayOfYear: number
   /** Optional explicit seed — overrides dayOfYear so replays vary run-to-run. */

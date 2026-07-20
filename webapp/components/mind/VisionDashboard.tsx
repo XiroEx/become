@@ -122,6 +122,8 @@ export default function VisionDashboard() {
   const [vision, setVision] = useState<VisionData | null>(null)
   const [align, setAlign] = useState<AlignData>({ avg7: 0, entries7: 0, todayScore: null, checkedToday: false })
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
+  // Lifetime reps in this tool — 1 + reps protocols are open.
+  const [reps, setReps] = useState(0)
   const [aiLoading, setAiLoading] = useState(false)
   const [aligning, setAligning] = useState(false)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
@@ -143,8 +145,10 @@ export default function VisionDashboard() {
         if (d.alignment) setAlign(d.alignment)
       }
       if (jr.ok) {
-        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = (await jr.json()).entries ?? []
+        const jd = await jr.json()
+        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = jd.entries ?? []
         setEntries(raw.map((e) => ({ id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt })))
+        setReps(Object.values((jd.counts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0))
       }
     } catch { /* ignore */ }
   }, [])
@@ -343,13 +347,15 @@ export default function VisionDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Vision protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.map((p) => (
+          {PROTOCOLS.map((p, i) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}
               title={p.title}
               blurb={p.blurb}
               color="text-emerald-500"
+              locked={i >= 1 + reps}
+              lockedHint={`${i - reps} more rep${i - reps === 1 ? '' : 's'} to unlock`}
               onClick={() => setFlow({ title: p.title, steps: p.steps })}
             />
           ))}

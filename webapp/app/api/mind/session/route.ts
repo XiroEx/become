@@ -209,6 +209,12 @@ export async function POST(request: NextRequest) {
       nextMainSessionAt,
       xpBank: (before?.xpBank ?? 0) + grantXp,
       streak,
+      // Feature unlock moments crossed by THIS session (coach after 3 main
+      // sessions, The Becoming after 5) — surfaced on the payoff.
+      featureUnlocks: [
+        ...(counted && newCount === 3 ? ['coach'] : []),
+        ...(counted && newCount === 5 ? ['becoming'] : []),
+      ],
     })
   } catch (err) {
     console.error('POST /api/mind/session error:', err)

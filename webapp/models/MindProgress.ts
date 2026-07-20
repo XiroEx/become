@@ -34,6 +34,10 @@ export interface IMindProgress extends Document {
   /** When the last MAIN session was completed — enforces the 20h cooldown so a
    *  main session (and its chapter progress) can only happen once every 20h. */
   lastMainSessionAt?: Date
+  /** Tools whose one-time onboarding intro the user has completed. A tool can be
+   *  UNLOCKED (chapter) but not yet INTRODUCED — the intro flow runs on first
+   *  open. Legacy docs (field absent) are grandfathered to their unlocked set. */
+  introducedSystems?: string[]
   /** When the last growth moment (chapter level-up) happened — gates progression
    *  to at most one growth moment per local day, so volume can't rush the arc. */
   lastGrowthAt?: Date
@@ -82,6 +86,7 @@ const MindProgressSchema = new Schema<IMindProgress>(
     levelXp: { type: Number, default: 0, min: 0 },
     mainSessionCount: { type: Number, default: 0, min: 0 },
     lastMainSessionAt: { type: Date },
+    introducedSystems: { type: [String], default: undefined },
     lastGrowthAt: { type: Date },
     vision: { type: VisionSchema },
     chapterHistory: {

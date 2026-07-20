@@ -76,6 +76,21 @@ export async function GET(request: NextRequest) {
     // Chapter is now derived from the main-session count (never below the stored
     // chapter). Level is derived from levelXp.
     const chapter = Math.max(storedChapter, chapterFromSessions(mainSessionCount))
+
+    // ── Tool intros (one-time onboarding per tool) ─────────────────────────
+    // Docs created before this feature shipped are grandfathered (their users
+    // have already used the tools — never re-onboard them). Newer docs start
+    // empty: each tool's intro runs on first open.
+    const INTRO_FEATURE_SHIPPED = Date.parse('2026-07-17T04:00:00Z')
+    let introducedSystems = progress?.introducedSystems as string[] | undefined
+    if (introducedSystems === undefined) {
+      const createdAt = progress?.createdAt ? new Date(progress.createdAt as Date).getTime() : Date.now()
+      introducedSystems = createdAt < INTRO_FEATURE_SHIPPED ? getUnlockedSystems(chapter) : []
+      await MindProgress.updateOne(
+        { userId: auth.userId },
+        { $set: { introducedSystems } },
+      ).catch(() => {})
+    }
     const levelProgress = getLevelProgress(levelXp)
     const chapterSessions = sessionsIntoChapter(mainSessionCount)
     const lastMainAt = progress?.lastMainSessionAt ? new Date(progress.lastMainSessionAt).getTime() : null
@@ -117,6 +132,8 @@ export async function GET(request: NextRequest) {
       // CHAPTER: gated by completed main sessions (10 per chapter).
       mainSessionCount,
       sessionsIntoChapter: chapterSessions,
+      // Tools whose one-time intro is done (unlocked ≠ introduced).
+      introducedSystems,
       // 20h main-session cooldown → decides main session vs Training Grounds.
       mainSessionAvailable: available,
       lastMainSessionAt: lastMainAt,

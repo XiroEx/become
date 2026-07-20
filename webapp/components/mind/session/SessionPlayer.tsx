@@ -56,6 +56,13 @@ interface CompleteResult {
   newlyUnlocked?: string[]
   currentChapter?: { name?: string; theme?: string }
   sessionsIntoChapter?: { done: number; needed: number; toNext: number }
+  /** Features this session just unlocked ('coach' after 3, 'becoming' after 5). */
+  featureUnlocks?: string[]
+}
+
+const FEATURE_UNLOCK_LABEL: Record<string, string> = {
+  coach: 'Your coach is unlocked — talk it through any time.',
+  becoming: 'The Becoming is unlocked — your training log is live.',
 }
 
 interface LevelUpResult {
@@ -396,6 +403,18 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                   You&apos;re in cooldown — this rep leveled you up but didn&apos;t count toward your chapter.
                 </p>
               )}
+              {(result?.featureUnlocks ?? []).map((f) => (
+                <motion.p
+                  key={f}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3.5 py-1.5 text-xs font-semibold text-amber-300"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {FEATURE_UNLOCK_LABEL[f] ?? f}
+                </motion.p>
+              ))}
               {result && typeof result.streak === 'number' && result.streak > 1 && (
                 <motion.p
                   initial={{ opacity: 0 }}

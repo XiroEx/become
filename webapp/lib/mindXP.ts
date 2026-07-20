@@ -14,7 +14,9 @@ export const CHAPTERS = [
     color: 'text-blue-400',
     bg: 'bg-blue-500/10',
     border: 'border-blue-500/20',
-    systems: ['state-shift'] as string[],
+    // Starter kit — regulate (state), identity (self-image), and why (mission)
+    // are open from day one. Chapters 2–5 each add ONE more tool.
+    systems: ['state-shift', 'self-image', 'mission'] as string[],
   },
   {
     id: 2,
@@ -24,7 +26,7 @@ export const CHAPTERS = [
     color: 'text-amber-400',
     bg: 'bg-amber-500/10',
     border: 'border-amber-500/20',
-    systems: ['vision', 'self-image', 'mission'] as string[],
+    systems: ['vision'] as string[],
   },
   {
     id: 3,
@@ -68,8 +70,8 @@ export const SYSTEM_INFO: Record<string, {
 }> = {
   'state-shift':   { label: 'State Shift',   hook: 'Reset in under 3 minutes',                 iconName: 'Wind',    color: 'text-blue-400',    iconBg: 'bg-blue-500/10',    chapter: 1 },
   'vision':        { label: 'Vision',         hook: 'See your best self clearly',               iconName: 'Sparkles',color: 'text-amber-400',   iconBg: 'bg-amber-500/10',   chapter: 2 },
-  'self-image':    { label: 'Self-Image',     hook: 'Reinforce who you\'re becoming',           iconName: 'Eye',     color: 'text-violet-400',  iconBg: 'bg-violet-500/10',  chapter: 2 },
-  'mission':       { label: 'Mission',        hook: 'The reason behind everything',             iconName: 'BookOpen',color: 'text-amber-400',   iconBg: 'bg-amber-500/10',   chapter: 2 },
+  'self-image':    { label: 'Self-Image',     hook: 'Reinforce who you\'re becoming',           iconName: 'Eye',     color: 'text-violet-400',  iconBg: 'bg-violet-500/10',  chapter: 1 },
+  'mission':       { label: 'Mission',        hook: 'The reason behind everything',             iconName: 'BookOpen',color: 'text-amber-400',   iconBg: 'bg-amber-500/10',   chapter: 1 },
   'discipline':    { label: 'Discipline',     hook: 'Today\'s non-negotiable',                  iconName: 'Sword',   color: 'text-red-400',     iconBg: 'bg-red-500/10',     chapter: 3 },
   'anti-sabotage': { label: 'Anti-Sabotage',  hook: 'Kill the pattern before it kills progress',iconName: 'Shield',  color: 'text-orange-400',  iconBg: 'bg-orange-500/10',  chapter: 4 },
   'social':        { label: 'Social',         hook: 'Your environment is your destiny',         iconName: 'Users',   color: 'text-emerald-400', iconBg: 'bg-emerald-500/10', chapter: 5 },

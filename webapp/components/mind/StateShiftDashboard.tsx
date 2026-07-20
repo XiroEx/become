@@ -305,6 +305,9 @@ function authHeaders(): HeadersInit {
 export default function StateShiftDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
+  // Lifetime reps in this tool — 1 + reps reset protocols are open (breathwork
+  // stays open; it's the foundation).
+  const [reps, setReps] = useState(0)
   const [shifts, setShifts] = useState(0)
   const [lastState, setLastState] = useState<MindState | null>(null)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
@@ -323,8 +326,10 @@ export default function StateShiftDashboard() {
         if (logs[0]) setLastState(logs[0].state)
       }
       if (jr.ok) {
-        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = (await jr.json()).entries ?? []
+        const jd = await jr.json()
+        const raw: Array<{ _id: string; title: string; kind: string; createdAt: string }> = jd.entries ?? []
         setEntries(raw.map((e) => ({ id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt })))
+        setReps(Object.values((jd.counts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0))
       }
     } catch { /* ignore */ }
   }, [])
@@ -482,13 +487,15 @@ export default function StateShiftDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Reset protocols</p>
         <div className="space-y-2">
-          {RESET_FLOWS.filter((f) => f.id !== 'protect-the-state').map((f) => (
+          {RESET_FLOWS.filter((f) => f.id !== 'protect-the-state').map((f, i) => (
             <ToolkitCard
               key={f.id}
               Icon={f.Icon}
               title={f.title}
               blurb={f.blurb}
               color="text-cyan-500"
+              locked={i >= 1 + reps}
+              lockedHint={`${i - reps} more rep${i - reps === 1 ? '' : 's'} to unlock`}
               onClick={() => setFlow({ title: f.title, steps: f.steps })}
             />
           ))}
