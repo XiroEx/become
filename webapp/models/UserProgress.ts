@@ -48,6 +48,10 @@ export interface IWorkoutLog {
   programId?: string
   phase?: number
   day?: string
+  // The exact Schedule.scheduledWorkouts[].date this program log fulfills (gap 3).
+  // Lets skip/complete/count target the EXACT calendar slot instead of a
+  // dayLabel±14d heuristic. Absent on legacy logs and on quick sessions.
+  scheduledDate?: Date
   // 'program' (default, legacy) = part of an enrolled program; 'quick' = an
   // ad-hoc session not attached to any program.
   kind?: 'program' | 'quick'
@@ -60,6 +64,9 @@ export interface IWorkoutLog {
   // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
   focus?: string
   completed: boolean
+  // Quick sessions only: a planned session the user deliberately skipped. Never
+  // set on program logs (those track skips on the Schedule slot instead).
+  skipped?: boolean
   duration?: number // in minutes (final, set on completion)
   startedAt?: Date // First time the live view was opened / first set saved
   activeSeconds?: number // Accumulated active seconds across all sessions
@@ -231,11 +238,13 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   programId: { type: String },
   phase: { type: Number },
   day: { type: String },
+  scheduledDate: { type: Date },
   kind: { type: String, enum: ['program', 'quick'], default: 'program' },
   title: { type: String },
   sessionId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },
+  skipped: { type: Boolean },
   duration: { type: Number },
   startedAt: { type: Date },
   activeSeconds: { type: Number, default: 0 },

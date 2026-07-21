@@ -180,6 +180,9 @@ export interface SessionContext {
   /** Effective move kinds from the user's PREVIOUS session — the composer avoids
    *  repeating them so back-to-back sessions feel different. */
   recentKinds?: string[] | null
+  /** The 50-session directed path: the focus this session is FOR (null once the
+   *  path is complete → fully adaptive). Prescribes the composer's spine. */
+  pathFocus?: { n: number; chapter: number; focus: string; directive: string } | null
   /** Deterministic rotation seed (day-of-year) so the same day is stable. */
   dayOfYear: number
   /** Optional explicit seed — overrides dayOfYear so replays vary run-to-run. */
@@ -196,6 +199,12 @@ export interface MindSessionPlan {
   moves: Move[]
   /** Flat XP awarded once per day on first completion (gated server-side). */
   rewardXp: number
+  /** The arsenal segment this session leads into next, chosen by the composer
+   *  from what the session actually surfaced (their reflections + its theme), with
+   *  a second-person reason. The player prefers this over the deterministic pick,
+   *  falling back to it when absent/invalid — so the session flows INTO the
+   *  arsenal instead of dead-ending. */
+  cta?: { system: string; reason: string }
 }
 
 /** The contract both the deterministic composer and the future AI engine fulfill. */
@@ -205,12 +214,22 @@ export interface MoveEngine {
 
 // ─── Scene contract (UI) ──────────────────────────────────────────────────────
 
+/** A reflective answer the user gave during a session move (a picked option, a
+ *  typed line). Reported up so the session can persist it to MindJournal and the
+ *  NEXT session can build on what they actually said (like the arsenal flows). */
+export interface SessionAnswer {
+  q: string
+  a: string
+}
+
 export interface SceneProps {
   move: Move
   /** Breath scenes: the resolved protocol (player resolves 'auto' from live state). */
   protocol?: BreathProtocol
-  /** Advance to the next move. */
-  onDone: () => void
+  /** Advance to the next move. Scenes that elicit a real reflection (a choice, a
+   *  typed answer) pass it so the session can remember it; recitation/structural
+   *  scenes just call onDone(). */
+  onDone: (answer?: SessionAnswer) => void
   /** state-check only: report the chosen state up to the player. */
   onState?: (state: MindState) => void
   /** Admin lab preview: scenes that persist (state/win/discipline) skip their

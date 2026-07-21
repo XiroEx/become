@@ -53,6 +53,10 @@ interface FoodSearchModalProps {
   onUpload?: () => void
   // Receives the current search-box text to seed the describe flow.
   onDescribe?: (text: string) => void
+  // Search-only mode: hides the camera / upload / barcode / describe capture
+  // affordances, leaving just search → pick → add. Used by the estimate review's
+  // "Add more" so you can't loop back into another AI capture.
+  searchOnly?: boolean
 }
 
 interface AlternateServing {
@@ -269,6 +273,7 @@ export default function FoodSearchModal({
   onSnapPhoto,
   onUpload,
   onDescribe,
+  searchOnly = false,
 }: FoodSearchModalProps) {
   const isPlanMode = mode === 'plan'
   const tagPickerEnabled = showTagPicker ?? Boolean(currentTag)
@@ -1125,7 +1130,7 @@ export default function FoodSearchModal({
                 {/* Describe send — slides in beside the bar (which shrinks to make
                     room) and is vertically centered via the flex row. */}
                 <AnimatePresence initial={false}>
-                  {query.trim() && onDescribe && (
+                  {query.trim() && onDescribe && !searchOnly && (
                     <motion.div
                       key="describe-send"
                       initial={{ width: 0, opacity: 0, marginLeft: 0 }}
@@ -1162,8 +1167,15 @@ export default function FoodSearchModal({
                     className="overflow-hidden"
                   >
                     {/* Three wider, shorter actions — describe now lives on the
-                        search box, so it's dropped from this row. */}
-                    <div className="grid grid-cols-3 gap-2">
+                        search box, so it's dropped from this row.
+
+                        In `searchOnly` mode (the plate estimate's "Add more") we
+                        keep Barcode but drop Snap/Upload: those re-enter the plate
+                        estimator, which is the loop searchOnly exists to prevent.
+                        A barcode resolves to one known food and feeds the same
+                        quantity-picker → onSelectFood path as a search result, so
+                        it lands on the plate like any other added item. */}
+                    <div className={searchOnly ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-3 gap-2'}>
                       <button
                         type="button"
                         onClick={() => { setBarcodeError(null); setScannerOpen(true) }}
@@ -1173,24 +1185,28 @@ export default function FoodSearchModal({
                         <ScanBarcode className="h-4 w-4" />
                         <span className="text-xs font-semibold">Barcode</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onSnapPhoto?.()}
-                        disabled={!onSnapPhoto}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                      >
-                        <Camera className="h-4 w-4" />
-                        <span className="text-xs font-semibold">Snap</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onUpload?.()}
-                        disabled={!onUpload}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                      >
-                        <Upload className="h-4 w-4" />
-                        <span className="text-xs font-semibold">Upload</span>
-                      </button>
+                      {!searchOnly && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onSnapPhoto?.()}
+                            disabled={!onSnapPhoto}
+                            className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          >
+                            <Camera className="h-4 w-4" />
+                            <span className="text-xs font-semibold">Snap</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpload?.()}
+                            disabled={!onUpload}
+                            className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 py-2 text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                          >
+                            <Upload className="h-4 w-4" />
+                            <span className="text-xs font-semibold">Upload</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -1674,13 +1690,11 @@ export default function FoodSearchModal({
                                           {Math.round(previewNutrition.calories)} cal
                                         </span>
                                       </p>
-                                      <p className="text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
-                                        P: {Math.round(previewNutrition.protein)}g
-                                        {' '}&middot;{' '}
-                                        C: {Math.round(previewNutrition.carbs)}g
-                                        {' '}&middot;{' '}
-                                        F: {Math.round(previewNutrition.fats)}g
-                                      </p>
+                                      <div className="flex flex-wrap justify-end gap-x-1.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+                                        <span className="whitespace-nowrap">P: {Math.round(previewNutrition.protein)}g</span>
+                                        <span className="whitespace-nowrap">C: {Math.round(previewNutrition.carbs)}g</span>
+                                        <span className="whitespace-nowrap">F: {Math.round(previewNutrition.fats)}g</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </>
@@ -1692,8 +1706,8 @@ export default function FoodSearchModal({
                                   carry the page-supplied plannedDate). */}
                               {!isPlanMode && (
                                 <div className="mt-2.5 flex flex-col gap-2">
-                                  <div className="grid grid-cols-4 items-center gap-2">
-                                    <div className="col-span-3 flex min-w-0 items-center gap-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
                                       <button
                                         type="button"
                                         onClick={() => setDateEditOpen(v => !v)}
@@ -1728,9 +1742,6 @@ export default function FoodSearchModal({
                                         {customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
-                                    <span className="min-w-0 self-end text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                                      Quantity
-                                    </span>
                                   </div>
                                   <AnimatePresence initial={false}>
                                     {dateEditOpen && (
@@ -1824,11 +1835,13 @@ export default function FoodSearchModal({
                                   )}
                                 </div>
                               )}
-                              <div className="mt-2 grid grid-cols-4 gap-2">
+                              {/* Quantity multiplier box removed — the picker's own
+                                  amount+unit is the single source of "how much". */}
+                              <div className="mt-2">
                                 <button
                                   onClick={handleAddFood}
                                   disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
-                                  className="col-span-3 flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                 >
                                   {adding ? (
                                     <>
@@ -1848,19 +1861,6 @@ export default function FoodSearchModal({
                                     </>
                                   )}
                                 </button>
-                                <input
-                                  type="number"
-                                  min="0.1"
-                                  step="0.1"
-                                  inputMode="decimal"
-                                  value={addQuantity}
-                                  onChange={(e) => setAddQuantity(e.target.value)}
-                                  onBlur={() => {
-                                    if (positiveDecimal(addQuantity) <= 0) setAddQuantity('1')
-                                  }}
-                                  aria-label="Quantity"
-                                  className="min-w-0 rounded-lg border border-zinc-200 bg-white px-2 text-center text-sm font-semibold tabular-nums text-zinc-900 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-                                />
                               </div>
                             </div>
                           </motion.div>

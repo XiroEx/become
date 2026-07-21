@@ -43,7 +43,7 @@ export default function PatternScene({ move, onDone }: SceneProps) {
                   {p.pattern}
                 </button>
               ))}
-              <button onClick={onDone} className="w-full pt-2 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+              <button onClick={() => onDone()} className="w-full pt-2 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
                 None of these right now
               </button>
             </div>
@@ -53,7 +53,7 @@ export default function PatternScene({ move, onDone }: SceneProps) {
             <p className="text-xs uppercase tracking-widest text-white/40">{PATTERNS[selected].pattern}</p>
             <p className="mt-5 text-xl font-semibold leading-relaxed text-white">{PATTERNS[selected].override}</p>
             <button
-              onClick={onDone}
+              onClick={() => onDone()}
               className="mt-10 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
             >
               Override it <ArrowRight className="h-5 w-5" />

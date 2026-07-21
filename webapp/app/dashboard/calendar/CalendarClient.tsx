@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import QuickSessionSummary from '@/components/QuickSessionSummary'
+import { continueQuickSession } from '@/lib/quickSession/openQuick'
 import { BackButton } from '@/components/ui/BackButton'
 import {
     ChevronLeft,
@@ -23,6 +25,7 @@ import {
     ChevronsRight,
     CalendarDays,
     BarChart2,
+    RotateCcw,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -48,6 +51,19 @@ interface ScheduleData {
     startDate: string
   }
   scheduledWorkouts: ScheduledWorkout[]
+}
+
+// One-off / generated "quick" sessions (kind:'quick' logs) surfaced on the
+// calendar alongside program workouts.
+interface QuickCalItem {
+  sessionId?: string
+  title: string
+  date: string
+  completed: boolean
+  skipped?: boolean
+  exerciseCount: number
+  duration?: number
+  status: 'completed' | 'planned' | 'incomplete' | 'skipped'
 }
 
 type ViewMode = 'month' | 'week'
@@ -207,6 +223,11 @@ export default function CalendarClient() {
     return new Date()
   })
   const [schedules, setSchedules] = useState<ScheduleData[]>([])
+  const [quick, setQuick] = useState<QuickCalItem[]>([])
+  const [summaryId, setSummaryId] = useState<string | null>(null)
+  // Quick-session Manage sheet (parity with the program workout Manage sheet).
+  const [quickMenu, setQuickMenu] = useState<QuickCalItem | null>(null)
+  const [showQuickDatePicker, setShowQuickDatePicker] = useState(false)
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
     const dateParam = searchParams.get('date')
@@ -290,6 +311,117 @@ export default function CalendarClient() {
     fetchSchedules()
   }, [fetchSchedules])
 
+  // Quick (one-off) sessions — bucketed onto the calendar by date. Re-callable
+  // so management actions (delete / re-date) can refresh.
+  const fetchQuick = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      const res = await fetch('/api/workouts/logs?includeIncomplete=true', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as { logs?: Array<{ kind: string; title: string; date: string; completed: boolean; skipped?: boolean; exerciseCount: number; duration?: number; sessionId?: string }> }
+      const startOfToday = new Date()
+      startOfToday.setHours(0, 0, 0, 0)
+      setQuick(
+        (data.logs ?? [])
+          .filter((l) => l.kind === 'quick')
+          .map((l) => ({
+            sessionId: l.sessionId,
+            title: l.title,
+            date: l.date,
+            completed: l.completed,
+            skipped: l.skipped,
+            exerciseCount: l.exerciseCount,
+            duration: l.duration,
+            status: l.completed ? 'completed' : l.skipped ? 'skipped' : (new Date(l.date) >= startOfToday ? 'planned' : 'incomplete'),
+          })),
+      )
+    } catch { /* non-fatal */ }
+  }, [])
+
+  useEffect(() => { fetchQuick() }, [fetchQuick])
+
+  // Shared management helpers -------------------------------------------------
+  // Per-workout schedule PATCH (skip / unskip / uncomplete / reschedule …).
+  const patchWorkout = useCallback(async (programId: string, action: string, workoutDate: string, extra: Record<string, unknown> = {}, confirmMsg?: string) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    if (confirmMsg && typeof window !== 'undefined' && !window.confirm(confirmMsg)) return
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/schedule', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ programId, action, workoutDate, tz: new Date().getTimezoneOffset(), ...extra }),
+      })
+      if (res.ok) await fetchSchedules()
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchSchedules])
+
+  // Delete a quick session log, then refresh.
+  const deleteQuick = useCallback(async (sessionId: string) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    if (typeof window !== 'undefined' && !window.confirm('Delete this session? This can’t be undone.')) return
+    setActionLoading(true)
+    try {
+      const res = await fetch(`/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        setQuickMenu(null)
+        await fetchQuick()
+      }
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchQuick])
+
+  // Re-date a quick session log to another day, then refresh + close the sheet.
+  const reDateQuick = useCallback(async (sessionId: string, date: string) => {
+    const token = localStorage.getItem('token')
+    if (!token || !date) return
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/workouts/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: sessionId, date }),
+      })
+      if (res.ok) {
+        setShowQuickDatePicker(false)
+        setQuickMenu(null)
+        await fetchQuick()
+      }
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchQuick])
+
+  // Skip / un-skip a planned quick session, then refresh + close the sheet.
+  const skipQuick = useCallback(async (sessionId: string, skipped: boolean) => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    setActionLoading(true)
+    try {
+      const res = await fetch('/api/workouts/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ id: sessionId, skipped }),
+      })
+      if (res.ok) {
+        setQuickMenu(null)
+        await fetchQuick()
+      }
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchQuick])
+
   const fetchWorkoutLog = async (w: ScheduledWorkout & { programName: string; programId: string }) => {
     setLogSummaryLoading(true)
     try {
@@ -330,6 +462,15 @@ export default function CalendarClient() {
     }
   }
 
+  // Bucket quick sessions by local calendar date.
+  const quickByDate = new Map<string, QuickCalItem[]>()
+  for (const q of quick) {
+    const key = toDateKey(new Date(q.date))
+    const existing = quickByDate.get(key) || []
+    existing.push(q)
+    quickByDate.set(key, existing)
+  }
+
   // Navigation
   const navigatePrev = () => {
     setDirection(-1)
@@ -366,6 +507,11 @@ export default function CalendarClient() {
   // Schedule actions
   const handleAction = async (action: string) => {
     if (!actionMenuWorkout) return
+    // Confirm state-changing actions so an accidental tap can't quietly alter history.
+    const confirmMsg: Record<string, string> = {
+      skip: 'Skip this workout? It’ll be marked skipped and won’t count as completed.',
+    }
+    if (confirmMsg[action] && typeof window !== 'undefined' && !window.confirm(confirmMsg[action])) return
     setActionLoading(true)
 
     try {
@@ -418,6 +564,7 @@ export default function CalendarClient() {
       })()
 
   // Selected day detail
+  const selectedQuick = selectedDate ? quickByDate.get(toDateKey(selectedDate)) || [] : []
   const selectedWorkouts = selectedDate
     ? workoutsByDate.get(toDateKey(selectedDate)) || []
     : []
@@ -447,7 +594,7 @@ export default function CalendarClient() {
 
       {/* View Toggle + Nav */}
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
+        <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800" data-tour="calendar-views">
           <button
             onClick={() => setViewMode('month')}
             className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -479,12 +626,14 @@ export default function CalendarClient() {
           </button>
           <button
             onClick={navigatePrev}
+            aria-label={viewMode === 'week' ? 'Previous week' : 'Previous month'}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             onClick={navigateNext}
+            aria-label={viewMode === 'week' ? 'Next week' : 'Next month'}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
           >
             <ChevronRight className="h-4 w-4" />
@@ -531,28 +680,34 @@ export default function CalendarClient() {
             <div key={i} className="h-16 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800 sm:h-20" />
           ))}
         </div>
-      ) : schedules.length === 0 ? (
-        <div className="mt-12 flex flex-col items-center gap-4 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-            <Calendar className="h-8 w-8 text-zinc-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">No schedules yet</h3>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Enroll in a program and set up a schedule to see your workouts here.
-            </p>
-          </div>
-          <Link
-            href="/dashboard/workout#browse-programs"
-            className="rounded-xl bg-zinc-900 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-          >
-            Browse Programs
-          </Link>
-        </div>
       ) : (
         <>
+          {/* Not-on-a-program CTA — a banner, NOT a replacement for the calendar.
+              The grid still renders below so logged one-off sessions + history are
+              always visible; enrolling just adds planned program workouts. */}
+          {schedules.length === 0 && (
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                  <Calendar className="h-5 w-5 text-zinc-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Not on a program</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Your logged sessions still show below. Enroll to plan workouts ahead.</p>
+                </div>
+              </div>
+              <Link
+                href="/dashboard/workout#browse-programs"
+                className="shrink-0 rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+              >
+                Browse
+              </Link>
+            </div>
+          )}
+
           {/* Calendar Grid */}
           <div
+            data-tour="calendar-grid"
             className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 overflow-hidden"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -585,6 +740,7 @@ export default function CalendarClient() {
                 const isToday_ = isSameDay(day, today)
                 const isSelected = selectedDate && isSameDay(day, selectedDate)
                 const dayWorkouts = workoutsByDate.get(key) || []
+                const dayQuick = quickByDate.get(key) || []
 
                 return (
                   <button
@@ -609,8 +765,8 @@ export default function CalendarClient() {
                       {day.getDate()}
                     </span>
 
-                    {/* Workout dots */}
-                    {dayWorkouts.length > 0 && (
+                    {/* Workout dots (program + quick sessions) */}
+                    {(dayWorkouts.length > 0 || dayQuick.length > 0) && (
                       <div className="mt-0.5 flex flex-wrap justify-center gap-0.5">
                         {dayWorkouts.map((w, i) => {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
@@ -622,6 +778,12 @@ export default function CalendarClient() {
                             w.status === 'skipped' ? 'bg-amber-400' :
                             colors.dot
                           return <div key={i} className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
+                        })}
+                        {dayQuick.map((q, i) => {
+                          // Quick sessions use a ring to distinguish them from program dots.
+                          const c = q.status === 'completed' ? 'bg-green-700' :
+                            q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
+                          return <div key={`q${i}`} className={`h-1.5 w-1.5 rounded-full ring-1 ring-purple-400 ${c}`} />
                         })}
                       </div>
                     )}
@@ -669,6 +831,10 @@ export default function CalendarClient() {
               <div className="h-2 w-2 rounded-full bg-amber-400" />
               <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Skipped</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <div className="h-2 w-2 rounded-full bg-purple-500 ring-1 ring-purple-300" />
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Quick session</span>
+            </div>
           </div>
 
           {/* Selected Day Detail Panel */}
@@ -685,9 +851,70 @@ export default function CalendarClient() {
                   {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </h3>
 
-                {selectedWorkouts.length === 0 ? (
+                {/* Quick (one-off) sessions on this day — tappable */}
+                {selectedQuick.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {selectedQuick.map((q, i) => {
+                      // Map the quick-session status onto the shared StatusBadge vocabulary
+                      // so quick + program cards read identically.
+                      const badgeStatus = q.status === 'completed' ? 'completed'
+                        : q.status === 'skipped' ? 'skipped'
+                        : q.status === 'planned' ? 'scheduled' : 'missed'
+                      const dot = q.status === 'completed' ? 'bg-green-700'
+                        : q.status === 'skipped' ? 'bg-amber-400'
+                        : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
+                      return (
+                        <div key={`sq${i}`} className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 dark:border-purple-900/40 dark:bg-purple-900/10">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <div className={`h-2 w-2 shrink-0 rounded-full ring-1 ring-purple-400 ${dot}`} />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{q.title}</p>
+                                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                  Quick session · {q.exerciseCount} {q.exerciseCount === 1 ? 'exercise' : 'exercises'}{q.duration ? ` · ${q.duration} min` : ''}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="shrink-0"><StatusBadge status={badgeStatus} /></div>
+                          </div>
+                          {/* Actions — same "Start Workout + Manage" pattern as program workouts */}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {q.status === 'completed' ? (
+                              <button
+                                onClick={() => q.sessionId && setSummaryId(q.sessionId)}
+                                className="flex items-center gap-1 rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-600 transition-colors hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/20"
+                              >
+                                <BarChart2 className="h-3 w-3" /> View Summary
+                              </button>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  if (!q.sessionId) { router.push('/dashboard/workout/hub?tab=sessions'); return }
+                                  const href = await continueQuickSession(q.sessionId)
+                                  router.push(href ?? '/dashboard/workout/hub?tab=sessions')
+                                }}
+                                className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                              >
+                                <Dumbbell className="h-3 w-3" /> {q.status === 'incomplete' ? 'Continue' : 'Start Workout'}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setQuickMenu(q)}
+                              disabled={!q.sessionId}
+                              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            >
+                              <Settings className="h-3 w-3" /> Manage
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {selectedWorkouts.length === 0 && selectedQuick.length === 0 ? (
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">Rest day — no workouts scheduled.</p>
-                ) : (
+                ) : selectedWorkouts.length === 0 ? null : (
                   <div className="space-y-3">
                     {selectedWorkouts.map((w, idx) => {
                       const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
@@ -731,7 +958,7 @@ export default function CalendarClient() {
                                 {w.status === 'scheduled' && (
                                   <>
                                     <Link
-                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}&sd=${encodeURIComponent(w.date)}`}
                                       className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                     >
                                       <Dumbbell className="h-3 w-3" />
@@ -749,7 +976,7 @@ export default function CalendarClient() {
                                 {w.status === 'missed' && (
                                   <>
                                     <Link
-                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}`}
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}&sd=${encodeURIComponent(w.date)}`}
                                       className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                     >
                                       <Dumbbell className="h-3 w-3" />
@@ -757,6 +984,7 @@ export default function CalendarClient() {
                                     </Link>
                                     <button
                                       onClick={async () => {
+                                        if (typeof window !== 'undefined' && !window.confirm('Skip this workout? It’ll be marked skipped and won’t count as completed.')) return
                                         const token = localStorage.getItem('token')
                                         if (!token) return
                                         setActionLoading(true)
@@ -809,7 +1037,48 @@ export default function CalendarClient() {
                                       <BarChart2 className="h-3 w-3" />
                                       View Summary
                                     </button>
+                                    <button
+                                      onClick={() => patchWorkout(w.programId, 'uncomplete', w.date, {}, 'Un-complete this workout? The sets you logged for it will be removed and it returns to scheduled.')}
+                                      disabled={actionLoading}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <RotateCcw className="h-3 w-3" />
+                                      Un-complete
+                                    </button>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Manage
+                                    </button>
                                   </div>
+                                )}
+                                {w.status === 'skipped' && (
+                                  <>
+                                    <Link
+                                      href={`/dashboard/workout/${w.programId}/workout?day=${encodeURIComponent(w.dayLabel)}&sd=${encodeURIComponent(w.date)}`}
+                                      className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                    >
+                                      <Dumbbell className="h-3 w-3" />
+                                      Do It Now
+                                    </Link>
+                                    <button
+                                      onClick={() => patchWorkout(w.programId, 'unskip', w.date, {}, 'Un-skip this workout? It returns to your schedule as upcoming.')}
+                                      disabled={actionLoading}
+                                      className="flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                                    >
+                                      <RotateCcw className="h-3 w-3" />
+                                      Un-skip
+                                    </button>
+                                    <button
+                                      onClick={() => setActionMenuWorkout(w)}
+                                      className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                                    >
+                                      <Settings className="h-3 w-3" />
+                                      Manage
+                                    </button>
+                                  </>
                                 )}
                               </>
                             )}
@@ -827,6 +1096,10 @@ export default function CalendarClient() {
 
       {/* Workout Log Summary Overlay */}
       <AnimatePresence>
+        {summaryId && (
+          <QuickSessionSummary sessionId={summaryId} onClose={() => setSummaryId(null)} />
+        )}
+
         {logSummary && (
           <WorkoutSummary
             programCompleted={false}
@@ -853,6 +1126,122 @@ export default function CalendarClient() {
             }}
             onDone={() => setLogSummary(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Quick-session Manage sheet — same actions surface as program workouts */}
+      <AnimatePresence>
+        {quickMenu && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+          >
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setQuickMenu(null); setShowQuickDatePicker(false) }} />
+            <motion.div
+              initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }}
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white p-5 shadow-2xl dark:bg-zinc-900 sm:p-6"
+            >
+              {actionLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm dark:bg-zinc-900/80">
+                  <svg className="h-8 w-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                </div>
+              )}
+              <h3 className="mb-1 text-base font-bold text-zinc-900 dark:text-white">Manage Session</h3>
+              <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+                {quickMenu.title} · {new Date(quickMenu.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </p>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    if (!quickMenu.sessionId) return
+                    const d = new Date(quickMenu.date); d.setDate(d.getDate() + 1)
+                    reDateQuick(quickMenu.sessionId, toDateKey(d))
+                  }}
+                  disabled={actionLoading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Next Day</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Push this session one day forward</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setShowQuickDatePicker((v) => !v)}
+                  disabled={actionLoading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  <CalendarDays className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Move to Date</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Pick any day for this session</p>
+                  </div>
+                </button>
+                {showQuickDatePicker && (
+                  <input
+                    type="date"
+                    defaultValue={toDateKey(new Date(quickMenu.date))}
+                    onChange={(e) => e.target.value && quickMenu.sessionId && reDateQuick(quickMenu.sessionId, e.target.value)}
+                    disabled={actionLoading}
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  />
+                )}
+
+                {quickMenu.status !== 'completed' && (
+                  quickMenu.status === 'skipped' ? (
+                    <button
+                      onClick={() => quickMenu.sessionId && skipQuick(quickMenu.sessionId, false)}
+                      disabled={actionLoading}
+                      className="flex w-full items-center gap-3 rounded-xl border border-amber-300 p-3 text-left transition-colors hover:bg-amber-50 disabled:opacity-50 dark:border-amber-700 dark:hover:bg-amber-900/20"
+                    >
+                      <RotateCcw className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">Un-skip Session</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Put it back as planned</p>
+                      </div>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (!quickMenu.sessionId) return
+                        if (typeof window !== 'undefined' && !window.confirm('Skip this session? It’ll be marked skipped and won’t count as done.')) return
+                        skipQuick(quickMenu.sessionId, true)
+                      }}
+                      disabled={actionLoading}
+                      className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 p-3 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      <SkipForward className="h-4 w-4 text-amber-500" />
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">Skip Session</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Mark as skipped</p>
+                      </div>
+                    </button>
+                  )
+                )}
+
+                <button
+                  onClick={() => quickMenu.sessionId && deleteQuick(quickMenu.sessionId)}
+                  disabled={actionLoading}
+                  className="flex w-full items-center gap-3 rounded-xl border border-red-200 p-3 text-left transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                >
+                  <X className="h-4 w-4 text-red-500" />
+                  <div>
+                    <p className="text-sm font-medium text-red-600 dark:text-red-400">Delete Session</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Remove it permanently</p>
+                  </div>
+                </button>
+              </div>
+
+              <button
+                onClick={() => { setQuickMenu(null); setShowQuickDatePicker(false) }}
+                className="mt-4 w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -1156,6 +1545,7 @@ export default function CalendarClient() {
                   ) : (
                     <button
                       onClick={async () => {
+                        if (typeof window !== 'undefined' && !window.confirm('Pause this program? All its workouts are frozen until you resume.')) return
                         const token = localStorage.getItem('token')
                         if (!token) return
                         setActionLoading(true)

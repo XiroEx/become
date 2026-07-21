@@ -415,7 +415,7 @@ export default function NutritionGoalsPage() {
       </Card>
 
       {/* Goal Type */}
-      <div className="mb-4 sm:mb-6">
+      <div className="mb-4 sm:mb-6" data-tour="goals-type">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Goal</h2>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {GOAL_CARDS.map((card) => (
@@ -480,7 +480,7 @@ export default function NutritionGoalsPage() {
       </Card>
 
       {/* Calorie & Macro Inputs */}
-      <Card className="mb-4 sm:mb-6">
+      <Card className="mb-4 sm:mb-6" data-tour="goals-macros">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Daily Targets</h2>
 
         {/* Calories */}
@@ -591,6 +591,7 @@ export default function NutritionGoalsPage() {
       <button
         onClick={handleSave}
         disabled={saving}
+        data-tour="goals-save"
         className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
       >
         <Save className="h-4 w-4" />

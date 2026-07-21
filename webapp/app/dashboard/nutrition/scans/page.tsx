@@ -135,7 +135,7 @@ export default function ScanHistoryPage() {
           description="Snap or describe a meal in Nutrition and your estimate will show up here."
         />
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="scans-list">
           {scans.map((scan) => (
             <Card key={scan._id} className="!p-4">
               <div className="flex items-start justify-between gap-2">

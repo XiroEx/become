@@ -41,7 +41,7 @@ test.beforeAll(async () => {
   console.log('\n[setup] Resetting e2e test user via bootstrap endpoint...')
   const res = await fetch(`${BASE_URL}/api/admin/e2e-setup`, {
     method: 'POST',
-    headers: { 'x-bootstrap-token': 'e2e-user-setup-2026' },
+    headers: { 'x-bootstrap-token': process.env.BOOTSTRAP_TOKEN || '' },
   })
   if (!res.ok) {
     const body = await res.text()

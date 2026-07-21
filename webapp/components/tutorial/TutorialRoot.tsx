@@ -11,9 +11,18 @@ import {
   TutorialProvider,
   createFetchAdapter,
   createLocalStorageAdapter,
+  type TutorialTheme,
 } from '@redbtn/redtutorial'
 import { getToken } from '@/lib/clientAuth'
 import { becomeTutorials } from '@/lib/tutorials/becomeTour'
+
+// BECOME's tutorial look: a darker spotlight backdrop for stronger contrast, and
+// black primary buttons (the library default accent is red) to match the app.
+const becomeTutorialTheme: TutorialTheme = {
+  overlayOpacity: 0.85,
+  accent: '#000000',
+  accentFg: '#ffffff',
+}
 
 export default function TutorialRoot({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -33,7 +42,12 @@ export default function TutorialRoot({ children }: { children: React.ReactNode }
   }, [])
 
   return (
-    <TutorialProvider tutorials={becomeTutorials} storage={storage} path={pathname}>
+    <TutorialProvider
+      tutorials={becomeTutorials}
+      storage={storage}
+      path={pathname}
+      theme={becomeTutorialTheme}
+    >
       {children}
     </TutorialProvider>
   )

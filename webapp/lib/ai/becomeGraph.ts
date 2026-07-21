@@ -27,6 +27,7 @@ export type BecomeTask =
   | 'consultant.nutrition'
   // structured
   | 'mind.composeSession'
+  | 'mindSuggestActions'
   | 'mind.generateFlow'
   | 'workout.generateSession'
   | 'workout.generateProgram'

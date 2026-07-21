@@ -4,7 +4,9 @@ import dbConnect from '@/lib/mongodb'
 import Schedule from '@/models/Schedule'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
-import { generateScheduledWorkouts, regenerateSchedule, type PhaseData } from '@/lib/schedule'
+import { calculateNextDay } from '@/app/api/programs/current-workout/route'
+import { generateScheduledWorkouts, regenerateSchedule, reflowStuckSchedule, type PhaseData } from '@/lib/schedule'
+import type { IScheduledWorkout } from '@/models/Schedule'
 import { readTzOffset, readTzOffsetFromBody, localDateKey, utcMidnightDateKey } from '@/lib/dayWindow'
 
 // GET: Fetch schedule(s) for a user
@@ -66,6 +68,53 @@ export async function GET(request: NextRequest) {
     const programStatusMap = new Map<string, string>()
     for (const p of activePrograms as Array<{ programId: string; status: string }>) {
       programStatusMap.set(p.programId, p.status)
+    }
+
+    // ── Catch-up reflow ────────────────────────────────────────────────────
+    // An in-progress program can run out of upcoming slots when the user falls
+    // behind: every remaining dated slot lapses into the past, so the calendar
+    // looks "finished" while the dashboard/hub (which track completion, not
+    // dates) still say "continue". When we hit that genuine dead-end — no future
+    // slots left AND the program isn't actually finished — re-offer the
+    // outstanding workouts on upcoming training days so all surfaces agree.
+    // Fires only at the dead-end, so a normal single skip (which leaves plenty
+    // of future slots) is untouched; idempotent once future slots exist again.
+    for (const schedule of schedules) {
+      if ((programStatusMap.get(schedule.programId) || '') !== 'in-progress') continue
+      const slots = (schedule.scheduledWorkouts || []) as Array<{ date: Date; status: string; dayLabel: string; phase: number }>
+      const nonRest = slots.filter((s) => s.status !== 'rest')
+      if (nonRest.length === 0) continue
+      const completed = nonRest.filter((s) => s.status === 'completed').length
+      const skipped = nonRest.filter((s) => s.status === 'skipped').length
+      // A future-dated missed slot is self-healed to scheduled below, so it counts as "future work still on the calendar".
+      const hasFuture = slots.some((s) => (s.status === 'scheduled' || s.status === 'missed') && new Date(s.date) >= now)
+      if (hasFuture) continue // work still on the calendar — not stuck
+
+      // No upcoming slots. If every session is resolved (completed or firmly
+      // skipped), the program is done — mark it complete so it stops showing
+      // "continue" with an empty calendar. Otherwise there's fell-behind (missed)
+      // work to catch up on → reflow only that, respecting skips.
+      if (completed + skipped >= nonRest.length) {
+        await UserProgress.updateOne(
+          { userId: payload.userId, 'activePrograms.programId': schedule.programId },
+          { $set: { 'activePrograms.$.status': 'completed' } },
+        ).catch(() => {})
+        programStatusMap.set(schedule.programId, 'completed')
+        continue
+      }
+
+      const program = await ProgramModel.findOne({ program_id: schedule.programId }).lean()
+      if (!program) continue
+      const phases = (program.phases || []) as PhaseData[]
+      const settingsDays = (schedule.settings as { trainingDays?: number[] } | undefined)?.trainingDays
+      const trainingDays: number[] = Array.isArray(settingsDays) && settingsDays.length
+        ? settingsDays
+        : Array.from(new Set(slots.map((s) => new Date(s.date).getUTCDay()))).sort((a, b) => a - b)
+      const reflowed = reflowStuckSchedule(slots as unknown as IScheduledWorkout[], phases, trainingDays, now, schedule.programId)
+      if (reflowed && reflowed.length) {
+        await Schedule.updateOne({ _id: schedule._id }, { $set: { scheduledWorkouts: reflowed } }).catch(() => {})
+        schedule.scheduledWorkouts = reflowed as typeof schedule.scheduledWorkouts
+      }
     }
 
     // Process schedules: compute statuses across the FULL schedule first,
@@ -428,7 +477,57 @@ export async function PATCH(request: NextRequest) {
 
     switch (action) {
       case 'skip': {
-        schedule.scheduledWorkouts[targetIdx].status = 'skipped'
+        const slot = schedule.scheduledWorkouts[targetIdx]
+        slot.status = 'skipped'
+        // Coordinate with the "unfinished workout" prompt: an abandoned/partial
+        // log for this day is exactly what makes that modal re-appear. Skipping
+        // here must also clear it, so the calendar/home skip and the modal agree
+        // (mirrors resolve-incomplete action='skip'). Matched by dayLabel within
+        // a ±14-day window of the slot so we don't touch a different occurrence.
+        const SKIP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+        await UserProgress.updateOne(
+          { userId: payload.userId },
+          {
+            $pull: {
+              workoutLogs: {
+                programId,
+                day: slot.dayLabel,
+                completed: false,
+                date: {
+                  $gte: new Date(targetDate.getTime() - SKIP_WINDOW_MS),
+                  $lte: new Date(targetDate.getTime() + SKIP_WINDOW_MS),
+                },
+              },
+            },
+          },
+        ).catch(() => {})
+
+        // Gap 1 — pointer parity: if the skipped slot IS the program's current
+        // day, advance currentDay/currentPhase (mirrors resolve-incomplete
+        // action='skip'). "Up Next" is schedule-driven so this only keeps the
+        // fallback pointer + modal's next-day math consistent. Skipping a PAST
+        // missed day (not the current one) leaves the pointer alone.
+        try {
+          const upDoc = await UserProgress.findOne(
+            { userId: payload.userId, 'activePrograms.programId': programId },
+            { 'activePrograms.$': 1 },
+          ).lean<{ activePrograms?: Array<{ currentDay?: string; currentPhase?: number }> }>()
+          const ap = upDoc?.activePrograms?.[0]
+          if (ap && ap.currentDay === slot.dayLabel && (ap.currentPhase ?? slot.phase) === slot.phase) {
+            const prog = await ProgramModel.findOne({ program_id: programId }).lean()
+            if (prog?.phases) {
+              const { nextDay, nextPhase } = calculateNextDay(
+                slot.dayLabel,
+                slot.phase,
+                prog.phases as Parameters<typeof calculateNextDay>[2],
+              )
+              await UserProgress.updateOne(
+                { userId: payload.userId, 'activePrograms.programId': programId },
+                { $set: { 'activePrograms.$.currentDay': nextDay, 'activePrograms.$.currentPhase': nextPhase } },
+              ).catch(() => {})
+            }
+          }
+        } catch { /* pointer advance is best-effort, never blocks the skip */ }
         break
       }
 
@@ -503,8 +602,42 @@ export async function PATCH(request: NextRequest) {
         break
       }
 
+      case 'uncomplete': {
+        // Revert a mis-logged / accidentally-completed workout: slot back to
+        // scheduled (GET derives 'missed' if it's in the past), remove the
+        // completed log, and give the completed-count back.
+        const slot = schedule.scheduledWorkouts[targetIdx]
+        if (slot.status === 'completed') {
+          const completedAtMs = slot.completedAt ? new Date(slot.completedAt).getTime() : targetDate.getTime()
+          slot.status = 'scheduled'
+          slot.completedAt = undefined
+          const UNDO_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
+          await UserProgress.updateOne(
+            { userId: payload.userId },
+            {
+              $pull: {
+                workoutLogs: {
+                  programId,
+                  day: slot.dayLabel,
+                  completed: true,
+                  date: {
+                    $gte: new Date(completedAtMs - UNDO_WINDOW_MS),
+                    $lte: new Date(completedAtMs + UNDO_WINDOW_MS),
+                  },
+                },
+              },
+            },
+          ).catch(() => {})
+          await UserProgress.updateOne(
+            { userId: payload.userId, 'activePrograms.programId': programId, 'activePrograms.completedWorkouts': { $gt: 0 } },
+            { $inc: { 'activePrograms.$.completedWorkouts': -1 }, $set: { 'activePrograms.$.status': 'in-progress' } },
+          ).catch(() => {})
+        }
+        break
+      }
+
       default:
-        return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip, shift, pause, resume' }, { status: 400 })
+        return NextResponse.json({ error: 'Invalid action. Use: skip, reschedule, swap, unskip, uncomplete, shift, pause, resume' }, { status: 400 })
     }
 
     // ScheduledWorkoutSchema is declared with `_id: false`, which means

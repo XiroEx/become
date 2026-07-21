@@ -40,6 +40,8 @@ interface WorkoutSaveRequest {
   activeSeconds?: number
   notes?: string
   tz?: number
+  /** ISO date of the exact Schedule slot this log fulfills (gap 3). */
+  scheduledDate?: string
 }
 
 interface QuickSessionSaveRequest {
@@ -53,6 +55,28 @@ interface QuickSessionSaveRequest {
   activeSeconds?: number
   notes?: string
   tz?: number
+  /** Optional backdate — ISO string / YYYY-MM-DD for a workout performed earlier. */
+  performedAt?: string
+}
+
+/**
+ * Resolve the date a session is dated to. Accepts an optional client-supplied
+ * `performedAt` — a PAST date logs a done session, a FUTURE date plans one — and
+ * clamps it to a sane window: a valid date, at most one year in the past or
+ * future. Falls back to now on anything invalid or out of range.
+ */
+function resolvePerformedAt(performedAt: string | undefined, _tzOffset: number): Date {
+  const now = new Date()
+  if (!performedAt || typeof performedAt !== 'string') return now
+  // Bare YYYY-MM-DD → anchor at local noon so it lands on the intended day
+  // regardless of tz offset when later bucketed into a local-day window.
+  const raw = /^\d{4}-\d{2}-\d{2}$/.test(performedAt) ? `${performedAt}T12:00:00` : performedAt
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return now
+  const YEAR = 365 * 24 * 60 * 60 * 1000
+  if (d.getTime() < now.getTime() - YEAR) return now   // absurdly old → now
+  if (d.getTime() > now.getTime() + YEAR) return now   // absurdly far ahead → now
+  return d
 }
 
 // GET: Fetch today's workout progress for a program
@@ -170,15 +194,43 @@ export async function GET(request: NextRequest) {
     }
 
     // Find most recent incomplete workout from a previous day (stale, within cutoff window)
-    type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
-    const staleLog = (userProgress.workoutLogs as WorkoutLog[])
+    type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; kind?: string; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
+    let staleLog: WorkoutLog | null = (userProgress.workoutLogs as WorkoutLog[])
       .filter(log =>
+        // Program prompt is program-scoped AND never picks up quick sessions —
+        // those live in their own sessionId namespace (no cross-contamination).
+        log.kind !== 'quick' &&
         log.programId === programId &&
         !log.completed &&
         new Date(log.date) < today &&
         new Date(log.date) >= staleCutoff
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
+
+    // Coordinate with the calendar/home "Skip": if this day was already resolved
+    // there (status skipped or completed), the leftover incomplete log is
+    // orphaned — don't re-prompt (that was the "asked twice" bug); drop it so the
+    // two features agree. Matched by dayLabel within a ±14-day window.
+    if (staleLog) {
+      const logDay = staleLog.day
+      const logMs = new Date(staleLog.date).getTime()
+      const RESOLVED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000
+      const sched = await Schedule.findOne({ userId: payload.userId, programId })
+        .select('scheduledWorkouts')
+        .lean<{ scheduledWorkouts?: Array<{ dayLabel: string; date: Date; status: string }> } | null>()
+      const alreadyResolved = (sched?.scheduledWorkouts ?? []).some(w =>
+        w.dayLabel === logDay &&
+        (w.status === 'skipped' || w.status === 'completed') &&
+        Math.abs(new Date(w.date).getTime() - logMs) <= RESOLVED_WINDOW_MS
+      )
+      if (alreadyResolved) {
+        UserProgress.updateOne(
+          { userId: payload.userId },
+          { $pull: { workoutLogs: { programId, day: logDay, completed: false, date: staleLog.date } } }
+        ).catch(() => {})
+        staleLog = null
+      }
+    }
 
     const staleIncomplete = staleLog ? {
       day: staleLog.day,
@@ -228,7 +280,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: WorkoutSaveRequest = rawBody
-    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes } = body
+    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes, scheduledDate } = body
 
     if (!programId || phase === undefined || !day) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -245,6 +297,7 @@ export async function POST(request: NextRequest) {
       programId,
       phase,
       day,
+      ...(scheduledDate && { scheduledDate: new Date(scheduledDate) }),
       completed,
       duration,
       startedAt: new Date(),
@@ -358,13 +411,34 @@ export async function POST(request: NextRequest) {
             )
             const byDateAsc = (a: { date: Date }, b: { date: Date }) =>
               new Date(a.date).getTime() - new Date(b.date).getTime()
+            // Gap 3: if the log carries the exact slot date, resolve THAT slot —
+            // never a neighbouring same-dayLabel slot. Compare UTC date-portion
+            // (slots are stored as UTC-midnight of the intended local day).
+            const exact = scheduledDate
+              ? candidates.find(
+                  (w) => new Date(w.date).toISOString().split('T')[0]
+                       === new Date(scheduledDate).toISOString().split('T')[0]
+                )
+              : undefined
+            // TODAY's own slot outranks the overdue backlog. `overdue` used to be
+            // `<= todayKey`, which swept today's slot into the backlog — so with
+            // Day 1 due both last Monday and today, doing today's workout resolved
+            // LAST Monday's slot ("Made up on Jul 13") and left today still
+            // "Scheduled" with nothing done. Backfilling an older miss is only
+            // right when today has no slot for this day (training on an off-day to
+            // catch up); it must never steal credit from the day you actually
+            // trained. Note the entry points don't all send `scheduledDate`, so
+            // this ordering — not `exact` — is what has to be correct.
+            const todaySlot = candidates.find(
+              (w) => dateKey(new Date(w.date), tzOffset) === todayKey
+            )
             const overdue = candidates
-              .filter((w) => dateKey(new Date(w.date), tzOffset) <= todayKey)
+              .filter((w) => dateKey(new Date(w.date), tzOffset) < todayKey)
               .sort(byDateAsc)
             const upcoming = candidates
               .filter((w) => dateKey(new Date(w.date), tzOffset) > todayKey)
               .sort(byDateAsc)
-            const match = overdue[0] ?? upcoming[0]
+            const match = exact ?? todaySlot ?? overdue[0] ?? upcoming[0]
 
             if (match) {
               await Schedule.updateOne(
@@ -513,11 +587,18 @@ async function handleQuickSessionSave(
 
   await dbConnect()
 
-  // Only persist a genuinely-reported offset — a MISSING `tz` must not be
-  // stored as UTC (that poisons the cron into sending the morning reminder at
-  // ~3am the user's real local time).
+  // Only PERSIST a genuinely-reported offset — a MISSING `tz` must not be stored
+  // as UTC (that poisons the cron into sending the morning reminder at ~3am the
+  // user's real local time).
   const reportedTz = readOptionalTzOffsetFromBody(body)
   if (reportedTz !== null) captureUserTimezone(payload.userId, reportedTz)
+
+  // Date resolution is separate: it needs *some* offset to bucket the day, and
+  // falling back to UTC here only affects this one record's date — it never
+  // writes a bogus tz to the user profile.
+  const tzOffset = readTzOffsetFromBody(body)
+  // Honor an optional backdate so users can log a session they did earlier.
+  const workoutDate = resolvePerformedAt(body.performedAt, tzOffset)
 
   // Update-if-exists (matched by sessionId), capturing the prior state so we
   // can tell whether this completion is the first one (gates streak/PR side
@@ -534,6 +615,12 @@ async function handleQuickSessionSave(
         ...(focus !== undefined && { 'workoutLogs.$[elem].focus': focus }),
         ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
         ...(notes !== undefined && { 'workoutLogs.$[elem].notes': notes }),
+        // Backdate only when the client explicitly sends performedAt — autosaves
+        // omit it, so they never disturb the log's date.
+        ...(body.performedAt && {
+          'workoutLogs.$[elem].date': workoutDate,
+          'workoutLogs.$[elem].startedAt': workoutDate,
+        }),
         updatedAt: new Date(),
       },
     },
@@ -545,7 +632,6 @@ async function handleQuickSessionSave(
   ) as QuickProgressDoc | null
 
   let wasAlreadyComplete = false
-  const workoutDate = new Date()
 
   if (docBefore) {
     const oldLog = docBefore.workoutLogs?.find((log) => log.sessionId === sessionId)

@@ -57,6 +57,8 @@ export default function EventsPage() {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Live sessions, workshops, and community check-ins.</p>
       </div>
 
+      {/* data-tour wrapper: stable tour anchor across loading / empty / list states */}
+      <div data-tour="events-list">
       {loading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" />)}</div>
       ) : events.length === 0 ? (
@@ -81,6 +83,7 @@ export default function EventsPage() {
               <div className="mt-4 flex items-center gap-2">
                 <button
                   onClick={() => toggleRsvp(event)}
+                  data-tour="event-rsvp"
                   className={`rounded-lg px-3 py-2 text-sm font-medium ${event.isAttending ? 'border border-zinc-200 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200' : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'}`}
                 >
                   {event.isAttending ? 'Cancel RSVP' : 'RSVP'}
@@ -91,6 +94,7 @@ export default function EventsPage() {
           ))}
         </div>
       )}
+      </div>
     </PageTransition>
   )
 }

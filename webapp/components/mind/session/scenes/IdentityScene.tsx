@@ -130,7 +130,7 @@ export default function IdentityScene({ move, onDone }: SceneProps) {
               </button>
               <p className="mt-6 text-sm text-white/40">{affirmed ? 'Locked in.' : 'Press and hold'}</p>
               {!affirmed && (
-                <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+                <button onClick={() => onDone()} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
                   Skip
                 </button>
               )}

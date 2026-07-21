@@ -58,7 +58,7 @@ export default function GroupDetailPage() {
           <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">{group.name}</h1>
         </div>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{group.description}</p>
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex items-center gap-2" data-tour="group-membership">
           <button
             onClick={toggleJoin}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${group.isMember ? 'border border-zinc-200 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200' : 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'}`}
@@ -69,7 +69,7 @@ export default function GroupDetailPage() {
         </div>
       </div>
 
-      <section>
+      <section data-tour="group-events">
         <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white">Group Events</h2>
         {events.length === 0 ? (
           <EmptyState icon={<CalendarDays className="h-7 w-7" />} title="No events scheduled" description="Upcoming group events will appear here." />

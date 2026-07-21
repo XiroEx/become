@@ -166,6 +166,10 @@ export function CustomizeTilesClient({
         )}
       </section>
 
+      {/* data-tour wrapper: the onboarding tour spotlights the whole palette
+          (all domain groups) as one concept. space-y-6 preserves the spacing
+          the sections had as direct children of the root. */}
+      <div data-tour="customize-palette" className="space-y-6">
       {(Object.keys(grouped) as MetricDomain[]).map((domain) => (
         <section key={domain} data-testid={`domain-${domain}`}>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">
@@ -209,6 +213,7 @@ export function CustomizeTilesClient({
           )}
         </section>
       ))}
+      </div>
 
       <p data-testid="save-status" className="text-xs text-zinc-500">
         {savingState === 'saving' && 'Saving…'}

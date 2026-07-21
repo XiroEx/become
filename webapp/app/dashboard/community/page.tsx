@@ -36,7 +36,7 @@ export default function CommunityPage() {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Events, groups, and chats in one place.</p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3" data-tour="community-tiles">
         {tiles.map((tile) => {
           const Icon = tile.icon
           return (
@@ -56,7 +56,7 @@ export default function CommunityPage() {
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <section>
+        <section data-tour="community-events">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Upcoming Events</h2>
             <Link href="/dashboard/events" className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">View all</Link>
@@ -72,7 +72,7 @@ export default function CommunityPage() {
             ))}
           </div>
         </section>
-        <section>
+        <section data-tour="community-groups">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Groups</h2>
             <Link href="/dashboard/groups" className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">View all</Link>

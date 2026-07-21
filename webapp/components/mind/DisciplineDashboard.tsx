@@ -8,12 +8,12 @@
 // separate dedicated home (not here).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair, Sparkles } from 'lucide-react'
+import { Sword, Flame, Soup, Gauge, Eye, Megaphone, ShieldCheck, Check, Trash2, Crosshair } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
-import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
-import { dailyPick } from '@/lib/mind/rotation'
+import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -127,12 +127,14 @@ interface NonNeg { id: string; text: string; currentStreak: number; longestStrea
 export default function DisciplineDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
+  // Lifetime reps in this tool — 1 + reps protocols are open.
+  const [reps, setReps] = useState(0)
   const [today, setToday] = useState<TodayChallenge | null>(null)
   const [nonNegs, setNonNegs] = useState<NonNeg[]>([])
   const [fightToday, setFightToday] = useState<number | null>(null) // today's fight-check score
   const [marking, setMarking] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
-  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
+  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -146,6 +148,7 @@ export default function DisciplineDashboard() {
         const d = await jr.json()
         const raw: Array<{ _id: string; title: string; kind: string; createdAt: string; lines?: { answer?: string }[] }> = d.entries ?? []
         setEntries(raw.map((e) => ({ id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt })))
+        setReps(Object.values((d.counts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0))
         // Surface today's fight-check score (it was saving silently before).
         const todayStr = new Date().toDateString()
         const fc = raw.find((e) => e.kind === 'fight-check' && new Date(e.createdAt).toDateString() === todayStr)
@@ -224,7 +227,7 @@ export default function DisciplineDashboard() {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'discipline', topic })
       const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
       if (r.ok && steps) {
-        setFlow({ title: topic, kind: 'protocol', steps })
+        setFlow({ title: topic, kind: 'protocol', steps, aiGenerated: true })
         return
       }
     } catch { /* fall through */ }
@@ -256,6 +259,7 @@ export default function DisciplineDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
+        onReflect={(flow.aiGenerated || flow.kind !== 'protocol') ? undefined : (a) => reflectOnAnswers('Discipline drill', a)}
         onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           const kind = flow.kind
@@ -423,41 +427,29 @@ export default function DisciplineDashboard() {
         )}
       </div>
 
-      {/* Personalize with AI — generates a discipline flow tailored to the user's
-          current block. Falls back to "Do It Anyway" without hard-erroring. */}
-      <button
-        type="button"
-        disabled={aiLoading}
-        onClick={() => runAiFlow('do the hard thing I am avoiding today')}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-300 py-3 text-sm font-semibold text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/30 dark:hover:bg-red-500/10"
-      >
-        {aiLoading ? (
-          <>
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Building your session…
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            Personalize with AI
-          </>
-        )}
-      </button>
+      {/* Today's session — adaptive + memory-aware (the headline daily action).
+          Falls back to "Do It Anyway" without hard-erroring. */}
+      <AdaptiveSession
+        loading={aiLoading}
+        onStart={() => runAiFlow('do the hard thing I am avoiding today')}
+        color="text-red-500"
+        bg="border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10"
+        subtitle="Aimed at the hard thing you’ve actually been dodging."
+      />
 
       {/* Protocols — guided runs */}
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Discipline protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.map((p) => (
+          {PROTOCOLS.map((p, i) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}
               title={p.title}
               blurb={p.blurb}
               color="text-red-500"
+              locked={i >= 1 + reps}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Discipline to unlock`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

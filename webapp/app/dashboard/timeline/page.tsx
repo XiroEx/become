@@ -964,6 +964,7 @@ function TimelineClient() {
 
         {/* View-mode toggle — shared SegmentedControl */}
         <SegmentedControl
+          data-tour="timeline-views"
           segments={[
             { value: 'day', label: 'Day', Icon: Clock },
             { value: 'week', label: 'Week', Icon: CalendarIcon },
@@ -1056,7 +1057,7 @@ function TimelineClient() {
             buried in the Month view only; the sheets are page-level, so expose
             them on Day/Week too. */}
         {viewMode !== 'month' && (
-          <div className="flex gap-2">
+          <div className="flex gap-2" data-tour="timeline-plan-tools">
             <button
               onClick={() => setCopyDayOpen(true)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white py-2 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
@@ -1076,7 +1077,7 @@ function TimelineClient() {
 
         {/* Tag filter chips */}
         {viewMode !== 'month' && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900" data-tour="timeline-filters">
           <button
             onClick={() => setFilterChipsOpen(o => !o)}
             className="flex w-full items-center justify-between gap-2"

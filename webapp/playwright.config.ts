@@ -17,6 +17,50 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'nudge',
+      testMatch: '**/nudge-visibility.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'off' },
+    },
+    {
+      name: 'swap-collapse',
+      testMatch: '**/swap-collapse.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'only-on-failure' },
+    },
+    {
+      name: 'calendar-audit',
+      testMatch: '**/calendar-audit.spec.ts',
+      timeout: 180_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off', trace: 'off', screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'estimate-barcode',
+      testMatch: '**/estimate-barcode.spec.ts',
+      timeout: 240_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off', trace: 'off', screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'estimate-barcode',
+      testMatch: '**/estimate-barcode.spec.ts',
+      timeout: 240_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'off',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'exercise-prs-persisted',
       testMatch: '**/exercise-prs-persisted.spec.ts',
       timeout: 60_000,
@@ -122,6 +166,65 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'calendar',
+      testMatch: '**/calendar.spec.ts',
+      timeout: 180_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'schedule-sync',
+      testMatch: '**/schedule-sync.spec.ts',
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'nutrition-picker',
+      testMatch: '**/nutrition-picker.spec.ts',
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'keyboard-inset',
+      testMatch: '**/keyboard-inset.spec.ts',
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'nutrition-regression',
+      testMatch: '**/nutrition-regression.spec.ts',
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
         video: 'off',
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',

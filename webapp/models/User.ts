@@ -136,8 +136,15 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
 
 // Index to support fast lookups of users by saved food (and basic membership tests)
 UserSchema.index({ 'savedFoods.foodId': 1 })
-// Stable link to the redauth identity (sparse: legacy users without one are fine).
-UserSchema.index({ authId: 1 }, { unique: true, sparse: true })
+// Stable link to the redauth identity. PARTIAL (not sparse) unique: a sparse
+// index still indexes docs where authId is present-but-null, and because the
+// field defaults to null every magic-link signup writes an explicit null — so
+// the 2nd such user hit E11000 (authId: null dup). Partial on {$type:'string'}
+// indexes only real authIds, letting unlimited null/absent users coexist.
+UserSchema.index(
+  { authId: 1 },
+  { unique: true, partialFilterExpression: { authId: { $type: 'string' } } }
+)
 
 // Hash password before saving
 UserSchema.pre('save', async function() {

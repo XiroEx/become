@@ -110,7 +110,8 @@ export default function ArsenalClient() {
         </div>
       ) : (
         <>
-          <div className="space-y-3">
+          {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+          <div className="space-y-3" data-tour="arsenal-systems">
             {unlocked.map((id) => {
               const info = SYSTEM_INFO[id]
               if (!info) return null
@@ -156,7 +157,7 @@ export default function ArsenalClient() {
               <p className="mb-3 mt-7 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
                 Locked
               </p>
-              <div className="space-y-3">
+              <div className="space-y-3" data-tour="arsenal-locked">
                 {lockedIds.map((id) => {
                   const info = SYSTEM_INFO[id]
                   return (

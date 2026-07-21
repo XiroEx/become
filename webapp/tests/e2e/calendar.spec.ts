@@ -1,0 +1,241 @@
+import { test, expect } from '@playwright/test'
+import { authenticate, BASE_URL, AUTH_TOKEN } from './test-auth'
+
+function todayKey(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Calendar feature/button coverage. Non-destructive: asserts controls are present
+// and reachable; does not delete/skip real data. Runs against production as the
+// test user, whose calendar has program + quick-session history (July 2026).
+
+test.describe('Calendar', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await authenticate(page, context)
+    await page.goto(`${BASE_URL}/dashboard/calendar`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByText('Calendar').first()).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('shell + navigation controls', async ({ page }) => {
+    // Month / Week toggle
+    await expect(page.getByRole('button', { name: 'Month' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Week' })).toBeVisible()
+    await page.getByRole('button', { name: 'Week' }).click()
+    await page.waitForTimeout(400)
+    await page.getByRole('button', { name: 'Month' }).click()
+    await page.waitForTimeout(400)
+
+    // Prev / next / today
+    const label = page.locator('h2, [class*="font-bold"]').filter({ hasText: /\d{4}/ }).first()
+    const before = await label.textContent()
+    await page.getByRole('button', { name: 'Today' }).click()
+    await page.waitForTimeout(300)
+    // Legend present
+    for (const t of ['Completed', 'Scheduled', 'Skipped']) {
+      await expect(page.getByText(t, { exact: true }).first()).toBeVisible()
+    }
+    expect(before).toBeTruthy()
+  })
+
+  test('settings link works', async ({ page }) => {
+    await page.locator('a[href="/dashboard/calendar/settings"]').first().click()
+    await page.waitForURL('**/dashboard/calendar/settings', { timeout: 15_000 })
+    expect(page.url()).toContain('/dashboard/calendar/settings')
+  })
+
+  test('day-detail renders management controls', async ({ page }) => {
+    // Assert the unified quick card (if any is on the selected day) shows the
+    // management buttons. Scope to the card via its "·" separator so the legend
+    // entry (bare "Quick session") doesn't trip the guard.
+    const detail = page.locator('text=/Quick session ·/').first()
+    if (await detail.isVisible({ timeout: 4000 }).catch(() => false)) {
+      // Unified quick card: a primary action (View Summary / Start Workout / Continue) + Manage
+      await expect(page.getByRole('button', { name: /View Summary|Start Workout|Continue/ }).first()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Manage' }).first()).toBeVisible()
+      // View Summary opens the summary sheet (non-destructive)
+      const viewBtn = page.getByRole('button', { name: 'View Summary' }).first()
+      if (await viewBtn.isVisible().catch(() => false)) {
+        await viewBtn.click()
+        await expect(page.getByText(/sets logged/).first()).toBeVisible({ timeout: 8000 })
+      }
+    }
+  })
+
+  test('a day with a program workout exposes actions', async ({ page }) => {
+    // Click day cells until one opens a program day-detail with an action button.
+    const cells = page.locator('button:has-text("1"), button:has-text("6"), button:has-text("9")')
+    const count = await cells.count()
+    let found = false
+    for (let i = 0; i < Math.min(count, 8) && !found; i++) {
+      await cells.nth(i).click().catch(() => {})
+      await page.waitForTimeout(300)
+      const anyAction = page.getByRole('button', { name: /Start Workout|Do It Now|Manage|Un-skip|Un-complete|Reschedule/ }).first()
+      if (await anyAction.isVisible({ timeout: 800 }).catch(() => false)) found = true
+    }
+    // Non-fatal: some months may have no program workouts. If found, verify Manage opens.
+    if (found) {
+      const manage = page.getByRole('button', { name: /Manage|Reschedule/ }).first()
+      if (await manage.isVisible().catch(() => false)) {
+        await manage.click()
+        await expect(page.getByText('Manage Workout')).toBeVisible({ timeout: 5000 })
+        await page.getByRole('button', { name: 'Cancel' }).click()
+      }
+    }
+  })
+
+  test('week view renders and toggles back to month', async ({ page }) => {
+    await page.getByRole('button', { name: 'Week' }).click()
+    await page.waitForTimeout(400)
+    // Week view still shows weekday headers and day cells.
+    await expect(page.getByText('Sun', { exact: true }).first()).toBeVisible()
+    await page.getByRole('button', { name: 'Month' }).click()
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('button', { name: 'Month' })).toBeVisible()
+  })
+
+  test('destructive actions ask for confirmation (Skip This Workout is gated)', async ({ page, context, request }) => {
+    // Seed a scheduled program workout on today so the day detail exposes Manage.
+    const PROG = 'strength-size-20'
+    const headers = { Authorization: `Bearer ${AUTH_TOKEN}`, 'Content-Type': 'application/json' }
+    const today = todayKey()
+    await request.post(`${BASE_URL}/api/programs/enroll`, { headers, data: { programId: PROG, startDate: today } }).catch(() => {})
+    const seeded = await request.post(`${BASE_URL}/api/schedule`, {
+      headers, data: { programId: PROG, trainingDays: [0, 1, 2, 3, 4, 5, 6], startDate: today },
+    })
+    test.skip(!seeded.ok(), `could not seed ${PROG}`)
+
+    await authenticate(page, context)
+    await page.goto(`${BASE_URL}/dashboard/calendar?date=${today}`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.waitForTimeout(1500)
+
+    // Open the workout's Manage sheet.
+    const manage = page.getByRole('button', { name: 'Manage' }).first()
+    test.skip(!(await manage.isVisible({ timeout: 10_000 }).catch(() => false)), 'no scheduled workout in day detail')
+    await manage.click()
+    await expect(page.getByText('Manage Workout')).toBeVisible({ timeout: 5000 })
+
+    // Clicking "Skip This Workout" must raise a confirm dialog. Dismiss it → no skip.
+    let dialogText = ''
+    page.once('dialog', (d) => { dialogText = d.message(); d.dismiss() })
+    await page.getByRole('button', { name: /Skip This Workout/ }).click()
+    await page.waitForTimeout(600)
+    // The gate fired ...
+    expect(dialogText, 'Skip This Workout must ask for confirmation').toContain('Skip')
+    // ... and dismissing it did NOT run the action — the Manage sheet stays open
+    // (a real skip closes the sheet), so nothing was changed.
+    await expect(page.getByText('Manage Workout')).toBeVisible()
+  })
+})
+
+// Destructive-but-self-cleaning: seeds a real quick session for the test user via
+// the API, drives the full management lifecycle through the UI, then guarantees
+// cleanup in `finally`. Net-zero effect on the account.
+test.describe('Calendar — quick-session lifecycle round-trip', () => {
+  test('seed → appears with controls → Move picker → delete via UI → gone', async ({ page, context, request }) => {
+    const stamp = Date.now()
+    const sessionId = `e2e-cal-${stamp}`
+    const title = `E2E Roundtrip ${stamp}`
+    const dateKey = todayKey()
+
+    // Seed a completed quick session dated today.
+    const seed = await request.post(`${BASE_URL}/api/workouts`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}`, 'Content-Type': 'application/json' },
+      data: {
+        kind: 'quick',
+        sessionId,
+        title,
+        focus: 'e2e',
+        completed: true,
+        duration: 12,
+        performedAt: dateKey,
+        exercises: [{ name: 'E2E Move', exerciseSlug: '', sets: [{ setNumber: 1, reps: 5, weight: 10, completed: true }] }],
+      },
+    })
+    expect(seed.ok(), `seed POST failed: ${seed.status()}`).toBeTruthy()
+
+    try {
+      await authenticate(page, context)
+      // Open the calendar with the seeded day pre-selected.
+      await page.goto(`${BASE_URL}/dashboard/calendar?date=${dateKey}`)
+      await page.waitForLoadState('domcontentloaded')
+
+      // Our uniquely-titled card renders in the day detail.
+      await expect(page.getByText(title).first()).toBeVisible({ timeout: 20_000 })
+
+      // The card offers the same "primary + Manage" pair as program workouts.
+      const card = page.locator('[class*="border-purple-200"]').filter({ hasText: title }).first()
+      await expect(card.getByRole('button', { name: 'View Summary' })).toBeVisible()
+      await expect(card.getByRole('button', { name: 'Manage' })).toBeVisible()
+
+      // Manage opens a sheet with the full action surface.
+      await card.getByRole('button', { name: 'Manage' }).click()
+      await expect(page.getByText('Manage Session')).toBeVisible({ timeout: 5_000 })
+      await expect(page.getByRole('button', { name: 'Move to Next Day' })).toBeVisible()
+      // Move to Date reveals a date picker.
+      await page.getByRole('button', { name: 'Move to Date' }).click()
+      await expect(page.locator('input[type="date"]')).toBeVisible({ timeout: 5_000 })
+
+      // Delete via the sheet, auto-accepting the confirm dialog.
+      page.once('dialog', (d) => d.accept())
+      await page.getByRole('button', { name: 'Delete Session' }).click()
+
+      // The card disappears after the refresh.
+      await expect(page.getByText(title)).toHaveCount(0, { timeout: 20_000 })
+    } finally {
+      // Safety net: ensure the seeded log is gone even if the UI path failed.
+      await request
+        .delete(`${BASE_URL}/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
+          headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+        })
+        .catch(() => {})
+    }
+  })
+
+  test('quick-session Manage sheet skips and un-skips a planned session', async ({ page, context, request }) => {
+    const stamp = Date.now()
+    const sessionId = `e2e-skip-${stamp}`
+    const title = `E2E Skip ${stamp}`
+    const dateKey = todayKey()
+    const auth = { Authorization: `Bearer ${AUTH_TOKEN}`, 'Content-Type': 'application/json' }
+
+    // Seed a PLANNED (not completed) quick session dated today.
+    const seed = await request.post(`${BASE_URL}/api/workouts`, {
+      headers: auth,
+      data: {
+        kind: 'quick', sessionId, title, focus: 'e2e', completed: false, performedAt: dateKey,
+        exercises: [{ name: 'E2E Skip Move', exerciseSlug: '', sets: [{ setNumber: 1, reps: 5, weight: 10, completed: false }] }],
+      },
+    })
+    expect(seed.ok(), `seed POST failed: ${seed.status()}`).toBeTruthy()
+
+    try {
+      await authenticate(page, context)
+      await page.goto(`${BASE_URL}/dashboard/calendar?date=${dateKey}`)
+      await page.waitForLoadState('domcontentloaded')
+      const card = page.locator('[class*="border-purple-200"]').filter({ hasText: title }).first()
+      await expect(card.getByText(title)).toBeVisible({ timeout: 20_000 })
+
+      // Skip via Manage → the card badge flips to "Skipped".
+      await card.getByRole('button', { name: 'Manage' }).click()
+      await expect(page.getByText('Manage Session')).toBeVisible({ timeout: 5_000 })
+      page.once('dialog', (d) => d.accept())
+      await page.getByRole('button', { name: 'Skip Session' }).click()
+      await expect(card.getByText('Skipped')).toBeVisible({ timeout: 15_000 })
+
+      // Un-skip via Manage → the "Skipped" badge clears.
+      await card.getByRole('button', { name: 'Manage' }).click()
+      await expect(page.getByText('Manage Session')).toBeVisible({ timeout: 5_000 })
+      await page.getByRole('button', { name: 'Un-skip Session' }).click()
+      await expect(card.getByText('Skipped')).toHaveCount(0, { timeout: 15_000 })
+    } finally {
+      await request
+        .delete(`${BASE_URL}/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
+          headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+        })
+        .catch(() => {})
+    }
+  })
+})

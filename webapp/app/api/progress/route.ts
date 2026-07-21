@@ -123,6 +123,10 @@ export async function GET(request: NextRequest) {
     let scheduleNextWorkoutDay: string | undefined
     let scheduleTotalWeeks: number | undefined
     let scheduleCurrentWeek: number | undefined
+    // Session-based progress (matches the workout hub's completed/total) so the
+    // dashboard % agrees with it instead of the coarser week-based ratio.
+    let scheduleCompleted: number | undefined
+    let scheduleTotal: number | undefined
 
     if (activeProgram) {
       const schedule = await Schedule.findOne({
@@ -154,14 +158,22 @@ export async function GET(request: NextRequest) {
         const daysPerWeek = (programDetails as { training_days_per_week?: number } | null)?.training_days_per_week
           || schedule.settings?.trainingDays?.length
           || 4
-        type ProgressLog = { programId: string; day: string; completed: boolean }
+        type ProgressLog = { programId: string; day: string; completed: boolean; date: Date | string }
         const wLogs = (progress.workoutLogs || []) as ProgressLog[]
         const sessions = (schedule.scheduledWorkouts || []).filter(
           (w: { status: string }) => w.status !== 'rest'
         ) as Array<{ status: string; dayLabel: string; date: Date }>
+        // Only count logs from the CURRENT enrollment (on/after its startDate) so a
+        // re-enrolled program starts fresh instead of inheriting old completions.
+        const enrollStart = activeProgram.startDate ? new Date(activeProgram.startDate) : null
+        if (enrollStart) enrollStart.setUTCHours(0, 0, 0, 0)
         const availableLogs = new Map<string, number>()
         for (const log of wLogs) {
-          if (log.programId === activeProgram.programId && log.completed) {
+          if (
+            log.programId === activeProgram.programId &&
+            log.completed &&
+            (!enrollStart || new Date(log.date) >= enrollStart)
+          ) {
             availableLogs.set(log.day, (availableLogs.get(log.day) || 0) + 1)
           }
         }
@@ -175,6 +187,8 @@ export async function GET(request: NextRequest) {
             return false
           }).length
         scheduleCurrentWeek = Math.max(1, Math.ceil(reconciledCompleted / daysPerWeek))
+        scheduleCompleted = reconciledCompleted
+        scheduleTotal = sessions.length
       }
 
       // totalWeeks from the real program data
@@ -188,7 +202,9 @@ export async function GET(request: NextRequest) {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
       currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1)
+      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1),
+      completedWorkouts: scheduleCompleted ?? activeProgram.completedWorkouts ?? 0,
+      totalWorkouts: scheduleTotal ?? activeProgram.totalWorkouts ?? 0,
     } : progress.currentProgram?.programId ? progress.currentProgram : null
 
     // Format and return progress data

@@ -101,6 +101,7 @@ export default function WorkoutClient() {
   const quickSessionButton = (
     <button
       type="button"
+      data-tour="workout-quick-session"
       onClick={() => setShowQuickSession(true)}
       className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
     >
@@ -342,17 +343,21 @@ export default function WorkoutClient() {
       const tags = (program.tags ?? []).map(t => t.toLowerCase());
       const allText = [goalField, targetUser, ...tags].join(" ");
 
-      // Goal match
+      // Goal match. `?? []` is load-bearing: a profile can hold a goal that isn't
+      // a key of this map (legacy values like "build_muscle" predate the current
+      // enum), and an unguarded `undefined.some(...)` threw inside this filter and
+      // white-screened the ENTIRE Workout page ("This page couldn't load"). An
+      // unknown goal must degrade to "no recommendation", never crash the page.
       let goalMatch = false;
       if (userFitnessGoal) {
-        const keywords = GOAL_KEYWORDS[userFitnessGoal];
+        const keywords = GOAL_KEYWORDS[userFitnessGoal] ?? [];
         goalMatch = keywords.some(kw => allText.includes(kw));
       }
 
-      // Level match
+      // Level match — same guard, same reason.
       let levelMatch = false;
       if (userExperienceLevel) {
-        const levels = LEVEL_MAP[userExperienceLevel];
+        const levels = LEVEL_MAP[userExperienceLevel] ?? [];
         levelMatch = levels.some(l => targetUser.includes(l));
       }
 
@@ -382,7 +387,7 @@ export default function WorkoutClient() {
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Choose your training path and start building.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div data-tour="workout-quick-links" className="mt-3 flex flex-wrap items-center gap-2">
           <Link
             href="/dashboard/workout/hub?tab=exercises"
             className="flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
@@ -409,13 +414,13 @@ export default function WorkoutClient() {
       </div>
 
       {/* Schedule / Calendar Widget */}
-      <div className="mb-6">
+      <div data-tour="workout-upcoming" className="mb-6">
         <UpcomingWorkouts />
       </div>
 
       {/* Active Programs Section */}
       {!loadingActive && activePrograms.length > 0 && (
-        <div className="mb-6">
+        <div data-tour="workout-continue" className="mb-6">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
               Continue Training
@@ -757,7 +762,7 @@ export default function WorkoutClient() {
         </div>
 
         {/* Search Bar */}
-        <div className="relative mb-3">
+        <div data-tour="workout-search" className="relative mb-3">
           <svg
             className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400"
             fill="none"

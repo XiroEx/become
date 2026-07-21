@@ -613,6 +613,12 @@ function NutritionPageInner() {
       if (!res.ok) {
         setLogs(prev)
         showErrorToast('Failed to delete entry.')
+      } else {
+        // Resync the headline daily-calorie ring + macro bars. The optimistic
+        // setLogs above only touches the meal cards; dailyTotals is separate
+        // state set exclusively by fetchMealLogs, so without this the ring keeps
+        // counting the just-deleted item until an unrelated refetch.
+        fetchMealLogs()
       }
     } catch (err) {
       setLogs(prev)
@@ -802,13 +808,15 @@ function NutritionPageInner() {
   // again, but nutrition is unlocked for every authed user.
   return (
     <>
-      <PageTransition className="pb-6">
+      {/* pb-28 keeps the last interactive controls (water +oz, Quick Add / Meal
+          Plan tiles) clear of the floating add-food FAB (fixed bottom-28). */}
+      <PageTransition className="pb-28">
        <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
         <header className="mb-2 flex items-start justify-between gap-3 sm:mb-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
+            <h1 className="truncate text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Nutrition</h1>
+            <p className="truncate text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">
               Track your food, macros, and hydration
             </p>
           </div>

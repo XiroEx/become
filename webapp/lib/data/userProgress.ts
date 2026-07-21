@@ -198,7 +198,7 @@ export interface ProgressInput {
   weightHistory: Array<{ date: Date | string; weight: number; bodyFat?: number }>;
   moodHistory: Array<{ date: Date | string; mood: number }>;
   workoutLogs: Array<{ date: Date | string; programId: string; completed?: boolean; [key: string]: unknown }>;
-  currentProgram: { programId: string; startDate?: Date | string; currentPhase: number; currentWeek: number } | null | undefined;
+  currentProgram: { programId: string; startDate?: Date | string; currentPhase: number; currentWeek: number; completedWorkouts?: number; totalWorkouts?: number } | null | undefined;
   streakDays: number;
   totalWorkouts: number;
 }
@@ -262,6 +262,8 @@ export function formatProgressData(
       currentPhase: progress.currentProgram.currentPhase,
       currentWeek: progress.currentProgram.currentWeek,
       totalWeeks: overrides?.totalWeeks ?? 12,
+      completedWorkouts: progress.currentProgram.completedWorkouts,
+      totalWorkouts: progress.currentProgram.totalWorkouts,
       nextWorkout: nextWorkout,
       nextWorkoutDay: overrides?.nextWorkoutDay,
     } : null,

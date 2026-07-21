@@ -443,6 +443,7 @@ export default function SettingsPage() {
     <button
       onClick={handleSave}
       disabled={saving}
+      data-tour="settings-save"
       className="w-full rounded-xl bg-zinc-900 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
     >
       {saving ? (
@@ -473,7 +474,7 @@ export default function SettingsPage() {
       </header>
 
       {/* Tab bar */}
-      <div className="flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60">
+      <div data-tour="settings-tabs" className="flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60">
         {TABS.map(tab => (
           <button
             key={tab.id}
@@ -493,7 +494,7 @@ export default function SettingsPage() {
       {activeTab === 'profile' && (
         <>
           {/* Account */}
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          <section data-tour="settings-account" className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
             <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Account</h2>
             <div className="space-y-4">
               <div>
@@ -521,7 +522,7 @@ export default function SettingsPage() {
           </section>
 
           {/* Body Stats */}
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          <section data-tour="settings-body-stats" className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Body Stats</h2>

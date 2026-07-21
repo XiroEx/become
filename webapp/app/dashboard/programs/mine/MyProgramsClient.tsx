@@ -112,6 +112,7 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
         <div className="mb-4 flex justify-end">
           <button
             onClick={() => setShowCreate(true)}
+            data-tour="programs-create"
             className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
             <Plus className="h-4 w-4" />
@@ -136,6 +137,7 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
           </div>
           <Link
             href="/dashboard/programs/new"
+            data-tour="programs-create"
             className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
             <Plus className="h-4 w-4" />
@@ -150,6 +152,8 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
         </div>
       )}
 
+      {/* data-tour anchors the onboarding tour to the list area (all states) */}
+      <div data-tour="programs-list">
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
@@ -230,6 +234,7 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
           ))}
         </div>
       )}
+      </div>
     </>
   );
 

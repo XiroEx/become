@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
 
@@ -57,6 +58,9 @@ interface ExerciseSwapModalProps {
   workoutExerciseSlugs: string[];
   /** Role override from the program context */
   programRole?: string;
+  /** Quick sessions have no program — only offer a session-scope swap and hide the
+   *  "Swap … for All Future Workouts" (program-wide) button. */
+  sessionScopeOnly?: boolean;
 }
 
 // ─── Equipment display helpers ──────────────────────────────────────────────
@@ -197,6 +201,7 @@ export default function ExerciseSwapModal({
   exerciseName,
   workoutExerciseSlugs,
   programRole,
+  sessionScopeOnly = false,
 }: ExerciseSwapModalProps) {
   const [alternatives, setAlternatives] = useState<AlternativeExercise[]>([]);
   const [source, setSource] = useState<SourceExercise | null>(null);
@@ -218,12 +223,17 @@ export default function ExerciseSwapModal({
   });
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [visibleCount, setVisibleCount] = useState(8);
+  // Snap every collapsible section back to its short preview whenever the modal is
+  // re-opened or the result set changes (new search / filters) — a section must
+  // never open already 30 items tall from a previous visit.
+  const sectionResetKey = useMemo(
+    () => [isOpen, searchQuery, filters.equipment, filters.bodyRegion, filters.difficulty, filters.category].join("|"),
+    [isOpen, searchQuery, filters],
+  );
   // Variations: cache per alternative slug, and which variant is selected
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({})
   const searchRef = useRef<HTMLInputElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useLockScroll(isOpen);
 
@@ -289,7 +299,6 @@ export default function ExerciseSwapModal({
       hasFetchedRef.current = true;
       fetchAlternatives();
       setSelectedSlug(null);
-      setVisibleCount(8);
       setSearchQuery("");
       setFilters({ equipment: null, bodyRegion: null, difficulty: null, category: null });
       setVariationsCache({});
@@ -354,7 +363,6 @@ export default function ExerciseSwapModal({
   // Reset visible count when user actively searches or filters
   useEffect(() => {
     if (searchQuery || Object.values(filters).some(Boolean)) {
-      setVisibleCount(8);
     }
   }, [searchQuery, filters]);
 
@@ -401,7 +409,6 @@ export default function ExerciseSwapModal({
   const difficultyOptions = [...new Set(alternatives.map((a) => a.difficulty))].sort();
   const categoryOptions = [...new Set(alternatives.map((a) => a.category))].sort();
 
-  const visibleAlternatives = filteredAlternatives.slice(0, visibleCount);
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -428,23 +435,6 @@ export default function ExerciseSwapModal({
     }));
   };
 
-  // Infinite scroll: bump visibleCount when sentinel enters viewport
-  const hasMore = useMemo(() => visibleCount < filteredAlternatives.length, [visibleCount, filteredAlternatives.length]);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount((c) => c + 10);
-        }
-      },
-      { threshold: 0.1 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore]);
 
   const handleCreateCustom = async () => {
     const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = customForm;
@@ -777,12 +767,14 @@ export default function ExerciseSwapModal({
               {/* ── My Custom Exercises ── */}
               {customExercises.length > 0 && (
                 <div className="px-5 pt-3 pb-2">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                    My Exercises
-                  </p>
-                  <div className="space-y-1.5">
-                    {customExercises.map(ex => (
-                      <div key={ex.slug} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/50">
+                  <CollapsibleSection
+                    title="My Exercises"
+                    items={customExercises}
+                    key={sectionResetKey}
+                    listClassName="space-y-1.5"
+                    keyFor={(ex) => ex.slug}
+                    renderItem={(ex) => (
+                      <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/50">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
                           <p className="text-xs text-zinc-400 dark:text-zinc-500">{ex.trackingType.replace(/_/g, " ")} · {ex.primaryMuscles.slice(0, 2).map(m => m.replace(/_/g, " ")).join(", ")}</p>
@@ -794,17 +786,10 @@ export default function ExerciseSwapModal({
                           Use
                         </button>
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  />
                 </div>
               )}
-
-              {/* Top Suggestions label */}
-              <div className="px-5 pt-3 pb-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                  Top Suggestions
-                </p>
-              </div>
 
               {/* Alternatives */}
               <div className="px-5 pb-4">
@@ -837,10 +822,13 @@ export default function ExerciseSwapModal({
                 )}
 
                 {!loading && !error && (
-                  <div className="space-y-2">
-                    {visibleAlternatives.map((alt, i) => (
+                  <CollapsibleSection
+                    title="Top Suggestions"
+                    items={filteredAlternatives}
+                    key={sectionResetKey}
+                    keyFor={(alt) => alt.slug}
+                    renderItem={(alt, i) => (
                       <motion.div
-                        key={alt.slug}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: Math.min(i, 5) * 0.03 }}
@@ -850,6 +838,7 @@ export default function ExerciseSwapModal({
                           isSelected={selectedSlug === alt.slug}
                           onSelect={() => setSelectedSlug(selectedSlug === alt.slug ? null : alt.slug)}
                           onSwap={(scope) => handleSwap(alt, scope)}
+                          sessionScopeOnly={sessionScopeOnly}
                           source={source}
                           variations={variationsCache[alt.slug] || null}
                           selectedVariationSlug={selectedVariants[alt.slug] ?? alt.slug}
@@ -858,15 +847,8 @@ export default function ExerciseSwapModal({
                           }
                         />
                       </motion.div>
-                    ))}
-
-                    {/* Infinite scroll sentinel */}
-                    {hasMore && (
-                      <div ref={sentinelRef} className="flex items-center justify-center py-4">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600 dark:border-zinc-600 dark:border-t-zinc-300" />
-                      </div>
                     )}
-                  </div>
+                  />
                 )}
 
                 {/* Create Custom button */}
@@ -939,6 +921,7 @@ function AlternativeCard({
   isSelected,
   onSelect,
   onSwap,
+  sessionScopeOnly = false,
   source,
   variations,
   selectedVariationSlug,
@@ -948,6 +931,7 @@ function AlternativeCard({
   isSelected: boolean;
   onSelect: () => void;
   onSwap: (scope: SwapScope) => void;
+  sessionScopeOnly?: boolean;
   source: SourceExercise | null;
   variations: ExerciseVariation[] | null;
   selectedVariationSlug: string;
@@ -1123,26 +1107,41 @@ function AlternativeCard({
                 </div>
               )}
 
-              {/* Swap buttons */}
+              {/* Swap buttons. Quick sessions have no program, so only a single
+                  session-scope swap is offered (no "All Future Workouts"). */}
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSwap('program');
-                  }}
-                  className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
-                >
-                  Swap {chosenVariation ? `"${chosenVariation.name}"` : ""} for All Future Workouts
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSwap('session');
-                  }}
-                  className="w-full rounded-lg border border-zinc-300 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Just This Session
-                </button>
+                {sessionScopeOnly ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSwap('session');
+                    }}
+                    className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
+                  >
+                    Swap {chosenVariation ? `"${chosenVariation.name}"` : "Exercise"}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwap('program');
+                      }}
+                      className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-500 active:bg-green-700"
+                    >
+                      Swap {chosenVariation ? `"${chosenVariation.name}"` : ""} for All Future Workouts
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSwap('session');
+                      }}
+                      className="w-full rounded-lg border border-zinc-300 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Just This Session
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>

@@ -8,17 +8,25 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Brain, ArrowRight, Check, ChevronRight, Flame, Share2 } from 'lucide-react'
+import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
+import TrainingGrounds from '@/components/mind/TrainingGrounds'
+import SuggestedActions from '@/components/mind/SuggestedActions'
 import { composeSession } from '@/lib/mind/composeSession'
 import { readMindPlanCache, invalidateMindSession } from '@/lib/mind/sessionCache'
 import { precomposeMindSession } from '@/lib/mind/precompose'
+import { suggestActions } from '@/lib/mind/suggestActions'
+import { getPathSession } from '@/lib/mind/sessionPath'
+import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
+import { runAiTask } from '@/lib/ai/runClient'
 import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
+
+interface LevelProgress { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
 
 interface ProgressData {
   chapter: number
@@ -26,6 +34,23 @@ interface ProgressData {
   xpProgress: { pct: number } | null
   unlockedSystems: string[]
   vision: { identityStatement?: string } | null
+  // Split level/chapter model
+  level: number
+  levelProgress: LevelProgress | null
+  mainSessionCount: number
+  sessionsIntoChapter: { done: number; needed: number; toNext: number } | null
+  mainSessionAvailable: boolean
+  nextMainSessionAt: number | null
+}
+
+/** "in 12h 30m" until the next main session unlocks (null once available). */
+function untilLabel(ts: number | null): string | null {
+  if (!ts) return null
+  const ms = ts - Date.now()
+  if (ms <= 0) return null
+  const h = Math.floor(ms / 3_600_000)
+  const m = Math.floor((ms % 3_600_000) / 60_000)
+  return h > 0 ? `in ${h}h ${m}m` : `in ${m}m`
 }
 
 const MOVE_CHIP: Record<MoveKind, string> = {
@@ -59,14 +84,16 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` }
 }
 
+// AI suggested-next cache — one set per completed session (cleared on the next
+// session's completion; 12h hard cap), so the tile doesn't re-tune every visit.
+const SUGG_CACHE_KEY = 'mind-suggested-next'
+const SUGG_CACHE_TTL = 12 * 60 * 60 * 1000
+
 export default function MindJourney() {
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
-  const [completedToday, setCompletedToday] = useState(false)
   const [streak, setStreak] = useState(0)
-  const [sharing, setSharing] = useState(false)
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [lastBreathAt, setLastBreathAt] = useState<number | null>(null)
@@ -78,6 +105,11 @@ export default function MindJourney() {
   // the page loads so there's NO added wait at Begin: if it's ready we play it,
   // otherwise we fall back to the instant deterministic plan.
   const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null)
+  // Post-session suggested actions — AI-picked; null until the AI resolves (the
+  // deterministic set shows meanwhile). Cached in localStorage so revisits don't
+  // refetch; suggFetching drives the "tuning…" hint ONLY during a real fetch.
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(null)
+  const [suggFetching, setSuggFetching] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -100,11 +132,16 @@ export default function MindJourney() {
           xpProgress: p.xpProgress ?? null,
           unlockedSystems: p.unlockedSystems ?? getUnlockedSystems(p.chapter ?? 1),
           vision: p.vision ?? null,
+          level: p.level ?? 1,
+          levelProgress: p.levelProgress ?? null,
+          mainSessionCount: p.mainSessionCount ?? 0,
+          sessionsIntoChapter: p.sessionsIntoChapter ?? null,
+          mainSessionAvailable: p.mainSessionAvailable ?? true,
+          nextMainSessionAt: p.nextMainSessionAt ?? null,
         })
       }
       if (sessionRes.ok) {
         const s = await sessionRes.json()
-        setCompletedToday(!!s.completedToday)
         setStreak(s.streak ?? 0)
         setLastBreathAt(typeof s.lastBreathAt === 'number' ? s.lastBreathAt : null)
         setRecentKinds(Array.isArray(s.recentKinds) ? s.recentKinds : [])
@@ -138,6 +175,7 @@ export default function MindJourney() {
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       recentKinds,
+      pathFocus: getPathSession(progress.mainSessionCount),
       dayOfYear: dayOfYear(),
       seed: sessionSeed ?? undefined,
       now: Date.now(),
@@ -171,43 +209,70 @@ export default function MindJourney() {
     setPlaying(true)
   }, [])
 
-  // Share the current composed session — snapshots the plan into a public link.
-  const handleShare = useCallback(async () => {
-    if (!effectivePlan || sharing) return
-    setSharing(true)
+  // Deterministic suggested actions — shown instantly (and the fallback if the AI
+  // drifts). The AI upgrade replaces them when it resolves.
+  const deterministicSuggestions = useMemo(
+    () => (progress ? suggestActions({ state: recentState, unlocked: progress.unlockedSystems, seed: dayOfYear() }) : []),
+    [progress, recentState],
+  )
+
+  // After a session (i.e. in the 20h cooldown → Training Grounds), ask the AI to
+  // pick 3 next protocols from the user's state + tendencies. CACHED in
+  // localStorage until the next session completes (max 12h) so revisiting the
+  // page doesn't refetch — "tuning…" shows only while a real fetch is running,
+  // and settles (to the deterministic set) if the AI fails.
+  useEffect(() => {
+    if (!progress || (progress.mainSessionAvailable ?? true) || aiSuggestions) return
+    // 1. Cache hit → adopt instantly, no fetch, no "tuning".
     try {
-      const res = await fetch('/api/mind/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` },
-        body: JSON.stringify({ kind: 'session', title: effectivePlan.intro.title, plan: effectivePlan }),
-      })
-      const data = await res.json().catch(() => null)
-      if (res.ok && data?.url) {
-        const full = `${window.location.origin}${data.url}`
-        setShareUrl(full)
-        // Native share sheet on mobile; clipboard fallback elsewhere.
-        if (typeof navigator !== 'undefined' && navigator.share) {
-          try { await navigator.share({ title: 'A Become session for you', url: full }) } catch { /* dismissed */ }
-        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          try { await navigator.clipboard.writeText(full) } catch { /* no clipboard */ }
-        }
+      const raw = localStorage.getItem(SUGG_CACHE_KEY)
+      if (raw) {
+        const c = JSON.parse(raw) as { suggestions?: SuggestedAction[]; ts?: number }
+        const fresh = typeof c.ts === 'number' && Date.now() - c.ts < SUGG_CACHE_TTL
+        const valid = (c.suggestions ?? []).filter((s) => findProtocol(s.system, s.id))
+        if (fresh && valid.length === 3) { setAiSuggestions(valid); return }
       }
-    } finally {
-      setSharing(false)
-    }
-  }, [effectivePlan, sharing])
+    } catch { /* fall through to fetch */ }
+    // 2. No usable cache → one fetch.
+    let cancelled = false
+    setSuggFetching(true)
+    runAiTask(
+      '/api/ai/mind/suggestions',
+      { context: { state: recentState, recentKinds, unlockedSystems: progress.unlockedSystems } },
+      { silent: true },
+    ).then((r) => {
+      if (cancelled) return
+      const raw = r.ok && r.result ? (r.result as { suggestions?: Array<{ system: string; protocolId: string; reason?: string }> }).suggestions : null
+      const valid = (Array.isArray(raw) ? raw : [])
+        .map((x) => {
+          const p = findProtocol(x.system, x.protocolId)
+          return p ? { ...p, reason: (x.reason || '').trim() || p.blurb } : null
+        })
+        .filter((x): x is SuggestedAction => x !== null)
+        .slice(0, 3)
+      if (valid.length === 3) {
+        setAiSuggestions(valid)
+        try { localStorage.setItem(SUGG_CACHE_KEY, JSON.stringify({ suggestions: valid, ts: Date.now() })) } catch { /* ignore */ }
+      }
+    }).finally(() => { if (!cancelled) setSuggFetching(false) })
+    return () => { cancelled = true }
+  }, [progress, recentState, recentKinds, aiSuggestions])
 
   // ── Immersive session overlay ──
   if (playing && effectivePlan) {
     return (
       <SessionPlayer
         plan={effectivePlan}
+        unlockedSystems={progress?.unlockedSystems ?? getUnlockedSystems(progress?.chapter ?? 1)}
         onExit={() => {
           setPlaying(false)
           // Finished a session → drop the cache and warm a fresh one in the
           // background (non-blocking), so the next view shows a new AI session.
           invalidateMindSession()
           setAiPlan(null)
+          setAiSuggestions(null)
+          // New session → yesterday's suggestions are stale; recompute once.
+          try { localStorage.removeItem(SUGG_CACHE_KEY) } catch { /* ignore */ }
           precomposeMindSession()
           setLoading(true)
           load()
@@ -239,13 +304,17 @@ export default function MindJourney() {
 
   const chapter = progress?.chapter ?? 1
   const chapterName = CHAPTERS[chapter - 1]?.name ?? 'Reset'
-  const pct = progress?.xpProgress?.pct ?? 0
-  const unlockedCount = progress?.unlockedSystems.length ?? 1
+  const level = progress?.level ?? 1
+  const levelPct = progress?.levelProgress?.pct ?? 0
+  const xpToNext = progress?.levelProgress?.xpToNext ?? 0
+  const chSessions = progress?.sessionsIntoChapter ?? null
+  const available = progress?.mainSessionAvailable ?? true
+  const cooldownLabel = untilLabel(progress?.nextMainSessionAt ?? null)
 
   return (
     <PageTransition className="flex min-h-[78vh] flex-col pb-6">
-      {/* Header — calm, minimal */}
-      <header className="mb-5">
+      {/* Header — calm, minimal (compact in Training Grounds mode) */}
+      <header className={available ? 'mb-5' : 'mb-4'}>
         <div className="flex items-center justify-between">
           <h1 className="flex items-center gap-2 text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
             <Brain className="h-6 w-6 text-violet-500" />
@@ -258,56 +327,88 @@ export default function MindJourney() {
             </span>
           )}
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-            Ch.{chapter} · {chapterName}
-          </span>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
+        {available ? (
+          <>
+            {/* LEVEL — per-user, XP-driven, uncapped (from ALL mind activity). */}
+            <div className="mt-3 flex items-center gap-3">
+              <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+                Lv {level}
+              </span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${levelPct}%` }} />
+              </div>
+              <span className="shrink-0 text-[11px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
+                {xpToNext} XP
+              </span>
+            </div>
 
-        {/* Visual chapter path */}
-        <div className="mt-4 flex items-center">
-          {CHAPTERS.map((c, i) => {
-            const done = c.id < chapter
-            const current = c.id === chapter
-            return (
-              <Fragment key={c.id}>
-                {i > 0 && (
-                  <div className={`h-0.5 flex-1 ${c.id <= chapter ? 'bg-violet-500' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
-                )}
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                    done
-                      ? 'bg-violet-500 text-white'
-                      : current
-                        ? 'bg-white text-violet-600 ring-2 ring-violet-500 dark:bg-zinc-900'
-                        : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
-                  }`}
-                  title={c.name}
-                >
-                  {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : c.id}
-                </div>
-              </Fragment>
-            )
-          })}
-        </div>
+            {/* Visual chapter path */}
+            {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+            <div className="mt-4 flex items-center" data-tour="mind-chapters">
+              {CHAPTERS.map((c, i) => {
+                const done = c.id < chapter
+                const current = c.id === chapter
+                return (
+                  <Fragment key={c.id}>
+                    {i > 0 && (
+                      <div className={`h-0.5 flex-1 ${c.id <= chapter ? 'bg-violet-500' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
+                    )}
+                    <div
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                        done
+                          ? 'bg-violet-500 text-white'
+                          : current
+                            ? 'bg-white text-violet-600 ring-2 ring-violet-500 dark:bg-zinc-900'
+                            : 'bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500'
+                      }`}
+                      title={c.name}
+                    >
+                      {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : c.id}
+                    </div>
+                  </Fragment>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+              Ch.{chapter} · {chapterName}
+              {chapter < CHAPTERS.length && chSessions
+                ? ` — ${chSessions.done}/${chSessions.needed} sessions to Ch.${chapter + 1}`
+                : ' — final chapter'}
+            </p>
+          </>
+        ) : (
+          // Training Grounds mode — level + chapter collapse onto ONE line so the
+          // grounds sit higher up.
+          <div className="mt-3 flex items-center gap-2.5">
+            <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-extrabold text-violet-600 dark:bg-violet-500/15 dark:text-violet-300">
+              Lv {level}
+            </span>
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+              <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-green-500" style={{ width: `${levelPct}%` }} />
+            </div>
+            <span className="shrink-0 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+              Ch.{chapter} · {chapterName}
+            </span>
+          </div>
+        )}
       </header>
 
-      {/* Centered focus area — fills the space below the header */}
-      <div className="flex flex-1 flex-col justify-center">
+      {/* Focus area — centered for the daily session, top-aligned for Training
+          Grounds so its tiles sit higher up. */}
+      <div className={`flex flex-1 flex-col ${available ? 'justify-center' : 'justify-start'}`}>
       {/* The next move — always the instant (deterministic) session; if an
           AI-composed plan is cached it's used transparently. Never blocks on
           generation (that happens in the background on app open). */}
-      {effectivePlan ? (
+      {available && effectivePlan ? (
+        // Main session available (first ever, or 20h since the last one).
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
             onClick={begin}
+            data-tour="mind-session"
             className="group relative w-full rounded-3xl bg-zinc-900 p-6 text-left text-white shadow-sm transition-transform active:scale-[0.98] dark:bg-zinc-800"
           >
             <p className="text-xs font-semibold uppercase tracking-widest text-white/50">
-              {completedToday ? 'Go again' : 'Today'}
+              {(() => { const ps = getPathSession(progress?.mainSessionCount ?? 0); return ps ? `Session ${ps.n} of 50 · ${CHAPTERS[ps.chapter - 1]?.name ?? ''}` : "Today's session" })()}
             </p>
             <h2 className="mt-2 text-3xl font-extrabold">{effectivePlan.intro.title}</h2>
             <p className="mt-2 max-w-xs text-sm text-white/70">{effectivePlan.intro.subtitle}</p>
@@ -319,61 +420,61 @@ export default function MindJourney() {
               ))}
             </div>
             <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3.5 text-base font-bold text-zinc-900 transition-transform group-active:scale-95">
-              {completedToday ? 'Train again' : 'Begin'}
+              Begin
               <ArrowRight className="h-5 w-5" />
             </span>
-            {completedToday && (
-              <p className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-white/60">
-                <Check className="h-3.5 w-3.5" />
-                Done today{streak > 0 ? ` · ${streak}-day streak` : ''}
-              </p>
-            )}
           </button>
-          {/* Share this session as a public, read-only link. */}
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            <Share2 className="h-4 w-4" />
-            {sharing ? 'Creating link…' : shareUrl ? 'Link ready — copied' : 'Share this session'}
-          </button>
-          {shareUrl && (
-            <p className="mt-1.5 break-all text-center text-[11px] text-zinc-400">{shareUrl}</p>
-          )}
         </motion.div>
-      ) : null}
+      ) : (
+        // In the 20h cooldown → suggested next actions + Training Grounds.
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <SuggestedActions actions={aiSuggestions ?? deterministicSuggestions} loading={suggFetching} />
+          <TrainingGrounds unlocked={progress?.unlockedSystems ?? []} nextInLabel={cooldownLabel} mainSessionCount={progress?.mainSessionCount ?? 0} />
+        </motion.div>
+      )}
 
-      {/* More → Arsenal */}
-      <Link
-        href="/dashboard/mind/arsenal"
-        className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-      >
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white">Your Arsenal</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Meditations, journaling, goals &amp; quick sessions — {unlockedCount} unlocked
-          </p>
+      {/* The Becoming — progression / training log. Unlocks after 5 main
+          sessions; until then it shows locked so the path ahead is visible. */}
+      {(progress?.mainSessionCount ?? 0) >= 5 ? (
+        <Link
+          href="/dashboard/mind/becoming"
+          data-tour="mind-becoming-link"
+          className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+        >
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Where you started, where you are, what&apos;s next
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 text-zinc-400" />
+        </Link>
+      ) : (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div>
+            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">The Becoming</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Your training log — unlocks after your 5th main session ({progress?.mainSessionCount ?? 0}/5 done)
+            </p>
+          </div>
+          <Lock className="h-4 w-4 text-zinc-400" />
         </div>
-        <ChevronRight className="h-5 w-5 text-zinc-400" />
-      </Link>
+      )}
 
-      {/* The Becoming — progression / training log */}
-      <Link
-        href="/dashboard/mind/becoming"
-        className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-      >
-        <div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Where you started, where you are, what&apos;s next
-          </p>
+      {/* AI coach — unlocks after 3 main sessions. */}
+      {(progress?.mainSessionCount ?? 0) >= 3 ? (
+        <MindCoachTeaser />
+      ) : (
+        <div className="mt-3 flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div>
+            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">Your coach</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              Talk it through — unlocks after your 3rd main session ({progress?.mainSessionCount ?? 0}/3 done)
+            </p>
+          </div>
+          <Lock className="h-4 w-4 text-zinc-400" />
         </div>
-        <ChevronRight className="h-5 w-5 text-zinc-400" />
-      </Link>
-
-      {/* AI coach — scaffolded (drops into the MoveEngine via redbtn later) */}
-      <MindCoachTeaser />
+      )}
       </div>
     </PageTransition>
   )

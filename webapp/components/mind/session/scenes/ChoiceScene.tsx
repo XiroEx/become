@@ -38,7 +38,7 @@ export default function ChoiceScene({ move, onDone }: SceneProps) {
             <p className="text-xs uppercase tracking-widest text-white/40">{options[picked]?.label}</p>
             {response && <p className="mt-5 text-xl font-semibold leading-relaxed text-white">{response}</p>}
             <button
-              onClick={onDone}
+              onClick={() => onDone(picked != null ? { q: move.title, a: options[picked]?.label ?? '' } : undefined)}
               className="mt-10 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
             >
               Continue

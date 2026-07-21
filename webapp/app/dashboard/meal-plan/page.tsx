@@ -203,7 +203,7 @@ export default function MealPlanPage() {
       </header>
 
       {/* Week nav */}
-      <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-2 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-2 py-2 dark:border-zinc-800 dark:bg-zinc-900" data-tour="plan-week-nav">
         <button onClick={() => setWeekStart(w => addDays(w, -7))} aria-label="Previous week"
           className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
           <ChevronLeft className="h-5 w-5" />
@@ -222,6 +222,7 @@ export default function MealPlanPage() {
       <button
         onClick={() => setGroceryOpen(true)}
         disabled={grocery.length === 0}
+        data-tour="plan-grocery"
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
       >
         <ShoppingCart className="h-4 w-4" />
@@ -231,7 +232,7 @@ export default function MealPlanPage() {
       {loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-zinc-400" /></div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="plan-days">
           {days.map(day => {
             const dayKey = ymd(day)
             const dayPlans = byDay.get(dayKey) ?? []

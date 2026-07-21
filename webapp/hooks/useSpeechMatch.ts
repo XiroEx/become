@@ -68,10 +68,13 @@ export function useSpeechMatch(
   const ratio = matched.length ? matchedCount / matched.length : 0
   const frontier = matched.reduce((acc, m, i) => (m ? i : acc), -1)
 
-  // Pass needs BOTH enough words said AND the speaker to have reached the end —
-  // otherwise a long statement "finishes" at 60% while you're still mid-sentence.
-  // `reachedEnd` = the furthest spoken word is within the last ~20% of the line.
-  const tail = Math.max(1, Math.ceil(matched.length * 0.2))
+  // Pass needs BOTH most of the words said AND the speaker to have actually
+  // reached the END of the line — otherwise it "finishes" mid-sentence (the old
+  // 0.6 ratio + 20% tail locked in while you were still talking). `reachedEnd`
+  // now requires the very last word (or the last two on longer lines), so it only
+  // completes once you've said the whole thing. The "Lock it in anyway" button
+  // stays as the escape hatch for a genuinely mis-heard final word.
+  const tail = matched.length > 6 ? 2 : 1
   const reachedEnd = matched.length > 0 && frontier >= matched.length - tail
   const passed = matched.length > 0 && ratio >= threshold && reachedEnd
 

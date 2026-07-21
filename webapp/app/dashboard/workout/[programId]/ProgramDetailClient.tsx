@@ -593,7 +593,7 @@ export default function ProgramDetailClient({ program }: Props) {
           so they reveal as the panel slides up. */}
       <div
         ref={heroRef}
-        className="sticky top-0 z-0 flex h-[calc(52vh+1rem)] sm:h-[calc(52vh+1.5rem)] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 -mt-4 sm:mx-0 sm:-mt-6"
+        className="sticky top-0 z-0 flex min-h-[calc(52vh+1rem)] sm:min-h-[calc(52vh+1.5rem)] flex-col overflow-hidden bg-linear-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-black dark:via-zinc-900 dark:to-black -mx-3 -mt-4 sm:mx-0 sm:-mt-6"
       >
         {/* Cover image or fallback pattern */}
         {program.coverImage ? (
@@ -630,7 +630,7 @@ export default function ProgramDetailClient({ program }: Props) {
           </div>
         )}
 
-        <div className="relative flex h-full flex-col px-4 pb-6 pt-1 sm:px-6 sm:pb-8 sm:pt-2">
+        <div className="relative flex flex-1 flex-col px-4 pb-6 pt-1 sm:px-6 sm:pb-8 sm:pt-2">
           {/* Top nav row */}
           <div className="mb-4 flex items-center justify-between sm:mb-6">
             <button
@@ -693,12 +693,14 @@ export default function ProgramDetailClient({ program }: Props) {
             <button
               onClick={handleStartProgram}
               disabled={enrolling}
+              data-tour="program-start"
               className="whitespace-nowrap rounded-full bg-linear-to-r from-green-500 to-emerald-600 px-5 py-2.5 font-semibold text-white shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed sm:px-7 sm:py-3"
             >
               {enrolling ? "Starting..." : activeProgram ? "Continue" : "Start Program"}
             </button>
             <button
               onClick={() => router.push(`/dashboard/workout/${program.program_id}/workout/live`)}
+              data-tour="program-live"
               className={`flex items-center gap-2 whitespace-nowrap rounded-full px-5 py-2.5 font-semibold text-white backdrop-blur-sm transition-all sm:px-6 sm:py-3 ${
                 hasInProgressWorkout
                   ? "bg-yellow-500/20 hover:bg-yellow-500/30 ring-1 ring-yellow-500/50"
@@ -919,7 +921,7 @@ export default function ProgramDetailClient({ program }: Props) {
       <div className="relative z-10 -mx-3 sm:mx-0 bg-zinc-50 dark:bg-zinc-950 sm:rounded-t-2xl">
       <div className="mx-auto max-w-4xl py-2 px-3 sm:px-6">
         {/* Phase Selector */}
-        <div className="-mt-4 relative z-10">
+        <div data-tour="program-phases" className="-mt-4 relative z-10">
           <Card>
             <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               Select Phase
@@ -968,7 +970,7 @@ export default function ProgramDetailClient({ program }: Props) {
         </div>
 
         {/* Day Selector */}
-        <div className="mt-4 sm:mt-6">
+        <div data-tour="program-days" className="mt-4 sm:mt-6">
           <div className="mb-2 text-sm font-semibold text-zinc-900 dark:text-white sm:mb-3">
             Training Days
           </div>
@@ -1029,7 +1031,7 @@ export default function ProgramDetailClient({ program }: Props) {
               </div>
 
               {/* Exercise List */}
-              <div className="space-y-2 sm:space-y-3">
+              <div data-tour="program-exercises" className="space-y-2 sm:space-y-3">
                 {(() => {
                   // Group consecutive exercises sharing the same groupId
                   const elements: React.ReactNode[] = [];
