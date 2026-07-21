@@ -404,7 +404,7 @@ export default function MindJourney() {
         // In the 20h cooldown → suggested next actions + Training Grounds.
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <SuggestedActions actions={aiSuggestions ?? deterministicSuggestions} loading={!aiSuggestions} />
-          <TrainingGrounds unlocked={progress?.unlockedSystems ?? []} nextInLabel={cooldownLabel} />
+          <TrainingGrounds unlocked={progress?.unlockedSystems ?? []} nextInLabel={cooldownLabel} mainSessionCount={progress?.mainSessionCount ?? 0} />
         </motion.div>
       )}
 
@@ -429,7 +429,7 @@ export default function MindJourney() {
           <div>
             <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">The Becoming</p>
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Your training log — unlocks after session 5
+              Your training log — unlocks after your 5th main session ({progress?.mainSessionCount ?? 0}/5 done)
             </p>
           </div>
           <Lock className="h-4 w-4 text-zinc-400" />
@@ -444,7 +444,7 @@ export default function MindJourney() {
           <div>
             <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">Your coach</p>
             <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Talk it through — unlocks after session 3
+              Talk it through — unlocks after your 3rd main session ({progress?.mainSessionCount ?? 0}/3 done)
             </p>
           </div>
           <Lock className="h-4 w-4 text-zinc-400" />

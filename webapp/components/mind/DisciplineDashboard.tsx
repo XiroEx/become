@@ -449,7 +449,7 @@ export default function DisciplineDashboard() {
               blurb={p.blurb}
               color="text-red-500"
               locked={i >= 1 + reps}
-              lockedHint={`${i - reps} more rep${i - reps === 1 ? '' : 's'} to unlock`}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in this tool to open`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

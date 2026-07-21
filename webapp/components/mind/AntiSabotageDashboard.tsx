@@ -278,7 +278,7 @@ export default function AntiSabotageDashboard() {
               blurb={p.blurb}
               color="text-orange-500"
               locked={i >= 1 + reps}
-              lockedHint={`${i - reps} more rep${i - reps === 1 ? '' : 's'} to unlock`}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in this tool to open`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

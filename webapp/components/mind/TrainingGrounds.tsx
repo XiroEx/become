@@ -32,11 +32,14 @@ const TILE: Record<string, { bg: string; icon: string; ring: string }> = {
 const FALLBACK = { bg: 'bg-zinc-500/10', icon: 'text-zinc-500', ring: 'border-zinc-500/30' }
 
 export default function TrainingGrounds({
-  unlocked, nextInLabel,
+  unlocked, nextInLabel, mainSessionCount = 0,
 }: {
   unlocked: string[]
   /** e.g. "in 12h 30m" — when the next main session unlocks. */
   nextInLabel?: string | null
+  /** Completed main sessions — lets locked tiles say exactly how far away the
+   *  unlocking chapter is (10 main sessions per chapter). */
+  mainSessionCount?: number
 }) {
   const allIds = Object.keys(SYSTEM_INFO)
   const unlockedIds = allIds.filter((id) => unlocked.includes(id))
@@ -87,6 +90,9 @@ export default function TrainingGrounds({
         <div className="mt-3 grid grid-cols-2 gap-3">
           {lockedIds.map((id) => {
             const info = SYSTEM_INFO[id]
+            // Chapters advance by main sessions (10 per chapter) — tell the user
+            // exactly what stands between them and this tool.
+            const needed = Math.max(0, (info.chapter - 1) * 10 - mainSessionCount)
             return (
               <div
                 key={id}
@@ -96,7 +102,9 @@ export default function TrainingGrounds({
                   <Lock className="h-4 w-4 text-zinc-400" />
                 </span>
                 <p className="mt-3 text-sm font-bold text-zinc-500 dark:text-zinc-400">{info.label}</p>
-                <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">Chapter {info.chapter}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">
+                  Unlocks in Ch.{info.chapter}{needed > 0 ? ` — ${needed} main session${needed === 1 ? '' : 's'} away` : ''}
+                </p>
               </div>
             )
           })}
