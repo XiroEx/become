@@ -15,6 +15,7 @@ import { readQuickSession, clearQuickSession, quickSessionOverviewHref, quickSes
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
+import { resolveTrackingInputs } from "@/lib/trackingInputs";
 
 interface SetData {
   reps: string;
@@ -224,11 +225,12 @@ export default function LiveWorkoutPage() {
 
   // Determine which inputs to show based on trackingType
   const tracking = currentExercise?.trackingType || "reps_weight";
-  const showWeightInput = tracking === "reps_weight";
-  const showRepsInput = ["reps_weight", "reps_bodyweight", "reps_only"].includes(tracking);
-  const showTimeInput = ["time", "time_distance", "intervals"].includes(tracking);
+  const inputPlan = resolveTrackingInputs(currentExercise?.trackingType);
+  const showWeightInput = inputPlan.weight !== "hidden";
+  const showRepsInput = inputPlan.reps;
+  const showTimeInput = inputPlan.duration;
   const isIntervalExercise = tracking === "intervals";
-  const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
+  const showSpeedInput = inputPlan.speed;
 
   // Per-bell weight convention: when the exercise name implies a dumbbell or
   // kettlebell, the user logs the per-bell weight (e.g. "90" for a pair of
@@ -243,7 +245,7 @@ export default function LiveWorkoutPage() {
 
   // Check if inputs are empty (for skip button text)
   // Interval exercises are always "complete" (no required input) — user marks done and moves on
-  const isSkipping = isIntervalExercise ? false : (showWeightInput ? !currentReps && !currentWeight : !currentReps);
+  const isSkipping = isIntervalExercise ? false : (inputPlan.weight === "required" ? !currentReps && !currentWeight : !currentReps);
 
   // Toggle fullscreen mode when tapping video
   const handleVideoTap = () => {
@@ -428,7 +430,8 @@ export default function LiveWorkoutPage() {
           const prefillPromise = fetchLastPerformance(token, workoutData.exercises);
           const lastPerformance = await prefillPromise;
 
-          let { data: initialData, flow } = initializeExercises(workoutData.exercises, lastPerformance);
+          const { data: initialData, flow: initialFlow } = initializeExercises(workoutData.exercises, lastPerformance);
+          let flow = initialFlow;
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
@@ -1695,14 +1698,14 @@ export default function LiveWorkoutPage() {
                   className="overflow-hidden"
                 >
                   <div data-tour="live-inputs" className="relative flex gap-3 mb-6">
-                    {/* Weight input — only for reps_weight */}
+                    {/* Weight input — required weight or optional added load */}
                     {showWeightInput && (
                       <div className="flex-1">
                         <div className="mb-1 flex items-center justify-between">
                           <label className="text-xs text-white/60">
-                            {bellStyle === 'dumbbell' ? 'Weight per DB (lbs)'
-                              : bellStyle === 'kettlebell' ? 'Weight per KB (lbs)'
-                              : 'Weight (lbs)'}
+                            {bellStyle === 'dumbbell' ? `${inputPlan.weight === 'optional' ? 'Added load' : 'Weight'} per DB (lbs)`
+                              : bellStyle === 'kettlebell' ? `${inputPlan.weight === 'optional' ? 'Added load' : 'Weight'} per KB (lbs)`
+                              : inputPlan.weight === 'optional' ? 'Added load (lbs)' : 'Weight (lbs)'}
                           </label>
                           {currentExercise && exercisePRs[currentExercise.name] &&
                             exercisePRs[currentExercise.name].weight > 0 &&
@@ -1757,7 +1760,7 @@ export default function LiveWorkoutPage() {
                       </div>
                     )}
                     {/* Distance input — time_distance only */}
-                    {tracking === "time_distance" && (
+                    {inputPlan.distance && (
                       <div className="flex-1">
                         <label className="mb-1 block text-xs text-white/60">Distance (m)</label>
                         <input
@@ -1791,7 +1794,7 @@ export default function LiveWorkoutPage() {
                     )}
                   </div>
 
-                  {/* Quick weight buttons — only for weighted exercises */}
+                  {/* Quick weight buttons — for required weight and optional added load */}
                   {showWeightInput && (
                     <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
                       {[45, 95, 135, 185, 225].map((weight) => (
@@ -1857,7 +1860,7 @@ export default function LiveWorkoutPage() {
                   ? exerciseData[currentExerciseIndex][currentSetIndex - 1].reps
                     ? `Round ${currentSetIndex}: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
                     : `Round ${currentSetIndex}: done`
-                  : showWeightInput
+                  : showWeightInput && Number(exerciseData[currentExerciseIndex][currentSetIndex - 1].weight) > 0
                   ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
                   : showTimeInput
                   ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
