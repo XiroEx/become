@@ -8,18 +8,87 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Play, Dumbbell } from 'lucide-react'
+import { ArrowLeft, Play, Dumbbell, CalendarClock, Check } from 'lucide-react'
 import ExerciseAccordion from '@/components/ExerciseAccordion'
 import ShareButton from '@/components/share/ShareButton'
 import PageTransition from '@/components/PageTransition'
 import { readQuickSession, quickSessionLiveHref, type StoredQuickSession } from '@/lib/quickSession/store'
-import { FOCUS_DEFS } from '@/lib/quickSession/types'
+import { FOCUS_DEFS, type DraftExercise } from '@/lib/quickSession/types'
+
+// Local YYYY-MM-DD (not UTC) so the date picker + max match the user's day.
+function localDateStr(d = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const firstInt = (s?: string): number | undefined => {
+  const m = s ? String(s).match(/\d+/) : null
+  return m ? parseInt(m[0], 10) : undefined
+}
+
+// Turn the planned session into a log: every planned set carries its prescribed
+// reps (or duration for time-based work). `done` marks the sets completed —
+// true when logging a past/today session, false when planning a future one.
+function buildLoggedExercises(exercises: DraftExercise[], done: boolean) {
+  return exercises.map((ex) => {
+    const nSets = Math.max(1, Number(ex.sets) || 1)
+    const reps = firstInt(ex.reps)
+    const durSec = firstInt(ex.duration)
+    return {
+      name: ex.name,
+      ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+      sets: Array.from({ length: nSets }, (_, i) => ({
+        setNumber: i + 1,
+        ...(reps != null && { reps }),
+        ...(durSec != null && { duration: durSec }),
+        completed: done,
+      })),
+    }
+  })
+}
 
 export default function QuickSessionOverviewPage() {
   const router = useRouter()
   const params = useSearchParams()
   const sessionId = params.get('session') || ''
   const [session, setSession] = useState<StoredQuickSession | null | undefined>(undefined)
+  const [logOpen, setLogOpen] = useState(false)
+  const [logDate, setLogDate] = useState(localDateStr())
+  const [logging, setLogging] = useState(false)
+  const [logError, setLogError] = useState<string | null>(null)
+  // Future date = planning ahead (saved incomplete); past/today = logging done.
+  const isFutureDate = logDate > localDateStr()
+
+  const logAsDone = async () => {
+    if (!session) return
+    setLogging(true)
+    setLogError(null)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      const done = !isFutureDate
+      const exercises = buildLoggedExercises(session.exercises, done)
+      const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0)
+      const res = await fetch('/api/workouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+        body: JSON.stringify({
+          kind: 'quick',
+          sessionId: session.sessionId,
+          title: session.title,
+          ...(session.focus && { focus: session.focus }),
+          exercises,
+          completed: done,
+          ...(done && { duration: Math.max(1, Math.round(totalSets * 1.5)) }),
+          performedAt: logDate,
+          tz: new Date().getTimezoneOffset(),
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Failed to save session')
+      router.push(done ? '/dashboard/history' : '/dashboard/workout/hub?tab=sessions')
+    } catch (e) {
+      setLogError(e instanceof Error ? e.message : 'Failed to save session')
+      setLogging(false)
+    }
+  }
 
   // Client-only read of the persisted draft (localStorage is unavailable during
   // SSR). Legitimate sync-to-param effect.
@@ -54,16 +123,55 @@ export default function QuickSessionOverviewPage() {
     <PageTransition className="pb-44">
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button onClick={() => router.back()} className="flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
-          <ShareButton
-            kind="session"
-            session={{ title: session.title, focus: session.focus, exercises: session.exercises }}
-            label="Share"
-          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLogOpen((v) => !v)}
+              aria-expanded={logOpen}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+                logOpen
+                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              }`}
+            >
+              <CalendarClock className="h-4 w-4" /> Log or plan
+            </button>
+            <ShareButton
+              kind="session"
+              session={{ title: session.title, focus: session.focus, exercises: session.exercises }}
+              label="Share"
+            />
+          </div>
         </div>
+
+        {/* Log / plan date panel — revealed by the header button. Past date =
+            logs it done; future date = plans it. */}
+        {logOpen && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              {isFutureDate ? 'Plan this session for' : 'When did you do this?'}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={logDate}
+                onChange={(e) => setLogDate(e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+              />
+              <button
+                onClick={logAsDone}
+                disabled={logging}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              >
+                <Check className="h-4 w-4" /> {logging ? 'Saving…' : isFutureDate ? 'Plan it' : 'Log it'}
+              </button>
+            </div>
+            {logError && <p className="mt-1.5 text-xs text-red-500">{logError}</p>}
+          </div>
+        )}
 
         {/* Title */}
         <div>

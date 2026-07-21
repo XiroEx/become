@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     if (action === 'count') {
       // Mark the stale log as completed — fill any incomplete sets so it counts
       const userProgress = await UserProgress.findOne({ userId: payload.userId }).lean()
-      type RawLog = { programId: string; day: string; completed: boolean; date: Date; exercises: Array<{ name: string; sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }> }> }
+      type RawLog = { programId: string; day: string; completed: boolean; date: Date; scheduledDate?: Date; exercises: Array<{ name: string; sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }> }> }
       const staleLog = (userProgress?.workoutLogs as RawLog[] | undefined)
         ?.filter(l => l.programId === programId && l.day === day && !l.completed && new Date(l.date) < today)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
@@ -123,7 +123,18 @@ export async function POST(request: NextRequest) {
           if (schedule?.scheduledWorkouts?.length) {
             const staleMs = new Date(staleLog.date).getTime()
             const WINDOW_MS = 14 * 24 * 60 * 60 * 1000
-            const matchIdx = schedule.scheduledWorkouts
+            // Gap 3: if the log carries the exact slot date, resolve THAT slot.
+            const sdKey = staleLog.scheduledDate
+              ? new Date(staleLog.scheduledDate).toISOString().split('T')[0]
+              : null
+            const exactIdx = sdKey
+              ? schedule.scheduledWorkouts.findIndex(
+                  (w) =>
+                    (w.status === 'scheduled' || w.status === 'missed') &&
+                    new Date(w.date).toISOString().split('T')[0] === sdKey
+                )
+              : -1
+            const matchIdx = exactIdx >= 0 ? exactIdx : schedule.scheduledWorkouts
               .map((w, i) => ({ w, i }))
               .filter(({ w }) =>
                 w.dayLabel === day &&
@@ -186,7 +197,7 @@ export async function POST(request: NextRequest) {
     if (action === 'skip') {
       // Find the stale log date before pulling it (needed for schedule slot match)
       const upForSkip = await UserProgress.findOne({ userId: payload.userId }).lean()
-      type SkipLog = { programId: string; day: string; completed: boolean; date: Date }
+      type SkipLog = { programId: string; day: string; completed: boolean; date: Date; scheduledDate?: Date }
       const skipLog = (upForSkip?.workoutLogs as SkipLog[] | undefined)
         ?.filter(l => l.programId === programId && l.day === day && !l.completed && new Date(l.date) < today)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
@@ -216,7 +227,18 @@ export async function POST(request: NextRequest) {
           if (schedule?.scheduledWorkouts?.length) {
             const skipMs = new Date(skipLog.date).getTime()
             const WINDOW_MS = 14 * 24 * 60 * 60 * 1000
-            const matchIdx = schedule.scheduledWorkouts
+            // Gap 3: exact slot match when the log carries its scheduled date.
+            const sdKey = skipLog.scheduledDate
+              ? new Date(skipLog.scheduledDate).toISOString().split('T')[0]
+              : null
+            const exactIdx = sdKey
+              ? schedule.scheduledWorkouts.findIndex(
+                  (w) =>
+                    (w.status === 'scheduled' || w.status === 'missed') &&
+                    new Date(w.date).toISOString().split('T')[0] === sdKey
+                )
+              : -1
+            const matchIdx = exactIdx >= 0 ? exactIdx : schedule.scheduledWorkouts
               .map((w, i) => ({ w, i }))
               .filter(({ w }) =>
                 w.dayLabel === day &&

@@ -12,7 +12,7 @@
 import { MongoClient } from 'mongodb';
 
 // MongoDB URI from environment or default
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://george8794:iLmYV8dMSgJoVEwx@jondonfit.ctp0tfj.mongodb.net/jondonfitdb?appName=jondonfit';
+const MONGODB_URI = process.env.MONGODB_URI;
 
 // Video URL mappings - exercise name -> video URL
 const VIDEO_URLS = {

@@ -398,9 +398,11 @@ function shouldShowServingChoice(
   const label = prettifyUnitCodes(rawLabel).trim()
   if (!label || isBareNumberLabel(label)) return false
 
-  const native = variant.servingUnit as Unit
-  const nativeFamily = familyOf(native)
-  if (isPrimary && (nativeFamily === 'mass' || nativeFamily === 'volume') && familyOf(choice.unit) === nativeFamily) {
+  // Suppress a PRIMARY only when its label is a bare gram/ml amount ("100 g",
+  // "240 ml") — those duplicate the weight/volume unit selectors and read as
+  // arbitrary. A real named serving ("3 oz cooked", "1 cup", "1 tbsp", "1 medium")
+  // is the food's intended default and must always show + be selectable first.
+  if (isPrimary && /^\s*\d+(?:\.\d+)?\s*(?:g|ml|grams?|milli(?:litre|liter)s?)\s*$/i.test(label)) {
     return false
   }
 

@@ -1,199 +1,49 @@
 import type { TutorialDefinition } from '@redbtn/redtutorial'
+import type { TutorialSection } from './sections/types'
 
-// BECOME onboarding tour — built on @redbtn/redtutorial (registry.redbtn.io).
+// ── BECOME onboarding tour — section registry ────────────────────────────────
+// The tour is assembled from per-route "sections" (one file each in ./sections).
+// Each section contributes its own steps + the segment(s) that trigger them on a
+// route, so sections can be authored independently and merged without conflicts.
+// The engine plays each segment the first time the user hits its route, and the
+// whole thing runs once per ACCOUNT (progress via /api/tutorial-progress).
 //
-// Segmented on purpose: instead of one long forced walkthrough, the "home"
-// segment plays the first time the user lands on the dashboard, and the
-// "nutrition" segment plays the first time they open the Nutrition tab —
-// contextual coaching as the user explores. Each segment runs once per
-// account (progress is stored via /api/tutorial-progress); finishing both
-// marks the tutorial completed. Bump `version` to re-show after big changes.
-//
-// v2 (2026-07-12): full-coverage rewrite — every dashboard tile, the nudge
-// card, the progress chart, and the whole nutrition logging surface. Steps
-// anchor to data-tour attributes (stable) or aria-labels where those already
-// exist; anything layout-dependent (tiles, nudge card) is skipped gracefully
-// via onMissingTarget: 'skip'. Requires @redbtn/redtutorial >= 0.1.1 (0.1.0
-// never fired route triggers for the landing path with the fetch adapter —
-// which is why the home segment silently never showed).
+// To add coverage for a new route: create ./sections/<name>.ts exporting a
+// `TutorialSection`, then import it and add it to the SECTIONS array below.
+// Bump `version` when the set changes materially so the expanded tour re-shows.
+
+// ── SECTION IMPORTS (agents: add your import here) ───────────────────────────
+import { coreSection } from './sections/core'
+import { nutritionSection } from './sections/nutrition'
+import { workoutSection } from './sections/workout'
+import { mindSection } from './sections/mind'
+import { socialSection } from './sections/social'
+import { foodSection } from './sections/food'
+import { trackingSection } from './sections/tracking'
+import { accountSection } from './sections/account'
+import { programsSection } from './sections/programs'
+
+// ── SECTION REGISTRY (agents: add your section to this array) ────────────────
+const SECTIONS: TutorialSection[] = [
+  coreSection,
+  nutritionSection,
+  workoutSection,
+  programsSection,
+  mindSection,
+  socialSection,
+  foodSection,
+  trackingSection,
+  accountSection,
+]
+
 export const becomeOnboardingTour: TutorialDefinition = {
   id: 'become-onboarding',
-  version: 2,
+  version: 4, // full-app coverage: per-route sections across the whole dashboard
   title: 'Welcome to BECOME',
-  steps: [
-    // ----- home segment (dashboard) --------------------------------------
-    // No target → centered modal. Always shows, even if every later anchor
-    // is missing — the segment can never silently no-op again.
-    {
-      id: 'welcome',
-      title: 'Welcome to Become',
-      body: 'Your fitness journey, tracked — workouts, food, mood, and mind in one place. Here is the 60-second lay of the land.',
-      nextLabel: 'Show me around',
-    },
-    {
-      id: 'tile-streak',
-      target: '[data-tour="tile-streak"]',
-      title: 'Day streak',
-      body: 'Log something every day to grow your streak and earn the trophy.',
-      placement: 'bottom',
-    },
-    {
-      id: 'tile-mood',
-      target: '[data-tour="tile-mood"]',
-      title: "Today's mood",
-      body: 'Tap to log how you feel — the tile keeps a 7-day trend.',
-      placement: 'bottom',
-      allowInteraction: true,
-    },
-    {
-      id: 'tile-weekly',
-      target: '[data-tour="tile-weekly"]',
-      title: 'This week',
-      body: 'Your weekly workout goal — watch it fill as you train.',
-      placement: 'bottom',
-    },
-    {
-      id: 'tile-goal',
-      target: '[data-tour="tile-goal"]',
-      title: 'Goal',
-      body: 'Progress toward your annual goal, as a live percentage.',
-      placement: 'bottom',
-    },
-    {
-      id: 'tile-water',
-      target: '[data-tour="tile-water"]',
-      title: 'Water',
-      body: 'Hydration counts too — track your intake against your daily goal.',
-      placement: 'bottom',
-    },
-    {
-      id: 'nudge-card',
-      target: '[data-tour="nudge-card"]',
-      title: 'Smart nudges',
-      body: 'Become watches your patterns and suggests the next best action — one tap and it is done.',
-      placement: 'bottom',
-    },
-    {
-      id: 'customize',
-      target: '[data-tour="customize-tiles"]',
-      title: 'Make it yours',
-      body: 'Reorder, resize, or swap tiles so the dashboard shows what you care about.',
-      placement: 'top',
-    },
-    {
-      id: 'progress-chart',
-      target: '[data-tour="progress-chart"]',
-      title: 'Your trends',
-      body: 'Weight, BMI, and mood over time — flip between them with the tabs.',
-      placement: 'top',
-    },
-    {
-      id: 'bottom-nav',
-      target: '[data-tour="bottom-nav"]',
-      title: 'Getting around',
-      body: 'Workout log, Mind, Home, Nutrition, and Community — everything is one tap away.',
-      placement: 'top',
-    },
-    {
-      id: 'user-menu',
-      target: 'button[aria-label="User menu"]',
-      title: 'Profile & settings',
-      body: 'Your profile, goals, and app settings live up here. That is the tour — go move!',
-      placement: 'bottom',
-    },
-
-    // ----- nutrition segment (contextual) --------------------------------
-    {
-      id: 'nutrition-camera',
-      target: 'button[aria-label="Camera options"]',
-      title: 'Log food with your camera',
-      body: 'Snap a photo of your plate or scan a barcode — the AI estimates the macros for you.',
-      placement: 'bottom',
-    },
-    {
-      id: 'nutrition-search',
-      target: '[data-tour="nutrition-search"]',
-      title: 'Search foods',
-      body: 'Search any food to log it in seconds.',
-      placement: 'bottom',
-    },
-    {
-      id: 'nutrition-upload',
-      target: 'button[aria-label="Upload options"]',
-      title: 'Upload or describe',
-      body: 'Already have a photo? Upload it — or just describe the meal in words.',
-      placement: 'bottom',
-    },
-    {
-      id: 'nutrition-timeline',
-      target: 'button[aria-label="Timeline and history"]',
-      title: 'Your day as a timeline',
-      body: 'Review everything you have logged today, plus past AI estimates.',
-      placement: 'bottom',
-    },
-    {
-      id: 'nutrition-my-stuff',
-      target: '[data-tour="nutrition-my-stuff"]',
-      title: 'My Stuff',
-      body: 'Saved foods, recipes, and meal plans — your shortcuts live here.',
-      placement: 'bottom',
-    },
-    {
-      id: 'calorie-ring',
-      target: 'button[aria-label="Edit calorie goals"]',
-      title: 'Calories remaining',
-      body: 'Goal minus food = what is left today. Tap the ring to edit your goals.',
-      placement: 'bottom',
-      allowInteraction: true,
-    },
-    {
-      id: 'macro-rows',
-      target: '[data-tour="macro-rows"]',
-      title: 'Macros',
-      body: 'Protein, carbs, and fats against your targets — balance beats guesswork.',
-      placement: 'top',
-    },
-    {
-      id: 'nutrition-add',
-      target: '[aria-label="Add food"], [aria-label="Schedule food"]',
-      title: 'Quick add',
-      body: 'This button follows you everywhere on this page — the fastest way to log. Enjoy!',
-      placement: 'top',
-    },
-  ],
-  segments: {
-    home: {
-      steps: [
-        'welcome',
-        'tile-streak',
-        'tile-mood',
-        'tile-weekly',
-        'tile-goal',
-        'tile-water',
-        'nudge-card',
-        'customize',
-        'progress-chart',
-        'bottom-nav',
-        'user-menu',
-      ],
-      trigger: { type: 'route', match: '/dashboard', delayMs: 800 },
-    },
-    nutrition: {
-      steps: [
-        'nutrition-camera',
-        'nutrition-search',
-        'nutrition-upload',
-        'nutrition-timeline',
-        'nutrition-my-stuff',
-        'calorie-ring',
-        'macro-rows',
-        'nutrition-add',
-      ],
-      trigger: { type: 'route', match: '/dashboard/nutrition', delayMs: 600 },
-    },
-  },
-  // If a tile/button is not on screen (customized layout, no nudge right now,
-  // feature-gated), skip that step rather than stalling the tour.
+  steps: SECTIONS.flatMap((s) => s.steps),
+  segments: Object.assign({}, ...SECTIONS.map((s) => s.segments)),
+  // Anchors that may be absent (customized layouts, feature-gated UI, a nudge
+  // that isn't showing right now) are skipped rather than stalling the tour.
   onMissingTarget: 'skip',
   canSkip: true,
   skipLabel: 'Skip tour',

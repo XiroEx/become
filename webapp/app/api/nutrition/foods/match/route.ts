@@ -122,25 +122,43 @@ async function matchOne(
     // Full coverage for any food; OR a subset match for the user's OWN saved
     // food (so "everyday coffee" finds their custom "Coffee" — but we don't
     // loosen against the giant global catalog).
-    const isOwn = !!f.createdBy && String(f.createdBy) === userId
+    //
+    // "Own" means the user AUTHORED this food (source 'manual') — not merely that
+    // they were the first to trigger its import. USDA/OFF catalog rows also carry
+    // `createdBy` (whoever imported them), and counting those as owned both
+    // skipped the anti-hijack guards below AND gave them top sort priority. That
+    // is why "cherries" resolved to USDA's "Pie Cherry" — which is actually a
+    // slice of cherry pie (260 cal/100 g) — instead of plain Cherries.
+    const isOwn = f.source === 'manual' && !!f.createdBy && String(f.createdBy) === userId
     if (cov < 1 && !(isOwn && subsetMatch(f.name))) continue
 
     // Don't slap an unrequested brand or extra ingredients onto a plain
     // description. "chicken breast" must not silently become "HEB Chicken
     // Breast In Basil Pesto Sauce" just because that branded import happens to
-    // contain the words "chicken" and "breast". These guards only apply to the
-    // global catalog — the user's OWN saved foods keep the looser subset match
-    // (they chose that name/brand themselves).
+    // contain the words "chicken" and "breast".
+
+    // (b) No unmentioned identity: reject a candidate whose own identity words
+    //     aren't mostly explained by the query. This applies to EVERY candidate,
+    //     including the user's own foods — a saved "Tomato Ketchup" must not
+    //     claim a plain "tomato", and "Reign Total Body Fuel Watermelon Sour
+    //     Gummy" must not claim "watermelon". (Exempting own foods here was the
+    //     second half of the Pie Cherry bug: a whole/raw food would silently
+    //     resolve to a prepared or branded product the user happened to save.)
+    //
+    //     Compared against the FULL query (name + brand), not the name alone —
+    //     that's what makes it safe to apply universally: a custom "Coffee" whose
+    //     brand the query does name ("Mild Roast Coffee" + "Everyday Dose") is
+    //     fully explained and still passes.
+    const candIdentity = contentWords(`${f.name} ${f.brand ?? ''}`)
+    if (coverage(candIdentity, haystack) < 0.6) continue
+
     if (!isOwn) {
-      // (a) Brand evidence: only adopt a brand the query actually names.
+      // (a) Brand evidence: only adopt a brand the query actually names. Still
+      //     scoped to the global catalog — the user picked their own food's brand.
       const brandWords = words(f.brand ?? '')
       const brandRequested = brandWords.length > 0
         && brandWords.some((bw) => fullQueryWords.some((qw) => stemMatch(bw, qw)))
       if (brandWords.length > 0 && !brandRequested) continue
-      // (b) No unmentioned identity: reject a candidate whose own identity words
-      //     (e.g. "basil pesto sauce") aren't mostly explained by the query.
-      const candIdentity = contentWords(`${f.name} ${f.brand ?? ''}`)
-      if (coverage(candIdentity, content) < 0.6) continue
     }
 
     const flat = flattenFoodForResponse(f)

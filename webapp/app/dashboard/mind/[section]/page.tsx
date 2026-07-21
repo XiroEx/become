@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import StateShiftTab from '@/components/mind/StateShiftTab'
-import SelfImageTab from '@/components/mind/SelfImageTab'
-import MissionTab from '@/components/mind/MissionTab'
+import ToolIntroGate from '@/components/mind/ToolIntroGate'
+import StateShiftDashboard from '@/components/mind/StateShiftDashboard'
+import SelfImageDashboard from '@/components/mind/SelfImageDashboard'
+import MissionDashboard from '@/components/mind/MissionDashboard'
 import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
 import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
-import SocialTab from '@/components/mind/SocialTab'
-import VisionTab from '@/components/mind/VisionTab'
+import SocialDashboard from '@/components/mind/SocialDashboard'
+import VisionDashboard from '@/components/mind/VisionDashboard'
 
 const SECTION_LABELS: Record<string, string> = {
   'state-shift': 'State Shift',
@@ -27,16 +28,6 @@ const VALID_SECTIONS = new Set(Object.keys(SECTION_LABELS))
 export default function MindSectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = use(params)
   const router = useRouter()
-  const [streak, setStreak] = useState(0)
-
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-    fetch(`/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.streakDays != null) setStreak(data.streakDays) })
-      .catch(() => {})
-  }, [])
 
   if (!VALID_SECTIONS.has(section)) {
     router.replace('/dashboard/mind')
@@ -47,7 +38,8 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
 
   return (
     <PageTransition className="flex flex-col">
-      <header className="mb-5">
+      {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
+      <header className="mb-5" data-tour="mind-section-header">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/dashboard/mind')}
@@ -59,14 +51,17 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
         </div>
       </header>
 
-      <div className="min-h-0 flex-1">
-        {section === 'state-shift'   && <StateShiftTab />}
-        {section === 'self-image'    && <SelfImageTab streak={streak} />}
-        {section === 'mission'       && <MissionTab />}
-        {section === 'discipline'    && <DisciplineDashboard />}
-        {section === 'anti-sabotage' && <AntiSabotageDashboard />}
-        {section === 'social'        && <SocialTab />}
-        {section === 'vision'        && <VisionTab streak={streak} />}
+      <div className="min-h-0 flex-1" data-tour="mind-section-body">
+        {/* First open of an unlocked tool runs its one-time onboarding intro. */}
+        <ToolIntroGate system={section}>
+          {section === 'state-shift'   && <StateShiftDashboard />}
+          {section === 'self-image'    && <SelfImageDashboard />}
+          {section === 'mission'       && <MissionDashboard />}
+          {section === 'discipline'    && <DisciplineDashboard />}
+          {section === 'anti-sabotage' && <AntiSabotageDashboard />}
+          {section === 'social'        && <SocialDashboard />}
+          {section === 'vision'        && <VisionDashboard />}
+        </ToolIntroGate>
       </div>
     </PageTransition>
   )

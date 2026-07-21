@@ -354,18 +354,20 @@ export default function MealsPage() {
       </header>
 
       {/* Tab strip — shared SegmentedControl */}
-      <SegmentedControl
-        segments={[
-          { value: 'recipes', label: 'Recipes', Icon: ScrollText },
-          { value: 'meals', label: 'Meals', Icon: ChefHat },
-          { value: 'foods', label: 'Foods', Icon: Bookmark },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+      <div data-tour="food-tabs">
+        <SegmentedControl
+          segments={[
+            { value: 'recipes', label: 'Recipes', Icon: ScrollText },
+            { value: 'meals', label: 'Meals', Icon: ChefHat },
+            { value: 'foods', label: 'Foods', Icon: Bookmark },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </div>
 
       {/* Search bar */}
-      <div className="relative">
+      <div className="relative" data-tour="food-search">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
         <input
           type="search"

@@ -9,6 +9,7 @@
 
 import { composeSessionAI } from './aiEngine'
 import { MIND_AI_PLAN_KEY, AI_PLAN_TTL, readMindPlanCache } from './sessionCache'
+import { getPathSession } from './sessionPath'
 import { getUnlockedSystems } from '@/lib/mindXP'
 import type { SessionContext } from './moves'
 import type { MindState } from '@/lib/mindContent'
@@ -78,7 +79,14 @@ export async function precomposeMindSession(): Promise<void> {
       missionAction,
       identityStatement: p.vision?.identityStatement ?? null,
       recentKinds,
+      // The directed 50-session path: this session's prescribed focus.
+      pathFocus: getPathSession(p.mainSessionCount ?? 0),
       dayOfYear: dayOfYear(),
+      // A fresh seed every composition — the day-of-year alone is stable within a
+      // day, so back-to-back sessions were fed near-identical input and came out
+      // near-identical. This varies the model's angle/modality mix run-to-run so
+      // no two sessions feel the same (the prompt keys its variety off `seed`).
+      seed: Math.floor(Math.random() * 1_000_000),
       now: Date.now(),
       lastBreathAt,
     }

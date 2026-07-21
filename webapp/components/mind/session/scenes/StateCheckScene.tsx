@@ -284,7 +284,7 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
             <p className="text-xs uppercase tracking-widest text-white/40">Noted</p>
             <p className="mt-4 max-w-sm text-xl font-semibold leading-relaxed text-white/90">{message}</p>
             <button
-              onClick={onDone}
+              onClick={() => onDone()}
               className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
             >
               Continue

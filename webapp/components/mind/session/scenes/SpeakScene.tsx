@@ -13,7 +13,10 @@ import type { SceneProps } from '@/lib/mind/moves'
 import WriteAffirm from './WriteAffirm'
 import { useSpeechMatch } from '@/hooks/useSpeechMatch'
 
-const PASS = 0.6
+// You have to actually say (nearly) the whole line — combined with the
+// reached-the-end gate in useSpeechMatch, this stops it locking in "correct"
+// while you're still mid-sentence. "Lock it in anyway" remains for mis-hears.
+const PASS = 0.85
 const FALLBACK_HOLD_MS = 2600
 
 export default function SpeakScene({ move, onDone }: SceneProps) {

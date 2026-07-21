@@ -271,7 +271,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
           )}
 
           <p className="mt-3 text-[11px] uppercase tracking-wide text-zinc-400">Per serving</p>
-          <div className="mt-1 grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
+          <div className="mt-1 grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50" data-tour="recipe-per-serving">
             <div><p className="text-base font-bold text-zinc-900 dark:text-white">{cal}</p><p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p></div>
             <div><p className="text-base font-bold text-blue-600 dark:text-blue-400">{p}g</p><p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p></div>
             <div><p className="text-base font-bold text-green-600 dark:text-green-400">{c}g</p><p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p></div>
@@ -298,7 +298,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
 
       {/* Cooking instructions — recipes retain these (meals don't). */}
       {recipe.instructions && recipe.instructions.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900" data-tour="recipe-instructions">
           <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Cooking instructions</h2>
           <ol className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
             {recipe.instructions.map((step, idx) => (
@@ -316,6 +316,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
         <button
           onClick={handleSaveOrLog}
           disabled={busy}
+          data-tour="recipe-save-food"
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" />

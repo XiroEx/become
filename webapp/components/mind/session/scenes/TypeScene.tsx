@@ -77,7 +77,7 @@ export default function TypeScene({ move, onDone }: SceneProps) {
             <p className="mt-4 text-lg font-bold">In your own hand.</p>
             <p className="mt-1 max-w-xs text-sm text-white/50">You wrote it. Now own it.</p>
             <button
-              onClick={onDone}
+              onClick={() => onDone()}
               className="mt-8 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
             >
               Continue <ArrowRight className="h-5 w-5" />
@@ -110,7 +110,7 @@ export default function TypeScene({ move, onDone }: SceneProps) {
             <p className="mt-3 text-xs text-white/40">
               {hasError ? 'Almost — check the last word.' : `${matched} / ${targetWords.length}`}
             </p>
-            <button onClick={onDone} className="mt-5 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+            <button onClick={() => onDone()} className="mt-5 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
               Skip
             </button>
           </motion.div>

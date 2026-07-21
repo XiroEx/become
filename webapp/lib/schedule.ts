@@ -171,3 +171,89 @@ export function regenerateSchedule(
     allWorkouts: [...pastWorkouts, ...futureWorkouts] as IScheduledWorkout[],
   }
 }
+
+/**
+ * Catch-up reflow for a "stuck" schedule.
+ *
+ * A program still in progress can run out of upcoming slots when the user falls
+ * behind: every remaining dated slot lapses into the past, so the calendar looks
+ * "finished" even though the dashboard/hub (which track completion, not dates)
+ * still say "continue". This re-offers the outstanding work on upcoming training
+ * days so every surface agrees.
+ *
+ * Skips are respected as firm decisions: COMPLETED and SKIPPED slots are both kept
+ * as immutable history and are NOT re-offered. Only genuinely-unresolved sessions
+ * (fell-behind / missed — never done, never deliberately skipped) are re-scheduled
+ * onto upcoming training days from `fromDate`. This keeps a deliberate skip from
+ * being resurrected in a jumbled order, and keeps the total session count equal to
+ * the program length (no double-counting).
+ *
+ * Returns the new full slot array, or null when there's nothing to reflow — i.e.
+ * every session is already completed or skipped (the program is effectively done),
+ * or no training days are configured. A null return signals the caller that the
+ * program is resolved and should be marked complete rather than left "in progress".
+ */
+export function reflowStuckSchedule(
+  existingWorkouts: IScheduledWorkout[],
+  phases: PhaseData[],
+  trainingDays: number[],
+  fromDate: Date,
+  programId: string
+): IScheduledWorkout[] | null {
+  const sortedDays = [...trainingDays].sort((a, b) => a - b)
+  if (sortedDays.length === 0) return null
+
+  // Completed + skipped are history — preserve them (dates, status, completedAt)
+  // untouched. A skip is a firm "not doing this session", so it is never re-offered.
+  const resolvedPast = existingWorkouts.filter(
+    (w) => w.status === 'completed' || w.status === 'skipped'
+  )
+
+  // Remaining = every program workout minus the ones already resolved (done or skipped).
+  const resolvedCounts = new Map<string, number>()
+  for (const w of resolvedPast) {
+    const key = `${w.phase}-${w.dayLabel}`
+    resolvedCounts.set(key, (resolvedCounts.get(key) || 0) + 1)
+  }
+  const remaining: { phase: number; dayLabel: string; title: string }[] = []
+  const usedCounts = new Map<string, number>()
+  for (let i = 0; i < phases.length; i++) {
+    const workouts = normalizeWorkouts(phases[i].workouts)
+    const numWeeks = parsePhaseWeeks(phases[i].weeks || '1')
+    for (let week = 0; week < numWeeks; week++) {
+      for (const w of workouts) {
+        const key = `${i + 1}-${w.day}`
+        const used = usedCounts.get(key) || 0
+        const resolved = resolvedCounts.get(key) || 0
+        if (used < resolved) usedCounts.set(key, used + 1)
+        else remaining.push({ phase: i + 1, dayLabel: w.day, title: w.title })
+      }
+    }
+  }
+  if (remaining.length === 0) return null
+
+  // Lay the remaining workouts on upcoming training days from fromDate.
+  const future: Array<Omit<IScheduledWorkout, 'completedAt' | 'notes'>> = []
+  const current = new Date(fromDate)
+  current.setUTCHours(0, 0, 0, 0)
+  const maxDate = new Date(current)
+  maxDate.setFullYear(maxDate.getFullYear() + 1)
+  let widx = 0
+  while (widx < remaining.length && current < maxDate) {
+    if (sortedDays.includes(current.getUTCDay())) {
+      const w = remaining[widx]
+      future.push({
+        date: new Date(current),
+        programId,
+        phase: w.phase,
+        dayLabel: w.dayLabel,
+        workoutTitle: w.title,
+        status: 'scheduled',
+      })
+      widx++
+    }
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  return [...resolvedPast, ...future] as IScheduledWorkout[]
+}

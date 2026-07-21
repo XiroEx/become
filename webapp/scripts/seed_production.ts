@@ -11,7 +11,8 @@ import { mockUserProgress } from '../lib/data/userProgress';
 // We don't load .env.local because we want to use the production URI provided explicitly
 // or we can just hardcode it for this task as requested.
 
-const PROD_MONGODB_URI = 'mongodb+srv://george8794:iLmYV8dMSgJoVEwx@jondonfit.ctp0tfj.mongodb.net/?appName=jondonfit';
+const PROD_MONGODB_URI = process.env.MONGODB_URI || process.env.PROD_MONGODB_URI || '';
+if (!PROD_MONGODB_URI) throw new Error('Set MONGODB_URI env var to run this seed script');
 const PROGRAMS_FILE = path.join(__dirname, '../../db/normalized_programs.json');
 
 async function seedProduction() {

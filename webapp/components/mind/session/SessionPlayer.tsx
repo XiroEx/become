@@ -7,17 +7,19 @@
 // state-check answer (which resolves the breath protocol), and completion (which
 // posts to /api/mind/session to award the daily XP once).
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, ArrowRight, Sparkles, Check, Flame, ChevronUp, Loader2 } from 'lucide-react'
+import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Share2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
+import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
 import {
   BREATH_PROTOCOLS,
   breathForState,
   type MindSessionPlan,
   type BreathProtocol,
+  type SessionAnswer,
 } from '@/lib/mind/moves'
 import StateCheckScene from './scenes/StateCheckScene'
 import BreathScene from './scenes/BreathScene'
@@ -39,14 +41,28 @@ import ContrastScene from './scenes/ContrastScene'
 interface CompleteResult {
   xpAwarded: number
   completions?: number
-  readyToLevelUp: boolean
   streak?: number
-  /** Banked toward the lifetime Becoming score this rep (incl. training reps). */
-  banked?: number
   /** Lifetime Becoming score after this rep. */
   xpBank?: number
-  /** Daily progression XP is spent — this was a training rep (still banks score). */
+  /** This completion landed inside the 20h cooldown (didn't count toward chapter). */
   trainingMode?: boolean
+  // ── Split level/chapter model ──
+  level?: number
+  previousLevel?: number
+  leveledUp?: boolean
+  levelProgress?: { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
+  chapter?: number
+  chapterAdvanced?: boolean
+  newlyUnlocked?: string[]
+  currentChapter?: { name?: string; theme?: string }
+  sessionsIntoChapter?: { done: number; needed: number; toNext: number }
+  /** Features this session just unlocked ('coach' after 3, 'becoming' after 5). */
+  featureUnlocks?: string[]
+}
+
+const FEATURE_UNLOCK_LABEL: Record<string, string> = {
+  coach: 'Your coach is unlocked — talk it through any time.',
+  becoming: 'The Becoming is unlocked — your training log is live.',
 }
 
 interface LevelUpResult {
@@ -70,6 +86,9 @@ export interface SessionPlayerProps {
    *  so the recipient is prompted to sign in to Become to continue. */
   gated?: boolean
   onRequireAuth?: () => void
+  /** Systems the user has unlocked — scopes the post-session "next segment" CTA
+   *  to what they can actually open. Defaults to all seven. */
+  unlockedSystems?: string[]
 }
 
 type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
@@ -81,7 +100,7 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth }: SessionPlayerProps) {
+export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth, unlockedSystems }: SessionPlayerProps) {
   const router = useRouter()
   // Gated (public share) runs are always read-only — never write progress.
   preview = preview || gated
@@ -90,7 +109,8 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const [liveState, setLiveState] = useState<MindState | null>(initialLiveState)
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
-  const [advancing, setAdvancing] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [shared, setShared] = useState(false)
 
   const total = plan.moves.length
   const rawMove = plan.moves[index]
@@ -100,12 +120,28 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const move =
     rawMove?.altPositive && liveState === 'locked_in' ? rawMove.altPositive : rawMove
 
+  // The reflective answers the user gave this session (a picked choice, etc.),
+  // deduped by question. Persisted to MindJournal on completion so the NEXT
+  // session can build on what they actually said — the same memory the arsenal
+  // flows use.
+  const answersRef = useRef<SessionAnswer[]>([])
+
   const complete = useCallback(async () => {
     setStage('payoff')
     // Admin lab preview: show the payoff but never write (no XP/streak/recency).
     if (preview) {
-      setResult({ xpAwarded: 0, readyToLevelUp: false })
+      setResult({ xpAwarded: 0 })
       return
+    }
+    // Remember this session's answers (best-effort) so tomorrow's session builds
+    // on them instead of asking from scratch.
+    if (answersRef.current.length) {
+      const lines = answersRef.current.map((x) => ({ prompt: x.q, answer: x.a }))
+      void fetch('/api/mind/journal', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ system: 'session', kind: 'session', title: plan.intro.title, lines }),
+      }).catch(() => {})
     }
     try {
       // Report the EFFECTIVE kinds the player actually showed — so a locked-in
@@ -129,9 +165,17 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
     } catch {
       /* payoff still shows; XP is best-effort */
     }
-  }, [plan.moves, liveState, preview])
+  }, [plan.moves, liveState, preview, plan.intro.title])
 
-  const next = useCallback(() => {
+  const next = useCallback((answer?: SessionAnswer) => {
+    // Capture a real reflection (keep the latest per question, so re-answering
+    // after a back overwrites instead of duplicating).
+    if (answer?.a) {
+      const arr = answersRef.current
+      const at = arr.findIndex((x) => x.q === answer.q)
+      if (at >= 0) arr[at] = answer
+      else arr.push(answer)
+    }
     // Public share: any attempt to advance prompts sign-in instead of progressing.
     if (gated) { onRequireAuth?.(); return }
     if (index >= total - 1) {
@@ -141,23 +185,55 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
     }
   }, [gated, onRequireAuth, index, total, complete])
 
-  const handleLevelUp = useCallback(async () => {
-    if (advancing) return
-    setAdvancing(true)
+  // Step back one move (or back to the intro from the first move). Re-mounts the
+  // prior scene fresh — like the arsenal flows' back button — so the user can
+  // revisit / redo a beat instead of being locked forward.
+  const back = useCallback(() => {
+    if (stage !== 'move') return
+    if (index <= 0) { setStage('intro'); return }
+    setIndex((i) => Math.max(0, i - 1))
+  }, [stage, index])
+  const canGoBack = stage === 'move' && !gated
+
+  // Share the session you just did — snapshots the plan into a public, read-only
+  // link (recipients sign in to try it). Lives on the payoff, not the hub: you
+  // share a session after you've done it, not one you haven't started.
+  const handleShare = useCallback(async () => {
+    if (sharing) return
+    setSharing(true)
     try {
-      const res = await fetch('/api/mind/progress/levelup', { method: 'POST', headers: authHeaders() })
-      if (res.ok) {
-        setLevelUp((await res.json()) as LevelUpResult)
-        setStage('levelup')
-      } else {
-        onExit() // gracefully bail if it can't advance
+      const res = await fetch('/api/mind/share', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ kind: 'session', title: plan.intro.title, plan }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) {
+        const full = `${window.location.origin}${data.url}`
+        setShared(true)
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          try { await navigator.share({ title: 'A Become session for you', url: full }) } catch { /* dismissed */ }
+        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          try { await navigator.clipboard.writeText(full) } catch { /* no clipboard */ }
+        }
       }
-    } catch {
-      onExit()
     } finally {
-      setAdvancing(false)
+      setSharing(false)
     }
-  }, [advancing, onExit])
+  }, [sharing, plan])
+
+  // The segment to send them to when the session ends — chosen from how they
+  // checked in and what today's session leaned on.
+  const nextFocus = useMemo(() => {
+    // Prefer the composer's own CTA — it picked the segment from what THIS session
+    // surfaced (the user's reflections + its theme) — as long as it's a real,
+    // unlocked segment. Otherwise fall back to the deterministic recommendation.
+    const cta = plan.cta
+    if (cta && SEGMENT_LABELS[cta.system] && (!unlockedSystems || unlockedSystems.includes(cta.system))) {
+      return { systemId: cta.system, label: SEGMENT_LABELS[cta.system], reason: cta.reason }
+    }
+    return recommendSegment({ state: liveState, moveKinds: plan.moves.map((m) => m.kind), unlocked: unlockedSystems })
+  }, [plan.cta, liveState, plan.moves, unlockedSystems])
 
   // Resolve the breath protocol from the live state-check answer ('auto').
   const resolvedProtocol = useMemo<BreathProtocol | undefined>(() => {
@@ -175,7 +251,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
       className="fixed inset-0 z-[100] flex flex-col bg-black text-white"
       style={{ paddingTop: 'env(safe-area-inset-top,0px)', paddingBottom: 'env(safe-area-inset-bottom,0px)' }}
     >
-      {/* Top bar: progress segments + exit */}
+      {/* Top bar: exit + back + progress segments */}
       <div className="flex items-center gap-3 px-4 pt-3">
         <button
           onClick={onExit}
@@ -184,6 +260,15 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
         >
           <X className="h-4 w-4" />
         </button>
+        {canGoBack && (
+          <button
+            onClick={back}
+            aria-label="Previous move"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        )}
         <div className="flex flex-1 gap-1.5">
           {Array.from({ length: total }).map((_, i) => (
             <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
@@ -279,14 +364,14 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 <Check className="h-10 w-10" strokeWidth={3} />
               </motion.span>
               <h1 className="text-2xl font-extrabold">
-                {result && (result.completions ?? 1) > 1 ? 'Another rep in.' : 'You showed up.'}
+                {result?.leveledUp ? 'Level up.' : result?.trainingMode ? 'Another rep in.' : 'You showed up.'}
               </h1>
               <p className="mt-2 text-white/60">
-                {result && result.xpAwarded === 0
-                  ? "You've maxed today's XP — but reps still count."
+                {result?.leveledUp
+                  ? `You climbed to Level ${result.level}.`
                   : "That's how it's built — one rep at a time."}
               </p>
-              {result && result.xpAwarded > 0 ? (
+              {result && (result.xpAwarded ?? 0) > 0 && (
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -295,26 +380,41 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 >
                   +{result.xpAwarded} XP
                 </motion.p>
-              ) : result && result.trainingMode && (result.banked ?? 0) > 0 ? (
-                <motion.p
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="mt-5 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-violet-300"
-                >
-                  Training · +{result.banked} banked
-                </motion.p>
-              ) : null}
-              {result && typeof result.xpBank === 'number' && result.xpBank > 0 && (
-                <motion.p
+              )}
+              {/* Level bar — the per-user, XP-driven progress. */}
+              {result?.level != null && (
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.55 }}
-                  className="mt-3 text-xs font-medium uppercase tracking-widest text-white/40"
+                  transition={{ delay: 0.5 }}
+                  className="mt-4 w-full max-w-xs"
                 >
-                  Becoming score {result.xpBank.toLocaleString()}
-                </motion.p>
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className={result.leveledUp ? 'text-violet-300' : 'text-white/70'}>Level {result.level}</span>
+                    {result.levelProgress && <span className="text-white/40 tabular-nums">{result.levelProgress.xpToNext} XP to next</span>}
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/15">
+                    <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-green-400 transition-all duration-700" style={{ width: `${result.levelProgress?.pct ?? 0}%` }} />
+                  </div>
+                </motion.div>
               )}
+              {result?.trainingMode && (
+                <p className="mt-3 max-w-xs text-xs text-white/40">
+                  You&apos;re in cooldown — this rep leveled you up but didn&apos;t count toward your chapter.
+                </p>
+              )}
+              {(result?.featureUnlocks ?? []).map((f) => (
+                <motion.p
+                  key={f}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6 }}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3.5 py-1.5 text-xs font-semibold text-amber-300"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {FEATURE_UNLOCK_LABEL[f] ?? f}
+                </motion.p>
+              ))}
               {result && typeof result.streak === 'number' && result.streak > 1 && (
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -327,15 +427,27 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 </motion.p>
               )}
 
-              {result?.readyToLevelUp ? (
+              {result?.chapterAdvanced ? (
                 <>
+                  {/* Chapters auto-advance on counted main sessions — the server
+                      already unlocked it; this just reveals what's new. */}
                   <button
-                    onClick={handleLevelUp}
-                    disabled={advancing}
-                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 py-4 text-base font-bold text-black transition-transform active:scale-95 disabled:opacity-70"
+                    onClick={() => {
+                      if (result.currentChapter) {
+                        setLevelUp({
+                          chapter: result.chapter ?? 0,
+                          newlyUnlocked: result.newlyUnlocked ?? [],
+                          currentChapter: result.currentChapter,
+                        })
+                        setStage('levelup')
+                      } else {
+                        onExit()
+                      }
+                    }}
+                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-400 to-amber-500 py-4 text-base font-bold text-black transition-transform active:scale-95"
                   >
-                    {advancing ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChevronUp className="h-5 w-5" strokeWidth={3} />}
-                    Unlock next chapter
+                    <ChevronUp className="h-5 w-5" strokeWidth={3} />
+                    New chapter unlocked
                   </button>
                   <button onClick={onExit} className="mt-3 text-sm font-medium text-white/50 transition-colors hover:text-white">
                     Later
@@ -343,19 +455,30 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 </>
               ) : (
                 <>
+                  {/* Post-session bridge: send them to the ONE arsenal segment that
+                      fits how they came in + what today leaned on. */}
                   <button
-                    onClick={onExit}
-                    className="mt-10 w-full max-w-xs rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
+                    onClick={() => router.push(`/dashboard/mind/${nextFocus.systemId}`)}
+                    className="mt-10 flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
                   >
-                    Done
+                    Next: {nextFocus.label}
+                    <ArrowRight className="h-5 w-5" />
                   </button>
-                  <button
-                    onClick={() => router.push('/dashboard/mind/arsenal')}
-                    className="mt-3 flex items-center gap-1 text-sm font-medium text-white/60 transition-colors hover:text-white"
-                  >
-                    Explore your arsenal
-                    <ArrowRight className="h-4 w-4" />
+                  <p className="mt-2.5 max-w-xs text-xs leading-relaxed text-white/50">{nextFocus.reason}</p>
+                  <button onClick={onExit} className="mt-4 text-sm font-medium text-white/50 transition-colors hover:text-white">
+                    Done for now
                   </button>
+                  {/* Share the session you just finished (not one you haven't started). */}
+                  {!preview && (
+                    <button
+                      onClick={handleShare}
+                      disabled={sharing}
+                      className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-white/40 transition-colors hover:text-white/70 disabled:opacity-60"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      {sharing ? 'Creating link…' : shared ? 'Link ready — copied' : 'Share this session'}
+                    </button>
+                  )}
                 </>
               )}
             </motion.div>

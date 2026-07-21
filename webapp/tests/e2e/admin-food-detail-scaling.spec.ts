@@ -25,7 +25,7 @@
 import { test, expect, request, type APIRequestContext } from '@playwright/test'
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000'
-const BOOTSTRAP_TOKEN = 'e2e-user-setup-2026'
+const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN || ''
 const VARIANTS_PAGE_SIZE = 20
 const FIXTURE_VARIANT_COUNT = 60
 

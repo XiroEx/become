@@ -21,7 +21,7 @@ import { BASE_URL as PROD_URL } from './test-auth'
 
 // Allow CI/local override; default to the prod base from test-auth.ts.
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || PROD_URL
-const BOOTSTRAP_TOKEN = 'e2e-user-setup-2026'
+const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN || ''
 const TZ_OFFSET = 300 // EST — value of Date.getTimezoneOffset() in minutes
 
 interface BootstrapResp { userId: string; email: string; token: string }

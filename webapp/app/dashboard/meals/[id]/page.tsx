@@ -214,7 +214,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           Meals
         </Link>
         {isOwner && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" data-tour="meal-actions">
             <button
               onClick={handleConvertToRecipe}
               disabled={converting}
@@ -273,7 +273,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           )}
 
           {/* Macro summary */}
-          <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50">
+          <div className="mt-3 grid grid-cols-4 gap-2 rounded-lg bg-zinc-50 p-2.5 text-center dark:bg-zinc-800/50" data-tour="meal-macros">
             <div>
               <p className="text-base font-bold text-zinc-900 dark:text-white">{totalCal}</p>
               <p className="text-[10px] uppercase tracking-wide text-zinc-500">Cal</p>
@@ -329,6 +329,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
       <div className="sticky bottom-2 left-0 right-0 z-10 rounded-xl border border-zinc-200 bg-white/90 p-2 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
         <button
           onClick={() => setApplySheetOpen(true)}
+          data-tour="meal-apply"
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-3 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
           Apply to log

@@ -30,7 +30,7 @@ export default function MissionScene({ move, onDone }: SceneProps) {
           Define it in Mission
           <ArrowRight className="h-4 w-4" />
         </Link>
-        <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+        <button onClick={() => onDone()} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
           Continue
         </button>
       </div>

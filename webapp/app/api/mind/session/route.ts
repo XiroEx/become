@@ -10,17 +10,17 @@ import dbConnect from '@/lib/mongodb'
 import MindSession from '@/models/MindSession'
 import MindProgress from '@/models/MindProgress'
 import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
-import { getXpToNextChapter, isReadyToLevelUp } from '@/lib/mindXP'
+import {
+  getLevelProgress, chapterFromSessions, sessionsIntoChapter,
+  mainSessionAvailable, MAIN_SESSION_COOLDOWN_MS, CHAPTERS, getUnlockedSystems,
+} from '@/lib/mindXP'
 
-// PROGRESSION XP per completion within a local day — diminishing so replays still
-// move you forward without farming a whole chapter in one sitting. completion 4+ = 0.
-const XP_BY_COMPLETION: Record<number, number> = { 1: 15, 2: 8, 3: 5 }
-
-// The "Becoming score" (xpBank) accrues from EVERY completion, including training
-// reps after progression XP is spent — so volume is always rewarded even though it
-// can't rush the arc. Banks the progression XP when there is some, else a flat
-// training amount so the score never stalls.
-const TRAINING_BANK = 3
+// A completed MAIN session grants this much LEVEL XP (level is uncapped, fed by
+// main + arsenal). Main sessions are gated to one per 20h and each counts toward
+// the chapter (10 per chapter). If someone somehow completes again inside the
+// cooldown (UI hides it), it still nudges level but does NOT count/advance.
+const MAIN_SESSION_XP = 20
+const IN_COOLDOWN_XP = 5
 
 // Consecutive-day streak of completed Mind sessions, anchored to the caller's
 // local day. Counts today if done, otherwise starts from yesterday (so the
@@ -72,10 +72,17 @@ export async function GET(request: NextRequest) {
     await dbConnect()
     const doc = await MindSession.findOne({ userId: auth.userId, dateKey }).lean()
     const streak = await streakFor(auth.userId!, dateKey)
-    // Recency for session spacing (breath cooldown + modality variety).
+    // Recency for session spacing (breath cooldown + modality variety) + the 20h
+    // main-session cooldown that decides whether the hub shows the main session
+    // or Training Grounds.
     const prog = await MindProgress.findOne({ userId: auth.userId })
-      .select('lastBreathAt recentKinds')
-      .lean<{ lastBreathAt?: Date; recentKinds?: string[] } | null>()
+      .select('lastBreathAt recentKinds lastMainSessionAt')
+      .lean<{ lastBreathAt?: Date; recentKinds?: string[]; lastMainSessionAt?: Date } | null>()
+
+    const available = mainSessionAvailable(prog?.lastMainSessionAt)
+    const nextMainSessionAt = prog?.lastMainSessionAt
+      ? new Date(prog.lastMainSessionAt).getTime() + MAIN_SESSION_COOLDOWN_MS
+      : null
 
     return NextResponse.json({
       dateKey,
@@ -83,6 +90,10 @@ export async function GET(request: NextRequest) {
       streak,
       lastBreathAt: prog?.lastBreathAt ? new Date(prog.lastBreathAt).getTime() : null,
       recentKinds: prog?.recentKinds ?? [],
+      // 20h main-session cooldown
+      mainSessionAvailable: available,
+      lastMainSessionAt: prog?.lastMainSessionAt ? new Date(prog.lastMainSessionAt).getTime() : null,
+      nextMainSessionAt: available ? null : nextMainSessionAt,
     })
   } catch (err) {
     console.error('GET /api/mind/session error:', err)
@@ -103,72 +114,107 @@ export async function POST(request: NextRequest) {
       : []
 
     await dbConnect()
+    const now = Date.now()
 
-    // Replays are allowed — users can train more than once a day. XP diminishes
-    // per completion (and stops) so extra reps still move you forward without
-    // letting you farm a level in one sitting. Atomic $inc gives the completion #.
+    // Read progress BEFORE the write so we can detect the 20h cooldown, the
+    // level-up crossing, and the chapter advance.
+    const before = await MindProgress.findOne({ userId: auth.userId })
+      .select('levelXp mainSessionCount lastMainSessionAt chapter xpBank chapterHistory')
+      .lean<{ levelXp?: number; mainSessionCount?: number; lastMainSessionAt?: Date; chapter?: number; xpBank?: number } | null>()
+
+    const prevLevelXp = before?.levelXp ?? 0
+    const prevCount = before?.mainSessionCount ?? 0
+    const prevChapter = before?.chapter ?? 1
+    // A "counted" main session only lands once every 20h. Inside the cooldown
+    // (the UI hides the main session then, so this is a defensive path) it still
+    // nudges level a little but does NOT count toward chapters.
+    const counted = mainSessionAvailable(before?.lastMainSessionAt, now)
+    const grantXp = counted ? MAIN_SESSION_XP : IN_COOLDOWN_XP
+
+    // Keep the per-day session doc for the streak. Also stamps completions/moves.
     const doc = await MindSession.findOneAndUpdate(
       { userId: auth.userId, dateKey },
       {
-        $inc: { completions: 1 },
+        $inc: { completions: 1, ...(counted ? { xpAwarded: grantXp } : {}) },
         $setOnInsert: { userId: auth.userId, dateKey },
         $set: { moves, completedAt: new Date() },
       },
       { upsert: true, new: true },
     )
-    const n = doc?.completions ?? 1
-    const xpAwarded = XP_BY_COMPLETION[n] ?? 0
-    // Every rep banks something toward the lifetime Becoming score.
-    const banked = xpAwarded > 0 ? xpAwarded : TRAINING_BANK
+    const completions = doc?.completions ?? 1
 
-    // Recency tracking for session spacing: remember when breath last ran (so it
-    // can be spaced out) and the modalities used (so the next session can vary).
-    // `moves` are the EFFECTIVE kinds the player actually showed (post state-swap).
+    // Recency for session spacing (breath cooldown + modality variety). `moves`
+    // are the EFFECTIVE kinds the player actually showed (post state-swap).
     const kinds = moves.map((m) => m.kind)
-    const didBreath = kinds.includes('breath')
-    const recencySet: Record<string, unknown> = {
-      recentKinds: kinds.filter((k) => k !== 'state-check'),
-    }
-    if (didBreath) recencySet.lastBreathAt = new Date()
+    const recencySet: Record<string, unknown> = { recentKinds: kinds.filter((k) => k !== 'state-check') }
+    if (kinds.includes('breath')) recencySet.lastBreathAt = new Date()
 
-    // Always bank toward the lifetime score; only progression xp diminishes.
-    const inc: Record<string, number> = { xpBank: banked }
-    if (xpAwarded > 0) inc.xp = xpAwarded
+    // Grant LEVEL xp (and bank toward the Becoming score). A counted main session
+    // also increments the chapter-gating session count + stamps the cooldown.
+    const inc: Record<string, number> = { levelXp: grantXp, xpBank: grantXp }
+    if (counted) inc.mainSessionCount = 1
+    if (counted) recencySet.lastMainSessionAt = new Date(now)
+
+    const newCount = counted ? prevCount + 1 : prevCount
+    const derivedChapter = chapterFromSessions(newCount)
+    const chapterAdvanced = counted && derivedChapter > prevChapter
+    // Never report a chapter below the stored one (guards the rare case where a
+    // POST beats the progress-GET seed of mainSessionCount).
+    const newChapter = Math.max(prevChapter, derivedChapter)
+    if (chapterAdvanced) {
+      recencySet.chapter = newChapter
+      recencySet.lastGrowthAt = new Date(now)
+    }
+
+    const update: Record<string, unknown> = { $inc: inc, $set: recencySet }
+    if (chapterAdvanced) {
+      update.$push = { chapterHistory: { chapter: newChapter, unlockedAt: new Date(now) } }
+    }
     await MindProgress.findOneAndUpdate(
       { userId: auth.userId },
-      { $inc: inc, $set: recencySet },
+      update,
       { upsert: true, setDefaultsOnInsert: true },
     ).catch(() => {})
-    if (xpAwarded > 0) {
-      await MindSession.updateOne({ userId: auth.userId, dateKey }, { $inc: { xpAwarded } }).catch(() => {})
-    }
 
-    const progress = await MindProgress.findOne({ userId: auth.userId })
-      .lean<{ chapter?: number; xp?: number; xpBank?: number; lastGrowthAt?: Date } | null>()
-    const chapter = progress?.chapter ?? 1
-    const xp = progress?.xp ?? 0
-    const xpBank = progress?.xpBank ?? 0
+    const newLevelXp = prevLevelXp + grantXp
+    const levelBefore = getLevelProgress(prevLevelXp)
+    const levelNow = getLevelProgress(newLevelXp)
+    const leveledUp = levelNow.level > levelBefore.level
     const streak = await streakFor(auth.userId!, dateKey)
-
-    // Gate the arc: at most one growth moment (level-up) per local day, so volume
-    // can't rush the story. Extra reps stay full sessions that bank score (training).
-    const grewToday = progress?.lastGrowthAt
-      ? localDateKey(null, tz, new Date(progress.lastGrowthAt)) === dateKey
-      : false
-    const readyToLevelUp = isReadyToLevelUp(chapter, xp) && !grewToday
+    const nextMainSessionAt = counted
+      ? now + MAIN_SESSION_COOLDOWN_MS
+      : new Date(before?.lastMainSessionAt ?? now).getTime() + MAIN_SESSION_COOLDOWN_MS
 
     return NextResponse.json({
-      completions: n,
-      xpAwarded,
-      banked,
-      xpBank,
-      trainingMode: xpAwarded === 0,
-      chapter,
-      xp,
+      completions,
+      counted,
+      trainingMode: !counted,
+      xpAwarded: grantXp,
+      // Level (per-user, XP-driven, uncapped)
+      levelXp: newLevelXp,
+      level: levelNow.level,
+      previousLevel: levelBefore.level,
+      leveledUp,
+      levelProgress: levelNow,
+      // Chapter (gated by main-session count)
+      chapter: newChapter,
+      previousChapter: prevChapter,
+      chapterAdvanced,
+      newlyUnlocked: chapterAdvanced ? CHAPTERS[newChapter - 1].systems : [],
+      unlockedSystems: getUnlockedSystems(newChapter),
+      currentChapter: CHAPTERS[newChapter - 1],
+      mainSessionCount: newCount,
+      sessionsIntoChapter: sessionsIntoChapter(newCount),
+      // Cooldown
+      nextMainSessionAt,
+      xpBank: (before?.xpBank ?? 0) + grantXp,
       streak,
-      xpProgress: getXpToNextChapter(chapter, xp),
-      readyToLevelUp,
-      gatedByGrowth: isReadyToLevelUp(chapter, xp) && grewToday,
+      // Feature unlock moments crossed by THIS session (coach after 3 main
+      // sessions, The Becoming after 5) — surfaced on the payoff.
+      featureUnlocks: [
+        ...(counted && newCount === 3 ? ['coach'] : []),
+        ...(counted && newCount === 5 ? ['becoming'] : []),
+      ],
     })
   } catch (err) {
     console.error('POST /api/mind/session error:', err)

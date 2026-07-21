@@ -11,7 +11,9 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
-import { readQuickSession, clearQuickSession, quickSessionOverviewHref, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
+import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 
 interface SetData {
@@ -93,6 +95,7 @@ export default function LiveWorkoutPage() {
   const searchParams = useSearchParams();
   const programId = params.programId as string;
   const requestedDay = searchParams.get("day");
+  const scheduledDate = searchParams.get("sd"); // exact Schedule slot date (program mode only; gap 3)
   // Quick (program-less) session mode — routed through this same component via
   // the sentinel programId `quick` + a sessionStorage-stashed draft keyed by
   // ?session=<id>. In quick mode we skip program/current-workout/schedule
@@ -364,8 +367,30 @@ export default function LiveWorkoutPage() {
           const token = localStorage.getItem("token");
           const lastPerformance = token ? await fetchLastPerformance(token, exs) : {};
           const { data, flow } = initializeExercises(exs, lastPerformance);
-          setExerciseData(data);
+          // Restore shared progress from the Track view (reps/weight/completed) so
+          // flipping the Track|Live tab never loses entered sets.
+          const savedQP = quickSessionId ? readQuickProgress(quickSessionId) : null;
+          const restored = savedQP?.exercises?.length
+            ? data.map((sets, i) => {
+                const savedEx = savedQP.exercises[i];
+                return sets.map((s, si) => {
+                  const ss = savedEx?.sets?.[si];
+                  return ss ? { ...s, reps: ss.reps ?? s.reps, weight: ss.weight ?? s.weight, completed: ss.completed ?? s.completed } : s;
+                });
+              })
+            : data;
+          setExerciseData(restored);
           setWorkoutFlow(flow);
+          // The active-set inputs bind to currentWeight/currentReps (not exerciseData
+          // directly), so seed them from the restored first step — otherwise progress
+          // entered in the Track view wouldn't appear in the Live inputs.
+          const firstStep = flow[0];
+          const firstSet = firstStep ? restored[firstStep.exerciseIndex]?.[firstStep.setIndex] : null;
+          if (firstSet) {
+            setCurrentReps(firstSet.reps || "");
+            setCurrentWeight(firstSet.weight || "");
+            setCurrentSpeed(firstSet.speed ?? "");
+          }
           setLoading(false);
           return;
         }
@@ -606,6 +631,31 @@ export default function LiveWorkoutPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [programId, requestedDay, loadKey, isQuick, quickSessionId]);
 
+  // Mirror live progress into the shared quick-session draft so the Track (form)
+  // view resumes with the same reps/weight/completed when the user flips the tab.
+  useEffect(() => {
+    // Guard on `loading`: on mount exerciseData is [] and this effect would otherwise
+    // clobber the shared draft with empty data BEFORE the load restores it (race).
+    if (!isQuick || !quickSessionId || !workout || loading) return;
+    // Snapshot exerciseData with the in-progress active-set inputs merged in, so a
+    // value typed in Live (before the set is marked done) still reaches the Track view.
+    const snap = exerciseData.map((sets) => sets.map((s) => ({ ...s })));
+    const step = workoutFlow[currentStepIndex];
+    const active = step ? snap[step.exerciseIndex]?.[step.setIndex] : null;
+    if (active) {
+      if (currentWeight) active.weight = currentWeight;
+      if (currentReps) active.reps = currentReps;
+    }
+    writeQuickProgress(
+      quickSessionId,
+      workout.exercises.map((ex, i) => ({
+        name: ex.name,
+        ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+        sets: (snap[i] ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed })),
+      })),
+    );
+  }, [isQuick, quickSessionId, workout, exerciseData, workoutFlow, currentStepIndex, currentWeight, currentReps, loading]);
+
   // Find the first incomplete step in the flow
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
     for (let i = 0; i < flow.length; i++) {
@@ -777,6 +827,7 @@ export default function LiveWorkoutPage() {
             exercises: exercisesToSave,
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
+            ...(scheduledDate && { scheduledDate }),
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
             tz: new Date().getTimezoneOffset(),
           };
@@ -805,7 +856,7 @@ export default function LiveWorkoutPage() {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta, scheduledDate]);
 
   // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
   // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension
@@ -1034,6 +1085,16 @@ export default function LiveWorkoutPage() {
     };
     setExercises(updatedExercises);
 
+    // Quick session: persist the swap into the stashed session so the Track view
+    // (which builds its exercise list from the stash) shows the same swapped exercise.
+    if (isQuick && quickSessionId) {
+      swapQuickSessionExercise(quickSessionId, exIdx, {
+        name: alternative.name,
+        exerciseSlug: alternative.slug,
+        trackingType: alternative.trackingType,
+      });
+    }
+
     // Save permanent swap if scope is 'program' (never for quick sessions —
     // they have no program to persist a swap against).
     if (scope === 'program' && !isQuick) {
@@ -1080,7 +1141,7 @@ export default function LiveWorkoutPage() {
 
     setShowSwapModal(false);
     setShowSkipModal(false);
-  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId, isQuick]);
+  }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId, isQuick, quickSessionId]);
 
   const handleCompleteOrSkipSet = () => {
     // On the final step, empty inputs just finish the workout — don't prompt to skip
@@ -1249,7 +1310,10 @@ export default function LiveWorkoutPage() {
                 e.stopPropagation();
                 // Quick sessions return to their overview (persisted) so closing
                 // live never strands the user with no way back into the session.
-                if (isQuick && quickSessionId) router.push(quickSessionOverviewHref(quickSessionId));
+                // REPLACE, not push: otherwise the live entry lingers behind the
+                // overview, and the overview's Back (router.back) returns INTO live
+                // — the two ping-pong and the user can't leave the session (back loop).
+                if (isQuick && quickSessionId) router.replace(quickSessionOverviewHref(quickSessionId));
                 else router.back();
               }}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
@@ -1258,6 +1322,23 @@ export default function LiveWorkoutPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+
+            {/* Track|Live tab (centered) — shown for BOTH program and quick workouts.
+                Progress is shared, so switching to Track keeps every entered set. */}
+            {workout && (isQuick ? !!quickSessionId : true) && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <WorkoutViewToggle
+                  active="live"
+                  trackHref={isQuick
+                    ? quickSessionTrackHref(quickSessionId || "")
+                    : `/dashboard/workout/${programId}/workout?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`}
+                  liveHref={isQuick
+                    ? quickSessionLiveHref(quickSessionId || "")
+                    : `/dashboard/workout/${programId}/workout/live?day=${encodeURIComponent(workout.day)}${scheduledDate ? `&sd=${encodeURIComponent(scheduledDate)}` : ""}`}
+                  onDark
+                />
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               {/* Resume indicator */}
@@ -1277,7 +1358,7 @@ export default function LiveWorkoutPage() {
                 )}
               </AnimatePresence>
 
-              <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
+              <div data-tour="live-timer" className="flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 backdrop-blur-sm">
                 <div className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
                 <span className="font-mono text-sm tabular-nums">{formatTime(elapsedTime)}</span>
               </div>
@@ -1381,6 +1462,7 @@ export default function LiveWorkoutPage() {
 
             {/* Dots */}
             <div
+              data-tour="live-exercise-dots"
               className="flex flex-col gap-2 cursor-pointer p-2"
               onClick={() => setShowExerciseList(!showExerciseList)}
             >
@@ -1486,7 +1568,7 @@ export default function LiveWorkoutPage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Exercise info */}
-            <div className="mb-4">
+            <div data-tour="live-exercise-info" className="mb-4">
               <div className="flex items-center gap-2 text-sm text-white/60">
                 <span>Exercise {currentExerciseIndex + 1}/{totalExercises}</span>
                 <span>•</span>
@@ -1612,7 +1694,7 @@ export default function LiveWorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="relative flex gap-3 mb-6">
+                  <div data-tour="live-inputs" className="relative flex gap-3 mb-6">
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
@@ -1751,6 +1833,7 @@ export default function LiveWorkoutPage() {
               <button
                 onClick={handleCompleteOrSkipSet}
                 disabled={isResting || saving}
+                data-tour="live-complete-set"
                 className={`flex-1 rounded-full py-4 text-lg font-bold shadow-lg transition-all disabled:opacity-50 ${
                   isSkipping
                     ? "bg-zinc-600 shadow-zinc-600/30 hover:bg-zinc-500"
@@ -1793,6 +1876,7 @@ export default function LiveWorkoutPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
+            data-tour="live-set-progress"
             className="absolute left-4 right-4 z-10 flex gap-1"
             style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4rem)' }}
           >
@@ -1993,6 +2077,7 @@ export default function LiveWorkoutPage() {
         exerciseName={currentExercise?.name || ""}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         programRole={undefined}
+        sessionScopeOnly={isQuick}
       />
     </div>
   );

@@ -8,6 +8,7 @@ import { baseGroupKey } from '@/lib/foodGrouping'
 import { canonicalFoodName } from '@/lib/foodCanonicalName'
 import { canAutoMergeAsVariant, type VariantMergeParent, type VariantMergeCandidate } from '@/lib/foodVariantMerge'
 import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import { plausibleOffKcal } from '@/lib/offEnergy'
 import { assessFoodImportQuality, foodQualityErrorMessage } from '@/lib/nutrition/foodQuality'
 
 const VALID_CATEGORIES: FoodCategory[] = [
@@ -732,7 +733,7 @@ function extractMlFromServingSize(text?: string): number | null {
 function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
   const n = off.nutriments
   const nutrition = {
-    calories: Math.round(n.energy_kcal_100g) || 0,
+    calories: plausibleOffKcal(n),
     protein: Math.round((n.proteins_100g ?? 0) * 10) / 10,
     carbs: Math.round((n.carbohydrates_100g ?? 0) * 10) / 10,
     fats: Math.round((n.fat_100g ?? 0) * 10) / 10,
@@ -757,14 +758,23 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
     && KNOWN_OFF_UNITS.has(offUnitNormalized)
     ? off.serving_quantity
     : null
-  const candidateGrams = parsedGrams ?? sqFromText ?? off.serving_quantity
-  const actualGrams = candidateGrams && candidateGrams >= 1 ? candidateGrams : null
 
   // Preserve the source unit when it's clearly liquid. ml ≠ g for non-water liquids
-  // (oils ~0.92 g/ml, honey ~1.4 g/ml). For water-like liquids the diff is <5%, but
-  // labeling alternates correctly avoids misleading users.
-  const isLiquid = off.serving_unit === 'ml' || /\bml\b|millilitre/i.test(off.serving_size || '')
+  // (oils ~0.92 g/ml, honey ~1.4 g/ml). Detect fl oz / cl / litre too — not just
+  // "ml" — so "14 fl oz" is parsed as a 414 ml volume instead of falling through
+  // to the gram path (where a count-only serving_quantity would collapse it).
+  const isLiquid = off.serving_unit === 'ml'
+    || /\bml\b|millilitre|milliliter|\bfl\.?\s*oz\b|fluid\s*ounce|\bcl\b|\blitres?\b|\bliters?\b/i.test(off.serving_size || '')
   const unit: ServingUnit = isLiquid ? 'ml' : 'g'
+  const volumeMl = isLiquid ? extractMlFromServingSize(off.serving_size) : null
+
+  // Never let a bare serving_quantity COUNT ("1" from "1 bottle"/"1 portion")
+  // become the serving bridge — that scales per-100 nutrition by 1/100 and
+  // collapses a 232-cal shake to ~1 cal. Only trust serving_quantity as an amount
+  // when it's a plausible serving weight (>=5) or arrived with a known g/ml unit.
+  const sqFallback = off.serving_quantity != null && off.serving_quantity >= 5 ? off.serving_quantity : null
+  const servingAmount = volumeMl ?? parsedGrams ?? sqFromText ?? sqFallback
+  const actualGrams = servingAmount && servingAmount >= 1 ? servingAmount : null
 
   const alternateServings: { label: string; multiplier: number }[] = []
   if (actualGrams && actualGrams !== 100) {
@@ -773,19 +783,13 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
   }
 
   // Bridges: the variant's nutrition is per 100 (g or ml). gramsPerServing /
-  // mlPerServing describe ONE serving — i.e. `actualGrams` when defined.
-  // For liquids, the parsed value came out of the volume family so we treat
-  // it as ml. For solids it's grams. Don't fake the cross-family bridge.
+  // mlPerServing describe ONE serving — i.e. `actualGrams` when defined. For
+  // liquids it's the parsed volume (ml); for solids it's grams. Never a count.
   let gramsPerServing: number | undefined
   let mlPerServing: number | undefined
   if (actualGrams != null) {
-    if (isLiquid) {
-      // For liquids, prefer a true volume parse so we don't conflate g and ml.
-      const parsedMl = extractMlFromServingSize(off.serving_size) ?? actualGrams
-      mlPerServing = parsedMl
-    } else {
-      gramsPerServing = actualGrams
-    }
+    if (isLiquid) mlPerServing = actualGrams
+    else gramsPerServing = actualGrams
   }
 
   return {
