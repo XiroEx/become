@@ -51,6 +51,7 @@ export interface DraftExercise {
   trackingType: string
   sets: number
   reps: string // e.g. "8-12" or "" for time-based
+  weight?: string // optional prescribed/added load
   rest?: string
   duration?: string // timed prescription for time-based tracking
   primaryMuscles?: string[]
