@@ -474,7 +474,7 @@ export default function SelfImageDashboard() {
               blurb={p.blurb}
               color="text-violet-500"
               locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in this tool to open`}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Self-Image to unlock`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

@@ -355,7 +355,7 @@ export default function VisionDashboard() {
               blurb={p.blurb}
               color="text-emerald-500"
               locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in this tool to open`}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Vision to unlock`}
               onClick={() => setFlow({ title: p.title, steps: p.steps })}
             />
           ))}

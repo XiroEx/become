@@ -495,7 +495,7 @@ export default function StateShiftDashboard() {
               blurb={f.blurb}
               color="text-cyan-500"
               locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in this tool to open`}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in State Shift to unlock`}
               onClick={() => setFlow({ title: f.title, steps: f.steps })}
             />
           ))}
