@@ -84,6 +84,11 @@ function authHeaders(): HeadersInit {
   return { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') ?? '' : ''}` }
 }
 
+// AI suggested-next cache — one set per completed session (cleared on the next
+// session's completion; 12h hard cap), so the tile doesn't re-tune every visit.
+const SUGG_CACHE_KEY = 'mind-suggested-next'
+const SUGG_CACHE_TTL = 12 * 60 * 60 * 1000
+
 export default function MindJourney() {
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
@@ -101,8 +106,10 @@ export default function MindJourney() {
   // otherwise we fall back to the instant deterministic plan.
   const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null)
   // Post-session suggested actions — AI-picked; null until the AI resolves (the
-  // deterministic set shows meanwhile).
+  // deterministic set shows meanwhile). Cached in localStorage so revisits don't
+  // refetch; suggFetching drives the "tuning…" hint ONLY during a real fetch.
   const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(null)
+  const [suggFetching, setSuggFetching] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -210,30 +217,46 @@ export default function MindJourney() {
   )
 
   // After a session (i.e. in the 20h cooldown → Training Grounds), ask the AI to
-  // pick 3 next protocols from the user's state + tendencies. Validated against
-  // the catalog client-side; only adopted if all 3 resolve.
+  // pick 3 next protocols from the user's state + tendencies. CACHED in
+  // localStorage until the next session completes (max 12h) so revisiting the
+  // page doesn't refetch — "tuning…" shows only while a real fetch is running,
+  // and settles (to the deterministic set) if the AI fails.
   useEffect(() => {
-    if (!progress || (progress.mainSessionAvailable ?? true)) return
+    if (!progress || (progress.mainSessionAvailable ?? true) || aiSuggestions) return
+    // 1. Cache hit → adopt instantly, no fetch, no "tuning".
+    try {
+      const raw = localStorage.getItem(SUGG_CACHE_KEY)
+      if (raw) {
+        const c = JSON.parse(raw) as { suggestions?: SuggestedAction[]; ts?: number }
+        const fresh = typeof c.ts === 'number' && Date.now() - c.ts < SUGG_CACHE_TTL
+        const valid = (c.suggestions ?? []).filter((s) => findProtocol(s.system, s.id))
+        if (fresh && valid.length === 3) { setAiSuggestions(valid); return }
+      }
+    } catch { /* fall through to fetch */ }
+    // 2. No usable cache → one fetch.
     let cancelled = false
+    setSuggFetching(true)
     runAiTask(
       '/api/ai/mind/suggestions',
       { context: { state: recentState, recentKinds, unlockedSystems: progress.unlockedSystems } },
       { silent: true },
     ).then((r) => {
-      if (cancelled || !r.ok || !r.result) return
-      const raw = (r.result as { suggestions?: Array<{ system: string; protocolId: string; reason?: string }> }).suggestions
-      if (!Array.isArray(raw)) return
-      const valid = raw
+      if (cancelled) return
+      const raw = r.ok && r.result ? (r.result as { suggestions?: Array<{ system: string; protocolId: string; reason?: string }> }).suggestions : null
+      const valid = (Array.isArray(raw) ? raw : [])
         .map((x) => {
           const p = findProtocol(x.system, x.protocolId)
           return p ? { ...p, reason: (x.reason || '').trim() || p.blurb } : null
         })
         .filter((x): x is SuggestedAction => x !== null)
         .slice(0, 3)
-      if (valid.length === 3) setAiSuggestions(valid)
-    })
+      if (valid.length === 3) {
+        setAiSuggestions(valid)
+        try { localStorage.setItem(SUGG_CACHE_KEY, JSON.stringify({ suggestions: valid, ts: Date.now() })) } catch { /* ignore */ }
+      }
+    }).finally(() => { if (!cancelled) setSuggFetching(false) })
     return () => { cancelled = true }
-  }, [progress, recentState, recentKinds])
+  }, [progress, recentState, recentKinds, aiSuggestions])
 
   // ── Immersive session overlay ──
   if (playing && effectivePlan) {
@@ -248,6 +271,8 @@ export default function MindJourney() {
           invalidateMindSession()
           setAiPlan(null)
           setAiSuggestions(null)
+          // New session → yesterday's suggestions are stale; recompute once.
+          try { localStorage.removeItem(SUGG_CACHE_KEY) } catch { /* ignore */ }
           precomposeMindSession()
           setLoading(true)
           load()
@@ -403,7 +428,7 @@ export default function MindJourney() {
       ) : (
         // In the 20h cooldown → suggested next actions + Training Grounds.
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <SuggestedActions actions={aiSuggestions ?? deterministicSuggestions} loading={!aiSuggestions} />
+          <SuggestedActions actions={aiSuggestions ?? deterministicSuggestions} loading={suggFetching} />
           <TrainingGrounds unlocked={progress?.unlockedSystems ?? []} nextInLabel={cooldownLabel} mainSessionCount={progress?.mainSessionCount ?? 0} />
         </motion.div>
       )}

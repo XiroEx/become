@@ -37,8 +37,12 @@ export function suggestActions(opts: {
   const picks: SuggestedAction[] = []
   const usedKeys = new Set<string>()
   const take = (sys: string) => {
-    const pool = CATALOG_BY_SYSTEM[sys]
-    if (!pool?.length) return
+    // Only the first protocol of a tool is GUARANTEED unlocked (the in-tool
+    // progression opens 1 + reps). The client doesn't know per-tool reps, so the
+    // deterministic picker never suggests deeper entries — the AI path (which
+    // filters candidates server-side by real rep counts) provides the variety.
+    const pool = (CATALOG_BY_SYSTEM[sys] ?? []).filter((p) => p.idx === 0)
+    if (!pool.length) return
     for (let i = 0; i < pool.length; i++) {
       const p = pool[(seed + i) % pool.length]
       const key = `${sys}:${p.id}`

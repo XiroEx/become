@@ -9,6 +9,10 @@ export interface ProtocolRef {
   id: string
   title: string
   blurb: string
+  /** Position of this protocol in ITS dashboard's rendered list — the in-tool
+   *  progressive unlock opens 1 + reps entries, so a protocol is unlocked when
+   *  idx < 1 + (reps in that tool). Suggestions must respect this. */
+  idx: number
 }
 
 export interface SuggestedAction extends ProtocolRef {
@@ -29,40 +33,40 @@ export const SEGMENT_STYLE: Record<string, { label: string; bg: string; text: st
 
 export const PROTOCOL_CATALOG: ProtocolRef[] = [
   // state-shift
-  { system: 'state-shift', id: 'name-next-action', title: 'Name the Next Action', blurb: 'What is the next action? Only that.' },
-  { system: 'state-shift', id: 'cut-the-noise', title: 'Cut the Noise', blurb: 'Silence is the sharpest tool.' },
-  { system: 'state-shift', id: 'move-to-shift', title: 'Move to Shift', blurb: 'Move the body, move the mind.' },
-  { system: 'state-shift', id: 'snap-out', title: 'Snap Out of It', blurb: 'This is a moment, not your identity.' },
+  { system: 'state-shift', id: 'name-next-action', idx: 0, title: 'Name the Next Action', blurb: 'What is the next action? Only that.' },
+  { system: 'state-shift', id: 'cut-the-noise', idx: 2, title: 'Cut the Noise', blurb: 'Silence is the sharpest tool.' },
+  { system: 'state-shift', id: 'move-to-shift', idx: 3, title: 'Move to Shift', blurb: 'Move the body, move the mind.' },
+  { system: 'state-shift', id: 'snap-out', idx: 4, title: 'Snap Out of It', blurb: 'This is a moment, not your identity.' },
   // self-image
-  { system: 'self-image', id: 'kill-the-old', title: 'Kill the Old Version', blurb: 'The old you would stop here. You don’t.' },
-  { system: 'self-image', id: 'identity-install', title: 'Identity Installation', blurb: 'I do what I say I will do.' },
-  { system: 'self-image', id: 'act-as-if', title: 'Act As If', blurb: 'Act like who you’re becoming until you are them.' },
-  { system: 'self-image', id: 'self-respect', title: 'Self-Respect Check', blurb: 'Would your future self respect this?' },
+  { system: 'self-image', id: 'kill-the-old', idx: 0, title: 'Kill the Old Version', blurb: 'The old you would stop here. You don’t.' },
+  { system: 'self-image', id: 'identity-install', idx: 2, title: 'Identity Installation', blurb: 'I do what I say I will do.' },
+  { system: 'self-image', id: 'act-as-if', idx: 3, title: 'Act As If', blurb: 'Act like who you’re becoming until you are them.' },
+  { system: 'self-image', id: 'self-respect', idx: 4, title: 'Self-Respect Check', blurb: 'Would your future self respect this?' },
   // mission
-  { system: 'mission', id: 'find-your-why', title: 'Find Your Why', blurb: 'Dig past the surface reason to the real one.' },
-  { system: 'mission', id: 'one-move', title: 'One Move Forward', blurb: 'Movement makes energy. Energy makes life.' },
-  { system: 'mission', id: 'north-star', title: 'North Star Check', blurb: 'Did today actually point where you’re going?' },
-  { system: 'mission', id: 'reconnect', title: 'Reconnect to Purpose', blurb: 'When you drift, come back to the why.' },
+  { system: 'mission', id: 'find-your-why', idx: 0, title: 'Find Your Why', blurb: 'Dig past the surface reason to the real one.' },
+  { system: 'mission', id: 'one-move', idx: 1, title: 'One Move Forward', blurb: 'Movement makes energy. Energy makes life.' },
+  { system: 'mission', id: 'north-star', idx: 3, title: 'North Star Check', blurb: 'Did today actually point where you’re going?' },
+  { system: 'mission', id: 'reconnect', idx: 4, title: 'Reconnect to Purpose', blurb: 'When you drift, come back to the why.' },
   // vision
-  { system: 'vision', id: 'see-future-you', title: 'See the Future You', blurb: 'Rehearse being them until it’s real.' },
-  { system: 'vision', id: 'which-domain', title: 'Which Domain Needs You?', blurb: 'Aim at the part that’s furthest behind.' },
-  { system: 'vision', id: 'close-the-gap', title: 'Close the Gap', blurb: 'Where does now differ most from the vision?' },
-  { system: 'vision', id: 'act-from-vision', title: 'Act From the Vision', blurb: 'Make one choice the future you would make.' },
+  { system: 'vision', id: 'see-future-you', idx: 0, title: 'See the Future You', blurb: 'Rehearse being them until it’s real.' },
+  { system: 'vision', id: 'which-domain', idx: 1, title: 'Which Domain Needs You?', blurb: 'Aim at the part that’s furthest behind.' },
+  { system: 'vision', id: 'close-the-gap', idx: 2, title: 'Close the Gap', blurb: 'Where does now differ most from the vision?' },
+  { system: 'vision', id: 'act-from-vision', idx: 3, title: 'Act From the Vision', blurb: 'Make one choice the future you would make.' },
   // social
-  { system: 'social', id: 'circle-audit', title: 'Circle Audit', blurb: 'Your environment is your fate. Know it.' },
-  { system: 'social', id: 'genuine-interest', title: 'Genuine Interest', blurb: 'People feel when you actually care.' },
-  { system: 'social', id: 'hard-conversation', title: 'Hard Conversation', blurb: 'Avoiding it is the expensive option.' },
-  { system: 'social', id: 'raise-average', title: 'Raise Your Average', blurb: 'You’re the average of your five closest.' },
+  { system: 'social', id: 'circle-audit', idx: 0, title: 'Circle Audit', blurb: 'Your environment is your fate. Know it.' },
+  { system: 'social', id: 'genuine-interest', idx: 1, title: 'Genuine Interest', blurb: 'People feel when you actually care.' },
+  { system: 'social', id: 'hard-conversation', idx: 2, title: 'Hard Conversation', blurb: 'Avoiding it is the expensive option.' },
+  { system: 'social', id: 'raise-average', idx: 3, title: 'Raise Your Average', blurb: 'You’re the average of your five closest.' },
   // discipline
-  { system: 'discipline', id: 'do-it-anyway', title: 'Do It Anyway', blurb: 'Feelings are data, not instructions.' },
-  { system: 'discipline', id: 'eat-the-frog', title: 'Eat the Frog', blurb: 'Hardest thing first. The day is won.' },
-  { system: 'discipline', id: 'find-your-40', title: 'Find Your 40%', blurb: 'When you think you’re done, you’re at 40%.' },
-  { system: 'discipline', id: 'excuse-callout', title: 'Excuse Callout', blurb: 'An excuse is a lie told too many times.' },
+  { system: 'discipline', id: 'do-it-anyway', idx: 0, title: 'Do It Anyway', blurb: 'Feelings are data, not instructions.' },
+  { system: 'discipline', id: 'eat-the-frog', idx: 1, title: 'Eat the Frog', blurb: 'Hardest thing first. The day is won.' },
+  { system: 'discipline', id: 'find-your-40', idx: 2, title: 'Find Your 40%', blurb: 'When you think you’re done, you’re at 40%.' },
+  { system: 'discipline', id: 'excuse-callout', idx: 4, title: 'Excuse Callout', blurb: 'An excuse is a lie told too many times.' },
   // anti-sabotage
-  { system: 'anti-sabotage', id: 'pattern-recognition', title: 'Pattern Recognition', blurb: 'Name the pattern — it can’t survive the light.' },
-  { system: 'anti-sabotage', id: 'stop-lying', title: 'Stop Lying to Yourself', blurb: 'Self-deception is the most expensive habit.' },
-  { system: 'anti-sabotage', id: 'action-override', title: 'Action Override', blurb: 'You can’t think your way to action.' },
-  { system: 'anti-sabotage', id: 'break-the-loop', title: 'Break the Loop', blurb: 'Interrupt the signal, interrupt the loop.' },
+  { system: 'anti-sabotage', id: 'pattern-recognition', idx: 0, title: 'Pattern Recognition', blurb: 'Name the pattern — it can’t survive the light.' },
+  { system: 'anti-sabotage', id: 'stop-lying', idx: 1, title: 'Stop Lying to Yourself', blurb: 'Self-deception is the most expensive habit.' },
+  { system: 'anti-sabotage', id: 'action-override', idx: 2, title: 'Action Override', blurb: 'You can’t think your way to action.' },
+  { system: 'anti-sabotage', id: 'break-the-loop', idx: 3, title: 'Break the Loop', blurb: 'Interrupt the signal, interrupt the loop.' },
 ]
 
 export const CATALOG_BY_SYSTEM: Record<string, ProtocolRef[]> = PROTOCOL_CATALOG.reduce(
