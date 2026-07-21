@@ -24,7 +24,7 @@ import {
 
 // ─── Seeded RNG (mulberry32) ─────────────────────────────────────────────────
 
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0
   return function () {
     a |= 0
@@ -35,7 +35,7 @@ function mulberry32(seed: number): () => number {
   }
 }
 
-function seededShuffle<T>(arr: T[], rng: () => number): T[] {
+export function seededShuffle<T>(arr: T[], rng: () => number): T[] {
   const out = arr.slice()
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
@@ -53,7 +53,7 @@ const DIFFICULTY_RANK: Record<string, number> = {
   expert: 4,
 }
 
-function difficultyAllowed(candidate: string, cap?: string): boolean {
+export function difficultyAllowed(candidate: string, cap?: string): boolean {
   if (!cap) return true
   const c = DIFFICULTY_RANK[candidate] ?? 2
   const max = DIFFICULTY_RANK[cap] ?? 4
@@ -70,7 +70,7 @@ function clamp(n: number, lo: number, hi: number): number {
  * How well a candidate fits a focus. 0 = off-focus (excluded). Higher = better
  * fit: muscle hits weigh most, then movement pattern, then body region.
  */
-function focusScore(ex: CandidateExercise, focus: FocusKey): number {
+export function focusScore(ex: CandidateExercise, focus: FocusKey): number {
   const def = FOCUS_DEFS[focus]
   let score = 0
 
@@ -99,7 +99,7 @@ function focusScore(ex: CandidateExercise, focus: FocusKey): number {
   return score
 }
 
-function hasEquipment(ex: CandidateExercise, available?: string[]): boolean {
+export function hasEquipment(ex: CandidateExercise, available?: string[]): boolean {
   if (!available || available.length === 0) return true
   // Bodyweight / none always pass — no equipment needed.
   if (ex.equipment.length === 0) return true
@@ -107,7 +107,7 @@ function hasEquipment(ex: CandidateExercise, available?: string[]): boolean {
   return ex.equipment.some((e) => available.includes(e) || e === 'bodyweight' || e === 'none')
 }
 
-function isCompound(ex: CandidateExercise): boolean {
+export function isCompound(ex: CandidateExercise): boolean {
   return ex.role === 'compound' || ex.role === 'secondary' || ex.mechanics === 'compound'
 }
 
@@ -132,7 +132,7 @@ function prescribe(ex: CandidateExercise): { sets: number; reps: string; rest?: 
   return { sets, reps, rest: isCompound(ex) ? '90s' : '60s' }
 }
 
-function toDraftExercise(ex: CandidateExercise): DraftExercise {
+export function toDraftExercise(ex: CandidateExercise): DraftExercise {
   const p = prescribe(ex)
   return {
     exerciseSlug: ex.slug,
