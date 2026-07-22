@@ -111,6 +111,24 @@ export function isCompound(ex: CandidateExercise): boolean {
   return ex.role === 'compound' || ex.role === 'secondary' || ex.mechanics === 'compound'
 }
 
+// ─── Session ordering — how a real lift is structured ────────────────────────
+// Big compound lifts first (heaviest, most technical, most CNS-demanding while
+// you're fresh), then secondary compounds, then isolation/accessory work, with
+// conditioning/cardio last. Within a tier the selection order (focus score +
+// muscle spread) is preserved — Array.sort is stable.
+
+function roleRank(ex: CandidateExercise): number {
+  if (ex.category === 'cardio' || ex.category === 'conditioning') return 3
+  if (ex.role === 'compound') return 0
+  if (ex.role === 'secondary') return 1
+  if (ex.mechanics === 'compound') return 1 // untagged multi-joint → secondary tier
+  return 2
+}
+
+export function orderLikeALift(chosen: CandidateExercise[]): CandidateExercise[] {
+  return chosen.slice().sort((a, b) => roleRank(a) - roleRank(b))
+}
+
 // ─── Sets / reps prescription ────────────────────────────────────────────────
 
 function prescribe(ex: CandidateExercise): { sets: number; reps: string; rest?: string; duration?: string } {
@@ -228,7 +246,7 @@ export function generateSession(
 
   const { chosen } = selectExercises(eligible, focus, count, rng)
 
-  const exercises = chosen.map(toDraftExercise)
+  const exercises = orderLikeALift(chosen).map(toDraftExercise)
 
   // Optional cardio finisher on a strength focus.
   if (opts.includeCardio && focus !== 'cardio') {
@@ -298,7 +316,7 @@ export function generateProgram(
       day: `Day ${i + 1}`,
       title: FOCUS_DEFS[dayFocus].label,
       focus: dayFocus,
-      exercises: chosen.map(toDraftExercise),
+      exercises: orderLikeALift(chosen).map(toDraftExercise),
     }
   })
 
