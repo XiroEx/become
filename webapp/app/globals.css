@@ -42,13 +42,3 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(-360deg); }
 }
-
-html {
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  margin: 0;
-  padding: 0;
-}
