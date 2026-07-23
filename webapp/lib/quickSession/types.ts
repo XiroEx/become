@@ -96,6 +96,49 @@ export interface GenerateSessionOptions {
   seed?: number
 }
 
+export type CompleteSessionMode = 'finish' | 'suggest'
+
+export interface CompleteSessionExerciseInput {
+  exerciseSlug: string
+  name?: string
+  trackingType?: string
+  sets?: number
+  reps?: string
+  rest?: string
+  duration?: string
+}
+
+export interface CompleteSessionOptions {
+  exercises: CompleteSessionExerciseInput[]
+  mode?: CompleteSessionMode
+  /** Target total exercise count for finish mode (clamped 3–10 by the engine). */
+  exerciseCount?: number
+  /** Number of one-tap suggestions to return (clamped 1–6 by the route). */
+  suggestionCount?: number
+  difficulty?: string
+  equipment?: string[]
+  seed?: number
+}
+
+export interface ComplementSuggestion {
+  exercise: DraftExercise
+  reason: string
+}
+
+export interface CompleteSessionFinishResponse {
+  session: DraftSession
+  seed: number
+}
+
+export interface CompleteSessionSuggestResponse {
+  suggestions: ComplementSuggestion[]
+  seed: number
+}
+
+export type CompleteSessionResponse =
+  | CompleteSessionFinishResponse
+  | CompleteSessionSuggestResponse
+
 export interface GenerateProgramOptions {
   focus: FocusKey
   /** Training days per week (clamped 2–6). */
