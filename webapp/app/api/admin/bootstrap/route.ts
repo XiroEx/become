@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 export async function POST(request: NextRequest) {
   try {
     const adminKey = request.headers.get('x-admin-key')
-    const secret = process.env.JWT_SECRET
+    const { auth } = await getRuntimeConfig()
+    const secret = auth.jwtSecret
 
     if (!secret || adminKey !== secret) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

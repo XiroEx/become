@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     let payload: { userId: string; email: string; role?: string }
     try {
-      payload = verifyToken(token)
+      payload = await verifyToken(token)
     } catch {
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
     }
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     // the client can sync localStorage — not just on the cookie path. `void
     // fromCookie` keeps the parsed flag without affecting behavior.
     void fromCookie
-    const refreshed = signToken({
+    const refreshed = await signToken({
       userId: payload.userId,
       email: payload.email,
       role: payload.role,

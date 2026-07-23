@@ -23,7 +23,9 @@ runConfig:
   #   secret: mySecretRef
 
 env:
-  - variable: MONGODB_URI
-    secret: MONGODB_URI
-  - variable: JWT_SECRET
-    secret: JWT_SECRET
+  # Runtime credentials are resolved from @redbtn/redsecrets. Only the
+  # encrypted store's connection and key are available as process bootstrap.
+  - variable: REDSECRETS_MONGODB_URI
+    secret: REDSECRETS_MONGODB_URI
+  - variable: SECRETS_ENCRYPTION_KEY
+    secret: SECRETS_ENCRYPTION_KEY

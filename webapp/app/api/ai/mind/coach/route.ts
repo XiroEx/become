@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     { message, history: trimHistory(body.history, 4), user: await userGrounding(gate.user.userId, body) },
     {
       conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
-      userToken: mintToolToken(gate.user.userId, gate.user.email),
+      userToken: await mintToolToken(gate.user.userId, gate.user.email),
     },
   )
 

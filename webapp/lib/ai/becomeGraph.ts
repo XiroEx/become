@@ -64,12 +64,12 @@ export interface RunBecomeOptions {
   pollIntervalMs?: number
 }
 
-const BASE = process.env.BECOME_AI_BASE_URL ?? 'https://app.redbtn.io'
-const WEBHOOK_ID = process.env.BECOME_AI_WEBHOOK_ID ?? 'LzbTW8D6DA9z'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 /** True when the deployment is configured to reach the graph at all. */
-export function becomeAiConfigured(): boolean {
-  return Boolean(process.env.BECOME_AI_WEBHOOK_SECRET && process.env.BECOME_AI_READBACK_TOKEN)
+export async function becomeAiConfigured(): Promise<boolean> {
+  const { ai } = await getRuntimeConfig()
+  return Boolean(ai.webhookSecret && ai.readbackToken)
 }
 
 interface RunState {
@@ -100,11 +100,12 @@ export async function triggerBecomeTask(
   context: string | Record<string, unknown>,
   opts: RunBecomeOptions = {},
 ): Promise<{ ok: true; runId: string } | { ok: false; error: string }> {
-  const secret = process.env.BECOME_AI_WEBHOOK_SECRET
+  const { ai } = await getRuntimeConfig()
+  const secret = ai.webhookSecret
   if (!secret) return { ok: false, error: 'missing_webhook_secret' }
   try {
     const triggerRes = await fetch(
-      `${BASE}/api/v1/webhooks/${WEBHOOK_ID}?secret=${encodeURIComponent(secret)}`,
+      `${ai.baseUrl}/api/v1/webhooks/${ai.webhookId}?secret=${encodeURIComponent(secret)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -134,10 +135,11 @@ export async function triggerBecomeTask(
  * own deadline), 'completed' with the normalized result, or 'failed'.
  */
 export async function fetchBecomeRun(runId: string): Promise<RunSnapshot> {
-  const readToken = process.env.BECOME_AI_READBACK_TOKEN
+  const { ai } = await getRuntimeConfig()
+  const readToken = ai.readbackToken
   if (!readToken) return { status: 'failed', error: 'missing_readback_token' }
   try {
-    const res = await fetch(`${BASE}/api/runs/${encodeURIComponent(runId)}`, {
+    const res = await fetch(`${ai.baseUrl}/api/runs/${encodeURIComponent(runId)}`, {
       headers: { Authorization: `Bearer ${readToken}` },
       signal: AbortSignal.timeout(10_000),
     })

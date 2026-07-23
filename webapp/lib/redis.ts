@@ -19,6 +19,7 @@
 //      response by more than ~150ms.
 
 import type { Redis as RedisClient } from 'ioredis'
+import { getRuntimeConfig } from './runtimeConfig'
 
 // Minimal surface we actually use. Lets tests inject a fake without ioredis.
 export interface CacheClient {
@@ -38,16 +39,16 @@ let loggedError = false
  * unset OR when client construction itself fails — both mean "no cache". The
  * result is memoized so we don't re-attempt construction on every call.
  */
-function getClient(): CacheClient | null {
+async function getClient(): Promise<CacheClient | null> {
   if (singleton !== undefined) return singleton
 
-  const url = process.env.REDIS_URL
-  if (!url) {
-    singleton = null
-    return null
-  }
-
   try {
+    const url = (await getRuntimeConfig()).redis.url
+    if (!url) {
+      singleton = null
+      return null
+    }
+
     // Require lazily so environments without ioredis (or where REDIS_URL is
     // unset) never pay the import cost, and a broken module can't crash import.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -109,8 +110,9 @@ function withTimeout<T>(p: Promise<T>, fallback: T, ms = CALL_TIMEOUT_MS): Promi
  */
 export async function cacheGetJson<T>(
   key: string,
-  client: CacheClient | null = getClient(),
+  client?: CacheClient | null,
 ): Promise<T | null> {
+  client = client === undefined ? await getClient() : client
   if (!client) return null
   try {
     const raw = await withTimeout(client.get(key), null)
@@ -129,8 +131,9 @@ export async function cacheSetJson(
   key: string,
   value: unknown,
   ttlSeconds: number,
-  client: CacheClient | null = getClient(),
+  client?: CacheClient | null,
 ): Promise<void> {
+  client = client === undefined ? await getClient() : client
   if (!client) return
   try {
     const payload = JSON.stringify(value)
@@ -146,8 +149,9 @@ export async function cacheSetJson(
  */
 export async function cacheDel(
   key: string,
-  client: CacheClient | null = getClient(),
+  client?: CacheClient | null,
 ): Promise<void> {
+  client = client === undefined ? await getClient() : client
   if (!client) return
   try {
     await withTimeout(client.del(key), undefined)

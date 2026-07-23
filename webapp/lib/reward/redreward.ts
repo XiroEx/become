@@ -21,19 +21,16 @@
 import { createRedReward, type RedRewardInstance } from '@redbtn/redreward'
 import { catalog } from './catalog'
 import { achievements } from './achievements'
+import { getRuntimeConfig, requireRuntimeSecret } from '../runtimeConfig'
 
 let instance: RedRewardInstance | null = null
 
-export function getRedReward(): RedRewardInstance {
+export async function getRedReward(): Promise<RedRewardInstance> {
   if (instance) return instance
 
   // Dedicated reward DB — must NOT be Become's app DB (clean blast radius).
-  const mongoUri = process.env.BECOME_REWARD_MONGODB_URI
-  if (!mongoUri) {
-    throw new Error(
-      '[redreward] BECOME_REWARD_MONGODB_URI is required (dedicated reward DB, separate from Become app data)',
-    )
-  }
+  const { reward } = await getRuntimeConfig()
+  const mongoUri = requireRuntimeSecret(reward.mongoUri, 'reward.mongoUri')
 
   instance = createRedReward({
     app: 'become',

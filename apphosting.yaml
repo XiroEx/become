@@ -1,5 +1,8 @@
 env:
-  - variable: MONGODB_URI
-    secret: MONGODB_URI
-  - variable: JWT_SECRET
-    secret: JWT_SECRET
+  # The app reads all application credentials from BECOME_RUNTIME_CONFIG in
+  # @redbtn/redsecrets. These two values are the only secret-store bootstrap
+  # inputs and never contain application credentials.
+  - variable: REDSECRETS_MONGODB_URI
+    secret: REDSECRETS_MONGODB_URI
+  - variable: SECRETS_ENCRYPTION_KEY
+    secret: SECRETS_ENCRYPTION_KEY

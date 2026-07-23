@@ -7,9 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { verifyAuth } from '@/lib/auth'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import { assembleUserContext } from './userContext'
-
-const JWT_SECRET = process.env.JWT_SECRET || ''
 
 /**
  * Mint a SHORT-LIVED (15 min) token scoped to this user for the graph to call
@@ -19,10 +18,11 @@ const JWT_SECRET = process.env.JWT_SECRET || ''
  * data endpoints via the become MCP tools, so it's effectively read-scoped; the
  * `scope` claim is there for future server-side enforcement.
  */
-export function mintToolToken(userId: string, email?: string): string | undefined {
-  if (!JWT_SECRET || !userId) return undefined
+export async function mintToolToken(userId: string, email?: string): Promise<string | undefined> {
+  if (!userId) return undefined
   try {
-    return jwt.sign({ userId, email, scope: 'ai-tools' }, JWT_SECRET, { expiresIn: '15m' })
+    const { auth } = await getRuntimeConfig()
+    return jwt.sign({ userId, email, scope: 'ai-tools' }, auth.jwtSecret, { expiresIn: '15m' })
   } catch {
     return undefined
   }
