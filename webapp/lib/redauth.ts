@@ -15,21 +15,20 @@
 // join key is `User.authId` = the redAuth user id.
 
 import { createRedAuth, type RedAuthInstance } from '@redbtn/redauth'
+import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
 
 let instance: RedAuthInstance | null = null
 
-export function getRedAuth(): RedAuthInstance {
+export async function getRedAuth(): Promise<RedAuthInstance> {
   if (instance) return instance
 
   // Dedicated auth DB — must NOT be Become's app DB (collection-name collision).
-  const mongoUri = process.env.AUTH_MONGODB_URI
-  const jwtSecret = process.env.JWT_SECRET
+  const { auth } = await getRuntimeConfig()
+  const mongoUri = requireRuntimeSecret(auth.authMongoUri, 'auth.authMongoUri')
+  const jwtSecret = auth.jwtSecret
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://become.redbtn.io'
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-
-  if (!mongoUri) throw new Error('[redauth] AUTH_MONGODB_URI is required (separate DB from Become app data)')
-  if (!jwtSecret) throw new Error('[redauth] JWT_SECRET is required')
+  const clientId = auth.googleClientId
+  const clientSecret = auth.googleClientSecret
 
   const googleEnabled = Boolean(clientId && clientSecret)
 

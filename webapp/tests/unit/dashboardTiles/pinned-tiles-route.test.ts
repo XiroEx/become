@@ -19,8 +19,8 @@ function makeRequest(body: unknown, authHeader?: string): NextRequest {
   })
 }
 
-function authed() {
-  return `Bearer ${signToken({ userId: 'fake-user', email: 't@example.com' })}`
+async function authed() {
+  return `Bearer ${await signToken({ userId: 'fake-user', email: 't@example.com' })}`
 }
 
 test('PATCH /api/dashboard/pinned-tiles: no auth → 401', async () => {
@@ -34,20 +34,20 @@ test('PATCH /api/dashboard/pinned-tiles: invalid JWT → 401', async () => {
 })
 
 test('PATCH /api/dashboard/pinned-tiles: invalid JSON → 400', async () => {
-  const res = await PATCH(makeRequest('not-json{{{', authed()))
+  const res = await PATCH(makeRequest('not-json{{{', await authed()))
   assert.equal(res.status, 400)
   const json = await res.json()
   assert.match(String(json.error), /Invalid JSON body/)
 })
 
 test('PATCH /api/dashboard/pinned-tiles: missing pinnedTiles → 400', async () => {
-  const res = await PATCH(makeRequest({}, authed()))
+  const res = await PATCH(makeRequest({}, await authed()))
   assert.equal(res.status, 400)
 })
 
 test('PATCH /api/dashboard/pinned-tiles: non-string entry → 400', async () => {
   const res = await PATCH(
-    makeRequest({ pinnedTiles: ['a', 42] }, authed()),
+    makeRequest({ pinnedTiles: ['a', 42] }, await authed()),
   )
   assert.equal(res.status, 400)
 })
@@ -56,7 +56,7 @@ test('PATCH /api/dashboard/pinned-tiles: too many entries → 400', async () => 
   const res = await PATCH(
     makeRequest(
       { pinnedTiles: Array.from({ length: 21 }, (_, i) => `t${i}`) },
-      authed(),
+      await authed(),
     ),
   )
   assert.equal(res.status, 400)

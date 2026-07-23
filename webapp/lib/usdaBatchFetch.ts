@@ -15,6 +15,7 @@
 
 import type { USDAFood, USDAFoodPortion } from '@/lib/usda'
 import { normalizeNutrients, type USDADetailNutrient } from '@/lib/usda'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 const API_BASE = 'https://api.nal.usda.gov/fdc/v1'
 
@@ -96,7 +97,7 @@ export async function fetchUSDAFoodsBatch(
     uniqueIds.push(s)
   }
 
-  const apiKey = options?.apiKey ?? process.env.USDA_API_KEY ?? 'DEMO_KEY'
+  const apiKey = options?.apiKey ?? (await getRuntimeConfig()).external.usdaApiKey ?? 'DEMO_KEY'
   const timeoutMs = options?.signalTimeoutMs ?? 15000
   const fetchImpl = options?.fetchImpl ?? fetch
 

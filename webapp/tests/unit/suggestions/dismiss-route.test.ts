@@ -21,9 +21,9 @@ function makeRequest(body: unknown | undefined, authHeader?: string): NextReques
   })
 }
 
-function authedHeader() {
+async function authedHeader() {
   // verifyAuth is JWT-only (no DB lookup), so any signed token is accepted.
-  const token = signToken({ userId: 'fake-test-user', email: 't@example.com' })
+  const token = await signToken({ userId: 'fake-test-user', email: 't@example.com' })
   return `Bearer ${token}`
 }
 
@@ -40,25 +40,25 @@ test('POST /api/suggestions/dismiss: invalid JWT → 401', async () => {
 })
 
 test('POST /api/suggestions/dismiss: authed + missing id → 400 (no DB touched)', async () => {
-  const res = await POST(makeRequest({}, authedHeader()))
+  const res = await POST(makeRequest({}, await authedHeader()))
   assert.equal(res.status, 400)
   const json = await res.json()
   assert.match(String(json.error), /Missing required field: id/)
 })
 
 test('POST /api/suggestions/dismiss: authed + empty-string id → 400', async () => {
-  const res = await POST(makeRequest({ id: '   ' }, authedHeader()))
+  const res = await POST(makeRequest({ id: '   ' }, await authedHeader()))
   assert.equal(res.status, 400)
 })
 
 test('POST /api/suggestions/dismiss: authed + non-string id → 400', async () => {
-  const res = await POST(makeRequest({ id: 42 }, authedHeader()))
+  const res = await POST(makeRequest({ id: 42 }, await authedHeader()))
   assert.equal(res.status, 400)
 })
 
 test('POST /api/suggestions/dismiss: authed + invalid JSON body → 400', async () => {
   const headers = new Headers()
-  headers.set('Authorization', authedHeader())
+  headers.set('Authorization', await authedHeader())
   headers.set('Content-Type', 'application/json')
   const req = new NextRequest('http://localhost/api/suggestions/dismiss', {
     method: 'POST',

@@ -1,14 +1,5 @@
 import nodemailer from 'nodemailer'
-
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: false, // true for 465, false for other ports
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-})
+import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || 'BECOME'
 
@@ -28,8 +19,17 @@ interface SendEmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, from, attachments }: SendEmailOptions) {
+  const { email } = await getRuntimeConfig()
+  const user = requireRuntimeSecret(email.user, 'email.user')
+  const pass = requireRuntimeSecret(email.pass, 'email.pass')
+  const transporter = nodemailer.createTransport({
+    host: email.host,
+    port: email.port,
+    secure: email.port === 465,
+    auth: { user, pass },
+  })
   const mailOptions = {
-    from: from ?? `"${appName}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
+    from: from ?? `"${appName}" <${email.from || user}>`,
     to,
     subject,
     html,

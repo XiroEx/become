@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const email = typeof body?.email === 'string' && body.email.trim() ? body.email.trim() : undefined
-    const redauth = getRedAuth()
+    const redauth = await getRedAuth()
     const { options, challengeId } = await redauth.createPasskeyAuthenticationOptions(email)
     return NextResponse.json({ options, challengeId })
   } catch (err) {

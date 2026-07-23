@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (!challengeId || !response) {
       return NextResponse.json({ error: 'challengeId and response are required' }, { status: 400 })
     }
-    const redauth = getRedAuth()
+    const redauth = await getRedAuth()
     await redauth.verifyPasskeyRegistration(challengeId, response)
     return NextResponse.json({ ok: true })
   } catch (err) {

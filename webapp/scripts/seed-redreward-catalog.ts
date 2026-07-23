@@ -33,7 +33,7 @@ async function main() {
   // own env check (clearer message), and so importing this file never connects.
   const { getRedReward } = await import('../lib/reward/redreward')
 
-  const reward = getRedReward()
+  const reward = await getRedReward()
   console.log('[seed-redreward] syncing catalog + achievements to the reward DB…')
   await reward.syncCatalog()
   console.log('[seed-redreward] done.')

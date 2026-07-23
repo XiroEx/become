@@ -9,7 +9,7 @@ import { publicOrigin } from '@/lib/authBridge'
 
 export async function GET(req: NextRequest) {
   try {
-    const redauth = getRedAuth()
+    const redauth = await getRedAuth()
     const redirectAfter = req.nextUrl.searchParams.get('redirect') || '/dashboard'
     const { url } = await redauth.getProviderAuthUrl('google', redirectAfter)
     return NextResponse.redirect(url)

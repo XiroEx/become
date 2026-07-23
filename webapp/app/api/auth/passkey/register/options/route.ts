@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const redauth = getRedAuth()
+    const redauth = await getRedAuth()
     const { user } = await redauth.findOrCreateUser(auth.email)
     const { options, challengeId } = await redauth.createPasskeyRegistrationOptions(
       String(user._id),

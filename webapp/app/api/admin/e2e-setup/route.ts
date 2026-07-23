@@ -3,20 +3,16 @@ import jwt from 'jsonwebtoken'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
-const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN
 const E2E_EMAIL = 'e2etest@become.io'
 
 export async function POST(request: NextRequest) {
   try {
     const token = request.headers.get('x-bootstrap-token')
-    if (!BOOTSTRAP_TOKEN || token !== BOOTSTRAP_TOKEN) {
+    const { admin, auth } = await getRuntimeConfig()
+    if (!admin.bootstrapToken || token !== admin.bootstrapToken) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const secret = process.env.JWT_SECRET
-    if (!secret) {
-      return NextResponse.json({ error: 'JWT_SECRET not configured' }, { status: 500 })
     }
 
     await connectDB()
@@ -53,7 +49,7 @@ export async function POST(request: NextRequest) {
     // 24-hour JWT for e2e test sessions
     const authToken = jwt.sign(
       { userId, email: E2E_EMAIL, role: 'user' },
-      secret,
+      auth.jwtSecret,
       { expiresIn: '24h' }
     )
 

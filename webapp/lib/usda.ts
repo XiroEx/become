@@ -9,6 +9,7 @@
 
 import { parseQuantityString, convert, familyOf } from '@/lib/units'
 import { cleanFoodName, sanitizeServingLabel } from '@/lib/foodNameClean'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 const API_BASE = 'https://api.nal.usda.gov/fdc/v1'
 
@@ -197,7 +198,7 @@ function deriveUsdaBridges(food: USDAFood): {
 }
 
 export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResult | null> {
-  const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
+  const apiKey = (await getRuntimeConfig()).external.usdaApiKey || 'DEMO_KEY'
 
   try {
     // USDA Branded foods are indexed by gtinUpc — searching the barcode as a
@@ -347,7 +348,7 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
 }
 
 export async function searchUSDA(query: string, limit: number = 15): Promise<MappedFoodResult[]> {
-  const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
+  const apiKey = (await getRuntimeConfig()).external.usdaApiKey || 'DEMO_KEY'
 
   try {
     // Include Foundation + SR Legacy (whole foods) alongside Branded.
@@ -431,7 +432,7 @@ export function normalizeNutrients(raw: USDADetailNutrient[] | undefined): USDAN
 }
 
 export async function fetchUSDAById(fdcId: string): Promise<USDAFood | null> {
-  const apiKey = process.env.USDA_API_KEY || 'DEMO_KEY'
+  const apiKey = (await getRuntimeConfig()).external.usdaApiKey || 'DEMO_KEY'
   const id = encodeURIComponent(fdcId)
 
   try {
@@ -486,4 +487,3 @@ export async function fetchUSDAById(fdcId: string): Promise<USDAFood | null> {
     return null
   }
 }
-

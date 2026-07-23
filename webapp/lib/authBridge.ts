@@ -62,7 +62,7 @@ export async function bridgeToBecomeSession(identity: BridgeIdentity): Promise<B
     isNew = true
   }
 
-  const token = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
+  const token = await signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
   return { token, user: { id: String(user._id), name: user.name, email: user.email }, isNew }
 }
 

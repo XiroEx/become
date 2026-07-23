@@ -26,6 +26,7 @@ import {
   type PutObjectCommandInput,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
 
 export interface BlobPutInput {
   key: string
@@ -61,29 +62,33 @@ export interface BlobStore {
 }
 
 class S3BlobStore implements BlobStore {
-  private client: S3Client
-  private bucket: string
-  private publicBase: string
+  private client: S3Client | null = null
+  private bucket = ''
+  private publicBase = ''
+  private init: Promise<void> | null = null
 
-  constructor() {
-    const endpoint = requireEnv('S3_ENDPOINT')
-    const region = process.env.S3_REGION || 'us-east-1'
-    const accessKeyId = requireEnv('S3_ACCESS_KEY_ID')
-    const secretAccessKey = requireEnv('S3_SECRET_ACCESS_KEY')
-    const forcePathStyle = (process.env.S3_FORCE_PATH_STYLE || '').toLowerCase() === 'true'
-
-    this.bucket = requireEnv('S3_BUCKET')
-    this.publicBase = (process.env.S3_PUBLIC_BASE_URL || `${endpoint}/${this.bucket}`).replace(/\/+$/, '')
-
-    this.client = new S3Client({
-      endpoint,
-      region,
-      credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle,
-    })
+  private async ensureInitialized(): Promise<void> {
+    if (this.client) return
+    if (!this.init) {
+      this.init = getRuntimeConfig().then(({ blob }) => {
+        const endpoint = requireRuntimeSecret(blob.endpoint, 'blob.endpoint')
+        const accessKeyId = requireRuntimeSecret(blob.accessKeyId, 'blob.accessKeyId')
+        const secretAccessKey = requireRuntimeSecret(blob.secretAccessKey, 'blob.secretAccessKey')
+        this.bucket = requireRuntimeSecret(blob.bucket, 'blob.bucket')
+        this.publicBase = (blob.publicBaseUrl || `${endpoint}/${this.bucket}`).replace(/\/+$/, '')
+        this.client = new S3Client({
+          endpoint,
+          region: blob.region || 'us-east-1',
+          credentials: { accessKeyId, secretAccessKey },
+          forcePathStyle: blob.forcePathStyle ?? false,
+        })
+      })
+    }
+    await this.init
   }
 
   async put({ key, body, contentType, cacheControl }: BlobPutInput) {
+    await this.ensureInitialized()
     const params: PutObjectCommandInput = {
       Bucket: this.bucket,
       Key: key,
@@ -91,12 +96,13 @@ class S3BlobStore implements BlobStore {
       ContentType: contentType,
       CacheControl: cacheControl ?? 'public, max-age=31536000, immutable',
     }
-    await this.client.send(new PutObjectCommand(params))
+    await this.client!.send(new PutObjectCommand(params))
     return { key, publicUrl: this.publicUrl(key) }
   }
 
   async get(key: string, options: BlobGetOptions = {}): Promise<BlobGetResult> {
-    const res = await this.client.send(new GetObjectCommand({
+    await this.ensureInitialized()
+    const res = await this.client!.send(new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
       Range: options.range,
@@ -113,12 +119,14 @@ class S3BlobStore implements BlobStore {
   }
 
   async delete(key: string) {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }))
+    await this.ensureInitialized()
+    await this.client!.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }))
   }
 
   async exists(key: string) {
+    await this.ensureInitialized()
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }))
+      await this.client!.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }))
       return true
     } catch (err) {
       const e = err as { $metadata?: { httpStatusCode?: number }; name?: string }
@@ -132,15 +140,10 @@ class S3BlobStore implements BlobStore {
   }
 
   async presignedPutUrl(key: string, contentType: string, expiresInSec = 900): Promise<string> {
+    await this.ensureInitialized()
     const cmd = new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType })
-    return getSignedUrl(this.client, cmd, { expiresIn: expiresInSec })
+    return getSignedUrl(this.client!, cmd, { expiresIn: expiresInSec })
   }
-}
-
-function requireEnv(name: string): string {
-  const v = process.env[name]
-  if (!v) throw new Error(`Missing required env: ${name}`)
-  return v
 }
 
 let cached: BlobStore | null = null

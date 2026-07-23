@@ -1,10 +1,5 @@
 import mongoose from 'mongoose'
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:admin123@localhost:27017/jondonfitdb?authSource=admin'
-
-if (!MONGODB_URI) {
-  throw new Error('Please define the MONGODB_URI environment variable inside .env.local')
-}
+import { getRuntimeConfig } from './runtimeConfig'
 
 declare global {
   var mongoose: any
@@ -26,7 +21,7 @@ async function dbConnect() {
       bufferCommands: false,
     }
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+    cached.promise = getRuntimeConfig().then(({ auth }) => mongoose.connect(auth.mongoUri, opts)).then((mongoose) => {
       return mongoose
     })
   }
