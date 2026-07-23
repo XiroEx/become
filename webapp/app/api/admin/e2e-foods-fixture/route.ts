@@ -16,18 +16,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import connectDB from '@/lib/mongodb'
 import Food from '@/models/Food'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
-const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN
-
-function unauthorized(req: NextRequest): NextResponse | null {
-  if (!BOOTSTRAP_TOKEN || req.headers.get('x-bootstrap-token') !== BOOTSTRAP_TOKEN) {
+async function unauthorized(req: NextRequest): Promise<NextResponse | null> {
+  const { admin } = await getRuntimeConfig()
+  if (!admin.bootstrapToken || req.headers.get('x-bootstrap-token') !== admin.bootstrapToken) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return null
 }
 
 export async function POST(req: NextRequest) {
-  const reject = unauthorized(req)
+  const reject = await unauthorized(req)
   if (reject) return reject
 
   try {
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const reject = unauthorized(req)
+  const reject = await unauthorized(req)
   if (reject) return reject
 
   try {

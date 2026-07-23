@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 const LIMIT = 24
 const RATING = 'pg-13'
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
     const auth = await verifyAuth(request)
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const key = process.env.GIPHY_API_KEY
+    const key = (await getRuntimeConfig()).external.giphyApiKey
     if (!key) {
       return NextResponse.json({ error: 'GIF search not configured', gifs: [] }, { status: 503 })
     }

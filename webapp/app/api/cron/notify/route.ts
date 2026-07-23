@@ -5,6 +5,7 @@ import Schedule from '@/models/Schedule'
 import ProgramModel from '@/models/Program'
 import MealLog from '@/models/MealLog'
 import { sendPushToUser } from '@/lib/pushNotification'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import {
   REENGAGEMENT_END_HOUR,
   REENGAGEMENT_START_HOUR,
@@ -26,7 +27,8 @@ export async function GET(request: NextRequest) {
     request.headers.get('x-cron-secret') ||
     request.nextUrl.searchParams.get('secret')
 
-  if (!secret || secret !== process.env.CRON_SECRET) {
+  const { admin } = await getRuntimeConfig()
+  if (!secret || !admin.cronSecret || secret !== admin.cronSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

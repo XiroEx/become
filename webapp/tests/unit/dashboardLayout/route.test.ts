@@ -32,8 +32,8 @@ function patchRequest(body: unknown, authHeader?: string): NextRequest {
   })
 }
 
-function authed() {
-  return `Bearer ${signToken({ userId: 'fake-user', email: 't@example.com' })}`
+async function authed() {
+  return `Bearer ${await signToken({ userId: 'fake-user', email: 't@example.com' })}`
 }
 
 test('GET /api/dashboard/layout: no auth → 401', async () => {
@@ -59,20 +59,20 @@ test('PATCH /api/dashboard/layout: invalid JWT → 401', async () => {
 })
 
 test('PATCH /api/dashboard/layout: invalid JSON → 400', async () => {
-  const res = await PATCH(patchRequest('not-json{{{', authed()))
+  const res = await PATCH(patchRequest('not-json{{{', await authed()))
   assert.equal(res.status, 400)
   const json = await res.json()
   assert.match(String(json.error), /Invalid JSON body/)
 })
 
 test('PATCH /api/dashboard/layout: missing layout array → 400', async () => {
-  const res = await PATCH(patchRequest({}, authed()))
+  const res = await PATCH(patchRequest({}, await authed()))
   assert.equal(res.status, 400)
 })
 
 test('PATCH /api/dashboard/layout: bad tile shape → 400', async () => {
   const res = await PATCH(
-    patchRequest({ layout: [{ id: 'x', kind: 'nope', size: '1x1' }] }, authed())
+    patchRequest({ layout: [{ id: 'x', kind: 'nope', size: '1x1' }] }, await authed())
   )
   assert.equal(res.status, 400)
 })
@@ -81,7 +81,7 @@ test('PATCH /api/dashboard/layout: locked on non-smart-rotating tile → 400', a
   const res = await PATCH(
     patchRequest(
       { layout: [{ id: 'streak', kind: 'stat', size: '1x1', locked: 'streak' }] },
-      authed()
+      await authed()
     )
   )
   assert.equal(res.status, 400)
@@ -93,7 +93,7 @@ test('PATCH /api/dashboard/layout: more than 20 tiles → 400', async () => {
     kind: 'stat',
     size: '1x1',
   }))
-  const res = await PATCH(patchRequest({ layout }, authed()))
+  const res = await PATCH(patchRequest({ layout }, await authed()))
   assert.equal(res.status, 400)
   const json = await res.json()
   assert.match(String(json.error), /at most 20/)

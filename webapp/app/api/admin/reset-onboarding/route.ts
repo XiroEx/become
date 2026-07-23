@@ -3,13 +3,15 @@ import mongoose from 'mongoose'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import { verifyAdmin } from '@/lib/adminAuth'
+import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 // Admin utility endpoint
 // Accepts either: x-admin-key header matching JWT_SECRET, OR Bearer token from an admin user
 // Body: { userId?: string } — if userId provided, resets that user only; otherwise resets all
 export async function POST(req: NextRequest) {
   const adminKey = req.headers.get('x-admin-key')
-  const secret = process.env.JWT_SECRET
+  const { auth } = await getRuntimeConfig()
+  const secret = auth.jwtSecret
 
   // Allow x-admin-key auth (legacy/script usage)
   const keyAuthed = secret && adminKey === secret

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const redauth = getRedAuth()
+    const redauth = await getRedAuth()
     const result = await redauth.handleProviderCallback('google', code, state)
     const email = result.profile?.email || result.user?.email
     const name = result.profile?.name || result.user?.name

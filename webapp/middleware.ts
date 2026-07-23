@@ -1,9 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { jwtVerify } from 'jose'
-
-const secret = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production'
-)
 
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get('auth_token')?.value
@@ -12,15 +7,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  try {
-    await jwtVerify(token, secret)
-    return NextResponse.next()
-  } catch {
-    // Expired or invalid token — clear cookie and redirect
-    const response = NextResponse.redirect(new URL('/login', request.url))
-    response.cookies.set('auth_token', '', { maxAge: 0 })
-    return response
-  }
+  // JWT verification belongs to the server-only route boundary. Middleware
+  // deliberately does not load secrets or the Mongo-backed secret store (which
+  // is not edge-compatible); AuthGuard and every protected API route still
+  // perform authoritative verification before returning user data.
+  return NextResponse.next()
 }
 
 export const config = {

@@ -1,17 +1,16 @@
 import webpush from 'web-push'
 import dbConnect from './mongodb'
 import PushSubscription from '@/models/PushSubscription'
+import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
 
 let vapidConfigured = false
 
-function ensureVapid() {
+async function ensureVapid() {
   if (vapidConfigured) return
-  const publicKey = process.env.VAPID_PUBLIC_KEY
-  const privateKey = process.env.VAPID_PRIVATE_KEY
-  const email = process.env.VAPID_EMAIL || 'mailto:admin@become.redbtn.io'
-  if (!publicKey || !privateKey) {
-    throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars required')
-  }
+  const { push } = await getRuntimeConfig()
+  const publicKey = requireRuntimeSecret(push.publicKey, 'push.publicKey')
+  const privateKey = requireRuntimeSecret(push.privateKey, 'push.privateKey')
+  const email = push.email || 'mailto:admin@become.redbtn.io'
   webpush.setVapidDetails(email, publicKey, privateKey)
   vapidConfigured = true
 }
@@ -26,7 +25,7 @@ export interface PushPayload {
 }
 
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
-  ensureVapid()
+  await ensureVapid()
   await dbConnect()
 
   const subs = await PushSubscription.find({ userId }).lean()

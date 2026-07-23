@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { NextRequest } from 'next/server'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+import { getRuntimeConfig } from './runtimeConfig'
 
 export interface JWTPayload {
   userId: string
@@ -23,8 +22,9 @@ export interface AuthResult {
 export const SESSION_EXPIRY = '30d'
 export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 
-export function signToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: SESSION_EXPIRY })
+export async function signToken(payload: JWTPayload): Promise<string> {
+  const { auth } = await getRuntimeConfig()
+  return jwt.sign(payload, auth.jwtSecret, { expiresIn: SESSION_EXPIRY })
 }
 
 /** Build the Set-Cookie header value for the auth cookie (rolling Max-Age). */
@@ -33,8 +33,9 @@ export function authCookie(token: string): string {
   return `auth_token=${token}; HttpOnly; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; SameSite=Lax; ${secure}`
 }
 
-export function verifyToken(token: string): JWTPayload {
-  return jwt.verify(token, JWT_SECRET) as JWTPayload
+export async function verifyToken(token: string): Promise<JWTPayload> {
+  const { auth } = await getRuntimeConfig()
+  return jwt.verify(token, auth.jwtSecret) as JWTPayload
 }
 
 export function getTokenFromRequest(request: Request): string | null {
@@ -53,7 +54,7 @@ export async function verifyAuth(request: NextRequest): Promise<AuthResult> {
       return { success: false, error: 'No token provided' }
     }
 
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     
     return {
       success: true,
