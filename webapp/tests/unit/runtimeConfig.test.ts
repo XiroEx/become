@@ -1,48 +1,40 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  __resetRuntimeConfigForTests,
-  getRuntimeConfig,
-  RuntimeConfigError,
-} from '../../lib/runtimeConfig'
+import { spawnSync } from 'node:child_process'
+import path from 'node:path'
 
-const originalNodeEnv = process.env.NODE_ENV
-const originalMongoUri = process.env.MONGODB_URI
-const originalJwtSecret = process.env.JWT_SECRET
-const env = process.env as Record<string, string | undefined>
+const TSX_CLI = path.resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs')
 
-function restoreEnv() {
-  env.NODE_ENV = originalNodeEnv
-  if (originalMongoUri === undefined) delete process.env.MONGODB_URI
-  else process.env.MONGODB_URI = originalMongoUri
-  if (originalJwtSecret === undefined) delete process.env.JWT_SECRET
-  else process.env.JWT_SECRET = originalJwtSecret
-  __resetRuntimeConfigForTests()
+function runIsolatedRuntimeConfig(code: string, env: Partial<NodeJS.ProcessEnv> = {}) {
+  return spawnSync(process.execPath, [TSX_CLI, '--eval', code], {
+    cwd: process.cwd(),
+    env: { ...process.env, ...env },
+    encoding: 'utf8',
+  })
 }
 
-test.afterEach(restoreEnv)
-
 test('runtime config resolves valid local configuration through typed boundary', async () => {
-  env.NODE_ENV = 'test'
-  process.env.MONGODB_URI = 'mongodb://localhost:27017/become-test'
-  process.env.JWT_SECRET = 'test-only-secret-that-is-not-a-default'
-  __resetRuntimeConfigForTests()
+  const result = runIsolatedRuntimeConfig(
+    "import { getRuntimeConfig } from './lib/runtimeConfig.ts'; (async () => { const config = await getRuntimeConfig(); if (config.auth.mongoUri !== 'mongodb://127.0.0.1:27017/become-test' || config.auth.jwtSecret !== 'test-only-secret-that-is-not-a-default' || config.email.port !== 587) process.exitCode = 1 })()",
+    {
+      NODE_ENV: 'test',
+      MONGODB_URI: 'mongodb://127.0.0.1:27017/become-test',
+      JWT_SECRET: 'test-only-secret-that-is-not-a-default',
+    },
+  )
 
-  const config = await getRuntimeConfig()
-
-  assert.equal(config.auth.mongoUri, 'mongodb://localhost:27017/become-test')
-  assert.equal(config.auth.jwtSecret, 'test-only-secret-that-is-not-a-default')
-  assert.equal(config.email.port, 587)
+  assert.equal(result.status, 0, result.stderr)
 })
 
 test('runtime config fails closed when JWT secret is missing', async () => {
-  env.NODE_ENV = 'test'
-  process.env.MONGODB_URI = 'mongodb://localhost:27017/become-test'
-  delete process.env.JWT_SECRET
-  __resetRuntimeConfigForTests()
-
-  await assert.rejects(
-    getRuntimeConfig(),
-    (error: unknown) => error instanceof RuntimeConfigError && /auth\.jwtSecret is required/.test(String(error)),
+  const result = runIsolatedRuntimeConfig(
+    "import { getRuntimeConfig } from './lib/runtimeConfig.ts'; delete process.env.JWT_SECRET; (async () => { try { await getRuntimeConfig(); process.exitCode = 1 } catch (error) { if (!(error instanceof Error) || !/auth\\.jwtSecret is required/.test(error.message)) process.exitCode = 2 } })()",
+    {
+      NODE_ENV: 'test',
+      MONGODB_URI: 'mongodb://127.0.0.1:27017/become-test',
+      JWT_SECRET: 'test-only-secret-that-is-not-a-default',
+    },
   )
+
+  assert.equal(result.status, 0, result.stderr)
 })
