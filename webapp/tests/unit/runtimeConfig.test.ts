@@ -5,7 +5,7 @@ import path from 'node:path'
 
 const TSX_CLI = path.resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs')
 
-function runIsolatedRuntimeConfig(code: string, env: NodeJS.ProcessEnv = {}) {
+function runIsolatedRuntimeConfig(code: string, env: Partial<NodeJS.ProcessEnv> = {}) {
   return spawnSync(process.execPath, [TSX_CLI, '--eval', code], {
     cwd: process.cwd(),
     env: { ...process.env, ...env },
