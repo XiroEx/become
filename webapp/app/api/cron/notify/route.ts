@@ -89,17 +89,23 @@ export async function GET(request: NextRequest) {
 
   for (const u of atRiskUsers) {
     try {
-      await sendPushToUser(String(u.userId), {
+      const sent = await sendPushToUser(String(u.userId), {
         title: `Don't break your ${u.streakDays}-day streak 🔥`,
         body: 'Log a workout, mood, or weight to keep it alive.',
         url: '/dashboard',
         tag: 'streak-at-risk',
       })
-      UserProgress.updateOne(
-        { userId: u.userId },
-        { $set: { 'lastPushSentAt.streakAtRisk': now } },
-      ).catch(() => {})
-      results.streakAtRisk++
+      // Only stamp when something actually reached a push service — a stamped
+      // failure suppresses tomorrow's retry and the user never hears from us.
+      if (sent.delivered > 0) {
+        UserProgress.updateOne(
+          { userId: u.userId },
+          { $set: { 'lastPushSentAt.streakAtRisk': now } },
+        ).catch(() => {})
+        results.streakAtRisk++
+      } else if (sent.attempted > 0) {
+        results.errors++
+      }
     } catch {
       results.errors++
     }
@@ -217,17 +223,21 @@ export async function GET(request: NextRequest) {
           : titleText
 
       try {
-        await sendPushToUser(userId, {
+        const sent = await sendPushToUser(userId, {
           title: "Today's workout is ready 💪",
           body,
           url: '/dashboard/calendar',
           tag: 'workout-reminder',
         })
-        UserProgress.updateOne(
-          { userId },
-          { $set: { 'lastPushSentAt.workoutReminder': now } },
-        ).catch(() => {})
-        results.workoutReminder++
+        if (sent.delivered > 0) {
+          UserProgress.updateOne(
+            { userId },
+            { $set: { 'lastPushSentAt.workoutReminder': now } },
+          ).catch(() => {})
+          results.workoutReminder++
+        } else if (sent.attempted > 0) {
+          results.errors++
+        }
       } catch {
         results.errors++
       }
@@ -272,17 +282,21 @@ export async function GET(request: NextRequest) {
         if (loggedToday) continue
 
         try {
-          await sendPushToUser(String(progress.userId), {
+          const sent = await sendPushToUser(String(progress.userId), {
             title: 'Log today\'s food 🍽️',
             body: 'A quick log keeps your nutrition picture honest. It takes 30 seconds.',
             url: '/dashboard/nutrition',
             tag: 'meal-reminder',
           })
-          UserProgress.updateOne(
-            { userId: progress.userId },
-            { $set: { 'lastPushSentAt.mealReminder': now } },
-          ).catch(() => {})
-          results.mealReminder++
+          if (sent.delivered > 0) {
+            UserProgress.updateOne(
+              { userId: progress.userId },
+              { $set: { 'lastPushSentAt.mealReminder': now } },
+            ).catch(() => {})
+            results.mealReminder++
+          } else if (sent.attempted > 0) {
+            results.errors++
+          }
         } catch {
           results.errors++
         }
@@ -329,17 +343,21 @@ export async function GET(request: NextRequest) {
       continue
     }
     try {
-      await sendPushToUser(String(u.userId), {
+      const sent = await sendPushToUser(String(u.userId), {
         title: 'We miss you 👋',
         body: 'Come back and keep building your best self.',
         url: '/dashboard',
         tag: 're-engagement',
       })
-      UserProgress.updateOne(
-        { userId: u.userId },
-        { $set: { 'lastPushSentAt.reEngagement': now } },
-      ).catch(() => {})
-      results.reEngagement++
+      if (sent.delivered > 0) {
+        UserProgress.updateOne(
+          { userId: u.userId },
+          { $set: { 'lastPushSentAt.reEngagement': now } },
+        ).catch(() => {})
+        results.reEngagement++
+      } else if (sent.attempted > 0) {
+        results.errors++
+      }
     } catch {
       results.errors++
     }
