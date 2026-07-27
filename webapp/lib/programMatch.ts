@@ -79,11 +79,17 @@ export interface ProgramMatch<T extends ProgramLike = ProgramLike> {
   reasons: string[]
 }
 
-function haystack(p: ProgramLike): string {
-  return [p.name, p.goal, p.description, ...(p.tags ?? []), ...(p.equipment ?? [])]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
+/**
+ * Name + tags, lowercased — the CURATED description of a program's intent.
+ *
+ * Deliberately excludes `equipment`, which is derived from the exercise list
+ * and is not trustworthy: in the live catalog every program lists "Barbell",
+ * including the one tagged "No Equipment / Bodyweight". Reading it made a
+ * full-gym program register as dumbbell-only because its exercise list happened
+ * to mention dumbbells.
+ */
+function intentText(p: ProgramLike): string {
+  return [p.name, ...(p.tags ?? [])].filter(Boolean).join(' ').toLowerCase()
 }
 
 function matchesAny(hay: string, keywords: string[]): boolean {
@@ -128,15 +134,15 @@ function memberEquipmentTier(equipment?: EquipmentType[]): EquipmentTier {
   return 'none'
 }
 
-/** The minimum kit a program actually needs. */
-function programEquipmentTier(hay: string): EquipmentTier {
-  if (matchesAny(hay, BODYWEIGHT_KEYWORDS)) return 'none'
-  if (matchesAny(hay, DUMBBELL_KEYWORDS)) return 'dumbbells'
+/** The minimum kit a program actually needs, per its curated tags/name. */
+function programEquipmentTier(program: ProgramLike): EquipmentTier {
+  const intent = intentText(program)
+  if (matchesAny(intent, BODYWEIGHT_KEYWORDS)) return 'none'
+  if (matchesAny(intent, DUMBBELL_KEYWORDS)) return 'dumbbells'
   return 'gym'
 }
 
 export function scoreProgram(program: ProgramLike, input: MatchInput): { score: number; reasons: string[] } {
-  const hay = haystack(program)
   // Reasons are assembled at the end in priority order, because the UI only has
   // room for the top few. "You can actually do this with what you own" matters
   // more to a member than "this is pitched at your level".
@@ -203,7 +209,7 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
   // A program the member physically can't run is worse than a slightly
   // off-goal one, so mismatches are penalised harder than matches are rewarded.
   const has = memberEquipmentTier(input.equipmentAccess)
-  const needs = programEquipmentTier(hay)
+  const needs = programEquipmentTier(program)
 
   if (has === 'none') {
     if (needs === 'none') {

@@ -253,6 +253,39 @@ describe('programMatch', () => {
     assert.match(reasons[0], /primary goal/i)
   })
 
+  it('ignores the noisy equipment field when deciding what kit a program needs', () => {
+    // Live catalog reality: `equipment` is derived from the exercise list and
+    // every program lists "Barbell" — even the one tagged No Equipment. Reading
+    // it made a full-gym program claim "Runs on dumbbells alone" to a member
+    // who had only dumbbells.
+    const fullGymProgram: ProgramLike = {
+      ...CATALOG[0],
+      equipment: ['Barbell', 'Cable Machine', 'Dumbbells', 'Squat Rack', 'Machines'],
+    }
+    const { reasons } = scoreProgram(fullGymProgram, {
+      goals: ['lose_weight'],
+      equipmentAccess: ['dumbbells'],
+    })
+    assert.ok(
+      !reasons.some(r => /dumbbells alone/i.test(r)),
+      `a barbell/rack program must not claim dumbbell-only: ${reasons.join(' | ')}`
+    )
+
+    const dumbbellProgram: ProgramLike = {
+      ...CATALOG[3],
+      equipment: ['Barbell', 'Dumbbells'], // same noise, but tagged "Dumbbells Only"
+    }
+    const dbMatch = scoreProgram(dumbbellProgram, {
+      goals: ['lose_weight'],
+      equipmentAccess: ['dumbbells'],
+    })
+    assert.ok(dbMatch.reasons.some(r => /dumbbells alone/i.test(r)))
+    assert.ok(dbMatch.score > scoreProgram(fullGymProgram, {
+      goals: ['lose_weight'],
+      equipmentAccess: ['dumbbells'],
+    }).score)
+  })
+
   it('grades goal fit by tags rather than incidental blurb wording', () => {
     // "No Excuses" only mentions "functional strength" in prose; the Jon Don
     // Split is TAGGED for hypertrophy and muscle building. Binary matching
