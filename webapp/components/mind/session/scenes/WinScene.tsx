@@ -74,7 +74,7 @@ export default function WinScene({ move, onDone, preview }: SceneProps) {
               {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trophy className="h-5 w-5" />}
               Bank it
             </button>
-            <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+            <button onClick={() => onDone()} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
               Skip
             </button>
           </motion.div>

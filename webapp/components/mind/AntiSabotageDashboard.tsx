@@ -6,11 +6,12 @@
 // everything lands in the track record (MindJournal).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Shield, Zap, Eye, Search, CircleSlash, RefreshCcw, Hand, Sparkles } from 'lucide-react'
+import { Shield, Zap, Eye, Search, CircleSlash, RefreshCcw, Hand } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
-import { SystemHero, ToolkitCard, TrackRecord, DailyDrop, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -124,8 +125,10 @@ function authHeaders(): HeadersInit {
 export default function AntiSabotageDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
+  // Lifetime reps in this tool — 1 + reps protocols are open.
+  const [reps, setReps] = useState(0)
   const [caught, setCaught] = useState(0)
-  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[] } | null>(null)
+  const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [catching, setCatching] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   // Cooldown so the catch can't be machine-gunned into a meaningless number —
@@ -146,6 +149,7 @@ export default function AntiSabotageDashboard() {
         id: String(e._id), title: e.title, kind: e.kind, createdAt: e.createdAt,
       })))
       setCaught(d.counts?.['pattern-catch'] ?? 0)
+      setReps(Object.values((d.counts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0))
     } catch { /* ignore */ }
   }, [])
 
@@ -184,7 +188,7 @@ export default function AntiSabotageDashboard() {
       const r = await runAiTask('/api/ai/mind/flow', { system: 'anti-sabotage', topic })
       const steps = validateGuidedSteps((r.result as { steps?: unknown } | undefined)?.steps)
       if (r.ok && steps) {
-        setFlow({ title: topic, kind: 'protocol', steps })
+        setFlow({ title: topic, kind: 'protocol', steps, aiGenerated: true })
         return
       }
     } catch { /* fall through */ }
@@ -205,6 +209,7 @@ export default function AntiSabotageDashboard() {
         steps={flow.steps}
         accent={ACCENT}
         doneText={DONE_TEXT}
+        onReflect={flow.aiGenerated ? undefined : (a) => reflectOnAnswers('Anti-Sabotage session', a)}
         onExit={() => { setFlow(null); setAiLoading(false) }}
         onComplete={(answers) => {
           setFlow(null)
@@ -228,45 +233,18 @@ export default function AntiSabotageDashboard() {
         bg="bg-orange-50 dark:bg-orange-500/10"
       />
 
-      {/* Daily drop — a fresh interrupt featured each day */}
-      {featuredInterrupt && (
-        <DailyDrop
-          Icon={Sparkles}
-          eyebrow="Today’s interrupt"
-          title={featuredInterrupt.title}
-          blurb={featuredInterrupt.blurb}
-          ctaLabel="Run"
-          color="text-orange-500"
-          onClick={() => setFlow({ title: featuredInterrupt.title, kind: 'protocol', steps: featuredInterrupt.steps })}
-        />
-      )}
-
-      {/* Personalize with AI — generates a flow tailored to the user’s current
-          pattern. Falls back to the featured static protocol without hard-erroring. */}
-      <button
-        type="button"
-        disabled={aiLoading}
-        onClick={() => runAiFlow(
+      {/* Today's session — adaptive + memory-aware (the headline daily action).
+          Falls back to the featured static interrupt without hard-erroring. */}
+      <AdaptiveSession
+        loading={aiLoading}
+        onStart={() => runAiFlow(
           featuredInterrupt?.title ?? 'interrupt a self-sabotage pattern',
           featuredInterrupt,
         )}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-orange-300 py-3 text-sm font-semibold text-orange-500 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-orange-500/30 dark:hover:bg-orange-500/10"
-      >
-        {aiLoading ? (
-          <>
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Building your session…
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            Personalize with AI
-          </>
-        )}
-      </button>
+        color="text-orange-500"
+        bg="border-orange-200 bg-orange-50 dark:border-orange-500/30 dark:bg-orange-500/10"
+        subtitle="An interrupt shaped by the patterns you’ve been catching."
+      />
 
       {/* Do one now — the one-tap catch (cooldown-gated against spam) */}
       <button
@@ -292,13 +270,15 @@ export default function AntiSabotageDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Interrupt protocols</p>
         <div className="space-y-2">
-          {PROTOCOLS.filter((p) => p.id !== featuredInterrupt?.id).map((p) => (
+          {PROTOCOLS.map((p, i) => (
             <ToolkitCard
               key={p.id}
               Icon={p.Icon}
               title={p.title}
               blurb={p.blurb}
               color="text-orange-500"
+              locked={i >= 1 + reps}
+              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Anti-Sabotage to unlock`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

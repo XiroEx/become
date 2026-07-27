@@ -33,16 +33,9 @@ export const mindSection: TutorialSection = {
     {
       id: 'mind-chapters',
       target: '[data-tour="mind-chapters"]',
-      title: 'Chapters',
-      body: 'Sessions earn XP. Five chapters — Reset to Architect — and each one unlocks new mental tools.',
+      title: 'Level & chapters',
+      body: 'Every session — main or training — levels you up. Chapters are separate: each main session counts toward the next one, and each chapter unlocks new mental tools.',
       placement: 'bottom',
-    },
-    {
-      id: 'mind-arsenal-link',
-      target: '[data-tour="mind-arsenal-link"]',
-      title: 'Your Arsenal',
-      body: 'The tools you have unlocked — meditations, journaling, goals, and quick themed sessions.',
-      placement: 'top',
     },
     {
       id: 'mind-becoming-link',
@@ -56,30 +49,6 @@ export const mindSection: TutorialSection = {
       target: '[data-tour="mind-coach"]',
       title: 'Talk to your coach',
       body: 'An AI mindset coach for the hard part — the resistance, the doubt, the next move.',
-      placement: 'top',
-    },
-
-    // ── Arsenal ──
-    {
-      id: 'mind-arsenal-systems',
-      target: '[data-tour="arsenal-systems"]',
-      title: 'Your systems',
-      body: 'Each card opens that system’s full dashboard — the deep tools for that skill.',
-      placement: 'bottom',
-    },
-    {
-      id: 'mind-arsenal-play',
-      target: 'button[aria-label="Start focused session"]',
-      title: 'Quick session',
-      body: 'The play button skips the dashboard and launches a short, fresh session themed on that system.',
-      placement: 'left',
-    },
-    {
-      id: 'mind-arsenal-locked',
-      // Only present while something is still locked — skipped otherwise.
-      target: '[data-tour="arsenal-locked"]',
-      title: 'Locked for now',
-      body: 'More systems unlock as you advance chapters. Keep showing up.',
       placement: 'top',
     },
 
@@ -124,13 +93,9 @@ export const mindSection: TutorialSection = {
   ],
   segments: {
     mind: {
-      steps: ['mind-session', 'mind-chapters', 'mind-arsenal-link', 'mind-becoming-link', 'mind-coach'],
+      steps: ['mind-session', 'mind-chapters', 'mind-becoming-link', 'mind-coach'],
       // Selector, not route — see the header comment (FeatureGuard/onboarding gates).
       trigger: { type: 'selector', selector: '[data-tour="mind-session"]', delayMs: 600 },
-    },
-    'mind-arsenal': {
-      steps: ['mind-arsenal-systems', 'mind-arsenal-play', 'mind-arsenal-locked'],
-      trigger: { type: 'route', match: '/dashboard/mind/arsenal', delayMs: 600 },
     },
     'mind-becoming': {
       steps: ['mind-becoming-score', 'mind-becoming-journey', 'mind-becoming-wins'],

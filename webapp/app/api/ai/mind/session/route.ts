@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, userGrounding } from '@/lib/ai/routeHelpers'
+import { assembleMindHistory } from '@/lib/ai/mindHistory'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -25,7 +26,15 @@ export async function POST(request: NextRequest) {
 
   const ctx = (body.context && typeof body.context === 'object' ? body.context : {}) as Record<string, unknown>
 
-  const trig = await triggerBecomeTask('mind.composeSession', { ...ctx, user: await userGrounding(gate.user.userId, body) })
+  // Ground the session in the user's durable context (mission, vision, identity,
+  // wins, state) AND read their OWN recent answers back out of MindJournal — the
+  // reflections they gave in previous sessions + arsenal flows — so a new session
+  // builds on what they actually said instead of starting cold each time.
+  const [ground, mindHistory] = await Promise.all([
+    userGrounding(gate.user.userId, body),
+    assembleMindHistory(gate.user.userId),
+  ])
+  const trig = await triggerBecomeTask('mind.composeSession', { ...ctx, user: { ...ground, ...mindHistory } })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })

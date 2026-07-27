@@ -203,7 +203,12 @@ function markUsed(kind: MoveKind, used: Set<MoveKind>): void {
 export class DeterministicMoveEngine implements MoveEngine {
   composeSession(ctx: SessionContext): MindSessionPlan {
     const seed = ctx.seed ?? ctx.dayOfYear
-    const intro = INTROS[seed % INTROS.length]
+    // On the 50-session directed path, the session's prescribed focus IS the
+    // intro — the theme the whole session serves. Off-path: rotate the pool.
+    // (directive text is composer-facing; never surface it to the user.)
+    const intro = ctx.pathFocus
+      ? { title: ctx.pathFocus.focus, subtitle: `Session ${ctx.pathFocus.n} of 50 on your path.` }
+      : INTROS[seed % INTROS.length]
     const used = new Set<MoveKind>()
     const avoid = new Set<string>(ctx.recentKinds ?? []) // last session's kinds
     const moves: Move[] = []

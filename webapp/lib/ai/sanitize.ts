@@ -44,6 +44,25 @@ export function clampWords(text: string, max: number): string {
   return words.length <= max ? text.trim() : words.slice(0, max).join(' ')
 }
 
+/**
+ * Clamp a title/question to a sane length WITHOUT chopping mid-sentence. Real
+ * coaching questions run long (20+ words) and must render WHOLE — a hard word
+ * cap was cutting them dead ("…how do you approach getting back on track when"
+ * with nothing after it). Only a genuine runaway gets trimmed: back to its last
+ * complete sentence when one exists, else hard-capped with an ellipsis so it
+ * always reads as a finished thought, never a severed one.
+ */
+export function clampTitle(text: string, maxWords = 34): string {
+  const t = text.trim()
+  const words = t.split(/\s+/)
+  if (words.length <= maxWords) return t
+  const cut = words.slice(0, maxWords).join(' ')
+  // Prefer to end on the last complete sentence within the cut.
+  const lastEnd = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '))
+  if (lastEnd > cut.length * 0.5) return cut.slice(0, lastEnd + 1).trim()
+  return cut.replace(/[\s,;:—-]+$/, '') + '…'
+}
+
 /** Drop surrounding quotes a model sometimes wraps a single line in. */
 export function stripQuotes(text: string): string {
   return text.trim().replace(/^["“'']+|["”'']+$/g, '').trim()

@@ -17,13 +17,17 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    // Arsenal training grants XP that counts toward the user's LEVEL (levelXp) —
+    // level rises from ALL mind activity, main sessions AND arsenal. `xp` (legacy
+    // progression) is kept in sync too. Chapters are NOT affected (main-session
+    // gated), so training never advances the arc.
     const updated = await MindProgress.findOneAndUpdate(
       { userId: auth.userId },
-      { $inc: { xp: amount } },
+      { $inc: { xp: amount, levelXp: amount } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean()
 
-    return NextResponse.json({ xp: updated?.xp ?? 0 })
+    return NextResponse.json({ xp: updated?.xp ?? 0, levelXp: (updated?.levelXp as number) ?? 0 })
   } catch (err) {
     console.error('POST /api/mind/progress/xp error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

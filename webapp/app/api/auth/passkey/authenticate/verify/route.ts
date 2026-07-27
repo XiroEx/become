@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     if (!challengeId || !response) {
       return NextResponse.json({ error: 'challengeId and response are required' }, { status: 400 })
     }
-    const redauth = getRedAuth()
+    const redauth = await getRedAuth()
     const result = await redauth.verifyPasskeyAuthentication(challengeId, response)
     const email = result.user?.email
     if (!email) {

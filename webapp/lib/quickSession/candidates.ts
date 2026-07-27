@@ -6,6 +6,47 @@
 import Exercise from '@/models/Exercise'
 import { FOCUS_DEFS, type CandidateExercise, type FocusKey } from './types'
 
+const CANDIDATE_PROJECTION =
+  'slug name category role mechanics movementPatterns primaryMuscles equipment difficulty trackingType bodyRegion defaultSets defaultReps defaultRest defaultDuration'
+
+interface CandidateExerciseDoc {
+  slug: string
+  name: string
+  category?: string
+  role?: string
+  mechanics?: string
+  movementPatterns?: string[]
+  primaryMuscles?: string[]
+  equipment?: string[]
+  difficulty?: string
+  trackingType?: string
+  bodyRegion?: string
+  defaultSets?: number
+  defaultReps?: string
+  defaultRest?: string
+  defaultDuration?: string
+}
+
+function toCandidateExercise(d: CandidateExerciseDoc): CandidateExercise {
+  return {
+    slug: d.slug,
+    name: d.name,
+    category: d.category ?? 'strength',
+    role: d.role ?? 'accessory',
+    mechanics: d.mechanics,
+    movementPatterns: d.movementPatterns ?? [],
+    primaryMuscles: d.primaryMuscles ?? [],
+    equipment: d.equipment ?? [],
+    difficulty: d.difficulty ?? 'intermediate',
+    trackingType: d.trackingType ?? 'reps_weight',
+    bodyRegion: d.bodyRegion ?? 'full_body',
+    defaultSets: d.defaultSets,
+    defaultReps: d.defaultReps,
+    defaultRest: d.defaultRest,
+    defaultDuration: d.defaultDuration,
+  }
+}
+
 export async function fetchCandidates(
   focuses: FocusKey[],
   limit = 250,
@@ -35,45 +76,25 @@ export async function fetchCandidates(
   if (or.length) filter.$or = or
 
   const docs = await Exercise.find(filter)
-    .select(
-      'slug name category role mechanics movementPatterns primaryMuscles equipment difficulty trackingType bodyRegion defaultSets defaultReps defaultRest defaultDuration',
-    )
+    .select(CANDIDATE_PROJECTION)
     .limit(limit)
-    .lean<
-      Array<{
-        slug: string
-        name: string
-        category?: string
-        role?: string
-        mechanics?: string
-        movementPatterns?: string[]
-        primaryMuscles?: string[]
-        equipment?: string[]
-        difficulty?: string
-        trackingType?: string
-        bodyRegion?: string
-        defaultSets?: number
-        defaultReps?: string
-        defaultRest?: string
-        defaultDuration?: string
-      }>
-    >()
+    .lean<CandidateExerciseDoc[]>()
 
-  return docs.map((d) => ({
-    slug: d.slug,
-    name: d.name,
-    category: d.category ?? 'strength',
-    role: d.role ?? 'accessory',
-    mechanics: d.mechanics,
-    movementPatterns: d.movementPatterns ?? [],
-    primaryMuscles: d.primaryMuscles ?? [],
-    equipment: d.equipment ?? [],
-    difficulty: d.difficulty ?? 'intermediate',
-    trackingType: d.trackingType ?? 'reps_weight',
-    bodyRegion: d.bodyRegion ?? 'full_body',
-    defaultSets: d.defaultSets,
-    defaultReps: d.defaultReps,
-    defaultRest: d.defaultRest,
-    defaultDuration: d.defaultDuration,
-  }))
+  return docs.map(toCandidateExercise)
+}
+
+/** Resolve catalog metadata for exercises already present in a draft. */
+export async function fetchCandidatesBySlugs(slugs: string[]): Promise<CandidateExercise[]> {
+  const uniqueSlugs = [...new Set(slugs.filter((slug) => slug.length > 0))]
+  if (uniqueSlugs.length === 0) return []
+
+  const docs = await Exercise.find({
+    slug: { $in: uniqueSlugs },
+    isCustom: { $ne: true },
+    isActive: { $ne: false },
+  })
+    .select(CANDIDATE_PROJECTION)
+    .lean<CandidateExerciseDoc[]>()
+
+  return docs.map(toCandidateExercise)
 }

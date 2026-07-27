@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       if (mode === 'register') {
         if (user) {
           // User already exists, just log them in
-          const jwtToken = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
+          const jwtToken = await signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
           await storeAuthToken(token, jwtToken)
           return new Response(JSON.stringify({
             token: jwtToken,
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const jwtToken = signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
+      const jwtToken = await signToken({ userId: String(user._id), email: user.email, role: user.role || 'user' })
 
       // Store the JWT for the polling session
       await storeAuthToken(token, jwtToken)

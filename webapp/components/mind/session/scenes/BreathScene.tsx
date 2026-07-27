@@ -179,7 +179,7 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
             <Eye className="h-4 w-4" />
             Preview one round
           </button>
-          <button onClick={onDone} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+          <button onClick={() => onDone()} className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
             Skip
           </button>
         </div>
@@ -310,7 +310,7 @@ export default function BreathScene({ move, protocol, onDone }: SceneProps) {
                 Back
               </button>
             ) : (
-              <button onClick={onDone} className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
+              <button onClick={() => onDone()} className="flex items-center gap-1 text-sm font-medium text-white/40 transition-colors hover:text-white/70">
                 Skip
                 <ArrowRight className="h-4 w-4" />
               </button>

@@ -1,17 +1,16 @@
 import webpush from 'web-push'
 import dbConnect from './mongodb'
 import PushSubscription from '@/models/PushSubscription'
+import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
 
 let vapidConfigured = false
 
-function ensureVapid() {
+async function ensureVapid() {
   if (vapidConfigured) return
-  const publicKey = process.env.VAPID_PUBLIC_KEY
-  const privateKey = process.env.VAPID_PRIVATE_KEY
-  const email = process.env.VAPID_EMAIL || 'mailto:admin@become.redbtn.io'
-  if (!publicKey || !privateKey) {
-    throw new Error('VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY env vars required')
-  }
+  const { push } = await getRuntimeConfig()
+  const publicKey = requireRuntimeSecret(push.publicKey, 'push.publicKey')
+  const privateKey = requireRuntimeSecret(push.privateKey, 'push.privateKey')
+  const email = push.email || 'mailto:admin@become.redbtn.io'
   webpush.setVapidDetails(email, publicKey, privateKey)
   vapidConfigured = true
 }
@@ -25,12 +24,20 @@ export interface PushPayload {
   tag?: string            // replaces existing notification with same tag
 }
 
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
-  ensureVapid()
+export interface PushSendResult {
+  attempted: number
+  delivered: number
+  pruned: number
+  failed: number
+}
+
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<PushSendResult> {
+  const result: PushSendResult = { attempted: 0, delivered: 0, pruned: 0, failed: 0 }
+  await ensureVapid()
   await dbConnect()
 
   const subs = await PushSubscription.find({ userId }).lean()
-  if (subs.length === 0) return
+  if (subs.length === 0) return result
 
   const data = JSON.stringify({
     title: payload.title,
@@ -46,15 +53,26 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   await Promise.allSettled(
     subs.map(async (sub) => {
       if (sub.platform === 'web' && sub.keys) {
+        result.attempted++
         try {
           await webpush.sendNotification(
             { endpoint: sub.endpoint, keys: sub.keys as { p256dh: string; auth: string } },
             data,
           )
+          result.delivered++
         } catch (err: unknown) {
-          // 410 Gone = subscription expired; clean it up
-          if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
+          const status = err && typeof err === 'object' && 'statusCode' in err
+            ? (err as { statusCode: number }).statusCode
+            : null
+          // 404/410 = subscription dead/expired; prune it so it stops rotting.
+          if (status === 404 || status === 410) {
             staleIds.push(String(sub._id))
+            result.pruned++
+          } else {
+            // Anything else (403 VAPID mismatch, 401, network) must be VISIBLE —
+            // silent swallowing is how notifications die quietly for weeks.
+            result.failed++
+            console.error(`[push] send failed user=${userId} status=${status ?? 'n/a'} endpoint=${(() => { try { return new URL(sub.endpoint).host } catch { return 'bad-endpoint' } })()}`)
           }
         }
       }
@@ -65,6 +83,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   if (staleIds.length > 0) {
     await PushSubscription.deleteMany({ _id: { $in: staleIds } })
   }
+  return result
 }
 
 export async function sendPushToUsers(userIds: string[], payload: PushPayload): Promise<void> {

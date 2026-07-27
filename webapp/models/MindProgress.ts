@@ -25,6 +25,19 @@ export interface IMindProgress extends Document {
    *  training reps after the daily progression XP is spent). Never decreases.
    *  The grinder's reward + the score the Becoming tab surfaces. */
   xpBank: number
+  /** Cumulative XP from ALL mind activity (main sessions + arsenal training) —
+   *  drives the user's LEVEL (uncapped). Separate from `xp` (legacy progression)
+   *  and from `chapter`. Seeded from xp+xpBank for pre-existing users. */
+  levelXp: number
+  /** Count of completed MAIN sessions — gates chapters (10 per chapter). */
+  mainSessionCount: number
+  /** When the last MAIN session was completed — enforces the 20h cooldown so a
+   *  main session (and its chapter progress) can only happen once every 20h. */
+  lastMainSessionAt?: Date
+  /** Tools whose one-time onboarding intro the user has completed. A tool can be
+   *  UNLOCKED (chapter) but not yet INTRODUCED — the intro flow runs on first
+   *  open. Legacy docs (field absent) are grandfathered to their unlocked set. */
+  introducedSystems?: string[]
   /** When the last growth moment (chapter level-up) happened — gates progression
    *  to at most one growth moment per local day, so volume can't rush the arc. */
   lastGrowthAt?: Date
@@ -70,6 +83,10 @@ const MindProgressSchema = new Schema<IMindProgress>(
     chapter: { type: Number, default: 1, min: 1, max: 5 },
     xp: { type: Number, default: 0, min: 0 },
     xpBank: { type: Number, default: 0, min: 0 },
+    levelXp: { type: Number, default: 0, min: 0 },
+    mainSessionCount: { type: Number, default: 0, min: 0 },
+    lastMainSessionAt: { type: Date },
+    introducedSystems: { type: [String], default: undefined },
     lastGrowthAt: { type: Date },
     vision: { type: VisionSchema },
     chapterHistory: {

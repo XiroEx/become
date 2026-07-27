@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ message: 'No account found for this email' }), { status: 404 })
     }
 
-    const token = signToken({ userId: String(user._id), email: user.email, role: user.role })
+    const token = await signToken({ userId: String(user._id), email: user.email, role: user.role })
 
     return new Response(JSON.stringify({ token, user: { id: user._id, name: user.name, email: user.email } }), { status: 200 })
   } catch (err: any) {
