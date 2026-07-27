@@ -178,6 +178,12 @@ test.describe('New User Journey', () => {
 
     await screenshot(page, '08-onboarding-step4-selected')
 
+    // Step 5 — Review: plays back every answer before committing
+    await page.locator('button:has-text("Next")').click()
+    await page.waitForTimeout(400)
+    await screenshot(page, '08b-onboarding-step5-review')
+    console.log('[phase2] Step 5: review shown ✓')
+
     // Click Finish
     await page.locator('button:has-text("Finish")').click()
 

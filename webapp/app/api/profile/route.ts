@@ -59,6 +59,8 @@ export async function PATCH(request: NextRequest) {
     // can't write arbitrary fields onto the profile sub-doc.
     const ALLOWED_PROFILE_KEYS: Array<keyof IUserProfile> = [
       'fitnessGoal',
+      'fitnessGoals',
+      'nutritionDirection',
       'experienceLevel',
       'age',
       'biologicalSex',

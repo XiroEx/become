@@ -83,7 +83,16 @@ export async function authenticate(page: Page, context: BrowserContext): Promise
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${args.token}` },
         body: JSON.stringify({
           onboardingCompleted: true,
-          profile: { fitnessGoal: 'build_muscle', experienceLevel: 'intermediate', age: 30 },
+          // 'build_muscle' is NOT a valid FitnessGoal — the enum value is
+          // 'gain_muscle'. The old value slipped past because findByIdAndUpdate
+          // doesn't run validators by default, leaving an unknown goal on the
+          // profile that other screens then had to defend against.
+          profile: {
+            fitnessGoal: 'gain_muscle',
+            fitnessGoals: ['gain_muscle'],
+            experienceLevel: 'intermediate',
+            age: 30,
+          },
         }),
       })
     }, { token: AUTH_TOKEN, baseUrl: BASE_URL })

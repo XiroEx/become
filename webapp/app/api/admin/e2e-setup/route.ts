@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import connectDB from '@/lib/mongodb'
 import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
+import NutritionGoal from '@/models/NutritionGoal'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 const E2E_EMAIL = 'e2etest@become.io'
@@ -45,6 +46,10 @@ export async function POST(request: NextRequest) {
       { userId },
       { $set: { activePrograms: [], workoutLogs: [], exercisePRs: [] } }
     )
+
+    // Drop saved nutrition goals too — otherwise a stale doc from a previous
+    // run makes it impossible to assert that ONBOARDING seeded the targets.
+    await NutritionGoal.deleteOne({ userId })
 
     // 24-hour JWT for e2e test sessions
     const authToken = jwt.sign(
