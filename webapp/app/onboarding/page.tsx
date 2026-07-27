@@ -29,6 +29,14 @@ import {
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
 import type { FitnessGoal, ExperienceLevel, EquipmentType } from '@/lib/programMatch'
+import {
+  lbsToKg,
+  ftInToCm,
+  cmToFtIn,
+  displayWeight,
+  roundWeight,
+  roundHeightCm,
+} from '@/lib/bodyUnits'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -347,9 +355,7 @@ export default function OnboardingPage() {
 
       if (payload.currentWeightKg) {
         const unit = payload.weightUnit ?? 'lbs'
-        const seedWeight = unit === 'lbs'
-          ? kgToLbs(payload.currentWeightKg)
-          : payload.currentWeightKg
+        const seedWeight = displayWeight(payload.currentWeightKg, unit)
         seeds.push(
           fetch('/api/weight', {
             method: 'POST',
@@ -786,24 +792,10 @@ function Step2({
   )
 }
 
-// ── Unit conversion helpers ───────────────────────────────────────────────────
-
-function cmToImperial(cm: number): { ft: number; inches: number } {
-  const totalInches = cm / 2.54
-  return { ft: Math.floor(totalInches / 12), inches: Math.round(totalInches % 12) }
-}
-
-function imperialToCm(ft: number, inches: number): number {
-  return Math.round((ft * 12 + inches) * 2.54)
-}
-
-function kgToLbs(kg: number): number {
-  return Math.round(kg * 2.20462)
-}
-
-function lbsToKg(lbs: number): number {
-  return Math.round(lbs / 2.20462 * 10) / 10
-}
+// ── Unit conversion ───────────────────────────────────────────────────────────
+// Conversions come from lib/bodyUnits so onboarding, settings and the nutrition
+// goals page can never disagree about what 210 lb is in kg. Stored values are
+// exact; rounding happens at render time only (displayWeight / roundHeightCm).
 
 // ── Step 3 — Body stats + calorie direction ───────────────────────────────────
 
@@ -826,42 +818,42 @@ function Step3({
   const [useImperial, setUseImperial] = useState(true)
 
   // Imperial display state
-  const initialHeight = profile.heightCm ? cmToImperial(profile.heightCm) : { ft: '', inches: '' }
+  const initialHeight = profile.heightCm ? cmToFtIn(profile.heightCm) : { ft: '', inches: '' }
   const [heightFt, setHeightFt] = useState<string>(initialHeight.ft !== '' ? String(initialHeight.ft) : '')
   const [heightIn, setHeightIn] = useState<string>(initialHeight.inches !== '' ? String(initialHeight.inches) : '')
   const [currentLbs, setCurrentLbs] = useState<string>(
-    profile.currentWeightKg ? String(kgToLbs(profile.currentWeightKg)) : ''
+    profile.currentWeightKg ? String(displayWeight(profile.currentWeightKg, 'lbs')) : ''
   )
   const [targetLbs, setTargetLbs] = useState<string>(
-    profile.targetWeightKg ? String(kgToLbs(profile.targetWeightKg)) : ''
+    profile.targetWeightKg ? String(displayWeight(profile.targetWeightKg, 'lbs')) : ''
   )
 
   // Metric display state
   const [heightCmDisplay, setHeightCmDisplay] = useState<string>(
-    profile.heightCm ? String(profile.heightCm) : ''
+    profile.heightCm ? String(roundHeightCm(profile.heightCm)) : ''
   )
   const [currentKgDisplay, setCurrentKgDisplay] = useState<string>(
-    profile.currentWeightKg ? String(profile.currentWeightKg) : ''
+    profile.currentWeightKg ? String(roundWeight(profile.currentWeightKg)) : ''
   )
   const [targetKgDisplay, setTargetKgDisplay] = useState<string>(
-    profile.targetWeightKg ? String(profile.targetWeightKg) : ''
+    profile.targetWeightKg ? String(roundWeight(profile.targetWeightKg)) : ''
   )
 
   function switchUnits(toImperial: boolean) {
     if (toImperial) {
       // Sync metric → imperial display
       if (profile.heightCm) {
-        const { ft, inches } = cmToImperial(profile.heightCm)
+        const { ft, inches } = cmToFtIn(profile.heightCm)
         setHeightFt(String(ft))
         setHeightIn(String(inches))
       }
-      if (profile.currentWeightKg) setCurrentLbs(String(kgToLbs(profile.currentWeightKg)))
-      if (profile.targetWeightKg) setTargetLbs(String(kgToLbs(profile.targetWeightKg)))
+      if (profile.currentWeightKg) setCurrentLbs(String(displayWeight(profile.currentWeightKg, 'lbs')))
+      if (profile.targetWeightKg) setTargetLbs(String(displayWeight(profile.targetWeightKg, 'lbs')))
     } else {
       // Sync imperial → metric display
-      if (profile.heightCm) setHeightCmDisplay(String(profile.heightCm))
-      if (profile.currentWeightKg) setCurrentKgDisplay(String(profile.currentWeightKg))
-      if (profile.targetWeightKg) setTargetKgDisplay(String(profile.targetWeightKg))
+      if (profile.heightCm) setHeightCmDisplay(String(roundHeightCm(profile.heightCm)))
+      if (profile.currentWeightKg) setCurrentKgDisplay(String(roundWeight(profile.currentWeightKg)))
+      if (profile.targetWeightKg) setTargetKgDisplay(String(roundWeight(profile.targetWeightKg)))
     }
     setUseImperial(toImperial)
     // Persist the choice — the profile keeps weights in kg, but the weight LOG
@@ -874,7 +866,7 @@ function Step3({
     setHeightFt(ft); setHeightIn(inches)
     const ftNum = parseInt(ft) || 0
     const inNum = parseInt(inches) || 0
-    onChange({ heightCm: (ftNum > 0 || inNum > 0) ? imperialToCm(ftNum, inNum) : undefined })
+    onChange({ heightCm: (ftNum > 0 || inNum > 0) ? ftInToCm(ftNum, inNum) : undefined })
   }
 
   function handleHeightCmChange(cm: string) {
@@ -1299,7 +1291,7 @@ function Step5Review({
 }) {
   const unit = profile.weightUnit ?? 'lbs'
   const showWeight = (kg?: number) =>
-    kg ? (unit === 'lbs' ? `${kgToLbs(kg)} lbs` : `${kg} kg`) : '—'
+    kg ? `${displayWeight(kg, unit)} ${unit}` : '—'
 
   const days = profile.weeklyAvailability ?? 3
   const activity = activityFromTrainingDays(profile.weeklyAvailability)
@@ -1371,7 +1363,7 @@ function Step5Review({
             label="Height"
             value={profile.heightCm
               ? unit === 'lbs'
-                ? `${cmToImperial(profile.heightCm).ft}'${cmToImperial(profile.heightCm).inches}"`
+                ? `${cmToFtIn(profile.heightCm).ft}'${cmToFtIn(profile.heightCm).inches}"`
                 : `${profile.heightCm} cm`
               : '—'}
           />

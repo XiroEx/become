@@ -8,6 +8,16 @@ import PasskeySetupButton from '@/components/PasskeySetupButton'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
+// Conversions are shared with onboarding and the nutrition goals page so the
+// three screens can never disagree about what a member weighs. See lib/bodyUnits.
+import {
+  cmToFtIn,
+  ftInToCm,
+  lbsToKg,
+  displayWeight,
+  roundWeight,
+  roundHeightCm,
+} from '@/lib/bodyUnits'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,22 +97,6 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 // ─── Unit conversion helpers ──────────────────────────────────────────────────
 
-function cmToFtIn(cm: number): { ft: number; inches: number } {
-  const totalInches = cm / 2.54
-  return { ft: Math.floor(totalInches / 12), inches: Math.round(totalInches % 12) }
-}
-
-function ftInToCm(ft: number, inches: number): number {
-  return Math.round((ft * 12 + inches) * 2.54)
-}
-
-function kgToLbs(kg: number): number {
-  return Math.round(kg * 2.20462)
-}
-
-function lbsToKg(lbs: number): number {
-  return Math.round((lbs / 2.20462) * 10) / 10
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -185,12 +179,14 @@ export default function SettingsPage() {
           setHeightIn(String(inches))
         }
         // Convert stored kg → lbs
-        setWeightDisplay(p.currentWeightKg !== undefined ? String(kgToLbs(p.currentWeightKg)) : '')
-        setTargetWeightDisplay(p.targetWeightKg !== undefined ? String(kgToLbs(p.targetWeightKg)) : '')
+        setWeightDisplay(p.currentWeightKg !== undefined ? String(displayWeight(p.currentWeightKg, unit)) : '')
+        setTargetWeightDisplay(p.targetWeightKg !== undefined ? String(displayWeight(p.targetWeightKg, unit)) : '')
       } else {
-        setHeightCm(p.heightCm !== undefined ? String(p.heightCm) : '')
-        setWeightDisplay(p.currentWeightKg !== undefined ? String(p.currentWeightKg) : '')
-        setTargetWeightDisplay(p.targetWeightKg !== undefined ? String(p.targetWeightKg) : '')
+        // Stored values are exact (182.88 cm, 95.2544 kg) — round for the input
+        // only. The unrounded number stays in the profile for the math.
+        setHeightCm(p.heightCm !== undefined ? String(roundHeightCm(p.heightCm)) : '')
+        setWeightDisplay(p.currentWeightKg !== undefined ? String(roundWeight(p.currentWeightKg)) : '')
+        setTargetWeightDisplay(p.targetWeightKg !== undefined ? String(roundWeight(p.targetWeightKg)) : '')
       }
     } catch {
       // ignore
@@ -336,17 +332,17 @@ export default function SettingsPage() {
         setHeightIn(String(inches))
         setHeightCm('')
       }
-      if (weightDisplay !== '') setWeightDisplay(String(kgToLbs(Number(weightDisplay))))
-      if (targetWeightDisplay !== '') setTargetWeightDisplay(String(kgToLbs(Number(targetWeightDisplay))))
+      if (weightDisplay !== '') setWeightDisplay(String(displayWeight(Number(weightDisplay), 'lbs')))
+      if (targetWeightDisplay !== '') setTargetWeightDisplay(String(displayWeight(Number(targetWeightDisplay), 'lbs')))
     } else {
       // imperial → metric
       if (heightFt !== '' || heightIn !== '') {
-        setHeightCm(String(ftInToCm(Number(heightFt) || 0, Number(heightIn) || 0)))
+        setHeightCm(String(roundHeightCm(ftInToCm(Number(heightFt) || 0, Number(heightIn) || 0))))
         setHeightFt('')
         setHeightIn('')
       }
-      if (weightDisplay !== '') setWeightDisplay(String(lbsToKg(Number(weightDisplay))))
-      if (targetWeightDisplay !== '') setTargetWeightDisplay(String(lbsToKg(Number(targetWeightDisplay))))
+      if (weightDisplay !== '') setWeightDisplay(String(roundWeight(lbsToKg(Number(weightDisplay)))))
+      if (targetWeightDisplay !== '') setTargetWeightDisplay(String(roundWeight(lbsToKg(Number(targetWeightDisplay)))))
     }
 
     setWeightUnit(newUnit)

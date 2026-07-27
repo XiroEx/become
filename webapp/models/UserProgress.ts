@@ -3,7 +3,12 @@ import type { IExercisePR, IPRDimension } from '@/lib/exercisePRs'
 
 export interface IWeightEntry {
   date: Date
-  weight: number // in lbs
+  /** Raw number the member typed, in `unit`. */
+  weight: number
+  /** The unit `weight` was entered in. Absent on entries logged before this
+   *  field existed — treat those as the member's current profile unit, which is
+   *  what they were using at the time. */
+  unit?: 'lbs' | 'kg'
   bodyFat?: number // percentage
 }
 
@@ -196,6 +201,7 @@ export interface IDashboardTile {
 const WeightEntrySchema = new Schema<IWeightEntry>({
   date: { type: Date, required: true },
   weight: { type: Number, required: true },
+  unit: { type: String, enum: ['lbs', 'kg'] },
   bodyFat: { type: Number }
 }, { _id: false })
 

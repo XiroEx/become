@@ -8,12 +8,15 @@ import { Card } from '@/components/ui'
 import {
   ACTIVITY_LABELS,
   DIRECTION_ADJUSTMENT,
+  DIRECTION_LABELS,
+  DIRECTION_EXPLANATION,
   calcTdee,
   computeNutritionTargets,
   type ActivityLevel,
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
 import type { FitnessGoal } from '@/lib/programMatch'
+import { toKg, ftInToCm, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
 
 /** Same three values as the NutritionGoal schema enum. */
 type GoalType = NutritionDirection
@@ -35,11 +38,20 @@ interface ProgressData {
   stats: { streakDays: number }
 }
 
-const GOAL_CARDS: { type: GoalType; label: string; description: string; adjustment: string }[] = [
-  { type: 'lose', label: 'Lose Weight', description: 'Caloric deficit for fat loss', adjustment: 'TDEE - 500 cal' },
-  { type: 'maintain', label: 'Maintain', description: 'Stay at current weight', adjustment: 'TDEE' },
-  { type: 'gain', label: 'Gain Muscle', description: 'Caloric surplus for growth', adjustment: 'TDEE + 300 cal' }
-]
+/** Labels and adjustments come from lib/nutrition/tdee so this page and the
+ *  onboarding wizard describe the same choice the same way. They used to be
+ *  hardcoded here, which is how "Gain Weight" in onboarding became "Gain Muscle"
+ *  on this screen — the same +300 with two different names. */
+const GOAL_CARDS: { type: GoalType; label: string; description: string; adjustment: string }[] =
+  (['lose', 'maintain', 'gain'] as GoalType[]).map((type) => ({
+    type,
+    label: DIRECTION_LABELS[type],
+    description: DIRECTION_EXPLANATION[type],
+    adjustment:
+      DIRECTION_ADJUSTMENT[type] === 0
+        ? 'TDEE'
+        : `TDEE ${DIRECTION_ADJUSTMENT[type] > 0 ? '+' : '−'} ${Math.abs(DIRECTION_ADJUSTMENT[type])} cal`,
+  }))
 
 /** 'recommended' runs the same computeNutritionTargets() the onboarding wizard
  *  uses, so recalculating here reproduces the numbers a member was shown when
@@ -74,7 +86,12 @@ export default function NutritionGoalsPage() {
   // 'recommended' matches the onboarding wizard's math — the default so a
   // member who never touches this screen keeps the numbers they were shown.
   const [macroPreset, setMacroPreset] = useState<MacroPreset>('recommended')
-  const [userWeight, setUserWeight] = useState<number | null>(null)   // lbs
+  /** Latest LOGGED weight, in the member's display unit (see weightUnit). */
+  const [userWeight, setUserWeight] = useState<number | null>(null)
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs')
+  /** Canonical weight in kg off the profile — kept in sync by /api/weight on
+   *  every log, so it is both fresh and unambiguous. Preferred over the log. */
+  const [profileWeightKg, setProfileWeightKg] = useState<number | null>(null)
   const [userHeightCm, setUserHeightCm] = useState<number | null>(null)
   const [userAge, setUserAge] = useState<number | null>(null)
   const [userSex, setUserSex] = useState<'male' | 'female' | null>(null)
@@ -92,16 +109,22 @@ export default function NutritionGoalsPage() {
     const sex = (userSex ?? (manualSex || null)) as 'male' | 'female' | null
     const heightCm = userHeightCm ?? (
       manualHeightFt
-        ? (parseInt(manualHeightFt) * 12 + parseInt(manualHeightIn || '0')) * 2.54
+        ? ftInToCm(parseInt(manualHeightFt), parseInt(manualHeightIn || '0'))
         : null
     )
     return {
       age: age ?? undefined,
       biologicalSex: sex ?? undefined,
       heightCm: heightCm ?? undefined,
-      currentWeightKg: userWeight ? userWeight * 0.453592 : undefined,
+      // The profile's kg value is canonical. The logged weight is only a
+      // fallback for members who last logged before /api/weight started syncing
+      // the profile — and it MUST be read through the member's unit: this line
+      // used to multiply by 0.453592 unconditionally, so a member tracking in
+      // kg had their 95 kg treated as 95 lb and got a TDEE ~800 cal too low.
+      currentWeightKg:
+        profileWeightKg ?? (userWeight ? toKg(userWeight, weightUnit) : undefined),
     }
-  }, [userAge, userSex, userHeightCm, userWeight, manualAge, manualSex, manualHeightFt, manualHeightIn])
+  }, [userAge, userSex, userHeightCm, userWeight, weightUnit, profileWeightKg, manualAge, manualSex, manualHeightFt, manualHeightIn])
 
   const applyGoalAdjustment = useCallback((baseTdee: number, goalType: GoalType): number => {
     return baseTdee + DIRECTION_ADJUSTMENT[goalType]
@@ -193,6 +216,10 @@ export default function NutritionGoalsPage() {
           const profile = profileData.profile || {}
           if (profile.age) setUserAge(profile.age)
           if (profile.heightCm) setUserHeightCm(profile.heightCm)
+          if (profile.weightUnit === 'kg' || profile.weightUnit === 'lbs') {
+            setWeightUnit(profile.weightUnit)
+          }
+          if (profile.currentWeightKg) setProfileWeightKg(profile.currentWeightKg)
           if (profile.biologicalSex === 'male' || profile.biologicalSex === 'female') {
             setUserSex(profile.biologicalSex)
           }
@@ -340,9 +367,12 @@ export default function NutritionGoalsPage() {
       <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
         <div className="flex flex-wrap gap-6">
-          {userWeight && (
+          {(profileWeightKg || userWeight) && (
             <div>
-              <p className="text-2xl font-bold text-zinc-900 dark:text-white">{userWeight}<span className="text-sm font-normal text-zinc-500"> lbs</span></p>
+              <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+                {profileWeightKg ? displayWeight(profileWeightKg, weightUnit) : userWeight}
+                <span className="text-sm font-normal text-zinc-500"> {weightUnit}</span>
+              </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Current Weight</p>
             </div>
           )}
