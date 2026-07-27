@@ -90,6 +90,34 @@ function matchesAny(hay: string, keywords: string[]): boolean {
   return keywords.some((k) => hay.includes(k))
 }
 
+function countHits(hay: string, keywords: string[]): number {
+  return keywords.filter((k) => hay.includes(k)).length
+}
+
+/**
+ * How strongly a program serves a goal, 0…1.
+ *
+ * Graded rather than binary, and weighted by WHERE the match came from. Tags
+ * are curated, so they're the real signal; a passing mention of "strength" in a
+ * fat-loss program's blurb is incidental and must not make it register as a
+ * muscle-building program. Binary matching made nearly every program tie at the
+ * same score, so the alphabetical tiebreak decided the recommendation and
+ * swapping your goal changed nothing.
+ */
+function goalStrength(program: ProgramLike, goal: FitnessGoal): number {
+  const keywords = GOAL_KEYWORDS[goal]
+  const tagHits = countHits((program.tags ?? []).join(' ').toLowerCase(), keywords)
+  const nameHits = countHits((program.name ?? '').toLowerCase(), keywords)
+  const textHits = countHits([program.goal, program.description].filter(Boolean).join(' ').toLowerCase(), keywords)
+
+  const weighted = tagHits * 1 + nameHits * 0.6 + textHits * 0.25
+  // Two solid tag hits is a full-strength match.
+  return Math.min(1, weighted / 2)
+}
+
+/** Below this, a match is too incidental to claim as a reason to the member. */
+const REASON_THRESHOLD = 0.25
+
 type EquipmentTier = 'none' | 'dumbbells' | 'gym'
 
 /** What the member has access to. 'none' is the floor. */
@@ -121,8 +149,10 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
   // ── Goals ───────────────────────────────────────────────────────────────
   const goals = input.goals ?? []
   goals.slice(0, GOAL_WEIGHTS.length).forEach((goal, i) => {
-    if (matchesAny(hay, GOAL_KEYWORDS[goal])) {
-      score += GOAL_WEIGHTS[i]
+    const strength = goalStrength(program, goal)
+    if (strength <= 0) return
+    score += GOAL_WEIGHTS[i] * strength
+    if (strength >= REASON_THRESHOLD) {
       goalReasons.push(
         i === 0
           ? `Built around your primary goal: ${GOAL_LABELS[goal]}`
@@ -144,6 +174,11 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
       const adjacent = order.some((lvl, idx) => target.includes(lvl) && Math.abs(idx - mine) === 1)
       if (adjacent) score += 7
     }
+  } else if (target.includes('beginner')) {
+    // Experience not answered yet (the goal step asks for a recommendation
+    // before we know anything else). Lean towards the beginner-inclusive
+    // option — a 5-day intermediate shred is a bad guess for an unknown member.
+    score += 4
   }
 
   // ── Days per week ───────────────────────────────────────────────────────
@@ -194,7 +229,9 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
     (r): r is string => Boolean(r)
   )
 
-  return { score, reasons }
+  // Rounded so float noise from the graded goal match can't reorder two
+  // programs that are effectively tied — the name tiebreak handles those.
+  return { score: Math.round(score * 100) / 100, reasons }
 }
 
 export function rankPrograms<T extends ProgramLike>(programs: T[], input: MatchInput): ProgramMatch<T>[] {
