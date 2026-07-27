@@ -9,7 +9,7 @@ import {
   waterGoalOz,
 } from '@/lib/nutrition/tdee'
 import { rankPrograms, scoreProgram } from '@/lib/programMatch'
-import type { ProgramLike } from '@/lib/programMatch'
+import type { FitnessGoal, ProgramLike } from '@/lib/programMatch'
 
 // A 30 y/o male, 5'10" (178 cm), 185 lb (83.9 kg), training 4 days a week.
 // Worked by hand so this test cross-checks the formula rather than mirroring it:
@@ -194,7 +194,7 @@ describe('programMatch', () => {
   })
 
   it('changes the recommendation when equipment changes', () => {
-    const base = { goals: ['lose_weight'] as const, experienceLevel: 'beginner' as const, weeklyAvailability: 4 }
+    const base = { goals: ['lose_weight'] as FitnessGoal[], experienceLevel: 'beginner' as const, weeklyAvailability: 4 }
     assert.equal(top({ ...base, equipmentAccess: ['full_gym'] }), 'fat-loss-foundation')
     assert.equal(top({ ...base, equipmentAccess: ['none'] }), 'no-excuses')
     assert.equal(top({ ...base, equipmentAccess: ['dumbbells'] }), 'db-only')
@@ -237,7 +237,7 @@ describe('programMatch', () => {
   })
 
   it('is deterministic — the same answers always yield the same top pick', () => {
-    const input = { goals: ['general_health'] as const, weeklyAvailability: 4 }
+    const input = { goals: ['general_health'] as FitnessGoal[], weeklyAvailability: 4 }
     const runs = new Set(Array.from({ length: 5 }, () => top(input)))
     assert.equal(runs.size, 1)
   })
