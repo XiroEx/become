@@ -1322,7 +1322,9 @@ function Step5Review({
           onEdit={onEdit}
           why={
             goals.length > 1
-              ? `Your primary goal (${GOAL_LABEL[goals[0]]}) drives your program match and dashboard. Your other ${goals.length - 1} goal${goals.length > 2 ? 's' : ''} still shift which programs we rank highest.`
+              ? `Your primary goal (${GOAL_LABEL[goals[0]]}) drives your program match and dashboard. Your other ${
+                  goals.length === 2 ? 'goal still shifts' : `${goals.length - 1} goals still shift`
+                } which programs we rank highest.`
               : goals.length === 1
                 ? `${GOAL_LABEL[goals[0]]} drives your program match, your calorie direction and your dashboard.`
                 : undefined
