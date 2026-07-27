@@ -59,7 +59,10 @@ export const E2E_USER = {
   role: 'user' as const,
 }
 
-export const BASE_URL = 'https://become.redbtn.io'
+/** Defaults to production. Point at a local server with
+ *  PLAYWRIGHT_BASE_URL=http://localhost:3000 to verify a change BEFORE it
+ *  ships — the same variable playwright.config.ts already honours. */
+export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://become.redbtn.io'
 
 /**
  * Mint a token for an arbitrary test user.
@@ -116,7 +119,7 @@ export async function authenticate(page: Page, context: BrowserContext): Promise
     domain: new URL(BASE_URL).hostname,
     path: '/',
     httpOnly: false,
-    secure: true,
+    secure: BASE_URL.startsWith('https'),
     sameSite: 'Lax',
   }])
 

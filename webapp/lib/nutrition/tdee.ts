@@ -10,7 +10,11 @@
  * g/lb protein, the goals page used a 30/40/30 percentage split — so a member's
  * numbers silently changed the first time they opened the goals page. Anything
  * that computes targets must go through computeNutritionTargets().
+ *
+ * Unit conversion lives in lib/bodyUnits.ts — this module only ever sees kg/cm.
  */
+
+import { LBS_PER_KG } from '@/lib/bodyUnits'
 
 export type NutritionDirection = 'lose' | 'maintain' | 'gain'
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
@@ -57,8 +61,6 @@ export const DIRECTION_EXPLANATION: Record<NutritionDirection, string> = {
   maintain: 'calories at maintenance — hold your weight while you train',
   gain: 'a 300 calorie surplus — lean gaining without excess fat',
 }
-
-const LBS_PER_KG = 2.20462
 
 /** Map weekly training availability onto an activity multiplier bucket. */
 export function activityFromTrainingDays(days?: number): ActivityLevel {

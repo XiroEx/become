@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
+import { toKg, type WeightUnit } from '@/lib/bodyUnits'
 import {
   readTzOffset,
   readTzOffsetFromBody,
@@ -145,6 +147,16 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    // The log stores the raw number the member typed, which is only meaningful
+    // alongside the unit they typed it in. Stamping the unit on the entry means
+    // a member who switches lbs↔kg doesn't retroactively corrupt their history.
+    let unit: WeightUnit = 'lbs'
+    if (!skip && weight) {
+      const user = await User.findById(authResult.userId).select('profile.weightUnit').lean()
+      const saved = (user as { profile?: { weightUnit?: WeightUnit } } | null)?.profile?.weightUnit
+      if (saved === 'kg' || saved === 'lbs') unit = saved
+    }
+
     const tzOffset = readTzOffsetFromBody(body)
     const todayKey = localDateKey(null, tzOffset)
     const today = utcMidnightDateKey(todayKey)
@@ -157,7 +169,7 @@ export async function POST(request: NextRequest) {
       // Create new progress record
       progress = await UserProgress.create({
         userId: authResult.userId,
-        weightHistory: weight ? [{ date: today, weight, ...(bodyFat != null ? { bodyFat } : {}) }] : [],
+        weightHistory: weight ? [{ date: today, weight, unit, ...(bodyFat != null ? { bodyFat } : {}) }] : [],
         weightSkipTracking: {
           lastPromptDate: today,
           lastWeightDate: weight ? today : undefined,
@@ -187,10 +199,11 @@ export async function POST(request: NextRequest) {
 
         if (existingIndex >= 0) {
           progress.weightHistory[existingIndex].weight = weight
+          progress.weightHistory[existingIndex].unit = unit
           if (bodyFat != null) progress.weightHistory[existingIndex].bodyFat = bodyFat
         } else {
           if (!progress.weightHistory) progress.weightHistory = []
-          progress.weightHistory.push({ date: today, weight, ...(bodyFat != null ? { bodyFat } : {}) })
+          progress.weightHistory.push({ date: today, weight, unit, ...(bodyFat != null ? { bodyFat } : {}) })
         }
 
         // Reset skip tracking
@@ -200,6 +213,18 @@ export async function POST(request: NextRequest) {
       }
 
       await progress.save()
+    }
+
+    // Keep the profile's canonical kg weight in step with the log.
+    //
+    // Calorie and protein targets are computed from profile.currentWeightKg. It
+    // used to be written once during onboarding and never again, so a member who
+    // dropped 15 lb was still being fed the macros for their starting weight —
+    // the app quietly stopped matching the person using it.
+    if (!skip && weight) {
+      await User.findByIdAndUpdate(authResult.userId, {
+        $set: { 'profile.currentWeightKg': toKg(weight, unit) },
+      }).catch(() => null)
     }
 
     // Record streak activity when weight is actually logged (not skipped)
