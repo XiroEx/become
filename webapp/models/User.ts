@@ -23,8 +23,21 @@ export type WeightUnit = 'lbs' | 'kg';
 
 export type PlanPromoteMode = 'manual' | 'auto';
 
+export type NutritionDirection = 'lose' | 'maintain' | 'gain';
+
 export interface IUserProfile {
+  /** The PRIMARY goal. Always mirrors fitnessGoals[0]; kept as its own field
+   *  because the dashboard, nudge modal, profile icon and AI context all key
+   *  off a single goal. */
   fitnessGoal?: FitnessGoal;
+  /** Ordered goal set from onboarding — index 0 is the primary. Members can
+   *  pick up to 3; secondary goals influence program recommendations and the
+   *  protein target without diluting the primary. */
+  fitnessGoals?: FitnessGoal[];
+  /** Explicit calorie direction. Defaults from the primary goal during
+   *  onboarding but is the member's own choice — "build muscle" does not
+   *  always mean "eat in a surplus". */
+  nutritionDirection?: NutritionDirection;
   experienceLevel?: ExperienceLevel;
   age?: number;
   biologicalSex?: BiologicalSex;
@@ -89,6 +102,8 @@ const SavedFoodSchema = new Schema({
 
 const UserProfileSchema = new Schema({
   fitnessGoal: { type: String, enum: ['lose_weight', 'gain_muscle', 'maintain', 'improve_performance', 'general_health'] },
+  fitnessGoals: [{ type: String, enum: ['lose_weight', 'gain_muscle', 'maintain', 'improve_performance', 'general_health'] }],
+  nutritionDirection: { type: String, enum: ['lose', 'maintain', 'gain'] },
   experienceLevel: { type: String, enum: ['beginner', 'intermediate', 'advanced'] },
   age: { type: Number },
   biologicalSex: { type: String, enum: ['male', 'female', 'prefer_not_to_say'] },

@@ -84,6 +84,21 @@ export default defineConfig({
       },
     },
     {
+      name: 'onboarding-audit',
+      testMatch: '**/onboarding-audit.spec.ts',
+      timeout: 180_000,
+      // Tests share one e2e user and run in sequence — the goals-page check
+      // asserts on what the wizard persisted.
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'new-user-journey',
       testMatch: '**/new-user-journey.spec.ts',
       timeout: 300_000,

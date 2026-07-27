@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,19 +12,32 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
+  Sparkles,
+  Pencil,
+  TrendingDown,
+  Minus,
+  TrendingUp,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import { defaultIconForGoal } from '@/lib/reward/icons'
+import {
+  computeNutritionTargets,
+  directionForGoal,
+  activityFromTrainingDays,
+  waterGoalOz,
+  DIRECTION_EXPLANATION,
+  type NutritionDirection,
+} from '@/lib/nutrition/tdee'
+import type { FitnessGoal, ExperienceLevel, EquipmentType } from '@/lib/programMatch'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_performance' | 'general_health'
-type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 type BiologicalSex = 'male' | 'female' | 'prefer_not_to_say'
-type EquipmentType = 'none' | 'dumbbells' | 'barbell' | 'cables' | 'full_gym'
 
 interface ProfileData {
-  fitnessGoal?: FitnessGoal
+  /** Ordered — index 0 is the primary goal. */
+  fitnessGoals?: FitnessGoal[]
+  nutritionDirection?: NutritionDirection
   experienceLevel?: ExperienceLevel
   age?: number
   biologicalSex?: BiologicalSex
@@ -40,6 +53,16 @@ interface ProfileData {
   weightUnit?: 'lbs' | 'kg'
 }
 
+interface Recommendation {
+  program_id: string
+  name: string
+  description: string
+  target_user: string
+  training_days_per_week: number | null
+  duration_weeks: number | null
+  reasons: string[]
+}
+
 // ── Step configuration ────────────────────────────────────────────────────────
 
 const GOAL_OPTIONS: { value: FitnessGoal; label: string; Icon: typeof Flame; color: string; bg: string }[] = [
@@ -49,6 +72,13 @@ const GOAL_OPTIONS: { value: FitnessGoal; label: string; Icon: typeof Flame; col
   { value: 'improve_performance',  label: 'Improve Performance',  Icon: Zap,      color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
   { value: 'general_health',       label: 'General Health',       Icon: Heart,    color: 'text-emerald-500',bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
 ]
+
+const GOAL_LABEL: Record<FitnessGoal, string> = GOAL_OPTIONS.reduce(
+  (acc, g) => ({ ...acc, [g.value]: g.label }),
+  {} as Record<FitnessGoal, string>
+)
+
+const MAX_GOALS = 3
 
 const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string; desc: string }[] = [
   { value: 'beginner',     label: 'Beginner',     desc: 'New to structured training' },
@@ -70,7 +100,15 @@ const EQUIPMENT_OPTIONS: { value: EquipmentType; label: string }[] = [
   { value: 'full_gym',  label: 'Full Gym' },
 ]
 
-const TOTAL_STEPS = 4
+const DIRECTION_OPTIONS: { value: NutritionDirection; label: string; sub: string; Icon: typeof Flame }[] = [
+  { value: 'lose',     label: 'Lose Weight', sub: 'TDEE − 500', Icon: TrendingDown },
+  { value: 'maintain', label: 'Maintain',    sub: 'TDEE',       Icon: Minus },
+  { value: 'gain',     label: 'Gain Weight', sub: 'TDEE + 300', Icon: TrendingUp },
+]
+
+const TOTAL_STEPS = 5
+
+const STEP_TITLES = ['Goals', 'Background', 'Body & nutrition', 'Equipment', 'Review'] as const
 
 // ── Animation variants ────────────────────────────────────────────────────────
 
@@ -80,52 +118,63 @@ const slideVariants = {
   exit:  (dir: number) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
 }
 
-// ── TDEE-based nutrition goal seeding ─────────────────────────────────────────
+// ── Live program recommendation ───────────────────────────────────────────────
 
-function computeNutritionGoals(p: ProfileData): { calories: number; protein: number; carbs: number; fats: number; goalType: string } | null {
-  if (!p.currentWeightKg || !p.fitnessGoal) return null
+/**
+ * Asks the API for the best-matching program as the member answers. Runs on
+ * every meaningful answer change (debounced) so the goal step can show a real
+ * recommendation the moment goals are picked — which is the whole point of
+ * making these choices matter.
+ */
+function useRecommendation(profile: ProfileData, enabled: boolean) {
+  const [rec, setRec] = useState<Recommendation | null>(null)
+  const [loading, setLoading] = useState(false)
+  const requestId = useRef(0)
 
-  const weightKg = p.currentWeightKg
-  const weightLbs = weightKg * 2.20462
+  const goals = profile.fitnessGoals ?? []
+  const key = [
+    goals.join(','),
+    profile.experienceLevel ?? '',
+    profile.weeklyAvailability ?? '',
+    (profile.equipmentAccess ?? []).join(','),
+  ].join('|')
 
-  // BMR — full Mifflin-St Jeor when height/age/sex available, else weight-only estimate
-  let bmr: number
-  if (p.heightCm && p.age && p.biologicalSex && p.biologicalSex !== 'prefer_not_to_say') {
-    bmr = p.biologicalSex === 'male'
-      ? 10 * weightKg + 6.25 * p.heightCm - 5 * p.age + 5
-      : 10 * weightKg + 6.25 * p.heightCm - 5 * p.age - 161
-  } else {
-    bmr = 25 * weightKg // rough estimate when data is sparse
-  }
+  useEffect(() => {
+    if (!enabled || goals.length === 0) {
+      setRec(null)
+      return
+    }
 
-  // Activity multiplier based on weekly training days
-  const days = p.weeklyAvailability ?? 3
-  const activityMult = days >= 5 ? 1.725 : days >= 3 ? 1.55 : 1.375
-  const tdee = bmr * activityMult
+    const id = ++requestId.current
+    setLoading(true)
 
-  // Calorie target by goal
-  const calMap: Record<FitnessGoal, number> = {
-    lose_weight: tdee - 500,
-    gain_muscle: tdee + 300,
-    maintain: tdee,
-    improve_performance: tdee + 100,
-    general_health: tdee,
-  }
-  const calories = Math.max(1200, Math.round(calMap[p.fitnessGoal]))
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ goals: goals.join(','), limit: '1' })
+        if (profile.experienceLevel) params.set('level', profile.experienceLevel)
+        if (profile.weeklyAvailability) params.set('days', String(profile.weeklyAvailability))
+        if (profile.equipmentAccess?.length) params.set('equipment', profile.equipmentAccess.join(','))
 
-  // Protein targets (g/lb bodyweight)
-  const proteinPerLb: Record<FitnessGoal, number> = {
-    lose_weight: 1.0,
-    gain_muscle: 0.9,
-    maintain: 0.75,
-    improve_performance: 0.85,
-    general_health: 0.75,
-  }
-  const protein = Math.round(weightLbs * proteinPerLb[p.fitnessGoal])
-  const fats = Math.round((calories * 0.25) / 9)
-  const carbs = Math.max(50, Math.round((calories - protein * 4 - fats * 9) / 4))
+        const res = await fetch(`/api/programs/recommend?${params}`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        // Ignore responses from superseded requests.
+        if (id !== requestId.current) return
+        setRec(data.recommendations?.[0] ?? null)
+      } catch {
+        if (id === requestId.current) setRec(null)
+      } finally {
+        if (id === requestId.current) setLoading(false)
+      }
+    }, 250)
 
-  return { calories, protein, carbs, fats, goalType: p.fitnessGoal }
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, enabled])
+
+  return { rec, loading }
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -137,6 +186,30 @@ export default function OnboardingPage() {
   const [profile, setProfile] = useState<ProfileData>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
+  /** Once the member picks a calorie direction themselves we stop re-deriving
+   *  it from the primary goal — their explicit choice wins. */
+  const [directionTouched, setDirectionTouched] = useState(false)
+
+  const goals = useMemo(() => profile.fitnessGoals ?? [], [profile.fitnessGoals])
+  const primaryGoal = goals[0]
+  const effectiveDirection: NutritionDirection =
+    profile.nutritionDirection ?? directionForGoal(primaryGoal)
+
+  const { rec, loading: recLoading } = useRecommendation(profile, authChecked)
+
+  const targets = useMemo(
+    () =>
+      computeNutritionTargets({
+        currentWeightKg: profile.currentWeightKg,
+        heightCm: profile.heightCm,
+        age: profile.age,
+        biologicalSex: profile.biologicalSex,
+        goals,
+        direction: effectiveDirection,
+        weeklyAvailability: profile.weeklyAvailability,
+      }),
+    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability]
+  )
 
   // ── Auth check on mount ──────────────────────────────────────────────────
   useEffect(() => {
@@ -194,11 +267,46 @@ export default function OnboardingPage() {
     setStep((s) => Math.max(s - 1, 1))
   }
 
+  function goToStep(target: number) {
+    setDirection(target > step ? 1 : -1)
+    setStep(Math.min(Math.max(target, 1), TOTAL_STEPS))
+  }
+
+  // ── Goal selection (multi, ordered) ──────────────────────────────────────
+  function toggleGoal(goal: FitnessGoal) {
+    setProfile((p) => {
+      const current = p.fitnessGoals ?? []
+      let next: FitnessGoal[]
+      if (current.includes(goal)) {
+        next = current.filter((g) => g !== goal)
+      } else if (current.length >= MAX_GOALS) {
+        // At the cap — replace the least important pick rather than silently
+        // ignoring the tap.
+        next = [...current.slice(0, MAX_GOALS - 1), goal]
+      } else {
+        next = [...current, goal]
+      }
+      // Keep the calorie direction in step with the primary goal until the
+      // member overrides it themselves.
+      const nutritionDirection = directionTouched
+        ? p.nutritionDirection
+        : directionForGoal(next[0])
+      return { ...p, fitnessGoals: next, nutritionDirection }
+    })
+  }
+
+  function setDirectionChoice(d: NutritionDirection) {
+    setDirectionTouched(true)
+    setProfile((p) => ({ ...p, nutritionDirection: d }))
+  }
+
   // ── Submit (finish or skip) ──────────────────────────────────────────────
   async function submit(profileOverride?: ProfileData) {
     setIsSubmitting(true)
     const token = getToken()
     const payload = profileOverride ?? profile
+    const payloadGoals = payload.fitnessGoals ?? []
+    const payloadDirection = payload.nutritionDirection ?? directionForGoal(payloadGoals[0])
 
     try {
       await fetch('/api/profile', {
@@ -208,12 +316,20 @@ export default function OnboardingPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          // The imperial/metric toggle defaults to lbs, so an untouched toggle
-          // must still persist 'lbs' rather than leaving weightUnit unset.
-          profile: { ...payload, weightUnit: payload.weightUnit ?? 'lbs' },
+          profile: {
+            ...payload,
+            // fitnessGoal stays the single primary goal — the dashboard, nudge
+            // modal, profile icon and AI context all read that one field.
+            fitnessGoal: payloadGoals[0],
+            fitnessGoals: payloadGoals,
+            nutritionDirection: payloadDirection,
+            // The imperial/metric toggle defaults to lbs, so an untouched toggle
+            // must still persist 'lbs' rather than leaving weightUnit unset.
+            weightUnit: payload.weightUnit ?? 'lbs',
+          },
           onboardingCompleted: true,
           // Give every new user a starter profile icon matched to their goal.
-          profileIcon: defaultIconForGoal(payload.fitnessGoal),
+          profileIcon: defaultIconForGoal(payloadGoals[0]),
         }),
       })
 
@@ -224,27 +340,59 @@ export default function OnboardingPage() {
       // (lbs)" and posts what you typed). Seeding it with the kg value meant a
       // user who entered 175 lb got a first log entry of 79 — which then showed
       // up as "79 lbs" on the dashboard/progress chart until they logged again.
+      const seeds: Promise<unknown>[] = []
+
       if (payload.currentWeightKg) {
         const unit = payload.weightUnit ?? 'lbs'
         const seedWeight = unit === 'lbs'
           ? kgToLbs(payload.currentWeightKg)
           : payload.currentWeightKg
-        fetch('/api/weight', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ weight: seedWeight, tz: new Date().getTimezoneOffset() }),
-        }).catch(() => {}) // fire-and-forget
+        seeds.push(
+          fetch('/api/weight', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ weight: seedWeight, tz: new Date().getTimezoneOffset() }),
+          }).catch(() => {})
+        )
       }
 
-      // Seed TDEE-based nutrition goals if we have enough data
-      const seedGoals = computeNutritionGoals(payload)
-      if (seedGoals) {
-        fetch('/api/nutrition/goals?onboarding=1', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(seedGoals),
-        }).catch(() => {}) // fire-and-forget
+      // Seed TDEE-based nutrition goals if we have enough data.
+      //
+      // goalType MUST be the NutritionGoal enum ('lose' | 'maintain' | 'gain').
+      // This used to post the raw fitnessGoal ('lose_weight', 'gain_muscle', …),
+      // which failed schema validation on the upsert — so the goal doc was
+      // never created and every new member saw the hardcoded 2000/150/200/65
+      // defaults until they opened the goals page and hit Save.
+      const seedTargets = computeNutritionTargets({
+        currentWeightKg: payload.currentWeightKg,
+        heightCm: payload.heightCm,
+        age: payload.age,
+        biologicalSex: payload.biologicalSex,
+        goals: payloadGoals,
+        direction: payloadDirection,
+        weeklyAvailability: payload.weeklyAvailability,
+      })
+      if (seedTargets) {
+        seeds.push(
+          fetch('/api/nutrition/goals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              calories: seedTargets.calories,
+              protein: seedTargets.protein,
+              carbs: seedTargets.carbs,
+              fats: seedTargets.fats,
+              waterGoal: waterGoalOz(payload.currentWeightKg),
+              goalType: seedTargets.direction,
+              activityLevel: seedTargets.activityLevel,
+            }),
+          }).catch(() => {})
+        )
       }
+
+      // Await the seeds — the dashboard reads weight and nutrition goals on
+      // mount, so navigating before they land showed stale/default numbers.
+      await Promise.all(seeds)
 
       // Reset program nudge so dashboard shows it immediately for new users
       try { localStorage.removeItem('become_program_nudge') } catch {}
@@ -281,8 +429,11 @@ export default function OnboardingPage() {
       {/* Content */}
       <div className="flex flex-1 flex-col items-center px-4 pt-10 pb-32 sm:px-6">
         {/* Step counter */}
-        <p className="mt-4 text-xs font-medium uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
-          Step {step} of {TOTAL_STEPS}
+        <p
+          data-testid="onboarding-step-counter"
+          className="mt-4 text-xs font-medium uppercase tracking-widest text-zinc-400 dark:text-zinc-500"
+        >
+          Step {step} of {TOTAL_STEPS} · {STEP_TITLES[step - 1]}
         </p>
 
         {/* Animated step content */}
@@ -299,8 +450,10 @@ export default function OnboardingPage() {
             >
               {step === 1 && (
                 <Step1
-                  value={profile.fitnessGoal}
-                  onChange={(v) => setProfile((p) => ({ ...p, fitnessGoal: v }))}
+                  goals={goals}
+                  onToggle={toggleGoal}
+                  rec={rec}
+                  recLoading={recLoading}
                 />
               )}
               {step === 2 && (
@@ -314,7 +467,10 @@ export default function OnboardingPage() {
               {step === 3 && (
                 <Step3
                   profile={profile}
+                  direction={effectiveDirection}
+                  targets={targets}
                   onChange={(updates) => setProfile((p) => ({ ...p, ...updates }))}
+                  onDirectionChange={setDirectionChoice}
                 />
               )}
               {step === 4 && (
@@ -323,6 +479,16 @@ export default function OnboardingPage() {
                   injuryNotes={profile.injuryNotes ?? ''}
                   onEquipmentChange={(v) => setProfile((p) => ({ ...p, equipmentAccess: v }))}
                   onInjuryNotesChange={(v) => setProfile((p) => ({ ...p, injuryNotes: v }))}
+                />
+              )}
+              {step === 5 && (
+                <Step5Review
+                  profile={profile}
+                  goals={goals}
+                  direction={effectiveDirection}
+                  targets={targets}
+                  rec={rec}
+                  onEdit={goToStep}
                 />
               )}
             </motion.div>
@@ -356,7 +522,8 @@ export default function OnboardingPage() {
           {step < TOTAL_STEPS ? (
             <button
               onClick={goNext}
-              disabled={step === 1 && !profile.fitnessGoal}
+              data-testid="onboarding-next"
+              disabled={step === 1 && goals.length === 0}
               className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               Next
@@ -365,6 +532,7 @@ export default function OnboardingPage() {
           ) : (
             <button
               onClick={() => submit()}
+              data-testid="onboarding-finish"
               disabled={isSubmitting}
               className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
@@ -378,31 +546,108 @@ export default function OnboardingPage() {
   )
 }
 
-// ── Step 1 — Primary Goal ─────────────────────────────────────────────────────
+// ── Recommendation card ───────────────────────────────────────────────────────
+
+function RecommendationCard({
+  rec,
+  loading,
+  compact,
+}: {
+  rec: Recommendation | null
+  loading: boolean
+  compact?: boolean
+}) {
+  if (loading && !rec) {
+    return (
+      <div className="mt-6 animate-pulse rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="h-3 w-32 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="mt-3 h-4 w-52 rounded bg-zinc-200 dark:bg-zinc-800" />
+        <div className="mt-2 h-3 w-40 rounded bg-zinc-200 dark:bg-zinc-800" />
+      </div>
+    )
+  }
+
+  if (!rec) return null
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
+      data-testid="recommended-program"
+      className={`rounded-2xl border-2 border-zinc-900 bg-white p-4 dark:border-white dark:bg-zinc-900 ${compact ? 'mt-3' : 'mt-6'}`}
+    >
+      <div className="flex items-center gap-1.5">
+        <Sparkles className="h-3.5 w-3.5 text-zinc-900 dark:text-white" />
+        <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-900 dark:text-white">
+          Recommended for you
+        </p>
+      </div>
+
+      <p
+        data-testid="recommended-program-name"
+        className="mt-2 text-base font-bold leading-snug text-zinc-900 dark:text-white"
+      >
+        {rec.name}
+      </p>
+
+      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+        {[
+          rec.duration_weeks ? `${rec.duration_weeks} weeks` : null,
+          rec.training_days_per_week ? `${rec.training_days_per_week} days/week` : null,
+          rec.target_user || null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+
+      {rec.reasons.length > 0 && (
+        <ul className="mt-3 space-y-1.5" data-testid="recommended-program-reasons">
+          {rec.reasons.slice(0, 3).map((reason) => (
+            <li key={reason} className="flex items-start gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+              <span>{reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </motion.div>
+  )
+}
+
+// ── Step 1 — Primary + secondary goals ────────────────────────────────────────
 
 function Step1({
-  value,
-  onChange,
+  goals,
+  onToggle,
+  rec,
+  recLoading,
 }: {
-  value?: FitnessGoal
-  onChange: (v: FitnessGoal) => void
+  goals: FitnessGoal[]
+  onToggle: (v: FitnessGoal) => void
+  rec: Recommendation | null
+  recLoading: boolean
 }) {
   return (
     <div>
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
-        What&apos;s your primary goal?
+        What are you here to do?
       </h1>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        We&apos;ll personalise your programme around what matters most to you.
+        Pick up to {MAX_GOALS}. Your first pick is your <span className="font-semibold text-zinc-700 dark:text-zinc-200">primary goal</span> — it
+        drives your program, your calories and your dashboard.
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {GOAL_OPTIONS.map(({ value: v, label, Icon, color, bg }) => {
-          const selected = value === v
+          const rank = goals.indexOf(v)
+          const selected = rank >= 0
           return (
             <button
               key={v}
-              onClick={() => onChange(v)}
+              onClick={() => onToggle(v)}
+              data-testid={`goal-${v}`}
+              aria-pressed={selected}
               className={`flex items-center gap-4 rounded-2xl border-2 p-4 text-left transition-all duration-150 ${
                 selected
                   ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
@@ -416,7 +661,17 @@ function Step1({
               >
                 <Icon className={`h-6 w-6 ${selected ? 'text-white dark:text-black' : color}`} />
               </div>
-              <span className="font-semibold">{label}</span>
+              <div className="min-w-0">
+                <span className="font-semibold">{label}</span>
+                {selected && (
+                  <p
+                    data-testid={rank === 0 ? 'primary-goal-badge' : undefined}
+                    className="mt-0.5 text-[10px] font-bold uppercase tracking-widest opacity-70"
+                  >
+                    {rank === 0 ? 'Primary' : `Also #${rank + 1}`}
+                  </p>
+                )}
+              </div>
               {selected && (
                 <Check className="ml-auto h-5 w-5 shrink-0 text-white dark:text-black" />
               )}
@@ -424,6 +679,14 @@ function Step1({
           )
         })}
       </div>
+
+      {goals.length >= MAX_GOALS && (
+        <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
+          That&apos;s {MAX_GOALS} — tapping another swaps out your last pick.
+        </p>
+      )}
+
+      <RecommendationCard rec={rec} loading={recLoading} />
     </div>
   )
 }
@@ -449,7 +712,8 @@ function Step2({
         Your background
       </h1>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        Both fields are optional — tap &quot;Skip for now&quot; if you prefer.
+        This sets the difficulty of the program we match you with, and how active
+        we assume you are when we work out your calories.
       </p>
 
       {/* Experience level */}
@@ -464,6 +728,7 @@ function Step2({
               <button
                 key={value}
                 onClick={() => onExperienceChange(value)}
+                data-testid={`experience-${value}`}
                 className={`rounded-xl border-2 p-4 text-left transition-all duration-150 ${
                   selected
                     ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
@@ -494,7 +759,10 @@ function Step2({
           >
             −
           </button>
-          <span className="w-8 text-center text-2xl font-bold text-zinc-900 dark:text-white">
+          <span
+            data-testid="weekly-availability"
+            className="w-8 text-center text-2xl font-bold text-zinc-900 dark:text-white"
+          >
             {days}
           </span>
           <button
@@ -507,6 +775,9 @@ function Step2({
           </button>
           <span className="text-sm text-zinc-500 dark:text-zinc-400">days / week</span>
         </div>
+        <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
+          We&apos;ll only recommend programs that fit inside {days} day{days === 1 ? '' : 's'} a week.
+        </p>
       </div>
     </div>
   )
@@ -531,17 +802,23 @@ function lbsToKg(lbs: number): number {
   return Math.round(lbs / 2.20462 * 10) / 10
 }
 
-// ── Step 3 — Body Stats ───────────────────────────────────────────────────────
+// ── Step 3 — Body stats + calorie direction ───────────────────────────────────
 
 function Step3({
   profile,
+  direction,
+  targets,
   onChange,
+  onDirectionChange,
 }: {
   profile: ProfileData
+  direction: NutritionDirection
+  targets: ReturnType<typeof computeNutritionTargets>
   onChange: (updates: Partial<ProfileData>) => void
+  onDirectionChange: (d: NutritionDirection) => void
 }) {
-  const showTargetWeight =
-    profile.fitnessGoal === 'lose_weight' || profile.fitnessGoal === 'gain_muscle'
+  // A target weight only makes sense when you're trying to move the number.
+  const showTargetWeight = direction !== 'maintain'
 
   const [useImperial, setUseImperial] = useState(true)
 
@@ -624,6 +901,14 @@ function Step3({
 
   const inputCls = "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
 
+  // What's still missing before we can compute an honest TDEE.
+  const missing = [
+    !profile.age && 'age',
+    !profile.heightCm && 'height',
+    !profile.currentWeightKg && 'weight',
+    (!profile.biologicalSex || profile.biologicalSex === 'prefer_not_to_say') && 'biological sex',
+  ].filter(Boolean) as string[]
+
   return (
     <div>
       <div className="flex items-start justify-between">
@@ -632,7 +917,8 @@ function Step3({
             Body stats
           </h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            All fields are optional — we use these to tailor recommendations.
+            These four numbers are what your daily calories and macros are built
+            from. Nothing here is shared.
           </p>
         </div>
         {/* Unit toggle */}
@@ -671,6 +957,7 @@ function Step3({
               min={10}
               max={100}
               placeholder="e.g. 28"
+              data-testid="stat-age"
               value={profile.age ?? ''}
               onChange={(e) => onChange({ age: e.target.value ? Number(e.target.value) : undefined })}
               className={inputCls}
@@ -683,12 +970,14 @@ function Step3({
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input type="number" inputMode="numeric" min={3} max={8} placeholder="5"
+                    data-testid="stat-height-ft"
                     value={heightFt} onChange={(e) => handleHeightChange(e.target.value, heightIn)}
                     className={inputCls} />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">ft</span>
                 </div>
                 <div className="relative flex-1">
                   <input type="number" inputMode="numeric" min={0} max={11} placeholder="10"
+                    data-testid="stat-height-in"
                     value={heightIn} onChange={(e) => handleHeightChange(heightFt, e.target.value)}
                     className={inputCls} />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">in</span>
@@ -697,6 +986,7 @@ function Step3({
             ) : (
               <div className="relative">
                 <input type="number" inputMode="numeric" min={100} max={250} placeholder="e.g. 175"
+                  data-testid="stat-height-cm"
                   value={heightCmDisplay} onChange={(e) => handleHeightCmChange(e.target.value)}
                   className={inputCls} />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">cm</span>
@@ -713,6 +1003,7 @@ function Step3({
               const selected = profile.biologicalSex === value
               return (
                 <button key={value} onClick={() => onChange({ biologicalSex: value })}
+                  data-testid={`sex-${value}`}
                   className={`flex-1 rounded-xl border-2 py-2.5 text-xs font-semibold transition-all duration-150 ${
                     selected
                       ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
@@ -723,6 +1014,10 @@ function Step3({
               )
             })}
           </div>
+          <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+            The Mifflin-St Jeor equation needs this. Choosing &quot;prefer not to say&quot;
+            means we can&apos;t calculate your calories automatically.
+          </p>
         </div>
 
         {/* Weight fields */}
@@ -734,6 +1029,7 @@ function Step3({
             <div className="relative">
               <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
                 placeholder={useImperial ? 'e.g. 185' : 'e.g. 84'}
+                data-testid="stat-current-weight"
                 value={useImperial ? currentLbs : currentKgDisplay}
                 onChange={(e) => handleCurrentWeightChange(e.target.value)}
                 className={inputCls} />
@@ -751,6 +1047,7 @@ function Step3({
               <div className="relative">
                 <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
                   placeholder={useImperial ? 'e.g. 165' : 'e.g. 75'}
+                  data-testid="stat-target-weight"
                   value={useImperial ? targetLbs : targetKgDisplay}
                   onChange={(e) => handleTargetWeightChange(e.target.value)}
                   className={inputCls} />
@@ -761,6 +1058,87 @@ function Step3({
             </div>
           )}
         </div>
+
+        {/* ── Calorie direction ─────────────────────────────────────────── */}
+        <div className="pt-2">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Which way are you eating?
+          </label>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Pre-set from your primary goal — change it if you disagree.
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {DIRECTION_OPTIONS.map(({ value, label, sub, Icon }) => {
+              const selected = direction === value
+              return (
+                <button
+                  key={value}
+                  onClick={() => onDirectionChange(value)}
+                  data-testid={`direction-${value}`}
+                  aria-pressed={selected}
+                  className={`rounded-xl border-2 p-3 text-left transition-all duration-150 ${
+                    selected
+                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <p className="mt-1.5 text-xs font-semibold leading-tight">{label}</p>
+                  <p className={`mt-0.5 text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    {sub}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Live TDEE preview ─────────────────────────────────────────── */}
+        {targets ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            data-testid="tdee-preview"
+            className="rounded-2xl border-2 border-zinc-900 bg-white p-4 dark:border-white dark:bg-zinc-900"
+          >
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-zinc-900 dark:text-white" />
+              <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-900 dark:text-white">
+                Your daily targets
+              </p>
+            </div>
+            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">
+              <span data-testid="preview-calories">{targets.calories.toLocaleString()}</span>
+              <span className="text-sm font-normal text-zinc-500"> cal / day</span>
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
+                <p data-testid="preview-protein" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.protein}g</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
+              </div>
+              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
+                <p data-testid="preview-carbs" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.carbs}g</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
+              </div>
+              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
+                <p data-testid="preview-fats" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.fats}g</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              Your TDEE is about <span className="font-semibold text-zinc-700 dark:text-zinc-200">{targets.tdee.toLocaleString()} cal</span>.
+              We applied {DIRECTION_EXPLANATION[targets.direction]}.
+            </p>
+          </motion.div>
+        ) : (
+          <div
+            data-testid="tdee-incomplete"
+            className="rounded-2xl border border-dashed border-zinc-300 p-4 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+          >
+            Add your {missing.join(', ')} and we&apos;ll calculate your calories and
+            macros right here — before you ever open the nutrition tab.
+          </div>
+        )}
       </div>
     </div>
   )
@@ -805,7 +1183,8 @@ function Step4({
         Equipment &amp; injuries
       </h1>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        Tell us what you have access to and any areas to work around.
+        We won&apos;t recommend a barbell program to someone training in a living
+        room. Tell us what you actually have.
       </p>
 
       {/* Equipment chips */}
@@ -820,6 +1199,8 @@ function Step4({
               <button
                 key={value}
                 onClick={() => toggleEquipment(value)}
+                data-testid={`equipment-${value}`}
+                aria-pressed={selected}
                 className={`rounded-full border-2 px-4 py-2 text-sm font-medium transition-all duration-150 ${
                   selected
                     ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
@@ -841,10 +1222,202 @@ function Step4({
         <textarea
           rows={4}
           placeholder="Any injuries or areas to avoid? (optional)"
+          data-testid="injury-notes"
           value={injuryNotes}
           onChange={(e) => onInjuryNotesChange(e.target.value)}
           className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
         />
+      </div>
+    </div>
+  )
+}
+
+// ── Step 5 — Review ───────────────────────────────────────────────────────────
+
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-1.5">
+      <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">{label}</span>
+      <span className="text-right text-sm font-medium text-zinc-900 dark:text-white">{value}</span>
+    </div>
+  )
+}
+
+function ReviewSection({
+  title,
+  step,
+  onEdit,
+  children,
+  why,
+}: {
+  title: string
+  step: number
+  onEdit: (s: number) => void
+  children: React.ReactNode
+  why?: string
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-zinc-900 dark:text-white">{title}</h2>
+        <button
+          onClick={() => onEdit(step)}
+          data-testid={`review-edit-${step}`}
+          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
+        >
+          <Pencil className="h-3 w-3" />
+          Edit
+        </button>
+      </div>
+      <div className="mt-1 divide-y divide-zinc-100 dark:divide-zinc-800">{children}</div>
+      {why && (
+        <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] leading-relaxed text-zinc-500 dark:bg-zinc-800/60 dark:text-zinc-400">
+          {why}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function Step5Review({
+  profile,
+  goals,
+  direction,
+  targets,
+  rec,
+  onEdit,
+}: {
+  profile: ProfileData
+  goals: FitnessGoal[]
+  direction: NutritionDirection
+  targets: ReturnType<typeof computeNutritionTargets>
+  rec: Recommendation | null
+  onEdit: (s: number) => void
+}) {
+  const unit = profile.weightUnit ?? 'lbs'
+  const showWeight = (kg?: number) =>
+    kg ? (unit === 'lbs' ? `${kgToLbs(kg)} lbs` : `${kg} kg`) : '—'
+
+  const days = profile.weeklyAvailability ?? 3
+  const activity = activityFromTrainingDays(profile.weeklyAvailability)
+
+  return (
+    <div data-testid="review-step">
+      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
+        Here&apos;s what we heard
+      </h1>
+      <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+        Everything below shapes what the app does for you. Edit anything that
+        isn&apos;t right, then finish.
+      </p>
+
+      <div className="mt-6 space-y-3">
+        {/* Goals */}
+        <ReviewSection
+          title="Your goals"
+          step={1}
+          onEdit={onEdit}
+          why={
+            goals.length > 1
+              ? `Your primary goal (${GOAL_LABEL[goals[0]]}) drives your program match and dashboard. Your other ${goals.length - 1} goal${goals.length > 2 ? 's' : ''} still shift which programs we rank highest.`
+              : goals.length === 1
+                ? `${GOAL_LABEL[goals[0]]} drives your program match, your calorie direction and your dashboard.`
+                : undefined
+          }
+        >
+          {goals.length === 0 ? (
+            <ReviewRow label="Goals" value="Not set" />
+          ) : (
+            goals.map((g, i) => (
+              <ReviewRow key={g} label={i === 0 ? 'Primary' : `Also #${i + 1}`} value={GOAL_LABEL[g]} />
+            ))
+          )}
+        </ReviewSection>
+
+        {/* Training */}
+        <ReviewSection
+          title="Training"
+          step={2}
+          onEdit={onEdit}
+          why={`We treat ${days} sessions a week as "${activity.replace('_', ' ')}" when calculating your calories, and we only surface programs that fit that schedule.`}
+        >
+          <ReviewRow
+            label="Experience"
+            value={profile.experienceLevel
+              ? profile.experienceLevel[0].toUpperCase() + profile.experienceLevel.slice(1)
+              : 'Not set'}
+          />
+          <ReviewRow label="Days / week" value={String(days)} />
+        </ReviewSection>
+
+        {/* Body + nutrition */}
+        <ReviewSection
+          title="Body & nutrition"
+          step={3}
+          onEdit={onEdit}
+          why={
+            targets
+              ? `Mifflin-St Jeor puts your TDEE at ~${targets.tdee.toLocaleString()} cal. We applied ${DIRECTION_EXPLANATION[targets.direction]}. These land in your nutrition tab the moment you finish — no setup needed.`
+              : 'Add your age, height, weight and biological sex and we can calculate your calories automatically instead of using generic defaults.'
+          }
+        >
+          <ReviewRow label="Age" value={profile.age ? String(profile.age) : '—'} />
+          <ReviewRow
+            label="Height"
+            value={profile.heightCm
+              ? unit === 'lbs'
+                ? `${cmToImperial(profile.heightCm).ft}'${cmToImperial(profile.heightCm).inches}"`
+                : `${profile.heightCm} cm`
+              : '—'}
+          />
+          <ReviewRow label="Current weight" value={showWeight(profile.currentWeightKg)} />
+          {direction !== 'maintain' && (
+            <ReviewRow label="Target weight" value={showWeight(profile.targetWeightKg)} />
+          )}
+          <ReviewRow
+            label="Eating"
+            value={direction === 'lose' ? 'Calorie deficit' : direction === 'gain' ? 'Calorie surplus' : 'Maintenance'}
+          />
+          {targets && (
+            <>
+              <ReviewRow label="Daily calories" value={`${targets.calories.toLocaleString()} cal`} />
+              <ReviewRow
+                label="Macros"
+                value={`${targets.protein}p / ${targets.carbs}c / ${targets.fats}f`}
+              />
+            </>
+          )}
+        </ReviewSection>
+
+        {/* Equipment */}
+        <ReviewSection
+          title="Equipment & injuries"
+          step={4}
+          onEdit={onEdit}
+          why="Programs that need gear you don't have get pushed down your recommendations, and your injury notes ride along with your coach's view of your account."
+        >
+          <ReviewRow
+            label="Equipment"
+            value={profile.equipmentAccess?.length
+              ? profile.equipmentAccess
+                  .map((e) => EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ?? e)
+                  .join(', ')
+              : 'Not set'}
+          />
+          <ReviewRow label="Injury notes" value={profile.injuryNotes?.trim() ? profile.injuryNotes.trim() : 'None'} />
+        </ReviewSection>
+
+        {/* Program match */}
+        {rec && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Your program match</h2>
+            <RecommendationCard rec={rec} loading={false} compact />
+            <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+              You&apos;ll be able to start this from your dashboard — or browse the
+              full catalog if you&apos;d rather pick your own.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
