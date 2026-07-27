@@ -27,11 +27,24 @@
 import { test, expect, Page } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
-import { BASE_URL } from './test-auth'
+import { BASE_URL, E2E_USER, resetOnboarding, signToken } from './test-auth'
 
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots')
 
-let e2eToken = ''
+const e2eToken = signToken(E2E_USER.id, E2E_USER.email)
+
+/** The old hardcoded API defaults — the exact numbers members used to be stuck
+ *  with. Seeded before the run so the assertions prove onboarding overwrote
+ *  them rather than merely finding a doc that happened to be there. */
+const STALE_DEFAULTS = {
+  calories: 2000,
+  protein: 150,
+  carbs: 200,
+  fats: 65,
+  waterGoal: 96,
+  goalType: 'maintain',
+  activityLevel: 'moderate',
+}
 
 // ─── The reference member ─────────────────────────────────────────────────────
 // 30 y/o male, 5'10", 185 lb, training 4 days a week.
@@ -56,16 +69,21 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, `onboarding-audit--${name}.png`), fullPage: true })
 }
 
-/** Reset the e2e user: clears onboarding, profile AND saved nutrition goals. */
+/**
+ * Put the e2e user back to pre-onboarding, then plant the OLD default macros so
+ * the run reproduces the reported bug exactly: a member who lands on generic
+ * 2000/150/200/65 targets and has to open the goals page to fix them.
+ */
 test.beforeAll(async () => {
-  const res = await fetch(`${BASE_URL}/api/admin/e2e-setup`, {
+  await resetOnboarding(E2E_USER.id)
+
+  const seed = await fetch(`${BASE_URL}/api/nutrition/goals`, {
     method: 'POST',
-    headers: { 'x-bootstrap-token': process.env.BOOTSTRAP_TOKEN || '' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${e2eToken}` },
+    body: JSON.stringify(STALE_DEFAULTS),
   })
-  if (!res.ok) throw new Error(`e2e-setup failed (${res.status}): ${await res.text()}`)
-  const data = (await res.json()) as { token: string; userId: string }
-  e2eToken = data.token
-  console.log(`[setup] fresh e2e user ${data.userId}`)
+  expect(seed.ok, 'must be able to plant the stale defaults').toBeTruthy()
+  console.log(`[setup] e2e user ${E2E_USER.id} reset with stale default macros planted`)
 })
 
 async function startOnboarding(page: Page, context: import('@playwright/test').BrowserContext) {
@@ -176,7 +194,7 @@ test.describe('Onboarding audit', () => {
     // the nutrition goals page, no Save press.
     const preview = page.getByTestId('tdee-preview')
     await expect(preview).toBeVisible()
-    await expect(preview).toContainText(String(EXPECTED_TDEE))
+    await expect(preview).toContainText(EXPECTED_TDEE.toLocaleString())
     await expect(page.getByTestId('preview-calories')).toHaveText(EXPECTED.lose.calories.toLocaleString())
     await expect(page.getByTestId('preview-protein')).toHaveText(`${EXPECTED.lose.protein}g`)
     await expect(page.getByTestId('preview-carbs')).toHaveText(`${EXPECTED.lose.carbs}g`)
@@ -256,8 +274,11 @@ test.describe('Onboarding audit', () => {
     expect(goals.protein).toBe(EXPECTED.lose.protein)
     expect(goals.carbs).toBe(EXPECTED.lose.carbs)
     expect(goals.fats).toBe(EXPECTED.lose.fats)
-    // Explicitly NOT the old hardcoded defaults.
-    expect(goals.calories).not.toBe(2000)
+    // The stale defaults planted in beforeAll must be GONE. Under the old code
+    // the seed threw on the enum validator and these survived untouched.
+    expect(goals.calories).not.toBe(STALE_DEFAULTS.calories)
+    expect(goals.protein).not.toBe(STALE_DEFAULTS.protein)
+    expect(goals.goalType).not.toBe(STALE_DEFAULTS.goalType)
 
     // The profile keeps the full ordered goal set, with the primary mirrored.
     const profileRes = await fetch(`${BASE_URL}/api/profile`, {

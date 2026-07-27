@@ -236,6 +236,23 @@ describe('programMatch', () => {
     assert.ok(reasons.some(r => r.includes('5 days a week')))
   })
 
+  it('orders reasons so the top 3 shown by the UI carry the most weight', () => {
+    // The card renders reasons.slice(0, 3). "You can do this with what you own"
+    // must survive that cut — it beat "pitched at your level" to the slot.
+    const { reasons } = scoreProgram(CATALOG[2], {
+      goals: ['lose_weight', 'gain_muscle'],
+      experienceLevel: 'intermediate',
+      weeklyAvailability: 4,
+      equipmentAccess: ['none'],
+    })
+    const shown = reasons.slice(0, 3)
+    assert.ok(
+      shown.some(r => /no equipment needed/i.test(r)),
+      `equipment fit must make the top 3, got: ${shown.join(' | ')}`
+    )
+    assert.match(reasons[0], /primary goal/i)
+  })
+
   it('is deterministic — the same answers always yield the same top pick', () => {
     const input = { goals: ['general_health'] as FitnessGoal[], weeklyAvailability: 4 }
     const runs = new Set(Array.from({ length: 5 }, () => top(input)))

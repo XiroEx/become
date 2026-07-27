@@ -49,7 +49,50 @@ export const AUTH_TOKEN: string = jwt.sign(
   // deliberately no expiresIn
 )
 
+/**
+ * The dedicated end-to-end account. Destructive fixtures (resetting onboarding,
+ * overwriting nutrition goals) must target THIS user and never a real member.
+ */
+export const E2E_USER = {
+  id: '69ee5d9a0a303c1b8a6f4457',
+  email: 'e2etest@become.io',
+  role: 'user' as const,
+}
+
 export const BASE_URL = 'https://become.redbtn.io'
+
+/** Mint a non-expiring token for an arbitrary test user. */
+export function signToken(userId: string, email: string, role = 'user'): string {
+  return jwt.sign({ userId, email, role }, JWT_SECRET)
+}
+
+/**
+ * Put a user back to the pre-onboarding state.
+ *
+ * Prefers /api/admin/e2e-setup (full reset incl. progress + nutrition goals)
+ * when BOOTSTRAP_TOKEN is available; otherwise falls back to the admin-key
+ * reset endpoint, which only flips onboardingCompleted. The secret never
+ * leaves this module.
+ */
+export async function resetOnboarding(userId: string): Promise<void> {
+  const bootstrap = process.env.BOOTSTRAP_TOKEN
+  if (bootstrap) {
+    const res = await fetch(`${BASE_URL}/api/admin/e2e-setup`, {
+      method: 'POST',
+      headers: { 'x-bootstrap-token': bootstrap },
+    })
+    if (res.ok) return
+  }
+
+  const res = await fetch(`${BASE_URL}/api/admin/reset-onboarding`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': JWT_SECRET },
+    body: JSON.stringify({ userId }),
+  })
+  if (!res.ok) {
+    throw new Error(`reset-onboarding failed (${res.status}): ${await res.text()}`)
+  }
+}
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────
 
