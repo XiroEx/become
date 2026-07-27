@@ -14,6 +14,9 @@
  *      every new member on the 2000/150/200/65 defaults until they opened the
  *      nutrition goals page and pressed Save.
  *   4. The review step lists every answer and can jump back to edit it.
+ *   5. Onboarding and the nutrition goals page agree to the calorie — the two
+ *      screens used to convert lbs→kg differently (0.1 kg rounding vs none), so
+ *      a 210 lb member was shown 2,910 on one screen and 2,909 on the other.
  *
  * Prerequisites:
  *   - webapp/.env.local with JWT_SECRET
@@ -49,20 +52,36 @@ const STALE_DEFAULTS = {
 // ─── The reference member ─────────────────────────────────────────────────────
 // 30 y/o male, 5'10", 185 lb, training 4 days a week.
 // Expected numbers are computed BY HAND here rather than imported from
-// lib/nutrition/tdee so the test genuinely checks the math:
-//   185 lb                        → 83.9 kg  (round(185 / 2.20462 * 10) / 10)
-//   5'10"                         → 178 cm   (round(70 * 2.54))
-//   BMR  = 10(83.9) + 6.25(178) − 5(30) + 5   = 1806.5
-//   TDEE = 1806.5 × 1.55 (moderate: 3-4 days) = 2800
+// lib/nutrition/tdee so the test genuinely checks the math.
+//
+// Conversions are EXACT — no rounding until render. Rounding 185 lb to 83.9 kg
+// and 5'10" to 178 cm (what the app used to do) inflated this member's TDEE by
+// 2 cal and, worse, produced a different answer on each screen depending on
+// which rounding that screen happened to use.
+//   185 lb                        → 83.9146 kg (185 / 2.20462)
+//   5'10"                         → 177.8 cm   (70 × 2.54)
+//   BMR  = 10(83.9146) + 6.25(177.8) − 5(30) + 5 = 1805.40
+//   TDEE = 1805.40 × 1.55 (moderate: 3-4 days)   = 2798
 const MEMBER = { age: 30, heightFt: 5, heightIn: 10, weightLbs: 185, days: 4 }
-const EXPECTED_TDEE = 2800
+const EXPECTED_TDEE = 2798
 const EXPECTED = {
-  lose: { calories: 2300, protein: 185, carbs: 246, fats: 64 },
-  // gain: 2800 + 300 = 3100; protein 184.97 × 0.9 = 166;
-  // fats round(3100 × .25 / 9) = 86; carbs (3100 − 664 − 774) / 4 = 416
-  gain: { calories: 3100, protein: 166, carbs: 416, fats: 86 },
-  maintain: { calories: 2800 },
+  lose: { calories: 2298, protein: 185, carbs: 246, fats: 64 },
+  // gain: 2798 + 300 = 3098; protein 185 × 0.9 = 167;
+  // fats round(3098 × .25 / 9) = 86; carbs (3098 − 668 − 774) / 4 = 414
+  gain: { calories: 3098, protein: 167, carbs: 414, fats: 86 },
+  maintain: { calories: 2798 },
 }
+
+// ─── The parity member ────────────────────────────────────────────────────────
+// The profile that exposed the cross-screen drift: 25 y/o male, 6'0", 210 lb,
+// 5 days a week, cutting. 6'0" is 182.88 cm exactly and 210 lb is 95.2544 kg —
+// both land mid-rounding-step, which is precisely why this member disagreed
+// across screens and the 185 lb one above did not.
+//   BMR  = 10(95.2544) + 6.25(182.88) − 5(25) + 5 = 1975.54
+//   TDEE = 1975.54 × 1.725 (active: 5 days)       = 3408
+const PARITY_MEMBER = { age: 25, heightFt: 6, heightIn: 0, weightLbs: 210, days: 5 }
+const PARITY_TDEE = 3408
+const PARITY_CALORIES = 2908
 
 async function shot(page: Page, name: string) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })
@@ -93,7 +112,7 @@ async function startOnboarding(page: Page, context: import('@playwright/test').B
     domain: new URL(BASE_URL).hostname,
     path: '/',
     httpOnly: false,
-    secure: true,
+    secure: BASE_URL.startsWith('https'),
     sameSite: 'Lax',
   }])
   await page.goto(`${BASE_URL}/login`)
@@ -300,7 +319,7 @@ test.describe('Onboarding audit', () => {
       domain: new URL(BASE_URL).hostname,
       path: '/',
       httpOnly: false,
-      secure: true,
+      secure: BASE_URL.startsWith('https'),
       sameSite: 'Lax',
     }])
     await page.goto(`${BASE_URL}/login`)
@@ -315,5 +334,61 @@ test.describe('Onboarding audit', () => {
     await expect(calories).toHaveValue(String(EXPECTED.lose.calories))
     await expect(page.getByText(`${EXPECTED_TDEE}`, { exact: false }).first()).toBeVisible()
     await shot(page, '07-nutrition-goals-page')
+  })
+
+  test('onboarding and the goals page agree to the calorie for a member whose weight lands mid-rounding-step', async ({ page, context }) => {
+    // The 185 lb member above rounds to the same numbers under either
+    // conversion, which is exactly why the drift survived that test. 210 lb at
+    // 6'0" does not: the old code showed 2,910 in onboarding and 2,909 here.
+    await resetOnboarding(E2E_USER.id)
+    await startOnboarding(page, context)
+
+    // ── Goals → Background → Body stats ─────────────────────────────────
+    await page.getByTestId('goal-lose_weight').click()
+    await page.getByTestId('onboarding-next').click()
+
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 5')
+    await page.getByTestId('experience-intermediate').click()
+    const days = page.getByTestId('weekly-availability')
+    await expect(days).toHaveText('3')
+    await page.getByRole('button', { name: 'Increase days' }).click()
+    await page.getByRole('button', { name: 'Increase days' }).click()
+    await expect(days).toHaveText(String(PARITY_MEMBER.days))
+    await page.getByTestId('onboarding-next').click()
+
+    await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 3 of 5')
+    await page.getByTestId('stat-age').fill(String(PARITY_MEMBER.age))
+    await page.getByTestId('stat-height-ft').fill(String(PARITY_MEMBER.heightFt))
+    await page.getByTestId('stat-height-in').fill(String(PARITY_MEMBER.heightIn))
+    await page.getByTestId('sex-male').click()
+    await page.getByTestId('stat-current-weight').fill(String(PARITY_MEMBER.weightLbs))
+
+    await expect(page.getByTestId('direction-lose')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('tdee-preview')).toContainText(PARITY_TDEE.toLocaleString())
+    await expect(page.getByTestId('preview-calories')).toHaveText(PARITY_CALORIES.toLocaleString())
+
+    // Finish so the numbers are persisted exactly as previewed.
+    await page.getByTestId('onboarding-next').click()   // → equipment
+    await page.getByTestId('onboarding-next').click()   // → review
+    await page.getByTestId('onboarding-finish').click()
+    await page.waitForURL(/\/dashboard/, { timeout: 60_000 })
+
+    const saved = await fetchGoals()
+    expect(saved.calories, 'persisted calories must match the preview').toBe(PARITY_CALORIES)
+
+    // ── The parity assertion ────────────────────────────────────────────
+    // Same member, other screen, same number — including the TDEE the
+    // Recalculate button offers, which recomputes rather than reading storage.
+    await page.goto(`${BASE_URL}/dashboard/nutrition/goals`)
+    await expect(page.getByRole('heading', { name: 'Nutrition Goals' })).toBeVisible()
+    await expect(page.locator('input[type="number"]').first()).toHaveValue(String(PARITY_CALORIES))
+    await expect(page.getByRole('button', { name: /Recalculate from TDEE/i }))
+      .toContainText(`${PARITY_CALORIES} cal`)
+
+    // And the calorie direction is described identically on both screens —
+    // this page used to call the surplus "Gain Muscle" while onboarding called
+    // the same +300 "Gain Weight".
+    await expect(page.getByText('Gain Weight', { exact: false }).first()).toBeVisible()
+    await shot(page, '08-cross-screen-parity')
   })
 })
