@@ -61,9 +61,16 @@ export const E2E_USER = {
 
 export const BASE_URL = 'https://become.redbtn.io'
 
-/** Mint a non-expiring token for an arbitrary test user. */
+/**
+ * Mint a token for an arbitrary test user.
+ *
+ * MUST carry an `exp` claim: AuthGuard reads `(payload.exp ?? 0) * 1000` and so
+ * treats an expiry-less token as expired, wiping it from localStorage and
+ * bouncing to /login. Real tokens are always issued with 7d, so this matches
+ * production shape rather than working around anything.
+ */
 export function signToken(userId: string, email: string, role = 'user'): string {
-  return jwt.sign({ userId, email, role }, JWT_SECRET)
+  return jwt.sign({ userId, email, role }, JWT_SECRET, { expiresIn: '7d' })
 }
 
 /**

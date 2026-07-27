@@ -253,6 +253,27 @@ describe('programMatch', () => {
     assert.match(reasons[0], /primary goal/i)
   })
 
+  it('grades goal fit by tags rather than incidental blurb wording', () => {
+    // "No Excuses" only mentions "functional strength" in prose; the Jon Don
+    // Split is TAGGED for hypertrophy and muscle building. Binary matching
+    // scored both identically, which is what made a goal swap change nothing.
+    const tagged = scoreProgram(CATALOG[1], { goals: ['gain_muscle'] })
+    const incidental = scoreProgram(CATALOG[2], { goals: ['gain_muscle'] })
+    assert.ok(
+      tagged.score > incidental.score * 2,
+      `tagged ${tagged.score} should decisively beat incidental ${incidental.score}`
+    )
+    // …and we don't claim the incidental one "supports your build muscle goal".
+    assert.ok(!incidental.reasons.some(r => /build muscle/i.test(r)))
+  })
+
+  it('changes the top pick when the primary goal changes, with goals alone', () => {
+    // The goal step asks for a recommendation before anything else is known.
+    const forFatLoss = top({ goals: ['lose_weight'] })
+    const forMuscle = top({ goals: ['gain_muscle'] })
+    assert.notEqual(forFatLoss, forMuscle)
+  })
+
   it('is deterministic — the same answers always yield the same top pick', () => {
     const input = { goals: ['general_health'] as FitnessGoal[], weeklyAvailability: 4 }
     const runs = new Set(Array.from({ length: 5 }, () => top(input)))
