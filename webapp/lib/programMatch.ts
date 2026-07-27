@@ -109,7 +109,13 @@ function programEquipmentTier(hay: string): EquipmentTier {
 
 export function scoreProgram(program: ProgramLike, input: MatchInput): { score: number; reasons: string[] } {
   const hay = haystack(program)
-  const reasons: string[] = []
+  // Reasons are assembled at the end in priority order, because the UI only has
+  // room for the top few. "You can actually do this with what you own" matters
+  // more to a member than "this is pitched at your level".
+  const goalReasons: string[] = []
+  let equipmentReason: string | undefined
+  let daysReason: string | undefined
+  let levelReason: string | undefined
   let score = 0
 
   // ── Goals ───────────────────────────────────────────────────────────────
@@ -117,7 +123,7 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
   goals.slice(0, GOAL_WEIGHTS.length).forEach((goal, i) => {
     if (matchesAny(hay, GOAL_KEYWORDS[goal])) {
       score += GOAL_WEIGHTS[i]
-      reasons.push(
+      goalReasons.push(
         i === 0
           ? `Built around your primary goal: ${GOAL_LABELS[goal]}`
           : `Also supports your ${GOAL_LABELS[goal].toLowerCase()} goal`
@@ -130,7 +136,7 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
   if (input.experienceLevel && target) {
     if (target.includes(input.experienceLevel)) {
       score += 15
-      reasons.push(`Pitched at your ${input.experienceLevel} level`)
+      levelReason = `Pitched at your ${input.experienceLevel} level`
     } else {
       // "Beginner to Intermediate" is adjacent to advanced, etc.
       const order: ExperienceLevel[] = ['beginner', 'intermediate', 'advanced']
@@ -147,11 +153,11 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
     const diff = needed - available
     if (diff === 0) {
       score += 18
-      reasons.push(`Fits your ${available} days a week exactly`)
+      daysReason = `Fits your ${available} days a week exactly`
     } else if (diff < 0) {
       // Fewer sessions than you have time for — fine, mild preference cost.
       score += Math.abs(diff) === 1 ? 11 : 5
-      if (Math.abs(diff) === 1) reasons.push(`${needed} days a week — fits inside your schedule`)
+      if (Math.abs(diff) === 1) daysReason = `${needed} days a week — fits inside your schedule`
     } else {
       // Needs MORE days than the member has. Penalise: it won't fit.
       score -= diff === 1 ? 6 : 18
@@ -167,22 +173,26 @@ export function scoreProgram(program: ProgramLike, input: MatchInput): { score: 
   if (has === 'none') {
     if (needs === 'none') {
       score += 22
-      reasons.push('No equipment needed — matches what you have access to')
+      equipmentReason = 'No equipment needed — matches what you have access to'
     } else {
       score -= needs === 'dumbbells' ? 18 : 30
     }
   } else if (has === 'dumbbells') {
     if (needs === 'dumbbells') {
       score += 18
-      reasons.push('Runs on dumbbells alone')
+      equipmentReason = 'Runs on dumbbells alone'
     } else if (needs === 'none') {
       score += 12
-      reasons.push('No equipment needed')
+      equipmentReason = 'No equipment needed'
     } else {
       score -= 12
     }
   }
   // A full gym runs everything — no adjustment either way.
+
+  const reasons = [...goalReasons, equipmentReason, daysReason, levelReason].filter(
+    (r): r is string => Boolean(r)
+  )
 
   return { score, reasons }
 }
