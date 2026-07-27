@@ -150,7 +150,10 @@ function useRecommendation(profile: ProfileData, enabled: boolean) {
 
     const timer = setTimeout(async () => {
       try {
-        const params = new URLSearchParams({ goals: goals.join(','), limit: '1' })
+        // profile=0 — rank on THIS session's answers only. Without it a member
+        // redoing onboarding gets ranked against the equipment/experience
+        // they're currently in the middle of replacing.
+        const params = new URLSearchParams({ goals: goals.join(','), limit: '1', profile: '0' })
         if (profile.experienceLevel) params.set('level', profile.experienceLevel)
         if (profile.weeklyAvailability) params.set('days', String(profile.weeklyAvailability))
         if (profile.equipmentAccess?.length) params.set('equipment', profile.equipmentAccess.join(','))

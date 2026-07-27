@@ -38,8 +38,13 @@ function csv<T extends string>(raw: string | null, valid: T[]): T[] | undefined 
  *   days=1..7
  *   equipment=none,dumbbells,...
  *   limit=1..10 (default 3)
+ *   profile=0  do NOT fall back to the saved profile
  *
- * Anything omitted falls back to the saved profile.
+ * Anything omitted falls back to the saved profile, EXCEPT when profile=0.
+ * The onboarding wizard passes profile=0 because it must rank on the answers
+ * given in THIS session only — otherwise a member redoing onboarding gets
+ * recommendations shaped by the equipment and experience they're in the middle
+ * of replacing, and the goal step looks like it's ignoring them.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -60,7 +65,8 @@ export async function GET(request: NextRequest) {
     let equipment = csv(sp.get('equipment'), VALID_EQUIPMENT)
 
     // Fall back to the saved profile for anything the caller didn't pass.
-    if (!goals || !level || !days || !equipment) {
+    const useProfile = sp.get('profile') !== '0'
+    if (useProfile && (!goals || !level || !days || !equipment)) {
       const user = await User.findById(authResult.userId).select('profile').lean()
       const profile = user?.profile
       if (profile) {
