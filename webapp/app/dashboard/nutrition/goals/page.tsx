@@ -1,13 +1,22 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { ArrowLeft, Save, Calculator } from 'lucide-react'
 import { Card } from '@/components/ui'
+import {
+  ACTIVITY_LABELS,
+  DIRECTION_ADJUSTMENT,
+  calcTdee,
+  computeNutritionTargets,
+  type ActivityLevel,
+  type NutritionDirection,
+} from '@/lib/nutrition/tdee'
+import type { FitnessGoal } from '@/lib/programMatch'
 
-type GoalType = 'lose' | 'maintain' | 'gain'
-type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
+/** Same three values as the NutritionGoal schema enum. */
+type GoalType = NutritionDirection
 
 interface NutritionGoals {
   calories: number
@@ -26,31 +35,19 @@ interface ProgressData {
   stats: { streakDays: number }
 }
 
-const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
-  sedentary: 'Sedentary',
-  light: 'Lightly Active',
-  moderate: 'Moderately Active',
-  active: 'Active',
-  very_active: 'Very Active'
-}
-
-const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
-  sedentary: 1.2,
-  light: 1.375,
-  moderate: 1.55,
-  active: 1.725,
-  very_active: 1.9
-}
-
 const GOAL_CARDS: { type: GoalType; label: string; description: string; adjustment: string }[] = [
   { type: 'lose', label: 'Lose Weight', description: 'Caloric deficit for fat loss', adjustment: 'TDEE - 500 cal' },
   { type: 'maintain', label: 'Maintain', description: 'Stay at current weight', adjustment: 'TDEE' },
   { type: 'gain', label: 'Gain Muscle', description: 'Caloric surplus for growth', adjustment: 'TDEE + 300 cal' }
 ]
 
-type MacroPreset = 'balanced' | 'high_protein' | 'low_carb' | 'custom'
+/** 'recommended' runs the same computeNutritionTargets() the onboarding wizard
+ *  uses, so recalculating here reproduces the numbers a member was shown when
+ *  they signed up instead of silently rewriting them with a % split. */
+type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
 
 const MACRO_PRESETS: { key: MacroPreset; label: string; protein: number; carbs: number; fats: number }[] = [
+  { key: 'recommended', label: 'Recommended (from your goal)', protein: 0, carbs: 0, fats: 0 },
   { key: 'balanced', label: 'Balanced (30/40/30)', protein: 30, carbs: 40, fats: 30 },
   { key: 'high_protein', label: 'High Protein (40/30/30)', protein: 40, carbs: 30, fats: 30 },
   { key: 'low_carb', label: 'Low Carb (35/25/40)', protein: 35, carbs: 25, fats: 40 },
@@ -74,11 +71,14 @@ export default function NutritionGoalsPage() {
   })
 
   const [goalsAreDefault, setGoalsAreDefault] = useState(false)
-  const [macroPreset, setMacroPreset] = useState<MacroPreset>('balanced')
+  // 'recommended' matches the onboarding wizard's math — the default so a
+  // member who never touches this screen keeps the numbers they were shown.
+  const [macroPreset, setMacroPreset] = useState<MacroPreset>('recommended')
   const [userWeight, setUserWeight] = useState<number | null>(null)   // lbs
   const [userHeightCm, setUserHeightCm] = useState<number | null>(null)
   const [userAge, setUserAge] = useState<number | null>(null)
   const [userSex, setUserSex] = useState<'male' | 'female' | null>(null)
+  const [userFitnessGoals, setUserFitnessGoals] = useState<FitnessGoal[]>([])
   // Manual overrides shown when profile data is missing
   const [manualAge, setManualAge] = useState('')
   const [manualSex, setManualSex] = useState<'male' | 'female' | ''>('')
@@ -86,24 +86,55 @@ export default function NutritionGoalsPage() {
   const [manualHeightIn, setManualHeightIn] = useState('')
   const [tdee, setTdee] = useState<number | null>(null)
 
-  const calculateTDEE = useCallback((weightKg: number, heightCm: number, age: number, sex: 'male' | 'female', activity: ActivityLevel): number => {
-    // Mifflin-St Jeor: male +5, female -161
-    const sexAdjust = sex === 'male' ? 5 : -161
-    const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexAdjust
-    return Math.round(bmr * ACTIVITY_MULTIPLIERS[activity])
-  }, [])
+  /** Profile values with the manual fallbacks folded in. */
+  const effectiveStats = useMemo(() => {
+    const age = userAge ?? (manualAge ? parseInt(manualAge) : null)
+    const sex = (userSex ?? (manualSex || null)) as 'male' | 'female' | null
+    const heightCm = userHeightCm ?? (
+      manualHeightFt
+        ? (parseInt(manualHeightFt) * 12 + parseInt(manualHeightIn || '0')) * 2.54
+        : null
+    )
+    return {
+      age: age ?? undefined,
+      biologicalSex: sex ?? undefined,
+      heightCm: heightCm ?? undefined,
+      currentWeightKg: userWeight ? userWeight * 0.453592 : undefined,
+    }
+  }, [userAge, userSex, userHeightCm, userWeight, manualAge, manualSex, manualHeightFt, manualHeightIn])
 
   const applyGoalAdjustment = useCallback((baseTdee: number, goalType: GoalType): number => {
-    switch (goalType) {
-      case 'lose': return baseTdee - 500
-      case 'gain': return baseTdee + 300
-      default: return baseTdee
-    }
+    return baseTdee + DIRECTION_ADJUSTMENT[goalType]
   }, [])
 
-  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number) => {
+  /**
+   * Writes calories + macros for a preset.
+   * 'recommended' defers to the shared computeNutritionTargets(); the
+   * percentage presets keep their historical behaviour.
+   */
+  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel) => {
+    if (preset === 'custom') return
+
+    if (preset === 'recommended') {
+      const targets = computeNutritionTargets({
+        ...effectiveStats,
+        goals: userFitnessGoals,
+        direction: goalType,
+        activityLevel: activity,
+      })
+      if (!targets) return
+      setGoals(prev => ({
+        ...prev,
+        calories: targets.calories,
+        protein: targets.protein,
+        carbs: targets.carbs,
+        fats: targets.fats
+      }))
+      return
+    }
+
     const found = MACRO_PRESETS.find(p => p.key === preset)
-    if (!found || preset === 'custom') return
+    if (!found) return
 
     const proteinGrams = Math.round((cals * (found.protein / 100)) / 4)
     const carbsGrams = Math.round((cals * (found.carbs / 100)) / 4)
@@ -116,7 +147,7 @@ export default function NutritionGoalsPage() {
       carbs: carbsGrams,
       fats: fatsGrams
     }))
-  }, [])
+  }, [effectiveStats, userFitnessGoals])
 
   useEffect(() => {
     async function fetchData() {
@@ -165,6 +196,13 @@ export default function NutritionGoalsPage() {
           if (profile.biologicalSex === 'male' || profile.biologicalSex === 'female') {
             setUserSex(profile.biologicalSex)
           }
+          // Goal set drives the protein target in the 'recommended' preset.
+          const goalSet: FitnessGoal[] = profile.fitnessGoals?.length
+            ? profile.fitnessGoals
+            : profile.fitnessGoal
+              ? [profile.fitnessGoal]
+              : []
+          setUserFitnessGoals(goalSet)
         }
       } catch (error) {
         console.error('Failed to fetch goals/progress:', error)
@@ -178,48 +216,33 @@ export default function NutritionGoalsPage() {
 
   // Recalculate TDEE whenever any body metric or activity level changes
   useEffect(() => {
-    const effectiveAge = userAge ?? (manualAge ? parseInt(manualAge) : null)
-    const effectiveSex = userSex ?? (manualSex || null) as 'male' | 'female' | null
-    const effectiveHeightCm = userHeightCm ?? (
-      manualHeightFt
-        ? (parseInt(manualHeightFt) * 12 + parseInt(manualHeightIn || '0')) * 2.54
-        : null
-    )
+    setTdee(calcTdee(effectiveStats, goals.activityLevel))
+  }, [effectiveStats, goals.activityLevel])
 
-    if (userWeight && effectiveHeightCm && effectiveAge && effectiveSex) {
-      const weightKg = userWeight * 0.453592
-      const calculatedTdee = calculateTDEE(weightKg, effectiveHeightCm, effectiveAge, effectiveSex, goals.activityLevel)
-      setTdee(calculatedTdee)
-    } else {
-      setTdee(null)
+  /** Single path for "recompute calories + macros" so goal, activity and
+   *  preset changes can never diverge from each other. */
+  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel) => {
+    if (!tdee) return
+    const adjustedCals = applyGoalAdjustment(tdee, goalType)
+    if (preset === 'custom') {
+      setGoals(prev => ({ ...prev, calories: adjustedCals }))
+      return
     }
-  }, [userWeight, userHeightCm, userAge, userSex, manualAge, manualSex, manualHeightFt, manualHeightIn, goals.activityLevel, calculateTDEE])
+    applyMacroPreset(preset, adjustedCals, goalType, activity)
+  }, [tdee, applyGoalAdjustment, applyMacroPreset])
 
   // Auto-apply TDEE on first load if user has never saved goals
   useEffect(() => {
     if (!tdee || loading) return
     if (goalsAreDefault) {
-      const adjustedCals = applyGoalAdjustment(tdee, goals.goalType)
-      if (macroPreset !== 'custom') {
-        applyMacroPreset(macroPreset, adjustedCals)
-      } else {
-        setGoals(prev => ({ ...prev, calories: adjustedCals }))
-      }
+      applyTargets(macroPreset, goals.goalType, goals.activityLevel)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tdee])
 
   const handleGoalTypeChange = (goalType: GoalType) => {
     setGoals(prev => ({ ...prev, goalType }))
-
-    if (tdee) {
-      const adjustedCals = applyGoalAdjustment(tdee, goalType)
-      if (macroPreset !== 'custom') {
-        applyMacroPreset(macroPreset, adjustedCals)
-      } else {
-        setGoals(prev => ({ ...prev, goalType, calories: adjustedCals }))
-      }
-    }
+    applyTargets(macroPreset, goalType, goals.activityLevel)
   }
 
   const handleActivityChange = (activityLevel: ActivityLevel) => {
@@ -227,19 +250,13 @@ export default function NutritionGoalsPage() {
   }
 
   const handleRecalculate = () => {
-    if (!tdee) return
-    const adjustedCals = applyGoalAdjustment(tdee, goals.goalType)
-    if (macroPreset !== 'custom') {
-      applyMacroPreset(macroPreset, adjustedCals)
-    } else {
-      setGoals(prev => ({ ...prev, calories: adjustedCals }))
-    }
+    applyTargets(macroPreset, goals.goalType, goals.activityLevel)
   }
 
   const handlePresetChange = (preset: MacroPreset) => {
     setMacroPreset(preset)
     if (preset !== 'custom') {
-      applyMacroPreset(preset, goals.calories)
+      applyMacroPreset(preset, goals.calories, goals.goalType, goals.activityLevel)
     }
   }
 

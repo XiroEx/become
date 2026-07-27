@@ -20,6 +20,8 @@ interface ProfileResponse {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+const MAX_FITNESS_GOALS = 3
+
 const FITNESS_GOALS: { value: FitnessGoal; label: string; description: string; icon: string }[] = [
   { value: 'lose_weight', label: 'Lose Weight', description: 'Burn fat and get leaner', icon: '🔥' },
   { value: 'gain_muscle', label: 'Gain Muscle', description: 'Build size and strength', icon: '💪' },
@@ -113,7 +115,9 @@ export default function SettingsPage() {
   // Form state
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
+  // Ordered goal set — index 0 is the primary goal. Kept as a list so editing
+  // here doesn't wipe the secondary goals picked during onboarding.
+  const [fitnessGoals, setFitnessGoals] = useState<FitnessGoal[]>([])
   const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | undefined>(undefined)
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(3)
   const [age, setAge] = useState<string>('')
@@ -161,7 +165,7 @@ export default function SettingsPage() {
       setName(data.name ?? '')
       setEmail(data.email ?? '')
       const p = data.profile ?? {}
-      setFitnessGoal(p.fitnessGoal)
+      setFitnessGoals(p.fitnessGoals?.length ? p.fitnessGoals : p.fitnessGoal ? [p.fitnessGoal] : [])
       setExperienceLevel(p.experienceLevel)
       setWeeklyAvailability(p.weeklyAvailability ?? 3)
       setAge(p.age !== undefined ? String(p.age) : '')
@@ -373,6 +377,18 @@ export default function SettingsPage() {
     return { storedHeightCm, storedWeightKg, storedTargetKg }
   }
 
+  /** Same ordered multi-select semantics as onboarding: first pick is primary,
+   *  tapping at the cap swaps out the least important pick. */
+  const toggleFitnessGoal = (goal: FitnessGoal) => {
+    setFitnessGoals(current => {
+      if (current.includes(goal)) return current.filter(g => g !== goal)
+      if (current.length >= MAX_FITNESS_GOALS) {
+        return [...current.slice(0, MAX_FITNESS_GOALS - 1), goal]
+      }
+      return [...current, goal]
+    })
+  }
+
   const handleSave = async () => {
     const token = getToken()
     if (!token) return
@@ -381,7 +397,9 @@ export default function SettingsPage() {
       const { storedHeightCm, storedWeightKg, storedTargetKg } = getStorageValues()
 
       const profile: Partial<IUserProfile> = {
-        ...(fitnessGoal !== undefined && { fitnessGoal }),
+        // fitnessGoal mirrors the primary so every existing consumer
+        // (dashboard, nudge modal, profile icon, AI context) keeps working.
+        ...(fitnessGoals.length > 0 && { fitnessGoal: fitnessGoals[0], fitnessGoals }),
         ...(experienceLevel !== undefined && { experienceLevel }),
         weeklyAvailability,
         ...(age !== '' && { age: Number(age) }),
@@ -671,34 +689,46 @@ export default function SettingsPage() {
         <>
           {/* Fitness Goal */}
           <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Fitness Goal</h2>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Fitness Goals</h2>
+            <p className="mb-4 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Pick up to {MAX_FITNESS_GOALS}. Your first pick is your primary goal — it drives
+              your program recommendations, your calorie direction and your dashboard.
+            </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {FITNESS_GOALS.map(goal => (
-                <button
-                  key={goal.value}
-                  onClick={() => setFitnessGoal(goal.value)}
-                  className={`flex items-center gap-3 rounded-xl border-2 p-3 text-left transition-all duration-150 ${
-                    fitnessGoal === goal.value
-                      ? 'border-green-500 bg-green-50 dark:border-green-500 dark:bg-green-900/20'
-                      : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
-                  }`}
-                >
-                  <span className="text-2xl">{goal.icon}</span>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-semibold ${fitnessGoal === goal.value ? 'text-green-700 dark:text-green-400' : 'text-zinc-900 dark:text-white'}`}>
-                      {goal.label}
-                    </p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{goal.description}</p>
-                  </div>
-                  {fitnessGoal === goal.value && (
-                    <div className="ml-auto shrink-0">
-                      <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
+              {FITNESS_GOALS.map(goal => {
+                const rank = fitnessGoals.indexOf(goal.value)
+                const selected = rank >= 0
+                return (
+                  <button
+                    key={goal.value}
+                    onClick={() => toggleFitnessGoal(goal.value)}
+                    data-testid={`settings-goal-${goal.value}`}
+                    aria-pressed={selected}
+                    className={`flex items-center gap-3 rounded-xl border-2 p-3 text-left transition-all duration-150 ${
+                      selected
+                        ? 'border-green-500 bg-green-50 dark:border-green-500 dark:bg-green-900/20'
+                        : 'border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-zinc-600'
+                    }`}
+                  >
+                    <span className="text-2xl">{goal.icon}</span>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${selected ? 'text-green-700 dark:text-green-400' : 'text-zinc-900 dark:text-white'}`}>
+                        {goal.label}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {selected ? (rank === 0 ? 'Primary goal' : `Also #${rank + 1}`) : goal.description}
+                      </p>
                     </div>
-                  )}
-                </button>
-              ))}
+                    {selected && (
+                      <div className="ml-auto shrink-0">
+                        <svg className="h-4 w-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </section>
 
