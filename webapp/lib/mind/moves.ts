@@ -199,6 +199,12 @@ export interface MindSessionPlan {
   moves: Move[]
   /** Flat XP awarded once per day on first completion (gated server-side). */
   rewardXp: number
+  /** Per-session finish line from the blueprint this session was built on — the
+   *  same per-tool uniqueness the arsenal flows have (DONE_TEXT). Falls back to a
+   *  generic line when absent (arsenal one-move/themed plans don't set it). */
+  doneText?: string
+  /** Which authored blueprint shaped this session. Diagnostic only. */
+  blueprintId?: string
   /** The arsenal segment this session leads into next, chosen by the composer
    *  from what the session actually surfaced (their reflections + its theme), with
    *  a second-person reason. The player prefers this over the deterministic pick,

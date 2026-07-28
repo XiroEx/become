@@ -14,6 +14,7 @@ import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Share2 } f
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
 import {
   BREATH_PROTOCOLS,
   breathForState,
@@ -111,6 +112,11 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState(false)
+  // Adaptive close — a short reflection written from what they actually answered
+  // this session, replacing a payoff that said the same thing to everyone. Same
+  // mechanism the arsenal flows have used all along (GuidedFlow's onReflect).
+  const [reflection, setReflection] = useState<string | null>(null)
+  const [reflecting, setReflecting] = useState(false)
 
   const total = plan.moves.length
   const rawMove = plan.moves[index]
@@ -134,7 +140,8 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
       return
     }
     // Remember this session's answers (best-effort) so tomorrow's session builds
-    // on them instead of asking from scratch.
+    // on them instead of asking from scratch — and read them back to the user
+    // right now as the close, so the payoff responds to what they just said.
     if (answersRef.current.length) {
       const lines = answersRef.current.map((x) => ({ prompt: x.q, answer: x.a }))
       void fetch('/api/mind/journal', {
@@ -142,6 +149,11 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
         headers: authHeaders(),
         body: JSON.stringify({ system: 'session', kind: 'session', title: plan.intro.title, lines }),
       }).catch(() => {})
+      setReflecting(true)
+      void Promise.resolve(reflectOnAnswers('Mind session', lines))
+        .then((t) => setReflection(t && t.trim() ? t.trim() : null))
+        .catch(() => setReflection(null))
+        .finally(() => setReflecting(false))
     }
     try {
       // Report the EFFECTIVE kinds the player actually showed — so a locked-in
@@ -364,13 +376,46 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 <Check className="h-10 w-10" strokeWidth={3} />
               </motion.span>
               <h1 className="text-2xl font-extrabold">
-                {result?.leveledUp ? 'Level up.' : result?.trainingMode ? 'Another rep in.' : 'You showed up.'}
+                {result?.leveledUp
+                  ? 'Level up.'
+                  : result?.trainingMode
+                    ? 'Another rep in.'
+                    : /* Per-session finish line from the blueprint, so two sessions
+                         never close on the same words. */
+                      plan.doneText ?? 'You showed up.'}
               </h1>
               <p className="mt-2 text-white/60">
                 {result?.leveledUp
                   ? `You climbed to Level ${result.level}.`
                   : "That's how it's built — one rep at a time."}
               </p>
+
+              {/* Adaptive close — written from the answers they just gave. Only
+                  appears when the session actually collected a reflection; a
+                  failure quietly leaves the payoff as it was. */}
+              {(reflecting || reflection) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-5 w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5"
+                >
+                  {reflecting ? (
+                    <div className="flex items-center justify-center gap-2.5 text-white/50">
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-sm">Reading what you said…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Here&apos;s what I see</p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-white/80">{reflection}</p>
+                    </>
+                  )}
+                </motion.div>
+              )}
               {result && (result.xpAwarded ?? 0) > 0 && (
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
