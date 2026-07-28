@@ -1,31 +1,46 @@
 // AI MoveEngine — the SECOND implementation of the MoveEngine seam (the first is
-// the deterministic composer in composeSession.ts). It asks the become-ai graph
-// (mind.composeSession, structured) to FULLY compose today's session — selection,
-// order, titles, AND the kind-specific payload (choice/acknowledge/interrogative
-// options, compose templates, statements, prompts) — so each move is a coherent
-// unit authored together (no more AI-title-over-deterministic-options mismatch).
+// the deterministic composer in composeSession.ts).
 //
-// Guard rail: every AI move is VALIDATED per kind. If a move is malformed for its
-// kind (e.g. a choice with <2 options, a compose with no template), that single
-// move falls back to the deterministic builder — never a half-AI/half-deterministic
-// Frankenstein. Structural/UI kinds (breath, state-check) stay deterministic. All
-// text is markdown-stripped. Whole-plan failure → null → caller uses deterministic.
+// WHAT CHANGED, AND WHY. This engine used to let the model compose the whole
+// session: which moves, what order, the titles AND the payload. Validation was
+// structural only (kind in the enum, >=3 moves, no duplicates), so anything that
+// was structurally legal shipped — including beats that restated each other, a
+// grounding "how heavy is today?" as the CLOSER, and second-person paragraphs in
+// front of scenes that speech-match the line word for word.
 //
-// composeSession() in the MoveEngine interface is synchronous; the AI call is not.
-// So this is exposed as an async helper the play flow awaits (with a loading
-// state), NOT as a drop-in sync MoveEngine.
+// Now the AI does the job the arsenal gives it: it writes COPY INTO A CONTAINER
+// SOMEONE AUTHORED. A blueprint (lib/mind/blueprints.ts) fixes the session's
+// shape — regulate → core → close, chosen deterministically from the user's
+// check-in — and each AI move is CONFORMED onto a slot:
+//
+//   • kind must be register-compatible with the slot it fills
+//   • every content field is validated per kind (lib/mind/validateMove.ts)
+//   • a field that fails falls back to the blueprint's authored copy
+//   • a beat that restates the previous one is dropped
+//   • acknowledge is gated on a down check-in and can never close
+//
+// Failure is LOUD, not partial: if the model fills none of the slots, the whole
+// plan is rejected (null) and the caller renders the deterministic blueprint
+// session. No more half-AI/half-authored Frankenstein moves.
 
-import { buildMove } from './composeSession'
 import { runAiTask } from '@/lib/ai/runClient'
 import { stripMarkdown, clampTitle } from '@/lib/ai/sanitize'
 import { SEGMENT_LABELS } from './recommendSegment'
+import { buildMove } from './moveBuilders'
+import { pickBlueprint, regulateSlot, slotMove, type SessionSlot } from './blueprints'
 import {
-  AFFIRM_STATEMENT_KINDS,
-  type Move,
-  type MoveKind,
-  type MindSessionPlan,
-  type SessionContext,
-} from './moves'
+  OPTION_KINDS,
+  canClose,
+  isDownState,
+  restates,
+  validateCompose,
+  validateOptions,
+  validatePrompt,
+  validateStatement,
+  validateSubtitle,
+  validateTitle,
+} from './validateMove'
+import type { Move, MoveKind, MindSessionPlan, SessionContext } from './moves'
 
 const VALID_KINDS: MoveKind[] = [
   'state-check', 'breath', 'identity', 'win', 'challenge', 'mission', 'vision',
@@ -33,10 +48,28 @@ const VALID_KINDS: MoveKind[] = [
   'compose', 'acknowledge', 'interrogative', 'contrast',
 ]
 
-// Kinds whose scene is fixed UI / resolved at play time — keep deterministic.
+// Registers. An AI move may fill a slot when it shares the slot's register — so
+// the model can still vary the modality (a slot asking for `mirror` accepts
+// `speak`; a slot asking for `choice` accepts `interrogative`) without being able
+// to swap the session's INTENT out from under the blueprint.
+const REGISTERS: MoveKind[][] = [
+  ['identity', 'mirror', 'type', 'speak', 'compose', 'assemble'], // recite / affirm
+  ['choice', 'interrogative', 'contrast'],                        // reflect
+  ['acknowledge'],                                                // meet the feeling
+  ['win'],                                                        // evidence
+  ['mission', 'challenge'],                                       // commit to action
+  ['vision'],                                                     // see it forward
+  ['antisabotage', 'social'],                                     // defense / environment
+  ['breath', 'state-check'],                                      // structural
+]
+
+function sameRegister(a: MoveKind, b: MoveKind): boolean {
+  if (a === b) return true
+  return REGISTERS.some((r) => r.includes(a) && r.includes(b))
+}
+
+// Fixed-UI kinds resolved at play time — the model never authors these.
 const STRUCTURAL_KINDS: MoveKind[] = ['breath', 'state-check', 'assemble']
-// Kinds that present a question + answer options (must be authored together).
-const OPTION_KINDS: MoveKind[] = ['choice', 'acknowledge', 'interrogative']
 
 interface AiMove {
   id?: string
@@ -58,169 +91,195 @@ interface AiPlan {
   cta?: { system?: unknown; reason?: unknown }
 }
 
-function str(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined
-}
-/** Plain-text-clean a free field (strip markdown). */
-function clean(v: unknown): string | undefined {
-  const s = str(v)
-  if (!s) return undefined
-  const c = stripMarkdown(s)
-  return c || undefined
-}
-/** Title: cleaned + clamped to a sane length. Questions run a full sentence or
- *  two — those pass whole; only a runaway is trimmed, never chopped mid-sentence
- *  (the old 16-word hard cap was cutting real questions off with no ending). */
-function cleanTitle(v: unknown): string | undefined {
-  const c = clean(v)
-  return c ? clampTitle(c, 30) : undefined
-}
-
-/** Validate AI options → 2–5 {label, response?} (coherent answer set). */
-function validateOptions(v: unknown): { label: string; response?: string }[] | undefined {
-  if (!Array.isArray(v)) return undefined
-  const out: { label: string; response?: string }[] = []
-  for (const it of v) {
-    if (typeof it === 'string') {
-      const l = clean(it)
-      if (l) out.push({ label: l })
-    } else if (it && typeof it === 'object') {
-      const o = it as Record<string, unknown>
-      const l = clean(o.label)
-      if (!l) continue
-      const r = clean(o.response)
-      out.push(r ? { label: l, response: r } : { label: l })
-    }
-    if (out.length >= 5) break
-  }
-  return out.length >= 2 ? out : undefined
-}
-
-/** Validate AI compose payload → {template with {n} blanks, blanks[][]}. */
-function validateCompose(v: unknown): { template: string; blanks: string[][] } | undefined {
-  if (!v || typeof v !== 'object') return undefined
-  const o = v as Record<string, unknown>
-  const template = str(o.template)
-  if (!template || !/\{\d+\}/.test(template)) return undefined
-  if (!Array.isArray(o.blanks)) return undefined
-  const blanks: string[][] = []
-  for (const b of o.blanks) {
-    if (!Array.isArray(b)) return undefined
-    const words = b.filter((w): w is string => typeof w === 'string' && w.trim().length > 0).map((w) => w.trim())
-    if (words.length < 1) return undefined
-    blanks.push(words)
-  }
-  return blanks.length >= 1 ? { template, blanks } : undefined
-}
-
-/** Validate the AI's next-segment CTA → {system, reason}. system must be one of
- *  the real arsenal segments; reason is cleaned. Returns undefined otherwise so
- *  the player falls back to the deterministic recommendation. */
+/** Validate the AI's next-segment CTA → {system, reason}. */
 function validateCta(v: unknown): { system: string; reason: string } | undefined {
   if (!v || typeof v !== 'object') return undefined
   const o = v as Record<string, unknown>
-  const system = str(o.system)
-  const reason = clean(o.reason)
+  const system = typeof o.system === 'string' ? o.system.trim() : ''
+  const reason = typeof o.reason === 'string' ? stripMarkdown(o.reason).trim() : ''
   if (!system || !reason || !(system in SEGMENT_LABELS)) return undefined
   return { system, reason: clampTitle(reason, 30) }
 }
 
 /**
- * Build a Move from an AI move, fully using the AI's authored content when it's
- * coherent for the kind, and falling back to the deterministic builder per-move
- * when it isn't. Never mixes an AI title with deterministic options (or vice
- * versa) for question+option moves — that pairing must come from one source.
+ * Fill one blueprint slot with an AI move, field by field. The authored move is
+ * the floor: anything the AI gets wrong simply does not replace it. Returns the
+ * move plus whether the AI contributed anything at all.
  */
-function hydrate(ai: AiMove, ctx: SessionContext): Move | null {
-  const kind = ai.kind as MoveKind
-  if (!VALID_KINDS.includes(kind)) return null
-  const base = buildMove(kind, ctx)
+function fillSlot(
+  slot: SessionSlot,
+  ai: AiMove | undefined,
+  ctx: SessionContext,
+): { move: Move; usedAi: boolean } {
+  const authored = slotMove(slot, ctx)
+  if (!ai) return { move: authored, usedAi: false }
 
-  // Fixed-UI / resolved-at-play-time kinds stay deterministic.
-  if (STRUCTURAL_KINDS.includes(kind)) return base
+  const kind = slot.kind
+  // Structural scenes own their own UI — never let generated copy near them.
+  if (STRUCTURAL_KINDS.includes(kind)) return { move: authored, usedAi: false }
 
-  const title = cleanTitle(ai.title)
-  const subtitle = clean(ai.subtitle)
+  const title = validateTitle(ai.title)
+  const subtitle = validateSubtitle(ai.subtitle)
 
-  // Question + options: use the AI pair only if BOTH a title and valid options
-  // are present; otherwise the whole deterministic move (coherent by construction).
+  // Question + options must come from ONE source. An AI question over authored
+  // options (or the reverse) is how "No wrong answer." ended up under a
+  // personalized question it was never written for.
   if (OPTION_KINDS.includes(kind)) {
     const options = validateOptions(ai.options)
-    if (title && options) {
-      return { ...base, title, subtitle: subtitle ?? base.subtitle, options }
+    if (!title || !options) return { move: authored, usedAi: false }
+    return {
+      move: { ...authored, title, subtitle: subtitle ?? authored.subtitle, options },
+      usedAi: true,
     }
-    return base
   }
 
-  // Fill-in-the-blank: AI template + blanks, paired with its title.
   if (kind === 'compose') {
     const compose = validateCompose(ai.compose)
-    if (title && compose) {
-      return { ...base, title, subtitle: subtitle ?? base.subtitle, compose }
+    if (!title || !compose) return { move: authored, usedAi: false }
+    return {
+      move: { ...authored, title, subtitle: subtitle ?? authored.subtitle, compose },
+      usedAi: true,
     }
-    return base
   }
 
-  // Self-contained content kinds — AI owns the copy fields.
+  // Self-contained content kinds. Each field stands or falls on its own here,
+  // because they are independent: a good title with an unsayable statement should
+  // keep the title and drop the statement back to the authored/personalized one.
+  const statement = validateStatement(ai.statement, kind)
+  const prompt = validatePrompt(ai.prompt)
+  const usedAi = !!(title || subtitle || statement || prompt)
   return {
-    ...base,
-    title: title ?? base.title,
-    subtitle: subtitle ?? base.subtitle,
-    statement: clean(ai.statement) ?? base.statement,
-    prompt: clean(ai.prompt) ?? base.prompt,
+    move: {
+      ...authored,
+      ...(title && { title }),
+      ...(subtitle && { subtitle }),
+      ...(statement && { statement }),
+      ...(prompt && { prompt }),
+    },
+    usedAi,
   }
 }
 
 /**
- * Compose today's session via the AI engine. Returns a fully-valid MindSessionPlan
- * or null on any failure (caller uses the deterministic composeSession(ctx)).
+ * Compose today's session: authored blueprint for the shape, AI for the copy.
+ * Returns null on any whole-plan failure so the caller renders the deterministic
+ * session instead.
  */
 export async function composeSessionAI(ctx: SessionContext): Promise<MindSessionPlan | null> {
+  // Pick the shape BEFORE asking for copy, and tell the model what each beat is
+  // for. The model is writing into a session someone else designed — it should
+  // know the brief, the same way the arsenal's flow generator is told which
+  // system and topic it is writing for.
+  const bp = pickBlueprint(ctx)
+  const onCooldown =
+    ctx.lastBreathAt != null &&
+    (ctx.now ?? 0) > 0 &&
+    (ctx.now ?? 0) - ctx.lastBreathAt < BREATH_COOLDOWN_MS
+
+  // The authored shape for today. regulate honours the breath cooldown; core and
+  // close come straight off the blueprint.
+  const slots: SessionSlot[] = [
+    regulateSlot(bp, onCooldown),
+    ...bp.slots.filter((s) => s.role !== 'regulate'),
+  ]
+
   let plan: AiPlan | null = null
   try {
     // Silent: background pre-composition, kept OUT of the global activity
     // indicator so it doesn't toast "Composing your session…" on every open.
-    const r = await runAiTask('/api/ai/mind/session', { context: ctx }, { silent: true })
+    const r = await runAiTask(
+      '/api/ai/mind/session',
+      {
+        context: ctx,
+        blueprint: {
+          id: bp.id,
+          title: bp.title,
+          subtitle: bp.subtitle,
+          slots: slots.map((s) => ({ kind: s.kind, role: s.role, brief: s.brief })),
+        },
+      },
+      { silent: true },
+    )
     if (!r.ok || !r.result || typeof r.result !== 'object') return null
     plan = r.result as AiPlan
   } catch {
     return null
   }
 
-  const aiMoves = Array.isArray(plan.moves) ? plan.moves : []
+  // Candidate AI moves, cleaned of anything that can't fill a slot at all.
+  const candidates = (Array.isArray(plan.moves) ? plan.moves : []).filter((m) => {
+    const k = m?.kind as MoveKind
+    if (!k || !VALID_KINDS.includes(k)) return false
+    if (STRUCTURAL_KINDS.includes(k)) return false
+    // The acknowledge register only makes sense when they came in down. This is
+    // the rule the deterministic composer has always had; the AI path never did.
+    if (k === 'acknowledge' && !isDownState(ctx.recentState)) return false
+    return true
+  })
+
+  const taken = new Set<number>()
   const moves: Move[] = []
-  const seen = new Set<string>()
-  let affirmUsed = false
-  for (const am of aiMoves) {
-    const m = hydrate(am, ctx)
-    if (!m) continue
-    if (seen.has(m.kind)) continue // no duplicate modalities in one session
-    // At most one "recite the statement" modality per session.
-    const isAffirm = AFFIRM_STATEMENT_KINDS.includes(m.kind)
-    if (isAffirm && affirmUsed) continue
-    if (isAffirm) affirmUsed = true
-    seen.add(m.kind)
-    moves.push(m)
+  let aiFilled = 0
+
+  for (const slot of slots) {
+    // Prefer an exact kind match, then anything in the same register.
+    let pick = candidates.findIndex((m, i) => !taken.has(i) && (m.kind as MoveKind) === slot.kind)
+    if (pick < 0) {
+      pick = candidates.findIndex((m, i) => !taken.has(i) && sameRegister(m.kind as MoveKind, slot.kind))
+    }
+    // A closing slot never accepts a register that leaves the user lower than
+    // they arrived.
+    if (pick >= 0 && slot.role === 'close' && !canClose(candidates[pick].kind as MoveKind)) pick = -1
+    if (pick >= 0) taken.add(pick)
+
+    const { move, usedAi } = fillSlot(slot, pick >= 0 ? candidates[pick] : undefined, ctx)
+
+    // Drop a beat that just says the previous beat again, and re-fill the slot
+    // from the authored copy instead of losing it.
+    const prev = moves[moves.length - 1]
+    if (usedAi && prev && beatsOverlap(prev, move)) {
+      moves.push(slotMove(slot, ctx))
+      continue
+    }
+
+    if (usedAi) aiFilled++
+    moves.push(move)
   }
 
-  // Sanity floor: a real session needs a few beats. Anything thinner means the
-  // model drifted — bail to the deterministic composer.
-  if (moves.length < 3) return null
+  // Fail loudly. If the model contributed nothing usable, this is not an AI
+  // session — say so and let the caller render the deterministic one rather than
+  // shipping a "personalized" session that is entirely fallback copy.
+  if (aiFilled === 0) return null
 
-  // Always open on a check-in (grounds the session + grants state XP) even if the
-  // AI forgot it.
-  if (moves[0].kind !== 'state-check') {
-    moves.unshift(buildMove('state-check', ctx))
+  // Keep the regulate beat's live swap: a check-in of 'locked_in' at play time
+  // turns a breath into the blueprint's alternative rather than forcing calm on
+  // someone who came in hot.
+  if (moves[0]?.kind === 'breath') {
+    moves[0] = { ...moves[0], altPositive: slotMove(bp.regulateAlt, ctx) }
   }
+
+  // Always open on a check-in (grounds the session + grants state XP).
+  moves.unshift(buildMove('state-check', ctx))
 
   return {
     intro: {
-      title: cleanTitle(plan.intro?.title) ?? 'Your session',
-      subtitle: clean(plan.intro?.subtitle) ?? 'Built around where you are today.',
+      title: validateTitle(plan.intro?.title) ?? bp.title,
+      subtitle: validateSubtitle(plan.intro?.subtitle) ?? bp.subtitle,
     },
     moves,
     rewardXp: 15,
-    // Where this session flows next in the arsenal, if the composer named it.
+    doneText: bp.doneText,
+    blueprintId: bp.id,
     ...(validateCta(plan.cta) ? { cta: validateCta(plan.cta) } : {}),
   }
+}
+
+// Mirrors the deterministic composer's spacing rule.
+const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000
+
+/** Does this beat just restate the previous one? Compares whatever text each
+ *  beat actually puts on screen. */
+function beatsOverlap(a: Move, b: Move): boolean {
+  const text = (m: Move) => [m.title, m.statement, m.prompt].filter(Boolean).join(' ')
+  return restates(text(a), text(b))
 }

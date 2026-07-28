@@ -34,7 +34,16 @@ export async function POST(request: NextRequest) {
     userGrounding(gate.user.userId, body),
     assembleMindHistory(gate.user.userId),
   ])
-  const trig = await triggerBecomeTask('mind.composeSession', { ...ctx, user: { ...ground, ...mindHistory } })
+  // The authored blueprint the client picked for today: the session's shape plus
+  // a brief per beat. The model writes copy INTO these slots rather than choosing
+  // the session's structure itself.
+  const blueprint = body.blueprint && typeof body.blueprint === 'object' ? body.blueprint : undefined
+
+  const trig = await triggerBecomeTask('mind.composeSession', {
+    ...ctx,
+    ...(blueprint ? { blueprint } : {}),
+    user: { ...ground, ...mindHistory },
+  })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
