@@ -21,37 +21,23 @@ import {
   type SessionContext,
 } from './moves'
 import { buildMove } from './moveBuilders'
-import { pickBlueprint, regulateSlot, slotMove } from './blueprints'
+import { pickBlueprint, blueprintMoves, breathOnCooldown } from './blueprints'
 
 // Re-exported so existing importers (the admin Mind lab, the AI engine) keep
 // working after the builders moved to their own module.
 export { buildMove } from './moveBuilders'
-
-// Breath is spaced out: once it's been done, it goes on cooldown so back-to-back
-// sessions within the same few hours don't repeat the same breathing.
-const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000 // ~4h
+export { BREATH_COOLDOWN_MS } from './blueprints'
 
 export class DeterministicMoveEngine implements MoveEngine {
   composeSession(ctx: SessionContext): MindSessionPlan {
     const bp = pickBlueprint(ctx)
-    const now = ctx.now ?? 0
-    const onCooldown = ctx.lastBreathAt != null && now > 0 && now - ctx.lastBreathAt < BREATH_COOLDOWN_MS
 
     // Open by checking in (grounds the session, grants XP via /api/mind/state),
     // then the blueprint's authored regulate → core → close.
-    const moves: Move[] = [buildMove('state-check', ctx)]
-
-    const regulate = slotMove(regulateSlot(bp, onCooldown), ctx)
-    // State-adaptive swap: a positive check-in at play time turns the regulate
-    // breath into the blueprint's alternative — no forced breathing when you
-    // already came in on.
-    if (regulate.kind === 'breath') regulate.altPositive = slotMove(bp.regulateAlt, ctx)
-    moves.push(regulate)
-
-    for (const slot of bp.slots) {
-      if (slot.role === 'regulate') continue
-      moves.push(slotMove(slot, ctx))
-    }
+    const moves: Move[] = [
+      buildMove('state-check', ctx),
+      ...blueprintMoves(bp, ctx, breathOnCooldown(ctx)),
+    ]
 
     // On the 50-session directed path, the session's prescribed focus IS the
     // intro — the theme the whole session serves. (The directive text is

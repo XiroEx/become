@@ -22,7 +22,7 @@ import { suggestActions } from '@/lib/mind/suggestActions'
 import { getPathSession } from '@/lib/mind/sessionPath'
 import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
 import { runAiTask } from '@/lib/ai/runClient'
-import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
+import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
 
@@ -166,9 +166,11 @@ export default function MindJourney() {
     load()
   }, [load])
 
-  const plan = useMemo<MindSessionPlan | null>(() => {
+  // The context the session is composed from. Also handed to the player so the
+  // live check-in can REBUILD the session around what the user actually reports.
+  const sessionContext = useMemo<SessionContext | null>(() => {
     if (!progress) return null
-    return composeSession({
+    return {
       chapter: progress.chapter,
       unlockedSystems: progress.unlockedSystems,
       recentState,
@@ -180,8 +182,13 @@ export default function MindJourney() {
       seed: sessionSeed ?? undefined,
       now: Date.now(),
       lastBreathAt,
-    })
+    }
   }, [progress, recentState, missionAction, sessionSeed, lastBreathAt, recentKinds])
+
+  const plan = useMemo<MindSessionPlan | null>(
+    () => (sessionContext ? composeSession(sessionContext) : null),
+    [sessionContext],
+  )
 
   // Adopt the AI-composed session if one is cached. Generation itself runs in
   // the background on APP OPEN (lib/mind/precompose, mounted in the shell) — we
@@ -263,6 +270,7 @@ export default function MindJourney() {
     return (
       <SessionPlayer
         plan={effectivePlan}
+        sessionContext={sessionContext ?? undefined}
         unlockedSystems={progress?.unlockedSystems ?? getUnlockedSystems(progress?.chapter ?? 1)}
         onExit={() => {
           setPlaying(false)

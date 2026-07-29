@@ -88,6 +88,7 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
   const [recheck, setRecheck] = useState(false)
   // Re-check that changed state → capture "what changed?".
   const [pendingState, setPendingState] = useState<MindState | null>(null)
+  const [pendingFeeling, setPendingFeeling] = useState<string | null>(null)
   const [note, setNote] = useState('')
 
   // Look for a recent check-in to decide between the full grid and the quick opener.
@@ -125,7 +126,10 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
     onDone()
   }
 
-  const submitState = async (state: MindState, opts?: { note?: string; previousState?: MindState }) => {
+  const submitState = async (
+    state: MindState,
+    opts?: { note?: string; previousState?: MindState; feeling?: string },
+  ) => {
     setChosen(state)
     setPendingState(null) // clear the "what changed?" gate so the reveal can show
     onState?.(state)
@@ -137,6 +141,10 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
         headers: authHeaders(),
         body: JSON.stringify({
           state,
+          // The word they actually tapped. Twenty feelings map onto four states,
+          // and sending only the state is why picking "Grateful" got the same
+          // reply as picking "Locked in".
+          ...(opts?.feeling && { feeling: opts.feeling }),
           ...(opts?.note && { note: opts.note }),
           ...(opts?.previousState && { previousState: opts.previousState }),
         }),
@@ -150,19 +158,24 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
     }
   }
 
-  const pick = (state: MindState) => {
+  const pick = (state: MindState, feeling: string) => {
     if (chosen || other || pendingState) return
+    setPendingFeeling(feeling)
     // Re-check that actually changed the state → ask what changed first.
     if (recheck && recent && state !== recent) {
       setPendingState(state)
       return
     }
-    void submitState(state)
+    void submitState(state, { feeling })
   }
 
   const submitNote = () => {
     if (!pendingState) return
-    void submitState(pendingState, { note: note.trim() || undefined, previousState: recent ?? undefined })
+    void submitState(pendingState, {
+      note: note.trim() || undefined,
+      previousState: recent ?? undefined,
+      feeling: pendingFeeling ?? undefined,
+    })
   }
 
   const showOpener = !chosen && !other && !recheck && !pendingState && recent !== null
@@ -235,7 +248,7 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
               <ArrowRight className="h-5 w-5" />
             </button>
             <button
-              onClick={() => void submitState(pendingState)}
+              onClick={() => void submitState(pendingState, { feeling: pendingFeeling ?? undefined })}
               className="mt-3 text-sm font-medium text-white/40 transition-colors hover:text-white/70"
             >
               Skip
@@ -257,7 +270,7 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
                 {FEELINGS.map(({ label, value, Icon }) => (
                   <button
                     key={label}
-                    onClick={() => pick(value)}
+                    onClick={() => pick(value, label)}
                     className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 transition-colors hover:border-white/30 active:scale-95"
                   >
                     <Icon className={`h-6 w-6 ${TINT[value]}`} />

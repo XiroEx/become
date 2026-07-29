@@ -42,9 +42,38 @@ const REVEALS: Record<MindState, string[]> = {
   ],
 }
 
+// Twenty feelings collapse onto four states, so "Grateful" and "Locked in" used
+// to get a byte-identical reply. These answer the FEELING they actually tapped.
+// Anything without an entry falls through to its state pool above.
+const FEELING_REVEALS: Record<string, string> = {
+  Grateful: 'Gratitude is the one that compounds quietly. Hold it a second before we move.',
+  Energized: 'Energy is cheap to waste and hard to manufacture. Let us point it somewhere.',
+  Motivated: 'Motivation is real but it is not a plan. We turn it into one thing today.',
+  Calm: 'Calm is not the absence of pressure, it is you handling it. Good place to work from.',
+  'Locked in': 'This is the state everything gets built in. Let us spend it on purpose.',
+  Tired: 'Tired is honest. We keep today small and still make it count.',
+  Drained: 'Empty tank. Today is maintenance, and maintenance still counts.',
+  Unmotivated: 'Waiting to feel like it is how weeks disappear. One small move breaks that.',
+  Down: 'Some days sit heavy for no clean reason. You still showed up.',
+  'Low energy': 'Low is data, not destiny. Small input, real output.',
+  Scattered: 'Scatter is normal. We pull it back to one point.',
+  Restless: 'Restless is energy without a lane. Let us give it one.',
+  Foggy: 'Fog lifts once something concrete gets done. We will find the something.',
+  Bored: 'Bored usually means under-challenged, not out of options.',
+  Distracted: 'Too many open loops. Everything but one can wait an hour.',
+  Anxious: 'Anxiety runs ahead of the facts. We will slow it to walking pace.',
+  Overwhelmed: 'Too much at once. Nothing moves until the pile gets smaller.',
+  Frustrated: 'Frustration means you care about the outcome. Let us aim it.',
+  Angry: 'Anger is fuel with bad steering. We will take the wheel back.',
+  Stressed: 'Naming it is the first move. We bring the system down a notch.',
+}
+
 /** Rotate per check-in so nobody sees the same reveal twice in a row. Keyed on
- *  how many times this user has logged THIS state, so it advances every time. */
-function revealFor(state: MindState, priorCount: number): string {
+ *  how many times this user has logged THIS state, so it advances every time.
+ *  A recognised feeling always wins — answering the word they picked is the
+ *  difference between being read and being bucketed. */
+function revealFor(state: MindState, priorCount: number, feeling?: string): string {
+  if (feeling && FEELING_REVEALS[feeling]) return FEELING_REVEALS[feeling]
   const pool = REVEALS[state]
   return pool[Math.abs(priorCount) % pool.length]
 }
@@ -77,7 +106,9 @@ export async function POST(request: NextRequest) {
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()
-    const { state, note, previousState } = body as { state: MindState; note?: string; previousState?: MindState }
+    const { state, note, previousState, feeling } = body as {
+      state: MindState; note?: string; previousState?: MindState; feeling?: string
+    }
 
     const valid: MindState[] = ['stressed', 'distracted', 'low_energy', 'locked_in']
     if (!valid.includes(state)) {
@@ -95,6 +126,7 @@ export async function POST(request: NextRequest) {
       state,
       ...(typeof note === 'string' && note.trim() && { note: note.trim().slice(0, 500) }),
       ...(valid.includes(previousState as MindState) && { previousState }),
+      ...(typeof feeling === 'string' && feeling.trim() && { feeling: feeling.trim().slice(0, 40) }),
     })
 
     // Grant XP — fire and forget
@@ -104,7 +136,10 @@ export async function POST(request: NextRequest) {
       { upsert: true, setDefaultsOnInsert: true }
     ).catch(() => {})
 
-    return NextResponse.json({ log, recommendation: { message: revealFor(state, priorCount) } })
+    return NextResponse.json({
+      log,
+      recommendation: { message: revealFor(state, priorCount, typeof feeling === 'string' ? feeling.trim() : undefined) },
+    })
   } catch (err) {
     console.error('POST /api/mind/state error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
