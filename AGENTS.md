@@ -9,8 +9,8 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 
 **Deployment is git-sourced. Do NOT run `/deploy become` for a normal release.** The
 workspace tracks `main` with `autoDeploy: true` and syncs within ~20-40s of a merge,
-unattended (verified 2026-07-29 across three merges). The generic `/deploy` skill
-still says "there is NO auto-deploy from GitHub" — that is stale for this workspace.
+unattended (verified 2026-07-29 across three merges). `/deploy` is for the exceptions
+only: a workspace with autoDeploy off, a genuine build retry, or inspecting state.
 
 Sync and build are separate. The workspace builds `baseDirectory: webapp`, so a
 **build only fires when `webapp/` actually changed**. A merge touching only repo-root
