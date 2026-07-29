@@ -33,6 +33,9 @@ export function resetUpdate(now: Date = new Date()): Required<ProgressUpdate> {
       levelXp: 0,
       // Drives CHAPTER.
       mainSessionCount: 0,
+      // Stops /api/mind/progress re-seeding xp from the user's evolutionScore on
+      // the next read. Without this a full reset bounced straight back off level 1.
+      xpSeeded: true,
       chapterHistory: [{ chapter: 1, unlockedAt: now }],
       selfDeclaredChapters: [],
       // Re-lock the one-time tool intros so the journey replays properly.

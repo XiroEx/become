@@ -28,6 +28,7 @@ interface Stored {
   xpBank?: number
   levelXp?: number
   mainSessionCount?: number
+  xpSeeded?: boolean
   lastMainSessionAt?: Date
   lastBreathAt?: Date
   lastGrowthAt?: Date
@@ -56,19 +57,35 @@ function applyUpdate(doc: Stored, update: { set: Record<string, unknown>; unset?
   return next
 }
 
-/** The derivations /api/mind/progress performs on read. */
-function derive(doc: Stored) {
+/**
+ * Everything /api/mind/progress does on read, in order. This has to mirror the
+ * WHOLE route, not just the last step: the first version of these tests modelled
+ * only the levelXp/mainSessionCount derivation and therefore missed that the
+ * evolutionScore seeding above it re-inflated xp after a reset.
+ *
+ * `evolutionScore` is the user's IdentityProfile score, re-persisted on every GET,
+ * so it is non-zero for anyone who has actually used the app.
+ */
+function derive(doc: Stored, evolutionScore = 0) {
+  // 1. One-time xp seeding from evolutionScore.
+  let xp = doc.xp ?? 0
+  if (!doc.xpSeeded && xp === 0 && evolutionScore > 0) xp += Math.min(evolutionScore, 100)
+
+  // 2. Migration seeding of the fields that derive level and chapter.
   const storedChapter = doc.chapter ?? 1
   const rawLevelXp = doc.levelXp ?? 0
   const rawCount = doc.mainSessionCount ?? 0
-  // The route re-seeds these when they look unmigrated. Mirrored exactly.
-  const levelXp = rawLevelXp > 0 ? rawLevelXp : (doc.xp ?? 0) + (doc.xpBank ?? 0)
+  const levelXp = rawLevelXp > 0 ? rawLevelXp : xp + (doc.xpBank ?? 0)
   const mainSessionCount = Math.max(rawCount, (storedChapter - 1) * SESSIONS_PER_CHAPTER)
+
+  // 3. The values the user actually sees.
+  const chapter = Math.max(storedChapter, chapterFromSessions(mainSessionCount))
   return {
-    chapter: Math.max(storedChapter, chapterFromSessions(mainSessionCount)),
+    chapter,
     level: getLevelProgress(levelXp).level,
+    xp,
     mainSessionAvailable: mainSessionAvailable(doc.lastMainSessionAt),
-    unlocked: getUnlockedSystems(Math.max(storedChapter, chapterFromSessions(mainSessionCount))),
+    unlocked: getUnlockedSystems(chapter),
   }
 }
 
@@ -101,6 +118,25 @@ test('the reset clears the 20h main-session cooldown', () => {
   const after = applyUpdate(veteran(), resetUpdate())
   assert.equal(after.lastMainSessionAt, undefined)
   assert.equal(derive(after).mainSessionAvailable, true, 'main session must be playable straight after a reset')
+})
+
+test('REGRESSION: the reset is not undone by the evolutionScore xp seeding', () => {
+  // The seeding condition used to be just "xp === 0", so it re-fired on the next
+  // read after a reset: xp came back, levelXp was derived from it, and the level
+  // climbed off 1. Anyone who has used the app has a non-zero evolutionScore, so
+  // this hit every real account.
+  const after = applyUpdate(veteran(), resetUpdate())
+  const d = derive(after, 100) // a fully-active user's evolution score
+  assert.equal(d.xp, 0, 'xp must stay at zero after a deliberate reset')
+  assert.equal(d.level, 1, 'level must stay at 1 after a deliberate reset')
+  assert.equal(d.chapter, 1)
+})
+
+test('the one-time xp seeding still works for a user who was never seeded', () => {
+  // Guard the fix: a genuine pre-existing account must still get its seed.
+  const legacy: Stored = { chapter: 1, xp: 0, xpBank: 0, levelXp: 0, mainSessionCount: 0 }
+  assert.equal(derive(legacy, 80).xp, 80, 'unseeded legacy accounts still seed')
+  assert.equal(derive({ ...legacy, xpSeeded: true }, 80).xp, 0, 'seeded accounts do not re-seed')
 })
 
 test('the reset zeroes every counter that derives level or chapter', () => {

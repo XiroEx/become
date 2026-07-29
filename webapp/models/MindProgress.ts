@@ -31,6 +31,11 @@ export interface IMindProgress extends Document {
   levelXp: number
   /** Count of completed MAIN sessions — gates chapters (10 per chapter). */
   mainSessionCount: number
+  /** True once the one-time evolutionScore → xp seeding has been considered.
+   *  Without this the seeding re-fired every time `xp` hit 0, which meant an
+   *  admin reset was partly undone on the very next page load (xp came back,
+   *  levelXp was re-derived from it, and the level climbed off 1 again). */
+  xpSeeded?: boolean
   /** When the last MAIN session was completed — enforces the 20h cooldown so a
    *  main session (and its chapter progress) can only happen once every 20h. */
   lastMainSessionAt?: Date
@@ -85,6 +90,7 @@ const MindProgressSchema = new Schema<IMindProgress>(
     xpBank: { type: Number, default: 0, min: 0 },
     levelXp: { type: Number, default: 0, min: 0 },
     mainSessionCount: { type: Number, default: 0, min: 0 },
+    xpSeeded: { type: Boolean },
     lastMainSessionAt: { type: Date },
     introducedSystems: { type: [String], default: undefined },
     lastGrowthAt: { type: Date },
