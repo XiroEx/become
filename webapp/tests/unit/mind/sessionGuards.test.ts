@@ -24,9 +24,10 @@ import {
   isDownState,
   MAX_SPOKEN_WORDS,
 } from '../../../lib/mind/validateMove'
-import { SESSION_BLUEPRINTS, pickBlueprint, slotMove } from '../../../lib/mind/blueprints'
+import { SESSION_BLUEPRINTS, pickBlueprint, slotMove, realignPlan } from '../../../lib/mind/blueprints'
 import { composeSession } from '../../../lib/mind/composeSession'
 import type { SessionContext } from '../../../lib/mind/moves'
+import type { MindState } from '../../../lib/mindContent'
 
 // The exact statement that reached the mirror scene.
 const SHIPPED_MIRROR_STATEMENT =
@@ -250,4 +251,87 @@ test('the breath cooldown swaps the regulate beat instead of dropping it', () =>
   assert.equal(cold.moves[1].kind, 'breath', 'outside the cooldown the breath stays')
   assert.notEqual(warm.moves[1].kind, 'breath', 'inside the cooldown it swaps')
   assert.equal(warm.moves.length, cold.moves.length, 'the beat is replaced, not removed')
+})
+
+// ─── Live realignment ─────────────────────────────────────────────────────────
+//
+// The session is composed BEFORE it is played (and the AI plan is cached up to
+// 8h), so ctx.recentState is whatever they felt LAST time. Answering the check-in
+// used to change nothing but the breath protocol: picking "low energy" still ran
+// whatever session was already built. The arsenal never had this problem because
+// naming your state there routes you into the matching reset immediately.
+
+test('checking in differently rebuilds the session around the new state', () => {
+  // Composed while they were last seen locked in…
+  const plan = composeSession(ctx({ recentState: 'locked_in' }))
+  assert.equal(plan.blueprintId, 'pour-it-in')
+
+  // …but today they report low energy.
+  const next = realignPlan(plan.blueprintId, 'low_energy', ctx({ recentState: 'locked_in' }))
+  assert.ok(next, 'a different state must rebuild the session')
+  assert.equal(next.blueprint.id, 'small-input')
+  assert.ok(next.moves.length >= 3)
+  // And the heaviness question is now where it belongs: in this session.
+  assert.ok(next.moves.some((m) => /how heavy is today/i.test(m.title)))
+})
+
+test('checking in the same way leaves the composed session alone', () => {
+  const c = ctx({ recentState: 'locked_in' })
+  const plan = composeSession(c)
+  assert.equal(realignPlan(plan.blueprintId, 'locked_in', c), null, 'no churn when nothing changed')
+})
+
+test('realignment covers every state transition and always stays valid', () => {
+  const states: MindState[] = ['stressed', 'distracted', 'low_energy', 'locked_in']
+  for (const from of states) {
+    for (const to of states) {
+      const c = ctx({ recentState: from })
+      const plan = composeSession(c)
+      const next = realignPlan(plan.blueprintId, to, c)
+      if (!next) continue // same blueprint — nothing to rebuild
+      const last = next.moves[next.moves.length - 1]
+      assert.ok(canClose(last.kind), `${from}->${to} closed on ${last.kind}`)
+      // A positive check-in must never be handed the meet-the-hard-feeling beat.
+      if (to === 'locked_in') {
+        assert.ok(!next.moves.some((m) => m.kind === 'acknowledge'), `${from}->${to} used acknowledge`)
+      }
+    }
+  }
+})
+
+test('a low-energy check-in never leaves you in the locked-in session', () => {
+  const c = ctx({ recentState: 'locked_in' })
+  const next = realignPlan('pour-it-in', 'low_energy', c)
+  assert.ok(next && !next.moves.some((m) => m.kind === 'mission' && !m.prompt))
+  assert.equal(next?.blueprint.id, 'small-input')
+})
+
+// ─── Modality rotation ────────────────────────────────────────────────────────
+
+test('the closing modality rotates across seeds', () => {
+  const kinds = new Set()
+  for (let seed = 0; seed < 12; seed++) {
+    const plan = composeSession(ctx({ recentState: 'locked_in', seed }))
+    kinds.add(plan.moves[plan.moves.length - 1].kind)
+  }
+  assert.ok(kinds.size >= 3, `expected several closing modalities, got ${[...kinds].join(', ')}`)
+})
+
+test('rotation avoids the modality used last session when it can', () => {
+  const plan = composeSession(ctx({ recentState: 'locked_in', seed: 3, recentKinds: ['speak'] }))
+  assert.notEqual(plan.moves[plan.moves.length - 1].kind, 'speak')
+})
+
+test('every rotated closing modality still produces a sayable statement', () => {
+  for (let seed = 0; seed < 20; seed++) {
+    for (const state of ['stressed', 'distracted', 'low_energy', 'locked_in'] as MindState[]) {
+      const plan = composeSession(ctx({ recentState: state, seed, identityStatement: SHIPPED_MIRROR_STATEMENT }))
+      const last = plan.moves[plan.moves.length - 1]
+      if (!['mirror', 'speak', 'type', 'assemble'].includes(last.kind)) continue
+      assert.ok(
+        validateStatement(last.statement, last.kind) !== null,
+        `${state}/${seed} closed on an unsayable ${last.kind}: ${last.statement}`,
+      )
+    }
+  }
 })

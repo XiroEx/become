@@ -15,6 +15,7 @@ import {
   type SessionContext,
 } from './moves'
 import { CHOICE_POOL, WIN_PROMPTS, COMPOSE_TEMPLATES, ACKNOWLEDGE_POOL, INTERROGATIVE_POOL } from './library'
+import { isSayable, MAX_SPOKEN_WORDS } from './validateMove'
 
 function stateCheckMove(): Move {
   return { id: 'state-check', kind: 'state-check', title: 'Where are you right now?', subtitle: 'One honest tap.', xp: 10 }
@@ -85,11 +86,21 @@ function mirrorMove(ctx: SessionContext): Move {
 // copy. Use the user's own line only when it is genuinely short; otherwise fall
 // back to a concise pool line.
 const MAX_SHORT_WORDS = 9
+
+// The pool is written for the identity scene, which REVEALS a statement rather
+// than making you recite it, so a few entries run long or open in third person.
+// Those are fine to read and impossible to say — filter them out here rather
+// than shortening the pool and losing them from the scene they work in.
+const SAYABLE_POOL = IDENTITY_POOL.filter(
+  (s) => isSayable(s) && s.trim().split(/\s+/).filter(Boolean).length <= MAX_SPOKEN_WORDS,
+)
+
 export function shortStatement(ctx: SessionContext): string {
-  const sd = ctx.seed ?? ctx.dayOfYear
+  const sd = Math.abs(ctx.seed ?? ctx.dayOfYear)
   const own = ctx.identityStatement?.trim()
-  if (own && own.split(/\s+/).filter(Boolean).length <= MAX_SHORT_WORDS) return own
-  return IDENTITY_POOL[sd % IDENTITY_POOL.length]
+  if (own && own.split(/\s+/).filter(Boolean).length <= MAX_SHORT_WORDS && isSayable(own)) return own
+  const pool = SAYABLE_POOL.length > 0 ? SAYABLE_POOL : IDENTITY_POOL
+  return pool[sd % pool.length]
 }
 
 function typeMove(ctx: SessionContext): Move {
