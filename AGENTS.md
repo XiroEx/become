@@ -8,10 +8,16 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 **Live deployment:** RedRun at `become.redbtn.io` (workspace ID: `69ab83dd21070736089dc29d`, node .3:32000). Firebase config in repo is legacy/unused.
 
 **Deployment is git-sourced. Do NOT run `/deploy become` for a normal release.** The
-workspace tracks `main` with `autoDeploy: true`, and RedRun syncs + builds on its own
-within ~30s of a merge (verified 2026-07-29: merge at 15:04:19Z → sync 15:04:56Z →
-build job started 15:04:40Z, no human involvement). The generic `/deploy` skill still
-says "there is NO auto-deploy from GitHub" — that is stale for this workspace.
+workspace tracks `main` with `autoDeploy: true` and syncs within ~20-40s of a merge,
+unattended (verified 2026-07-29 across three merges). The generic `/deploy` skill
+still says "there is NO auto-deploy from GitHub" — that is stale for this workspace.
+
+Sync and build are separate. The workspace builds `baseDirectory: webapp`, so a
+**build only fires when `webapp/` actually changed**. A merge touching only repo-root
+files (AGENTS.md, README) syncs but correctly does not rebuild — `buildState` stays
+`built` on the previous SHA. That is not a stuck deploy. Confirmed 2026-07-29: merge
+a952896 (AGENTS.md only) synced at +16s and never rebuilt, while merges touching
+`webapp/` started a build job ~21s after the merge.
 
 Hand-triggering `build?force=true` while the automatic build is already running
 KILLS it: the running job fails with "Build interrupted (no active job found during
