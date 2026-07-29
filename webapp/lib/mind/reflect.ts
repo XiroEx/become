@@ -19,7 +19,12 @@ export async function reflectOnAnswers(
     `I just finished a ${systemLabel} in the Mind section. Here is exactly what I wrote:\n${qa}\n\n` +
     `Respond directly to me in 2–3 sentences: name what I actually said, reassure me, ` +
     `give me ONE concrete piece of advice tied to my answers, and end with a short push to keep going. ` +
-    `Warm and direct, no fluff, no lists. Never name a book, author, or source.`
+    `Warm and direct, no fluff, no lists. Never name a book, author, or source. ` +
+    // This is mindset work. The coach has my whole cross-app context including my
+    // training schedule, and it kept closing sessions with "go hit that Chest and
+    // Back session" — which turns inner work into a workout reminder.
+    `This is MINDSET work: do not mention my workouts, my training schedule, or what ` +
+    `is programmed for me today. Stay on what I just wrote.`
 
   try {
     const r = await runAiTask('/api/ai/mind/coach', { message })

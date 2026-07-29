@@ -1,13 +1,9 @@
-// Deterministic MoveEngine — composes today's Mind session from the user's
-// context. This is the zero-AI floor: whatever the AI engine cannot deliver, this
-// renders instead, and it has to be good on its own.
+// Deterministic MoveEngine — the zero-AI floor. Whatever the AI engine cannot
+// deliver, this renders instead, and it has to be good on its own.
 //
-// HOW IT WORKS NOW. It no longer assembles a session move-by-move out of separate
-// pools (which is why beats used to sit next to each other having never been
-// written to). It picks an AUTHORED BLUEPRINT (lib/mind/blueprints.ts) — a whole
-// session written as one unit, chosen from the user's check-in — and renders its
-// slots. Same model the arsenal uses for its protocol flows, which is the reason
-// those read better than this did.
+// A session is the user's STATE opening joined to the PATH body:
+//   [state-check] → OPENING(regulate) → BODY(core) → BODY(close)
+// See lib/mind/blueprints.ts for why the two halves are owned separately.
 //
 // Pure + client-safe. The arsenal's single-move and themed-session launchers live
 // at the bottom and are unchanged.
@@ -21,32 +17,36 @@ import {
   type SessionContext,
 } from './moves'
 import { buildMove } from './moveBuilders'
-import { pickBlueprint, blueprintMoves, breathOnCooldown } from './blueprints'
+import { sessionShape, shapeMoves } from './blueprints'
 
 // Re-exported so existing importers (the admin Mind lab, the AI engine) keep
 // working after the builders moved to their own module.
 export { buildMove } from './moveBuilders'
-export { BREATH_COOLDOWN_MS } from './blueprints'
+export { BREATH_COOLDOWN_MS } from './slots'
 
 export class DeterministicMoveEngine implements MoveEngine {
   composeSession(ctx: SessionContext): MindSessionPlan {
-    const bp = pickBlueprint(ctx)
+    const shape = sessionShape(ctx)
 
     // Open by checking in (grounds the session, grants XP via /api/mind/state),
-    // then the blueprint's authored regulate → core → close.
-    const moves: Move[] = [
-      buildMove('state-check', ctx),
-      ...blueprintMoves(bp, ctx, breathOnCooldown(ctx)),
-    ]
+    // then the state opening and today's path body.
+    const moves: Move[] = [buildMove('state-check', ctx), ...shapeMoves(shape, ctx)]
 
-    // On the 50-session directed path, the session's prescribed focus IS the
-    // intro — the theme the whole session serves. (The directive text is
-    // composer-facing; never surface it to the user.)
+    // On the path, the prescribed focus IS the intro — the theme the whole body
+    // serves. (The directive text is composer-facing; never surface it.) Off-path,
+    // the opening frames it.
     const intro = ctx.pathFocus
       ? { title: ctx.pathFocus.focus, subtitle: `Session ${ctx.pathFocus.n} of 50 on your path.` }
-      : { title: bp.title, subtitle: bp.subtitle }
+      : { title: shape.opening.title, subtitle: shape.opening.subtitle }
 
-    return { intro, moves, rewardXp: 15, doneText: bp.doneText, blueprintId: bp.id }
+    return {
+      intro,
+      moves,
+      rewardXp: 15,
+      doneText: shape.doneText,
+      blueprintId: shape.id,
+      openingId: shape.opening.id,
+    }
   }
 }
 
@@ -59,7 +59,6 @@ export function composeSession(ctx: SessionContext): MindSessionPlan {
 
 // ─── Arsenal single-move launcher ─────────────────────────────────────────────
 
-// Which unlocked systems can be played as a standalone one-move session today.
 const SYSTEM_TO_MOVE: Partial<Record<string, MoveKind>> = {
   'state-shift': 'breath',
   'self-image': 'identity',
@@ -85,11 +84,6 @@ export function singleMovePlan(systemId: string, ctx: SessionContext): MindSessi
 }
 
 // ─── Focused (themed) sessions — the "More" destination ───────────────────────
-//
-// Each unlocked system can be played as a SHORT, DYNAMIC session: a fixed core
-// move for the theme + a couple extras sampled (and rotated by seed) from a
-// relevant pool — different every time, Duolingo-replay style, while staying
-// on-theme.
 
 const THEME_CONFIG: Record<string, { title: string; subtitle: string; core: MoveKind; pool: MoveKind[] }> = {
   'state-shift':   { title: 'Reset',       subtitle: 'Drop the stress, find your center.',     core: 'breath',       pool: ['state-check', 'identity', 'mirror', 'choice', 'speak'] },
@@ -115,9 +109,8 @@ export function composeThemedSession(systemId: string, ctx: SessionContext): Min
   const cfg = THEME_CONFIG[systemId]
   if (!cfg) return null
   const seed = ctx.seed ?? ctx.dayOfYear
-  // Rotate the pool by seed, take 2 distinct extras → a 3-move set that varies.
-  // At most ONE affirm-statement modality per session (core counts) — otherwise
-  // a theme like Identity recites the same phrase in 2-3 different mediums.
+  // At most ONE affirm-statement modality per session (core counts) — otherwise a
+  // theme like Identity recites the same phrase in 2-3 different mediums.
   let affirmUsed = AFFIRM_STATEMENT_KINDS.includes(cfg.core)
   const rotated = cfg.pool.map((_, i) => cfg.pool[(i + seed) % cfg.pool.length])
   const extras: MoveKind[] = []

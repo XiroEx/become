@@ -27,7 +27,7 @@ import { runAiTask } from '@/lib/ai/runClient'
 import { stripMarkdown, clampTitle } from '@/lib/ai/sanitize'
 import { SEGMENT_LABELS } from './recommendSegment'
 import { buildMove } from './moveBuilders'
-import { pickBlueprint, blueprintSlots, breathOnCooldown, slotMove, type SessionSlot } from './blueprints'
+import { sessionShape, slotMove, type SessionSlot } from './blueprints'
 import {
   OPTION_KINDS,
   canClose,
@@ -166,14 +166,12 @@ function fillSlot(
  * session instead.
  */
 export async function composeSessionAI(ctx: SessionContext): Promise<MindSessionPlan | null> {
-  // Pick the shape BEFORE asking for copy, and tell the model what each beat is
-  // for. The model is writing into a session someone else designed — it should
-  // know the brief, the same way the arsenal's flow generator is told which
-  // system and topic it is writing for.
-  const bp = pickBlueprint(ctx)
-  // The authored shape for today: regulate honours the breath cooldown, and each
-  // slot resolves to the modality it runs today (the close beat rotates).
-  const slots: SessionSlot[] = blueprintSlots(bp, ctx, breathOnCooldown(ctx))
+  // Pick the shape BEFORE asking for copy, and tell the model both halves: the
+  // STATE it is opening for, and the PATH theme the body must serve. The model is
+  // writing into a session someone else designed — it should know the brief, the
+  // same way the arsenal's flow generator is told its system and topic.
+  const shape = sessionShape(ctx)
+  const slots: SessionSlot[] = shape.slots
 
   let plan: AiPlan | null = null
   try {
@@ -184,9 +182,16 @@ export async function composeSessionAI(ctx: SessionContext): Promise<MindSession
       {
         context: ctx,
         blueprint: {
-          id: bp.id,
-          title: bp.title,
-          subtitle: bp.subtitle,
+          id: shape.id,
+          // The opening the check-in called for.
+          opening: { id: shape.opening.id, title: shape.opening.title, subtitle: shape.opening.subtitle },
+          // The theme the body must serve — today's path session.
+          focus: shape.focus,
+          shape: shape.body.shape,
+          // Which part of the person today works — mindset is not only mental.
+          dimension: ctx.pathFocus?.dimension ?? null,
+          directive: ctx.pathFocus?.directive ?? null,
+          feeling: ctx.recentFeeling ?? null,
           slots: slots.map((s) => ({ kind: s.kind, role: s.role, brief: s.brief })),
         },
       },
@@ -247,7 +252,7 @@ export async function composeSessionAI(ctx: SessionContext): Promise<MindSession
   // turns a breath into the blueprint's alternative rather than forcing calm on
   // someone who came in hot.
   if (moves[0]?.kind === 'breath') {
-    moves[0] = { ...moves[0], altPositive: slotMove(bp.regulateAlt, ctx) }
+    moves[0] = { ...moves[0], altPositive: slotMove(shape.opening.alt, ctx) }
   }
 
   // Always open on a check-in (grounds the session + grants state XP).
@@ -255,13 +260,16 @@ export async function composeSessionAI(ctx: SessionContext): Promise<MindSession
 
   return {
     intro: {
-      title: validateTitle(plan.intro?.title) ?? bp.title,
-      subtitle: validateSubtitle(plan.intro?.subtitle) ?? bp.subtitle,
+      // On the path the focus IS the intro; the model may reword it, never replace it.
+      title: validateTitle(plan.intro?.title) ?? shape.focus ?? shape.opening.title,
+      subtitle: validateSubtitle(plan.intro?.subtitle)
+        ?? (ctx.pathFocus ? `Session ${ctx.pathFocus.n} of 50 on your path.` : shape.opening.subtitle),
     },
     moves,
     rewardXp: 15,
-    doneText: bp.doneText,
-    blueprintId: bp.id,
+    doneText: shape.doneText,
+    blueprintId: shape.id,
+    openingId: shape.opening.id,
     ...(validateCta(plan.cta) ? { cta: validateCta(plan.cta) } : {}),
   }
 }

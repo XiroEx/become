@@ -95,6 +95,7 @@ export default function MindJourney() {
   const [progress, setProgress] = useState<ProgressData | null>(null)
   const [streak, setStreak] = useState(0)
   const [recentState, setRecentState] = useState<MindState | null>(null)
+  const [recentFeeling, setRecentFeeling] = useState<string | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [lastBreathAt, setLastBreathAt] = useState<number | null>(null)
   const [recentKinds, setRecentKinds] = useState<string[]>([])
@@ -150,6 +151,7 @@ export default function MindJourney() {
         const st = await stateRes.json()
         const last = Array.isArray(st.logs) && st.logs.length > 0 ? st.logs[0] : null
         if (last?.state) setRecentState(last.state as MindState)
+        if (typeof last?.feeling === 'string') setRecentFeeling(last.feeling)
       }
       if (missionRes.ok) {
         const m = await missionRes.json()
@@ -174,6 +176,7 @@ export default function MindJourney() {
       chapter: progress.chapter,
       unlockedSystems: progress.unlockedSystems,
       recentState,
+      recentFeeling,
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       recentKinds,
@@ -183,7 +186,7 @@ export default function MindJourney() {
       now: Date.now(),
       lastBreathAt,
     }
-  }, [progress, recentState, missionAction, sessionSeed, lastBreathAt, recentKinds])
+  }, [progress, recentState, recentFeeling, missionAction, sessionSeed, lastBreathAt, recentKinds])
 
   const plan = useMemo<MindSessionPlan | null>(
     () => (sessionContext ? composeSession(sessionContext) : null),
