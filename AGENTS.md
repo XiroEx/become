@@ -5,7 +5,19 @@
 A mobile-first PWA for personalized fitness coaching. Users authenticate via magic links, enroll in multi-phase training programs, log workouts in real time, and track weight/mood/progress over time. Built for a coach named Jon Don.
 
 **Repo:** `XiroEx/become` on GitHub (private)
-**Live deployment:** RedRun at `become.redbtn.io` (workspace ID: `69ab83dd21070736089dc29d`, node .3:32000). Deploy with `/deploy become`. Firebase config in repo is legacy/unused.
+**Live deployment:** RedRun at `become.redbtn.io` (workspace ID: `69ab83dd21070736089dc29d`, node .3:32000). Firebase config in repo is legacy/unused.
+
+**Deployment is git-sourced. Do NOT run `/deploy become` for a normal release.** The
+workspace tracks `main` with `autoDeploy: true`, and RedRun syncs + builds on its own
+within ~30s of a merge (verified 2026-07-29: merge at 15:04:19Z → sync 15:04:56Z →
+build job started 15:04:40Z, no human involvement). The generic `/deploy` skill still
+says "there is NO auto-deploy from GitHub" — that is stale for this workspace.
+
+Hand-triggering `build?force=true` while the automatic build is already running
+KILLS it: the running job fails with "Build interrupted (no active job found during
+reconciliation)". That is exactly what happened on 2026-07-29, and it was mistaken
+for an infra flake. Merge and wait; only intervene if no build appears after a few
+minutes.
 
 ## Tech Stack
 
@@ -22,7 +34,7 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 | Drag & Drop | @hello-pangea/dnd 18 |
 | Icons | lucide-react |
 | Email | Nodemailer (SMTP/Gmail) |
-| Deployment | Firebase App Hosting |
+| Deployment | RedRun (git-sourced from `main`, autoDeploy) |
 | Package Manager | npm |
 
 ## Project Structure
@@ -199,6 +211,6 @@ Rules:
 - No test framework or tests
 - Chat and nutrition sections exist as pages but may be stubs
 - Redis URL is configured in .env but unused in code
-- No CI/CD pipeline (deployment is Firebase App Hosting)
+- No CI pipeline (RedRun builds on merge to `main`; no tests gate the deploy)
 - No rate limiting on API routes
 - No centralized error handling or logging
