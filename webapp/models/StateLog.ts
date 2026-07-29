@@ -10,6 +10,12 @@ export interface IStateLog extends Document {
   note?: string
   /** The state being replaced, when this is a mid-day re-check. */
   previousState?: MindState
+  /** The FEELING they actually tapped ("Grateful", "Motivated", "Drained"…).
+   *  Twenty feelings map onto four canonical states, and storing only the state
+   *  threw the nuance away — picking "Grateful" and picking "Locked in" produced
+   *  an identical session and an identical reply. Kept so the app can answer in
+   *  their word and the AI can ground on it. */
+  feeling?: string
   timestamp: Date
 }
 
@@ -25,6 +31,7 @@ const StateLogSchema = new Schema<IStateLog>({
     type: String,
     enum: ['stressed', 'distracted', 'low_energy', 'locked_in'],
   },
+  feeling: { type: String, maxlength: 40 },
   timestamp: { type: Date, default: Date.now },
 })
 

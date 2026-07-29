@@ -43,6 +43,12 @@ export interface SessionSlot {
    *  Deliberately omits `statement` on affirm slots so the user's OWN identity
    *  statement still comes through. */
   content?: SlotContent
+  /** Other modalities that serve this same brief, rotated by seed so replaying a
+   *  blueprint doesn't feel identical. Only ever used where the beat's payload is
+   *  interchangeable (the recite-the-statement family) — never where authored
+   *  options belong to one specific question. When a rotated kind is chosen the
+   *  slot's authored copy is dropped, since that copy was written for `kind`. */
+  alternates?: MoveKind[]
 }
 
 export interface SessionBlueprint {
@@ -114,6 +120,7 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
         kind: 'identity',
         role: 'close',
         brief: 'Close on the line they hold when it gets heavy. Their own statement if they have one.',
+        alternates: ['mirror', 'speak', 'compose', 'type'],
         content: { title: 'This is the line you hold', subtitle: 'Hold to lock it in.' },
       },
     ],
@@ -165,6 +172,7 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
         kind: 'type',
         role: 'close',
         brief: 'Write the line out word for word. Typing forces attention where reading does not.',
+        alternates: ['identity', 'speak', 'compose', 'mirror'],
         content: { title: 'Write it out', subtitle: 'Word for word. That is the point.' },
       },
     ],
@@ -219,6 +227,7 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
         kind: 'compose',
         role: 'close',
         brief: 'Lowest-effort affirm modality. Fill blanks rather than recite. No wrong answers.',
+        alternates: ['identity', 'type', 'mirror'],
         content: { title: 'Fill it in', subtitle: 'Choose the words that fit today.' },
       },
     ],
@@ -250,13 +259,14 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
       {
         kind: 'mission',
         role: 'core',
-        brief: 'Aim the state at ONE concrete thing before it fades. This is the whole session.',
+        brief: 'Aim the state at ONE concrete thing before it fades. The prompt is the NUDGE that helps them name it; the user writes the actual move. Never write the move for them.',
         content: { title: 'What is the one thing to attack while this lasts?', subtitle: 'Highest leverage. Not the easiest.' },
       },
       {
         kind: 'speak',
         role: 'close',
         brief: 'Say it out loud. A dialed-in state is the one time saying it aloud lands hardest.',
+        alternates: ['mirror', 'identity', 'type', 'compose'],
         content: { title: 'Say it out loud', subtitle: 'Like you mean it.' },
       },
     ],
@@ -292,6 +302,7 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
         kind: 'mirror',
         role: 'close',
         brief: 'Look at yourself and say the line. Must be short and first person to be sayable.',
+        alternates: ['speak', 'type', 'identity', 'compose'],
         content: { title: 'Look at yourself and say it', subtitle: 'Short line. Mean it.' },
       },
     ],
@@ -335,6 +346,7 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
         kind: 'identity',
         role: 'close',
         brief: 'Collapse the vision into the one line they carry out of here.',
+        alternates: ['mirror', 'speak', 'type', 'compose'],
         content: { title: 'This is who that makes you', subtitle: 'Hold to lock it in.' },
       },
     ],
@@ -378,6 +390,7 @@ export const SESSION_BLUEPRINTS: SessionBlueprint[] = [
         kind: 'identity',
         role: 'close',
         brief: 'Tie the rep back to identity. They are not doing a task, they are becoming someone.',
+        alternates: ['speak', 'type', 'mirror', 'compose'],
         content: { title: 'This is what that makes you', subtitle: 'Hold to lock it in.' },
       },
     ],
@@ -435,4 +448,81 @@ export function pickBlueprint(ctx: SessionContext): SessionBlueprint {
 export function regulateSlot(bp: SessionBlueprint, onBreathCooldown: boolean): SessionSlot {
   const slot = bp.slots.find((s) => s.role === 'regulate') ?? bp.slots[0]
   return slot.kind === 'breath' && onBreathCooldown ? bp.regulateAlt : slot
+}
+
+/**
+ * Which modality this slot runs today. Rotating the close beat across the
+ * recite-the-statement family is what stops a replayed blueprint feeling like the
+ * same session twice. The authored copy is written for `slot.kind`, so a rotated
+ * kind drops it and uses the builder's own (already scene-appropriate) titles.
+ */
+export function resolveSlot(slot: SessionSlot, ctx: SessionContext): SessionSlot {
+  if (!slot.alternates || slot.alternates.length === 0) return slot
+  const seed = Math.abs(ctx.seed ?? ctx.dayOfYear)
+  const options = [slot.kind, ...slot.alternates]
+  const avoid = new Set(ctx.recentKinds ?? [])
+  // Prefer a modality they did not just get.
+  const fresh = options.filter((k) => !avoid.has(k))
+  const pool = fresh.length > 0 ? fresh : options
+  const kind = pool[seed % pool.length]
+  if (kind === slot.kind) return slot
+  return { kind, role: slot.role, brief: slot.brief }
+}
+
+/** Breath is spaced out: once done it goes on cooldown so back-to-back sessions
+ *  in the same few hours don't repeat the same breathing. */
+export const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000 // ~4h
+
+/** Is the breath beat on cooldown for this context? */
+export function breathOnCooldown(ctx: SessionContext, cooldownMs: number = BREATH_COOLDOWN_MS): boolean {
+  const now = ctx.now ?? 0
+  return ctx.lastBreathAt != null && now > 0 && now - ctx.lastBreathAt < cooldownMs
+}
+
+/** The slots a blueprint runs today, regulate → core → close, cooldown applied. */
+export function blueprintSlots(
+  bp: SessionBlueprint,
+  ctx: SessionContext,
+  onBreathCooldown: boolean,
+): SessionSlot[] {
+  return [
+    regulateSlot(bp, onBreathCooldown),
+    ...bp.slots.filter((s) => s.role !== 'regulate'),
+  ].map((s) => resolveSlot(s, ctx))
+}
+
+/** The moves a blueprint renders today (without the leading state-check). */
+export function blueprintMoves(
+  bp: SessionBlueprint,
+  ctx: SessionContext,
+  onBreathCooldown: boolean,
+): Move[] {
+  const moves = blueprintSlots(bp, ctx, onBreathCooldown).map((s) => slotMove(s, ctx))
+  // A positive live check-in swaps the regulate breath for the blueprint's
+  // alternative rather than forcing calm on someone who came in hot.
+  if (moves[0]?.kind === 'breath') moves[0].altPositive = slotMove(bp.regulateAlt, ctx)
+  return moves
+}
+
+/**
+ * Rebuild a session around the state the user JUST reported.
+ *
+ * The session is composed before it is played (and the AI plan is cached for up
+ * to 8h), so `ctx.recentState` is whatever they felt LAST time — possibly days
+ * ago. Without this, answering "low energy" changed nothing but the breath
+ * protocol: the core and close beats were already fixed. The arsenal never had
+ * that problem because naming your state there routes you straight into the
+ * matching reset.
+ *
+ * Returns null when today's answer lands on the same blueprint (nothing to do),
+ * so the personalized copy already on screen is kept.
+ */
+export function realignPlan(
+  currentBlueprintId: string | undefined,
+  liveState: MindState,
+  ctx: SessionContext,
+): { blueprint: SessionBlueprint; moves: Move[] } | null {
+  const bp = pickBlueprint({ ...ctx, recentState: liveState })
+  if (bp.id === currentBlueprintId) return null
+  return { blueprint: bp, moves: blueprintMoves(bp, ctx, breathOnCooldown(ctx)) }
 }

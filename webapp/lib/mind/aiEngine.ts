@@ -27,7 +27,7 @@ import { runAiTask } from '@/lib/ai/runClient'
 import { stripMarkdown, clampTitle } from '@/lib/ai/sanitize'
 import { SEGMENT_LABELS } from './recommendSegment'
 import { buildMove } from './moveBuilders'
-import { pickBlueprint, regulateSlot, slotMove, type SessionSlot } from './blueprints'
+import { pickBlueprint, blueprintSlots, breathOnCooldown, slotMove, type SessionSlot } from './blueprints'
 import {
   OPTION_KINDS,
   canClose,
@@ -171,17 +171,9 @@ export async function composeSessionAI(ctx: SessionContext): Promise<MindSession
   // know the brief, the same way the arsenal's flow generator is told which
   // system and topic it is writing for.
   const bp = pickBlueprint(ctx)
-  const onCooldown =
-    ctx.lastBreathAt != null &&
-    (ctx.now ?? 0) > 0 &&
-    (ctx.now ?? 0) - ctx.lastBreathAt < BREATH_COOLDOWN_MS
-
-  // The authored shape for today. regulate honours the breath cooldown; core and
-  // close come straight off the blueprint.
-  const slots: SessionSlot[] = [
-    regulateSlot(bp, onCooldown),
-    ...bp.slots.filter((s) => s.role !== 'regulate'),
-  ]
+  // The authored shape for today: regulate honours the breath cooldown, and each
+  // slot resolves to the modality it runs today (the close beat rotates).
+  const slots: SessionSlot[] = blueprintSlots(bp, ctx, breathOnCooldown(ctx))
 
   let plan: AiPlan | null = null
   try {
@@ -273,9 +265,6 @@ export async function composeSessionAI(ctx: SessionContext): Promise<MindSession
     ...(validateCta(plan.cta) ? { cta: validateCta(plan.cta) } : {}),
   }
 }
-
-// Mirrors the deterministic composer's spacing rule.
-const BREATH_COOLDOWN_MS = 4 * 60 * 60 * 1000
 
 /** Does this beat just restate the previous one? Compares whatever text each
  *  beat actually puts on screen. */

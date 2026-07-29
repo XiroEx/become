@@ -15,6 +15,8 @@ import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
 import { reflectOnAnswers } from '@/lib/mind/reflect'
+import { realignPlan } from '@/lib/mind/blueprints'
+import type { SessionContext } from '@/lib/mind/moves'
 import {
   BREATH_PROTOCOLS,
   breathForState,
@@ -90,6 +92,10 @@ export interface SessionPlayerProps {
   /** Systems the user has unlocked — scopes the post-session "next segment" CTA
    *  to what they can actually open. Defaults to all seven. */
   unlockedSystems?: string[]
+  /** The context the plan was composed from. Supplying it lets the session
+   *  REALIGN to whatever the user reports on the live check-in — without it the
+   *  session is stuck on the state they felt last time. */
+  sessionContext?: SessionContext
 }
 
 type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
@@ -101,13 +107,16 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth, unlockedSystems }: SessionPlayerProps) {
+export default function SessionPlayer({ plan: initialPlan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth, unlockedSystems, sessionContext }: SessionPlayerProps) {
   const router = useRouter()
   // Gated (public share) runs are always read-only — never write progress.
   preview = preview || gated
   const [stage, setStage] = useState<Stage>('intro')
   const [index, setIndex] = useState(0)
   const [liveState, setLiveState] = useState<MindState | null>(initialLiveState)
+  // The plan can be REBUILT mid-session by the check-in, so it lives in state.
+  const [plan, setPlan] = useState<MindSessionPlan>(initialPlan)
+  const [realigned, setRealigned] = useState<string | null>(null)
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
   const [sharing, setSharing] = useState(false)
@@ -131,6 +140,33 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   // session can build on what they actually said — the same memory the arsenal
   // flows use.
   const answersRef = useRef<SessionAnswer[]>([])
+
+  /**
+   * The check-in just told us how they actually feel. Rebuild the rest of the
+   * session around THAT, the way naming your state in the arsenal drops you
+   * straight into the matching reset.
+   *
+   * The plan was composed before it was played (and the AI plan is cached for up
+   * to 8h), so it was built for whatever they felt LAST time. Answering "low
+   * energy" used to change nothing but the breath protocol — the core and close
+   * beats were already locked in. Only the moves AFTER the check-in are replaced,
+   * and only when today's answer actually calls for a different session.
+   */
+  const onLiveState = useCallback((state: MindState) => {
+    setLiveState(state)
+    if (!sessionContext) return
+    const next = realignPlan(plan.blueprintId, state, sessionContext)
+    if (!next) return
+    setPlan((p) => ({
+      ...p,
+      moves: [p.moves[0], ...next.moves],
+      doneText: next.blueprint.doneText,
+      blueprintId: next.blueprint.id,
+      // The intro is already behind them; the session's NEW shape is what counts.
+      intro: p.intro,
+    }))
+    setRealigned(next.blueprint.title)
+  }, [plan.blueprintId, sessionContext])
 
   const complete = useCallback(async () => {
     setStage('payoff')
@@ -294,6 +330,19 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
         </div>
       </div>
 
+      {/* Realignment notice — the check-in changed the session, so say so. Being
+          told "we rebuilt this around what you just said" is the whole point of
+          asking. Shown on the first beat after the check-in. */}
+      {realigned && stage === 'move' && index === 1 && (
+        <motion.p
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-4 mt-2.5 rounded-full bg-white/10 px-3 py-1.5 text-center text-[11px] font-semibold text-white/70"
+        >
+          Rebuilt around how you just checked in · {realigned}
+        </motion.p>
+      )}
+
       {/* Stage */}
       <div className="relative flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
@@ -334,7 +383,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
               className="absolute inset-0"
             >
               {move.kind === 'state-check' && (
-                <StateCheckScene move={move} onState={setLiveState} onDone={next} preview={preview} />
+                <StateCheckScene move={move} onState={onLiveState} onDone={next} preview={preview} />
               )}
               {move.kind === 'breath' && (
                 <BreathScene move={move} protocol={resolvedProtocol} onDone={next} />
