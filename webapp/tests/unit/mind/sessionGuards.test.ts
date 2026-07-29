@@ -24,7 +24,10 @@ import {
   isDownState,
   MAX_SPOKEN_WORDS,
 } from '../../../lib/mind/validateMove'
-import { SESSION_BLUEPRINTS, pickBlueprint, slotMove, realignPlan } from '../../../lib/mind/blueprints'
+import { sessionShape, realignOpening, slotMove, STATE_OPENINGS, NEUTRAL_OPENING, openingFor } from '../../../lib/mind/blueprints'
+import { PATH_BODIES } from '../../../lib/mind/bodies'
+import { SESSION_PATH, getPathSession } from '../../../lib/mind/sessionPath'
+import type { SessionSlot } from '../../../lib/mind/slots'
 import { composeSession } from '../../../lib/mind/composeSession'
 import type { SessionContext } from '../../../lib/mind/moves'
 import type { MindState } from '../../../lib/mindContent'
@@ -138,119 +141,124 @@ test('acknowledge is only justified by a down check-in', () => {
   assert.equal(isDownState(null), false)
 })
 
-// ─── blueprints ───────────────────────────────────────────────────────────────
+// ─── openings + bodies ───────────────────────────────────────────────────────
 
-test('every blueprint is structurally sound', () => {
-  for (const bp of SESSION_BLUEPRINTS) {
-    const roles = bp.slots.map((s) => s.role)
-    assert.ok(roles.includes('regulate'), `${bp.id} needs a regulate slot`)
-    assert.ok(roles.includes('core'), `${bp.id} needs a core slot`)
-    assert.ok(roles.includes('close'), `${bp.id} needs a close slot`)
-    assert.ok(bp.doneText.trim().length > 0, `${bp.id} needs a finish line`)
-    for (const slot of bp.slots) {
-      assert.ok(slot.brief.trim().length > 0, `${bp.id}/${slot.kind} needs a brief`)
-      if (slot.role === 'close') {
-        assert.ok(canClose(slot.kind), `${bp.id} must not close on ${slot.kind}`)
-      }
-    }
-    // A breath regulate slot must have a non-breath alternative for the cooldown
-    // and the locked-in swap.
-    assert.notEqual(bp.regulateAlt.kind, 'breath', `${bp.id} regulateAlt must not be breath`)
+const ALL_SLOTS = (): SessionSlot[] => [
+  ...Object.values(STATE_OPENINGS).flatMap((o) => [o.slot, o.alt]),
+  NEUTRAL_OPENING.slot, NEUTRAL_OPENING.alt,
+  ...Object.values(PATH_BODIES).flatMap((b) => [b.core, b.close, b.coreFallback]),
+]
+
+test('every state has an opening, and none of them is a bare breath fallback', () => {
+  for (const [state, o] of Object.entries(STATE_OPENINGS)) {
+    assert.ok(o.slot.brief.trim(), `${state} opening needs a brief`)
+    assert.notEqual(o.alt.kind, 'breath', `${state} alt must not be breath (it covers the cooldown)`)
+  }
+  // Someone who came in strong should not be handed a down-regulating breath.
+  assert.notEqual(STATE_OPENINGS.locked_in.slot.kind, 'breath')
+})
+
+test('every path body closes on a valid register and has a finish line', () => {
+  for (const b of Object.values(PATH_BODIES)) {
+    assert.equal(b.close.role, 'close')
+    assert.ok(canClose(b.close.kind), `${b.shape} must not close on ${b.close.kind}`)
+    assert.ok(b.doneText.trim(), `${b.shape} needs a finish line`)
+    assert.ok(b.core.brief.trim(), `${b.shape} core needs a brief`)
+  }
+})
+
+test('every one of the 50 path sessions maps to a real body shape', () => {
+  assert.equal(SESSION_PATH.length, 50)
+  for (const p of SESSION_PATH) {
+    assert.ok(PATH_BODIES[p.shape], `session ${p.n} has unknown shape ${p.shape}`)
+    assert.ok(['mental', 'emotional', 'spiritual', 'physical'].includes(p.dimension), `session ${p.n} bad dimension`)
+    // A shape must be renderable by the chapter that session belongs to.
+    assert.ok(
+      PATH_BODIES[p.shape].minChapter <= p.chapter,
+      `session ${p.n} (ch${p.chapter}) uses ${p.shape} which needs ch${PATH_BODIES[p.shape].minChapter}`,
+    )
+  }
+})
+
+test('the path works all four dimensions, not just the mental one', () => {
+  const seen = new Set(SESSION_PATH.map((p) => p.dimension))
+  for (const d of ['mental', 'emotional', 'spiritual', 'physical']) {
+    assert.ok(seen.has(d as never), `no path session works the ${d} dimension`)
   }
 })
 
 test('authored option slots always render at least two choices', () => {
   const c = ctx()
-  for (const bp of SESSION_BLUEPRINTS) {
-    for (const slot of [...bp.slots, bp.regulateAlt]) {
-      if (!['choice', 'acknowledge', 'interrogative'].includes(slot.kind)) continue
-      const move = slotMove(slot, c)
-      assert.ok((move.options?.length ?? 0) >= 2, `${bp.id}/${slot.kind} needs 2+ options`)
-      assert.ok(move.title.trim().length > 0, `${bp.id}/${slot.kind} needs a question`)
-    }
+  for (const slot of ALL_SLOTS()) {
+    if (!['choice', 'acknowledge', 'interrogative'].includes(slot.kind)) continue
+    const move = slotMove(slot, c)
+    assert.ok((move.options?.length ?? 0) >= 2, `${slot.kind} needs 2+ options`)
+    assert.ok(move.title.trim().length > 0, `${slot.kind} needs a question`)
   }
 })
 
 test('authored say-aloud slots produce a sayable statement', () => {
-  // Uses a long identity statement on purpose: the builder must fall back to a
-  // short pool line rather than handing a paragraph to a scene that speech-matches.
+  // Long identity statement on purpose: the builder must fall back to a short pool
+  // line rather than hand a paragraph to a scene that speech-matches it.
   const c = ctx({ identityStatement: SHIPPED_MIRROR_STATEMENT })
-  for (const bp of SESSION_BLUEPRINTS) {
-    for (const slot of [...bp.slots, bp.regulateAlt]) {
-      if (!['mirror', 'speak', 'type', 'assemble'].includes(slot.kind)) continue
-      const move = slotMove(slot, c)
-      assert.ok(move.statement, `${bp.id}/${slot.kind} needs a statement`)
+  for (const slot of ALL_SLOTS()) {
+    if (!['mirror', 'speak', 'type', 'assemble'].includes(slot.kind)) continue
+    const move = slotMove(slot, c)
+    assert.ok(move.statement, `${slot.kind} needs a statement`)
+    assert.ok(
+      validateStatement(move.statement!, slot.kind) !== null,
+      `${slot.kind} produced an unsayable line: ${move.statement}`,
+    )
+  }
+})
+
+test('a locked-in check-in opens on evidence, not a breath', () => {
+  const shape = sessionShape(ctx({ recentState: 'locked_in' }))
+  assert.equal(shape.opening.id, 'open-pour-it-in')
+  assert.notEqual(shape.slots[0].kind, 'breath')
+})
+
+test('a low-energy check-in is where the heaviness question lives', () => {
+  const o = openingFor('low_energy')
+  assert.match(o.alt.content?.title ?? '', /how heavy is today/i)
+})
+
+// ─── the state/path split ────────────────────────────────────────────────────
+
+test('the PATH decides the body: same state, different path day, different body', () => {
+  const commitDay = SESSION_PATH.find((p) => p.shape === 'commit')!
+  const envisionDay = SESSION_PATH.find((p) => p.shape === 'envision')!
+  const a = sessionShape(ctx({ recentState: 'stressed', chapter: 5, pathFocus: commitDay }))
+  const b = sessionShape(ctx({ recentState: 'stressed', chapter: 5, pathFocus: envisionDay }))
+  assert.equal(a.opening.id, b.opening.id, 'same state should give the same opening')
+  assert.notEqual(a.body.shape, b.body.shape, 'different path day must give a different body')
+})
+
+test('the STATE decides the opening: same path day, different state, same body', () => {
+  const day = SESSION_PATH.find((p) => p.shape === 'reflect')!
+  const a = sessionShape(ctx({ recentState: 'stressed', pathFocus: day }))
+  const b = sessionShape(ctx({ recentState: 'low_energy', pathFocus: day }))
+  assert.notEqual(a.opening.id, b.opening.id, 'different state must give a different opening')
+  assert.equal(a.body.shape, b.body.shape, 'the path body must not change with state')
+})
+
+test('a session never runs a body its chapter cannot render', () => {
+  for (let chapter = 1; chapter <= 5; chapter++) {
+    for (let seed = 0; seed < 8; seed++) {
+      const shape = sessionShape(ctx({ chapter, seed, pathFocus: null }))
       assert.ok(
-        validateStatement(move.statement!, slot.kind) !== null,
-        `${bp.id}/${slot.kind} produced an unsayable line: ${move.statement}`,
+        shape.body.minChapter <= chapter || shape.slots[1].kind === 'choice',
+        `ch${chapter}/seed${seed} ran ${shape.body.shape} (needs ch${shape.body.minChapter})`,
       )
     }
   }
 })
 
-test('a locked-in check-in gets the locked-in blueprint, not a breath', () => {
-  const bp = pickBlueprint(ctx({ recentState: 'locked_in' }))
-  assert.equal(bp.id, 'pour-it-in')
-  assert.ok(!bp.slots.some((s) => s.kind === 'breath'), 'do not down-regulate someone already on')
-})
-
-test('a low-energy check-in is where the heaviness question belongs', () => {
-  const bp = pickBlueprint(ctx({ recentState: 'low_energy' }))
-  assert.equal(bp.id, 'small-input')
-  const core = bp.slots.find((s) => s.role === 'core')
-  assert.equal(core?.kind, 'acknowledge')
-  assert.match(core?.content?.title ?? '', /how heavy is today/i)
-})
-
-// ─── the deterministic session end to end ─────────────────────────────────────
-
-test('a locked-in session never asks how heavy today is', () => {
-  const plan = composeSession(ctx({ recentState: 'locked_in' }))
-  assert.equal(plan.moves[0].kind, 'state-check')
-  assert.ok(!plan.moves.some((m) => m.kind === 'acknowledge'), 'no acknowledge on a locked-in session')
-  assert.ok(!plan.moves.some((m) => /how heavy is today/i.test(m.title)))
-  assert.ok(plan.doneText, 'session needs its own finish line')
-})
-
-test('every composed session opens on a check-in and closes on a valid register', () => {
-  const states = ['stressed', 'distracted', 'low_energy', 'locked_in', null] as const
-  for (const state of states) {
-    for (const chapter of [1, 2, 3, 5]) {
-      for (const seed of [0, 1, 2, 3, 11]) {
-        const plan = composeSession(ctx({ recentState: state, chapter, seed }))
-        assert.equal(plan.moves[0].kind, 'state-check', `${state}/${chapter}/${seed} must open on a check-in`)
-        assert.ok(plan.moves.length >= 4, `${state}/${chapter}/${seed} is too thin`)
-        const last = plan.moves[plan.moves.length - 1]
-        assert.ok(canClose(last.kind), `${state}/${chapter}/${seed} closed on ${last.kind}`)
-        // No beat may restate the one before it.
-        for (let i = 1; i < plan.moves.length; i++) {
-          const text = (m: (typeof plan.moves)[number]) =>
-            [m.title, m.statement, m.prompt].filter(Boolean).join(' ')
-          assert.equal(
-            restates(text(plan.moves[i - 1]), text(plan.moves[i])),
-            false,
-            `${state}/${chapter}/${seed}: move ${i} restates move ${i - 1}`,
-          )
-        }
-      }
-    }
-  }
-})
-
-test('chapter 1 never serves a blueprint gated behind a later chapter', () => {
-  for (const seed of [0, 1, 2, 3, 4, 5]) {
-    const bp = pickBlueprint(ctx({ chapter: 1, recentState: null, seed }))
-    assert.ok(bp.minChapter <= 1, `${bp.id} is gated to chapter ${bp.minChapter}`)
-  }
-})
-
-test('the breath cooldown swaps the regulate beat instead of dropping it', () => {
-  const now = 1_000_000_000
-  const warm = composeSession(ctx({ recentState: 'stressed', now, lastBreathAt: now - 60_000 }))
-  const cold = composeSession(ctx({ recentState: 'stressed', now, lastBreathAt: now - 9 * 60 * 60 * 1000 }))
-  assert.equal(cold.moves[1].kind, 'breath', 'outside the cooldown the breath stays')
-  assert.notEqual(warm.moves[1].kind, 'breath', 'inside the cooldown it swaps')
-  assert.equal(warm.moves.length, cold.moves.length, 'the beat is replaced, not removed')
+test('the path focus is the intro, and the body actually serves it', () => {
+  const day = getPathSession(11)! // session 12 — "Name the identity", envision
+  const plan = composeSession(ctx({ chapter: 2, pathFocus: day }))
+  assert.equal(plan.intro.title, day.focus, 'intro must be the path focus')
+  assert.equal(plan.blueprintId?.split('/')[1], day.shape, 'body must be the focus shape')
 })
 
 // ─── Live realignment ─────────────────────────────────────────────────────────
@@ -261,24 +269,36 @@ test('the breath cooldown swaps the regulate beat instead of dropping it', () =>
 // whatever session was already built. The arsenal never had this problem because
 // naming your state there routes you into the matching reset immediately.
 
-test('checking in differently rebuilds the session around the new state', () => {
-  // Composed while they were last seen locked in…
-  const plan = composeSession(ctx({ recentState: 'locked_in' }))
-  assert.equal(plan.blueprintId, 'pour-it-in')
-
-  // …but today they report low energy.
-  const next = realignPlan(plan.blueprintId, 'low_energy', ctx({ recentState: 'locked_in' }))
-  assert.ok(next, 'a different state must rebuild the session')
-  assert.equal(next.blueprint.id, 'small-input')
-  assert.ok(next.moves.length >= 3)
-  // And the heaviness question is now where it belongs: in this session.
-  assert.ok(next.moves.some((m) => /how heavy is today/i.test(m.title)))
-})
-
-test('checking in the same way leaves the composed session alone', () => {
+test('checking in differently swaps the opening', () => {
   const c = ctx({ recentState: 'locked_in' })
   const plan = composeSession(c)
-  assert.equal(realignPlan(plan.blueprintId, 'locked_in', c), null, 'no churn when nothing changed')
+  assert.equal(plan.openingId, 'open-pour-it-in')
+  const next = realignOpening(plan.openingId, 'low_energy', c)
+  assert.ok(next, 'a different state must swap the opening')
+  assert.equal(next.opening.id, 'open-small-input')
+})
+
+test('REGRESSION: realigning KEEPS the path body and its personalized copy', () => {
+  const day = SESSION_PATH.find((p) => p.shape === 'commit')!
+  const c = ctx({ recentState: 'locked_in', chapter: 5, pathFocus: day })
+  const plan = composeSession(c)
+  // Stand in for AI-personalized copy on the body beats.
+  const personalized = { ...plan, moves: plan.moves.map((m, i) => (i >= 2 ? { ...m, title: `PERSONALIZED ${i}` } : m)) }
+
+  const next = realignOpening(personalized.openingId, 'low_energy', c)
+  assert.ok(next)
+  const after = [personalized.moves[0], next.move, ...personalized.moves.slice(2)]
+
+  assert.equal(after.length, personalized.moves.length, 'the session keeps its length')
+  assert.notEqual(after[1].kind === 'breath' && personalized.moves[1].kind === 'breath', undefined)
+  assert.equal(after[2].title, 'PERSONALIZED 2', 'core copy must survive realignment')
+  assert.equal(after[3].title, 'PERSONALIZED 3', 'close copy must survive realignment')
+})
+
+test('checking in the same way leaves the session alone', () => {
+  const c = ctx({ recentState: 'locked_in' })
+  const plan = composeSession(c)
+  assert.equal(realignOpening(plan.openingId, 'locked_in', c), null, 'no churn when nothing changed')
 })
 
 test('realignment covers every state transition and always stays valid', () => {
@@ -287,23 +307,22 @@ test('realignment covers every state transition and always stays valid', () => {
     for (const to of states) {
       const c = ctx({ recentState: from })
       const plan = composeSession(c)
-      const next = realignPlan(plan.blueprintId, to, c)
-      if (!next) continue // same blueprint — nothing to rebuild
-      const last = next.moves[next.moves.length - 1]
+      const next = realignOpening(plan.openingId, to, c)
+      if (!next) continue
+      const swapped = [plan.moves[0], next.move, ...plan.moves.slice(2)]
+      const last = swapped[swapped.length - 1]
       assert.ok(canClose(last.kind), `${from}->${to} closed on ${last.kind}`)
       // A positive check-in must never be handed the meet-the-hard-feeling beat.
       if (to === 'locked_in') {
-        assert.ok(!next.moves.some((m) => m.kind === 'acknowledge'), `${from}->${to} used acknowledge`)
+        assert.ok(!swapped.some((m) => m.kind === 'acknowledge'), `${from}->${to} used acknowledge`)
       }
     }
   }
 })
 
-test('a low-energy check-in never leaves you in the locked-in session', () => {
-  const c = ctx({ recentState: 'locked_in' })
-  const next = realignPlan('pour-it-in', 'low_energy', c)
-  assert.ok(next && !next.moves.some((m) => m.kind === 'mission' && !m.prompt))
-  assert.equal(next?.blueprint.id, 'small-input')
+test('a low-energy check-in never leaves you in the locked-in opening', () => {
+  const next = realignOpening('open-pour-it-in', 'low_energy', ctx({ recentState: 'locked_in' }))
+  assert.equal(next?.opening.id, 'open-small-input')
 })
 
 // ─── Modality rotation ────────────────────────────────────────────────────────

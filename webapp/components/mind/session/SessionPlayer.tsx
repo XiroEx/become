@@ -15,7 +15,7 @@ import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
 import { reflectOnAnswers } from '@/lib/mind/reflect'
-import { realignPlan } from '@/lib/mind/blueprints'
+import { realignOpening } from '@/lib/mind/blueprints'
 import type { SessionContext } from '@/lib/mind/moves'
 import {
   BREATH_PROTOCOLS,
@@ -155,18 +155,18 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
   const onLiveState = useCallback((state: MindState) => {
     setLiveState(state)
     if (!sessionContext) return
-    const next = realignPlan(plan.blueprintId, state, sessionContext)
+    // Swap ONLY the opening. The body belongs to today's path session, so the
+    // curriculum theme — and every word the AI personalized into it — survives.
+    // Recognise the feeling, then carry on with the path.
+    const next = realignOpening(plan.openingId, state, sessionContext)
     if (!next) return
     setPlan((p) => ({
       ...p,
-      moves: [p.moves[0], ...next.moves],
-      doneText: next.blueprint.doneText,
-      blueprintId: next.blueprint.id,
-      // The intro is already behind them; the session's NEW shape is what counts.
-      intro: p.intro,
+      moves: [p.moves[0], next.move, ...p.moves.slice(2)],
+      openingId: next.opening.id,
     }))
-    setRealigned(next.blueprint.title)
-  }, [plan.blueprintId, sessionContext])
+    setRealigned(next.opening.title)
+  }, [plan.openingId, sessionContext])
 
   const complete = useCallback(async () => {
     setStage('payoff')
