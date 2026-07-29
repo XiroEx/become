@@ -41,17 +41,19 @@ export async function GET(request: NextRequest) {
       ).lean()
     }
 
-    // One-time XP seeding: if user has evolution activity but zero XP, seed from evolutionScore
-    if (progress && progress.xp === 0) {
+    // One-time XP seeding: if a user has evolution activity but zero XP, seed from
+    // evolutionScore. `xpSeeded` makes it genuinely one-time — the condition used
+    // to be "xp === 0", so it re-fired every time XP returned to zero. That meant
+    // an admin reset was partly undone on the very next page load: xp came back,
+    // levelXp was re-derived from it below, and the level climbed straight off 1.
+    if (progress && !progress.xpSeeded) {
       const evolutionScore = (identity as Record<string, unknown> | null)?.evolutionScore as number | undefined
-      if (evolutionScore && evolutionScore > 0) {
-        const seedXp = Math.min(evolutionScore, 100)
-        progress = await MindProgress.findOneAndUpdate(
-          { userId: auth.userId },
-          { $inc: { xp: seedXp } },
-          { new: true }
-        ).lean()
-      }
+      const seedXp = progress.xp === 0 && evolutionScore && evolutionScore > 0 ? Math.min(evolutionScore, 100) : 0
+      progress = await MindProgress.findOneAndUpdate(
+        { userId: auth.userId },
+        { ...(seedXp > 0 && { $inc: { xp: seedXp } }), $set: { xpSeeded: true } },
+        { new: true }
+      ).lean()
     }
 
     const storedChapter = (progress?.chapter as number) ?? 1
