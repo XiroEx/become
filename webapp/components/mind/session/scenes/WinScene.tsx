@@ -36,7 +36,9 @@ export default function WinScene({ move, onDone, preview }: SceneProps) {
       }
     }
     setSaved(true)
-    setTimeout(onDone, 1100)
+    // Report the win up: it belongs in the journal and in the session's closing
+    // reflection, not just in /api/mind/wins.
+    setTimeout(() => onDone({ q: move.prompt ?? move.title, a: text.trim() }), 1100)
   }
 
   return (
