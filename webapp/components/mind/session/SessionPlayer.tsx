@@ -88,11 +88,14 @@ const MOVE_RECAP_LABEL: Record<string, string> = {
 }
 
 // The completion sequence. Sealing → recap of the beats → score → the reflection.
-// Timed so the AI close (2-4s) lands after something worth watching rather than
-// after a bare spinner.
-const PAYOFF_SEAL_MS = 750
-const PAYOFF_RECAP_STEP_MS = 300
-const PAYOFF_SCORE_MS = 700
+// Deliberately unhurried: this is the moment the session is meant to land, and it
+// comfortably outlasts the 2-4s the generated close takes to write. Roughly 4s on
+// a short session, 5s on a long one. Tap anywhere to skip.
+const PAYOFF_SEAL_MS = 1100
+const PAYOFF_RECAP_STEP_MS = 500
+/** Beat of stillness after the last recap line, before the score moves in. */
+const PAYOFF_RECAP_HOLD_MS = 400
+const PAYOFF_SCORE_MS = 1000
 
 const FEATURE_UNLOCK_LABEL: Record<string, string> = {
   coach: 'Your coach is unlocked — talk it through any time.',
@@ -183,7 +186,7 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
   // together they cover the couple of seconds the generated close takes to arrive.
   useEffect(() => {
     if (stage !== 'payoff') return
-    const recapMs = PAYOFF_RECAP_STEP_MS * recapItems.length + 200
+    const recapMs = PAYOFF_RECAP_STEP_MS * recapItems.length + PAYOFF_RECAP_HOLD_MS
     const t1 = setTimeout(() => setPayoffPhase(1), PAYOFF_SEAL_MS)
     const t2 = setTimeout(() => setPayoffPhase(2), PAYOFF_SEAL_MS + recapMs)
     const t3 = setTimeout(() => setPayoffPhase(3), PAYOFF_SEAL_MS + recapMs + PAYOFF_SCORE_MS)
@@ -421,7 +424,7 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.55, ease: 'easeOut' }}
               className="flex h-full w-full flex-col items-center justify-center px-6 text-center"
             >
               <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-green-500">
@@ -498,9 +501,9 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                     initial={{ scale: 0.7, opacity: 0 }}
                     animate={{ scale: [0.7, 1.9], opacity: [0.55, 0] }}
                     transition={{
-                      duration: 2.2,
+                      duration: 3.4,
                       repeat: payoffPhase < 3 ? Infinity : 0,
-                      delay: i * 0.55,
+                      delay: i * 0.9,
                       ease: 'easeOut',
                     }}
                   />
@@ -508,13 +511,13 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                 <motion.span
                   initial={{ scale: 0, rotate: -25 }}
                   animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.1 }}
+                  transition={{ type: 'spring', stiffness: 150, damping: 17, delay: 0.15 }}
                   className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-green-500"
                 >
                   <motion.span
                     initial={{ pathLength: 0 }}
                     animate={{ pathLength: 1 }}
-                    transition={{ delay: 0.35, duration: 0.4 }}
+                    transition={{ delay: 0.5, duration: 0.6 }}
                   >
                     <Check className="h-10 w-10" strokeWidth={3} />
                   </motion.span>
@@ -551,7 +554,8 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                       animate={{ opacity: 1, x: 0 }}
                       transition={{
                         delay: payoffPhase >= 3 ? 0 : (i * PAYOFF_RECAP_STEP_MS) / 1000,
-                        duration: 0.25,
+                        duration: 0.45,
+                        ease: 'easeOut',
                       }}
                       className="flex items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2 text-left"
                     >
@@ -592,7 +596,7 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-5 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-green-300"
                 >
                   +{result.xpAwarded} XP
@@ -603,7 +607,7 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-4 w-full max-w-xs"
                 >
                   <div className="flex items-center justify-between text-xs font-semibold">
@@ -625,7 +629,7 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                   key={f}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3.5 py-1.5 text-xs font-semibold text-amber-300"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
@@ -636,7 +640,7 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ duration: 0.3 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-300"
                 >
                   <Flame className="h-4 w-4" />
