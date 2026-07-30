@@ -53,7 +53,13 @@ export default function PatternScene({ move, onDone }: SceneProps) {
             <p className="text-xs uppercase tracking-widest text-white/40">{PATTERNS[selected].pattern}</p>
             <p className="mt-5 text-xl font-semibold leading-relaxed text-white">{PATTERNS[selected].override}</p>
             <button
-              onClick={() => onDone()}
+              onClick={() =>
+                onDone(
+                  selected !== null
+                    ? { q: 'The pattern I catch myself in', a: PATTERNS[selected].pattern }
+                    : undefined,
+                )
+              }
               className="mt-10 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-4 text-base font-bold text-black transition-transform active:scale-95"
             >
               Override it <ArrowRight className="h-5 w-5" />

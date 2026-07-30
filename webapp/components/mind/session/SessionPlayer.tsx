@@ -152,8 +152,18 @@ export default function SessionPlayer({ plan: initialPlan, onExit, preview = fal
    * beats were already locked in. Only the moves AFTER the check-in are replaced,
    * and only when today's answer actually calls for a different session.
    */
-  const onLiveState = useCallback((state: MindState) => {
+  const onLiveState = useCallback((state: MindState, feeling?: string) => {
     setLiveState(state)
+    // The check-in IS an answer. Recording it guarantees the closing reflection
+    // always has something to read — the state/path split moved the guaranteed
+    // answer-producing beat out of the session, so a breath opening plus a
+    // non-typing body left the close with nothing and it stopped appearing.
+    const arr = answersRef.current
+    const q = 'How I checked in today'
+    const a = feeling || state.replace('_', ' ')
+    const at = arr.findIndex((x) => x.q === q)
+    if (at >= 0) arr[at] = { q, a }
+    else arr.unshift({ q, a })
     if (!sessionContext) return
     // Swap ONLY the opening. The body belongs to today's path session, so the
     // curriculum theme — and every word the AI personalized into it — survives.

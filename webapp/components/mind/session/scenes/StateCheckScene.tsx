@@ -117,12 +117,13 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
     if (chosen || other) return
     setOther(true)
     setMessage("That's okay — you don't have to name it. Let's just begin.")
+    onState?.('distracted', 'Not sure')
   }
 
   // Quick path: reuse the recent state, no re-logging (avoids mood/XP spam).
   const resumeRecent = () => {
     if (!recent) return
-    onState?.(recent)
+    onState?.(recent, STATE_META[recent].label)
     onDone()
   }
 
@@ -132,7 +133,7 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
   ) => {
     setChosen(state)
     setPendingState(null) // clear the "what changed?" gate so the reveal can show
-    onState?.(state)
+    onState?.(state, opts?.feeling)
     setMessage(FALLBACK_MESSAGES[state]) // optimistic
     if (preview) return // admin lab: don't log state / grant XP
     try {
