@@ -20,11 +20,13 @@ export async function reflectOnAnswers(
     `Respond directly to me in 2–3 sentences: name what I actually said, reassure me, ` +
     `give me ONE concrete piece of advice tied to my answers, and end with a short push to keep going. ` +
     `Warm and direct, no fluff, no lists. Never name a book, author, or source. ` +
-    // This is mindset work. The coach has my whole cross-app context including my
-    // training schedule, and it kept closing sessions with "go hit that Chest and
-    // Back session" — which turns inner work into a workout reminder.
-    `This is MINDSET work: do not mention my workouts, my training schedule, or what ` +
-    `is programmed for me today. Stay on what I just wrote.`
+    // The coach has the whole cross-app context including the training schedule,
+    // and was closing every session with "go hit that Chest and Back session" —
+    // which turns inner work into a workout reminder. Training is allowed, it just
+    // isn't the answer to everything.
+    `Lead with what I wrote — that is the subject. You may mention my training, ` +
+    `nutrition or the rest of my day only when it genuinely follows from my answer, ` +
+    `never as a default ending, and never in more than one sentence.`
 
   try {
     const r = await runAiTask('/api/ai/mind/coach', { message })

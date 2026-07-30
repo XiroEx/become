@@ -244,8 +244,9 @@ export interface SceneProps {
    *  typed answer) pass it so the session can remember it; recitation/structural
    *  scenes just call onDone(). */
   onDone: (answer?: SessionAnswer) => void
-  /** state-check only: report the chosen state up to the player. */
-  onState?: (state: MindState) => void
+  /** state-check only: report the chosen state up to the player, plus the exact
+   *  feeling word they tapped ("Grateful", "Drained") where there is one. */
+  onState?: (state: MindState, feeling?: string) => void
   /** Admin lab preview: scenes that persist (state/win/discipline) skip their
    *  network writes so testing never pollutes the account. */
   preview?: boolean

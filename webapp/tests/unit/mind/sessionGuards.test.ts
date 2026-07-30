@@ -354,3 +354,40 @@ test('every rotated closing modality still produces a sayable statement', () => 
     }
   }
 })
+
+// ─── the closing reflection must always have something to read ───────────────
+//
+// The adaptive close only renders when the session collected at least one answer.
+// Splitting state and path moved the guaranteed answer-producing beat out of the
+// session: a breath opening plus a body whose scene doesn't collect input (win,
+// vision, antisabotage, social all used to report nothing) left the close with
+// zero answers, so it silently stopped appearing.
+
+/** Scenes that report a {q,a} back to the player. */
+const ANSWERING_KINDS = [
+  'choice', 'acknowledge', 'interrogative', // ChoiceScene
+  'mission',                                // MissionScene
+  'win',                                    // WinScene
+  'challenge',                              // ChallengeScene
+  'contrast',                               // ContrastScene
+  'antisabotage',                           // PatternScene
+  'social',                                 // SocialScene
+  'vision',                                 // VisionScene (reports the locked statement)
+]
+
+test('every composed session contains at least one answer-producing beat', () => {
+  const states: (MindState | null)[] = ['stressed', 'distracted', 'low_energy', 'locked_in', null]
+  for (const state of states) {
+    for (const p of [null, ...SESSION_PATH]) {
+      const chapter = p?.chapter ?? 5
+      for (const seed of [0, 3, 7]) {
+        const plan = composeSession(ctx({ recentState: state, chapter, seed, pathFocus: p }))
+        const answering = plan.moves.filter((m) => ANSWERING_KINDS.includes(m.kind))
+        assert.ok(
+          answering.length > 0,
+          `${state}/path${p?.n ?? '-'}/seed${seed} has no answer-producing beat: ${plan.moves.map((m) => m.kind).join(' → ')}`,
+        )
+      }
+    }
+  }
+})
