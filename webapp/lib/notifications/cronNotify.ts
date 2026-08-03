@@ -52,6 +52,10 @@ export function workoutTitleForDay(phases: any[], phaseNum: number, dayLabel: st
 
 export const WORKOUT_REMINDER_START_HOUR = 7
 export const WORKOUT_REMINDER_END_HOUR = 11
+/** The daily Mind session nudge shares the morning with the workout reminder;
+ *  the route sends at most ONE morning push per user, workout first. */
+export const MIND_REMINDER_START_HOUR = 7
+export const MIND_REMINDER_END_HOUR = 11
 export const REENGAGEMENT_START_HOUR = 12
 export const REENGAGEMENT_END_HOUR = 18
 export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'

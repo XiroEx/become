@@ -70,6 +70,7 @@ interface NotificationPrefs {
   mealReminder: boolean
   reEngagement: boolean
   chatMessage: boolean
+  mindReminder: boolean
 }
 
 type NotificationPrefKey = keyof NotificationPrefs
@@ -79,6 +80,7 @@ interface PreferencesResponse {
 }
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
+  { key: 'mindReminder', label: 'Daily mindset session', sublabel: 'Morning nudge when your session is ready' },
   { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
   { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
   { key: 'mealReminder', label: 'Meal log reminder', sublabel: "Evening nudge when you haven't logged any food" },
@@ -140,6 +142,7 @@ export default function SettingsPage() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({
     streakAtRisk: true,
     workoutReminder: true,
+    mindReminder: true,
     mealReminder: true,
     reEngagement: true,
     chatMessage: true,
@@ -215,6 +218,7 @@ export default function SettingsPage() {
       const data: PreferencesResponse = await res.json()
       const p = data.preferences ?? {}
       setNotifPrefs({
+        mindReminder: p.mindReminder ?? true,
         streakAtRisk: p.streakAtRisk ?? true,
         workoutReminder: p.workoutReminder ?? true,
         mealReminder: p.mealReminder ?? true,
