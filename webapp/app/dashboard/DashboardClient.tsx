@@ -5,6 +5,7 @@ import NotificationOptIn from '@/components/NotificationOptIn'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart from '@/components/ProgressChart'
+import { useTutorialMaybe } from '@redbtn/redtutorial'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import ProgramNudgeModal, {
@@ -58,6 +59,10 @@ export default function DashboardClient() {
     () => readCache<UserProgressData>(PROGRESS_CACHE_KEY) === null,
   )
   const [showCheckInModal, setShowCheckInModal] = useState(false)
+  // The check-in is DUE but must wait its turn: a brand-new member lands here
+  // with the onboarding tour running, and the modal was rendering straight over
+  // it — the tour card sat behind a dialog the member had to dismiss first.
+  const [checkInDue, setCheckInDue] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
   const [checkInInfo, setCheckInInfo] = useState({
@@ -136,10 +141,10 @@ export default function DashboardClient() {
             const lastDismissed = raw ? parseInt(raw, 10) : 0
             const hoursSince = (Date.now() - lastDismissed) / (1000 * 60 * 60)
             if (hoursSince >= SUPPRESS_HOURS) {
-              setShowCheckInModal(true)
+              setCheckInDue(true)
             }
           } catch {
-            setShowCheckInModal(true)
+            setCheckInDue(true)
           }
         }
       } catch (error) {
@@ -308,8 +313,24 @@ export default function DashboardClient() {
     } catch {}
   }
 
+  // Hold the daily check-in behind the onboarding tour. `ready` guards the brief
+  // window where tutorial progress is still loading — opening during it would
+  // flash the modal and then get covered by the tour that starts a beat later.
+  // Once the tour finishes (or there is no tour), the queued check-in opens, so
+  // a new member sees the tutorial first and the check-in immediately after.
+  const tutorial = useTutorialMaybe()
+  const tutorialBusy = !!tutorial && (!tutorial.ready || !!tutorial.active)
+
+  useEffect(() => {
+    if (checkInDue && !tutorialBusy) {
+      setShowCheckInModal(true)
+      setCheckInDue(false)
+    }
+  }, [checkInDue, tutorialBusy])
+
   const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
     setShowCheckInModal(false)
+    setCheckInDue(false)
     try { localStorage.setItem('checkin_last_dismissed', String(Date.now())) } catch {}
     
     const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
