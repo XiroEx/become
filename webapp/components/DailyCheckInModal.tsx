@@ -222,8 +222,17 @@ const moodOptions = [
   }
 ]
 
-// Get warning level for days since last entry
-function getWarningInfo(days: number): { level: 'none' | 'mild' | 'moderate' | 'high' | 'critical'; color: string; message: string } {
+/** The mood/weight APIs return this when the member has NO history at all — it
+ *  is a "never logged" sentinel, not a real day count. Rendering it verbatim is
+ *  how a brand-new member's first ever check-in said "999+ days since last log". */
+const NEVER_LOGGED = 999
+
+/** Warning level for days since last entry. `days >= NEVER_LOGGED` means they
+ *  have simply never logged, which is not a lapse — it is their first time. */
+function getWarningInfo(days: number): { level: 'none' | 'mild' | 'moderate' | 'high' | 'critical'; color: string; message: string; firstTime?: boolean } {
+  if (days >= NEVER_LOGGED) {
+    return { level: 'none', color: 'text-zinc-400 dark:text-zinc-500', message: 'First log', firstTime: true }
+  }
   if (days >= 10) {
     return { level: 'critical', color: 'text-red-600 dark:text-red-400', message: `${days}+ days` }
   }
@@ -519,9 +528,9 @@ export default function DailyCheckInModal({
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   How are you feeling?
                 </label>
-                {moodWarning.level !== 'none' && (
+                {(moodWarning.level !== 'none' || moodWarning.firstTime) && (
                   <span className={`text-xs font-medium ${moodWarning.color}`}>
-                    {moodWarning.message} since last log
+                    {moodWarning.firstTime ? 'First log' : `${moodWarning.message} since last log`}
                   </span>
                 )}
               </div>
@@ -566,9 +575,9 @@ export default function DailyCheckInModal({
                 <label htmlFor="weight" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Current Weight ({weightUnit})
                 </label>
-                {weightWarning.level !== 'none' && (
+                {(weightWarning.level !== 'none' || weightWarning.firstTime) && (
                   <span className={`text-xs font-medium ${weightWarning.color}`}>
-                    {weightWarning.message} since last log
+                    {weightWarning.firstTime ? 'First log' : `${weightWarning.message} since last log`}
                   </span>
                 )}
               </div>
