@@ -4,7 +4,10 @@ import UserProgress from '@/models/UserProgress'
 import Schedule from '@/models/Schedule'
 import ProgramModel from '@/models/Program'
 import MealLog from '@/models/MealLog'
-import { sendPushToUser } from '@/lib/pushNotification'
+import { sendPushToUser, type PushPayload } from '@/lib/pushNotification'
+import MindProgress from '@/models/MindProgress'
+import MindSession from '@/models/MindSession'
+import { mainSessionAvailable } from '@/lib/mindXP'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import {
   REENGAGEMENT_END_HOUR,
@@ -16,9 +19,60 @@ import {
   localDateKeyForUser,
   localHourForUser,
   workoutTitleForDay,
+  MIND_REMINDER_START_HOUR,
+  MIND_REMINDER_END_HOUR,
 } from '@/lib/notifications/cronNotify'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Per-notification outcome counters.
+ *
+ * The old route counted only successful sends, so "19 users qualified but none of
+ * them has ever enabled push" and "nobody qualified" both reported `0` — with
+ * `errors: 0` as well, because a user with no subscription never even attempts a
+ * send. The cron looked perfectly healthy while delivering nothing. Splitting
+ * `qualified` from `delivered` makes that visible at a glance.
+ */
+interface Tally {
+  /** Passed every filter and we tried to reach them. */
+  qualified: number
+  /** A push service accepted it. */
+  delivered: number
+  /** Qualified, but the user has no usable push subscription. */
+  noSubscription: number
+  /** A push service rejected it, or the send threw. */
+  failed: number
+}
+
+const tally = (): Tally => ({ qualified: 0, delivered: 0, noSubscription: 0, failed: 0 })
+
+/**
+ * Send one notification and record the real outcome. `onDelivered` only runs on a
+ * genuine delivery — stamping a failure would suppress tomorrow's retry and the
+ * user would never hear from us.
+ */
+async function deliver(
+  t: Tally,
+  userId: string,
+  payload: PushPayload,
+  onDelivered: () => void,
+): Promise<void> {
+  t.qualified++
+  try {
+    const sent = await sendPushToUser(userId, payload)
+    if (sent.delivered > 0) {
+      t.delivered++
+      onDelivered()
+    } else if (sent.attempted > 0) {
+      t.failed++
+    } else {
+      t.noSubscription++
+    }
+  } catch {
+    t.failed++
+  }
+}
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -36,13 +90,20 @@ export async function GET(request: NextRequest) {
 
   const now = new Date()
 
+  const t = {
+    streakAtRisk: tally(),
+    workoutReminder: tally(),
+    mealReminder: tally(),
+    reEngagement: tally(),
+    mindReminder: tally(),
+    scheduleSetup: tally(),
+  }
   const results = {
-    streakAtRisk: 0,
-    workoutReminder: 0,
-    mealReminder: 0,
-    reEngagement: 0,
     missedSlotsSynced: 0,
     skippedByWindow: 0,
+    /** Users with an in-progress program but NO schedule document — they can
+     *  never receive a workout reminder, and their calendar is empty. */
+    activeProgramsWithoutSchedule: 0,
     errors: 0,
   }
 
@@ -88,27 +149,17 @@ export async function GET(request: NextRequest) {
   }).select('userId streakDays').lean()
 
   for (const u of atRiskUsers) {
-    try {
-      const sent = await sendPushToUser(String(u.userId), {
-        title: `Don't break your ${u.streakDays}-day streak 🔥`,
-        body: 'Log a workout, mood, or weight to keep it alive.',
-        url: '/dashboard',
-        tag: 'streak-at-risk',
-      })
-      // Only stamp when something actually reached a push service — a stamped
-      // failure suppresses tomorrow's retry and the user never hears from us.
-      if (sent.delivered > 0) {
-        UserProgress.updateOne(
-          { userId: u.userId },
-          { $set: { 'lastPushSentAt.streakAtRisk': now } },
-        ).catch(() => {})
-        results.streakAtRisk++
-      } else if (sent.attempted > 0) {
-        results.errors++
-      }
-    } catch {
-      results.errors++
-    }
+    await deliver(t.streakAtRisk, String(u.userId), {
+      title: `Don't break your ${u.streakDays}-day streak 🔥`,
+      body: 'Log a workout, mood, or weight to keep it alive.',
+      url: '/dashboard',
+      tag: 'streak-at-risk',
+    }, () => {
+      UserProgress.updateOne(
+        { userId: u.userId },
+        { $set: { 'lastPushSentAt.streakAtRisk': now } },
+      ).catch(() => {})
+    })
   }
 
   // ── 2. Workout reminder (7am–11am LOCAL per user) ─────────────────────────
@@ -222,25 +273,17 @@ export async function GET(request: NextRequest) {
           ? `${best.dayLabel} · ${titleText}`
           : titleText
 
-      try {
-        const sent = await sendPushToUser(userId, {
-          title: "Today's workout is ready 💪",
-          body,
-          url: '/dashboard/calendar',
-          tag: 'workout-reminder',
-        })
-        if (sent.delivered > 0) {
-          UserProgress.updateOne(
-            { userId },
-            { $set: { 'lastPushSentAt.workoutReminder': now } },
-          ).catch(() => {})
-          results.workoutReminder++
-        } else if (sent.attempted > 0) {
-          results.errors++
-        }
-      } catch {
-        results.errors++
-      }
+      await deliver(t.workoutReminder, userId, {
+        title: "Today's workout is ready 💪",
+        body,
+        url: '/dashboard/calendar',
+        tag: 'workout-reminder',
+      }, () => {
+        UserProgress.updateOne(
+          { userId },
+          { $set: { 'lastPushSentAt.workoutReminder': now } },
+        ).catch(() => {})
+      })
     }
   }
 
@@ -281,29 +324,129 @@ export async function GET(request: NextRequest) {
         })
         if (loggedToday) continue
 
-        try {
-          const sent = await sendPushToUser(String(progress.userId), {
-            title: 'Log today\'s food 🍽️',
-            body: 'A quick log keeps your nutrition picture honest. It takes 30 seconds.',
-            url: '/dashboard/nutrition',
-            tag: 'meal-reminder',
-          })
-          if (sent.delivered > 0) {
-            UserProgress.updateOne(
-              { userId: progress.userId },
-              { $set: { 'lastPushSentAt.mealReminder': now } },
-            ).catch(() => {})
-            results.mealReminder++
-          } else if (sent.attempted > 0) {
-            results.errors++
-          }
-        } catch {
-          results.errors++
-        }
+        await deliver(t.mealReminder, String(progress.userId), {
+          title: 'Log today\'s food 🍽️',
+          body: 'A quick log keeps your nutrition picture honest. It takes 30 seconds.',
+          url: '/dashboard/nutrition',
+          tag: 'meal-reminder',
+        }, () => {
+          UserProgress.updateOne(
+            { userId: progress.userId },
+            { $set: { 'lastPushSentAt.mealReminder': now } },
+          ).catch(() => {})
+        })
       }
     }
   } catch (err) {
     console.error('meal-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.6 Daily Mind session (7am-11am LOCAL) ──────────────────────────────
+  // The main Mind session is the app's core daily ritual and had NO reminder at
+  // all — the cron only ever nudged workouts, meals, streaks and lapses. Fires
+  // when their main session is off its 20h cooldown and they have not completed
+  // one today.
+  //
+  // At most ONE morning push per user: if a workout reminder already went out
+  // today, we stay quiet rather than stacking two notifications in one morning.
+  try {
+    const mindCandidates = await UserProgress.find({
+      'notificationPrefs.mindReminder': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset lastPushSentAt').lean()
+
+    for (const progress of mindCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+      if (userLocalHour === null) continue
+      if (userLocalHour < MIND_REMINDER_START_HOUR || userLocalHour > MIND_REMINDER_END_HOUR) continue
+
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+
+      // One per local day.
+      const lastSent = progress?.lastPushSentAt?.mindReminder
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) continue
+
+      // One morning push total — the workout reminder ran first and wins.
+      const lastWorkout = progress?.lastPushSentAt?.workoutReminder
+      if (lastWorkout && localDateKeyForUser(new Date(lastWorkout), progress?.timezoneOffset) === userLocalDateKey) continue
+
+      // Already did today's session? Nothing to nudge.
+      const doneToday = await MindSession.exists({ userId: progress.userId, dateKey: userLocalDateKey })
+      if (doneToday) continue
+
+      // Respect the 20h main-session cooldown — nudging toward a locked session
+      // would send them to Training Grounds, not the session.
+      const mind = await MindProgress.findOne({ userId: progress.userId })
+        .select('lastMainSessionAt mainSessionCount')
+        .lean<{ lastMainSessionAt?: Date; mainSessionCount?: number } | null>()
+      if (!mainSessionAvailable(mind?.lastMainSessionAt, now.getTime())) continue
+
+      const started = (mind?.mainSessionCount ?? 0) > 0
+      await deliver(t.mindReminder, String(progress.userId), {
+        title: started ? 'Your session is ready 🧠' : 'Start your first session 🧠',
+        body: started
+          ? 'A few minutes on your mindset before the day takes over.'
+          : 'Five minutes to set how today goes. Begin the path.',
+        url: '/dashboard/mind',
+        tag: 'mind-reminder',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.mindReminder': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('mind-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.7 Program with no schedule (7am-11am LOCAL, weekly) ────────────────
+  // An in-progress program with no Schedule document can NEVER produce a workout
+  // reminder, and the user's calendar is empty. This was silently true for a real
+  // account for three weeks. Count it, and nudge them to pick training days.
+  try {
+    const withPrograms = await UserProgress.find({
+      activePrograms: { $elemMatch: { status: { $in: ['active', 'in-progress'] } } },
+    }).select('userId timezoneOffset lastPushSentAt notificationPrefs activePrograms').lean()
+
+    if (withPrograms.length > 0) {
+      const scheduledUserIds = new Set(
+        (await Schedule.find({ userId: { $in: withPrograms.map((p) => p.userId) } })
+          .select('userId')
+          .lean()).map((s) => String(s.userId)),
+      )
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+      for (const progress of withPrograms) {
+        if (scheduledUserIds.has(String(progress.userId))) continue
+        results.activeProgramsWithoutSchedule++
+
+        if (progress?.notificationPrefs?.workoutReminder === false) continue
+        const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+        if (userLocalHour === null) continue
+        if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) continue
+
+        // Weekly at most — this is a setup nudge, not a daily nag.
+        const lastSent = progress?.lastPushSentAt?.scheduleSetup
+        if (lastSent && new Date(lastSent) > weekAgo) continue
+
+        await deliver(t.scheduleSetup, String(progress.userId), {
+          title: 'Your program has no training days yet 📅',
+          body: 'Pick the days you train and we will keep you on track from there.',
+          url: '/dashboard/calendar',
+          tag: 'schedule-setup',
+        }, () => {
+          UserProgress.updateOne(
+            { userId: progress.userId },
+            { $set: { 'lastPushSentAt.scheduleSetup': now } },
+          ).catch(() => {})
+        })
+      }
+    }
+  } catch (err) {
+    console.error('schedule-setup sweep failed:', err)
     results.errors++
   }
 
@@ -342,26 +485,22 @@ export async function GET(request: NextRequest) {
       results.skippedByWindow++
       continue
     }
-    try {
-      const sent = await sendPushToUser(String(u.userId), {
-        title: 'We miss you 👋',
-        body: 'Come back and keep building your best self.',
-        url: '/dashboard',
-        tag: 're-engagement',
-      })
-      if (sent.delivered > 0) {
-        UserProgress.updateOne(
-          { userId: u.userId },
-          { $set: { 'lastPushSentAt.reEngagement': now } },
-        ).catch(() => {})
-        results.reEngagement++
-      } else if (sent.attempted > 0) {
-        results.errors++
-      }
-    } catch {
-      results.errors++
-    }
+    await deliver(t.reEngagement, String(u.userId), {
+      title: 'We miss you 👋',
+      body: 'Come back and keep building your best self.',
+      url: '/dashboard',
+      tag: 're-engagement',
+    }, () => {
+      UserProgress.updateOne(
+        { userId: u.userId },
+        { $set: { 'lastPushSentAt.reEngagement': now } },
+      ).catch(() => {})
+    })
   }
 
-  return NextResponse.json({ success: true, ...results })
+  // Report qualified/delivered/noSubscription per type. A row that reads
+  // `qualified: 19, delivered: 0, noSubscription: 19` is the signal that the
+  // pipeline is fine and nobody has push enabled — previously indistinguishable
+  // from "nobody qualified".
+  return NextResponse.json({ success: true, notifications: t, ...results })
 }
