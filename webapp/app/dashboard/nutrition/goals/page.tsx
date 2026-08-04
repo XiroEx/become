@@ -574,7 +574,7 @@ export default function NutritionGoalsPage() {
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
             <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fats (g)</label>
-            <span className="text-xs text-violet-600 dark:text-violet-400">{percentages.fats}%</span>
+            <span className="text-xs text-yellow-600 dark:text-yellow-400">{percentages.fats}%</span>
           </div>
           <input
             type="number"
@@ -592,7 +592,7 @@ export default function NutritionGoalsPage() {
         <div className="flex h-3 w-full overflow-hidden rounded-full">
           <div className="bg-blue-600 transition-all duration-300" style={{ width: `${percentages.protein}%` }} />
           <div className="bg-green-600 transition-all duration-300" style={{ width: `${percentages.carbs}%` }} />
-          <div className="bg-violet-500 transition-all duration-300" style={{ width: `${percentages.fats}%` }} />
+          <div className="bg-yellow-400 transition-all duration-300" style={{ width: `${percentages.fats}%` }} />
         </div>
         <div className="mt-2 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
           <span className="flex items-center gap-1">
@@ -602,7 +602,7 @@ export default function NutritionGoalsPage() {
             <span className="inline-block h-2 w-2 rounded-full bg-green-600" /> Carbs {percentages.carbs}%
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-violet-500" /> Fats {percentages.fats}%
+            <span className="inline-block h-2 w-2 rounded-full bg-yellow-400" /> Fats {percentages.fats}%
           </span>
         </div>
       </Card>

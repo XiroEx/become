@@ -50,7 +50,7 @@ test('REGRESSION: exceeding protein is a win, never a warning', () => {
     const s = macroStatus(current, GOAL, 'floor')
     assert.equal(s, 'hit', `${current}g of a ${GOAL}g protein floor should read as hit`)
     assert.notEqual(macroBarClass(s, MACRO_COLORS.protein), 'bg-red-500')
-    assert.notEqual(macroBarClass(s, MACRO_COLORS.protein), 'bg-amber-500')
+    assert.notEqual(macroBarClass(s, MACRO_COLORS.protein), 'bg-orange-500')
   }
   // Still shows progress while short of the target.
   assert.equal(macroStatus(120, GOAL, 'floor'), 'under')
@@ -70,12 +70,17 @@ test('the grace band is exactly 5%', () => {
 })
 
 test('REGRESSION: no macro identity colour collides with a status colour', () => {
-  // Fats used to be amber — indistinguishable from the "slightly over" state.
-  const statusColours = ['bg-emerald-500', 'bg-amber-500', 'bg-red-500']
+  // Fats used to BE the warning colour — an amber fats bar at 40% was
+  // indistinguishable from an amber "just over target" bar.
+  const statusColours = ['bg-emerald-500', 'bg-orange-500', 'bg-red-500']
   for (const [macro, colour] of Object.entries(MACRO_COLORS)) {
     assert.ok(!statusColours.includes(colour), `${macro} identity colour ${colour} collides with a status colour`)
   }
-  assert.equal(MACRO_COLORS.fats, 'bg-violet-500')
+  // Fats is yellow; the warning is a darker, redder orange. Same family, split
+  // by lightness, so the green -> orange -> red progression still reads.
+  assert.equal(MACRO_COLORS.fats, 'bg-yellow-400')
+  assert.equal(macroBarClass('warn', MACRO_COLORS.fats), 'bg-orange-500')
+  assert.notEqual(MACRO_COLORS.fats, macroBarClass('warn', MACRO_COLORS.fats))
 })
 
 test('each status maps to a distinct bar colour', () => {
@@ -83,15 +88,15 @@ test('each status maps to a distinct bar colour', () => {
   assert.equal(macroBarClass('under', identity), identity)
   assert.equal(macroBarClass('empty', identity), identity)
   assert.equal(macroBarClass('hit', identity), 'bg-emerald-500')
-  assert.equal(macroBarClass('warn', identity), 'bg-amber-500')
+  assert.equal(macroBarClass('warn', identity), 'bg-orange-500')
   assert.equal(macroBarClass('over', identity), 'bg-red-500')
 })
 
 test('chips and ring strokes follow the same three states', () => {
-  assert.match(macroChipClass('warn'), /amber/)
+  assert.match(macroChipClass('warn'), /orange/)
   assert.match(macroChipClass('over'), /red/)
   assert.match(macroChipClass('hit'), /emerald/)
-  assert.equal(macroStrokeColor('warn', '#fff'), '#f59e0b')
+  assert.equal(macroStrokeColor('warn', '#fff'), '#f97316')
   assert.equal(macroStrokeColor('over', '#fff'), '#ef4444')
   assert.equal(macroStrokeColor('hit', '#fff'), '#10b981')
   assert.equal(macroStrokeColor('under', 'url(#grad)'), 'url(#grad)')
