@@ -102,10 +102,11 @@ describe('cross-screen target parity', () => {
 
     assert.ok(fromOnboarding && fromGoalsPage)
     assert.equal(fromOnboarding.calories, 2908)
-    assert.equal(fromOnboarding.protein, 210)   // 1.0 g/lb while cutting
-    assert.equal(fromOnboarding.fats, 81)       // 25% of calories
-    assert.equal(fromOnboarding.carbs, 335)     // the remainder
-    // The actual regression: these two were 2910 and 2909.
+    // Macros are explicit shares now (lose = 35/35/30), with protein bounded by
+    // bodyweight rather than set by it. 1.0 g/lb is the FLOOR the cut must clear.
+    assert.deepEqual(fromOnboarding.split, { protein: 34, carbs: 35, fats: 30 })
+    assert.ok(fromOnboarding.protein >= 210, 'must clear the 1.0 g/lb cutting floor')
+    // The actual regression this test exists for: these two were 2910 and 2909.
     assert.deepEqual(fromGoalsPage, fromOnboarding)
   })
 

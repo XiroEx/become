@@ -42,11 +42,18 @@ describe('tdee', () => {
     assert.equal(computeNutritionTargets({ ...REFERENCE, age: undefined }), null)
     assert.equal(computeNutritionTargets({ ...REFERENCE, heightCm: undefined }), null)
     assert.equal(computeNutritionTargets({ ...REFERENCE, currentWeightKg: undefined }), null)
-    // "Prefer not to say" has no Mifflin-St Jeor constant — we must not invent one.
-    assert.equal(
-      computeNutritionTargets({ ...REFERENCE, biologicalSex: 'prefer_not_to_say' }),
-      null
-    )
+    assert.equal(computeNutritionTargets({ ...REFERENCE, biologicalSex: undefined }), null)
+  })
+
+  it('"prefer not to say" gets real targets, between male and female', () => {
+    // This used to return null. Nothing was seeded in that case, so declining to
+    // state your sex silently handed you the schema defaults (2000/150/200/65) —
+    // strictly worse than the midpoint of the two Mifflin-St Jeor constants.
+    const undisclosed = computeNutritionTargets({ ...REFERENCE, biologicalSex: 'prefer_not_to_say', goals: ['maintain'] })
+    const male = computeNutritionTargets({ ...REFERENCE, biologicalSex: 'male', goals: ['maintain'] })
+    const female = computeNutritionTargets({ ...REFERENCE, biologicalSex: 'female', goals: ['maintain'] })
+    assert.ok(undisclosed && male && female)
+    assert.ok(undisclosed.calories < male.calories && undisclosed.calories > female.calories)
   })
 
   it('applies the deficit for a lose-weight member', () => {
@@ -55,9 +62,10 @@ describe('tdee', () => {
     assert.equal(t.tdee, 2800)
     assert.equal(t.direction, 'lose')
     assert.equal(t.calories, 2300)          // 2800 − 500
-    assert.equal(t.protein, 185)            // 184.97 lb × 1.0 g/lb
-    assert.equal(t.fats, 64)                // 2300 × 0.25 / 9
-    assert.equal(t.carbs, 246)              // (2300 − 740 − 576) / 4
+    // Macros are now explicit shares of calories (lose = 35/35/30) with protein
+    // bounded by bodyweight, rather than protein-from-g/lb and carbs-as-remainder.
+    assert.deepEqual(t.split, { protein: 35, carbs: 35, fats: 30 })
+    assert.ok(t.protein >= 185, 'must still clear the 1.0 g/lb deficit floor')
     // Macros must actually reconstruct the calorie target.
     assert.ok(Math.abs(t.protein * 4 + t.carbs * 4 + t.fats * 9 - t.calories) <= 6)
   })
@@ -67,7 +75,10 @@ describe('tdee', () => {
     assert.ok(t)
     assert.equal(t.direction, 'gain')
     assert.equal(t.calories, 3100)          // 2800 + 300
-    assert.equal(t.protein, 166)            // 184.97 × 0.9
+    assert.deepEqual(t.split, { protein: 27, carbs: 45, fats: 28 })
+    assert.ok(t.protein >= 166, 'must clear the 0.9 g/lb surplus floor')
+    // The old model gave 19% protein / 56% carbs here; carbs may no longer run away.
+    assert.ok(t.split.carbs <= 50, `carbs ${t.split.carbs}%`)
   })
 
   it('holds at maintenance for maintain / general health / performance', () => {
@@ -85,15 +96,28 @@ describe('tdee', () => {
     const t = computeNutritionTargets({ ...REFERENCE, goals: ['gain_muscle'], direction: 'maintain' })
     assert.ok(t)
     assert.equal(t.calories, 2800)
-    assert.equal(t.protein, 166) // still the higher muscle-seeking protein target
+    assert.ok(t.protein >= 166, 'still clears the muscle-seeking protein floor')
   })
 
-  it('raises protein when muscle gain is a SECONDARY goal', () => {
+  it('the muscle-gain protein FLOOR rises when muscle gain is a secondary goal', () => {
+    // Both land on the same 30% maintain split here, so the floor is what differs:
+    // 0.8 g/lb vs 0.9 g/lb. The floor only shows up in the target when the split
+    // would otherwise fall below it, which is the point of having one.
     const single = computeNutritionTargets({ ...REFERENCE, goals: ['maintain'] })
     const paired = computeNutritionTargets({ ...REFERENCE, goals: ['maintain', 'gain_muscle'] })
     assert.ok(single && paired)
     assert.equal(single.calories, paired.calories)
-    assert.ok(paired.protein > single.protein, 'secondary goal should move the protein target')
+    assert.ok(paired.protein >= single.protein)
+    // The floor only binds when 30% of calories would fall BELOW it — heavy
+    // bodyweight against a low calorie target. There the two floors diverge.
+    const heavySedentary = {
+      currentWeightKg: 130, heightCm: 160, age: 70,
+      biologicalSex: 'male' as const, activityLevel: 'sedentary' as const,
+    }
+    const a = computeNutritionTargets({ ...heavySedentary, goals: ['maintain'] })!
+    const b = computeNutritionTargets({ ...heavySedentary, goals: ['maintain', 'gain_muscle'] })!
+    assert.equal(a.calories, b.calories)
+    assert.ok(b.protein > a.protein, `floor should differ: ${a.protein} vs ${b.protein}`)
   })
 
   it('never recommends below a 1200 calorie floor', () => {
