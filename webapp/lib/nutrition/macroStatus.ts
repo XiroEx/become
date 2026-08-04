@@ -59,15 +59,16 @@ export function macroStatus(current: number, goal: number, kind: MacroKind = 'ce
  * `identity` is the macro's own colour (blue protein, green carbs, violet fats)
  * and is used only while the member is still working toward the target. Once a
  * target is met or blown, the bar speaks in STATUS colours instead — which is
- * why fats moved off amber: an amber fats bar at 40% was indistinguishable from
- * an amber "just over your target" bar.
+ * why the warning colour is a darker orange than the yellow fats bar: when they
+ * were the same amber, a fats bar at 40% was indistinguishable from a "just over
+ * your target" bar.
  */
 export function macroBarClass(status: MacroStatus, identity: string): string {
   switch (status) {
     case 'hit':
       return 'bg-emerald-500'
     case 'warn':
-      return 'bg-amber-500'
+      return 'bg-orange-500'
     case 'over':
       return 'bg-red-500'
     default:
@@ -81,7 +82,7 @@ export function macroTextClass(status: MacroStatus): string {
     case 'hit':
       return 'font-semibold text-emerald-600 dark:text-emerald-400'
     case 'warn':
-      return 'font-semibold text-amber-600 dark:text-amber-400'
+      return 'font-semibold text-orange-600 dark:text-orange-400'
     case 'over':
       return 'font-semibold text-red-500'
     default:
@@ -95,7 +96,7 @@ export function macroChipClass(status: MacroStatus): string {
     case 'hit':
       return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
     case 'warn':
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+      return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
     case 'over':
       return 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
     default:
@@ -109,7 +110,7 @@ export function macroStrokeColor(status: MacroStatus, fallback: string): string 
     case 'hit':
       return '#10b981'
     case 'warn':
-      return '#f59e0b'
+      return '#f97316'
     case 'over':
       return '#ef4444'
     default:
@@ -118,15 +119,20 @@ export function macroStrokeColor(status: MacroStatus, fallback: string): string 
 }
 
 /**
- * Macro identity colours. Fats moved amber → violet so the palette no longer
- * collides with the amber warning state; protein blue and carbs green are
- * unchanged, and neither clashes (green only ever means "good" in both
- * languages).
+ * Macro identity colours.
+ *
+ * Fats is yellow and the "slightly over" warning is ORANGE — same family, split
+ * by lightness and hue so they never read as the same thing. Fats sits bright
+ * (#facc15); the warning sits noticeably darker and redder (#f97316), which also
+ * makes the green → orange → red progression read in the right direction.
+ *
+ * Protein blue and carbs green are unchanged: green only ever means "good" in
+ * both the identity and the status language, so it does not clash.
  */
 export const MACRO_COLORS = {
   protein: 'bg-blue-600',
   carbs: 'bg-green-600',
-  fats: 'bg-violet-500',
+  fats: 'bg-yellow-400',
 } as const
 
 /** Which targets are ceilings and which are floors. */
