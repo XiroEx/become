@@ -12,6 +12,9 @@ import {
   DIRECTION_EXPLANATION,
   calcTdee,
   computeNutritionTargets,
+  splitForPreset,
+  MACRO_PRESET_LABELS,
+  type MacroPreset,
   type ActivityLevel,
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
@@ -53,18 +56,18 @@ const GOAL_CARDS: { type: GoalType; label: string; description: string; adjustme
         : `TDEE ${DIRECTION_ADJUSTMENT[type] > 0 ? '+' : '−'} ${Math.abs(DIRECTION_ADJUSTMENT[type])} cal`,
   }))
 
-/** 'recommended' runs the same computeNutritionTargets() the onboarding wizard
- *  uses, so recalculating here reproduces the numbers a member was shown when
- *  they signed up instead of silently rewriting them with a % split. */
-type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
+/** Every preset now runs through the shared computeNutritionTargets(), which
+ *  applies the same bodyweight protein floor/cap here as during onboarding. The
+ *  page used to own its own percentage maths, so a preset picked here produced
+ *  different grams than the identical preset picked in the wizard. */
+const MACRO_PRESET_KEYS: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb', 'custom']
 
-const MACRO_PRESETS: { key: MacroPreset; label: string; protein: number; carbs: number; fats: number }[] = [
-  { key: 'recommended', label: 'Recommended (from your goal)', protein: 0, carbs: 0, fats: 0 },
-  { key: 'balanced', label: 'Balanced (30/40/30)', protein: 30, carbs: 40, fats: 30 },
-  { key: 'high_protein', label: 'High Protein (40/30/30)', protein: 40, carbs: 30, fats: 30 },
-  { key: 'low_carb', label: 'Low Carb (35/25/40)', protein: 35, carbs: 25, fats: 40 },
-  { key: 'custom', label: 'Custom', protein: 0, carbs: 0, fats: 0 }
-]
+function presetLabel(key: MacroPreset, direction: NutritionDirection): string {
+  if (key === 'custom') return MACRO_PRESET_LABELS.custom
+  const s = splitForPreset(key, direction)
+  const suffix = key === 'recommended' ? ' (from your goal)' : ''
+  return `${MACRO_PRESET_LABELS[key]}${suffix} — ${s.protein}/${s.carbs}/${s.fats}`
+}
 
 export default function NutritionGoalsPage() {
   const router = useRouter()
@@ -138,37 +141,22 @@ export default function NutritionGoalsPage() {
   const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel) => {
     if (preset === 'custom') return
 
-    if (preset === 'recommended') {
-      const targets = computeNutritionTargets({
-        ...effectiveStats,
-        goals: userFitnessGoals,
-        direction: goalType,
-        activityLevel: activity,
-      })
-      if (!targets) return
-      setGoals(prev => ({
-        ...prev,
-        calories: targets.calories,
-        protein: targets.protein,
-        carbs: targets.carbs,
-        fats: targets.fats
-      }))
-      return
-    }
-
-    const found = MACRO_PRESETS.find(p => p.key === preset)
-    if (!found) return
-
-    const proteinGrams = Math.round((cals * (found.protein / 100)) / 4)
-    const carbsGrams = Math.round((cals * (found.carbs / 100)) / 4)
-    const fatsGrams = Math.round((cals * (found.fats / 100)) / 9)
-
+    const targets = computeNutritionTargets({
+      ...effectiveStats,
+      goals: userFitnessGoals,
+      direction: goalType,
+      activityLevel: activity,
+      macroPreset: preset,
+    })
+    if (!targets) return
     setGoals(prev => ({
       ...prev,
-      calories: cals,
-      protein: proteinGrams,
-      carbs: carbsGrams,
-      fats: fatsGrams
+      // 'recommended' also re-derives calories; the explicit presets re-split the
+      // calorie number already on screen.
+      calories: preset === 'recommended' ? targets.calories : cals,
+      protein: targets.protein,
+      carbs: targets.carbs,
+      fats: targets.fats,
     }))
   }, [effectiveStats, userFitnessGoals])
 
@@ -520,8 +508,8 @@ export default function NutritionGoalsPage() {
           onChange={(e) => handlePresetChange(e.target.value as MacroPreset)}
           className="w-full cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
         >
-          {MACRO_PRESETS.map((preset) => (
-            <option key={preset.key} value={preset.key}>{preset.label}</option>
+          {MACRO_PRESET_KEYS.map((key) => (
+            <option key={key} value={key}>{presetLabel(key, goals.goalType)}</option>
           ))}
         </select>
       </Card>

@@ -90,6 +90,19 @@ export default defineConfig({
       },
     },
     {
+      name: 'onboarding-macros',
+      testMatch: '**/onboarding-macros.spec.ts',
+      timeout: 180_000,
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'onboarding-audit',
       testMatch: '**/onboarding-audit.spec.ts',
       timeout: 180_000,

@@ -26,7 +26,15 @@ import {
   activityFromTrainingDays,
   waterGoalOz,
   DIRECTION_EXPLANATION,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+  splitForPreset,
+  recommendedPresetForGoal,
   type NutritionDirection,
+  type ActivityLevel,
+  type MacroPreset,
 } from '@/lib/nutrition/tdee'
 import type { FitnessGoal, ExperienceLevel, EquipmentType } from '@/lib/programMatch'
 import {
@@ -55,6 +63,13 @@ interface ProfileData {
   equipmentAccess?: EquipmentType[]
   injuryNotes?: string
   weeklyAvailability?: number
+  /** Asked DIRECTLY rather than inferred from training days. Training frequency
+   *  is not the same thing as daily activity — a labourer and a desk worker who
+   *  both lift 3x/week have very different TDEEs, and this multiplier swings the
+   *  calorie target by ~600 cal, so it is the least safe thing to guess. */
+  activityLevel?: ActivityLevel
+  /** Which macro split the member chose. */
+  macroPreset?: MacroPreset
   /** The unit the user actually typed in. Profile weights are always stored in
    *  kg, but the weight LOG is stored raw in the user's display unit — so we
    *  have to carry this through to seed the first log entry correctly. */
@@ -117,6 +132,18 @@ const DIRECTION_OPTIONS: { value: NutritionDirection; label: string; sub: string
 const TOTAL_STEPS = 5
 
 const STEP_TITLES = ['Goals', 'Background', 'Body & nutrition', 'Equipment', 'Review'] as const
+
+/** Plain-English activity descriptions — the multiplier alone means nothing to a member. */
+const ACTIVITY_BLURBS: Record<ActivityLevel, string> = {
+  sedentary: 'Desk job, mostly sitting, little walking',
+  light: 'On your feet some of the day, light walking',
+  moderate: 'Moving a good part of the day',
+  active: 'On your feet most of the day, or a physical job',
+  very_active: 'Hard physical work all day',
+}
+
+/** 'custom' is a Nutrition-tab concept; onboarding offers the four real splits. */
+const MACRO_PRESET_CHOICES: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb']
 
 // ── Animation variants ────────────────────────────────────────────────────────
 
@@ -208,6 +235,17 @@ export default function OnboardingPage() {
 
   const { rec, loading: recLoading } = useRecommendation(profile, authChecked)
 
+  // Mifflin-St Jeor needs all four. Without them computeNutritionTargets()
+  // returns null, no goal document is seeded, and the member silently inherits
+  // the schema defaults (2000/150/200/65) that describe nobody. So step 3 cannot
+  // be passed until we can actually compute an honest number.
+  const canComputeTargets = Boolean(
+    profile.currentWeightKg &&
+    profile.heightCm &&
+    profile.age &&
+    profile.biologicalSex,
+  )
+
   const targets = useMemo(
     () =>
       computeNutritionTargets({
@@ -218,8 +256,10 @@ export default function OnboardingPage() {
         goals,
         direction: effectiveDirection,
         weeklyAvailability: profile.weeklyAvailability,
+        activityLevel: profile.activityLevel,
+        macroPreset: profile.macroPreset,
       }),
-    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability]
+    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability, profile.activityLevel, profile.macroPreset]
   )
 
   // ── Auth check on mount ──────────────────────────────────────────────────
@@ -380,6 +420,8 @@ export default function OnboardingPage() {
         goals: payloadGoals,
         direction: payloadDirection,
         weeklyAvailability: payload.weeklyAvailability,
+        activityLevel: payload.activityLevel,
+        macroPreset: payload.macroPreset,
       })
       if (seedTargets) {
         seeds.push(
@@ -478,6 +520,7 @@ export default function OnboardingPage() {
                   profile={profile}
                   direction={effectiveDirection}
                   targets={targets}
+                  goals={goals}
                   onChange={(updates) => setProfile((p) => ({ ...p, ...updates }))}
                   onDirectionChange={setDirectionChoice}
                 />
@@ -532,7 +575,7 @@ export default function OnboardingPage() {
             <button
               onClick={goNext}
               data-testid="onboarding-next"
-              disabled={step === 1 && goals.length === 0}
+              disabled={(step === 1 && goals.length === 0) || (step === 3 && !canComputeTargets)}
               className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               Next
@@ -803,15 +846,22 @@ function Step3({
   profile,
   direction,
   targets,
+  goals,
   onChange,
   onDirectionChange,
 }: {
   profile: ProfileData
   direction: NutritionDirection
   targets: ReturnType<typeof computeNutritionTargets>
+  goals: FitnessGoal[]
   onChange: (updates: Partial<ProfileData>) => void
   onDirectionChange: (d: NutritionDirection) => void
 }) {
+  // Activity defaults from training days so the form arrives pre-filled with a
+  // sensible answer, but the member's explicit pick always wins.
+  const activity = profile.activityLevel ?? activityFromTrainingDays(profile.weeklyAvailability)
+  const macroPreset = profile.macroPreset ?? 'recommended'
+  const suggestedPreset = recommendedPresetForGoal(direction, goals)
   // A target weight only makes sense when you're trying to move the number.
   const showTargetWeight = direction !== 'maintain'
 
@@ -1088,7 +1138,106 @@ function Step3({
           </div>
         </div>
 
+        {/* ── Activity level ────────────────────────────────────────────── */}
+        {/* Asked outright. It used to be inferred from weekly training days,
+            which conflates "how often do you lift" with "how much do you move" —
+            and it is the biggest single lever on the calorie target. */}
+        <div className="pt-2">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            How active is your day, outside training?
+          </label>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Your job and daily movement, not your workouts. This has the biggest effect on your calories.
+          </p>
+          <div className="mt-3 space-y-2">
+            {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((level) => {
+              const selected = activity === level
+              return (
+                <button
+                  key={level}
+                  onClick={() => onChange({ activityLevel: level })}
+                  data-testid={`activity-${level}`}
+                  aria-pressed={selected}
+                  className={`flex w-full items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-all duration-150 ${
+                    selected
+                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
+                  }`}
+                >
+                  <span>
+                    <span className="block text-xs font-semibold">{ACTIVITY_LABELS[level]}</span>
+                    <span className={`block text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                      {ACTIVITY_BLURBS[level]}
+                    </span>
+                  </span>
+                  <span className={`text-[10px] tabular-nums ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    &times;{ACTIVITY_MULTIPLIERS[level]}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Macro split ───────────────────────────────────────────────── */}
+        <div className="pt-2">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            How do you want your macros split?
+          </label>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            You can change this any time in Nutrition.
+          </p>
+          <div className="mt-3 space-y-2">
+            {MACRO_PRESET_CHOICES.map((key) => {
+              const selected = macroPreset === key
+              const split = splitForPreset(key, direction)
+              const isSuggested = key === suggestedPreset
+              return (
+                <button
+                  key={key}
+                  onClick={() => onChange({ macroPreset: key })}
+                  data-testid={`macro-preset-${key}`}
+                  aria-pressed={selected}
+                  className={`flex w-full items-start justify-between gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition-all duration-150 ${
+                    selected
+                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold">
+                      {MACRO_PRESET_LABELS[key]}
+                      {isSuggested && (
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                          selected ? 'bg-white/20' : 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                        }`}>
+                          For your goal
+                        </span>
+                      )}
+                    </span>
+                    <span className={`mt-0.5 block text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                      {MACRO_PRESET_BLURBS[key]}
+                    </span>
+                  </span>
+                  <span className={`shrink-0 text-[10px] tabular-nums ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    {split.protein}/{split.carbs}/{split.fats}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* ── Live TDEE preview ─────────────────────────────────────────── */}
+        {!targets && (
+          <p
+            data-testid="targets-incomplete"
+            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+          >
+            Add your age, height, weight and sex above and we&apos;ll calculate your real
+            calorie and macro targets. Without them we can only guess, and we would rather not.
+          </p>
+        )}
         {targets ? (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
