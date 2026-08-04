@@ -6,6 +6,12 @@ import Link from 'next/link'
 import { Settings2 } from 'lucide-react'
 import { Card } from '@/components/ui'
 import MacroBar from './MacroBar'
+import {
+  macroStatus,
+  macroStrokeColor,
+  macroTextClass,
+  MACRO_COLORS,
+} from '@/lib/nutrition/macroStatus'
 
 interface MacroValues {
   current: number
@@ -23,7 +29,11 @@ interface CalorieRingProps {
 export default function CalorieRing({ consumed, goal, protein, carbs, fats }: CalorieRingProps) {
   const router = useRouter()
   const remaining = goal - consumed
-  const isOver = consumed > goal
+  // Calories are a ceiling: hitting the target is the win, a few over is a
+  // nudge, well over is the warning. A single calorie over used to read exactly
+  // as red as 500 over.
+  const status = macroStatus(consumed, goal, 'ceiling')
+  const isOver = status === 'over' || status === 'warn'
   const percentage = goal > 0 ? Math.min(consumed / goal, 1) : 0
 
   const size = 180
@@ -75,7 +85,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
               cy={size / 2}
               r={radius}
               fill="none"
-              stroke={isOver ? '#ef4444' : 'url(#calorie-ring-gradient)'}
+              stroke={macroStrokeColor(status, 'url(#calorie-ring-gradient)')}
               strokeWidth={strokeWidth}
               strokeLinecap="round"
               strokeDasharray={circumference}
@@ -92,12 +102,18 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.4, duration: 0.4 }}
               className={`text-2xl font-bold tabular-nums ${
-                isOver ? 'text-red-500' : 'text-zinc-900 dark:text-white'
+                status === 'over' ? 'text-red-500'
+                  : status === 'warn' ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-zinc-900 dark:text-white'
               }`}
             >
               {Math.abs(remaining)}
             </motion.span>
-            <span className={`text-xs font-medium ${isOver ? 'text-red-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
+            <span className={`text-xs font-medium ${
+              status === 'over' ? 'text-red-400'
+                : status === 'warn' ? 'text-amber-500'
+                : 'text-zinc-500 dark:text-zinc-400'
+            }`}>
               {isOver ? 'over' : 'remaining'}
             </span>
           </div>
@@ -109,7 +125,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
           {' '}&minus;{' '}
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Food {consumed}</span>
           {' '}={' '}
-          <span className={`font-semibold ${isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+          <span className={macroTextClass(status === 'under' || status === 'empty' ? 'hit' : status)}>
             {Math.abs(remaining)} {isOver ? 'over' : 'remaining'}
           </span>
         </p>
@@ -117,9 +133,10 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
 
       {/* Macro bars */}
       <div className="mt-5 space-y-3" data-tour="macro-rows">
-        <MacroBar label="Protein" current={protein.current} goal={protein.goal} color="bg-blue-600" />
-        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color="bg-green-600" />
-        <MacroBar label="Fats" current={fats.current} goal={fats.goal} color="bg-amber-500" />
+        {/* Protein is a FLOOR — exceeding it is a good outcome, never a warning. */}
+        <MacroBar label="Protein" current={protein.current} goal={protein.goal} color={MACRO_COLORS.protein} kind="floor" />
+        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} />
+        <MacroBar label="Fats" current={fats.current} goal={fats.goal} color={MACRO_COLORS.fats} />
       </div>
     </Card>
   )

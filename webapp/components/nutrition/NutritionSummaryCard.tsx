@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from 'framer-motion'
+import { macroStatus, macroBarClass, MACRO_COLORS, type MacroKind } from '@/lib/nutrition/macroStatus'
 import Link from 'next/link'
 import { Droplets, UtensilsCrossed, Zap } from 'lucide-react'
 import { Card } from '@/components/ui'
@@ -18,15 +19,23 @@ interface NutritionSummaryCardProps {
   water: MacroValues
 }
 
-function MiniMacroBar({ current, goal, color }: { current: number; goal: number; color: string }) {
-  const pct = Math.min((current / goal) * 100, 100)
+function MiniMacroBar({
+  current,
+  goal,
+  color,
+  kind = 'ceiling',
+}: { current: number; goal: number; color: string; kind?: MacroKind }) {
+  // This bar had NO over-state at all — it clamped at 100% and kept the macro's
+  // own colour, so a member 200g over on carbs saw an ordinary full green bar.
+  const status = macroStatus(current, goal, kind)
+  const pct = goal > 0 ? Math.min((current / goal) * 100, 100) : 0
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
       <motion.div
         initial={{ width: 0 }}
         animate={{ width: `${pct}%` }}
         transition={{ duration: 0.8, ease: 'easeOut' }}
-        className={`h-full rounded-full ${color}`}
+        className={`h-full rounded-full ${macroBarClass(status, color)}`}
       />
     </div>
   )
@@ -125,7 +134,7 @@ export default function NutritionSummaryCard({
                   {Math.round(protein.current)}g / {Math.round(protein.goal)}g
                 </span>
               </div>
-              <MiniMacroBar current={protein.current} goal={protein.goal} color="bg-blue-600" />
+              <MiniMacroBar current={protein.current} goal={protein.goal} color={MACRO_COLORS.protein} kind="floor" />
             </div>
             <div>
               <div className="mb-0.5 flex items-center justify-between text-[11px]">
@@ -134,7 +143,7 @@ export default function NutritionSummaryCard({
                   {Math.round(carbs.current)}g / {Math.round(carbs.goal)}g
                 </span>
               </div>
-              <MiniMacroBar current={carbs.current} goal={carbs.goal} color="bg-green-600" />
+              <MiniMacroBar current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} />
             </div>
             <div>
               <div className="mb-0.5 flex items-center justify-between text-[11px]">
@@ -143,7 +152,7 @@ export default function NutritionSummaryCard({
                   {Math.round(fats.current)}g / {Math.round(fats.goal)}g
                 </span>
               </div>
-              <MiniMacroBar current={fats.current} goal={fats.goal} color="bg-amber-500" />
+              <MiniMacroBar current={fats.current} goal={fats.goal} color={MACRO_COLORS.fats} />
             </div>
           </div>
 
