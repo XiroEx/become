@@ -103,7 +103,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
               transition={{ delay: 0.4, duration: 0.4 }}
               className={`text-2xl font-bold tabular-nums ${
                 status === 'over' ? 'text-red-500'
-                  : status === 'warn' ? 'text-amber-600 dark:text-amber-400'
+                  : status === 'warn' ? 'text-orange-600 dark:text-orange-400'
                   : 'text-zinc-900 dark:text-white'
               }`}
             >
@@ -111,7 +111,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
             </motion.span>
             <span className={`text-xs font-medium ${
               status === 'over' ? 'text-red-400'
-                : status === 'warn' ? 'text-amber-500'
+                : status === 'warn' ? 'text-orange-500'
                 : 'text-zinc-500 dark:text-zinc-400'
             }`}>
               {isOver ? 'over' : 'remaining'}
