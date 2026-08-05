@@ -399,11 +399,17 @@ export default function DailyCheckInModal({
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      // Record skip for weight tracking
-      await fetch('/api/weight', {
+      // "Skip for Today" has to close the day. It used to POST {skip:true} to
+      // /api/weight, which recorded nothing for mood — so the check-in was still
+      // outstanding and came back after the 8-hour window, on the same day the
+      // member had just dismissed it. That POST also incremented consecutiveSkips
+      // on every press, so skipping three times in a day counted as three skipped
+      // days against the 14-day mandatory weigh-in. /api/checkin records one skip
+      // per local day and suppresses until tomorrow.
+      await fetch('/api/checkin', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ skip: true, tz: new Date().getTimezoneOffset() })
+        body: JSON.stringify({ action: 'skip', tz: new Date().getTimezoneOffset() })
       })
 
       onClose({})
