@@ -17,6 +17,12 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'tutgate',
+      testMatch: '**/checkin-tutorial-gate.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'only-on-failure' },
+    },
+    {
       name: 'nudge',
       testMatch: '**/nudge-visibility.spec.ts',
       timeout: 120_000,
