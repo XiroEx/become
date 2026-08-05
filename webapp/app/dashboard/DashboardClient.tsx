@@ -1,11 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NotificationOptIn from '@/components/NotificationOptIn'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart from '@/components/ProgressChart'
 import { useTutorialMaybe } from '@redbtn/redtutorial'
+import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import ProgramNudgeModal, {
@@ -90,6 +91,8 @@ export default function DashboardClient() {
   const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
+  // Queued like the check-in — waits its turn behind the onboarding tour.
+  const [nudgeDue, setNudgeDue] = useState(false)
   const [layout, setLayout] = useState<DashboardTile[] | null>(
     () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
   )
@@ -262,15 +265,18 @@ export default function DashboardClient() {
       }
     }
 
-    // Check whether to show the program nudge modal
+    // Check whether the program nudge is DUE. Like the check-in it only gets
+    // queued here — a brand-new member has no program, so this fires on exactly
+    // the load where the onboarding tour is also starting, and an ungated open
+    // covers the tour the same way the check-in did.
     function checkProgramNudge(hasProgram: boolean) {
       if (hasProgram) return // already enrolled — never show
       try {
         const raw = localStorage.getItem(NUDGE_KEY)
         const state: NudgeState | null = raw ? JSON.parse(raw) : null
-        if (shouldShowNudge(state)) setShowNudge(true)
+        if (shouldShowNudge(state)) setNudgeDue(true)
       } catch {
-        setShowNudge(true) // on parse error, just show it
+        setNudgeDue(true) // on parse error, just show it
       }
     }
 
@@ -299,16 +305,68 @@ export default function DashboardClient() {
     } catch {}
   }
 
-  // Hold the daily check-in behind the onboarding tour. `ready` guards the brief
-  // window where tutorial progress is still loading — opening during it would
-  // flash the modal and then get covered by the tour that starts a beat later.
-  // Once the tour finishes (or there is no tour), the queued check-in opens, so
-  // a new member sees the tutorial first and the check-in immediately after.
+  // Hold the daily check-in behind the onboarding tour.
+  //
+  // Gating on `tutorial.active` alone lost a race: the tour triggers 800ms after
+  // landing on /dashboard (core.ts `home` segment), so for that first beat there
+  // is no active tutorial to detect. A fresh account whose /api/checkin call came
+  // back inside that window got the check-in opened, and then the tour drew its
+  // coach-marks on top of it — both on screen at once.
+  //
+  // So the question isn't "is a tour running right now", it's "has this member
+  // finished onboarding at all". That is sampled ONCE per page load: a member who
+  // runs the tour during this visit is not handed the check-in the instant they
+  // tap "Got it" — it waits for their next visit, which is also what makes the
+  // first session read as one clean sequence instead of a modal ambush.
   const tutorial = useTutorialMaybe()
-  const tutorialBusy = !!tutorial && (!tutorial.ready || !!tutorial.active)
+  const [tourWasSettled, setTourWasSettled] = useState<boolean | null>(null)
 
   useEffect(() => {
-    if (checkInDue && !tutorialBusy) {
+    if (tourWasSettled !== null) return // already sampled for this page load
+    if (!tutorial) { setTourWasSettled(true); return } // no provider — nothing to wait for
+    if (!tutorial.ready) return // progress still loading; a verdict now would be a guess
+    setTourWasSettled(onboardingSettled(tutorial))
+  }, [tutorial, tourWasSettled])
+
+  // Fail-safe. "Onboarding unfinished" must not mean "no check-in, ever".
+  //
+  // Two ways that could happen, both seen while testing this: the tour never
+  // triggers on a given load, or the tutorial provider never reports `ready` at
+  // all (a stored progress blob it can't parse wedges it, and `ready` stays false
+  // forever). Either would silently lock a member out of the daily check-in
+  // permanently. So an unresolved OR negative verdict only holds the queue while
+  // the tour still might appear — or while it actually is on screen.
+  const TOUR_GRACE_MS = 6000 // well past the tour's 800ms route trigger + anchor resolution
+  const [tourGraceOver, setTourGraceOver] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setTourGraceOver(true), TOUR_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Once a tour has been seen this session, the queue stays shut until the next
+  // load even after it finishes — tapping "Got it" should not immediately
+  // summon a modal, which is the other half of what was asked for.
+  const sawTour = useRef(false)
+  if (tutorial?.active) sawTour.current = true
+
+  const tutorialBusy =
+    !!tutorial?.active || // tour on screen right now — always yield
+    (tourWasSettled !== true && (sawTour.current || !tourGraceOver))
+
+  // The program nudge is the other first-run modal that used to open straight
+  // over the tour: a brand-new member has no program, so it fires on exactly the
+  // load where onboarding is starting.
+  useEffect(() => {
+    if (nudgeDue && !tutorialBusy) {
+      setShowNudge(true)
+      setNudgeDue(false)
+    }
+  }, [nudgeDue, tutorialBusy])
+
+  useEffect(() => {
+    // Don't stack on the nudge either — two modals at once is the same problem
+    // in a different costume.
+    if (checkInDue && !tutorialBusy && !showNudge && !nudgeDue) {
       setShowCheckInModal(true)
       setCheckInDue(false)
 
@@ -325,7 +383,7 @@ export default function DashboardClient() {
         body: JSON.stringify({ action: 'shown', tz: new Date().getTimezoneOffset() }),
       }).catch(() => {})
     }
-  }, [checkInDue, tutorialBusy])
+  }, [checkInDue, tutorialBusy, showNudge, nudgeDue])
 
   const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
     setShowCheckInModal(false)
