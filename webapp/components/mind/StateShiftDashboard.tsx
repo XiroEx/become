@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Wind, Timer, Play, Pause, RotateCcw, X, Check, Waves, Focus, Zap, Activity, VolumeX } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import ProtocolUnlockModal, { useProtocolUnlocks } from '@/components/mind/system/ProtocolUnlock'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
@@ -286,6 +287,12 @@ const RESET_FLOWS: { id: string; title: string; blurb: string; Icon: typeof Wind
 
 // ── Current-state check-in → matched reset (the signature mechanic) ────────────
 // `state` maps to the StateLog enum; `reset` is either an animated breath session
+// The progressively-unlocked list. "Protect the State" is reached from the
+// locked-in state tile rather than the protocol list, so it is excluded here —
+// and the unlock indices must be read off THIS array, not RESET_FLOWS, or the
+// celebration names a different protocol than the one that actually opened.
+const UNLOCKABLE_RESETS = RESET_FLOWS.filter((f) => f.id !== 'protect-the-state')
+
 // or one of the guided reset flows above.
 type MindState = 'stressed' | 'distracted' | 'low_energy' | 'locked_in'
 const STATES: { state: MindState; label: string; Icon: typeof Wind; reset: { breath: string } | { flow: string } }[] = [
@@ -307,7 +314,10 @@ export default function StateShiftDashboard() {
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   // Lifetime reps in this tool — 1 + reps reset protocols are open (breathwork
   // stays open; it's the foundation).
-  const [reps, setReps] = useState(0)
+  const [reps, setReps] = useState<number | null>(null)
+  // Celebrate the protocol a rep just opened — the unlock used to happen
+  // silently and members only noticed by scrolling the list.
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(UNLOCKABLE_RESETS, reps)
   const [shifts, setShifts] = useState(0)
   const [lastState, setLastState] = useState<MindState | null>(null)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
@@ -421,6 +431,7 @@ export default function StateShiftDashboard() {
 
   return (
     <div className="space-y-5">
+      <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-cyan-500" />
       <SystemHero
         Icon={Wind}
         title="State Shift"
@@ -487,15 +498,15 @@ export default function StateShiftDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Reset protocols</p>
         <div className="space-y-2">
-          {RESET_FLOWS.filter((f) => f.id !== 'protect-the-state').map((f, i) => (
+          {UNLOCKABLE_RESETS.map((f, i) => (
             <ToolkitCard
               key={f.id}
               Icon={f.Icon}
               title={f.title}
               blurb={f.blurb}
               color="text-cyan-500"
-              locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in State Shift to unlock`}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? '' : 's'} in State Shift to unlock`}
               onClick={() => setFlow({ title: f.title, steps: f.steps })}
             />
           ))}

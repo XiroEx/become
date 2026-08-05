@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Telescope, Repeat, Brain, Dumbbell, Users, Home, Eye, Target, Check, Pencil, ArrowRight, type LucideIcon } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import ProtocolUnlockModal, { useProtocolUnlocks } from '@/components/mind/system/ProtocolUnlock'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
@@ -123,7 +124,10 @@ export default function VisionDashboard() {
   const [align, setAlign] = useState<AlignData>({ avg7: 0, entries7: 0, todayScore: null, checkedToday: false })
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   // Lifetime reps in this tool — 1 + reps protocols are open.
-  const [reps, setReps] = useState(0)
+  const [reps, setReps] = useState<number | null>(null)
+  // Celebrate the protocol a rep just opened — the unlock used to happen
+  // silently and members only noticed by scrolling the list.
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(PROTOCOLS, reps)
   const [aiLoading, setAiLoading] = useState(false)
   const [aligning, setAligning] = useState(false)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
@@ -237,6 +241,7 @@ export default function VisionDashboard() {
 
   return (
     <div className="space-y-5">
+      <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-emerald-500" />
       <SystemHero
         Icon={Telescope}
         title="Vision"
@@ -354,8 +359,8 @@ export default function VisionDashboard() {
               title={p.title}
               blurb={p.blurb}
               color="text-emerald-500"
-              locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Vision to unlock`}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? '' : 's'} in Vision to unlock`}
               onClick={() => setFlow({ title: p.title, steps: p.steps })}
             />
           ))}

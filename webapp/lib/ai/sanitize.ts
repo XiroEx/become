@@ -99,10 +99,62 @@ export function validateGuidedSteps(raw: unknown): GuidedStep[] | null {
         step.scale = { min: sc.min, max: sc.max, minLabel: sc.minLabel.trim(), maxLabel: sc.maxLabel.trim() }
       }
     }
+    ensureStepAsks(step)
     out.push(step)
   }
   // Need at least 2 steps to be a "flow".
   return out.length >= 2 ? out.slice(0, 8) : null
+}
+
+/** Does this line actually pose a question? */
+function isQuestion(s: string): boolean {
+  return /\?["'”’)\]]*\s*$/.test(s.trim())
+}
+
+/**
+ * Pull the trailing question out of a paragraph, e.g.
+ * "You said you'd lead. What does that cost you today?" → the second sentence.
+ */
+export function trailingQuestion(body: string): string | null {
+  const m = body.trim().match(/([^.!?]+\?)["'”’)\]]*\s*$/)
+  if (!m) return null
+  const q = m[1].trim()
+  // Guard against a stray "?" or a two-word fragment being promoted.
+  return q.split(/\s+/).length >= 3 ? q : null
+}
+
+/**
+ * A typed-answer step has to ASK the member something.
+ *
+ * The model reliably sets `inputPrompt`, but often writes it as a directive
+ * while putting the real question in `body` — or writes both as declarations.
+ * Combined with `inputPrompt` never having been rendered, that produced screens
+ * that stated something at the member and showed a bare text box. Where the body
+ * ends in a question, promote that question to be the ask so the screen reads as
+ * a question rather than a pronouncement.
+ */
+export function ensureStepAsks(step: GuidedStep): GuidedStep {
+  if (!step.inputPrompt) return step
+
+  if (!isQuestion(step.inputPrompt)) {
+    const fromBody = step.body ? trailingQuestion(step.body) : null
+    if (fromBody) step.inputPrompt = fromBody
+  }
+
+  // The ask now owns the question, so the body must not also end on one — the
+  // model routinely writes the question in both places, and with the ask finally
+  // rendered that would stutter the same request twice in slightly different
+  // words. Strip the body's trailing question and leave it as pure setup.
+  if (isQuestion(step.inputPrompt) && step.body) {
+    const dupe = trailingQuestion(step.body)
+    if (dupe) {
+      const setup = step.body.slice(0, step.body.lastIndexOf(dupe)).trim()
+      if (setup) step.body = setup
+      else delete step.body // the body was only the question — the ask carries it
+    }
+  }
+
+  return step
 }
 
 function clampTextLen(s: string, max: number): string {
