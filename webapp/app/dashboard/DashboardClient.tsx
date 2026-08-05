@@ -108,44 +108,30 @@ export default function DashboardClient() {
           'Authorization': `Bearer ${token}`
         }
 
-        // Fetch mood status
-        const moodRes = await fetch(`/api/mood?tz=${new Date().getTimezoneOffset()}`, { headers })
-        let daysSinceMood = 0
-        if (moodRes.ok) {
-          const { daysSinceLastEntry, todaysMood: moodFromApi } = await moodRes.json()
-          daysSinceMood = daysSinceLastEntry || 0
-          if (moodFromApi) {
-            setTodaysMood(moodFromApi as MoodLevel)
-          }
+        // One authoritative answer from the server. This used to be two calls
+        // whose day-counters were OR'd together on the client, which meant
+        // logging only your weight left the mood counter above zero and the
+        // check-in came straight back — the complaint members were raising.
+        // /api/checkin owns the rule now: both halves closes the day, "Skip for
+        // Today" closes the day, and only a genuinely partial check-in gets the
+        // 8-hour window.
+        const res = await fetch(`/api/checkin?tz=${new Date().getTimezoneOffset()}`, { headers })
+        if (!res.ok) return
+
+        const status = await res.json()
+
+        if (status.todaysMood) {
+          setTodaysMood(status.todaysMood as MoodLevel)
         }
 
-        // Fetch weight status
-        const weightRes = await fetch(`/api/weight?tz=${new Date().getTimezoneOffset()}`, { headers })
-        let daysSinceWeight = 0
-        let lastWeight: number | undefined = undefined
-        if (weightRes.ok) {
-          const { daysSinceLastEntry, lastWeight: lastWeightFromApi } = await weightRes.json()
-          daysSinceWeight = daysSinceLastEntry || 0
-          lastWeight = lastWeightFromApi || undefined
-        }
+        setCheckInInfo({
+          daysSinceMood: status.daysSinceMood ?? 0,
+          daysSinceWeight: status.daysSinceWeight ?? 0,
+          lastWeight: status.lastWeight ?? undefined,
+        })
 
-        setCheckInInfo({ daysSinceMood, daysSinceWeight, lastWeight })
-
-        // Show check-in modal if mood or weight is due, but at most once per 8 hours.
-        // This prevents the modal from appearing on every tab open / refresh.
-        if (daysSinceMood > 0 || daysSinceWeight > 0) {
-          const CHECKIN_KEY = 'checkin_last_dismissed'
-          const SUPPRESS_HOURS = 8
-          try {
-            const raw = localStorage.getItem(CHECKIN_KEY)
-            const lastDismissed = raw ? parseInt(raw, 10) : 0
-            const hoursSince = (Date.now() - lastDismissed) / (1000 * 60 * 60)
-            if (hoursSince >= SUPPRESS_HOURS) {
-              setCheckInDue(true)
-            }
-          } catch {
-            setCheckInDue(true)
-          }
+        if (status.due) {
+          setCheckInDue(true)
         }
       } catch (error) {
         console.error('Failed to check check-in status:', error)
@@ -325,14 +311,26 @@ export default function DashboardClient() {
     if (checkInDue && !tutorialBusy) {
       setShowCheckInModal(true)
       setCheckInDue(false)
+
+      // Stamp "we asked" on the SERVER, not in localStorage. iOS gives a
+      // home-screen PWA its own storage container, so the old local stamp meant
+      // checking in from the installed app still re-prompted in Safari.
+      const token = localStorage.getItem('token')
+      fetch('/api/checkin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action: 'shown', tz: new Date().getTimezoneOffset() }),
+      }).catch(() => {})
     }
   }, [checkInDue, tutorialBusy])
 
   const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
     setShowCheckInModal(false)
     setCheckInDue(false)
-    try { localStorage.setItem('checkin_last_dismissed', String(Date.now())) } catch {}
-    
+
     const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     
     if (checkInData.mood) {

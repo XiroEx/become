@@ -10,9 +10,9 @@ import {
   readTzOffset,
   readTzOffsetFromBody,
   localDateKey,
-  localDayWindowForKey,
   utcMidnightDateKey,
-  dateKey,
+  isEntryOnDay,
+  daysSinceEntry,
 } from '@/lib/dayWindow'
 
 // Check if weight should be prompted and return skip info
@@ -45,27 +45,25 @@ export async function GET(request: NextRequest) {
 
     const tzOffset = readTzOffset(request.nextUrl.searchParams)
     const todayKey = localDateKey(null, tzOffset)
-    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
     const tracking = progress.weightSkipTracking || { consecutiveSkips: 0 }
 
-    // Calculate days since last weight entry and get last weight
+    // Weight rows and the skip-tracking dates are day-keyed (UTC-midnight
+    // markers), so they are compared as calendar days. Reading them as instants
+    // shifted them a day backwards for members west of UTC, which is why a
+    // weight logged minutes ago still reported "1 day since last log".
     let daysSinceLastEntry = 999
     let lastWeight: number | null = null
     if (progress.weightHistory && progress.weightHistory.length > 0) {
-      const sortedHistory = [...progress.weightHistory].sort((a: { date: Date }, b: { date: Date }) =>
-        new Date(b.date).getTime() - new Date(a.date).getTime()
+      const newest = progress.weightHistory.reduce((a: { date: Date }, b: { date: Date }) =>
+        new Date(b.date).getTime() > new Date(a.date).getTime() ? b : a
       )
-      const lastEntryKey = dateKey(new Date(sortedHistory[0].date), tzOffset)
-      const lastMs = new Date(lastEntryKey + 'T00:00:00.000Z').getTime()
-      const todayMs = new Date(todayKey + 'T00:00:00.000Z').getTime()
-      daysSinceLastEntry = Math.floor((todayMs - lastMs) / (1000 * 60 * 60 * 24))
-      lastWeight = (sortedHistory[0] as { date: Date; weight: number }).weight
+      daysSinceLastEntry = daysSinceEntry(newest.date, todayKey, tzOffset) ?? 999
+      lastWeight = (newest as { date: Date; weight: number }).weight
     }
 
-    // Check if we already prompted today (using local-day window)
+    // Check if we already prompted today
     if (tracking.lastPromptDate) {
-      const lastPromptKey = dateKey(new Date(tracking.lastPromptDate), tzOffset)
-      if (lastPromptKey === todayKey) {
+      if (isEntryOnDay(tracking.lastPromptDate, todayKey, tzOffset)) {
         // Already prompted today, don't show again
         return NextResponse.json({
           needsWeightCheck: false,
@@ -77,11 +75,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Check if weight was logged today (using local-day window)
-    const todaysWeight = progress.weightHistory?.find((entry: { date: Date }) => {
-      const t = new Date(entry.date).getTime()
-      return t >= start.getTime() && t <= end.getTime()
-    })
+    // Check if weight was logged today
+    const todaysWeight = progress.weightHistory?.find((entry: { date: Date }) =>
+      isEntryOnDay(entry.date, todayKey, tzOffset)
+    )
 
     if (todaysWeight) {
       return NextResponse.json({
@@ -98,10 +95,7 @@ export async function GET(request: NextRequest) {
 
     // Increment if we haven't prompted today and there's no weight entry
     if (tracking.lastPromptDate) {
-      const lastPromptKey = dateKey(new Date(tracking.lastPromptDate), tzOffset)
-      const lastMs = new Date(lastPromptKey + 'T00:00:00.000Z').getTime()
-      const todayMs = new Date(todayKey + 'T00:00:00.000Z').getTime()
-      const daysSinceLastPrompt = Math.floor((todayMs - lastMs) / (1000 * 60 * 60 * 24))
+      const daysSinceLastPrompt = daysSinceEntry(tracking.lastPromptDate, todayKey, tzOffset) ?? 0
 
       if (daysSinceLastPrompt >= 1) {
         consecutiveSkips = (tracking.consecutiveSkips || 0) + 1
@@ -160,7 +154,6 @@ export async function POST(request: NextRequest) {
     const tzOffset = readTzOffsetFromBody(body)
     const todayKey = localDateKey(null, tzOffset)
     const today = utcMidnightDateKey(todayKey)
-    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
 
     // Find or create user progress
     let progress = await UserProgress.findOne({ userId: authResult.userId })
@@ -185,17 +178,27 @@ export async function POST(request: NextRequest) {
       }
 
       if (skip) {
-        // User skipped - increment counter and update last prompt date
-        progress.weightSkipTracking.consecutiveSkips = (progress.weightSkipTracking.consecutiveSkips || 0) + 1
+        // A skip is a per-DAY event, not a per-press one. This used to increment
+        // unconditionally, so dismissing the prompt three times in one day counted
+        // as three skipped days — inflating the counter that drives the day-3/7/12
+        // reminders and the 14-day mandatory weigh-in.
+        const lastPrompt = progress.weightSkipTracking.lastPromptDate
+        const alreadyCountedToday =
+          lastPrompt && isEntryOnDay(lastPrompt, todayKey, tzOffset)
+        if (!alreadyCountedToday) {
+          progress.weightSkipTracking.consecutiveSkips = (progress.weightSkipTracking.consecutiveSkips || 0) + 1
+        }
         progress.weightSkipTracking.lastPromptDate = today
       } else if (weight) {
         // User logged weight
 
-        // Check if there's already a weight entry for today (using local-day window)
-        const existingIndex = progress.weightHistory?.findIndex((entry: { date: Date }) => {
-          const t = new Date(entry.date).getTime()
-          return t >= start.getTime() && t <= end.getTime()
-        }) ?? -1
+        // Check if there's already a weight entry for today. Matched by calendar
+        // day — the local-instant window never matched the day-keyed row, so a
+        // member west of UTC appended a new row on every save instead of
+        // updating the day's entry.
+        const existingIndex = progress.weightHistory?.findIndex((entry: { date: Date }) =>
+          isEntryOnDay(entry.date, todayKey, tzOffset)
+        ) ?? -1
 
         if (existingIndex >= 0) {
           progress.weightHistory[existingIndex].weight = weight

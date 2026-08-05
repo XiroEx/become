@@ -8,9 +8,9 @@ import {
   readTzOffset,
   readTzOffsetFromBody,
   localDateKey,
-  localDayWindowForKey,
   utcMidnightDateKey,
-  dateKey,
+  isEntryOnDay,
+  daysSinceEntry,
 } from '@/lib/dayWindow'
 
 // Check if mood has been logged today and return today's mood
@@ -33,24 +33,19 @@ export async function GET(request: NextRequest) {
 
     const tzOffset = readTzOffset(request.nextUrl.searchParams)
     const todayKey = localDateKey(null, tzOffset)
-    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
+    // Mood rows are day-keyed (UTC-midnight markers), so they must be matched as
+    // calendar days. Matching them against a local-instant window reported
+    // "no mood today" the moment a member west of UTC logged one.
+    const todaysMood = progress.moodHistory.find((entry: { date: Date; mood: number }) =>
+      isEntryOnDay(entry.date, todayKey, tzOffset)
+    )
 
-    const todaysMood = progress.moodHistory.find((entry: { date: Date; mood: number }) => {
-      const t = new Date(entry.date).getTime()
-      return t >= start.getTime() && t <= end.getTime()
-    })
-
-    // Calculate days since last entry using local date keys
     let daysSinceLastEntry = 0
     if (progress.moodHistory.length > 0) {
-      const sortedHistory = [...progress.moodHistory].sort((a: { date: Date }, b: { date: Date }) =>
-        new Date(b.date).getTime() - new Date(a.date).getTime()
+      const newest = progress.moodHistory.reduce((a: { date: Date }, b: { date: Date }) =>
+        new Date(b.date).getTime() > new Date(a.date).getTime() ? b : a
       )
-      const lastEntryKey = dateKey(new Date(sortedHistory[0].date), tzOffset)
-      // Count calendar days between lastEntryKey and todayKey
-      const lastMs = new Date(lastEntryKey + 'T00:00:00.000Z').getTime()
-      const todayMs = new Date(todayKey + 'T00:00:00.000Z').getTime()
-      daysSinceLastEntry = Math.floor((todayMs - lastMs) / (1000 * 60 * 60 * 24))
+      daysSinceLastEntry = daysSinceEntry(newest.date, todayKey, tzOffset) ?? 0
     }
 
     return NextResponse.json({
@@ -85,7 +80,6 @@ export async function POST(request: NextRequest) {
     const tzOffset = readTzOffsetFromBody(body)
     const todayKey = localDateKey(null, tzOffset)
     const today = utcMidnightDateKey(todayKey)
-    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
     const now = new Date()
 
     // Find or create user progress
@@ -104,10 +98,12 @@ export async function POST(request: NextRequest) {
         }]
       })
     } else {
-      // Check if there's already a mood entry for today (using local-day window)
+      // Check if there's already a mood entry for today. Matched by calendar
+      // day: the local-instant window never matched the day-keyed row a member
+      // west of UTC had just written, so every log appended a duplicate row for
+      // the same day instead of updating it.
       const existingIndex = progress.moodHistory?.findIndex((entry: { date: Date }) => {
-        const t = new Date(entry.date).getTime()
-        return t >= start.getTime() && t <= end.getTime()
+        return isEntryOnDay(entry.date, todayKey, tzOffset)
       }) ?? -1
 
       let previousMood: 1 | 2 | 3 | 4 | 5 | null = null

@@ -112,6 +112,13 @@ export interface IUserProgress {
     lastWeightDate?: Date // Last date weight was logged
     consecutiveSkips: number // Number of consecutive days skipped
   }
+  // Daily check-in gating. Lives on the server, not in localStorage, so that a
+  // member who checks in from the home-screen PWA is not asked again in Safari
+  // (iOS gives standalone web apps their own storage container).
+  checkIn?: {
+    lastSkippedDate?: Date // Local day on which "Skip for Today" was pressed
+    lastShownAt?: Date // Last time the modal was actually put in front of them
+  }
   workoutLogs: IWorkoutLog[]
   activePrograms: IActiveProgram[]
   currentProgram?: {
@@ -345,6 +352,10 @@ const UserProgressSchema = new Schema<IUserProgress>({
     lastPromptDate: { type: Date },
     lastWeightDate: { type: Date },
     consecutiveSkips: { type: Number, default: 0 }
+  },
+  checkIn: {
+    lastSkippedDate: { type: Date },
+    lastShownAt: { type: Date }
   },
   workoutLogs: [WorkoutLogSchema],
   activePrograms: { type: [ActiveProgramSchema], default: [] },

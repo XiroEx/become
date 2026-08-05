@@ -113,3 +113,55 @@ export function utcMidnightDateKey(dateKey: string): Date {
   if (!m) return new Date(dateKey + 'T00:00:00.000Z')
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
 }
+
+/**
+ * Which calendar day a DAY-KEYED row belongs to.
+ *
+ * Mood entries, weight entries and weightSkipTracking dates are WRITTEN with
+ * utcMidnightDateKey(), so they sit at UTC midnight and denote a calendar day
+ * rather than an instant. Reading one back through the local-instant machinery
+ * — `localDayWindowForKey()` or `dateKey(d, tzOffset)` — shifts it a day
+ * backwards for anyone WEST of UTC: an Eastern member's 2026-08-05 begins at
+ * 05:00Z, so the marker 2026-08-05T00:00Z falls outside their own day.
+ *
+ * The member-visible result was that logging your mood and weight read back
+ * immediately as "1 day since last log", `todaysMood` came back null, and the
+ * daily check-in never registered as done — so it kept reappearing. It was
+ * correct at UTC and east of it, which is why it went unnoticed.
+ *
+ * Rows written before this convention hold a real timestamp, so both readings
+ * are accepted and the nearer one wins.
+ */
+export function entryDayKeys(d: Date | string, tzOffsetMinutes: number): string[] {
+  const date = new Date(d)
+  if (Number.isNaN(date.getTime())) return []
+  const asMarker = dateKey(date, 0)
+  const asInstant = dateKey(date, tzOffsetMinutes)
+  return asMarker === asInstant ? [asMarker] : [asMarker, asInstant]
+}
+
+/** Did this day-keyed row land on `dayKey` for a caller in `tzOffsetMinutes`? */
+export function isEntryOnDay(
+  d: Date | string,
+  dayKey: string,
+  tzOffsetMinutes: number
+): boolean {
+  return entryDayKeys(d, tzOffsetMinutes).includes(dayKey)
+}
+
+/** Whole calendar days between a day-keyed row and `todayKey`. Never negative. */
+export function daysSinceEntry(
+  d: Date | string,
+  todayKey: string,
+  tzOffsetMinutes: number
+): number | null {
+  const keys = entryDayKeys(d, tzOffsetMinutes)
+  if (keys.length === 0) return null
+  const todayMs = utcMidnightDateKey(todayKey).getTime()
+  let best = Infinity
+  for (const k of keys) {
+    const diff = Math.floor((todayMs - utcMidnightDateKey(k).getTime()) / 86_400_000)
+    if (diff < best) best = diff
+  }
+  return Math.max(0, best)
+}
