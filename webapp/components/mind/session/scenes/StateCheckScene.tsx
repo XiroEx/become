@@ -19,6 +19,7 @@ import {
   ArrowRight, RotateCcw, Loader2, type LucideIcon,
 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
+import { recentFeelingLabel } from '@/lib/mind/recentFeeling'
 import type { SceneProps } from '@/lib/mind/moves'
 
 // Within this window of your last check-in, a new session skips the full grid.
@@ -29,6 +30,12 @@ const TINT: Record<MindState, string> = {
   distracted: 'text-amber-300',
   low_energy: 'text-blue-300',
   locked_in: 'text-green-300',
+}
+
+/** The icon for a past check-in — the specific feeling's, when we know it. */
+function recentIcon(state: MindState, feeling: string | null): LucideIcon {
+  const match = feeling ? FEELINGS.find((f) => f.label === feeling) : undefined
+  return match?.Icon ?? STATE_META[state].Icon
 }
 
 // Canonical per-state meta for the "welcome back" opener.
@@ -85,6 +92,11 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
   // Supplementary-run state.
   const [loadingRecent, setLoadingRecent] = useState(true)
   const [recent, setRecent] = useState<MindState | null>(null)
+  // The exact word they tapped last time ("Scattered"), not just the bucket it
+  // falls into. Twenty feelings collapse onto four states, so showing the state
+  // back reads as though the app misheard them — pick "Scattered" and it replies
+  // "distracted", which is simply the first amber tile in the grid.
+  const [recentFeeling, setRecentFeeling] = useState<string | null>(null)
   const [recheck, setRecheck] = useState(false)
   // Re-check that changed state → capture "what changed?".
   const [pendingState, setPendingState] = useState<MindState | null>(null)
@@ -98,10 +110,17 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
       try {
         const res = await fetch('/api/mind/state', { headers: authHeaders() })
         if (res.ok) {
-          const data = (await res.json()) as { logs?: { state: MindState; timestamp: string }[] }
+          const data = (await res.json()) as {
+            logs?: { state: MindState; timestamp: string; feeling?: string }[]
+          }
           const last = data.logs?.[0]
           if (last && Date.now() - new Date(last.timestamp).getTime() < RECENT_WINDOW_MS) {
-            if (!cancelled) setRecent(last.state)
+            if (!cancelled) {
+              setRecent(last.state)
+              // Already stored by POST /api/mind/state — it was only ever
+              // dropped on the way back in.
+              setRecentFeeling(last.feeling?.trim() || null)
+            }
           }
         }
       } catch {
@@ -123,7 +142,9 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
   // Quick path: reuse the recent state, no re-logging (avoids mood/XP spam).
   const resumeRecent = () => {
     if (!recent) return
-    onState?.(recent, STATE_META[recent].label)
+    // Hand the rest of the session the word they actually picked, so the whole
+    // run keeps speaking their language rather than the bucket's.
+    onState?.(recent, recentFeelingLabel(recent, recentFeeling))
     onDone()
   }
 
@@ -198,11 +219,11 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
             className="flex h-full w-full flex-col items-center justify-center px-6 text-center"
           >
             <span className={`mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5`}>
-              {(() => { const I = STATE_META[recent].Icon; return <I className={`h-8 w-8 ${TINT[recent]}`} /> })()}
+              {(() => { const I = recentIcon(recent, recentFeeling); return <I className={`h-8 w-8 ${TINT[recent]}`} /> })()}
             </span>
             <h1 className="text-2xl font-extrabold">Welcome back</h1>
             <p className="mt-2 max-w-xs text-white/50">
-              Last check-in: <span className="font-semibold text-white/80">{STATE_META[recent].label}</span>. Pick up where you left off?
+              Last check-in: <span className="font-semibold text-white/80">{recentFeelingLabel(recent, recentFeeling)}</span>. Pick up where you left off?
             </p>
             <button
               onClick={resumeRecent}
@@ -229,7 +250,11 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
             className="flex h-full w-full flex-col items-center justify-center px-6 text-center"
           >
             <p className="text-xs uppercase tracking-widest text-white/40">
-              {recent ? `${STATE_META[recent].label} → ` : ''}{STATE_META[pendingState].label}
+              {/* Both ends named by the feeling actually chosen — "Scattered →
+                  Drained" is the shift they made; "distracted → low energy" is
+                  not something either of them said. */}
+              {recent ? `${recentFeelingLabel(recent, recentFeeling)} → ` : ''}
+              {pendingFeeling || STATE_META[pendingState].label}
             </p>
             <h1 className="mt-3 text-2xl font-extrabold">What changed?</h1>
             <p className="mt-2 max-w-xs text-white/50">A quick note on what shifted since earlier.</p>
