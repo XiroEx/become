@@ -102,10 +102,10 @@ describe('cross-screen target parity', () => {
 
     assert.ok(fromOnboarding && fromGoalsPage)
     assert.equal(fromOnboarding.calories, 2908)
-    // Macros are explicit shares now (lose = 35/35/30), with protein bounded by
-    // bodyweight rather than set by it. 1.0 g/lb is the FLOOR the cut must clear.
-    assert.deepEqual(fromOnboarding.split, { protein: 34, carbs: 35, fats: 30 })
-    assert.ok(fromOnboarding.protein >= 210, 'must clear the 1.0 g/lb cutting floor')
+    // "Recommended" personalises from bodyweight: 210 lb cutting wants ~1.0 g/lb,
+    // which is 29% of 2908 cal. Every macro is exactly its share of calories.
+    assert.deepEqual(fromOnboarding.split, { protein: 29, carbs: 41, fats: 30 })
+    assert.ok(fromOnboarding.protein >= 210, 'must land on the 1.0 g/lb cutting target')
     // The actual regression this test exists for: these two were 2910 and 2909.
     assert.deepEqual(fromGoalsPage, fromOnboarding)
   })

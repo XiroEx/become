@@ -862,6 +862,12 @@ function Step3({
   const activity = profile.activityLevel ?? activityFromTrainingDays(profile.weeklyAvailability)
   const macroPreset = profile.macroPreset ?? 'recommended'
   const suggestedPreset = recommendedPresetForGoal(direction, goals)
+  // Feeds the personalised "Recommended" split. Until the body stats and the
+  // calorie target exist there is nothing to personalise from, so the cards fall
+  // back to the static per-direction table.
+  const presetContext = targets && profile.currentWeightKg
+    ? { weightLbs: profile.currentWeightKg * 2.2046226218, calories: targets.calories, goals }
+    : undefined
   // A target weight only makes sense when you're trying to move the number.
   const showTargetWeight = direction !== 'maintain'
 
@@ -1190,7 +1196,10 @@ function Step3({
           <div className="mt-3 space-y-2">
             {MACRO_PRESET_CHOICES.map((key) => {
               const selected = macroPreset === key
-              const split = splitForPreset(key, direction)
+              // Show the ratio this option will ACTUALLY deliver. "Recommended"
+              // is personalised from their bodyweight, goal and calorie target,
+              // so it no longer reads identically to "Balanced".
+              const split = splitForPreset(key, direction, presetContext)
               const isSuggested = key === suggestedPreset
               return (
                 <button

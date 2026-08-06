@@ -159,16 +159,21 @@ function proteinPerLb(direction: NutritionDirection, goals: FitnessGoal[]): numb
   return wantsMuscle ? 0.9 : 0.8
 }
 
-/** Nobody needs more than this per lb. */
-const MAX_PROTEIN_PER_LB = 1.6
 /**
- * Hard ceiling in grams, regardless of bodyweight. Above roughly this point
- * protein stops doing anything useful and the number just reads as broken. It
- * also stands in for scaling to lean mass: at 320 lb, 1.0 g/lb of TOTAL weight
- * is 320 g, which no coach would prescribe — the target should track lean mass,
- * and this ceiling approximates that without asking for a body-fat estimate.
+ * Bands the RECOMMENDED split is allowed to personalise within. These bound a
+ * PERCENTAGE, never a gram figure.
+ *
+ * There used to be a hard 250 g protein ceiling here. It had to go: it silently
+ * overrode whichever split the member chose, so at 3,384 cal both "High Protein"
+ * (40%) and "Lower Carb" (35%) delivered exactly 250 g — the picker looked
+ * broken because, for protein, it was. Picking a ratio has to move the ratio.
+ *
+ * Bounding the percentage instead keeps every preset honest: 40% of calories is
+ * 40% of calories at any bodyweight, and the only thing clamped is how far
+ * "Recommended" will personalise away from a sensible middle.
  */
-const MAX_PROTEIN_G = 250
+const RECOMMENDED_PROTEIN_PCT = { min: 25, max: 40 }
+const RECOMMENDED_CARB_PCT = { min: 25, max: 50 }
 
 // ─── Macro splits ─────────────────────────────────────────────────────────────
 //
@@ -224,9 +229,73 @@ export const MACRO_PRESET_BLURBS: Record<MacroPreset, string> = {
   custom: 'Set every number yourself.',
 }
 
-/** The split a preset resolves to for a given direction. */
-export function splitForPreset(preset: MacroPreset, direction: NutritionDirection): MacroSplit {
-  if (preset === 'recommended' || preset === 'custom') return RECOMMENDED_SPLITS[direction]
+/** What the personalised "Recommended" split needs to know about the member. */
+export interface RecommendedContext {
+  weightLbs: number
+  calories: number
+  goals?: FitnessGoal[]
+}
+
+/**
+ * "Recommended" is the personalised one — the whole point of collecting
+ * bodyweight, goal, direction and activity.
+ *
+ * It used to be a fixed per-direction table, which meant that at `maintain` it
+ * resolved to 30/40/30 — byte-identical to "Balanced". Two of the four options
+ * were the same option wearing different names.
+ *
+ * Now protein is anchored to what THIS member's bodyweight and goal call for,
+ * converted into a percentage of THEIR calorie target, and bounded so it stays
+ * a sane recommendation at both extremes: a light member on a big surplus can't
+ * be handed 15% protein, and a heavy member in a deficit can't be handed 50%.
+ * Carbs take what is left after a direction-appropriate fat share, bounded so we
+ * never return to the 56%-carb blowout that started all of this.
+ */
+export function recommendedSplit(
+  direction: NutritionDirection,
+  ctx: RecommendedContext,
+): MacroSplit {
+  const goals = ctx.goals ?? []
+  if (!(ctx.calories > 0) || !(ctx.weightLbs > 0)) return RECOMMENDED_SPLITS[direction]
+
+  const proteinG = ctx.weightLbs * proteinPerLb(direction, goals)
+  const protein = clamp(
+    Math.round(((proteinG * 4) / ctx.calories) * 100),
+    RECOMMENDED_PROTEIN_PCT.min,
+    RECOMMENDED_PROTEIN_PCT.max,
+  )
+
+  // Fat is the steady one — enough for hormones, not so much that it crowds out
+  // the carbs that fuel training. A surplus leans slightly more on carbs.
+  const fatsTarget = direction === 'gain' ? 27 : 30
+
+  let carbs = clamp(100 - protein - fatsTarget, RECOMMENDED_CARB_PCT.min, RECOMMENDED_CARB_PCT.max)
+  // Whatever the carb bound gave or took comes out of fat, so the three always
+  // sum to exactly 100 and the label can never disagree with the grams.
+  const fats = 100 - protein - carbs
+
+  return { protein, carbs, fats }
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n))
+}
+
+/**
+ * The split a preset resolves to.
+ *
+ * Pass `ctx` to get the personalised Recommended split; without it, Recommended
+ * falls back to the static per-direction table (used where the member's body
+ * stats aren't to hand).
+ */
+export function splitForPreset(
+  preset: MacroPreset,
+  direction: NutritionDirection,
+  ctx?: RecommendedContext,
+): MacroSplit {
+  if (preset === 'recommended' || preset === 'custom') {
+    return ctx ? recommendedSplit(direction, ctx) : RECOMMENDED_SPLITS[direction]
+  }
   return MACRO_PRESET_SPLITS[preset]
 }
 
@@ -284,28 +353,27 @@ export function computeNutritionTargets(input: TargetsInput): NutritionTargets |
   const calories = Math.max(1200, Math.round(tdee + calorieAdjustment(tdee, direction)))
 
   const weightLbs = input.currentWeightKg * LBS_PER_KG
-  const target = splitForPreset(input.macroPreset ?? 'recommended', direction)
+  const target = splitForPreset(input.macroPreset ?? 'recommended', direction, {
+    weightLbs,
+    calories,
+    goals,
+  })
 
-  // Protein: the split sets the target, bodyweight bounds it. The floor stops a
-  // big calorie number diluting protein into single digits of g/lb; the cap stops
-  // a heavy member being told to eat 300g+.
-  const proteinCap = Math.min(Math.round(weightLbs * MAX_PROTEIN_PER_LB), MAX_PROTEIN_G)
-  // The cap is authoritative — for a very heavy member the bodyweight floor can
-  // itself exceed what anyone should eat, so the floor is clamped to it first.
-  const proteinFloor = Math.min(Math.round(weightLbs * proteinPerLb(direction, goals)), proteinCap)
-  const proteinFromSplit = Math.round((calories * target.protein) / 100 / 4)
-  const protein = Math.min(Math.max(proteinFromSplit, proteinFloor), proteinCap)
+  // THE SPLIT IS THE ANSWER. Each macro is simply its own share of the calorie
+  // target — no floors, no ceilings, no remainder redistribution.
+  //
+  // This is the fix for the picker looking dead: protein used to be clamped
+  // between a bodyweight floor and a hard 250 g ceiling AFTER the split had been
+  // applied, so at 3,384 cal "High Protein" (40% = 338 g) and "Lower Carb"
+  // (35% = 296 g) both came out at exactly 250 g. The leftover was then handed
+  // back to carbs and fat, which quietly rewrote the ratio the member picked
+  // into something else entirely. Choosing 40/30/30 now yields 40/30/30.
+  const protein = Math.round((calories * target.protein) / 100 / 4)
+  let carbs = Math.round((calories * target.carbs) / 100 / 4)
+  let fats = Math.round((calories * target.fats) / 100 / 9)
 
-  // Whatever protein did not claim is split between carbs and fat IN THE
-  // PRESET'S RATIO. Handing the leftover to carbs alone is what produced the
-  // original blowout — and it came back at the extremes as soon as the protein
-  // ceiling started binding, so the remainder has to be shared, not dumped.
-  const remainingCal = Math.max(0, calories - protein * 4)
-  const ratioTotal = target.carbs + target.fats
-  let carbs = Math.round((remainingCal * (target.carbs / ratioTotal)) / 4)
-  let fats = Math.round((remainingCal * (target.fats / ratioTotal)) / 9)
-
-  // Guard rail: keep carbs workable, buying the difference back from fat.
+  // Guard rail: keep carbs workable, buying the difference back from fat. With
+  // explicit percentages this only binds on a very low calorie target.
   const MIN_CARBS = 50
   if (carbs < MIN_CARBS) {
     const deficitCal = (MIN_CARBS - carbs) * 4
