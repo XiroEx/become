@@ -62,10 +62,12 @@ describe('tdee', () => {
     assert.equal(t.tdee, 2800)
     assert.equal(t.direction, 'lose')
     assert.equal(t.calories, 2300)          // 2800 − 500
-    // Macros are now explicit shares of calories (lose = 35/35/30) with protein
-    // bounded by bodyweight, rather than protein-from-g/lb and carbs-as-remainder.
-    assert.deepEqual(t.split, { protein: 35, carbs: 35, fats: 30 })
-    assert.ok(t.protein >= 185, 'must still clear the 1.0 g/lb deficit floor')
+    // "Recommended" is personalised now: protein is derived from THIS member's
+    // bodyweight and direction (1.0 g/lb on a cut ≈ 185 g ≈ 32% of 2300), rather
+    // than read off a fixed per-direction table. Carbs take what is left after a
+    // 30% fat share.
+    assert.deepEqual(t.split, { protein: 32, carbs: 38, fats: 30 })
+    assert.ok(t.protein >= 180, 'must still land on the 1.0 g/lb deficit target')
     // Macros must actually reconstruct the calorie target.
     assert.ok(Math.abs(t.protein * 4 + t.carbs * 4 + t.fats * 9 - t.calories) <= 6)
   })
@@ -75,8 +77,8 @@ describe('tdee', () => {
     assert.ok(t)
     assert.equal(t.direction, 'gain')
     assert.equal(t.calories, 3100)          // 2800 + 300
-    assert.deepEqual(t.split, { protein: 27, carbs: 45, fats: 28 })
-    assert.ok(t.protein >= 166, 'must clear the 0.9 g/lb surplus floor')
+    assert.deepEqual(t.split, { protein: 25, carbs: 48, fats: 27 })
+    assert.ok(t.protein >= 166, 'must clear the 0.9 g/lb surplus target')
     // The old model gave 19% protein / 56% carbs here; carbs may no longer run away.
     assert.ok(t.split.carbs <= 50, `carbs ${t.split.carbs}%`)
   })
