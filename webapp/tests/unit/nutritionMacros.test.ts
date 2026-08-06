@@ -14,6 +14,9 @@ import {
   computeNutritionTargets,
   splitForPreset,
   recommendedPresetForGoal,
+  recommendPreset,
+  MACRO_PRESET_LABELS,
+  type FitnessGoal,
   MACRO_PRESET_SPLITS,
   RECOMMENDED_SPLITS,
   type MacroPreset,
@@ -308,6 +311,73 @@ describe('macro preset picker', () => {
       const t = computeNutritionTargets({ ...MEMBER, macroPreset: preset })!
       const fromMacros = t.protein * 4 + t.carbs * 4 + t.fats * 9
       assert.ok(Math.abs(fromMacros - t.calories) <= 8, `${preset}: ${fromMacros} vs ${t.calories}`)
+    }
+  })
+})
+
+// ── Naming + who gets recommended what ───────────────────────────────────────
+//
+// "Recommended" was a preset NAME, which made it the obvious pick for anyone who
+// didn't have an opinion — including beginners, for whom the computed split can
+// be an accurate-but-unreachable 400 g of protein. It is now a BADGE that moves,
+// and the computed split is called what it is: Custom.
+
+describe('macro preset naming and recommendation', () => {
+  it('the computed split is called "Custom", not "Recommended"', () => {
+    assert.equal(MACRO_PRESET_LABELS.recommended, 'Custom')
+    // Nothing in the picker is named "Recommended" any more.
+    for (const label of Object.values(MACRO_PRESET_LABELS)) {
+      assert.notEqual(label, 'Recommended')
+    }
+  })
+
+  it('hand-typed numbers are called "Manual" so there is only one "Custom"', () => {
+    assert.equal(MACRO_PRESET_LABELS.custom, 'Manual')
+    const names = Object.values(MACRO_PRESET_LABELS)
+    assert.equal(new Set(names).size, names.length, `duplicate labels: ${names.join(', ')}`)
+  })
+
+  it('a beginner is pointed at Balanced whatever their goal', () => {
+    // The reported case: new to the gym, very overweight, custom split is
+    // technically right and practically unreachable.
+    for (const [dir, goals] of [
+      ['lose', ['lose_weight']],
+      ['gain', ['gain_muscle']],
+      ['maintain', ['general_health']],
+    ] as [NutritionDirection, FitnessGoal[]][]) {
+      const r = recommendPreset(dir, goals, 'beginner')
+      assert.equal(r.preset, 'balanced', `${dir}/${goals[0]} sent a beginner to ${r.preset}`)
+      assert.ok(r.why.length > 20, 'a recommendation must explain itself')
+    }
+  })
+
+  it('unknown experience is treated as beginner, not as advanced', () => {
+    assert.equal(recommendPreset('lose', ['lose_weight'], undefined).preset, 'balanced')
+  })
+
+  it('experience unlocks the sharper recommendations', () => {
+    // Same goal, three experience levels — the recommendation has to move.
+    const beginner = recommendPreset('lose', ['lose_weight'], 'beginner')
+    const intermediate = recommendPreset('lose', ['lose_weight'], 'intermediate')
+    const advanced = recommendPreset('lose', ['lose_weight'], 'advanced')
+    assert.equal(beginner.preset, 'balanced')
+    assert.equal(intermediate.preset, 'recommended')  // "Custom"
+    assert.equal(advanced.preset, 'high_protein')
+  })
+
+  it('goal picks between the sharper options once experience allows', () => {
+    assert.equal(recommendPreset('gain', ['gain_muscle'], 'advanced').preset, 'high_protein')
+    assert.equal(recommendPreset('maintain', ['general_health'], 'advanced').preset, 'recommended')
+  })
+
+  it('every recommendation names a real, selectable option', () => {
+    const selectable: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb']
+    for (const exp of [undefined, 'beginner', 'intermediate', 'advanced'] as const) {
+      for (const dir of DIRECTIONS) {
+        const r = recommendPreset(dir, ['lose_weight'], exp)
+        assert.ok(selectable.includes(r.preset), `${exp}/${dir} badged ${r.preset}`)
+        assert.ok(r.badge.length > 0 && r.badge.length <= 16, `badge "${r.badge}" is not card-sized`)
+      }
     }
   })
 })

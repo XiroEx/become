@@ -26,6 +26,9 @@ export type FitnessGoal =
   | 'improve_performance'
   | 'general_health'
 
+/** Declared locally to keep this module free of model imports. */
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
+
 export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   sedentary: 1.2,
   light: 1.375,
@@ -212,17 +215,29 @@ export const RECOMMENDED_SPLITS: Record<NutritionDirection, MacroSplit> = {
   gain: { protein: 27, carbs: 45, fats: 28 },
 }
 
+/**
+ * NOTE ON THE `recommended` KEY. It is shown to members as **"Custom"**, because
+ * that is what it is — a split computed from their body, goal and activity, not
+ * a preset. The key keeps its old name because it is already persisted on
+ * existing profiles and stored NutritionGoals; renaming it would orphan
+ * everyone's saved choice for a cosmetic win.
+ *
+ * "Recommended" is no longer a preset name at all. It is a BADGE that moves
+ * between options depending on the member — see recommendPreset().
+ */
 export const MACRO_PRESET_LABELS: Record<MacroPreset, string> = {
-  recommended: 'Recommended',
+  recommended: 'Custom',
   balanced: 'Balanced',
   high_protein: 'High Protein',
   low_carb: 'Lower Carb',
-  custom: 'Custom',
+  // Hand-typed numbers. Renamed off "Custom" so it can't be confused with the
+  // computed split above.
+  custom: 'Manual',
 }
 
 /** One-line rationale shown next to each option. */
 export const MACRO_PRESET_BLURBS: Record<MacroPreset, string> = {
-  recommended: 'Tuned to your goal — the safe default.',
+  recommended: 'Built from your body, goal and activity.',
   balanced: 'An even 30/40/30. Works for most people.',
   high_protein: 'More protein, fewer carbs. Good when building or holding muscle.',
   low_carb: 'Carbs down, fats up. For people who feel better eating this way.',
@@ -311,6 +326,61 @@ export function recommendedPresetForGoal(
   if (goals.includes('gain_muscle') && direction !== 'lose') return 'high_protein'
   if (direction === 'lose') return 'high_protein'
   return 'recommended'
+}
+
+export interface PresetRecommendation {
+  /** Which option carries the badge. */
+  preset: MacroPreset
+  /** Short badge text on the card. */
+  badge: string
+  /** One line under the picker explaining the pick. */
+  why: string
+}
+
+/**
+ * Which option to badge as recommended, and why.
+ *
+ * Experience gates how demanding the recommendation is allowed to be, because
+ * an accurate target and an achievable one are not the same thing. The custom
+ * split for a very overweight beginner is arithmetically right and can still be
+ * 400 g of protein — a number they have no idea how to hit, and which reads as
+ * "this isn't for me" on day one. Beginners are pointed at Balanced so their
+ * first target is one they can actually meet; the demanding splits stay one tap
+ * away for when they want them.
+ *
+ * Goal picks between the demanding options once experience says they're ready.
+ */
+export function recommendPreset(
+  direction: NutritionDirection,
+  goals: FitnessGoal[] = [],
+  experience?: ExperienceLevel,
+): PresetRecommendation {
+  // Unknown experience is treated as beginner on purpose: the gentler target is
+  // the safer thing to hand someone we know nothing about.
+  if (!experience || experience === 'beginner') {
+    return {
+      preset: 'balanced',
+      badge: 'Start here',
+      why: 'A split you can actually hit while the habit is still forming. You can move to a sharper one whenever you want.',
+    }
+  }
+
+  const wantsMuscle = goals.includes('gain_muscle')
+  if (experience === 'advanced' && (wantsMuscle || direction === 'lose')) {
+    return {
+      preset: 'high_protein',
+      badge: 'For your goal',
+      why: wantsMuscle
+        ? 'Protein leads when the goal is building muscle.'
+        : 'Protein leads in a deficit — it is what protects muscle while you lose fat.',
+    }
+  }
+
+  return {
+    preset: 'recommended',
+    badge: 'For you',
+    why: 'Worked out from your bodyweight, your goal and how active your day is.',
+  }
 }
 
 export interface TargetsInput extends BodyStats {
