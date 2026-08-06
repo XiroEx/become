@@ -15,6 +15,29 @@ Screenshots and step-by-step notes: `webapp/tests/e2e/screenshots/nadine/`.
 
 ---
 
+## Status — re-checked 2026-08-06 against production (`741cce6`)
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Mindset + Chat invisible to real members | **NOT FIXED** |
+| 2 | Negative progress % on The Becoming | **NOT FIXED** |
+| 3 | Macro preset does not deliver its advertised split | **FIXED** (#801–#804) |
+| 4 | "Lose Weight — TDEE − 500" label is wrong | **NOT FIXED** |
+| 5 | Recommends a program, never enrols her | **NOT FIXED** |
+| 6 | Dashboard tiles/layout 500 on unrelated bad history | **NOT FIXED** |
+| 7 | 178 g protein impractical for a beginner | **FIXED for new members** — see caveat |
+
+**Caveat on 3 and 7 — the fix is not retroactive.** Targets are computed once at
+onboarding and persisted to `NutritionGoals`. Nadine's live account still reads
+**1648 cal / 178 g P / 126 g C / 48 g F = 43/31/26**, the pre-fix numbers. Every
+member who onboarded before 2026-08-06 keeps their old macros until something
+recalculates them (goals page → change preset, or Recalculate from TDEE). Worth
+deciding whether to run a one-off recompute.
+
+---
+
+---
+
 ## P1 — Mindset and Chat are invisible to every real member
 
 **Where:** `webapp/components/FeatureGuard.tsx:28`
@@ -63,13 +86,26 @@ test, since the same off-by-a-clamp already got fixed for `current`.
 
 ---
 
-## ~~P2 — The "Recommended" macro preset does not deliver the split it advertises~~ — FIXED 2026-08-06 (PR #801/#802)
+## ~~P2 — The macro preset does not deliver the split it advertises~~ — FIXED
 
-Fixed as part of the wider macro-picker fix: the hard 250 g protein ceiling was
-removed, every preset now delivers exactly its advertised split, and
-"Recommended" is personalised so it is no longer a clone of "Balanced".
+Shipped in #801/#802 (percentages became authoritative; the hard 250 g protein
+ceiling is gone) and #803/#804 (the computed split is now called **Custom**, the
+"recommended" badge moves by goal AND experience, and beginners are pointed at
+Balanced).
 
-Original writeup below.
+Re-verified for Nadine under `741cce6` — label now equals delivered, every time:
+
+| Option | Label | Delivered |
+|---|---|---|
+| Custom | 40/30/30 | 40/30/30 — 165 g P |
+| Balanced | 30/40/30 | 30/40/30 — 124 g P |
+| High Protein | 40/30/30 | 40/30/30 — 165 g P |
+| Lower Carb | 35/25/40 | 35/25/40 — 144 g P |
+
+As a beginner she is now badged **"Start here" on Balanced** (124 g P), not
+pushed at the 165 g Custom split.
+
+Original writeup below, for reference.
 
 ## P2 — The "Recommended" macro preset does not deliver the split it advertises
 
