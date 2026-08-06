@@ -31,7 +31,7 @@ import {
   MACRO_PRESET_LABELS,
   MACRO_PRESET_BLURBS,
   splitForPreset,
-  recommendedPresetForGoal,
+  recommendPreset,
   type NutritionDirection,
   type ActivityLevel,
   type MacroPreset,
@@ -861,7 +861,12 @@ function Step3({
   // sensible answer, but the member's explicit pick always wins.
   const activity = profile.activityLevel ?? activityFromTrainingDays(profile.weeklyAvailability)
   const macroPreset = profile.macroPreset ?? 'recommended'
-  const suggestedPreset = recommendedPresetForGoal(direction, goals)
+  // Which option gets the badge — and why — depends on goal AND experience.
+  // A beginner is pointed at Balanced even when the custom split is the more
+  // "correct" answer, because an accurate target they can't hit is worse than a
+  // slightly softer one they can.
+  const recommendation = recommendPreset(direction, goals, profile.experienceLevel)
+  const suggestedPreset = recommendation.preset
   // Feeds the personalised "Recommended" split. Until the body stats and the
   // calorie target exist there is nothing to personalise from, so the cards fall
   // back to the static per-direction table.
@@ -1220,7 +1225,7 @@ function Step3({
                         <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
                           selected ? 'bg-white/20' : 'bg-zinc-900 text-white dark:bg-white dark:text-black'
                         }`}>
-                          For your goal
+                          {recommendation.badge}
                         </span>
                       )}
                     </span>
@@ -1235,6 +1240,13 @@ function Step3({
               )
             })}
           </div>
+          {/* Say WHY that one is badged. A recommendation the member doesn't
+              understand is just another option. */}
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <span className="font-semibold">{MACRO_PRESET_LABELS[recommendation.preset]}</span>
+            {' — '}
+            {recommendation.why}
+          </p>
         </div>
 
         {/* ── Live TDEE preview ─────────────────────────────────────────── */}
