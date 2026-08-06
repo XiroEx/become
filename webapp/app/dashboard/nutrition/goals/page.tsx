@@ -65,7 +65,7 @@ const MACRO_PRESET_KEYS: MacroPreset[] = ['recommended', 'balanced', 'high_prote
 function presetLabel(key: MacroPreset, direction: NutritionDirection): string {
   if (key === 'custom') return MACRO_PRESET_LABELS.custom
   const s = splitForPreset(key, direction)
-  const suffix = key === 'recommended' ? ' (from your goal)' : ''
+  const suffix = key === 'recommended' ? ' (from your stats)' : ''
   return `${MACRO_PRESET_LABELS[key]}${suffix} — ${s.protein}/${s.carbs}/${s.fats}`
 }
 
