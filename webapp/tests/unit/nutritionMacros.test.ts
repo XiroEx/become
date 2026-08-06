@@ -8,7 +8,7 @@
 // Every macro is now an explicit share of calories, with protein bounded by
 // bodyweight. These tests exist to stop a number like 453 shipping again.
 
-import { test } from 'node:test'
+import { test, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   computeNutritionTargets,
@@ -88,19 +88,38 @@ test('no body type produces an absurd macro anywhere in the grid', () => {
           // is arithmetic, not a bug.
           assert.ok(t.carbs > 0, `${where}: ${t.carbs}g carbs`)
           assert.ok(t.carbs * 4 <= t.calories * 0.55, `${where}: carbs are ${t.split.carbs}% of intake`)
-          assert.ok(t.protein > 0 && t.protein <= 250, `${where}: ${t.protein}g protein`)
+          // Protein is bounded as a SHARE, never as a gram figure. The old hard
+          // 250 g ceiling silently overrode the member's chosen split — at
+          // 3,384 cal both High Protein (40%) and Lower Carb (35%) came out at
+          // exactly 250 g, so picking a ratio did nothing. 40% is the highest
+          // share any preset asks for; grams follow from calories.
+          assert.ok(t.protein > 0, `${where}: ${t.protein}g protein`)
+          assert.ok(t.protein * 4 <= t.calories * 0.41, `${where}: protein is ${t.split.protein}% of intake`)
           assert.ok(t.fats >= 20, `${where}: ${t.fats}g fat`)
-          // Ceiling rather than the preset's nominal share: when the protein cap
-          // binds, the leftover redistributes and lifts fat a few points above the
-          // preset. Half the plate is the line nothing may cross.
           assert.ok(t.fats * 9 <= t.calories * 0.5, `${where}: fat is ${t.split.fats}% of intake`)
           // The calorie target itself must be sane — every macro scales with it,
           // so a bad TDEE would show up here rather than as an odd gram figure.
           assert.ok(t.calories >= 1200 && t.calories <= 6000, `${where}: ${t.calories} cal`)
 
-          // Protein stays in a defensible g/lb band.
-          const perLb = t.protein / lbs
-          assert.ok(perLb >= 0.6 && perLb <= 1.65, `${where}: ${perLb.toFixed(2)} g/lb protein`)
+          // g/lb is the contract for RECOMMENDED — that one is ours to defend,
+          // and it is anchored to bodyweight by construction.
+          //
+          // It is NOT the contract for the explicit presets. Those are a share of
+          // calories the member chose, and at 4,100 cal a 40% pick is legitimately
+          // ~2.2 g/lb for a light, very tall, very active member. Asserting a g/lb
+          // band on them would only be satisfiable by silently clamping grams —
+          // which is exactly the bug that made the picker look dead. What must
+          // hold instead is that the grams ARE the advertised share.
+          if (preset === 'recommended') {
+            const perLb = t.protein / lbs
+            assert.ok(perLb >= 0.6 && perLb <= 1.4, `${where}: ${perLb.toFixed(2)} g/lb protein`)
+          } else {
+            assert.deepEqual(
+              t.split,
+              splitForPreset(preset, direction),
+              `${where}: delivered a different split than it advertised`,
+            )
+          }
 
           // Carbs can never dominate the plate again.
           assert.ok(t.split.carbs <= 55, `${where}: carbs ${t.split.carbs}%`)
@@ -187,4 +206,108 @@ test('no direction ever pushes anyone below the calorie floor by design', () => 
       assert.ok(t.calories >= 1200, `${direction}/${activityLevel}: ${t.calories} cal`)
     }
   }
+})
+
+// ── The picker has to actually change the numbers ────────────────────────────
+//
+// Reported from a live JonDon onboarding at 3,384 cal: "high protein goes up in
+// protein but doesn't change our protein, and low-carb also doesn't change our
+// percentage of protein." Both landed on exactly 250 g because a hard gram
+// ceiling was applied AFTER the split, then the leftover was redistributed —
+// silently rewriting the ratio the member had chosen.
+
+describe('macro preset picker', () => {
+  const MEMBER = {
+    currentWeightKg: 93,        // ~205 lb
+    heightCm: 183,
+    age: 30,
+    biologicalSex: 'male' as const,
+    activityLevel: 'active' as const,
+    direction: 'maintain' as const,
+  }
+
+  it('every preset delivers exactly the split it advertises', () => {
+    for (const preset of ['balanced', 'high_protein', 'low_carb'] as const) {
+      const t = computeNutritionTargets({ ...MEMBER, macroPreset: preset })
+      assert.ok(t)
+      const advertised = splitForPreset(preset, 'maintain')
+      assert.deepEqual(
+        t.split,
+        advertised,
+        `${preset} advertised ${advertised.protein}/${advertised.carbs}/${advertised.fats} but delivered ${t.split.protein}/${t.split.carbs}/${t.split.fats}`,
+      )
+    }
+  })
+
+  it('choosing High Protein raises protein in GRAMS, not just on the label', () => {
+    const balanced = computeNutritionTargets({ ...MEMBER, macroPreset: 'balanced' })
+    const high = computeNutritionTargets({ ...MEMBER, macroPreset: 'high_protein' })
+    assert.ok(balanced && high)
+    assert.ok(
+      high.protein > balanced.protein,
+      `high protein ${high.protein}g must exceed balanced ${balanced.protein}g`,
+    )
+    // 40% vs 30% of the same calories — a full third more, not a rounding nudge.
+    assert.ok(high.protein - balanced.protein > 50, `only +${high.protein - balanced.protein}g`)
+  })
+
+  it('choosing Lower Carb lowers carbs and raises BOTH protein and fat', () => {
+    const balanced = computeNutritionTargets({ ...MEMBER, macroPreset: 'balanced' })
+    const low = computeNutritionTargets({ ...MEMBER, macroPreset: 'low_carb' })
+    assert.ok(balanced && low)
+    assert.ok(low.carbs < balanced.carbs, 'carbs must come down')
+    assert.ok(low.protein > balanced.protein, 'protein must follow its 35% share up')
+    assert.ok(low.fats > balanced.fats, 'fat must follow its 40% share up')
+  })
+
+  it('no preset is pinned to the same protein as another', () => {
+    // The exact reported symptom: three different ratios, one protein number.
+    const grams = (['balanced', 'high_protein', 'low_carb'] as const).map(
+      (p) => computeNutritionTargets({ ...MEMBER, macroPreset: p })!.protein,
+    )
+    assert.equal(new Set(grams).size, grams.length, `protein was ${grams.join(' / ')} across three presets`)
+  })
+
+  it('Recommended is personalised, so it is not just a copy of Balanced', () => {
+    // At maintain these used to be the same fixed 30/40/30 — two of the four
+    // options were the same option under different names.
+    const rec = computeNutritionTargets({ ...MEMBER, macroPreset: 'recommended' })
+    const bal = computeNutritionTargets({ ...MEMBER, macroPreset: 'balanced' })
+    assert.ok(rec && bal)
+    assert.notDeepEqual(rec.split, bal.split)
+  })
+
+  it('Recommended tracks the member, not a table', () => {
+    // Bodyweight alone is not the lever to test with — calories scale with weight,
+    // so the protein SHARE is roughly weight-invariant, which is correct. What
+    // must move it is what the member is actually doing: a cut asks for more
+    // protein per lb than maintenance, so the recommended share has to rise.
+    const cutting = computeNutritionTargets({ ...MEMBER, direction: 'lose', macroPreset: 'recommended' })
+    const holding = computeNutritionTargets({ ...MEMBER, direction: 'maintain', macroPreset: 'recommended' })
+    assert.ok(cutting && holding)
+    assert.ok(
+      cutting.split.protein > holding.split.protein,
+      `a cut should be recommended a bigger protein share (${holding.split.protein}% holding vs ${cutting.split.protein}% cutting)`,
+    )
+  })
+
+  it('a heavy member is still protected without a hard gram ceiling', () => {
+    // 320 lb cutting at 1.0 g/lb would be 320 g. The percentage band holds it to
+    // a sane share of intake instead of a magic number.
+    const t = computeNutritionTargets({
+      currentWeightKg: 145, heightCm: 183, age: 35, biologicalSex: 'male',
+      direction: 'lose', activityLevel: 'moderate', macroPreset: 'recommended',
+    })
+    assert.ok(t)
+    assert.ok(t.split.protein <= 40, `${t.split.protein}% protein`)
+    assert.ok(t.protein * 4 <= t.calories * 0.41)
+  })
+
+  it('grams always reconstruct the calorie target', () => {
+    for (const preset of ['recommended', 'balanced', 'high_protein', 'low_carb'] as const) {
+      const t = computeNutritionTargets({ ...MEMBER, macroPreset: preset })!
+      const fromMacros = t.protein * 4 + t.carbs * 4 + t.fats * 9
+      assert.ok(Math.abs(fromMacros - t.calories) <= 8, `${preset}: ${fromMacros} vs ${t.calories}`)
+    }
+  })
 })
