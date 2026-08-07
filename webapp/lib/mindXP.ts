@@ -89,7 +89,13 @@ export function getXpToNextChapter(currentChapter: number, currentXp: number): {
   const prevThreshold = CHAPTER_XP_THRESHOLDS[currentChapter - 1]
   const inChapterXp = currentXp - prevThreshold
   const inChapterNeeded = needed - prevThreshold
-  const pct = Math.min(100, Math.round((inChapterXp / inChapterNeeded) * 100))
+  // Clamp BOTH ends. `inChapterXp` goes negative whenever a member sits in a
+  // chapter above what their XP has paid for — which is a normal path, not an
+  // edge case: the Mind intake maps "I'm building momentum" to chapter 2 and
+  // "I'm ready for the next level" to chapter 3, both with 0 XP. Those members
+  // were shown -50% and -100% on The Becoming. `current` on the next line was
+  // already floor-clamped; `pct` was not.
+  const pct = Math.max(0, Math.min(100, Math.round((inChapterXp / inChapterNeeded) * 100)))
   return { needed: inChapterNeeded, current: Math.max(0, inChapterXp), pct }
 }
 
