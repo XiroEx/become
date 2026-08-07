@@ -19,20 +19,21 @@ Screenshots and step-by-step notes: `webapp/tests/e2e/screenshots/nadine/`.
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Mindset + Chat invisible to real members | **NOT FIXED** |
-| 2 | Negative progress % on The Becoming | **NOT FIXED** |
+| 1 | Mindset + Chat invisible to real members | **OPEN — business decision** |
+| 2 | Negative progress % on The Becoming | **FIXED** (#805/#806) |
 | 3 | Macro preset does not deliver its advertised split | **FIXED** (#801–#804) |
-| 4 | "Lose Weight — TDEE − 500" label is wrong | **NOT FIXED** |
-| 5 | Recommends a program, never enrols her | **NOT FIXED** |
-| 6 | Dashboard tiles/layout 500 on unrelated bad history | **NOT FIXED** |
-| 7 | 178 g protein impractical for a beginner | **FIXED for new members** — see caveat |
+| 4 | "Lose Weight — TDEE − 500" label is wrong | **FIXED** (#805/#806) |
+| 5 | Recommends a program, never enrols her | **FIXED** (#805/#806) |
+| 6 | Dashboard tiles/layout 500 on unrelated bad history | **FIXED** (#805/#806) |
+| 7 | 178 g protein impractical for a beginner | **FIXED** (#801–#806) |
 
-**Caveat on 3 and 7 — the fix is not retroactive.** Targets are computed once at
-onboarding and persisted to `NutritionGoals`. Nadine's live account still reads
-**1648 cal / 178 g P / 126 g C / 48 g F = 43/31/26**, the pre-fix numbers. Every
-member who onboarded before 2026-08-06 keeps their old macros until something
-recalculates them (goals page → change preset, or Recalculate from TDEE). Worth
-deciding whether to run a one-off recompute.
+All seven are closed except #1, which is a launch decision rather than a defect.
+
+**The retroactivity gap is closed too.** `NutritionGoal` now carries
+`macroPreset` + `calcVersion`; a row from an older version of the macro maths is
+recomputed on the next read, so members who onboarded before the fix get correct
+targets without a migration. Hand-typed numbers (`macroPreset: 'custom'`) are
+never touched, and a member with incomplete body stats keeps what they had.
 
 ---
 
