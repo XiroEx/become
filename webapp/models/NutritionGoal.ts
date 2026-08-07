@@ -11,6 +11,18 @@ export interface INutritionGoal {
   waterGoal: number
   goalType: 'lose' | 'maintain' | 'gain'
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
+  /**
+   * Which split produced these numbers. 'custom' means the member typed them
+   * by hand — those are never recomputed for them.
+   */
+  macroPreset?: 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
+  /**
+   * Version of the macro maths these numbers came out of. Targets are computed
+   * once and persisted, so a fix to the algorithm does not reach anyone who
+   * already onboarded. Stamping the version lets a stale row be recomputed on
+   * the next read instead of needing a migration.
+   */
+  calcVersion?: number
   createdAt?: Date
   updatedAt?: Date
 }
@@ -37,7 +49,12 @@ const NutritionGoalSchema = new Schema<INutritionGoal>({
     type: String,
     enum: ['sedentary', 'light', 'moderate', 'active', 'very_active'],
     default: 'moderate'
-  }
+  },
+  macroPreset: {
+    type: String,
+    enum: ['recommended', 'balanced', 'high_protein', 'low_carb', 'custom']
+  },
+  calcVersion: { type: Number }
 }, {
   timestamps: true
 })
