@@ -190,6 +190,19 @@ const RECOMMENDED_CARB_PCT = { min: 25, max: 50 }
 // bodyweight via a floor and a cap, so the percentage can never produce an
 // unphysiological gram figure in either direction.
 
+/**
+ * Bump when the macro maths changes in a way that should reach members who
+ * already have targets saved.
+ *
+ *   1  original — protein from g/lb, carbs absorbed the remainder
+ *   2  every macro an explicit share of calories; the hard 250 g protein
+ *      ceiling removed; "Recommended" personalised
+ *
+ * Targets are computed once at onboarding and persisted, so without this a fix
+ * only ever reaches new signups.
+ */
+export const MACRO_CALC_VERSION = 2
+
 export type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
 
 export interface MacroSplit {

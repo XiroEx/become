@@ -63,11 +63,17 @@ export async function GET(request: NextRequest) {
   })
 
   if (migrated) {
-    if (progress) {
-      progress.dashboardLayout = layout
-      await progress.save()
-    } else {
-      await UserProgress.create({ userId, dashboardLayout: layout })
+    // Same reasoning as tiles: this is a lazy migration on a READ path, and a
+    // full-document save() lets unrelated legacy data 500 the dashboard. Write
+    // just the layout, and serve the response either way.
+    try {
+      if (progress) {
+        await UserProgress.updateOne({ _id: progress._id }, { $set: { dashboardLayout: layout } })
+      } else {
+        await UserProgress.create({ userId, dashboardLayout: layout })
+      }
+    } catch (err) {
+      console.error('dashboardLayout migration write failed (non-fatal):', err)
     }
   }
 
@@ -95,8 +101,13 @@ export async function PATCH(request: NextRequest) {
   await dbConnect()
   const existing = await UserProgress.findOne({ userId: auth.userId })
   if (existing) {
-    existing.dashboardLayout = validated.layout
-    await existing.save()
+    // Only this member's layout is being changed; validating their whole
+    // history on the way past would reject the save for reasons that have
+    // nothing to do with the edit.
+    await UserProgress.updateOne(
+      { _id: existing._id },
+      { $set: { dashboardLayout: validated.layout } },
+    )
   } else {
     await UserProgress.create({
       userId: auth.userId,

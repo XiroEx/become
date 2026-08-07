@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -32,6 +32,7 @@ import {
   MACRO_PRESET_BLURBS,
   splitForPreset,
   recommendPreset,
+  calorieAdjustment,
   type NutritionDirection,
   type ActivityLevel,
   type MacroPreset,
@@ -234,6 +235,34 @@ export default function OnboardingPage() {
     profile.nutritionDirection ?? directionForGoal(primaryGoal)
 
   const { rec, loading: recLoading } = useRecommendation(profile, authChecked)
+  // Optional enrolment straight from the recommendation. Onboarding used to end
+  // with a program match the member could not act on, and a dashboard that then
+  // said "No program yet".
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrolled, setEnrolled] = useState(false)
+
+  const enrolInRecommended = useCallback(async () => {
+    if (!rec || enrolling || enrolled) return
+    setEnrolling(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/programs/enroll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ programId: rec.program_id }),
+      })
+      // A failure here must never block finishing onboarding — enrolling is a
+      // bonus, not a step.
+      if (res.ok) setEnrolled(true)
+    } catch {
+      /* stay un-enrolled; they can start it from the dashboard */
+    } finally {
+      setEnrolling(false)
+    }
+  }, [rec, enrolling, enrolled])
 
   // Mifflin-St Jeor needs all four. Without them computeNutritionTargets()
   // returns null, no goal document is seeded, and the member silently inherits
@@ -436,6 +465,7 @@ export default function OnboardingPage() {
               waterGoal: waterGoalOz(payload.currentWeightKg),
               goalType: seedTargets.direction,
               activityLevel: seedTargets.activityLevel,
+              macroPreset: payload.macroPreset ?? 'recommended',
             }),
           }).catch(() => {})
         )
@@ -541,6 +571,9 @@ export default function OnboardingPage() {
                   targets={targets}
                   rec={rec}
                   onEdit={goToStep}
+                  enrolled={enrolled}
+                  enrolling={enrolling}
+                  onEnroll={enrolInRecommended}
                 />
               )}
             </motion.div>
@@ -604,10 +637,18 @@ function RecommendationCard({
   rec,
   loading,
   compact,
+  enrolled,
+  enrolling,
+  onEnroll,
 }: {
   rec: Recommendation | null
   loading: boolean
   compact?: boolean
+  /** Already enrolled in this program during onboarding. */
+  enrolled?: boolean
+  enrolling?: boolean
+  /** Omit to render the card as pure information (no action). */
+  onEnroll?: () => void
 }) {
   if (loading && !rec) {
     return (
@@ -662,6 +703,33 @@ function RecommendationCard({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Offer it — never force it. The card used to be read-only, so the one
+          moment a member is most bought in ended with nothing to press and the
+          dashboard afterwards said "No program yet". Skipping stays free: the
+          wizard's own "Skip for now" is untouched, and this button simply is
+          not shown once they've enrolled. */}
+      {onEnroll && (
+        enrolled ? (
+          <p
+            data-testid="recommended-program-enrolled"
+            className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+          >
+            <Check className="h-3.5 w-3.5" />
+            Added — it will be waiting on your dashboard.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={onEnroll}
+            disabled={enrolling}
+            data-testid="recommended-program-enroll"
+            className="mt-3 w-full rounded-xl bg-zinc-900 py-2.5 text-xs font-bold text-white transition-transform active:scale-95 disabled:opacity-60 dark:bg-white dark:text-black"
+          >
+            {enrolling ? 'Adding…' : 'Start this program'}
+          </button>
+        )
       )}
     </motion.div>
   )
@@ -1126,6 +1194,14 @@ function Step3({
           <div className="mt-3 grid grid-cols-3 gap-2">
             {DIRECTION_OPTIONS.map(({ value, label, sub, Icon }) => {
               const selected = direction === value
+              // Show the adjustment ACTUALLY applied, not the nominal one. The
+              // deficit is capped at 20% of TDEE and the surplus at 15%, so a
+              // smaller member reading "TDEE - 500" gets a different number and
+              // no way to reconcile it. With a live TDEE we can just say it.
+              const applied = targets ? calorieAdjustment(targets.tdee, value) : null
+              const subLabel = applied === null || applied === 0
+                ? sub
+                : `TDEE ${applied < 0 ? '−' : '+'} ${Math.abs(applied)}`
               return (
                 <button
                   key={value}
@@ -1141,7 +1217,7 @@ function Step3({
                   <Icon className="h-4 w-4" />
                   <p className="mt-1.5 text-xs font-semibold leading-tight">{label}</p>
                   <p className={`mt-0.5 text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
-                    {sub}
+                    {subLabel}
                   </p>
                 </button>
               )
@@ -1451,6 +1527,9 @@ function Step5Review({
   targets,
   rec,
   onEdit,
+  enrolled,
+  enrolling,
+  onEnroll,
 }: {
   profile: ProfileData
   goals: FitnessGoal[]
@@ -1458,6 +1537,9 @@ function Step5Review({
   targets: ReturnType<typeof computeNutritionTargets>
   rec: Recommendation | null
   onEdit: (s: number) => void
+  enrolled: boolean
+  enrolling: boolean
+  onEnroll: () => void
 }) {
   const unit = profile.weightUnit ?? 'lbs'
   const showWeight = (kg?: number) =>
@@ -1578,10 +1660,17 @@ function Step5Review({
         {rec && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Your program match</h2>
-            <RecommendationCard rec={rec} loading={false} compact />
+            <RecommendationCard
+              rec={rec}
+              loading={false}
+              compact
+              enrolled={enrolled}
+              enrolling={enrolling}
+              onEnroll={onEnroll}
+            />
             <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-              You&apos;ll be able to start this from your dashboard — or browse the
-              full catalog if you&apos;d rather pick your own.
+              Entirely optional — you can also start it later from your dashboard,
+              or browse the full catalog if you&apos;d rather pick your own.
             </p>
           </div>
         )}

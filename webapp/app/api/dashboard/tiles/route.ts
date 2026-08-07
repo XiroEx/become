@@ -153,12 +153,20 @@ export async function GET(request: NextRequest) {
   // Persist tileLastShownAt for served ids. We only write when there's
   // actually something to record.
   if (progress && servedIds.length > 0) {
-    progress.tileLastShownAt = updateLastShown(
-      progress.tileLastShownAt,
-      servedIds,
-      now,
-    )
-    await progress.save()
+    // Targeted $set, not progress.save().
+    //
+    // save() validates the WHOLE UserProgress document, so one malformed legacy
+    // subdocument anywhere in it — a workout set missing `setNumber`, say —
+    // threw here and returned a 500 from a GET, blanking the entire stat row:
+    // no streak, no mood, no weekly count, no calories. This is bookkeeping for
+    // tile rotation; it has no business failing the read, so it writes only its
+    // own field and swallows its own errors.
+    await UserProgress.updateOne(
+      { _id: progress._id },
+      { $set: { tileLastShownAt: updateLastShown(progress.tileLastShownAt, servedIds, now) } },
+    ).catch((err) => {
+      console.error('tileLastShownAt write failed (non-fatal):', err)
+    })
   }
 
   const responseBody = {
