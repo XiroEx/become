@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import Exercise from '@/models/Exercise'
 import { verifyAuth } from '@/lib/auth'
+import { mapPlannedLog, type RawLog } from '@/lib/quickSession/planned'
+import type { TrackingType } from '@/models/Exercise'
 
 // GET /api/workouts/planned — upcoming PLANNED quick sessions: future-dated,
 // incomplete, kind:'quick' workout logs. Returns each with a reconstructed
 // DraftSession-shaped exercise list so the client can stash + start it (under
 // the same sessionId, so finishing it consumes the plan).
-
-interface RawSet { reps?: number | null; duration?: number | null; completed?: boolean }
-interface RawEx { name: string; exerciseSlug?: string; sets?: RawSet[] }
-interface RawLog {
-  kind?: string
-  sessionId?: string
-  title?: string
-  focus?: string
-  date: Date | string
-  completed: boolean
-  exercises?: RawEx[]
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,29 +23,25 @@ export async function GET(request: NextRequest) {
       .select('workoutLogs')
       .lean<{ workoutLogs?: RawLog[] } | null>()
 
+    const logs = up?.workoutLogs ?? []
+    const slugs = [...new Set(
+      logs
+        .filter((log) => log.kind === 'quick' && !log.completed && !!log.sessionId && new Date(log.date).getTime() > Date.now())
+        .flatMap((log) => (log.exercises ?? []).map((exercise) => exercise.exerciseSlug).filter((slug): slug is string => Boolean(slug))),
+    )]
+    const catalogExercises = slugs.length > 0
+      ? await Exercise.find({ slug: { $in: slugs } })
+          .select('slug trackingType')
+          .lean<{ slug: string; trackingType: TrackingType }[]>()
+      : []
+    const trackingTypesBySlug = new Map(
+      catalogExercises.map((exercise) => [exercise.slug, exercise.trackingType]),
+    )
+
     const now = Date.now()
-    const planned = (up?.workoutLogs ?? [])
-      .filter((l) => l.kind === 'quick' && !l.completed && !!l.sessionId && new Date(l.date).getTime() > now)
-      .map((l) => ({
-        sessionId: l.sessionId,
-        title: l.title || 'Planned session',
-        focus: l.focus,
-        date: new Date(l.date).toISOString(),
-        exerciseCount: l.exercises?.length ?? 0,
-        // DraftExercise-shaped so the client can stash + launch it.
-        exercises: (l.exercises ?? []).map((ex) => {
-          const first = ex.sets?.[0]
-          const isTime = !!first && first.duration != null && first.reps == null
-          return {
-            exerciseSlug: ex.exerciseSlug || '',
-            name: ex.name,
-            trackingType: isTime ? 'time' : 'reps',
-            sets: ex.sets?.length || 1,
-            reps: first?.reps != null ? String(first.reps) : '',
-            ...(first?.duration != null ? { duration: String(first.duration) } : {}),
-          }
-        }),
-      }))
+    const planned = logs
+      .filter((log) => log.kind === 'quick' && !log.completed && !!log.sessionId && new Date(log.date).getTime() > now)
+      .map((log) => mapPlannedLog(log, trackingTypesBySlug))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
     return NextResponse.json({ planned })
