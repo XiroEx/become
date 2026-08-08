@@ -7,6 +7,25 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 **Repo:** `XiroEx/become` on GitHub (private)
 **Live deployment:** RedRun at `become.redbtn.io` (workspace ID: `69ab83dd21070736089dc29d`, node .3:32000). Firebase config in repo is legacy/unused.
 
+## Channels
+
+Two git-sourced RedRun workspaces, same MongoDB and same env:
+
+| Channel | Domain | Branch | Workspace ID |
+|---|---|---|---|
+| Production | become.redbtn.io | `main` | `69ab83dd21070736089dc29d` |
+| Beta | become-beta.redbtn.io | `beta` | `6a77a584e2c526617ae198f1` |
+
+Both autoDeploy, so **merging to a branch IS the deploy for that channel**. The
+normal flow is unchanged: `agent/<host>` → `beta` (beta channel picks it up) →
+`main` (production picks it up).
+
+They share a database on purpose, so beta is a code-level preview and not an
+isolated sandbox — data written on beta is production data. Only two env values
+differ, and both must: `NEXT_PUBLIC_APP_URL` (magic-link emails are built from
+it, so prod's value would land beta testers on production) and
+`NEXT_PUBLIC_APP_NAME`.
+
 **Deployment is git-sourced. Do NOT run `/deploy become` for a normal release.** The
 workspace tracks `main` with `autoDeploy: true` and syncs within ~20-40s of a merge,
 unattended (verified 2026-07-29 across three merges). `/deploy` is for the exceptions
