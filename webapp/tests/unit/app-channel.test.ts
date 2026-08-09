@@ -64,9 +64,15 @@ describe('PWA manifest', () => {
 })
 
 describe('title and home-screen label', () => {
-  it('both come from the shared channel name', () => {
-    const layout = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf8')
-    assert.match(layout, /import \{ APP_NAME \} from "@\/lib\/appChannel"/)
+  const layout = readFileSync(join(process.cwd(), 'app/layout.tsx'), 'utf8')
+
+  it('come straight from the env, which already differs per channel', () => {
+    // NEXT_PUBLIC_APP_NAME is "BECOME" on prod and "BECOME (beta)" on beta, so
+    // the title was already correct. Routing it through the title-cased
+    // APP_NAME would have restyled PRODUCTION's title to "Become" as a side
+    // effect of naming the beta channel — a change nobody asked for.
+    assert.match(layout, /const appName = process\.env\.NEXT_PUBLIC_APP_NAME \|\| "BECOME"/)
+    assert.doesNotMatch(layout, /const appName = APP_NAME/)
     assert.match(layout, /title: appName/)
     // iOS home-screen label lives under appleWebApp.title.
     assert.match(layout, /appleWebApp:[\s\S]*?title: appName/)
