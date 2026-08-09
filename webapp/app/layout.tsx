@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import { APP_NAME } from "@/lib/appChannel";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME";
+const appName = APP_NAME;
 const appTagline = process.env.NEXT_PUBLIC_APP_TAGLINE || "Transform your body and mind.";
 
 const colorSchemeScript = `
