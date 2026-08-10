@@ -10,6 +10,10 @@ import UserProgress from '@/models/UserProgress'
 //                     newest first, enriched with kind/title/program name and an
 //                     exercise count. By default returns completed sessions only;
 //                     pass ?includeIncomplete=true to include in-progress ones.
+//   ?withExercises=true — also return each quick session's exercises, so a saved
+//                     session can be REOPENED rather than regenerated. Opt-in:
+//                     most callers only need the counts, and this multiplies the
+//                     payload for a member with a long history.
 type RawLog = {
   programId?: string
   day?: string
@@ -22,7 +26,11 @@ type RawLog = {
   skipped?: boolean
   date: Date
   duration?: number
-  exercises?: Array<{ sets?: Array<{ completed?: boolean }> }>
+  exercises?: Array<{
+    exerciseSlug?: string
+    name?: string
+    sets?: Array<{ completed?: boolean; reps?: number; duration?: number }>
+  }>
 }
 
 export async function GET(request: NextRequest) {
@@ -59,6 +67,7 @@ export async function GET(request: NextRequest) {
 
     // ── History mode (all sessions) ──────────────────────────────────────────
     const includeIncomplete = searchParams.get('includeIncomplete') === 'true'
+    const withExercises = searchParams.get('withExercises') === 'true'
 
     const userProgress = await UserProgress.findOne({ userId: payload.userId })
       .select('workoutLogs activePrograms')
@@ -88,6 +97,34 @@ export async function GET(request: NextRequest) {
           (kind === 'program'
             ? [programName, log.day].filter(Boolean).join(' · ') || log.day || 'Workout'
             : 'Quick Session')
+        // The saved exercises, DraftExercise-shaped, so tapping a session can
+        // REOPEN it. Without these the hub had nothing to open and instead
+        // regenerated a brand-new session from the focus tag — which is why a
+        // saved session opened as an unrelated (and different every time) one.
+        // Only quick sessions need this; program days are resolved from the
+        // program itself.
+        const draftExercises =
+          withExercises && kind === 'quick'
+            ? (log.exercises ?? []).map((ex) => {
+                const first = ex.sets?.[0]
+                // Time-based when a duration was recorded and no real rep count
+                // was. The rep count matters: the Track view writes `reps: 0`
+                // next to the duration, so "reps == null" alone would call a
+                // 45-second plank a 0-rep strength set.
+                const isTime = !!first && first.duration != null && !(first.reps && first.reps > 0)
+                return {
+                  exerciseSlug: ex.exerciseSlug || '',
+                  // Every save writes a name; the fallback only guards a
+                  // hand-edited log so the row can't render blank.
+                  name: ex.name || 'Exercise',
+                  trackingType: isTime ? ('time' as const) : ('reps' as const),
+                  sets: ex.sets?.length || 1,
+                  reps: !isTime && first?.reps != null ? String(first.reps) : '',
+                  ...(first?.duration != null ? { duration: String(first.duration) } : {}),
+                }
+              })
+            : undefined
+
         return {
           kind,
           title,
@@ -103,6 +140,7 @@ export async function GET(request: NextRequest) {
           duration: log.duration,
           exerciseCount,
           completedSets,
+          ...(draftExercises ? { exercises: draftExercises } : {}),
         }
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

@@ -56,11 +56,17 @@ export interface DraftExercise {
   primaryMuscles?: string[]
 }
 
+/** Where a draft came from. Drives the overview's label — a session reopened
+ *  from history is not a "generated" one, and saying so reads as the old bug
+ *  where tapping a saved session handed back something else. */
+export type DraftSource = 'generated' | 'saved'
+
 /** An in-flight, program-less session. */
 export interface DraftSession {
   title: string
   focus?: FocusKey
   exercises: DraftExercise[]
+  source?: DraftSource
 }
 
 /** Minimal exercise shape the pure generator consumes (decoupled from Mongo). */

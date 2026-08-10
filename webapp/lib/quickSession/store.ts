@@ -5,7 +5,7 @@
 // only the id in the URL. The live client reads it back, runs the workout, and
 // saves with kind:'quick' + that sessionId.
 
-import type { DraftSession } from './types'
+import type { DraftExercise, DraftSession } from './types'
 
 export const QUICK_PROGRAM_ID = 'quick'
 
@@ -97,15 +97,49 @@ export function readQuickSession(sessionId: string): StoredQuickSession | null {
   }
 }
 
+/**
+ * Overwrite a stashed session's title/exercises in place, keeping its id.
+ *
+ * Backs the overview's edit mode. Kept separate from stashQuickSessionWithId so
+ * the intent reads at the call site — this is "the user changed this session",
+ * not "start this plan".
+ */
+export function updateQuickSession(
+  sessionId: string,
+  patch: { title?: string; exercises?: DraftExercise[] },
+): StoredQuickSession | null {
+  const current = readQuickSession(sessionId)
+  if (!current) return null
+  const next: StoredQuickSession = {
+    ...current,
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.exercises !== undefined ? { exercises: patch.exercises } : {}),
+  }
+  try {
+    localStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(next))
+  } catch {
+    /* storage unavailable — the caller still gets the updated object back */
+  }
+  return next
+}
+
 /** Remove a stashed session (call once it's completed). */
 export function clearQuickSession(sessionId: string): void {
   try { localStorage.removeItem(KEY_PREFIX + sessionId) } catch { /* ignore */ }
   try { sessionStorage.removeItem(KEY_PREFIX + sessionId) } catch { /* ignore */ }
 }
 
-/** The overview ("regular view") URL for a stashed quick session. */
-export function quickSessionOverviewHref(sessionId: string): string {
-  return `/dashboard/workout/quick-session?session=${encodeURIComponent(sessionId)}`
+/**
+ * The overview ("regular view") URL for a stashed quick session.
+ *
+ * `saved` marks a session that already exists server-side under this exact
+ * sessionId (a planned session). The overview uses it to decide whether editing
+ * should write back to that log — for an unsaved draft it must not, or the edit
+ * would insert a stray log nobody asked for.
+ */
+export function quickSessionOverviewHref(sessionId: string, opts?: { saved?: boolean }): string {
+  const q = `session=${encodeURIComponent(sessionId)}${opts?.saved ? '&saved=1' : ''}`
+  return `/dashboard/workout/quick-session?${q}`
 }
 
 /** The live route URL for a stashed quick session. */
