@@ -196,4 +196,67 @@ describe('servingOptions', () => {
     assert.equal(primary.unit, 'g')
     assert.equal(primary.quantity, 45)
   })
+  it('prefers a stored bridge over one derived from the label text', () => {
+    // Sardines: the label calls it "1 can (3.75 oz)" = 106 g, but the nutrition
+    // is recorded against the 92 g drained weight the variant stores. Scaling by
+    // the label's 106 g overstated the can by 16%.
+    const variant = {
+      servingSize: 1,
+      servingUnit: 'each' as const,
+      displayLabel: '1 can (3.75 oz)',
+      gramsPerServing: 92,
+      nutrition: { calories: 191, protein: 23, carbs: 0, fats: 11 },
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+    const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+    assert.ok(primary)
+    const effective = variantForServingChoice(variant, primary)
+    assert.equal(effective.gramsPerServing, 92)
+  })
+
+  it('still accepts a derived bridge for a dimension the variant does not store', () => {
+    // Per-field, not all-or-nothing: gramsPerServing is stored and kept, while
+    // mlPerServing has no stored value and is filled in from the label. The
+    // derived ml is computed FROM the stored grams, so the pair agrees.
+    const variant = {
+      servingSize: 100,
+      servingUnit: 'g' as const,
+      displayLabel: '1 cup',
+      gramsPerServing: 120,
+      mlPerServing: undefined as number | undefined,
+      nutrition,
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+    const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+    assert.ok(primary)
+    const effective = variantForServingChoice(variant, primary)
+    assert.equal(effective.gramsPerServing, 120)
+    assert.ok(effective.mlPerServing != null && effective.mlPerServing > 0)
+  })
+  it('does NOT let a stored bridge override an alternate serving', () => {
+    // Spinach stores gramsPerServing 30 for its own "1 cup raw" serving, and
+    // offers "1 cup cooked (180 g)" as an alternate. The alternate weighs what
+    // ITS label says; scaling it by the stored 30 g is a six-fold error.
+    const variant = {
+      servingSize: 1,
+      servingUnit: 'cup' as const,
+      displayLabel: '1 cup raw (30 g)',
+      gramsPerServing: 30,
+      alternateServings: [{ label: '1 cup cooked (180 g)', multiplier: 1 }],
+      nutrition,
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+    const cooked = groups.servings.find(choice => choice.label.includes('cooked'))
+    assert.ok(cooked)
+    const effective = variantForServingChoice(variant, cooked)
+    assert.equal(Math.round(effective.gramsPerServing!), 180)
+
+    // ...while the primary still gets the stored value.
+    const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+    assert.ok(primary)
+    assert.equal(variantForServingChoice(variant, primary).gramsPerServing, 30)
+  })
 })
