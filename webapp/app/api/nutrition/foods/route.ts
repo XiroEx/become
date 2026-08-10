@@ -140,6 +140,10 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q')
     const category = searchParams.get('category')
     const customOnly = searchParams.get('custom') === 'true'
+    // "Verified" = a food WE curated, not one mirrored from USDA/OpenFoodFacts.
+    // Those upstream records are where the bad servings and self-contradicting
+    // calories come from, so this is the escape hatch to a trusted subset.
+    const verifiedOnly = searchParams.get('verifiedOnly') === 'true'
     const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 100)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
@@ -150,6 +154,7 @@ export async function GET(request: NextRequest) {
     // on thousands of otherwise-fine foods. Spread into every query via baseFilter.
     const baseFilter: Record<string, unknown> = { hiddenFromSearch: { $ne: true } }
     if (category) baseFilter.category = category
+    if (verifiedOnly) baseFilter.isVerified = true
 
     // Fetch the user's saved-food id set once per request — used to flag results
     // and to bump them above other "from our DB" foods in the combined ranking.
@@ -272,26 +277,30 @@ export async function GET(request: NextRequest) {
     }
 
     // --- 2. USDA (primary external source) ---
+    // Skipped entirely under verifiedOnly — nothing upstream is ours, so
+    // querying it would only cost latency and then be filtered away.
 
-    const usdaResults = await searchUSDA(q, 15)
+    const usdaResults = verifiedOnly ? [] : await searchUSDA(q, 15)
 
     // --- 3. Open Food Facts (supplemental for packaged goods) ---
 
     let offFoods: ReturnType<typeof mapOffToFoodResult>[] = []
-    try {
-      const offCollection = mongoose.connection.db!.collection('openfoodfacts')
-      const offFilter: Record<string, unknown> = { $text: { $search: q } }
-      if (category) offFilter.category = category
+    if (!verifiedOnly) {
+      try {
+        const offCollection = mongoose.connection.db!.collection('openfoodfacts')
+        const offFilter: Record<string, unknown> = { $text: { $search: q } }
+        if (category) offFilter.category = category
 
-      const offResults = await offCollection
-        .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(15)
-        .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
+        const offResults = await offCollection
+          .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
+          .sort({ score: { $meta: 'textScore' } })
+          .limit(15)
+          .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
 
-      offFoods = offResults.map(mapOffToFoodResult)
-    } catch {
-      // OFF collection might not exist — fail gracefully
+        offFoods = offResults.map(mapOffToFoodResult)
+      } catch {
+        // OFF collection might not exist — fail gracefully
+      }
     }
 
     // Combine: our DB → USDA → OFF
