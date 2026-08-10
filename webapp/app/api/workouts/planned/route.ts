@@ -44,13 +44,16 @@ export async function GET(request: NextRequest) {
         // DraftExercise-shaped so the client can stash + launch it.
         exercises: (l.exercises ?? []).map((ex) => {
           const first = ex.sets?.[0]
-          const isTime = !!first && first.duration != null && first.reps == null
+          // Time-based when a duration was recorded and no real rep count was —
+          // the Track view writes `reps: 0` beside the duration, so checking
+          // only for a null reps would call a 45-second plank a 0-rep set.
+          const isTime = !!first && first.duration != null && !(first.reps && first.reps > 0)
           return {
             exerciseSlug: ex.exerciseSlug || '',
             name: ex.name,
             trackingType: isTime ? 'time' : 'reps',
             sets: ex.sets?.length || 1,
-            reps: first?.reps != null ? String(first.reps) : '',
+            reps: !isTime && first?.reps != null ? String(first.reps) : '',
             ...(first?.duration != null ? { duration: String(first.duration) } : {}),
           }
         }),

@@ -20,6 +20,7 @@ import {
   isFocusKey,
   type FocusKey,
   type DraftSession,
+  type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
 import { runAiTask } from "@/lib/ai/runClient";
@@ -64,6 +65,8 @@ interface WorkoutLog {
   date: string;
   duration?: number;
   exerciseCount: number;
+  /** Present when fetched with ?withExercises=true; absent on legacy logs. */
+  exercises?: DraftExercise[];
 }
 
 interface WorkoutLogsResponse {
@@ -157,7 +160,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
     setLoadingRecent(true);
     (async () => {
       try {
-        const res = await fetch("/api/workouts/logs", { headers: authHeaders() });
+        const res = await fetch("/api/workouts/logs?withExercises=true", { headers: authHeaders() });
         if (!res.ok) return;
         const data = (await res.json()) as WorkoutLogsResponse;
         if (cancelled) return;
@@ -241,11 +244,29 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
     onClose();
   }, [preview, router, onClose]);
 
-  // ── Repeat a recent session (re-generate by its focus, then start) ──
+  // ── Repeat a recent session ──
+  // Genuinely repeats it: same title, same exercises. It used to re-GENERATE
+  // from the log's focus, which meant "Repeat" on "Sunday Back & Shoulders"
+  // handed back a different full-body session every time.
   const repeatRecent = useCallback(
     async (log: WorkoutLog) => {
       const focus: FocusKey = isFocusKey(log.focus) ? log.focus : "full_body";
       setError(null);
+
+      if (log.exercises?.length) {
+        const id = stashQuickSession({
+          title: log.title,
+          focus,
+          exercises: log.exercises,
+          source: "saved",
+        });
+        router.push(quickSessionOverviewHref(id));
+        onClose();
+        return;
+      }
+
+      // Legacy log with no stored exercises — nothing to repeat, so rebuild one
+      // from its focus (the old behaviour).
       setRepeating(true);
       try {
         const res = await fetch("/api/generate/session", {
