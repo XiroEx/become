@@ -11,6 +11,7 @@ import {
   importManualFood,
 } from '@/lib/foodImport'
 import { assessFoodImportQuality } from '@/lib/nutrition/foodQuality'
+import { plausibleOffKcal, offKjPer100 } from '@/lib/offEnergy'
 
 // ---------------------------------------------------------------------------
 // Map an OFF doc to the response shape
@@ -20,7 +21,10 @@ function mapOffToFoodResult(off: InstanceType<typeof OpenFoodFact> & { _id: unkn
   const n = off.nutriments
 
   const nutrition = {
-    calories: Math.round(n.energy_kcal_100g) || 0,
+    // Reconciled against the kJ field and the macros — OFF's kcal is wrong
+    // often enough, and plausibly enough, that taking it raw ships 271 cal
+    // cups of bone broth. See lib/offEnergy.ts.
+    calories: plausibleOffKcal(n),
     protein:  Math.round((n.proteins_100g      ?? 0) * 10) / 10,
     carbs:    Math.round((n.carbohydrates_100g  ?? 0) * 10) / 10,
     fats:     Math.round((n.fat_100g            ?? 0) * 10) / 10,
@@ -173,7 +177,15 @@ export async function GET(request: NextRequest) {
             const p = offData.product
             const n = p.nutriments || {}
             const nutrition = {
-              calories: Math.round(n['energy-kcal_100g'] ?? n.energy_kcal_100g ?? 0),
+              calories: plausibleOffKcal({
+                energy_kcal_100g: n['energy-kcal_100g'] ?? n.energy_kcal_100g,
+                energy_kj_100g: offKjPer100(n),
+                proteins_100g: n.proteins_100g,
+                carbohydrates_100g: n.carbohydrates_100g,
+                fat_100g: n.fat_100g,
+                fiber_100g: n.fiber_100g,
+                alcohol_100g: n.alcohol_100g,
+              }),
               protein:  Math.round((n.proteins_100g     ?? 0) * 10) / 10,
               carbs:    Math.round((n.carbohydrates_100g ?? 0) * 10) / 10,
               fats:     Math.round((n.fat_100g          ?? 0) * 10) / 10,
