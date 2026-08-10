@@ -83,6 +83,18 @@ export function buildServingChoiceGroups(variant: ServingOptionVariant): Serving
   }
 }
 
+/**
+ * The variant to do the maths against for a given serving choice, with the
+ * choice's bridge applied.
+ *
+ * The choice's bridge wins here, and must: an ALTERNATE serving carries its own
+ * weight, which is frequently not the variant's. Spinach stores
+ * gramsPerServing 30 for "1 cup raw" and offers "1 cup cooked (180 g)" as an
+ * alternate; scaling that alternate by the stored 30 g would be a six-fold
+ * error. Whether the stored value should override is decided per choice in
+ * choiceFromLabel, where it is known whether the label describes the variant's
+ * own serving.
+ */
 export function variantForServingChoice<T extends ServingOptionVariant>(
   variant: T,
   choice?: Pick<ServingChoice, 'gramsPerServing' | 'mlPerServing'> | null,
@@ -115,6 +127,7 @@ function buildServingChoices(variant: ServingOptionVariant): ServingChoice[] {
     fallbackQuantity: primaryQuantity(variant),
     fallbackUnit: native,
     variant,
+    isPrimary: true,
   })
   if (primary && shouldShowServingChoice(primary, primaryLabel, variant, true)) choices.push(primary)
 
@@ -141,6 +154,7 @@ function buildServingChoices(variant: ServingOptionVariant): ServingChoice[] {
   const forced = primary ?? choiceFromLabel({
     id: 'serving-primary', label: primaryLabel,
     fallbackQuantity: primaryQuantity(variant), fallbackUnit: native, variant,
+    isPrimary: true,
   })
   if (forced) return [forced]
   return [{ id: 'serving-primary', group: 'servings', label: primaryLabel, quantity: primaryQuantity(variant), unit: native }]
@@ -152,12 +166,33 @@ function choiceFromLabel(args: {
   fallbackQuantity: number
   fallbackUnit: Unit
   variant: ServingOptionVariant
+  /** True when this label describes the variant's OWN serving (the primary),
+   *  so the variant's stored bridge and the label are two accounts of the same
+   *  thing. Alternates describe a different amount and must not be overridden. */
+  isPrimary?: boolean
 }): ServingChoice | null {
   const label = prettifyUnitCodes(args.label).trim()
   if (!label || !(args.fallbackQuantity > 0)) return null
 
   const parsed = parseServingLabel(label)
-  const bridge = deriveBridge(args.variant, parsed, args.fallbackQuantity, args.fallbackUnit)
+  const derived = deriveBridge(args.variant, parsed, args.fallbackQuantity, args.fallbackUnit)
+
+  // For the PRIMARY, the stored bridge and the label describe the same serving,
+  // so when they disagree the stored one wins: it is the weight the nutrition is
+  // actually recorded against, while the label is a rounded household
+  // approximation of it. A tin of sardines is labelled "1 can (3.75 oz)" (106 g)
+  // but stores the 92 g drained weight its 191 cal are based on; deriving 106 g
+  // from the label overstates the can by 16%.
+  //
+  // Per-field, so a variant storing only gramsPerServing still accepts a derived
+  // mlPerServing. Where both are involved the derived value is computed FROM the
+  // stored one, so the pair stays self-consistent.
+  const bridge = args.isPrimary && derived
+    ? {
+        gramsPerServing: args.variant.gramsPerServing ?? derived.gramsPerServing,
+        mlPerServing: args.variant.mlPerServing ?? derived.mlPerServing,
+      }
+    : derived
 
   let quantity = args.fallbackQuantity
   let unit = args.fallbackUnit
