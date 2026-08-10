@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, BellOff, Check, X } from 'lucide-react'
+import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
 const DISMISSED_KEY = 'notification_prompt_dismissed_at'
@@ -19,6 +20,14 @@ export default function NotificationOptIn() {
   const [show, setShow] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
   const [enabled, setEnabled] = useState(false)
+
+  // Users who ALREADY granted permission never reach the prompt below, and
+  // until this ran there was no other way to create a subscription — so a
+  // subscription that expired, rotated, or got pruned on 404/410 left the user
+  // silently unreachable forever. Reconcile on every load.
+  useEffect(() => {
+    ensurePushSubscription().catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Don't show if: no SW support, no VAPID key, already granted/denied, or

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
+import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
@@ -149,6 +150,11 @@ export default function SettingsPage() {
   })
   const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
   const [enablingNotifications, setEnablingNotifications] = useState(false)
+  // Whether THIS DEVICE currently has a subscription the server can reach.
+  // Distinct from browser permission: "granted" only means the user said yes
+  // once, not that we still hold a working subscription for them.
+  const [deviceRegistered, setDeviceRegistered] = useState<boolean | null>(null)
+  const [repairing, setRepairing] = useState(false)
 
   const fetchProfile = useCallback(async () => {
     const token = getToken()
@@ -241,10 +247,27 @@ export default function SettingsPage() {
     setNotifPermission(permission)
     if (permission === 'granted') {
       fetchNotifPrefs()
+      // "Granted" says the user agreed once; it does NOT say we still hold a
+      // subscription. Reconcile, then report what is actually true.
+      ensurePushSubscription()
+        .then((outcome) => setDeviceRegistered(outcome !== 'failed' && outcome !== 'unsupported'))
+        .catch(() => setDeviceRegistered(false))
     } else {
       setNotifPrefsLoading(false)
     }
   }, [fetchNotifPrefs])
+
+  const repairSubscription = async () => {
+    setRepairing(true)
+    try {
+      const outcome = await ensurePushSubscription({ force: true })
+      const ok = outcome !== 'failed' && outcome !== 'unsupported'
+      setDeviceRegistered(ok)
+      showToast(ok ? 'This device is registered' : 'Could not register this device', ok ? 'success' : 'error')
+    } finally {
+      setRepairing(false)
+    }
+  }
 
   const handleNotifToggle = async (key: NotificationPrefKey, value: boolean) => {
     const previous = notifPrefs[key]
@@ -834,20 +857,28 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                      notifPermission === 'granted'
+                      notifPermission === 'granted' && deviceRegistered !== false
                         ? 'bg-green-500'
-                        : notifPermission === 'denied'
+                        : notifPermission === 'granted' || notifPermission === 'denied'
                           ? 'bg-red-500'
                           : 'bg-zinc-400 dark:bg-zinc-500'
                     }`}
                   />
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                    {notifPermission === 'granted' ? 'Active' : notifPermission === 'denied' ? 'Blocked' : 'Not enabled'}
+                    {notifPermission === 'granted'
+                      ? deviceRegistered === false
+                        ? 'Not reaching this device'
+                        : 'Active'
+                      : notifPermission === 'denied'
+                        ? 'Blocked'
+                        : 'Not enabled'}
                   </p>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   {notifPermission === 'granted'
-                    ? "You'll receive push notifications"
+                    ? deviceRegistered === false
+                      ? 'Permission is on, but this device has no working subscription. Tap Repair.'
+                      : "You'll receive push notifications"
                     : notifPermission === 'denied'
                       ? 'Enable in your browser settings to receive notifications'
                       : 'Turn on notifications to stay on your streak'}
@@ -861,6 +892,18 @@ export default function SettingsPage() {
                   className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 >
                   {enablingNotifications ? 'Enabling…' : 'Enable'}
+                </button>
+              )}
+              {/* Permission granted but unreachable — previously a dead end,
+                  since every subscribe path was gated on permission='default'. */}
+              {notifPermission === 'granted' && deviceRegistered === false && (
+                <button
+                  type="button"
+                  onClick={repairSubscription}
+                  disabled={repairing}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {repairing ? 'Repairing…' : 'Repair'}
                 </button>
               )}
             </div>
