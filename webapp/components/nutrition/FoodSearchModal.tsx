@@ -3,7 +3,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
+import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock, BadgeCheck } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import { getToken } from '@/lib/clientAuth'
@@ -106,6 +106,8 @@ interface FoodResult {
   isSaved?: boolean
   isBestMatch?: boolean
   persistable?: boolean
+  /** Curated by us rather than mirrored from USDA/OpenFoodFacts. */
+  isVerified?: boolean
 }
 
 interface MealResult {
@@ -283,6 +285,10 @@ export default function FoodSearchModal({
 
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
+  // Restrict results to foods we curated ourselves. Composes with whichever tab
+  // is active rather than being a tab of its own, so "Recent, verified only" and
+  // "search chicken, verified only" both work.
+  const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [results, setResults] = useState<FoodResult[]>([])
   const [mealResults, setMealResults] = useState<MealResult[]>([])
   const [mealsLoading, setMealsLoading] = useState(false)
@@ -398,6 +404,7 @@ export default function FoodSearchModal({
       setSelection(null)
       setSelectedVariantIdx(0)
       setActiveTab('all')
+      setVerifiedOnly(false)
       setScannerOpen(false)
       setBarcodeError(null)
       addingRef.current = false
@@ -502,28 +509,37 @@ export default function FoodSearchModal({
   }, [])
 
   const fetchResults = useCallback(
-    async (searchQuery: string, tab: TabId) => {
+    async (searchQuery: string, tab: TabId, verified: boolean) => {
       setLoading(true)
       try {
         const token = getToken()
         const headers: HeadersInit = {}
         if (token) headers['Authorization'] = `Bearer ${token}`
 
+        // Only the search endpoint takes verifiedOnly — it uses the flag to skip
+        // USDA/OFF entirely rather than fetch and discard. The recent/frequent/
+        // saved endpoints return a bounded personal list, so filtering those
+        // client-side costs nothing and keeps their routes untouched.
         let url: string
+        let filterClientSide = false
         if (tab === 'recent') {
           url = '/api/nutrition/foods/recent'
+          filterClientSide = verified
         } else if (tab === 'frequent') {
           url = '/api/nutrition/foods/frequent'
+          filterClientSide = verified
         } else if (tab === 'mine') {
           url = '/api/me/foods'
+          filterClientSide = verified
         } else {
-          url = `/api/nutrition/foods?q=${encodeURIComponent(searchQuery)}`
+          url = `/api/nutrition/foods?q=${encodeURIComponent(searchQuery)}${verified ? '&verifiedOnly=true' : ''}`
         }
 
         const res = await fetch(url, { headers })
         if (res.ok) {
           const data = await res.json()
-          setResults(data.foods || data || [])
+          const foods: FoodResult[] = data.foods || data || []
+          setResults(filterClientSide ? foods.filter(f => f.isVerified === true) : foods)
         } else {
           setResults([])
         }
@@ -550,7 +566,7 @@ export default function FoodSearchModal({
     }
 
     if (activeTab === 'recent' || activeTab === 'frequent' || activeTab === 'mine') {
-      fetchResults('', activeTab)
+      fetchResults('', activeTab, verifiedOnly)
       setMealResults([])
       return
     }
@@ -559,7 +575,7 @@ export default function FoodSearchModal({
     // view. Falls back to the standard "type 2 chars" empty state if they have none.
     if (query.trim().length < 2) {
       if (activeTab === 'all') {
-        fetchResults('', 'mine')
+        fetchResults('', 'mine', verifiedOnly)
       } else {
         setResults([])
       }
@@ -569,7 +585,7 @@ export default function FoodSearchModal({
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      fetchResults(query, activeTab)
+      fetchResults(query, activeTab, verifiedOnly)
       fetchMeals(query) // surface matching saved meals alongside foods on All
     }, 300)
 
@@ -577,7 +593,7 @@ export default function FoodSearchModal({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
    
-  }, [query, activeTab, isOpen, fetchResults, fetchMeals])
+  }, [query, activeTab, verifiedOnly, isOpen, fetchResults, fetchMeals])
 
   // Active variant for the currently selected food (or null)
   const activeVariant = useMemo<FoodVariant | null>(() => {
@@ -1235,6 +1251,25 @@ export default function FoodSearchModal({
               )}
               {/* Tabs — horizontally scrollable so no chip wraps or gets cut off */}
               <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {/* Verified filter, leading the row. Deliberately NOT a sixth
+                    tab: it narrows whichever tab is active rather than
+                    replacing it, so "Recent, verified only" is expressible.
+                    First position because the row scrolls — placed after
+                    "Frequent" it sat off-screen on a phone. */}
+                <button
+                  onClick={() => setVerifiedOnly(v => !v)}
+                  aria-pressed={verifiedOnly}
+                  title="Show only foods verified by us"
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    verifiedOnly
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </button>
+                <span className="mx-1 w-px shrink-0 self-stretch bg-zinc-200 dark:bg-zinc-700" aria-hidden />
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
@@ -1249,6 +1284,7 @@ export default function FoodSearchModal({
                     {tab.label}
                   </button>
                 ))}
+
               </div>
             </div>
 
@@ -1487,6 +1523,14 @@ export default function FoodSearchModal({
                             <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                               {food.name}
                             </p>
+                            {food.isVerified && (
+                              <span title="Verified by Become" className="shrink-0">
+                                <BadgeCheck
+                                  className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                                  aria-label="Verified by Become"
+                                />
+                              </span>
+                            )}
                             {food.source === 'usda' && (
                               <span title="USDA FoodData Central" className="shrink-0">
                                 <Globe
