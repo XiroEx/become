@@ -5,6 +5,7 @@ import TopNav from '../../components/TopNav'
 import AuthGuard from '../../components/AuthGuard'
 import MindSessionWarmer from '../../components/mind/MindSessionWarmer'
 import TutorialRoot from '../../components/tutorial/TutorialRoot'
+import PushSubscriptionSync from '../../components/PushSubscriptionSync'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,6 +14,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <TutorialRoot>
       {/* Background: compose the AI Mind session on app open (cooldown-gated). */}
       <MindSessionWarmer />
+      {/* Background: keep this device's push subscription registered. Lives here
+          rather than on the dashboard home so it covers every protected route. */}
+      <PushSubscriptionSync />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
       <div
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"
