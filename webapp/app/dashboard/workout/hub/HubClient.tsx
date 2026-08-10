@@ -40,6 +40,9 @@ interface SessionLog {
   duration?: number
   exerciseCount: number
   sessionId?: string
+  /** The exercises actually performed. Present for quick sessions saved with
+   *  them; absent on very old logs, which fall back to regenerating. */
+  exercises?: DraftExercise[]
 }
 
 interface PlannedSession {
@@ -93,19 +96,47 @@ function SessionsTab() {
     if (opening) return
     setOpening(p.sessionId)
     stashQuickSessionWithId(
-      { title: p.title, ...(isFocusKey(p.focus) ? { focus: p.focus } : {}), exercises: p.exercises },
+      {
+        title: p.title,
+        ...(isFocusKey(p.focus) ? { focus: p.focus } : {}),
+        exercises: p.exercises,
+        source: 'saved',
+      },
       p.sessionId,
     )
-    router.push(quickSessionOverviewHref(p.sessionId))
+    // saved: it already exists server-side under this id, so edits write back.
+    router.push(quickSessionOverviewHref(p.sessionId, { saved: true }))
   }
 
-  // Tapping a past session rebuilds one by its focus and opens the overview,
-  // where you can Start it or "Log a past date". Mirrors the Quick Session
-  // modal's Repeat so behaviour is consistent.
+  // Tapping a past session opens THAT session — same title, same exercises.
+  //
+  // It used to throw the log away and POST /api/generate/session with just its
+  // focus, so you tapped "Sunday Back & Shoulders" and got a brand-new (and
+  // different every time) "Full Body Session", since focus is usually absent and
+  // defaulted to full_body. The exercises were on the log all along; the list
+  // endpoint simply wasn't returning them.
+  //
+  // Opened under a NEW sessionId on purpose: a save matches the log by
+  // sessionId and updates it in place, so reusing the completed log's id would
+  // overwrite that day's history the moment you finished the repeat.
   async function openSession(log: SessionLog) {
     const key = log.sessionId ?? log.date
     if (opening) return
     setOpening(key)
+
+    if (log.exercises?.length) {
+      const id = stashQuickSession({
+        title: log.title,
+        ...(isFocusKey(log.focus) ? { focus: log.focus } : {}),
+        exercises: log.exercises,
+        source: 'saved',
+      })
+      router.push(quickSessionOverviewHref(id))
+      return
+    }
+
+    // Legacy log with no stored exercises — nothing to reopen, so fall back to
+    // generating a fresh session from its focus (the old behaviour).
     try {
       const token = localStorage.getItem('token')
       const res = await fetch('/api/generate/session', {
@@ -132,7 +163,9 @@ function SessionsTab() {
           return
         }
         const [res, plannedRes] = await Promise.all([
-          fetch('/api/workouts/logs', { headers: { Authorization: `Bearer ${token}` } }),
+          // withExercises: the Sessions list needs the real exercises so tapping
+          // a session reopens THAT session instead of generating a new one.
+          fetch('/api/workouts/logs?withExercises=true', { headers: { Authorization: `Bearer ${token}` } }),
           fetch('/api/workouts/planned', { headers: { Authorization: `Bearer ${token}` } }),
         ])
         if (res.ok) {

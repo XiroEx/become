@@ -21,6 +21,9 @@ interface Exercise {
   type?: ExerciseType;
   sets?: number;
   reps?: string;
+  /** Unit for the `reps` figure. "sec" for a timed prescription — otherwise a
+   *  45-second plank renders as "45 reps". */
+  repsUnit?: string;
   rest?: string;
   details?: string;
   videoUrl?: string;
@@ -278,9 +281,9 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
               </p>
             ) : (
               <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                {exercise.sets && <span>{exercise.sets} sets</span>}
+                {exercise.sets && <span>{exercise.sets} {exercise.sets === 1 ? 'set' : 'sets'}</span>}
                 {exercise.sets && exercise.reps && <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">•</span>}
-                {exercise.reps && <span>{exercise.reps} reps</span>}
+                {exercise.reps && <span>{exercise.reps} {exercise.repsUnit ?? 'reps'}</span>}
                 {exercise.rest && (
                   <>
                     <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">•</span>
