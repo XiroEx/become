@@ -341,6 +341,24 @@ function deriveBridge(
     }
   }
 
+  // Last resort: the label measures the SAME serving the servingSize does, just
+  // in the other dimension. "1/3 c" on a 32 g serving means one serving is both
+  // 32 g and 1/3 cup — that IS the density, for this food, and no separate
+  // gramsPerServing/mlPerServing is needed to know it.
+  //
+  // Without this the choice can't convert to the storage unit, canResolveChoice
+  // drops it, and the food's real serving disappears from the picker: a casein
+  // powder labelled "1/3 c" defaulted to a bare "100 g" (344 cal) with 1/3 cup
+  // nowhere in the list. Everything above is more specific — a label carrying
+  // BOTH dimensions, or a variant with an explicit bridge — so this only fires
+  // when the label alone has to supply the relationship.
+  if (nativeFamily === 'mass' && labelMl != null && labelMl > 0) {
+    return { mlPerServing: bridgePerNativeServing(labelMl, variant, fallbackQuantity, fallbackUnit) }
+  }
+  if (nativeFamily === 'volume' && labelGrams != null && labelGrams > 0) {
+    return { gramsPerServing: bridgePerNativeServing(labelGrams, variant, fallbackQuantity, fallbackUnit) }
+  }
+
   return null
 }
 
