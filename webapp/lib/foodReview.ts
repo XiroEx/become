@@ -144,8 +144,24 @@ function runBridgeCheck(
   issues: ReviewIssue[],
 ): ReviewIssue[] {
   const su = (variant.servingUnit ?? '').toLowerCase()
+
+  // A servingSize of exactly 100 is the per-100 MATH REFERENCE, not a claim
+  // about the serving — that is how every OpenFoodFacts/USDA import is stored,
+  // with the real serving weight carried in gramsPerServing/mlPerServing.
+  // Cinnamon Toast Crunch is servingSize=100 g with gramsPerServing=40 and a
+  // "40g" label, and it is completely correct. QuantityPicker and
+  // servingOptions both read that shape as normal and rely on the two
+  // differing; only this rule called it a conflict, and it did so for 2543 of
+  // the 3656 OFF imports, burying ~700 real issues under false positives.
+  //
+  // A genuine conflict is when servingSize is NOT the per-100 reference and the
+  // bridge still disagrees with it — then the two really are describing the
+  // same serving with different numbers.
+  const isPer100Reference = variant.servingSize === 100
+
   if (
-    variant.gramsPerServing != null
+    !isPer100Reference
+    && variant.gramsPerServing != null
     && (su === 'g')
     && Math.abs(variant.gramsPerServing - (variant.servingSize ?? 0)) > 0.5
   ) {
@@ -155,7 +171,8 @@ function runBridgeCheck(
     })
   }
   if (
-    variant.mlPerServing != null
+    !isPer100Reference
+    && variant.mlPerServing != null
     && (su === 'ml')
     && Math.abs(variant.mlPerServing - (variant.servingSize ?? 0)) > 0.5
   ) {

@@ -462,7 +462,10 @@ export async function GET(request: NextRequest) {
       // matches something, non-matching results are already gone, so this can
       // only reorder genuine candidates. It never lifts an unrelated verified
       // food above a precise brand match.
-      verified: item.isVerified === true ? 0 : 1,
+      // Saved ("My Foods") outranks even verified, per user: a food you
+      // deliberately saved is the one you meant, so it belongs at the top of
+      // YOUR results. Verified is the floor under everything else.
+      tier: item.isSaved === true ? 0 : item.isVerified === true ? 1 : 2,
       rel: relevanceScore(item.name, item.brand, item.dataType)
         - (item.isFirstClass ? 500 : 0)
         + groupServingPenalty(item),
@@ -491,7 +494,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Verified first, then relevance-dominant ordering within each tier, with
+    // Saved first, then verified, then relevance-dominant ordering within each
+    // tier, with
     // source (saved → our DB → USDA → OFF) breaking remaining ties.
     //
     // The last two keys exist because relevance does NOT separate a set of
@@ -502,8 +506,8 @@ export async function GET(request: NextRequest) {
     // Falling through to usage and then to the name makes it deterministic, and
     // prefers the food people actually log over an incidental one.
     kept.sort((a, b) =>
-      a.verified !== b.verified
-        ? a.verified - b.verified
+      a.tier !== b.tier
+        ? a.tier - b.tier
         : a.rel !== b.rel
           ? a.rel - b.rel
           : a.src !== b.src
