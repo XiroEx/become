@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, Check, X, Loader2 } from 'lucide-react'
+import { AlertTriangle, Check, X, Loader2, Pencil } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 
 type Kind = 'calories' | 'macros' | 'serving' | 'other'
@@ -22,19 +22,54 @@ const KINDS: { id: Kind; label: string }[] = [
   { id: 'other', label: 'Something else' },
 ]
 
+/** Per-serving values the user can correct for their own entry. */
+export interface LogCorrection {
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+}
+
 export interface FlagFoodSheetProps {
   isOpen: boolean
   foodId: string
   foodName: string
   onClose: () => void
+  /** Current per-serving values, prefilled into the correction fields. */
+  currentNutrition?: LogCorrection
+  /**
+   * When provided, the sheet offers "just fix it for my entry" ALONGSIDE
+   * reporting. Offered BEFORE logging on purpose: making someone log a number
+   * they can see is wrong, and only then discover an edit screen, is a bad
+   * trade — most people would never find the edit at all.
+   *
+   * This only ever touches their own log. The shared catalogue is written by
+   * the verification agent, never by a user.
+   */
+  onApplyToLog?: (values: LogCorrection) => void
 }
 
-export default function FlagFoodSheet({ isOpen, foodId, foodName, onClose }: FlagFoodSheetProps) {
+export default function FlagFoodSheet({
+  isOpen, foodId, foodName, onClose, currentNutrition, onApplyToLog,
+}: FlagFoodSheetProps) {
   const [kind, setKind] = useState<Kind>('calories')
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [fixing, setFixing] = useState(false)
+  const [draft, setDraft] = useState<LogCorrection | null>(null)
+
+  const startFixing = () => {
+    setDraft(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 })
+    setFixing(true)
+  }
+
+  const applyFix = () => {
+    if (!draft || !onApplyToLog) return
+    onApplyToLog(draft)
+    close()
+  }
 
   const submit = async () => {
     setSubmitting(true)
@@ -65,6 +100,8 @@ export default function FlagFoodSheet({ isOpen, foodId, foodName, onClose }: Fla
     setResult(null)
     setError(null)
     setNote('')
+    setFixing(false)
+    setDraft(null)
     onClose()
   }
 
@@ -86,7 +123,59 @@ export default function FlagFoodSheet({ isOpen, foodId, foodName, onClose }: Fla
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-md rounded-t-2xl bg-white p-5 pb-8 dark:bg-zinc-900 sm:rounded-2xl sm:pb-5"
           >
-            {result ? (
+            {fixing && draft ? (
+              <>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">Fix it for this entry</p>
+                  <button onClick={close} aria-label="Close" className="text-zinc-400 hover:text-zinc-600">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+                  Per serving, for your log only. The shared food isn&rsquo;t changed — report it below and we&rsquo;ll
+                  check it against the label.
+                </p>
+                <div className="mb-4 grid grid-cols-2 gap-2">
+                  {([
+                    ['calories', 'Calories'],
+                    ['protein', 'Protein (g)'],
+                    ['carbs', 'Carbs (g)'],
+                    ['fats', 'Fats (g)'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                      {label}
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        value={String(draft[key])}
+                        onChange={(e) =>
+                          setDraft({ ...draft, [key]: Math.max(0, Number(e.target.value) || 0) })
+                        }
+                        aria-label={label}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFixing(false)}
+                    className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyFix}
+                    className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-black"
+                  >
+                    Use these values
+                  </button>
+                </div>
+              </>
+            ) : result ? (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-600">
                   <Check className="h-5 w-5 text-white" />
@@ -121,6 +210,17 @@ export default function FlagFoodSheet({ isOpen, foodId, foodName, onClose }: Fla
                   Tell us what looks off about <span className="font-medium">{foodName}</span> and we&rsquo;ll
                   check it against the label. This reports the food for everyone; it doesn&rsquo;t change your entry.
                 </p>
+
+                {onApplyToLog && (
+                  <button
+                    type="button"
+                    onClick={startFixing}
+                    className="mb-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-800 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Fix it for this entry
+                  </button>
+                )}
 
                 <div className="mb-4 space-y-1.5">
                   {KINDS.map((k) => (

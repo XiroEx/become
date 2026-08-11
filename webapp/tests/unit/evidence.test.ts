@@ -7,7 +7,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { atwater, type EvidenceValues } from '../../lib/nutrition/evidence'
+import { atwater, matchesRecord, type EvidenceValues } from '../../lib/nutrition/evidence'
 
 test('atwater is the free cross-check on any source', () => {
   assert.equal(atwater({ proteinPer100: 10, carbsPer100: 20, fatsPer100: 5 }), 165)
@@ -57,4 +57,24 @@ test('a bundle with only our own record is not evidence', () => {
   // failure mode that would let the pipeline "verify" anything.
   const selfOnly = ['stored']
   assert.equal(selfOnly.some((s) => s !== 'stored'), false)
+})
+
+test('a user photo is a claim, not a source, until its identity is confirmed', () => {
+  // The attack and the accident look identical to us: someone reports a
+  // tortilla and attaches a cereal panel. Its numbers are perfectly
+  // self-consistent, so Atwater cannot catch it. Only the NAME can.
+  assert.equal(matchesRecord('Cheerios Honey Nut', 'Original Zero', 'Mission Foods Inc'), false)
+
+  // A wordier label for the same product still matches — labels carry
+  // marketing text a record name never will.
+  assert.equal(
+    matchesRecord('Mission Original Zero Net Carbs Tortillas', 'Original Zero', 'Mission Foods Inc'),
+    true,
+  )
+
+  // Unreadable is UNKNOWN, not a pass and not a rejection.
+  assert.equal(matchesRecord(undefined, 'Original Zero'), undefined)
+  assert.equal(matchesRecord('   ', 'Original Zero'), undefined)
+  // Generic filler alone must not carry a match.
+  assert.equal(matchesRecord('Original', 'Original Zero'), undefined)
 })
