@@ -1,0 +1,183 @@
+'use client'
+
+// "Something look wrong?" — report bad catalogue data.
+//
+// This does NOT edit the food. The user's report is evidence handed to the
+// verification agent, which is the only writer of the shared catalogue. Fixing
+// their OWN log is a separate action on the edit modal behind this sheet, and
+// that is deliberate: it unblocks them in seconds without letting one person's
+// misreading of a label change what everybody else sees.
+
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { AlertTriangle, Check, X, Loader2 } from 'lucide-react'
+import { getToken } from '@/lib/clientAuth'
+
+type Kind = 'calories' | 'macros' | 'serving' | 'other'
+
+const KINDS: { id: Kind; label: string }[] = [
+  { id: 'calories', label: 'Calories look wrong' },
+  { id: 'macros', label: 'Macros look wrong' },
+  { id: 'serving', label: 'Serving size is wrong' },
+  { id: 'other', label: 'Something else' },
+]
+
+export interface FlagFoodSheetProps {
+  isOpen: boolean
+  foodId: string
+  foodName: string
+  onClose: () => void
+}
+
+export default function FlagFoodSheet({ isOpen, foodId, foodName, onClose }: FlagFoodSheetProps) {
+  const [kind, setKind] = useState<Kind>('calories')
+  const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const token = getToken()
+      const res = await fetch(`/api/nutrition/foods/${foodId}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+        body: JSON.stringify({ kind, note: note.trim() || undefined }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // 429 covers both "already reported" and the daily cap. Both are
+        // legitimate answers to show the user, not failures to hide.
+        setError(data?.error || 'Could not send that report.')
+        return
+      }
+      setResult(data?.message || 'Thanks — we will check this.')
+    } catch {
+      setError('Network error. Try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const close = () => {
+    setResult(null)
+    setError(null)
+    setNote('')
+    onClose()
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={close}
+        >
+          <motion.div
+            initial={{ y: 32, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 32, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-t-2xl bg-white p-5 pb-8 dark:bg-zinc-900 sm:rounded-2xl sm:pb-5"
+          >
+            {result ? (
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-600">
+                  <Check className="h-5 w-5 text-white" />
+                </div>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-white">Report sent</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{result}</p>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  Your own entry is unchanged — edit it behind this sheet if the numbers are off for you.
+                </p>
+                <button
+                  onClick={close}
+                  className="mt-1 rounded-xl bg-zinc-900 px-5 py-2 text-sm font-semibold text-white dark:bg-white dark:text-black"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      Something look wrong?
+                    </p>
+                  </div>
+                  <button onClick={close} aria-label="Close" className="text-zinc-400 hover:text-zinc-600">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+                  Tell us what looks off about <span className="font-medium">{foodName}</span> and we&rsquo;ll
+                  check it against the label. This reports the food for everyone; it doesn&rsquo;t change your entry.
+                </p>
+
+                <div className="mb-4 space-y-1.5">
+                  {KINDS.map((k) => (
+                    <button
+                      key={k.id}
+                      type="button"
+                      onClick={() => setKind(k.id)}
+                      aria-pressed={kind === k.id}
+                      className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                        kind === k.id
+                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                          : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+
+                <label htmlFor="flag-note" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Anything else? (optional)
+                </label>
+                <textarea
+                  id="flag-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="e.g. my label says 45 cal per container"
+                  className="mb-4 w-full resize-none rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                />
+
+                {error && <p className="mb-3 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={submitting}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-amber-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {submitting ? 'Sending…' : 'Report it'}
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
