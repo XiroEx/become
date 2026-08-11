@@ -121,6 +121,39 @@ export interface IFood {
   isFirstClass: boolean
   isVerified: boolean
 
+  /**
+   * Verification pipeline state. Supersedes the bare `isVerified` boolean,
+   * which recorded THAT something was trusted but never why, by whom, against
+   * what evidence, or when it should be rechecked.
+   *
+   * `claimedAt` is the concurrency guard: two users flagging the same food at
+   * once must produce one run, not two. It carries a TTL rather than being a
+   * permanent lock, because runs die mid-flight and a permanent lock would
+   * wedge a food as unverifiable forever. See lib/nutrition/flagPolicy.ts.
+   */
+  verification?: {
+    state: 'unverified' | 'queued' | 'running' | 'verified' | 'insufficient'
+    /** How strong the verification is, not merely whether it happened. */
+    tier?: 'self-consistent' | 'corroborated' | 'label-verified'
+    evidence?: Array<{
+      url?: string
+      source?: string
+      extractedValues?: Record<string, number | string>
+      model?: string
+      at?: Date
+    }>
+    runId?: string
+    claimedAt?: Date
+    verifiedAt?: Date
+    /** Branded products get reformulated; a verification is not forever. */
+    expiresAt?: Date
+    /** A flag arrived mid-run — re-run ONCE on completion, never a loop. */
+    recheckRequested?: boolean
+    /** Distinct users who have flagged this. Corroboration, not a spam count. */
+    flagCount?: number
+    lastOutcome?: string
+  }
+
   barcode?: string
   imageUrl?: string
 
@@ -227,6 +260,28 @@ const FoodSchema = new Schema<IFood>({
 
   isFirstClass: { type: Boolean, default: false },
   isVerified: { type: Boolean, default: false },
+  verification: {
+    state: {
+      type: String,
+      enum: ['unverified', 'queued', 'running', 'verified', 'insufficient'],
+      default: 'unverified',
+    },
+    tier: { type: String, enum: ['self-consistent', 'corroborated', 'label-verified'] },
+    evidence: [{
+      url: { type: String },
+      source: { type: String },
+      extractedValues: { type: Schema.Types.Mixed },
+      model: { type: String },
+      at: { type: Date },
+    }],
+    runId: { type: String },
+    claimedAt: { type: Date },
+    verifiedAt: { type: Date },
+    expiresAt: { type: Date },
+    recheckRequested: { type: Boolean },
+    flagCount: { type: Number },
+    lastOutcome: { type: String },
+  },
 
   barcode: { type: String },
   imageUrl: { type: String },

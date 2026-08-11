@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Pencil } from 'lucide-react'
+import { X, Pencil, AlertTriangle } from 'lucide-react'
+import FlagFoodSheet from '@/components/nutrition/FlagFoodSheet'
 import { useLockScroll } from '@/lib/useLockScroll'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import type { IMealItem } from '@/models/Meal'
@@ -91,6 +92,7 @@ export default function EditFoodModal({
   const isPlanMode = mode === 'plan'
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
   const [saving, setSaving] = useState(false)
+  const [flagOpen, setFlagOpen] = useState(false)
   const [error, setError] = useState('')
 
   // Local bridge edits — start from the logged snapshot. Saving the form
@@ -338,6 +340,21 @@ export default function EditFoodModal({
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
               )}
 
+              {/* Report bad catalogue data. Sits under the edit controls on
+                  purpose: fixing YOUR entry is right there and instant, while
+                  reporting hands it to the agent that owns the shared record.
+                  Only for real catalogue foods — a quick-add has no foodId. */}
+              {item?.foodId && (
+                <button
+                  type="button"
+                  onClick={() => setFlagOpen(true)}
+                  className="flex w-full items-center justify-center gap-1.5 pt-1 text-xs font-medium text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400"
+                >
+                  <AlertTriangle className="h-3 w-3 text-amber-500" />
+                  Something look wrong?
+                </button>
+              )}
+
               {/* Actions */}
               <div className="flex gap-3 pt-1">
                 <button
@@ -359,6 +376,15 @@ export default function EditFoodModal({
             </form>
           </motion.div>
         </motion.div>
+      )}
+
+      {item?.foodId && (
+        <FlagFoodSheet
+          isOpen={flagOpen}
+          foodId={String(item.foodId)}
+          foodName={item.name ?? 'this food'}
+          onClose={() => setFlagOpen(false)}
+        />
       )}
     </AnimatePresence>
   )
