@@ -10,7 +10,7 @@
 
 import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, Check, X, Loader2, Pencil, Camera, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, X, Loader2, Pencil, Camera, ImagePlus, Trash2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import { resizeImageToBlob } from '@/lib/imageResize'
 
@@ -79,6 +79,7 @@ export default function FlagFoodSheet({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const galleryRef = useRef<HTMLInputElement | null>(null)
 
   const clearPhoto = () => {
     // Release the object URL rather than leaking it for the tab's lifetime.
@@ -316,8 +317,12 @@ export default function FlagFoodSheet({
                 </div>
 
                 {/* Panel photo — the strongest evidence we can collect, since the
-                    reporter is holding the package. `capture` opens the camera
-                    directly on mobile; on desktop it falls back to a file pick. */}
+                    reporter is holding the package.
+                    TWO inputs, same as the plate-scan flow. `capture` does NOT
+                    degrade to a file pick on iOS: it removes the photo-library
+                    option entirely and hard-locks the control to the camera, so
+                    anyone who already shot the label cannot send it. The gallery
+                    input has no `capture` for exactly that reason. */}
                 <input
                   ref={fileRef}
                   type="file"
@@ -328,6 +333,17 @@ export default function FlagFoodSheet({
                   onChange={(e) => {
                     void pickPhoto(e.target.files?.[0])
                     // Reset so re-picking the SAME file still fires a change.
+                    e.target.value = ''
+                  }}
+                />
+                <input
+                  ref={galleryRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  data-testid="flag-photo-gallery-input"
+                  onChange={(e) => {
+                    void pickPhoto(e.target.files?.[0])
                     e.target.value = ''
                   }}
                 />
@@ -350,16 +366,30 @@ export default function FlagFoodSheet({
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+                ) : uploading ? (
+                  <div className="mb-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-sm font-medium text-zinc-600 dark:border-zinc-600 dark:text-zinc-300">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Uploading&hellip;
+                  </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="mb-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  >
-                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
-                    {uploading ? 'Uploading…' : 'Photograph the label'}
-                  </button>
+                  <div className="mb-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      <Camera className="h-3.5 w-3.5 shrink-0" />
+                      Take photo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => galleryRef.current?.click()}
+                      className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      <ImagePlus className="h-3.5 w-3.5 shrink-0" />
+                      Upload photo
+                    </button>
+                  </div>
                 )}
 
                 <label htmlFor="flag-note" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
