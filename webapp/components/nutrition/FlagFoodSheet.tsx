@@ -207,8 +207,9 @@ export default function FlagFoodSheet({
                 </div>
 
                 <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-                  Tell us what looks off about <span className="font-medium">{foodName}</span> and we&rsquo;ll
-                  check it against the label. This reports the food for everyone; it doesn&rsquo;t change your entry.
+                  Tell us what looks off about <span className="font-medium">{foodName}</span>{' '}
+                  and we&rsquo;ll check it against the label. This reports the food for everyone; it
+                  doesn&rsquo;t change your entry.
                 </p>
 
                 {onApplyToLog && (
