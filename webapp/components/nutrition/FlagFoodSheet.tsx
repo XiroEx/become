@@ -70,8 +70,19 @@ export default function FlagFoodSheet({
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
+  const clearPhoto = () => {
+    // Release the object URL rather than leaking it for the tab's lifetime.
+    setPhotoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+    setPhotoUrl(null)
+  }
+
   const pickPhoto = async (file: File | undefined) => {
-    if (!file) return
+    // The button is disabled mid-upload, but the input can still be driven
+    // directly, and a second pass would upload twice and strand the first blob.
+    if (!file || uploading) return
     setUploading(true)
     setError(null)
     try {
@@ -90,7 +101,10 @@ export default function FlagFoodSheet({
         return
       }
       setPhotoUrl(data.imageUrl)
-      setPhotoPreview(URL.createObjectURL(small))
+      setPhotoPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return URL.createObjectURL(small)
+      })
     } catch {
       setError('Could not read that photo.')
     } finally {
@@ -144,8 +158,7 @@ export default function FlagFoodSheet({
     setNote('')
     setFixing(false)
     setDraft(null)
-    setPhotoUrl(null)
-    setPhotoPreview(null)
+    clearPhoto()
     onClose()
   }
 
@@ -313,7 +326,7 @@ export default function FlagFoodSheet({
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setPhotoUrl(null); setPhotoPreview(null) }}
+                      onClick={clearPhoto}
                       aria-label="Remove photo"
                       className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
                     >
