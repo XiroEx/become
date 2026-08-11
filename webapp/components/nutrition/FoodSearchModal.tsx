@@ -1761,20 +1761,6 @@ export default function FoodSearchModal({
                                         <span className="whitespace-nowrap">C: {Math.round(previewNutrition.carbs)}g</span>
                                         <span className="whitespace-nowrap">F: {Math.round(previewNutrition.fats)}g</span>
                                       </div>
-                                      {/* Under the macros, where the wrong number
-                                          actually is. Buried behind a log edit it was
-                                          undiscoverable, and it made people log a value
-                                          they could already see was wrong. */}
-                                      <button
-                                        type="button"
-                                        onClick={() => setFlagOpen(true)}
-                                        className="mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap text-[11px] font-medium text-zinc-400 underline-offset-2 hover:text-amber-600 hover:underline dark:text-zinc-500 dark:hover:text-amber-400"
-                                      >
-                                        <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                                        {/* Short when edited — the long form wrapped to two
-                                            lines and crowded the macros above it. */}
-                                        {nutritionOverride ? 'Edited for this entry' : 'Something look wrong?'}
-                                      </button>
                                     </div>
                                   </div>
                                 </>
@@ -1822,6 +1808,18 @@ export default function FoodSearchModal({
                                         {customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
+                                    {/* Shares the date row rather than sitting under the
+                                        macros, where it crowded the right edge. This row
+                                        already spans the full width, so there is room for
+                                        it without squeezing anything. */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setFlagOpen(true)}
+                                      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-zinc-400 underline-offset-2 hover:text-amber-600 hover:underline dark:text-zinc-500 dark:hover:text-amber-400"
+                                    >
+                                      <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                      {nutritionOverride ? 'Edited for this entry' : 'Something look wrong?'}
+                                    </button>
                                   </div>
                                   <AnimatePresence initial={false}>
                                     {dateEditOpen && (
