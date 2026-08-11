@@ -73,6 +73,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], video: 'off' },
     },
     {
+      name: 'quick-session-abandon-save',
+      testMatch: '**/quick-session-abandon-save.spec.ts',
+      timeout: 60_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off' },
+    },
+    {
       name: 'swap-mobile',
       testMatch: '**/swap-debug.spec.ts',
       timeout: 120_000,
