@@ -38,10 +38,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     const body = await request.json().catch(() => ({}))
-    const kind = body?.kind
-    if (!['calories', 'macros', 'serving', 'other'].includes(kind)) {
+    const VALID_KINDS = ['calories', 'macros', 'serving', 'other'] as const
+    type Kind = (typeof VALID_KINDS)[number]
+    // Accept the full selection, falling back to the single `kind` older
+    // clients send. Deduped and filtered so a hand-rolled body cannot stuff
+    // this array.
+    const kinds: Kind[] = Array.from(
+      new Set(
+        (Array.isArray(body?.kinds) ? body.kinds : [body?.kind]).filter(
+          (k: unknown): k is Kind =>
+            typeof k === 'string' && (VALID_KINDS as readonly string[]).includes(k),
+        ),
+      ),
+    )
+    if (kinds.length === 0) {
       return NextResponse.json({ error: 'kind must be calories, macros, serving or other' }, { status: 400 })
     }
+    const kind = kinds[0]
 
     await dbConnect()
 
@@ -97,6 +110,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         foodId,
         userId,
         kind,
+        kinds,
         note: typeof body?.note === 'string' ? body.note.slice(0, 1000) : undefined,
         photoUrl,
         claimedValues: body?.claimedValues,
@@ -173,6 +187,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     void verifyFood(id, {
       userClaim: body?.claimedValues,
       userPhotoUrl: photoUrl,
+      reportedKinds: kinds,
+      reportedNote: typeof body?.note === 'string' ? body.note.slice(0, 1000) : undefined,
     }).catch((err) => console.error('verifyFood dispatch failed:', err))
 
     return NextResponse.json({

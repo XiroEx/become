@@ -33,6 +33,8 @@ export interface IFoodFlag {
   userId: Types.ObjectId
 
   kind: FoodFlagKind
+  /** Everything the reporter ticked; `kind` is kinds[0]. */
+  kinds?: FoodFlagKind[]
   note?: string
 
   /** The user's own photo of the nutrition panel. The single strongest evidence
@@ -69,6 +71,10 @@ const FoodFlagSchema = new Schema<IFoodFlag>(
     userId: { type: Schema.Types.ObjectId, required: true, ref: 'User' },
 
     kind: { type: String, enum: ['calories', 'macros', 'serving', 'other'], required: true },
+    // The full selection. `kind` is kept as the primary for existing rows and
+    // for anything that reads a single value; `kinds` is what the reporter
+    // actually ticked, since "calories AND macros" is an ordinary report.
+    kinds: [{ type: String, enum: ['calories', 'macros', 'serving', 'other'] }],
     note: { type: String, maxlength: 1000 },
     photoUrl: { type: String },
 
