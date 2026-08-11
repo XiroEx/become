@@ -3,10 +3,11 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock, BadgeCheck } from 'lucide-react'
+import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import { getToken } from '@/lib/clientAuth'
+import FlagFoodSheet, { type LogCorrection } from '@/components/nutrition/FlagFoodSheet'
 import BarcodeScanner from './BarcodeScanner'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import QuantityPicker, { type QuantityPickerSelection } from './QuantityPicker'
@@ -289,6 +290,10 @@ export default function FoodSearchModal({
   // is active rather than being a tab of its own, so "Recent, verified only" and
   // "search chicken, verified only" both work.
   const [verifiedOnly, setVerifiedOnly] = useState(false)
+  const [flagOpen, setFlagOpen] = useState(false)
+  // Per-serving values the user corrected BEFORE logging. Applies to their
+  // entry only; the catalogue is the agent's to write.
+  const [nutritionOverride, setNutritionOverride] = useState<LogCorrection | null>(null)
   const [results, setResults] = useState<FoodResult[]>([])
   const [mealResults, setMealResults] = useState<MealResult[]>([])
   const [mealsLoading, setMealsLoading] = useState(false)
@@ -402,6 +407,7 @@ export default function FoodSearchModal({
       setApplyMeal(null)
       setSelectedFood(null)
       setSelection(null)
+      setNutritionOverride(null)
       setSelectedVariantIdx(0)
       setActiveTab('all')
       setVerifiedOnly(false)
@@ -601,10 +607,22 @@ export default function FoodSearchModal({
     return getActiveVariant(selectedFood, selectedVariantIdx)
   }, [selectedFood, selectedVariantIdx])
   const addQuantityMultiplier = positiveDecimal(addQuantity)
-  const previewNutrition = useMemo(
-    () => scaleNutrition(selection?.nutrition, addQuantityMultiplier || 1),
-    [selection, addQuantityMultiplier],
-  )
+  const previewNutrition = useMemo(() => {
+    // A user correction is PER SERVING, matching what the log entry stores, so
+    // it scales by the same multiplier the picker applies. Without this the
+    // preview would keep showing the old numbers right after someone corrected
+    // them, which reads as the edit having silently failed.
+    if (nutritionOverride && selection) {
+      const factor = (selection.multiplier || 1) * (addQuantityMultiplier || 1)
+      return {
+        calories: nutritionOverride.calories * factor,
+        protein: nutritionOverride.protein * factor,
+        carbs: nutritionOverride.carbs * factor,
+        fats: nutritionOverride.fats * factor,
+      }
+    }
+    return scaleNutrition(selection?.nutrition, addQuantityMultiplier || 1)
+  }, [selection, addQuantityMultiplier, nutritionOverride])
 
   useEffect(() => {
     setServingLabelDraft(variantFriendlyLabel(activeVariant))
@@ -914,11 +932,13 @@ export default function FoodSearchModal({
         // `servings` here is the back-compat "× per-variant-serving" multiplier.
         // New consumers should prefer loggedQuantity + loggedUnit.
         servings: selection.multiplier * addQuantityMultiplier,
+        // A user correction applies to THIS entry only — the shared food is the
+        // verification agent's to write, never the user's.
         nutrition: {
-          calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
-          protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
-          carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
-          fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
+          calories: Math.round((nutritionOverride?.calories ?? activeVariant.nutrition.calories) * 10) / 10,
+          protein:  Math.round((nutritionOverride?.protein  ?? activeVariant.nutrition.protein)  * 10) / 10,
+          carbs:    Math.round((nutritionOverride?.carbs    ?? activeVariant.nutrition.carbs)    * 10) / 10,
+          fats:     Math.round((nutritionOverride?.fats     ?? activeVariant.nutrition.fats)     * 10) / 10,
           fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
           sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
           sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
@@ -1491,10 +1511,12 @@ export default function FoodSearchModal({
                         tabIndex={0}
                         onClick={() => {
                           if (selectedFood?._id === food._id) {
+                            setNutritionOverride(null)
                             setSelectedFood(null)
                             setSelection(null)
                           } else {
                             const variantIdx = pickDefaultVariantIdx(food.variants)
+                            setNutritionOverride(null)
                             setSelectedFood(food)
                             setSelectedVariantIdx(variantIdx)
                             setSelection(null)
@@ -1739,6 +1761,20 @@ export default function FoodSearchModal({
                                         <span className="whitespace-nowrap">C: {Math.round(previewNutrition.carbs)}g</span>
                                         <span className="whitespace-nowrap">F: {Math.round(previewNutrition.fats)}g</span>
                                       </div>
+                                      {/* Under the macros, where the wrong number
+                                          actually is. Buried behind a log edit it was
+                                          undiscoverable, and it made people log a value
+                                          they could already see was wrong. */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setFlagOpen(true)}
+                                        className="mt-1 inline-flex max-w-full items-center gap-1 whitespace-nowrap text-[11px] font-medium text-zinc-400 underline-offset-2 hover:text-amber-600 hover:underline dark:text-zinc-500 dark:hover:text-amber-400"
+                                      >
+                                        <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                        {/* Short when edited — the long form wrapped to two
+                                            lines and crowded the macros above it. */}
+                                        {nutritionOverride ? 'Edited for this entry' : 'Something look wrong?'}
+                                      </button>
                                     </div>
                                   </div>
                                 </>
@@ -1936,6 +1972,22 @@ export default function FoodSearchModal({
       )}
 
       {/* Barcode scanner overlay — rendered outside the modal so it covers the full screen */}
+      {selectedFood && (
+        <FlagFoodSheet
+          isOpen={flagOpen}
+          foodId={String(selectedFood._id)}
+          foodName={selectedFood.name}
+          currentNutrition={activeVariant ? {
+            calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
+            protein: Math.round(activeVariant.nutrition.protein * 10) / 10,
+            carbs: Math.round(activeVariant.nutrition.carbs * 10) / 10,
+            fats: Math.round(activeVariant.nutrition.fats * 10) / 10,
+          } : undefined}
+          onApplyToLog={setNutritionOverride}
+          onClose={() => setFlagOpen(false)}
+        />
+      )}
+
       {scannerOpen && (
         <BarcodeScanner
           onClose={() => setScannerOpen(false)}
