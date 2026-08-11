@@ -36,6 +36,10 @@ export type BecomeTask =
   | 'nutrition.productFind'
   // structured text → plate estimate (describe a meal / correct a prior estimate)
   | 'nutrition.describeEstimate'
+  // food verification: grounded search gathers, the reviewer adjudicates.
+  // Dotless because the task registry now rejects dotted keys.
+  | 'nutritionFoodEvidence'
+  | 'nutritionFoodReview'
 
 export interface BecomeResponse {
   ok: boolean

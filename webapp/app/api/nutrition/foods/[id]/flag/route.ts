@@ -6,6 +6,7 @@ import Food from '@/models/Food'
 import FoodFlag from '@/models/FoodFlag'
 import User from '@/models/User'
 import { decideFlag, ownFlagPhotoUrl, CLAIM_TTL_MS, type FlagContext } from '@/lib/nutrition/flagPolicy'
+import { verifyFood } from '@/lib/nutrition/verifyFood'
 
 // ---------------------------------------------------------------------------
 // POST /api/nutrition/foods/[id]/flag — "something doesn't look right".
@@ -164,14 +165,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       })
     }
 
-    // The verification graph is dispatched in a later step of this build; the
-    // flag sits 'open' with the food claimed until then, and the claim TTL
-    // means an undispatched claim releases itself rather than sticking.
+    // Dispatch and do NOT await: the pipeline runs a grounded search and a
+    // review, tens of seconds, well past what the reporter should wait behind.
+    // verifyFood never throws and always releases the claim, so a failure here
+    // cannot wedge the food — and the claim TTL covers the process dying
+    // mid-run, which is a failure mode we have watched happen elsewhere.
+    void verifyFood(id, {
+      userClaim: body?.claimedValues,
+      userPhotoUrl: photoUrl,
+    }).catch((err) => console.error('verifyFood dispatch failed:', err))
+
     return NextResponse.json({
       ok: true,
       flagId: String(flag._id),
       status: 'open',
-      dispatched: false,
+      dispatched: true,
       message: 'Thanks — we will check this and correct it if needed.',
     })
   } catch (error) {
