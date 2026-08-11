@@ -167,7 +167,14 @@ export function canWrite(
  */
 export async function verifyFood(
   foodId: string,
-  opts: { userClaim?: EvidenceValues; userPhotoUrl?: string; userPhotoIdentity?: string } = {},
+  opts: {
+    userClaim?: EvidenceValues
+    userPhotoUrl?: string
+    userPhotoIdentity?: string
+    /** What the reporter actually ticked, and what they wrote. */
+    reportedKinds?: string[]
+    reportedNote?: string
+  } = {},
 ): Promise<VerificationOutcome> {
   const food = await Food.findById(foodId)
     .select('name brand barcode variants verification')
@@ -222,6 +229,13 @@ export async function verifyFood(
         })),
         webSources: search?.found ? search.sources : [],
         webNotes: search?.notes,
+        // What a human standing in front of the package said looks wrong.
+        // This is a POINTER, not a source: it tells the reviewer where to
+        // look, and the write gate still requires independent corroboration,
+        // so a bad report cannot become a catalogue edit on its own.
+        report: opts.reportedKinds?.length
+          ? { looksWrong: opts.reportedKinds, note: opts.reportedNote }
+          : undefined,
       },
       { timeoutMs: REVIEW_TIMEOUT_MS },
     )

@@ -53,7 +53,17 @@ export interface FlagFoodSheetProps {
 export default function FlagFoodSheet({
   isOpen, foodId, foodName, onClose, currentNutrition, onApplyToLog,
 }: FlagFoodSheetProps) {
-  const [kind, setKind] = useState<Kind>('calories')
+  // Multi-select: "the calories AND the macros are both off" is an ordinary
+  // report, and forcing one radio button made people file the half of it they
+  // thought we were more likely to believe.
+  const [kinds, setKinds] = useState<Kind[]>(['calories'])
+  const toggleKind = (id: Kind) =>
+    setKinds((prev) =>
+      prev.includes(id)
+        // Never let them submit nothing: the last one stays selected.
+        ? (prev.length === 1 ? prev : prev.filter((k) => k !== id))
+        : [...prev, id],
+    )
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -132,7 +142,10 @@ export default function FlagFoodSheet({
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body: JSON.stringify({
-          kind,
+          // `kind` stays for compatibility with the stored shape; `kinds`
+          // carries the full selection.
+          kind: kinds[0],
+          kinds,
           note: note.trim() || undefined,
           photoUrl: photoUrl || undefined,
         }),
@@ -158,6 +171,7 @@ export default function FlagFoodSheet({
     setNote('')
     setFixing(false)
     setDraft(null)
+    setKinds(['calories'])
     clearPhoto()
     onClose()
   }
@@ -280,15 +294,18 @@ export default function FlagFoodSheet({
                   </button>
                 )}
 
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  What&rsquo;s off? Pick all that apply
+                </p>
                 <div className="mb-4 space-y-1.5">
                   {KINDS.map((k) => (
                     <button
                       key={k.id}
                       type="button"
-                      onClick={() => setKind(k.id)}
-                      aria-pressed={kind === k.id}
+                      onClick={() => toggleKind(k.id)}
+                      aria-pressed={kinds.includes(k.id)}
                       className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
-                        kind === k.id
+                        kinds.includes(k.id)
                           ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
                           : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'
                       }`}
