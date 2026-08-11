@@ -17,8 +17,18 @@ import {
   TrendingDown,
   Minus,
   TrendingUp,
+  HelpCircle,
+  AlertTriangle,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
+import {
+  explainCalories,
+  explainMacro,
+  proteinNeedsFlag,
+  MACRO_LABELS,
+  type MacroKey,
+} from '@/lib/nutrition/macroExplain'
 import { defaultIconForGoal } from '@/lib/reward/icons'
 import {
   computeNutritionTargets,
@@ -290,6 +300,7 @@ export default function OnboardingPage() {
       }),
     [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability, profile.activityLevel, profile.macroPreset]
   )
+
 
   // ── Auth check on mount ──────────────────────────────────────────────────
   useEffect(() => {
@@ -946,6 +957,56 @@ function Step3({
 
   const [useImperial, setUseImperial] = useState(true)
 
+  // Which figure the member tapped, if any.
+  const [explaining, setExplaining] = useState<MacroKey | 'calories' | null>(null)
+
+  const proteinFlagged = useMemo(
+    () =>
+      !!targets &&
+      proteinNeedsFlag(targets.protein, profile.currentWeightKg, targets.direction, goals),
+    [targets, profile.currentWeightKg, goals],
+  )
+
+  /** The sheet's contents, rebuilt from the SAME targets the card is showing. */
+  const explanation = useMemo(() => {
+    if (!explaining || !targets) return null
+    if (explaining === 'calories') {
+      const c = explainCalories(
+        {
+          currentWeightKg: profile.currentWeightKg,
+          heightCm: profile.heightCm,
+          age: profile.age,
+          biologicalSex: profile.biologicalSex,
+        },
+        targets.activityLevel,
+        targets.direction,
+      )
+      if (!c) return null
+      return {
+        title: 'Where your calories come from',
+        headline: `${c.calories.toLocaleString()} cal / day`,
+        steps: c.steps,
+        note: undefined,
+      }
+    }
+    const m = explainMacro({
+      macro: explaining,
+      grams: targets[explaining],
+      calories: targets.calories,
+      percent: targets.split[explaining],
+      weightKg: profile.currentWeightKg,
+      direction: targets.direction,
+      goals,
+      presetLabel: MACRO_PRESET_LABELS[profile.macroPreset ?? 'recommended'],
+    })
+    return {
+      title: `Where your ${MACRO_LABELS[explaining].toLowerCase()} comes from`,
+      headline: `${m.grams} g${m.perLb ? ` · ${m.perLb} g per lb` : ''}`,
+      steps: m.steps,
+      note: m.note,
+    }
+  }, [explaining, targets, profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, profile.macroPreset, goals])
+
   // Imperial display state
   const initialHeight = profile.heightCm ? cmToFtIn(profile.heightCm) : { ft: '', inches: '' }
   const [heightFt, setHeightFt] = useState<string>(initialHeight.ft !== '' ? String(initialHeight.ft) : '')
@@ -1348,28 +1409,72 @@ function Step3({
                 Your daily targets
               </p>
             </div>
-            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">
-              <span data-testid="preview-calories">{targets.calories.toLocaleString()}</span>
+            <button
+              type="button"
+              onClick={() => setExplaining('calories')}
+              className="mt-2 flex items-baseline gap-1.5 text-left"
+            >
+              <span className="text-2xl font-bold text-zinc-900 dark:text-white" data-testid="preview-calories">
+                {targets.calories.toLocaleString()}
+              </span>
               <span className="text-sm font-normal text-zinc-500"> cal / day</span>
-            </p>
+              <HelpCircle className="h-3.5 w-3.5 shrink-0 self-center text-zinc-400" />
+            </button>
+            {/* Every figure is tappable. A number you cannot interrogate reads as
+                a number somebody made up. */}
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
-                <p data-testid="preview-protein" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.protein}g</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
-              </div>
-              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
-                <p data-testid="preview-carbs" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.carbs}g</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
-              </div>
-              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
-                <p data-testid="preview-fats" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.fats}g</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
-              </div>
+              {([
+                ['protein', targets.protein, 'Protein'],
+                ['carbs', targets.carbs, 'Carbs'],
+                ['fats', targets.fats, 'Fats'],
+              ] as const).map(([key, grams, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setExplaining(key)}
+                  data-testid={`explain-${key}`}
+                  className={`rounded-lg py-2 transition-colors ${
+                    key === 'protein' && proteinFlagged
+                      ? 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-500/20 dark:hover:bg-amber-500/30'
+                      : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <p data-testid={`preview-${key}`} className="text-sm font-bold text-zinc-900 dark:text-white">
+                    {grams}g
+                  </p>
+                  <p className="flex items-center justify-center gap-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                    {label}
+                    <HelpCircle className="h-2.5 w-2.5 shrink-0" />
+                  </p>
+                </button>
+              ))}
             </div>
+            {proteinFlagged && (
+              <button
+                type="button"
+                onClick={() => setExplaining('protein')}
+                data-testid="protein-flag"
+                className="mt-2 flex w-full items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-left dark:border-amber-500/40 dark:bg-amber-500/10"
+              >
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-200">
+                  That protein number is outside the usual range for your bodyweight. It is not a
+                  mistake — tap to see how we got it.
+                </span>
+              </button>
+            )}
             <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               Your TDEE is about <span className="font-semibold text-zinc-700 dark:text-zinc-200">{targets.tdee.toLocaleString()} cal</span>.
-              We applied {DIRECTION_EXPLANATION[targets.direction]}.
+              We applied {DIRECTION_EXPLANATION[targets.direction]}. Tap any number to see how we got it.
             </p>
+            <MacroExplainSheet
+              isOpen={!!explanation}
+              title={explanation?.title ?? ''}
+              headline={explanation?.headline ?? ''}
+              steps={explanation?.steps ?? []}
+              note={explanation?.note}
+              onClose={() => setExplaining(null)}
+            />
           </motion.div>
         ) : (
           <div
