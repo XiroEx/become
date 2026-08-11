@@ -887,6 +887,23 @@ export default function LiveWorkoutPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workout, programId, saveWorkout]);
 
+  // Persist a quick session to the server the instant it begins, not only once
+  // the user types something, completes a set, or backgrounds the app. Without
+  // this, pressing "Start workout" and leaving immediately via in-app
+  // navigation (the exit button, a route change) never hit any of those save
+  // triggers — the session existed only as a local draft with no server
+  // record, so it never showed up as resumable anywhere (calendar, history)
+  // and the user had to rebuild it from scratch. One save per session id.
+  const quickSessionStartedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isQuick || !quickSessionId || !workout || loading) return;
+    if (quickSessionStartedRef.current === quickSessionId) return;
+    if (!readQuickSession(quickSessionId)) return; // no real draft — nothing to persist
+    quickSessionStartedRef.current = quickSessionId;
+    saveWorkout(exerciseData, false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isQuick, quickSessionId, workout, loading]);
+
   // Auto-save: update exerciseData on input change + debounced save
   const updateCurrentInput = useCallback((field: "reps" | "weight" | "speed", value: string) => {
     if (field === "reps") setCurrentReps(value);
