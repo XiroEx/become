@@ -8,10 +8,11 @@
 // that is deliberate: it unblocks them in seconds without letting one person's
 // misreading of a label change what everybody else sees.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, Check, X, Loader2, Pencil } from 'lucide-react'
+import { AlertTriangle, Check, X, Loader2, Pencil, Camera, Trash2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { resizeImageToBlob } from '@/lib/imageResize'
 
 type Kind = 'calories' | 'macros' | 'serving' | 'other'
 
@@ -59,6 +60,43 @@ export default function FlagFoodSheet({
   const [error, setError] = useState<string | null>(null)
   const [fixing, setFixing] = useState(false)
   const [draft, setDraft] = useState<LogCorrection | null>(null)
+  // The panel photo: the strongest evidence available, because the reporter is
+  // holding the package and a database can only ever report what someone typed.
+  // Server side it also overrides the recently-verified cooldown for that
+  // reason. Uploaded ahead of the report so the flag carries a durable URL
+  // rather than an object URL that dies with the tab.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  const pickPhoto = async (file: File | undefined) => {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const small = await resizeImageToBlob(file, { maxDim: 1024, quality: 0.6 })
+      const form = new FormData()
+      form.append('file', new File([small], 'label.jpg', { type: 'image/jpeg' }))
+      const token = getToken()
+      const res = await fetch('/api/nutrition/flags/image', {
+        method: 'POST',
+        headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+        body: form,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.imageUrl) {
+        setError(data?.error || 'Could not upload that photo.')
+        return
+      }
+      setPhotoUrl(data.imageUrl)
+      setPhotoPreview(URL.createObjectURL(small))
+    } catch {
+      setError('Could not read that photo.')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const startFixing = () => {
     setDraft(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 })
@@ -79,7 +117,11 @@ export default function FlagFoodSheet({
       const res = await fetch(`/api/nutrition/foods/${foodId}/flag`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
-        body: JSON.stringify({ kind, note: note.trim() || undefined }),
+        body: JSON.stringify({
+          kind,
+          note: note.trim() || undefined,
+          photoUrl: photoUrl || undefined,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -102,6 +144,8 @@ export default function FlagFoodSheet({
     setNote('')
     setFixing(false)
     setDraft(null)
+    setPhotoUrl(null)
+    setPhotoPreview(null)
     onClose()
   }
 
@@ -240,6 +284,53 @@ export default function FlagFoodSheet({
                     </button>
                   ))}
                 </div>
+
+                {/* Panel photo — the strongest evidence we can collect, since the
+                    reporter is holding the package. `capture` opens the camera
+                    directly on mobile; on desktop it falls back to a file pick. */}
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  data-testid="flag-photo-input"
+                  onChange={(e) => {
+                    void pickPhoto(e.target.files?.[0])
+                    // Reset so re-picking the SAME file still fires a change.
+                    e.target.value = ''
+                  }}
+                />
+                {photoPreview ? (
+                  <div className="mb-4 flex items-center gap-3 rounded-xl border border-zinc-200 p-2 dark:border-zinc-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={photoPreview} alt="Nutrition label" className="h-14 w-14 rounded-lg object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-zinc-900 dark:text-white">Label attached</p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        We&rsquo;ll read it against this food.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setPhotoUrl(null); setPhotoPreview(null) }}
+                      aria-label="Remove photo"
+                      className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={uploading}
+                    className="mb-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                    {uploading ? 'Uploading…' : 'Photograph the label'}
+                  </button>
+                )}
 
                 <label htmlFor="flag-note" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Anything else? (optional)
