@@ -155,7 +155,7 @@ export function calcTdee(stats: BodyStats, activityLevel: ActivityLevel): number
  * This is a floor, not the target: the split below sets the target as a share of
  * calories and this stops a large calorie number diluting protein away.
  */
-function proteinPerLb(direction: NutritionDirection, goals: FitnessGoal[]): number {
+export function proteinPerLb(direction: NutritionDirection, goals: FitnessGoal[]): number {
   const wantsMuscle = goals.includes('gain_muscle')
   if (direction === 'lose') return 1.0
   if (direction === 'gain') return 0.9
