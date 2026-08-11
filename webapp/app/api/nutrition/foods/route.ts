@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
 
     if (!q) {
       const foods = await Food.find(baseFilter)
-        .sort({ isFirstClass: -1, usageCount: -1 })
+        .sort({ isFirstClass: -1, usageCount: -1, _id: 1 })
         .skip(offset)
         .limit(limit)
         .lean<FoodLean[]>()
@@ -201,7 +201,7 @@ export async function GET(request: NextRequest) {
 
     const textFilter = { ...baseFilter, $text: { $search: q } }
     const textResults = await Food.find(textFilter, { score: { $meta: 'textScore' } })
-      .sort({ score: { $meta: 'textScore' }, isFirstClass: -1, usageCount: -1 })
+      .sort({ score: { $meta: 'textScore' }, isFirstClass: -1, usageCount: -1, _id: 1 })
       .limit(customLimit)
       .lean<FoodLean[]>()
 
@@ -214,7 +214,7 @@ export async function GET(request: NextRequest) {
       ],
     }
     const regexResults = await Food.find(regexFilter)
-      .sort({ isFirstClass: -1, usageCount: -1 })
+      .sort({ isFirstClass: -1, usageCount: -1, _id: 1 })
       .limit(customLimit)
       .lean<FoodLean[]>()
 
@@ -450,6 +450,19 @@ export async function GET(request: NextRequest) {
     const scored = combined.map(item => ({
       item,
       covered: coveredCount(item.name, item.brand),
+      // Hard tier, ABOVE relevance: a food we curated and verified outranks any
+      // mirrored USDA/OFF record, always. The old `src` rank expressed this
+      // intent but only as a tie-break on EXACT relevance equality, which a
+      // continuous score essentially never produces — so in practice an
+      // upstream record with a shorter name beat our own entry every time
+      // ("Chicken" over "Chicken Breast"). The -500 isFirstClass bonus had the
+      // same weakness: a bonus competes with relevance, a tier does not.
+      //
+      // Safe because the precision filter runs FIRST: when the query fully
+      // matches something, non-matching results are already gone, so this can
+      // only reorder genuine candidates. It never lifts an unrelated verified
+      // food above a precise brand match.
+      verified: item.isVerified === true ? 0 : 1,
       rel: relevanceScore(item.name, item.brand, item.dataType)
         - (item.isFirstClass ? 500 : 0)
         + groupServingPenalty(item),
@@ -478,10 +491,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Relevance-dominant ordering: full-coverage, simplest-name results first;
-    // source (saved → our DB → USDA → OFF) only breaks ties within the same
-    // relevance.
-    kept.sort((a, b) => (a.rel !== b.rel ? a.rel - b.rel : a.src - b.src))
+    // Verified first, then relevance-dominant ordering within each tier, with
+    // source (saved → our DB → USDA → OFF) breaking remaining ties.
+    //
+    // The last two keys exist because relevance does NOT separate a set of
+    // equally-shaped names: "Chicken Breast", "Chicken Thigh", "Chicken
+    // Nuggets" and "Fried Chicken" all cover the query "chicken" with the same
+    // word count, so they scored identically and the order came out ARBITRARY —
+    // literally a different chicken on top between two runs of the same query.
+    // Falling through to usage and then to the name makes it deterministic, and
+    // prefers the food people actually log over an incidental one.
+    kept.sort((a, b) =>
+      a.verified !== b.verified
+        ? a.verified - b.verified
+        : a.rel !== b.rel
+          ? a.rel - b.rel
+          : a.src !== b.src
+            ? a.src - b.src
+            : (b.item.usageCount ?? 0) !== (a.item.usageCount ?? 0)
+              ? (b.item.usageCount ?? 0) - (a.item.usageCount ?? 0)
+              : String(a.item.name ?? '').localeCompare(String(b.item.name ?? '')),
+    )
 
     const sortedFoods = kept.map(s => s.item)
     const paged = sortedFoods.slice(offset, offset + limit)
