@@ -37,6 +37,18 @@ export interface EvidenceItem {
   source: EvidenceSource
   url?: string
   values: EvidenceValues
+  /**
+   * For a user photo: does the product IDENTITY on the packaging match the
+   * record being verified? Undefined when we could not read a name off it.
+   *
+   * This is the difference between a claim and a source. A panel photo has no
+   * inherent link to the food it was attached to — someone can photograph a
+   * cereal box while reporting a tortilla, maliciously or by simple mistake,
+   * and the numbers on it will be perfectly self-consistent. Atwater cannot
+   * catch that; only reading the NAME off the package can.
+   */
+  identityMatch?: boolean
+  identityRead?: string
   /** Anything the source says about itself that the reviewer should weigh —
    *  notably OFF records that contradict their own kJ field. */
   caveat?: string
@@ -46,13 +58,58 @@ export interface EvidenceItem {
 export interface EvidenceBundle {
   barcode?: string
   items: EvidenceItem[]
-  /** True when at least one source is independent of the one we imported from.
-   *  Without this the "evidence" is just our own record echoed back. */
+  /**
+   * True when at least one source is independent of the one we imported from
+   * AND trustworthy enough to weigh. Without this the "evidence" is just our
+   * own record echoed back.
+   *
+   * A user photo only counts once its product identity is confirmed against
+   * the record. Unconfirmed, it is a strong PRIORITY signal — someone bothered
+   * to report and photograph — but it cannot by itself justify a catalogue
+   * write, because we cannot tell a mis-attached panel from a correct one.
+   */
   hasIndependentSource: boolean
 }
 
 const round = (n: number | undefined, dp = 2): number | undefined =>
   n == null || !isFinite(n) ? undefined : Math.round(n * 10 ** dp) / 10 ** dp
+
+/**
+ * Does a product name read off a photo plausibly refer to the record?
+ *
+ * Deliberately a token-overlap test rather than an exact match: labels carry
+ * marketing text ("Mission Original Zero Net Carbs Tortillas") that a record
+ * name ("Original Zero") never will. Requires a real content word in common,
+ * so "Cheerios" against "Original Zero" fails while a wordier variant of the
+ * same product passes.
+ *
+ * Returns undefined when nothing was read — unknown is NOT the same as
+ * mismatched, and it must not be treated as either a pass or a rejection.
+ */
+export function matchesRecord(
+  photoIdentity: string | undefined,
+  recordName: string | undefined,
+  recordBrand?: string,
+): boolean | undefined {
+  if (!photoIdentity || !photoIdentity.trim() || !recordName) return undefined
+
+  const STOP = new Set(['the', 'and', 'with', 'of', 'a', 'net', 'carbs', 'original', 'flavor', 'flavour'])
+  const tokens = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((t) => t.length > 2 && !STOP.has(t)),
+    )
+
+  const photo = tokens(photoIdentity)
+  const record = tokens(`${recordName} ${recordBrand ?? ''}`)
+  if (photo.size === 0 || record.size === 0) return undefined
+
+  for (const t of record) if (photo.has(t)) return true
+  return false
+}
 
 /** Atwater estimate — the free cross-check every source gets measured against. */
 export function atwater(v: EvidenceValues): number | undefined {
@@ -151,6 +208,11 @@ export interface GatherInput {
   /** Values a user read off the label, when they submitted a report. */
   userClaim?: EvidenceValues
   userPhotoUrl?: string
+  /** Product name read off the user's photo by the vision pass, if any. */
+  userPhotoIdentity?: string
+  /** The record's own name/brand, to check that identity against. */
+  recordName?: string
+  recordBrand?: string
 }
 
 /**
@@ -167,10 +229,13 @@ export async function gatherEvidence(input: GatherInput): Promise<EvidenceBundle
   ]
 
   if (input.userClaim) {
+    const identityMatch = matchesRecord(input.userPhotoIdentity, input.recordName, input.recordBrand)
     items.push({
       source: 'user-photo',
       url: input.userPhotoUrl,
       values: input.userClaim,
+      identityMatch,
+      identityRead: input.userPhotoIdentity,
       at: new Date().toISOString(),
     })
   }
@@ -184,9 +249,12 @@ export async function gatherEvidence(input: GatherInput): Promise<EvidenceBundle
     if (usda) items.push(usda)
   }
 
-  const hasIndependentSource = items.some(
-    (i) => i.source === 'usda' || i.source === 'user-photo' || i.source === 'openfoodfacts',
-  )
+  const hasIndependentSource = items.some((i) => {
+    if (i.source === 'usda' || i.source === 'openfoodfacts') return true
+    // A photo counts ONLY when we confirmed it is the same product.
+    if (i.source === 'user-photo') return i.identityMatch === true
+    return false
+  })
 
   return { barcode: input.barcode, items, hasIndependentSource }
 }
