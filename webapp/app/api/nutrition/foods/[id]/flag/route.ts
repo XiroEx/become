@@ -5,7 +5,7 @@ import dbConnect from '@/lib/mongodb'
 import Food from '@/models/Food'
 import FoodFlag from '@/models/FoodFlag'
 import User from '@/models/User'
-import { decideFlag, CLAIM_TTL_MS, type FlagContext } from '@/lib/nutrition/flagPolicy'
+import { decideFlag, ownFlagPhotoUrl, CLAIM_TTL_MS, type FlagContext } from '@/lib/nutrition/flagPolicy'
 
 // ---------------------------------------------------------------------------
 // POST /api/nutrition/foods/[id]/flag — "something doesn't look right".
@@ -62,6 +62,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const now = Date.now()
     const since = new Date(now - DAY_MS)
 
+    // Anything that is not our own upload, owned by this caller, is discarded
+    // rather than rejected: the report itself is still worth keeping.
+    const photoUrl = ownFlagPhotoUrl(body?.photoUrl, auth.userId!)
+
     const [alreadyFlaggedByUser, userFlagsToday, user] = await Promise.all([
       FoodFlag.exists({ foodId, userId }),
       FoodFlag.countDocuments({ userId, createdAt: { $gte: since } }),
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       claimedAt: food.verification?.claimedAt ? new Date(food.verification.claimedAt).getTime() : undefined,
       runId: food.verification?.runId,
       verifiedAt: food.verification?.verifiedAt ? new Date(food.verification.verifiedAt).getTime() : undefined,
-      hasPhoto: typeof body?.photoUrl === 'string' && body.photoUrl.length > 0,
+      hasPhoto: !!photoUrl,
     })
 
     if (decision.action === 'reject') {
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         userId,
         kind,
         note: typeof body?.note === 'string' ? body.note.slice(0, 1000) : undefined,
-        photoUrl: typeof body?.photoUrl === 'string' ? body.photoUrl : undefined,
+        photoUrl,
         claimedValues: body?.claimedValues,
         status: decision.action === 'attach' ? 'attached' : 'open',
         runId: decision.action === 'attach' ? decision.runId : undefined,

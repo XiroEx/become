@@ -34,6 +34,28 @@ export const REVERIFY_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000
  */
 export const CLAIM_TTL_MS = 15 * 60 * 1000
 
+/**
+ * Only a path this shape counts as a photo — exactly what our own upload route
+ * hands back, owned by the caller.
+ *
+ * Two things break if the submitted string is trusted as-is. `hasPhoto`
+ * overrides the re-verify cooldown, so any non-empty string would buy an
+ * unlimited supply of runs on already-verified foods: the one bypass this whole
+ * module exists to prevent. And the URL is later FETCHED to read the label, so
+ * an attacker-chosen one turns the verification agent into a request forwarder
+ * against whatever it can reach. Relative paths only — an absolute URL, however
+ * plausible its host, is rejected outright.
+ */
+const FLAG_PHOTO_PATH = /^\/api\/blob\/food-flags\/([a-f\d]{24})\/[\w.-]+\.(?:jpg|png|webp)$/
+
+export function ownFlagPhotoUrl(value: unknown, userId: string): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const match = FLAG_PHOTO_PATH.exec(value)
+  // The owner segment must be the caller: otherwise one account could cite
+  // another's upload, and the photo would no longer be evidence THEY hold.
+  return match && match[1] === userId ? value : undefined
+}
+
 export type FlagDecision =
   /** Record the flag and dispatch a verification run. */
   | { action: 'dispatch' }

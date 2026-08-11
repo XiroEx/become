@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   decideFlag,
+  ownFlagPhotoUrl,
   canClaim,
   isClaimLive,
   CLAIM_TTL_MS,
@@ -107,4 +108,37 @@ test('canClaim mirrors the atomic database guard', () => {
   assert.equal(canClaim({ now: NOW, foodState: 'running', claimedAt: NOW - CLAIM_TTL_MS - 1 }), true)
   // Queued with no claim stamp at all is reclaimable rather than wedged.
   assert.equal(canClaim({ now: NOW, foodState: 'queued' }), true)
+})
+
+test('a photo URL is only believed when it is ours AND the caller owns it', () => {
+  // hasPhoto overrides the re-verify cooldown, so a string the user picked would
+  // be an unlimited supply of runs against already-verified foods. And the URL
+  // is fetched later to read the label, so an attacker-chosen one aims our own
+  // agent at whatever it can reach.
+  const me = '6a7abb5db7e8c10e9da43d75'
+  const mine = `/api/blob/food-flags/${me}/abc123.jpg`
+
+  assert.equal(ownFlagPhotoUrl(mine, me), mine)
+
+  // Someone else's upload is not evidence THIS reporter holds.
+  assert.equal(ownFlagPhotoUrl(`/api/blob/food-flags/${'0'.repeat(24)}/abc.jpg`, me), undefined)
+
+  // Absolute URLs are refused outright, however plausible the host — this is
+  // the SSRF door.
+  assert.equal(ownFlagPhotoUrl(`https://become.redbtn.io${mine}`, me), undefined)
+  assert.equal(ownFlagPhotoUrl('http://10.100.0.1:9222/json', me), undefined)
+
+  // Escaping the prefix, by traversal or by another blob path.
+  assert.equal(ownFlagPhotoUrl(`/api/blob/food-flags/${me}/../../secret.jpg`, me), undefined)
+  assert.equal(ownFlagPhotoUrl('/api/blob/plate-scans/x.jpg', me), undefined)
+
+  // A non-empty string alone must not read as "has photo".
+  assert.equal(ownFlagPhotoUrl('yes', me), undefined)
+  assert.equal(ownFlagPhotoUrl('', me), undefined)
+  assert.equal(ownFlagPhotoUrl(undefined, me), undefined)
+  assert.equal(ownFlagPhotoUrl(12345, me), undefined)
+
+  // Only image extensions we actually store.
+  assert.equal(ownFlagPhotoUrl(`/api/blob/food-flags/${me}/x.svg`, me), undefined)
+  assert.equal(ownFlagPhotoUrl(`/api/blob/food-flags/${me}/x.webp`, me), `/api/blob/food-flags/${me}/x.webp`)
 })
