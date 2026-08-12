@@ -97,7 +97,7 @@ function NutritionPageInner() {
   const initialDate = useMemo(() => parseDateParam(searchParams?.get('date')), [searchParams])
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate)
   const [logs, setLogs] = useState<MealLogLite[]>([])
-  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 })
   const [water, setWater] = useState({ current: 0, goal: 96 })
   const [quickAdds, setQuickAdds] = useState<QuickAddRow[]>([])
   const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
@@ -276,15 +276,18 @@ function NutritionPageInner() {
           protein: Math.round(data.dailyTotals?.protein ?? 0),
           carbs: Math.round(data.dailyTotals?.carbs ?? 0),
           fats: Math.round(data.dailyTotals?.fats ?? 0),
+          // Already computed by the log API; it was simply never carried
+          // through to the UI.
+          fiber: Math.round(data.dailyTotals?.fiber ?? 0),
         })
       } else {
         setLogs([])
-        setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+        setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 })
       }
     } catch (err) {
       console.error('Failed to fetch meal logs:', err)
       setLogs([])
-      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 })
     }
   }, [dateParam, getHeaders])
 
@@ -737,16 +740,20 @@ function NutritionPageInner() {
   // Planned totals for the visible date — only meaningful when viewingFuture
   // (when not, plans is empty / filtered upstream).
   const plannedTotals = useMemo(() => {
-    if (!viewingFuture) return { calories: 0, protein: 0, carbs: 0, fats: 0 }
-    let c = 0, p = 0, cb = 0, f = 0
+    if (!viewingFuture) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+    let c = 0, p = 0, cb = 0, f = 0, fib = 0
     for (const plan of plans) {
       const n = plan.expectedNutrition
       c += n?.calories ?? 0
       p += n?.protein ?? 0
       cb += n?.carbs ?? 0
       f += n?.fats ?? 0
+      fib += (n as { fiber?: number } | undefined)?.fiber ?? 0
     }
-    return { calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb), fats: Math.round(f) }
+    return {
+      calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb),
+      fats: Math.round(f), fiber: Math.round(fib),
+    }
   }, [viewingFuture, plans])
 
   // The CalorieRing shows MealLog daily totals + quick-add calories on today/
@@ -958,6 +965,7 @@ function NutritionPageInner() {
           goal={goals.calories}
           protein={{ current: totalProtein, goal: goals.protein }}
           carbs={{ current: totalCarbs, goal: goals.carbs }}
+          fiber={viewingFuture ? plannedTotals.fiber : dailyTotals.fiber}
           fats={{ current: totalFats, goal: goals.fats }}
         />
 
