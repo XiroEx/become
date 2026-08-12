@@ -69,6 +69,7 @@ export interface RunBecomeOptions {
 }
 
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
+import { parseModelJson } from '@/lib/nutrition/parseModelJson'
 
 /** True when the deployment is configured to reach the graph at all. */
 export async function becomeAiConfigured(): Promise<boolean> {
@@ -210,6 +211,23 @@ export async function runStructuredTask<T>(
 ): Promise<T | null> {
   const res = await runBecomeTask(task, context, opts)
   if (!res.ok || res.result == null || typeof res.result !== 'object') return null
+
+  // Salvage: the graph node parses the model's reply, and when that fails it
+  // hands back { ok:false, error:'unparseable_model_output', raw }. A stray
+  // character after otherwise-valid JSON used to end a whole verification run
+  // that way, so try once more here rather than throwing the answer away.
+  // Belt and braces on purpose: the node config lives outside this repo and can
+  // be older than the code calling it.
+  const asError = res.result as { ok?: boolean; error?: string; raw?: string }
+  if (asError.ok === false && typeof asError.raw === 'string') {
+    const salvaged = parseModelJson<T>(asError.raw)
+    if (salvaged.ok) {
+      console.warn(`runStructuredTask(${task}): recovered a result the graph node could not parse`)
+      return salvaged.value as T
+    }
+    return null
+  }
+
   return res.result as T
 }
 
