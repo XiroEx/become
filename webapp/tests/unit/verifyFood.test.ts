@@ -8,7 +8,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canWrite, storedPer100, flagStatusFor, WRITE_CONFIDENCE_FLOOR } from '../../lib/nutrition/verifyFood'
+import { canWrite, storedPer100, flagStatusFor, gramsFromServingText, WRITE_CONFIDENCE_FLOOR } from '../../lib/nutrition/verifyFood'
 import type { EvidenceBundle } from '../../lib/nutrition/evidence'
 
 const bundle = (hasIndependentSource: boolean): EvidenceBundle => ({
@@ -128,4 +128,24 @@ test('a refused correction is never reported back as corrected', () => {
   // conflicted has no status of its own; nothing changed, so it reads as
   // insufficient and the reasoning string carries the distinction.
   assert.equal(flagStatusFor('conflicted', false), 'insufficient')
+})
+
+test('grams are recovered from the serving text the vision runner writes', () => {
+  // The vision node pins the plate-scan schema, so the serving arrives as prose
+  // rather than as servingSize + servingUnit. Reading only `matches` and
+  // structured fields silently discarded a perfectly good read of a real label.
+  assert.equal(gramsFromServingText('3 tortillas (54g)'), 54)
+  assert.equal(gramsFromServingText('1 tortilla (18 g)'), 18)
+  assert.equal(gramsFromServingText('1 cup (240ml)'), 240)
+  assert.equal(gramsFromServingText('54g'), 54)
+
+  // Parenthesised weight wins over a count that happens to precede it.
+  assert.equal(gramsFromServingText('2 bars (40g each)'), 40)
+
+  // Nothing convertible: better to have no photo basis than a wrong one.
+  assert.equal(gramsFromServingText('1 tortilla'), undefined)
+  assert.equal(gramsFromServingText('a handful'), undefined)
+  assert.equal(gramsFromServingText(''), undefined)
+  assert.equal(gramsFromServingText(undefined), undefined)
+  assert.equal(gramsFromServingText('0 g'), undefined)
 })
