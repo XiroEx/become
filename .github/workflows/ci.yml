@@ -1,0 +1,79 @@
+name: CI
+
+# Until now nothing ran the tests except a person remembering to. That is how
+# three assertions sat broken for a day, and how the "Upcoming Workouts" bug
+# would have come back the moment the scanner stopped being run by hand.
+#
+# This does NOT gate the deploy — RedRun builds on merge to main and does not
+# consult GitHub. It tells you a merge broke something; it cannot stop it. To
+# actually block a bad merge, turn on a branch protection rule requiring this
+# check on `main` and `beta`.
+
+on:
+  push:
+    branches: [main, beta]
+  pull_request:
+    branches: [main, beta]
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: webapp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      # `@redbtn/*` lives on a private Verdaccio and anonymous reads 401, so the
+      # install cannot start without this. Written to the home directory rather
+      # than the repo so it can never be committed by accident.
+      - name: Authenticate to the private registry
+        env:
+          NPMRC: ${{ secrets.BECOME_NPMRC }}
+        run: |
+          if [ -z "$NPMRC" ]; then
+            echo "::error::BECOME_NPMRC secret is missing — npm ci cannot fetch @redbtn/* packages"
+            exit 1
+          fi
+          printf '%s\n' "$NPMRC" > "$HOME/.npmrc"
+          chmod 600 "$HOME/.npmrc"
+
+      - run: npm ci
+
+      # The webapp's tsconfig reaches into ../shared/api-client, which is its own
+      # package with its own lockfile. Locally that typechecks only because those
+      # modules already sit on the machine; a clean checkout has nothing there and
+      # every import of `zod` fails. This is the first thing CI caught.
+      - name: Install shared/api-client deps
+        working-directory: shared/api-client
+        run: npm ci
+
+      # Typecheck and tests are reported separately so a failure names itself.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      # Runs last: it is the slowest and the least likely to be the thing you
+      # broke, so failing fast on the two above gets you a useful answer sooner.
+      - name: Production build
+        run: npm run build
+        env:
+          # The build must not need real secrets. If this ever starts failing
+          # for want of a credential, that is a finding about the build, not a
+          # reason to put production values here.
+          NEXT_TELEMETRY_DISABLED: '1'
