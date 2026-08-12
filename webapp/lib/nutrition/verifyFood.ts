@@ -80,6 +80,9 @@ export interface ReviewVerdict {
     carbsPer100?: number
     fatsPer100?: number
     fiberPer100?: number
+    sugarPer100?: number
+    sodiumPer100?: number
+    saturatedFatPer100?: number
     servingGrams?: number
     servingLabel?: string
   } | null
@@ -106,7 +109,12 @@ interface LabelCandidate {
   servingUnit?: string
   /** Plate-scan shape states the serving in prose, e.g. "3 tortillas (54g)". */
   estimatedServing?: string
-  nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number; fiber?: number }
+  nutrition?: {
+    calories?: number; protein?: number; carbs?: number; fats?: number
+    fiber?: number; sugar?: number; sodium?: number; saturatedFat?: number
+  }
+  /** "About 4.5 servings per container" — package size is an identity check. */
+  servingsPerContainer?: number
 }
 
 interface FoodLike {
@@ -119,7 +127,10 @@ interface FoodLike {
     servingSize?: number
     gramsPerServing?: number
     displayLabel?: string
-    nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number; fiber?: number }
+    nutrition?: {
+      calories?: number; protein?: number; carbs?: number; fats?: number
+      fiber?: number; sugar?: number; sodium?: number; saturatedFat?: number
+    }
   }[]
 }
 
@@ -142,6 +153,9 @@ export function storedPer100(food: FoodLike): EvidenceValues | null {
     // Carried so the reviewer's Atwater check uses NET carbs. Without it a
     // high-fiber food reads as internally inconsistent when it is fine.
     fiberPer100: round(n.fiber),
+    sugarPer100: round(n.sugar),
+    sodiumPer100: round(n.sodium),
+    saturatedFatPer100: round(n.saturatedFat),
     servingGrams: grams,
     servingLabel: v.displayLabel,
   }
@@ -265,8 +279,16 @@ async function readLabelPhoto(photoUrl: string): Promise<LabelRead | null> {
         carbsPer100: r(m.nutrition.carbs),
         fatsPer100: r(m.nutrition.fats),
         fiberPer100: r(m.nutrition.fiber),
+        sugarPer100: r(m.nutrition.sugar),
+        sodiumPer100: r(m.nutrition.sodium),
+        saturatedFatPer100: r(m.nutrition.saturatedFat),
         servingGrams: grams,
         servingLabel: m.estimatedServing,
+        servingsPerContainer: m.servingsPerContainer,
+        packageGrams:
+          m.servingsPerContainer && m.servingsPerContainer > 0
+            ? Math.round(grams * m.servingsPerContainer)
+            : undefined,
       },
     }
   } catch (err) {
@@ -479,6 +501,9 @@ async function applyCorrection(
   // basis — 7g of fiber sitting next to macros for a serving three times the
   // size, which then breaks the very Atwater check that found the error.
   put('fiber', c.fiberPer100)
+  put('sugar', c.sugarPer100)
+  put('sodium', c.sodiumPer100)
+  put('saturatedFat', c.saturatedFatPer100)
   if (Object.keys(set).length === 0) return false
 
   // A basis correction is meaningless unless the serving itself moves too.
