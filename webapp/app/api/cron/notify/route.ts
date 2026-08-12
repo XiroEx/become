@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
   if (schedulesWithRecent.length > 0) {
     const userIds = schedulesWithRecent.map((s) => s.userId)
     const progressDocs = await UserProgress.find({ userId: { $in: userIds } })
-      .select('userId notificationPrefs lastPushSentAt timezoneOffset activePrograms')
+      .select('userId notificationPrefs lastPushSentAt timezoneOffset timezone activePrograms')
       .lean()
 
     const progressByUserId = new Map(
@@ -235,13 +235,13 @@ export async function GET(request: NextRequest) {
 
       // Skip when we don't know the user's timezone — otherwise the UTC
       // fallback fires reminders in the small hours of their local day.
-      const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
       if (userLocalHour === null) continue
       if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) continue
 
-      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
       const lastSent = progress?.lastPushSentAt?.workoutReminder
-      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) {
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) {
         continue
       }
 
@@ -312,17 +312,17 @@ export async function GET(request: NextRequest) {
     if (activeLoggers.length > 0) {
       const loggerIds = activeLoggers.map((u) => u._id)
       const loggerProgress = await UserProgress.find({ userId: { $in: loggerIds } })
-        .select('userId notificationPrefs lastPushSentAt timezoneOffset')
+        .select('userId notificationPrefs lastPushSentAt timezoneOffset timezone')
         .lean()
       for (const progress of loggerProgress) {
         if (progress?.notificationPrefs?.mealReminder === false) continue
-        const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+        const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
         if (userLocalHour === null) continue
         if (userLocalHour < 17 || userLocalHour > 20) continue
 
-        const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+        const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
         const lastSent = progress?.lastPushSentAt?.mealReminder
-        if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) continue
+        if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
 
         // Anything logged in the user's local today? Local midnight in UTC =
         // dateKey 00:00Z + tz offset minutes.
@@ -365,18 +365,18 @@ export async function GET(request: NextRequest) {
     const mindCandidates = await UserProgress.find({
       'notificationPrefs.mindReminder': { $ne: false },
       timezoneOffset: { $exists: true },
-    }).select('userId timezoneOffset lastPushSentAt').lean()
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
 
     for (const progress of mindCandidates) {
-      const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
       if (userLocalHour === null) continue
       if (userLocalHour < MIND_REMINDER_START_HOUR || userLocalHour > MIND_REMINDER_END_HOUR) continue
 
-      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
 
       // One per local day.
       const lastSent = progress?.lastPushSentAt?.mindReminder
-      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) continue
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
 
       // The workout reminder no longer suppresses this one. It used to, to avoid
       // stacking two pushes in one morning — but training days are most days,
@@ -437,7 +437,7 @@ export async function GET(request: NextRequest) {
         results.activeProgramsWithoutSchedule++
 
         if (progress?.notificationPrefs?.workoutReminder === false) continue
-        const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+        const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
         if (userLocalHour === null) continue
         if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) continue
 

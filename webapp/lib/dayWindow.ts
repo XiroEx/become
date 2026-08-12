@@ -40,6 +40,17 @@ export function readTzOffsetFromBody(body: unknown): number {
  * reported UTC user still sends `tz: 0`, which is a real number and preserved.
  * Clamped to ±14h.
  */
+/**
+ * The caller's IANA zone, when they sent one. Unvalidated here on purpose —
+ * captureUserTimezone rejects anything Intl cannot parse, so validation lives
+ * at the write rather than being duplicated at every read.
+ */
+export function readZoneFromBody(body: unknown): string | undefined {
+  const z = (body as { tzZone?: unknown; timezone?: unknown })?.tzZone
+    ?? (body as { timezone?: unknown })?.timezone
+  return typeof z === 'string' && z.length > 0 && z.length <= 64 ? z : undefined
+}
+
 export function readOptionalTzOffsetFromBody(body: unknown): number | null {
   if (!body || typeof body !== 'object') return null
   const raw = (body as Record<string, unknown>).tz

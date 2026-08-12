@@ -3,7 +3,40 @@
  * `tzOffsetMinutes` matches Date.getTimezoneOffset(): positive when local is
  * BEHIND UTC (e.g. 300 for EST). Returns null when the offset is unknown.
  */
-export function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number | null {
+/**
+ * Local hour/day from an IANA zone when we have one.
+ *
+ * A stored offset is a snapshot. It is wrong for half the year the moment
+ * daylight saving moves, and only self-corrects when the member opens the app —
+ * so the members most likely to drift are the quiet ones we most want to nudge
+ * at a sane hour. A zone name never goes stale.
+ */
+function partsInZone(now: Date, zone: string): { hour: number; dateKey: string } | null {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', hour12: false,
+    })
+    const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value]))
+    const hour = Number(parts.hour)
+    if (!Number.isFinite(hour)) return null
+    // en-CA yields ISO-ordered date parts, so this is already YYYY-MM-DD.
+    return { hour: hour % 24, dateKey: `${parts.year}-${parts.month}-${parts.day}` }
+  } catch {
+    return null
+  }
+}
+
+export function localHourForUser(
+  now: Date,
+  tzOffsetMinutes: number | undefined,
+  zone?: string,
+): number | null {
+  if (zone) {
+    const p = partsInZone(now, zone)
+    if (p) return p.hour
+  }
   if (!Number.isFinite(tzOffsetMinutes as number)) return null
   const offset = tzOffsetMinutes as number
   const utcMs = now.getTime()
@@ -36,7 +69,15 @@ export function slotDateKey(date: Date | string): string {
 }
 
 /** Local-date key (YYYY-MM-DD) for a user given their stored offset. */
-export function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): string {
+export function localDateKeyForUser(
+  now: Date,
+  tzOffsetMinutes: number | undefined,
+  zone?: string,
+): string {
+  if (zone) {
+    const p = partsInZone(now, zone)
+    if (p) return p.dateKey
+  }
   const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
   const localMs = now.getTime() - offset * 60 * 1000
   return new Date(localMs).toISOString().slice(0, 10)

@@ -39,6 +39,25 @@ export interface IMindProgress extends Document {
   /** When the last MAIN session was completed — enforces the 20h cooldown so a
    *  main session (and its chapter progress) can only happen once every 20h. */
   lastMainSessionAt?: Date
+  /**
+   * The session that was composed and not yet finished.
+   *
+   * A session used to be rolled fresh on every Begin, so walking away and coming
+   * back handed you a DIFFERENT session — you could not lose your place because
+   * there was no place to lose. It stays now until it is completed, the local
+   * day rolls over, or the member logs something that changes the picture the
+   * session was built from.
+   */
+  activeSession?: {
+    dateKey: string
+    seed: number
+    plan: unknown
+    generatedAt: Date
+    /** Logged-activity watermarks at composition time. A newer workout or meal
+     *  than these means the session was built on stale context. */
+    lastWorkoutAt?: Date | null
+    lastMealAt?: Date | null
+  }
   /** Tools whose one-time onboarding intro the user has completed. A tool can be
    *  UNLOCKED (chapter) but not yet INTRODUCED — the intro flow runs on first
    *  open. Legacy docs (field absent) are grandfathered to their unlocked set. */
@@ -92,6 +111,17 @@ const MindProgressSchema = new Schema<IMindProgress>(
     mainSessionCount: { type: Number, default: 0, min: 0 },
     xpSeeded: { type: Boolean },
     lastMainSessionAt: { type: Date },
+    activeSession: {
+      type: new Schema({
+        dateKey: { type: String, required: true },
+        seed: { type: Number, required: true },
+        plan: { type: Schema.Types.Mixed, required: true },
+        generatedAt: { type: Date, required: true },
+        lastWorkoutAt: { type: Date, default: null },
+        lastMealAt: { type: Date, default: null },
+      }, { _id: false }),
+      default: undefined,
+    },
     introducedSystems: { type: [String], default: undefined },
     lastGrowthAt: { type: Date },
     vision: { type: VisionSchema },
