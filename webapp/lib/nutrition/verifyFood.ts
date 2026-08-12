@@ -55,6 +55,9 @@ export interface SearchSource {
   fatsPer100?: number
   variantMatch?: 'exact' | 'uncertain' | 'different'
   nameMatchesRecord?: boolean
+  /** How the searcher pinned this page to the product: by the scanned UPC, or
+   *  by name. Barcode-resolved identity is not in question; a name match is. */
+  foundVia?: 'barcode' | 'name'
   confidence?: number
 }
 
@@ -76,6 +79,7 @@ export interface ReviewVerdict {
     proteinPer100?: number
     carbsPer100?: number
     fatsPer100?: number
+    fiberPer100?: number
     servingGrams?: number
     servingLabel?: string
   } | null
@@ -324,9 +328,12 @@ export async function verifyFood(
     const search = await runStructuredTask<SearchResult>(
       'nutritionFoodEvidence',
       {
+        // Barcode first: it is the only identifier that cannot be confused
+        // between product lines, and the searcher is told to resolve it before
+        // it reaches for the name.
+        barcode: food.barcode,
         name: food.name,
         brand: food.brand,
-        barcode: food.barcode,
         storedPer100: stored,
         storedServing: stored.servingLabel,
       },
@@ -340,6 +347,7 @@ export async function verifyFood(
         record: { name: food.name, brand: food.brand, storedPer100: stored },
         sources: bundle.items.map((i) => ({
           source: i.source,
+          matchedBy: i.matchedBy,
           ...i.values,
           identityMatch: i.identityMatch,
           identityRead: i.identityRead,
@@ -466,7 +474,18 @@ async function applyCorrection(
   put('protein', c.proteinPer100)
   put('carbs', c.carbsPer100)
   put('fats', c.fatsPer100)
+  // Fiber moves with the rest. When a correction changes the SERVING BASIS,
+  // every macro is rescaled and leaving fiber behind strands it on the old
+  // basis — 7g of fiber sitting next to macros for a serving three times the
+  // size, which then breaks the very Atwater check that found the error.
+  put('fiber', c.fiberPer100)
   if (Object.keys(set).length === 0) return false
+
+  // A basis correction is meaningless unless the serving itself moves too.
+  if (c.servingGrams && c.servingGrams > 0) {
+    set[`variants.${idx}.gramsPerServing`] = c.servingGrams
+  }
+  if (c.servingLabel) set[`variants.${idx}.displayLabel`] = c.servingLabel
 
   set['verification.tier'] = 'corroborated'
   await Food.updateOne({ _id: foodId }, { $set: set })
