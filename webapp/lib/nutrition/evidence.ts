@@ -39,9 +39,26 @@ export interface EvidenceValues {
    * a correct Mission tortilla record broken on 2026-08-11.
    */
   fiberPer100?: number
+  /**
+   * The rest of the panel. A label is a single coherent object, and the parts
+   * we ignore are the parts that catch the errors the macros hide: sodium and
+   * saturated fat scale with the serving basis exactly like everything else, so
+   * a source that agrees on protein but is 3x out on sodium is describing a
+   * different serving, not a different opinion about protein.
+   */
+  sugarPer100?: number
+  sodiumPer100?: number
+  saturatedFatPer100?: number
   /** The serving the source describes, when it states one. */
   servingGrams?: number
   servingLabel?: string
+  /**
+   * Identity signals beyond the name. Servings per container multiplied by the
+   * serving weight gives the package size, which is a strong and independent
+   * check that two sources describe the same physical product.
+   */
+  servingsPerContainer?: number
+  packageGrams?: number
 }
 
 export interface EvidenceItem {
@@ -216,6 +233,9 @@ async function fromOpenFoodFacts(barcode: string): Promise<EvidenceItem | null> 
       fat_100g: Number(n['fat_100g']) || undefined,
       fiber_100g: Number(n['fiber_100g']) || undefined,
       alcohol_100g: Number(n['alcohol_100g']) || undefined,
+      sugars_100g: Number(n['sugars_100g']) || undefined,
+      sodium_100g: Number(n['sodium_100g']) || undefined,
+      saturated_fat_100g: Number(n['saturated-fat_100g'] ?? n['saturated_fat_100g']) || undefined,
     }
     const conflict = detectOffEnergyConflict(shaped)
 
@@ -229,6 +249,9 @@ async function fromOpenFoodFacts(barcode: string): Promise<EvidenceItem | null> 
         carbsPer100: round(shaped.carbohydrates_100g),
         fatsPer100: round(shaped.fat_100g),
         fiberPer100: round(shaped.fiber_100g),
+        sugarPer100: round(shaped.sugars_100g),
+        sodiumPer100: round(shaped.sodium_100g, 3),
+        saturatedFatPer100: round(shaped.saturated_fat_100g),
         servingGrams: round(data.product?.serving_quantity),
         servingLabel: data.product?.serving_size,
       },
@@ -264,6 +287,10 @@ async function fromUSDA(barcode: string): Promise<EvidenceItem | null> {
         carbsPer100: round((hit.nutrition?.carbs ?? 0) * scale),
         fatsPer100: round((hit.nutrition?.fats ?? 0) * scale),
         fiberPer100: hit.nutrition?.fiber != null ? round(hit.nutrition.fiber * scale) : undefined,
+        sugarPer100: hit.nutrition?.sugar != null ? round(hit.nutrition.sugar * scale) : undefined,
+        sodiumPer100: hit.nutrition?.sodium != null ? round(hit.nutrition.sodium * scale, 3) : undefined,
+        saturatedFatPer100:
+          hit.nutrition?.saturatedFat != null ? round(hit.nutrition.saturatedFat * scale) : undefined,
         servingGrams: round(hit.gramsPerServing ?? undefined),
         servingLabel: hit.displayLabel,
       },
