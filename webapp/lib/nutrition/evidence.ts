@@ -28,6 +28,17 @@ export interface EvidenceValues {
   proteinPer100?: number
   carbsPer100?: number
   fatsPer100?: number
+  /**
+   * Fiber per 100. Carried because Atwater is wrong without it.
+   *
+   * Total carbs at 4 cal/g double-counts fiber, which the body largely does not
+   * absorb. On an ordinary food the error is small; on a "zero net carb"
+   * product, where fiber IS the carbohydrate, the estimate comes out roughly
+   * double the true figure and a perfectly correct record reads as internally
+   * inconsistent. That is not hypothetical: it is what made the reviewer call
+   * a correct Mission tortilla record broken on 2026-08-11.
+   */
+  fiberPer100?: number
   /** The serving the source describes, when it states one. */
   servingGrams?: number
   servingLabel?: string
@@ -111,13 +122,35 @@ export function matchesRecord(
   return false
 }
 
-/** Atwater estimate — the free cross-check every source gets measured against. */
+/**
+ * Atwater estimate — the free cross-check every source gets measured against.
+ *
+ * Uses NET carbs when fiber is known. Fiber is counted in total carbohydrate on
+ * a label but contributes little or no energy, so charging it 4 cal/g inflates
+ * the estimate. On most foods that is noise. On a high-fiber product it is the
+ * difference between "this record is fine" and "this record is twice what it
+ * should be" — see fiberPer100 above.
+ *
+ * Fiber is valued at 0, matching how these products compute net carbs. The FDA
+ * permits 2 cal/g for soluble fiber, so on a very high-fiber food the true
+ * figure sits between this estimate and this estimate plus 2x fiber. The
+ * reviewer is told to treat it as a band rather than a point.
+ */
 export function atwater(v: EvidenceValues): number | undefined {
   const p = v.proteinPer100
   const c = v.carbsPer100
   const f = v.fatsPer100
   if (p == null && c == null && f == null) return undefined
-  return round(4 * (p ?? 0) + 4 * (c ?? 0) + 9 * (f ?? 0), 1)
+  // Never let a bad fiber figure push carbs negative.
+  const netCarbs = Math.max(0, (c ?? 0) - (v.fiberPer100 ?? 0))
+  return round(4 * (p ?? 0) + 4 * netCarbs + 9 * (f ?? 0), 1)
+}
+
+/** The upper end of the band: fiber charged at the FDA's 2 cal/g for soluble. */
+export function atwaterUpper(v: EvidenceValues): number | undefined {
+  const base = atwater(v)
+  if (base == null) return undefined
+  return round(base + 2 * (v.fiberPer100 ?? 0), 1)
 }
 
 async function fromOpenFoodFacts(barcode: string): Promise<EvidenceItem | null> {
@@ -157,6 +190,7 @@ async function fromOpenFoodFacts(barcode: string): Promise<EvidenceItem | null> 
         proteinPer100: round(shaped.proteins_100g),
         carbsPer100: round(shaped.carbohydrates_100g),
         fatsPer100: round(shaped.fat_100g),
+        fiberPer100: round(shaped.fiber_100g),
         servingGrams: round(data.product?.serving_quantity),
         servingLabel: data.product?.serving_size,
       },
@@ -190,6 +224,7 @@ async function fromUSDA(barcode: string): Promise<EvidenceItem | null> {
         proteinPer100: round((hit.nutrition?.protein ?? 0) * scale),
         carbsPer100: round((hit.nutrition?.carbs ?? 0) * scale),
         fatsPer100: round((hit.nutrition?.fats ?? 0) * scale),
+        fiberPer100: hit.nutrition?.fiber != null ? round(hit.nutrition.fiber * scale) : undefined,
         servingGrams: round(hit.gramsPerServing ?? undefined),
         servingLabel: hit.displayLabel,
       },

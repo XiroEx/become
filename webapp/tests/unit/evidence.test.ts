@@ -7,7 +7,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { atwater, matchesRecord, type EvidenceValues } from '../../lib/nutrition/evidence'
+import { atwater, atwaterUpper, matchesRecord, type EvidenceValues } from '../../lib/nutrition/evidence'
 
 test('atwater is the free cross-check on any source', () => {
   assert.equal(atwater({ proteinPer100: 10, carbsPer100: 20, fatsPer100: 5 }), 165)
@@ -77,4 +77,42 @@ test('a user photo is a claim, not a source, until its identity is confirmed', (
   assert.equal(matchesRecord('   ', 'Original Zero'), undefined)
   // Generic filler alone must not carry a match.
   assert.equal(matchesRecord('Original', 'Original Zero'), undefined)
+})
+
+test('Atwater uses NET carbs — the fiber trap that broke a real review', () => {
+  // Mission "Original Zero" as stored, per 100g. Fiber IS the carbohydrate.
+  const tortilla: EvidenceValues = {
+    caloriesPer100: 138.9, proteinPer100: 11.11, carbsPer100: 38.89,
+    fatsPer100: 8.33, fiberPer100: 38.89,
+  }
+
+  // Charging total carbs at 4 cal/g doubles the estimate and makes a correct
+  // record look broken. That is exactly what the reviewer did on 2026-08-11.
+  const naive = 4 * 11.11 + 4 * 38.89 + 9 * 8.33
+  assert.ok(naive > 270, 'the naive figure really is about double')
+
+  // Net carbs put it next to the stated value.
+  const est = atwater(tortilla)!
+  assert.ok(est < 130, `net-carb estimate ${est} should be near the stated 139`)
+  assert.ok(Math.abs(est - 138.9) < 25, 'inside a sane tolerance of the label')
+
+  // The band: fiber at 0 (low) through fiber at 2 cal/g (high). The stated
+  // calories must fall inside it, which is what "coherent" means here.
+  const upper = atwaterUpper(tortilla)!
+  assert.ok(upper > est, 'upper end charges fiber')
+  assert.ok(tortilla.caloriesPer100! >= est && tortilla.caloriesPer100! <= upper,
+    `139 should sit inside [${est}, ${upper}]`)
+})
+
+test('a food with no fiber is unaffected by the change', () => {
+  // Guard against the fix quietly moving every other food.
+  assert.equal(atwater({ proteinPer100: 10, carbsPer100: 20, fatsPer100: 5 }), 165)
+  assert.equal(atwaterUpper({ proteinPer100: 10, carbsPer100: 20, fatsPer100: 5 }), 165)
+})
+
+test('a nonsense fiber figure cannot push carbs negative', () => {
+  // Bad imports exist; fiber > carbs must not manufacture negative calories.
+  const out = atwater({ proteinPer100: 10, carbsPer100: 5, fatsPer100: 0, fiberPer100: 40 })!
+  assert.equal(out, 40) // protein only, carbs floored at 0
+  assert.ok(out >= 0)
 })
