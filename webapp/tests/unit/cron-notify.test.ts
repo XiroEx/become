@@ -68,8 +68,10 @@ const CRON_ROUTE = readFileSync(
   'utf8',
 )
 
-test('the mind reminder fires in the local morning', () => {
-  assert.equal(MIND_REMINDER_START_HOUR, 7)
+test('the mind reminder fires in the local morning, staggered after the workout one', () => {
+  // 8, not 7: the workout push owns 7am. They are separate reminders now (see
+  // below), so they need separate hours or they arrive stacked in one minute.
+  assert.equal(MIND_REMINDER_START_HOUR, 8)
   assert.equal(MIND_REMINDER_END_HOUR, 11)
 })
 
@@ -87,9 +89,20 @@ test('the mind reminder skips users who already did today', () => {
   assert.match(CRON_ROUTE, /MindSession\.exists\(\{ userId: progress\.userId, dateKey: userLocalDateKey \}\)/)
 })
 
-test('at most one morning push: the workout reminder suppresses the mind one', () => {
-  assert.match(CRON_ROUTE, /lastPushSentAt\?\.workoutReminder/)
-  assert.match(CRON_ROUTE, /One morning push total/)
+test('the workout reminder no longer suppresses the mind one', () => {
+  // This test used to assert the OPPOSITE, and the old behaviour was the bug:
+  // the mind nudge was skipped on any day a workout reminder went out, and
+  // training days are most days, so members effectively never received it. A
+  // member asked for mindset notifications and this was why they had none.
+  // Staggering the windows (7am / 8am) solves the stacking that suppression was
+  // there to prevent. Do not restore it.
+  const mindBlock = CRON_ROUTE.slice(CRON_ROUTE.indexOf('2.6 Daily Mind session'))
+  assert.doesNotMatch(mindBlock, /One morning push total/)
+  assert.doesNotMatch(
+    mindBlock.slice(0, mindBlock.indexOf('deliver(')),
+    /if \(lastWorkout &&/,
+    'the mind block must not skip on a same-day workout push',
+  )
 })
 
 test('an in-progress program with no schedule is counted, not silently ignored', () => {

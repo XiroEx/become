@@ -111,8 +111,19 @@ describe('stale targets are brought up to date on read', () => {
   })
 
   it('a row from an older version is recomputed', () => {
-    assert.match(GOALS, /if \(\(goals\.calcVersion as number \| undefined\) === MACRO_CALC_VERSION\) return null/)
+    // The version check is now gated on `!broken`. A row whose calories and
+    // macros contradict each other is repaired on read EVEN at the current
+    // version — the stamp records which formula produced a row, not whether
+    // that row adds up. A real member's row read 2,214 cal against 2,317 cal of
+    // macros while carrying the current version, so the old early-return
+    // skipped it forever.
+    assert.match(GOALS, /if \(!broken && \(goals\.calcVersion as number \| undefined\) === MACRO_CALC_VERSION\) return null/)
     assert.match(GOALS, /computeNutritionTargets\(/)
+  })
+
+  it('an incoherent row is repaired on read regardless of version', () => {
+    assert.match(GOALS, /const broken = stored\.calories > 0 && !isCoherent\(stored\)/)
+    assert.match(GOALS, /reconcileGoals\(stored, true\)/)
   })
 
   it("hand-typed numbers are never recomputed", () => {
