@@ -53,6 +53,14 @@ jobs:
 
       - run: npm ci
 
+      # The webapp's tsconfig reaches into ../shared/api-client, which is its own
+      # package with its own lockfile. Locally that typechecks only because those
+      # modules already sit on the machine; a clean checkout has nothing there and
+      # every import of `zod` fails. This is the first thing CI caught.
+      - name: Install shared/api-client deps
+        working-directory: shared/api-client
+        run: npm ci
+
       # Typecheck and tests are reported separately so a failure names itself.
       - name: Typecheck
         run: npx tsc --noEmit
