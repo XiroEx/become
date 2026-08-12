@@ -69,6 +69,7 @@ test('walk every scene of the daily session', async ({ page, context }) => {
     return [...new Set(parts.map(t => t.trim()).filter(Boolean))]
   }
 
+  let closed = false
   for (let step = 0; step < 16; step++) {
     await page.waitForTimeout(900)
     await page.screenshot({ path: `${SHOTS}/${String(step + 1).padStart(2, '0')}-step.png` })
@@ -77,14 +78,22 @@ test('walk every scene of the daily session', async ({ page, context }) => {
     const screen = lines.join(' | ')
     notes.push(`\n--- step ${step} ---\n${lines.slice(0, 14).join('\n')}`)
 
-    // A step that wants typing must actually ASK something.
-    const hasInput = await page.locator('textarea:visible, input[type="text"]:visible').count() > 0
-    if (hasInput && !/\?/.test(screen)) {
-      notes.push(`  >>> FINDING: asks for input but no question is on screen`)
+    // The session is over once the close lands — anything past it is the hub,
+    // not a scene, and judging it as one produces noise.
+    if (/Decided\. Now go\.|HERE'S WHAT I SEE/i.test(screen)) {
+      notes.push('  (session close reached)')
+      closed = true
     }
-    // A statement rendered as the whole screen with no framing reads as a prompt.
-    if (/^Lock in/.test(lines[1] ?? '') && !/\?/.test(screen)) {
-      notes.push(`  >>> FINDING: "Lock in" with no question`)
+
+    // A step that wants typing must make the ask legible: a question, OR a
+    // plain imperative ("Write it — own words are fine"). Requiring a literal
+    // "?" flagged perfectly clear instructions, and a check that cries wolf
+    // gets ignored, which is how the real one would slip through again.
+    const hasInput = await page.locator('textarea:visible, input[type="text"]:visible').count() > 0
+    const asks = /\?/.test(screen)
+      || /\b(write|name|type|describe|list|add|tell|say) (it|one|a|your|what|three)\b/i.test(screen)
+    if (!closed && hasInput && !asks) {
+      notes.push(`  >>> FINDING: asks for input with neither a question nor an instruction`)
     }
 
     // ── advance ────────────────────────────────────────────────────────────
@@ -102,6 +111,19 @@ test('walk every scene of the daily session', async ({ page, context }) => {
       await page.waitForTimeout(250)
     }
 
+    // Voice scenes always offer a written path and a bail-out — the harness must
+    // use them, or it reports its own missing gesture as a dead end. Prefer the
+    // written path: it exercises more of the scene than "lock it in anyway".
+    const writeInstead = page.locator('button:visible', {
+      hasText: /^(Prefer to write it\?|Write it instead|Type it instead)$/,
+    }).first()
+    if (await writeInstead.isVisible().catch(() => false)) {
+      await writeInstead.click()
+      notes.push('  (took the written path)')
+      await page.waitForTimeout(900)
+      continue
+    }
+
     const hold = page.locator(':visible', { hasText: /^Hold to affirm$/ }).first()
     if (await hold.isVisible().catch(() => false)) {
       const box = await hold.boundingBox()
@@ -116,7 +138,7 @@ test('walk every scene of the daily session', async ({ page, context }) => {
     }
 
     const cta = page.locator('button:visible', {
-      hasText: /^(Continue|Lock it in|Next|Done|I did it|Save|Bank it|Got it|Yes|Start)/,
+      hasText: /^(Continue|Lock it in|Lock it in anyway|Next|Done|I did it|Save|Bank it|Got it|Yes|Start)/,
     }).first()
     if (await cta.isVisible().catch(() => false)) {
       await cta.click()
@@ -138,6 +160,7 @@ test('walk every scene of the daily session', async ({ page, context }) => {
     }
     if (moved) continue
 
+    if (closed) { notes.push('  (end of session)'); break }
     notes.push(`  >>> FINDING: nothing actionable and nothing auto-advanced after 6s — dead end`)
     break
   }
