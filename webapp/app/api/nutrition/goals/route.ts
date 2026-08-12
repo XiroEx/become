@@ -9,6 +9,7 @@ import {
   MACRO_CALC_VERSION,
   type MacroPreset,
 } from '@/lib/nutrition/tdee'
+import { reconcileGoals, isCoherent } from '@/lib/nutrition/goalCoherence'
 
 const DEFAULT_GOALS = {
   calories: 2000,
@@ -63,7 +64,35 @@ async function refreshStaleTargets(
   goals: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   try {
-    if ((goals.calcVersion as number | undefined) === MACRO_CALC_VERSION) return null
+    // A row whose own numbers contradict each other is repaired whatever its
+    // calcVersion says. The version stamp only tracks which FORMULA produced a
+    // row; it cannot catch a row that was written in two halves at two
+    // different bodyweights, which is how a live member ended up with 2,214 cal
+    // sitting beside 2,317 cal of macros.
+    const stored = {
+      calories: (goals.calories as number) ?? 0,
+      protein: (goals.protein as number) ?? 0,
+      carbs: (goals.carbs as number) ?? 0,
+      fats: (goals.fats as number) ?? 0,
+    }
+    const broken = stored.calories > 0 && !isCoherent(stored)
+
+    if (broken && goals.macroPreset === 'custom') {
+      // Hand-typed numbers are theirs. Do not replace them with computed
+      // targets — just make the calorie figure agree with the macros they set.
+      const { goals: fixed } = reconcileGoals(stored, true)
+      const saved = await NutritionGoal.findOneAndUpdate(
+        { userId },
+        { $set: { calories: fixed.calories } },
+        { new: true },
+      ).lean()
+      console.warn(`nutrition goals repaired on read for ${userId}: custom row, calories recomputed`, {
+        was: stored.calories, now: fixed.calories,
+      })
+      return saved as Record<string, unknown> | null
+    }
+
+    if (!broken && (goals.calcVersion as number | undefined) === MACRO_CALC_VERSION) return null
     if (goals.macroPreset === 'custom') return null
 
     const user = await User.findById(userId).select('profile').lean<{
@@ -119,11 +148,39 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    // Reconcile BEFORE writing. Each field used to be $set independently, so a
+    // caller that sent macros without calories (or the reverse) left a row whose
+    // own numbers contradicted each other — 2,214 cal stored against 2,317 cal
+    // of macros, which read on the dashboard as "266 left" beside 378 cal of
+    // remaining macros. Merge onto what is already stored, then make the two
+    // halves agree, with whichever side this request touched winning.
+    const existing = await NutritionGoal.findOne({ userId: authResult.userId })
+      .lean<{ calories?: number; protein?: number; carbs?: number; fats?: number } | null>()
+
+    const merged = {
+      calories: calories ?? existing?.calories ?? 0,
+      protein: protein ?? existing?.protein ?? 0,
+      carbs: carbs ?? existing?.carbs ?? 0,
+      fats: fats ?? existing?.fats ?? 0,
+    }
+    const touchedMacros = protein !== undefined || carbs !== undefined || fats !== undefined
+    const { goals: coherent, fix, was } = reconcileGoals(merged, touchedMacros)
+    if (fix !== 'none') {
+      console.warn(
+        `nutrition goals reconciled for ${authResult.userId}: ${fix}`,
+        { was, now: coherent },
+      )
+    }
+
     const updateData: Record<string, unknown> = {}
-    if (calories !== undefined) updateData.calories = calories
-    if (protein !== undefined) updateData.protein = protein
-    if (carbs !== undefined) updateData.carbs = carbs
-    if (fats !== undefined) updateData.fats = fats
+    // Write all four whenever any of them was touched, so the row can never be
+    // left half-updated again.
+    if (calories !== undefined || touchedMacros) {
+      updateData.calories = coherent.calories
+      updateData.protein = coherent.protein
+      updateData.carbs = coherent.carbs
+      updateData.fats = coherent.fats
+    }
     if (fiber !== undefined) updateData.fiber = fiber
     if (waterGoal !== undefined) updateData.waterGoal = waterGoal
     if (goalType !== undefined) updateData.goalType = goalType
