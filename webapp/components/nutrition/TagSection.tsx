@@ -23,6 +23,7 @@ import {
   Upload,
   PencilLine,
   Trash2,
+  Check,
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
 import { Card } from '@/components/ui'
@@ -99,6 +100,15 @@ interface TagSectionProps {
   /** "Log it" — promote a plan into a real log (today). When provided, a Log it
    *  button appears in the planned header. */
   onLogPlan?: (planId: string) => void
+  /** Combine items already logged in this section into one grouped entry,
+   *  optionally keeping it as a reusable meal. When omitted, no select mode. */
+  onCombine?: (
+    picks: { logId: string; itemId: string }[],
+    opts: { mealName?: string; saveAsMeal: boolean },
+  ) => Promise<void> | void
+  /** Whether this member may keep the result as a reusable meal (plus tier).
+   *  Combining the day's rows is not gated; only saving the meal is. */
+  canSaveMeals?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -195,9 +205,17 @@ export default function TagSection({
   onRemovePlan,
   onEditPlanItem,
   onLogPlan,
+  onCombine,
+  canSaveMeals = false,
 }: TagSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
+  // Select mode: pick logged rows, then fold them into one entry.
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [combineName, setCombineName] = useState('')
+  const [saveAsMeal, setSaveAsMeal] = useState(true)
+  const [combining, setCombining] = useState(false)
   const visuals = getVisuals(tag)
   const label = titleCaseTag(tag)
 
@@ -251,6 +269,71 @@ export default function TagSection({
       lastKey = key
     }
     groups[groups.length - 1].items.push(fi)
+  }
+
+  // ── Select mode ────────────────────────────────────────────────────────────
+  const keyOf = (logId: string, itemId: unknown) => `${logId}:${String(itemId)}`
+  const selectableItems = flat.filter(fi => fi.item._id)
+  const canCombine = Boolean(onCombine) && selectableItems.length >= 2
+
+  const toggleSelected = (k: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }
+
+  const exitSelect = () => {
+    setSelecting(false)
+    setSelected(new Set())
+    setCombineName('')
+    setSaveAsMeal(true)
+  }
+
+  const pickedItems = selectableItems.filter(fi => selected.has(keyOf(fi.logId, fi.item._id)))
+
+  const pickedTotals = pickedItems.reduce(
+    (acc, fi) => {
+      const n = fi.item.nutrition
+      const q = fi.item.servings ?? 1
+      acc.calories += (n.calories ?? 0) * q
+      acc.protein += (n.protein ?? 0) * q
+      acc.carbs += (n.carbs ?? 0) * q
+      acc.fats += (n.fats ?? 0) * q
+      return acc
+    },
+    { calories: 0, protein: 0, carbs: 0, fats: 0 },
+  )
+
+  // Same shape as the search sheet's basket name, so a meal built either way
+  // reads the same in the list.
+  const defaultCombineName =
+    pickedItems.length === 0
+      ? ''
+      : pickedItems.length <= 3
+        ? pickedItems.map(fi => fi.item.name).join(' + ')
+        : `${pickedItems[0].item.name} + ${pickedItems[1].item.name} +${pickedItems.length - 2} more`
+
+  const handleCombine = async () => {
+    if (!onCombine || pickedItems.length < 2 || combining) return
+    setCombining(true)
+    try {
+      await onCombine(
+        pickedItems.map(fi => ({ logId: fi.logId, itemId: String(fi.item._id) })),
+        {
+          mealName:
+            canSaveMeals && saveAsMeal
+              ? (combineName.trim() || defaultCombineName || 'Meal')
+              : (combineName.trim() || undefined),
+          saveAsMeal: canSaveMeals && saveAsMeal,
+        },
+      )
+      exitSelect()
+    } finally {
+      setCombining(false)
+    }
   }
 
   return (
@@ -346,6 +429,21 @@ export default function TagSection({
                             Apply meal template…
                           </button>
                         )}
+                        {canCombine && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setKebabOpen(false)
+                              setIsCollapsed(false)
+                              setSelecting(true)
+                            }}
+                            data-testid={`combine-start-${tag}`}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <ChefHat className="h-3.5 w-3.5 text-emerald-500" />
+                            Combine into a meal…
+                          </button>
+                        )}
                         {/* Delete everything logged in this section. Only shown
                             when there are actual logged entries (not plans). */}
                         {flat.length > 0 && (
@@ -386,6 +484,77 @@ export default function TagSection({
         </div>
       </button>
 
+      {/* Select-mode banner + action bar. Sits above the rows so the running
+          count stays visible while scrolling a long section. */}
+      {selecting && (
+        <div
+          data-testid={`combine-bar-${tag}`}
+          className="border-y border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-900/20"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
+              {pickedItems.length === 0
+                ? 'Tap items to combine'
+                : `${pickedItems.length} selected`}
+              {pickedItems.length > 0 && (
+                <span className="ml-2 font-normal tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {Math.round(pickedTotals.calories)} cal &middot; {Math.round(pickedTotals.protein)}p{' '}
+                  {Math.round(pickedTotals.carbs)}c {Math.round(pickedTotals.fats)}f
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={exitSelect}
+              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {pickedItems.length >= 2 && (
+            <>
+              {canSaveMeals && (
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaveAsMeal(v => !v)}
+                    aria-pressed={saveAsMeal}
+                    aria-label="Also save as a reusable meal"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                      saveAsMeal
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-emerald-300 dark:border-emerald-700'
+                    }`}
+                  >
+                    {saveAsMeal && <Check className="h-3 w-3" />}
+                  </button>
+                  <input
+                    value={combineName}
+                    onChange={e => setCombineName(e.target.value)}
+                    placeholder={defaultCombineName}
+                    data-testid={`combine-name-${tag}`}
+                    aria-label="Meal name"
+                    className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 placeholder-zinc-400 dark:border-emerald-900/40 dark:bg-zinc-800 dark:text-white"
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleCombine}
+                disabled={combining}
+                data-testid={`combine-submit-${tag}`}
+                className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {canSaveMeals && saveAsMeal
+                  ? `Combine ${pickedItems.length} and save as meal`
+                  : `Combine ${pickedItems.length} into one entry`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Items */}
       <AnimatePresence initial={false}>
         {!isCollapsed && (
@@ -419,6 +588,9 @@ export default function TagSection({
                         onEditEntry={onEditEntry}
                         onRemoveEntry={onRemoveEntry}
                         onAddToMeal={onAddToMeal}
+                        selecting={selecting}
+                        isSelected={(logId, itemId) => selected.has(keyOf(logId, itemId))}
+                        onToggleSelect={(logId, itemId) => toggleSelected(keyOf(logId, itemId))}
                       />
                     ) : group.source && group.source !== 'manual' && group.source !== 'search' && group.items.length > 1 ? (
                       // Multi-food capture that isn't a saved meal — group it under
@@ -438,6 +610,9 @@ export default function TagSection({
                               key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
                               logId={fi.logId}
                               item={fi.item}
+                              selectable={selecting && Boolean(fi.item._id)}
+                              selected={selected.has(keyOf(fi.logId, fi.item._id))}
+                              onToggleSelect={() => toggleSelected(keyOf(fi.logId, fi.item._id))}
                               onEdit={() => onEditEntry(fi.logId, fi.item)}
                               onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                             />
@@ -513,6 +688,11 @@ export default function TagSection({
 // several meals in one tag from becoming a long flat list. ───────────────────
 
 interface MealGroupCardProps {
+  /** Select mode, threaded down from TagSection so items inside a meal group
+   *  can be combined alongside loose ones. */
+  selecting?: boolean
+  isSelected?: (logId: string, itemId: unknown) => boolean
+  onToggleSelect?: (logId: string, itemId: unknown) => void
   group: { key: string; mealName?: string; items: { logId: string; item: IMealItem & { _id?: string } }[] }
   tag: string
   onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
@@ -520,7 +700,10 @@ interface MealGroupCardProps {
   onAddToMeal?: (logId: string, tag: string) => void
 }
 
-function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: MealGroupCardProps) {
+function MealGroupCard({
+  group, tag, onEditEntry, onRemoveEntry, onAddToMeal,
+  selecting, isSelected, onToggleSelect,
+}: MealGroupCardProps) {
   const [open, setOpen] = useState(false)
   const totalCal = Math.round(group.items.reduce((s, fi) => s + (fi.item.nutrition?.calories ?? 0) * (fi.item.servings ?? 1), 0))
   return (
@@ -550,6 +733,9 @@ function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: 
                   key={`${fi.logId}-${fi.item._id ?? idx}`}
                   logId={fi.logId}
                   item={fi.item}
+                  selectable={Boolean(selecting) && Boolean(fi.item._id)}
+                  selected={isSelected?.(fi.logId, fi.item._id) ?? false}
+                  onToggleSelect={() => onToggleSelect?.(fi.logId, fi.item._id)}
                   onEdit={() => onEditEntry(fi.logId, fi.item)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
@@ -665,11 +851,17 @@ interface ItemRowProps {
   item: IMealItem & { _id?: string }
   onEdit: () => void
   onDelete: () => void
+  /** In select mode the row becomes a checkbox target and its edit/delete
+   *  affordances are withheld — tapping to pick must never delete a log. */
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }
 
-function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
+function ItemRow({ item, onEdit, onDelete, selectable, selected, onToggleSelect }: ItemRowProps) {
   const showVariant = shouldShowVariantName(item.variantName)
-  return (
+
+  const row = (
     <FoodItemRow
       layout="log"
       name={item.name}
@@ -679,8 +871,40 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
       hardAmount={hardAmountOf(item)}
       calories={Math.round((item.nutrition.calories ?? 0) * (item.servings ?? 1))}
       macros={scaledMacrosOf(item)}
-      onEdit={onEdit}
-      onRemove={onDelete}
+      onEdit={selectable ? undefined : onEdit}
+      onRemove={selectable ? undefined : onDelete}
     />
+  )
+
+  if (!selectable) return row
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`${selected ? 'Deselect' : 'Select'} ${item.name}`}
+      onClick={onToggleSelect}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggleSelect?.()
+        }
+      }}
+      className={`flex cursor-pointer items-center gap-2 pl-3 transition-colors ${
+        selected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+          selected
+            ? 'border-emerald-600 bg-emerald-600 text-white'
+            : 'border-zinc-300 dark:border-zinc-600'
+        }`}
+      >
+        {selected && <Check className="h-3 w-3" />}
+      </span>
+      <div className="pointer-events-none min-w-0 flex-1">{row}</div>
+    </div>
   )
 }
