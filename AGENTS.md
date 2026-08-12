@@ -105,7 +105,34 @@ become/
 
 ## Database (MongoDB)
 
-Remote: `server.georgeanthony.net:27017`, database: `become`
+**Become is the one app whose data lives on hosted Atlas, not on the fleet Mongo.**
+Production app data: Atlas cluster `jondonfit.ctp0tfj.mongodb.net`, database
+`jondonfitdb` (auth data in `become_auth`). The `jondonfit` naming is legacy —
+it predates the rename to Become. Every other redbtn app uses the
+`server.georgeanthony.net` box, so it is easy to assume this one does too.
+
+A `become` database DOES exist on `server.georgeanthony.net:27017`, which is
+what makes the wrong answer look right: it is an abandoned copy (most
+collections empty, a couple hundred stray food rows) and nothing reads it.
+Verified 2026-08-12 — `jondonfitdb` holds the live data (60 users, meal logs
+from that day).
+
+The fleet box is still in the picture for one thing: the **redsecrets store**
+(`redshared` on `192.168.1.10:27017`), which is where the real connection
+string comes from.
+
+### Where config actually comes from (read before trusting an env var)
+
+`lib/runtimeConfig.ts` resolves `BECOME_RUNTIME_CONFIG` from redsecrets and
+**prefers it over the container's environment variables**. A `docker inspect` of
+`MONGODB_URI` or `JWT_SECRET` therefore shows a value that may be stale and is
+not necessarily the one in use. Read the payload if you need the truth.
+
+In production (`NODE_ENV=production`, which `next start` sets) the payload is
+REQUIRED — with no redsecrets bootstrap, `getRuntimeConfig()` throws and every
+authenticated route returns 401 while `AuthGuard`, which only checks token
+expiry client-side, still renders the page. The app looks fine and every list is
+silently empty. For local work run `next dev`, where local env is authoritative.
 
 ### Models
 
@@ -186,7 +213,9 @@ npm install
 npm run dev          # starts MongoDB via docker compose (../db/compose.yml) + Next.js dev server
 ```
 
-Dev MongoDB is spun up from `../db/compose.yml`. Production uses the remote MongoDB on `server.georgeanthony.net`.
+Dev MongoDB is spun up from `../db/compose.yml`. Production uses hosted Atlas —
+see the Database section above; it is the one app that does not use the fleet
+Mongo box.
 
 ## Shell & Background Jobs (CRITICAL)
 

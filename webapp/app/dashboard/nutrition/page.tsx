@@ -497,6 +497,41 @@ function NutritionPageInner() {
   }, [logs])
 
   /**
+   * Fold items already logged today into one grouped entry, optionally keeping
+   * it as a reusable meal.
+   *
+   * The server does the create-then-strip in one request precisely so this
+   * client cannot leave a half-merged day behind on a dropped connection.
+   */
+  const handleCombine = async (
+    picks: { logId: string; itemId: string }[],
+    opts: { mealName?: string; saveAsMeal: boolean },
+  ) => {
+    if (picks.length < 2) return
+    try {
+      const res = await fetch('/api/meal-logs/combine', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ picks, mealName: opts.mealName, saveAsMeal: opts.saveAsMeal }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        showToast(data?.error || 'Could not combine those items.', 'error')
+        return
+      }
+      showToast(
+        opts.saveAsMeal && opts.mealName
+          ? `Combined ${picks.length} items and saved "${opts.mealName}"`
+          : `Combined ${picks.length} items`,
+        'success',
+      )
+      await fetchMealLogs()
+    } catch {
+      showToast('Could not combine those items.', 'error')
+    }
+  }
+
+  /**
    * The legacy IFoodEntry shape -> MealItemInput. Shared so the single-add and
    * multi-add paths cannot drift on which provenance fields they forward.
    */
@@ -1139,6 +1174,8 @@ function NutritionPageInner() {
               && (plansByTag[tag] || []).length === 0
             }
             onPlan={(t) => openPlanDatePicker(t)}
+            onCombine={handleCombine}
+            canSaveMeals={canSaveMeals}
             futureDate={viewingFuture}
           />
         ))}
