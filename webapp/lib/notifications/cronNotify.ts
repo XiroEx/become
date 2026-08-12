@@ -11,6 +11,30 @@ export function localHourForUser(now: Date, tzOffsetMinutes: number | undefined)
   return new Date(localMs).getUTCHours()
 }
 
+/**
+ * Calendar-date key for a SCHEDULED WORKOUT SLOT.
+ *
+ * A slot's `date` is a day MARKER stored at UTC midnight — it means "Aug 13",
+ * not an instant. Reading it through a timezone offset (as localDateKeyForUser
+ * does, correctly, for real timestamps) shifts it a day earlier for anyone
+ * behind UTC: Aug 13 00:00Z minus 4h is Aug 12 20:00, which keys as Aug 12.
+ *
+ * That is exactly what made the morning push name TOMORROW's workout. On
+ * 2026-08-12 a member in EDT saw "Today: Day 3 · Legs" on the dashboard and got
+ * a push for "Day 4 · Chest, Back", because the dashboard reads the marker as a
+ * plain date (`date.split('T')[0]`) and the cron did not.
+ *
+ * It also fired reminders on rest days, since tomorrow's slot satisfied the
+ * "is there a slot today?" gate.
+ *
+ * Read the marker the way the dashboard does: take the UTC date part, full stop.
+ */
+export function slotDateKey(date: Date | string): string {
+  return typeof date === 'string'
+    ? date.slice(0, 10)
+    : date.toISOString().slice(0, 10)
+}
+
 /** Local-date key (YYYY-MM-DD) for a user given their stored offset. */
 export function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): string {
   const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
@@ -52,9 +76,9 @@ export function workoutTitleForDay(phases: any[], phaseNum: number, dayLabel: st
 
 export const WORKOUT_REMINDER_START_HOUR = 7
 export const WORKOUT_REMINDER_END_HOUR = 11
-/** The daily Mind session nudge shares the morning with the workout reminder;
- *  the route sends at most ONE morning push per user, workout first. */
-export const MIND_REMINDER_START_HOUR = 7
+/** Starts an hour after the workout window so the two morning nudges do not
+ *  land in the same minute; they are separate reminders, not competing ones. */
+export const MIND_REMINDER_START_HOUR = 8
 export const MIND_REMINDER_END_HOUR = 11
 export const REENGAGEMENT_START_HOUR = 12
 export const REENGAGEMENT_END_HOUR = 18

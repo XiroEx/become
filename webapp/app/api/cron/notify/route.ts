@@ -20,6 +20,7 @@ import {
   localHourForUser,
   workoutTitleForDay,
   MIND_REMINDER_START_HOUR,
+  slotDateKey,
   MIND_REMINDER_END_HOUR,
 } from '@/lib/notifications/cronNotify'
 
@@ -244,34 +245,44 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // Each slot's date is UTC midnight of its local day → bucket by local key.
-      const keyed = slots.map((s) => ({ ...s, key: localDateKeyForUser(new Date(s.date), progress?.timezoneOffset) }))
+      // A slot's date is a day MARKER, not an instant — read it as a plain
+      // calendar date, exactly as the dashboard does. Putting it through the
+      // user's offset shifted every slot a day earlier for anyone behind UTC,
+      // which is what made this push name tomorrow's workout.
+      const keyed = slots.map((s) => ({ ...s, key: slotDateKey(s.date) }))
 
       // Only nudge on a training day: there must be a slot scheduled for TODAY.
-      const hasTodaySlot = keyed.some((s) => s.status === 'scheduled' && s.key === userLocalDateKey)
-      if (!hasTodaySlot) continue
+      const todaySlots = keyed.filter((s) => s.status === 'scheduled' && s.key === userLocalDateKey)
+      if (todaySlots.length === 0) continue
 
-      // The workout to surface = the earliest UNCOMPLETED slot that's due (today
-      // or overdue), within a 7-day catch-up window so we don't nag about
-      // ancient misses. This makes a behind user's reminder name the workout
-      // they still owe (missed Day 3 Legs) rather than today's calendar slot.
+      // Name TODAY's workout — the same one the dashboard's "Up Next" shows.
+      //
+      // This used to name the oldest workout still owed instead. That rule was
+      // added to stop the push naming "the next calendar day" (c7f03c0), but
+      // that symptom WAS the date-marker shift above: with the dates read
+      // correctly there is no next-day drift to work around, and telling
+      // someone whose calendar says Legs that their workout is Chest is simply
+      // wrong. The backlog is still worth mentioning, so it rides along as a
+      // count rather than replacing what today actually is.
+      const best = todaySlots.sort((a, b) => a.date.getTime() - b.date.getTime())[0]
+
+      // Overdue, within a 7-day window so we don't nag about ancient misses.
       const CATCHUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
       const cutoffMs = now.getTime() - CATCHUP_WINDOW_MS
-      const due = keyed
-        .filter((s) => s.key <= userLocalDateKey && new Date(s.date).getTime() >= cutoffMs)
-        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.date.getTime() - b.date.getTime()))
-      const best = due[0]
-      if (!best) continue
+      const overdue = keyed.filter(
+        (s) => s.key < userLocalDateKey && new Date(s.date).getTime() >= cutoffMs,
+      ).length
 
       // Resolve the title from the LIVE program (the slot's cached title can be
       // stale after a program edit — this is the "wrong workout name" bug).
       const program = await getProgram(best.programId)
       const liveTitle = program ? workoutTitleForDay(program.phases ?? [], best.phase ?? 1, best.dayLabel ?? '') : null
       const titleText = liveTitle || best.workoutTitle || best.dayLabel || 'Tap to start your session.'
-      const body =
+      const named =
         best.dayLabel && !titleText.toLowerCase().includes(best.dayLabel.toLowerCase())
           ? `${best.dayLabel} · ${titleText}`
           : titleText
+      const body = overdue > 0 ? `${named} · ${overdue} to catch up` : named
 
       await deliver(t.workoutReminder, userId, {
         title: "Today's workout is ready 💪",
@@ -367,9 +378,11 @@ export async function GET(request: NextRequest) {
       const lastSent = progress?.lastPushSentAt?.mindReminder
       if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) continue
 
-      // One morning push total — the workout reminder ran first and wins.
-      const lastWorkout = progress?.lastPushSentAt?.workoutReminder
-      if (lastWorkout && localDateKeyForUser(new Date(lastWorkout), progress?.timezoneOffset) === userLocalDateKey) continue
+      // The workout reminder no longer suppresses this one. It used to, to avoid
+      // stacking two pushes in one morning — but training days are most days,
+      // so in practice the mindset nudge almost never fired at all. They are
+      // separate rituals and each deserves its own reminder; the windows are
+      // staggered (workout 7am, mind 8am) so they don't arrive together.
 
       // Already did today's session? Nothing to nudge.
       const doneToday = await MindSession.exists({ userId: progress.userId, dateKey: userLocalDateKey })
@@ -384,7 +397,7 @@ export async function GET(request: NextRequest) {
 
       const started = (mind?.mainSessionCount ?? 0) > 0
       await deliver(t.mindReminder, String(progress.userId), {
-        title: started ? 'Your session is ready 🧠' : 'Start your first session 🧠',
+        title: started ? "Today's mindset module is ready 🧠" : 'Start your first session 🧠',
         body: started
           ? 'A few minutes on your mindset before the day takes over.'
           : 'Five minutes to set how today goes. Begin the path.',
