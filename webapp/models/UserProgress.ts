@@ -156,6 +156,13 @@ export interface IUserProgress {
   // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
   // requests so the cron can send notifications at a reasonable LOCAL hour.
   timezoneOffset?: number
+  /**
+   * IANA zone, e.g. "America/New_York". Preferred over timezoneOffset because a
+   * stored offset is a snapshot: it is wrong for half the year the moment
+   * daylight saving moves, and only self-corrects if the member opens the app.
+   * A zone name stays right forever, including for members who go quiet.
+   */
+  timezone?: string
   // Persisted personal records, kept in lockstep with workoutLogs by the
   // POST /api/workouts save path. Read by GET endpoints instead of recomputing
   // from workoutLogs on every request.
@@ -389,6 +396,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     scheduleSetup: { type: Date },
   },
   timezoneOffset: { type: Number },
+  timezone: { type: String },
   exercisePRs: { type: [ExercisePRSchema], default: [] },
   dismissedSuggestions: { type: [DismissedSuggestionSchema], default: [] },
   pinnedTiles: { type: [String], default: [] },

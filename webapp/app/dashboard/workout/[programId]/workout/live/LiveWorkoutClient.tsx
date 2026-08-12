@@ -819,6 +819,9 @@ export default function LiveWorkoutPage() {
             activeSeconds: activeSecondsAtSave,
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
             tz: new Date().getTimezoneOffset(),
+            // The zone name, not just the offset: an offset is wrong for half
+            // the year the moment daylight saving moves.
+            tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }
         : {
             programId,
