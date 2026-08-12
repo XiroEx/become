@@ -24,9 +24,11 @@ interface CalorieRingProps {
   protein: MacroValues
   carbs: MacroValues
   fats: MacroValues
+  /** Grams of the day's carbs that are fiber. Shaded inside the carb bar. */
+  fiber?: number
 }
 
-export default function CalorieRing({ consumed, goal, protein, carbs, fats }: CalorieRingProps) {
+export default function CalorieRing({ consumed, goal, protein, carbs, fats, fiber }: CalorieRingProps) {
   const router = useRouter()
   const remaining = goal - consumed
   // Calories are a ceiling: hitting the target is the win, a few over is a
@@ -135,7 +137,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
       <div className="mt-5 space-y-3" data-tour="macro-rows">
         {/* Protein is a FLOOR — exceeding it is a good outcome, never a warning. */}
         <MacroBar label="Protein" current={protein.current} goal={protein.goal} color={MACRO_COLORS.protein} kind="floor" />
-        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} />
+        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} fiber={fiber} />
         <MacroBar label="Fats" current={fats.current} goal={fats.goal} color={MACRO_COLORS.fats} />
       </div>
     </Card>
