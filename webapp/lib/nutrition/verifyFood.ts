@@ -26,6 +26,7 @@ import Food from '@/models/Food'
 import FoodFlag from '@/models/FoodFlag'
 import { gatherEvidence, type EvidenceBundle, type EvidenceValues } from './evidence'
 import { runStructuredTask } from '@/lib/ai/becomeGraph'
+import { getBlobStore } from '@/lib/blobStorage'
 
 /**
  * Below this, a correction is recorded but NOT written to the shared record.
@@ -40,6 +41,7 @@ export const WRITE_CONFIDENCE_FLOOR = 0.85
 /** Grounded search is the metered cost in this pipeline — bound the wait. */
 const SEARCH_TIMEOUT_MS = 120_000
 const REVIEW_TIMEOUT_MS = 90_000
+const VISION_TIMEOUT_MS = 90_000
 
 export interface SearchSource {
   sourceDomain?: string
@@ -102,7 +104,7 @@ interface FoodLike {
     servingSize?: number
     gramsPerServing?: number
     displayLabel?: string
-    nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number }
+    nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number; fiber?: number }
   }[]
 }
 
@@ -122,6 +124,9 @@ export function storedPer100(food: FoodLike): EvidenceValues | null {
     proteinPer100: round(n.protein),
     carbsPer100: round(n.carbs),
     fatsPer100: round(n.fats),
+    // Carried so the reviewer's Atwater check uses NET carbs. Without it a
+    // high-fiber food reads as internally inconsistent when it is fine.
+    fiberPer100: round(n.fiber),
     servingGrams: grams,
     servingLabel: v.displayLabel,
   }
@@ -159,6 +164,80 @@ export function canWrite(
   return { ok: true }
 }
 
+interface LabelRead {
+  identity?: string
+  values?: EvidenceValues
+}
+
+/**
+ * Read the panel the reporter photographed.
+ *
+ * Without this the photo is stored, shown to nobody, and passed to nothing: the
+ * bundle only carried a user-photo entry when the reporter ALSO typed the
+ * numbers by hand, so the single strongest piece of evidence we can collect was
+ * being dropped for everyone who did the obvious thing and just took a picture.
+ *
+ * What comes back is still a CLAIM, not a source. gatherEvidence checks the
+ * name read off the packaging against the record before any of it counts —
+ * a panel photo has no inherent link to the food it was attached to.
+ */
+async function readLabelPhoto(photoUrl: string): Promise<LabelRead | null> {
+  try {
+    // Same-origin path issued by our upload route: /api/blob/<key>
+    const key = photoUrl.replace(/^\/api\/blob\//, '')
+    if (!key || key === photoUrl) return null
+
+    const blob = await getBlobStore().get(key)
+    if (!blob?.body) return null
+    const buf = Buffer.from(await new Response(blob.body).arrayBuffer())
+    if (buf.length === 0 || buf.length > 8 * 1024 * 1024) return null
+
+    const read = await runStructuredTask<{
+      matches?: {
+        name?: string
+        brand?: string
+        servingSize?: number
+        servingUnit?: string
+        nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number; fiber?: number }
+      }[]
+    }>(
+      'nutrition.productFind',
+      { text: 'Read the nutrition panel exactly as printed.' },
+      { image: buf.toString('base64'), timeoutMs: VISION_TIMEOUT_MS },
+    )
+
+    const m = read?.matches?.[0]
+    if (!m) return null
+
+    const identity = [m.brand, m.name].filter(Boolean).join(' ').trim() || undefined
+
+    // Only normalise when the serving is stated in a real mass/volume unit.
+    // "1 each" cannot be converted, and guessing produces a per-100 basis wrong
+    // by an unknown factor — worse than having no photo at all.
+    const unit = (m.servingUnit ?? '').toLowerCase()
+    const grams = unit === 'g' || unit === 'ml' ? m.servingSize : undefined
+    if (!grams || grams <= 0 || !m.nutrition) return { identity }
+
+    const k = 100 / grams
+    const r = (x: number | undefined) => (x == null ? undefined : Math.round(x * k * 100) / 100)
+    return {
+      identity,
+      values: {
+        caloriesPer100: r(m.nutrition.calories),
+        proteinPer100: r(m.nutrition.protein),
+        carbsPer100: r(m.nutrition.carbs),
+        fatsPer100: r(m.nutrition.fats),
+        fiberPer100: r(m.nutrition.fiber),
+        servingGrams: grams,
+      },
+    }
+  } catch (err) {
+    // Best effort: a photo we cannot read must not sink the whole run.
+    console.error('readLabelPhoto failed:', err)
+    return null
+  }
+}
+
 /**
  * Run the whole pipeline for one food.
  *
@@ -190,13 +269,18 @@ export async function verifyFood(
   try {
     await Food.updateOne({ _id: foodId }, { $set: { 'verification.state': 'running' } })
 
+    // 0. Read the reporter's photo, if they sent one. Typed values still win:
+    //    someone who bothered to enter the numbers read them off the same
+    //    package, and their transcription beats ours.
+    const label = opts.userPhotoUrl ? await readLabelPhoto(opts.userPhotoUrl) : null
+
     // 1. Deterministic.
     const bundle = await gatherEvidence({
       barcode: food.barcode,
       stored,
-      userClaim: opts.userClaim,
+      userClaim: opts.userClaim ?? label?.values,
       userPhotoUrl: opts.userPhotoUrl,
-      userPhotoIdentity: opts.userPhotoIdentity,
+      userPhotoIdentity: opts.userPhotoIdentity ?? label?.identity,
       recordName: food.name,
       recordBrand: food.brand,
     })
@@ -229,6 +313,9 @@ export async function verifyFood(
         })),
         webSources: search?.found ? search.sources : [],
         webNotes: search?.notes,
+        // Present even when the panel numbers were not legible: knowing WHICH
+        // product the reporter photographed is worth something on its own.
+        photoIdentityRead: label?.identity,
         // What a human standing in front of the package said looks wrong.
         // This is a POINTER, not a source: it tells the reviewer where to
         // look, and the write gate still requires independent corroboration,
