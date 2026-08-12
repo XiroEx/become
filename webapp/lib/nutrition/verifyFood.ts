@@ -94,6 +94,17 @@ export interface VerificationOutcome {
   review?: ReviewVerdict
 }
 
+/** One product as either vision shape describes it. */
+interface LabelCandidate {
+  name?: string
+  brand?: string
+  servingSize?: number
+  servingUnit?: string
+  /** Plate-scan shape states the serving in prose, e.g. "3 tortillas (54g)". */
+  estimatedServing?: string
+  nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number; fiber?: number }
+}
+
 interface FoodLike {
   _id: unknown
   name?: string
@@ -164,6 +175,24 @@ export function canWrite(
   return { ok: true }
 }
 
+/**
+ * Grams (or ml) out of a serving phrase like "3 tortillas (54g)".
+ *
+ * The vision runner describes the serving in prose, so the weight has to be
+ * recovered from the text. Prefer a figure in parentheses — that is where a
+ * label puts the real weight — and fall back to any mass figure in the string.
+ * Returns undefined rather than guessing: an unconvertible serving must not
+ * become a per-100 basis that is wrong by an unknown factor.
+ */
+export function gramsFromServingText(text: string | undefined): number | undefined {
+  if (!text) return undefined
+  const paren = text.match(/\((\d+(?:\.\d+)?)\s*(g|ml)\b[^)]*\)/i)
+  const any = paren ?? text.match(/(\d+(?:\.\d+)?)\s*(g|ml)\b/i)
+  if (!any) return undefined
+  const n = Number(any[1])
+  return isFinite(n) && n > 0 ? n : undefined
+}
+
 interface LabelRead {
   identity?: string
   values?: EvidenceValues
@@ -176,6 +205,13 @@ interface LabelRead {
  * bundle only carried a user-photo entry when the reporter ALSO typed the
  * numbers by hand, so the single strongest piece of evidence we can collect was
  * being dropped for everyone who did the obvious thing and just took a picture.
+ *
+ * TWO RESPONSE SHAPES. The vision graph node pins its own structuredOutput
+ * schema — the plate-scan one, `{ items:[{ name, estimatedServing, nutrition }] }`
+ * — and ignores the per-task schema, so nutrition.productFind comes back shaped
+ * like a plate estimate rather than as `{ matches: [...] }`. Reading only
+ * `matches` silently found nothing and threw away a perfectly good read of the
+ * label. Accept both, and let the node keep its schema.
  *
  * What comes back is still a CLAIM, not a source. gatherEvidence checks the
  * name read off the packaging against the record before any of it counts —
@@ -193,29 +229,26 @@ async function readLabelPhoto(photoUrl: string): Promise<LabelRead | null> {
     if (buf.length === 0 || buf.length > 8 * 1024 * 1024) return null
 
     const read = await runStructuredTask<{
-      matches?: {
-        name?: string
-        brand?: string
-        servingSize?: number
-        servingUnit?: string
-        nutrition?: { calories?: number; protein?: number; carbs?: number; fats?: number; fiber?: number }
-      }[]
+      matches?: LabelCandidate[]
+      items?: LabelCandidate[]
     }>(
       'nutrition.productFind',
       { text: 'Read the nutrition panel exactly as printed.' },
       { image: buf.toString('base64'), timeoutMs: VISION_TIMEOUT_MS },
     )
 
-    const m = read?.matches?.[0]
+    const m = read?.matches?.[0] ?? read?.items?.[0]
     if (!m) return null
 
     const identity = [m.brand, m.name].filter(Boolean).join(' ').trim() || undefined
 
-    // Only normalise when the serving is stated in a real mass/volume unit.
-    // "1 each" cannot be converted, and guessing produces a per-100 basis wrong
-    // by an unknown factor — worse than having no photo at all.
+    // A gram weight can arrive as structured fields or inside the serving text.
     const unit = (m.servingUnit ?? '').toLowerCase()
-    const grams = unit === 'g' || unit === 'ml' ? m.servingSize : undefined
+    const grams =
+      unit === 'g' || unit === 'ml'
+        ? m.servingSize
+        : gramsFromServingText(m.estimatedServing)
+
     if (!grams || grams <= 0 || !m.nutrition) return { identity }
 
     const k = 100 / grams
@@ -229,6 +262,7 @@ async function readLabelPhoto(photoUrl: string): Promise<LabelRead | null> {
         fatsPer100: r(m.nutrition.fats),
         fiberPer100: r(m.nutrition.fiber),
         servingGrams: grams,
+        servingLabel: m.estimatedServing,
       },
     }
   } catch (err) {
