@@ -115,11 +115,31 @@ export function matchesRecord(
     )
 
   const photo = tokens(photoIdentity)
-  const record = tokens(`${recordName} ${recordBrand ?? ''}`)
-  if (photo.size === 0 || record.size === 0) return undefined
+  const name = tokens(recordName)
+  const brand = tokens(recordBrand ?? '')
+  if (photo.size === 0) return undefined
 
-  for (const t of record) if (photo.has(t)) return true
-  return false
+  const shares = (a: Set<string>) => {
+    for (const t of a) if (photo.has(t)) return true
+    return false
+  }
+
+  // The distinguishing part of the product NAME is present: same product.
+  if (name.size > 0 && shares(name)) return true
+
+  // Right brand, none of the name. A brand ships many lines, so this is
+  // positive evidence of a DIFFERENT one rather than a weak match — "Mission
+  // Carb Balance" against a record for "Mission Zero Net Carbs" is two
+  // products, and treating the shared brand token as a match invited the
+  // reviewer to rewrite one line's macros with the other's.
+  if (brand.size > 0 && shares(brand)) return false
+
+  // Nothing in common at all. Only call that a mismatch when the read is
+  // specific enough to be an identity: a single generic word like "Tortillas"
+  // means we failed to read a brand, not that the reporter photographed the
+  // wrong thing, and accusing them on that basis makes the pipeline ignore a
+  // perfectly good panel.
+  return photo.size >= 2 ? false : undefined
 }
 
 /**
