@@ -47,6 +47,23 @@ export interface EvidenceValues {
 export interface EvidenceItem {
   source: EvidenceSource
   url?: string
+  /**
+   * HOW this source was identified as the product in front of us. Distinct from
+   * how good its numbers are, and far more important for deciding whether it
+   * describes the same thing.
+   *
+   * `barcode` means it was resolved from the exact UPC the member scanned, so
+   * its identity is not in question. `photo` is the package they were holding.
+   * `name` is a text match, which is the weakest: brands ship many lines whose
+   * names differ by one word.
+   *
+   * The gap this closes is real. A UPC-resolved OpenFoodFacts entry had a
+   * member's package exactly right — correct serving basis, macros matching the
+   * printed label to the decimal — and lost to two retailer pages found by NAME,
+   * because the reviewer was only told to rank sources by data quality and
+   * ranked "user-submitted database" below "retailer".
+   */
+  matchedBy?: 'barcode' | 'photo' | 'name'
   values: EvidenceValues
   /**
    * For a user photo: does the product IDENTITY on the packaging match the
@@ -204,6 +221,7 @@ async function fromOpenFoodFacts(barcode: string): Promise<EvidenceItem | null> 
 
     return {
       source: 'openfoodfacts',
+      matchedBy: 'barcode',
       url: `https://world.openfoodfacts.org/product/${barcode}`,
       values: {
         caloriesPer100: round(plausibleOffKcal(shaped), 1),
@@ -238,6 +256,7 @@ async function fromUSDA(barcode: string): Promise<EvidenceItem | null> {
     const scale = 100 / size
     return {
       source: 'usda',
+      matchedBy: 'barcode',
       url: fdcUrl(hit._id),
       values: {
         caloriesPer100: round((hit.nutrition?.calories ?? 0) * scale, 1),
@@ -287,6 +306,7 @@ export async function gatherEvidence(input: GatherInput): Promise<EvidenceBundle
     const identityMatch = matchesRecord(input.userPhotoIdentity, input.recordName, input.recordBrand)
     items.push({
       source: 'user-photo',
+      matchedBy: 'photo',
       url: input.userPhotoUrl,
       values: input.userClaim,
       identityMatch,
