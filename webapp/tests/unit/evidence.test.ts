@@ -116,3 +116,44 @@ test('a nonsense fiber figure cannot push carbs negative', () => {
   assert.equal(out, 40) // protein only, carbs floored at 0
   assert.ok(out >= 0)
 })
+
+test('a shared BRAND is not a shared product', () => {
+  // The bug this replaces: token overlap on the brand alone returned true, so a
+  // photo of "Mission Carb Balance" was reported as the same product as a
+  // record for "Mission Zero Net Carbs" — and the reviewer was then invited to
+  // rewrite one line's macros with the other's. Brands ship many lines whose
+  // panels differ; the shared word is the LEAST informative one.
+  assert.equal(
+    matchesRecord('Mission Carb Balance Tortillas', 'Original Zero', 'Mission Foods Inc'),
+    false,
+  )
+  // The distinguishing part of the name present -> genuinely the same product.
+  assert.equal(
+    matchesRecord('Mission Zero Net Carbs Tortillas', 'Original Zero', 'Mission Foods Inc'),
+    true,
+  )
+})
+
+test('a vague read is unknown, never an accusation', () => {
+  // Vision is not deterministic: three reads of ONE photo returned "Mission
+  // Carb Balance Tortillas", "Tortillas", and "Zero Net Carbs Tortillas".
+  // A bare category word means we failed to read a brand — treating it as proof
+  // the reporter photographed the wrong thing throws away a good panel.
+  assert.equal(matchesRecord('Tortillas', 'Original Zero', 'Mission Foods Inc'), undefined)
+  assert.equal(matchesRecord('Bread', 'Original Zero', 'Mission Foods Inc'), undefined)
+
+  // Two or more specific tokens with nothing in common IS enough to say no.
+  assert.equal(matchesRecord('Cheerios Honey Nut', 'Original Zero', 'Mission Foods Inc'), false)
+})
+
+test('every identity outcome is safe for the write gate', () => {
+  // Whatever the read, no branch may silently rewrite a different product:
+  //   true      -> counts as evidence (same product)
+  //   false     -> wrong_product, blocked
+  //   undefined -> supporting only, never the basis for a correction
+  const outcomes = ['Mission Zero Net Carbs Tortillas', 'Mission Carb Balance Tortillas', 'Tortillas']
+    .map((p) => matchesRecord(p, 'Original Zero', 'Mission Foods Inc'))
+  assert.deepEqual(outcomes, [true, false, undefined])
+  // The unsafe combination would be `true` for a different line. Assert it is gone.
+  assert.notEqual(matchesRecord('Mission Carb Balance Tortillas', 'Original Zero', 'Mission Foods Inc'), true)
+})
