@@ -57,6 +57,27 @@ const hangingClient: CacheClient = {
   del: () => new Promise(() => {}),
 }
 
+/**
+ * The lib UNREFS its timeout timer on purpose, so a pending cache call can never
+ * hold a process open. Correct in production — but it means a test whose only
+ * outstanding work is that race has nothing keeping the event loop alive, and
+ * node:test cancels it with "Promise resolution is still pending but the event
+ * loop has already resolved".
+ *
+ * It passed locally purely because other tests happened to keep the loop busy.
+ * On a clean machine (CI, first run) it cancelled, and took the rest of the file
+ * with it as cancelledByParent. Hold a ref'd timer for the duration instead of
+ * relying on that accident.
+ */
+async function whileLoopAlive<T>(fn: () => Promise<T>): Promise<T> {
+  const keepAlive = setInterval(() => {}, 20)
+  try {
+    return await fn()
+  } finally {
+    clearInterval(keepAlive)
+  }
+}
+
 describe('cacheGetJson', () => {
   it('round-trips JSON written via cacheSetJson (fake client)', async () => {
     const fake = new FakeRedis()
@@ -86,7 +107,9 @@ describe('cacheGetJson', () => {
 
   it('does not hang on a hanging client — resolves null via timeout', async () => {
     // If the timeout race were broken this test would never finish.
-    assert.equal(await cacheGetJson('k', hangingClient), null)
+    await whileLoopAlive(async () => {
+      assert.equal(await cacheGetJson('k', hangingClient), null)
+    })
   })
 })
 
@@ -108,7 +131,7 @@ describe('cacheSetJson', () => {
   })
 
   it('does not hang on a hanging client', async () => {
-    await assert.doesNotReject(() => cacheSetJson('k', { x: 1 }, 60, hangingClient))
+    await whileLoopAlive(() => assert.doesNotReject(() => cacheSetJson('k', { x: 1 }, 60, hangingClient)))
   })
 })
 
