@@ -9,6 +9,9 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindSession from '@/models/MindSession'
 import MindProgress from '@/models/MindProgress'
+import UserProgress from '@/models/UserProgress'
+import MealLog from '@/models/MealLog'
+import { staleReason, type ActiveSessionStamp } from '@/lib/mind/activeSession'
 import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
 import {
   getLevelProgress, chapterFromSessions, sessionsIntoChapter,
@@ -60,6 +63,21 @@ async function streakFor(userId: string, todayKey: string): Promise<number> {
   return computeStreak(docs.map((d) => d.dateKey), todayKey)
 }
 
+/** Watermarks the active session is judged against. */
+async function activityNow(userId: string) {
+  const [progress, meal] = await Promise.all([
+    UserProgress.findOne({ userId }).select('workoutLogs.date').lean<{ workoutLogs?: { date: Date }[] } | null>(),
+    MealLog.findOne({ user: userId }).sort({ loggedAt: -1 }).select('loggedAt').lean<{ loggedAt?: Date } | null>(),
+  ])
+  const workouts = (progress?.workoutLogs ?? [])
+    .map(w => new Date(w.date).getTime())
+    .filter(t => Number.isFinite(t))
+  return {
+    lastWorkoutAt: workouts.length ? new Date(Math.max(...workouts)) : null,
+    lastMealAt: meal?.loggedAt ? new Date(meal.loggedAt) : null,
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
@@ -76,8 +94,23 @@ export async function GET(request: NextRequest) {
     // main-session cooldown that decides whether the hub shows the main session
     // or Training Grounds.
     const prog = await MindProgress.findOne({ userId: auth.userId })
-      .select('lastBreathAt recentKinds lastMainSessionAt')
-      .lean<{ lastBreathAt?: Date; recentKinds?: string[]; lastMainSessionAt?: Date } | null>()
+      .select('lastBreathAt recentKinds lastMainSessionAt activeSession')
+      .lean<{
+        lastBreathAt?: Date
+        recentKinds?: string[]
+        lastMainSessionAt?: Date
+        activeSession?: ActiveSessionStamp & { seed: number; plan: unknown }
+      } | null>()
+
+    // Hand back the unfinished session rather than composing a new one, unless
+    // the day rolled over or the member logged something it was built from.
+    const stored = prog?.activeSession
+    const stale = stored ? staleReason(stored, dateKey, await activityNow(auth.userId!)) : null
+    if (stored && stale) {
+      // Drop it now so the next Begin composes cleanly instead of racing this.
+      await MindProgress.updateOne({ userId: auth.userId }, { $unset: { activeSession: 1 } }).catch(() => {})
+    }
+    const resume = stored && !stale ? { seed: stored.seed, plan: stored.plan } : null
 
     const available = mainSessionAvailable(prog?.lastMainSessionAt)
     const nextMainSessionAt = prog?.lastMainSessionAt
@@ -94,6 +127,9 @@ export async function GET(request: NextRequest) {
       mainSessionAvailable: available,
       lastMainSessionAt: prog?.lastMainSessionAt ? new Date(prog.lastMainSessionAt).getTime() : null,
       nextMainSessionAt: available ? null : nextMainSessionAt,
+      // Non-null when there is a session in progress to pick up where it left off.
+      resume,
+      resumeDropped: stale ?? null,
     })
   } catch (err) {
     console.error('GET /api/mind/session error:', err)
@@ -170,9 +206,16 @@ export async function POST(request: NextRequest) {
     if (chapterAdvanced) {
       update.$push = { chapterHistory: { chapter: newChapter, unlockedAt: new Date(now) } }
     }
+    // The session is finished, so the stored copy has done its job. Leaving it
+    // would hand the same completed session back at the next Begin.
+    const updateWithClear = {
+      ...update,
+      $unset: { ...(update as { $unset?: Record<string, 1> }).$unset, activeSession: 1 as const },
+    }
+
     await MindProgress.findOneAndUpdate(
       { userId: auth.userId },
-      update,
+      updateWithClear,
       { upsert: true, setDefaultsOnInsert: true },
     ).catch(() => {})
 
@@ -218,6 +261,54 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     console.error('POST /api/mind/session error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+
+/**
+ * PUT: remember the session that was just composed, so leaving mid-way and
+ * coming back returns the SAME session. Cleared by POST on completion, by a new
+ * local day, or by a workout/meal log that changes what it was built from.
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success || !auth.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const seed = Number(body?.seed)
+    const plan = body?.plan
+    if (!Number.isFinite(seed) || !plan || typeof plan !== 'object') {
+      return NextResponse.json({ error: 'seed and plan are required' }, { status: 400 })
+    }
+
+    await dbConnect()
+    const dateKey = localDateKey(null, readTzOffsetFromBody(body))
+    const now = await activityNow(auth.userId)
+
+    await MindProgress.updateOne(
+      { userId: auth.userId },
+      {
+        $set: {
+          activeSession: {
+            dateKey,
+            seed,
+            plan,
+            generatedAt: new Date(),
+            lastWorkoutAt: now.lastWorkoutAt,
+            lastMealAt: now.lastMealAt,
+          },
+        },
+      },
+      { upsert: true },
+    )
+
+    return NextResponse.json({ ok: true, dateKey })
+  } catch (err) {
+    console.error('PUT /api/mind/session error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

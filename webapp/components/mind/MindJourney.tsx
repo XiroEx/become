@@ -102,6 +102,10 @@ export default function MindJourney() {
   const [playing, setPlaying] = useState(false)
   // Fresh seed per launch so replays compose a varied set (not the same items).
   const [sessionSeed, setSessionSeed] = useState<number | null>(null)
+  // An unfinished session from an earlier visit. Begin picks this up verbatim
+  // rather than composing something new, so walking away does not silently swap
+  // your session for a different one.
+  const [resumable, setResumable] = useState<{ seed: number; plan: MindSessionPlan } | null>(null)
   // AI-composed session (become-ai graph). Pre-composed in the background after
   // the page loads so there's NO added wait at Begin: if it's ready we play it,
   // otherwise we fall back to the instant deterministic plan.
@@ -146,6 +150,12 @@ export default function MindJourney() {
         setStreak(s.streak ?? 0)
         setLastBreathAt(typeof s.lastBreathAt === 'number' ? s.lastBreathAt : null)
         setRecentKinds(Array.isArray(s.recentKinds) ? s.recentKinds : [])
+        // A session composed earlier and never finished. The server already
+        // decided it is still valid — it drops it on a new day, or once a
+        // workout or meal changes what it was built from.
+        if (s.resume?.plan && typeof s.resume?.seed === 'number') {
+          setResumable({ seed: s.resume.seed, plan: s.resume.plan as MindSessionPlan })
+        }
       }
       if (stateRes.ok) {
         const st = await stateRes.json()
@@ -215,9 +225,27 @@ export default function MindJourney() {
   const effectivePlan = aiPlan ?? plan
 
   const begin = useCallback(() => {
-    setSessionSeed(Date.now())
+    if (resumable) {
+      setSessionSeed(resumable.seed)
+      setAiPlan(resumable.plan)
+      setPlaying(true)
+      return
+    }
+    const seed = Date.now()
+    setSessionSeed(seed)
     setPlaying(true)
-  }, [])
+    // Remember what we just committed to, so a refresh or a walk-away returns
+    // THIS session. Best effort: failing to persist costs continuity, never the
+    // session itself.
+    const planToStore = aiPlan ?? plan
+    if (planToStore) {
+      fetch('/api/mind/session', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ seed, plan: planToStore, tzOffset: new Date().getTimezoneOffset() }),
+      }).catch(() => {})
+    }
+  }, [resumable, aiPlan, plan])
 
   // Deterministic suggested actions — shown instantly (and the fallback if the AI
   // drifts). The AI upgrade replaces them when it resolves.
@@ -277,6 +305,7 @@ export default function MindJourney() {
         unlockedSystems={progress?.unlockedSystems ?? getUnlockedSystems(progress?.chapter ?? 1)}
         onExit={() => {
           setPlaying(false)
+          setResumable(null)
           // Finished a session → drop the cache and warm a fresh one in the
           // background (non-blocking), so the next view shows a new AI session.
           invalidateMindSession()
