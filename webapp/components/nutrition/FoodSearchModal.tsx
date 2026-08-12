@@ -354,6 +354,10 @@ export default function FoodSearchModal({
   const [mealName, setMealName] = useState('')
   const [saveAsMeal, setSaveAsMeal] = useState(true)
   const [submittingMany, setSubmittingMany] = useState(false)
+  const basketRef = useRef<HTMLDivElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const actionRowRef = useRef<HTMLDivElement>(null)
+  const [basketHeight, setBasketHeight] = useState(0)
   const addingRef = useRef(false)
   // User-picked log date as YYYY-MM-DD — null means "Now" (today @ current
   // wall-clock time). Lets users backdate to yesterday / earlier. No time
@@ -929,7 +933,14 @@ export default function FoodSearchModal({
     }
   }
 
-  const handleAddFood = async () => {
+  /**
+   * `startMeal` is the "Build a meal" button: it turns multi-select on AND banks
+   * the item that is already open. Flipping the mode alone would make the first
+   * item cost two taps on the same row, which is the friction the basket exists
+   * to remove — and `mealMode` is still false in this closure at that point, so
+   * the intent has to arrive as an argument rather than be read off state.
+   */
+  const handleAddFood = async (opts?: { startMeal?: boolean }) => {
     if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0) return
     if (addingRef.current) return
     addingRef.current = true
@@ -1001,10 +1012,11 @@ export default function FoodSearchModal({
         ? { repeat: { every: repeatEvery, count: repeatCount } }
         : undefined
 
-      if (mealMode) {
+      if (mealMode || opts?.startMeal) {
         // Straight into the basket. Everything below still runs, so the sheet
         // returns to the list ready for the next item — which is the whole
         // point of the mode.
+        if (opts?.startMeal) setMealMode(true)
         setBasket(prev => [...prev, entry])
       } else {
         await onSelectFood(
@@ -1076,6 +1088,39 @@ export default function FoodSearchModal({
     setMealName('')
     setSaveAsMeal(true)
   }
+
+  // The basket floats over the results, and its height swings by ~200px between
+  // empty, collapsed and expanded. A fixed pad would either waste space or hide
+  // the expanded row's own Add button underneath it, so measure the real card.
+  useLayoutEffect(() => {
+    if (!mealMode) {
+      setBasketHeight(0)
+      return
+    }
+    setBasketHeight(basketRef.current?.offsetHeight ?? 0)
+  }, [mealMode, basket.length, basketOpen, canSaveMeals, saveAsMeal])
+
+  /**
+   * Pull the expanded row's action row above the basket.
+   *
+   * Reserving scroll room is not enough on its own: the row can open with its
+   * buttons already underneath the floating card (a few saved meals above the
+   * foods section is all it takes), and a CTA you have to discover by scrolling
+   * is a CTA you don't press. Runs after the accordion's height animation, so
+   * the measurement is of the settled layout.
+   */
+  useEffect(() => {
+    if (!selectedFood) return
+    const t = setTimeout(() => {
+      const row = actionRowRef.current
+      const scroller = resultsRef.current
+      if (!row || !scroller) return
+      const clearance = scroller.getBoundingClientRect().bottom - basketHeight - 12
+      const overflow = row.getBoundingClientRect().bottom - clearance
+      if (overflow > 0) scroller.scrollBy({ top: overflow, behavior: 'smooth' })
+    }, 260)
+    return () => clearTimeout(t)
+  }, [selectedFood, basketHeight, selection, dateEditOpen, repeatOpen])
 
   const handleSubmitBasket = async () => {
     if (basket.length === 0 || submittingMany || !onAddMany) return
@@ -1178,32 +1223,19 @@ export default function FoodSearchModal({
                     <span className="hidden sm:inline">Custom Food</span>
                     <span className="sm:hidden">Custom</span>
                   </Link>
-                  {onAddMany && !isPlanMode && (
-                    <button
-                      type="button"
-                      onClick={() => (mealMode ? exitMealMode() : setMealMode(true))}
-                      data-testid="toggle-meal-mode"
-                      aria-pressed={mealMode}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                        mealMode
-                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
-                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
-                      }`}
-                      title={mealMode ? 'Stop building a meal' : 'Add several items at once'}
-                    >
-                      <ChefHat className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">{mealMode ? 'Building' : 'Add to meal'}</span>
-                      <span className="sm:hidden">{mealMode ? 'Building' : 'Meal'}</span>
-                    </button>
-                  )}
+                  {/* No meal toggle here on purpose. It read as "browse meals"
+                      next to the Meals filter chip below, and the width it stole
+                      truncated the tag to "Din…". Multi-select now starts from
+                      the expanded row, where the intent is unambiguous. */}
                   <button
                     type="button"
                     onClick={() => setTagDropdownOpen(v => !v)}
+                    data-testid="tag-picker"
                     className="flex flex-1 min-w-0 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                   >
                     <TagIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                     <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Adding to</span>
-                    <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
+                    <span data-testid="tag-label" className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
                     <ChevronDown className={`ml-auto h-4 w-4 shrink-0 text-zinc-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -1222,6 +1254,7 @@ export default function FoodSearchModal({
                               key={t}
                               type="button"
                               onClick={() => { setActiveTag(t); setTagDropdownOpen(false) }}
+                              data-testid={`tag-option-${t}`}
                               className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
                                 activeTag === t
                                   ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
@@ -1438,7 +1471,15 @@ export default function FoodSearchModal({
             </div>
 
             {/* Results */}
-            <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div
+              ref={resultsRef}
+              className="flex-1 overflow-y-auto overscroll-contain"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                paddingBottom: basketHeight ? basketHeight + 24 : undefined,
+                scrollPaddingBottom: basketHeight ? basketHeight + 12 : undefined,
+              }}
+            >
               {/* Meals section — only on "all" tab + query (≥2 chars). Sticky-style header
                   matches the "My Foods" header pattern; chevron toggles collapse. */}
               {((activeTab === 'all' && query.trim().length >= 2 && (mealsLoading || mealResults.length > 0)) || (activeTab === 'meals' && (mealsLoading || mealResults.length > 0))) && (
@@ -2044,11 +2085,15 @@ export default function FoodSearchModal({
                               )}
                               {/* Quantity multiplier box removed — the picker's own
                                   amount+unit is the single source of "how much". */}
-                              <div className="mt-2">
+                              {/* The row that used to be one full-width button.
+                                  Multi-select lives here now: it is the only
+                                  place where "several of these" is already the
+                                  thought in the member's head. */}
+                              <div ref={actionRowRef} className="mt-2 flex items-stretch gap-2">
                                 <button
-                                  onClick={handleAddFood}
+                                  onClick={() => handleAddFood()}
                                   disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
-                                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                  className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                 >
                                   {adding ? (
                                     <>
@@ -2057,19 +2102,37 @@ export default function FoodSearchModal({
                                     </>
                                   ) : (
                                     <>
-                                      <Plus className="h-4 w-4" />
-                                      {isPlanMode
-                                        ? (
-                                            repeatOpen && repeatCount > 1
-                                              ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
-                                              : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
-                                          )
-                                        : mealMode
-                                          ? 'Add to meal'
-                                          : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                      <Plus className="h-4 w-4 shrink-0" />
+                                      <span className="truncate">
+                                        {isPlanMode
+                                          ? (
+                                              repeatOpen && repeatCount > 1
+                                                ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
+                                                : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                            )
+                                          : mealMode
+                                            ? 'Add to meal'
+                                            : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                      </span>
                                     </>
                                   )}
                                 </button>
+                                {/* Hidden once the mode is on: the basket is the
+                                    state indicator from then on, and the primary
+                                    button above already says "Add to meal". */}
+                                {onAddMany && !isPlanMode && !mealMode && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddFood({ startMeal: true })}
+                                    disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
+                                    data-testid="start-meal-mode"
+                                    title="Keep adding items and log them together as one meal"
+                                    className="flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                  >
+                                    <ChefHat className="h-3.5 w-3.5 shrink-0" />
+                                    Build a meal
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </motion.div>
@@ -2082,108 +2145,144 @@ export default function FoodSearchModal({
               )}
             </div>
 
-            {/* Basket tray — docked under the results while building a meal. */}
-            {mealMode && (
-              <div
-                data-testid="meal-basket"
-                className="shrink-0 border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
-              >
-                {basket.length === 0 ? (
-                  <p className="py-1 text-center text-xs text-zinc-500 dark:text-zinc-400">
-                    Add each item as usual &mdash; they&rsquo;ll collect here.
-                  </p>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setBasketOpen(v => !v)}
-                      className="flex w-full items-center justify-between gap-2 text-left"
-                    >
-                      <span className="text-xs font-semibold text-zinc-900 dark:text-white">
-                        {basket.length} item{basket.length === 1 ? '' : 's'}
-                        <span className="ml-2 font-normal tabular-nums text-zinc-500 dark:text-zinc-400">
-                          {Math.round(basketTotals.calories)} cal &middot; {Math.round(basketTotals.protein)}p{' '}
-                          {Math.round(basketTotals.carbs)}c {Math.round(basketTotals.fats)}f
-                        </span>
-                      </span>
-                      <ChevronDown
-                        className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${basketOpen ? 'rotate-180' : ''}`}
-                      />
-                    </button>
-
-                    {basketOpen && (
-                      <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
-                        {basket.map((it, i) => (
-                          <li
-                            key={`${it.id}-${i}`}
-                            className="flex items-center gap-2 rounded-lg bg-zinc-50 px-2 py-1.5 dark:bg-zinc-800"
-                          >
-                            <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-700 dark:text-zinc-200">
-                              {it.name}
-                              {it.servingLabel ? (
-                                <span className="text-zinc-400"> &middot; {it.servingLabel}</span>
-                              ) : null}
-                            </span>
-                            <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
-                              {Math.round((it.nutrition?.calories ?? 0) * (it.servings || 1))} cal
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeFromBasket(i)}
-                              aria-label={`Remove ${it.name}`}
-                              className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-red-600 dark:hover:bg-zinc-700"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {canSaveMeals && (
-                      <div className="mt-2 flex items-center gap-2">
+            {/* Basket — floats over the results instead of docking under them,
+                so the item you are picking stays on screen while the meal you
+                are building stays visible. The scroller above pads itself by
+                this card's measured height so nothing hides behind it. */}
+            <AnimatePresence>
+              {mealMode && (
+                <motion.div
+                  ref={basketRef}
+                  key="meal-basket"
+                  initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+                  data-testid="meal-basket"
+                  className="absolute inset-x-3 bottom-3 z-30 rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95"
+                >
+                  {basket.length === 0 ? (
+                    <div className="flex items-center gap-2">
+                      <ChefHat className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <p className="min-w-0 flex-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        Building a meal &mdash; add each item as usual and they&rsquo;ll collect here.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={exitMealMode}
+                        data-testid="cancel-meal"
+                        aria-label="Cancel meal"
+                        className="shrink-0 rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSaveAsMeal(v => !v)}
-                          aria-pressed={saveAsMeal}
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
-                            saveAsMeal
-                              ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
-                              : 'border-zinc-300 dark:border-zinc-600'
-                          }`}
+                          onClick={() => setBasketOpen(v => !v)}
+                          data-testid="basket-toggle"
+                          aria-expanded={basketOpen}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
                         >
-                          {saveAsMeal && <Check className="h-3 w-3" />}
+                          <span className="min-w-0 text-xs font-semibold text-zinc-900 dark:text-white">
+                            {basket.length} item{basket.length === 1 ? '' : 's'}
+                            <span className="ml-2 font-normal tabular-nums text-zinc-500 dark:text-zinc-400">
+                              {Math.round(basketTotals.calories)} cal &middot; {Math.round(basketTotals.protein)}p{' '}
+                              {Math.round(basketTotals.carbs)}c {Math.round(basketTotals.fats)}f
+                            </span>
+                          </span>
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 shrink-0 text-zinc-400 transition-transform ${basketOpen ? 'rotate-180' : ''}`}
+                          />
                         </button>
-                        {/* Pre-filled and editable in place: naming is friction at
-                            exactly the moment they want to be done. */}
-                        <input
-                          value={mealName}
-                          onChange={e => setMealName(e.target.value)}
-                          disabled={!saveAsMeal}
-                          placeholder={defaultMealName}
-                          data-testid="meal-name"
-                          aria-label="Meal name"
-                          className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 placeholder-zinc-400 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
-                        />
+                        <button
+                          type="button"
+                          onClick={exitMealMode}
+                          data-testid="cancel-meal"
+                          aria-label="Cancel meal"
+                          className="shrink-0 rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
-                    )}
 
-                    <button
-                      type="button"
-                      onClick={handleSubmitBasket}
-                      disabled={submittingMany}
-                      data-testid="submit-basket"
-                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
-                    >
-                      {submittingMany && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      {canSaveMeals && saveAsMeal
-                        ? `Add to meal and log ${basket.length}`
-                        : `Log ${basket.length} item${basket.length === 1 ? '' : 's'}`}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+                      {basketOpen && (
+                        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                          {basket.map((it, i) => (
+                            <li
+                              key={`${it.id}-${i}`}
+                              className="flex items-center gap-2 rounded-lg bg-zinc-50 px-2 py-1.5 dark:bg-zinc-800"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-700 dark:text-zinc-200">
+                                {it.name}
+                                {it.servingLabel ? (
+                                  <span className="text-zinc-400"> &middot; {it.servingLabel}</span>
+                                ) : null}
+                              </span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+                                {Math.round((it.nutrition?.calories ?? 0) * (it.servings || 1))} cal
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeFromBasket(i)}
+                                aria-label={`Remove ${it.name}`}
+                                className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-red-600 dark:hover:bg-zinc-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {canSaveMeals && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSaveAsMeal(v => !v)}
+                            aria-pressed={saveAsMeal}
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                              saveAsMeal
+                                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                                : 'border-zinc-300 dark:border-zinc-600'
+                            }`}
+                          >
+                            {saveAsMeal && <Check className="h-3 w-3" />}
+                          </button>
+                          {/* Pre-filled and editable in place: naming is friction at
+                              exactly the moment they want to be done. */}
+                          <input
+                            value={mealName}
+                            onChange={e => setMealName(e.target.value)}
+                            disabled={!saveAsMeal}
+                            placeholder={defaultMealName}
+                            data-testid="meal-name"
+                            aria-label="Meal name"
+                            className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 placeholder-zinc-400 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleSubmitBasket}
+                        disabled={submittingMany}
+                        data-testid="submit-basket"
+                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                      >
+                        {submittingMany && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        {canSaveMeals && saveAsMeal
+                          ? `Add to meal and log ${basket.length}`
+                          : `Log ${basket.length} item${basket.length === 1 ? '' : 's'}`}
+                      </button>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Save toast */}
             <AnimatePresence>
@@ -2193,7 +2292,9 @@ export default function FoodSearchModal({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.15 }}
-                  className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-lg dark:bg-white/95 dark:text-black"
+                  // Rides above the floating basket rather than under it.
+                  style={{ bottom: basketHeight ? basketHeight + 24 : 16 }}
+                  className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-lg dark:bg-white/95 dark:text-black"
                 >
                   {saveToast}
                 </motion.div>
