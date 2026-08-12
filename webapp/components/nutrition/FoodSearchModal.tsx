@@ -17,6 +17,19 @@ import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
 
+/**
+ * Exactly what `handleAddFood` builds: the legacy IFoodEntry shape plus the
+ * logged* provenance the API tolerates. Named so the multi-add callback and the
+ * basket can share it instead of restating the intersection three times.
+ */
+export type LoggedFoodEntry = IFoodEntry & {
+  servingLabel?: string
+  loggedQuantity?: number
+  loggedUnit?: Unit
+  loggedGramsPerServing?: number
+  loggedMlPerServing?: number
+}
+
 interface FoodSearchModalProps {
   isOpen: boolean
   // Current tag the food will be added under. When omitted, the modal hides
@@ -37,6 +50,21 @@ interface FoodSearchModalProps {
   // without loggedAt. The caller is responsible for routing to /api/meal-plans.
   mode?: 'log' | 'plan'
   onClose: () => void
+  /**
+   * Multi-add. Called with every basket item at once.
+   *
+   * `mealName` is set only when the member wants it kept for reuse; without it
+   * the items are just logged together. Logging several things in one pass is
+   * the actual pain (a burger, its bun and the sauce is three trips through
+   * this sheet today) and it is not worth gating, so saving the MEAL is the
+   * part that checks entitlement, not the multi-add.
+   */
+  onAddMany?: (
+    items: LoggedFoodEntry[],
+    opts: { tag?: string; loggedAt?: string; mealName?: string },
+  ) => Promise<void> | void
+  /** False hides the "save it as a meal" half of the flow (needs `custom-meals`). */
+  canSaveMeals?: boolean
   // Tag is optional — meal-building flow ignores it.
   // loggedAt (ISO string) is optional — passed when user explicitly picks a custom time.
   // planOptions is plan-mode-only — passes the recurrence selection through.
@@ -272,6 +300,8 @@ export default function FoodSearchModal({
   mode = 'log',
   onClose,
   onSelectFood,
+  onAddMany,
+  canSaveMeals = false,
   autoScan = false,
   onSnapPhoto,
   onUpload,
@@ -314,6 +344,16 @@ export default function FoodSearchModal({
   const [variantMenuOpen, setVariantMenuOpen] = useState(false)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
+  // Multi-add. `basket` holds fully-built entries, so each item keeps its own
+  // quantity, unit and serving label — a burger, its bun and the sauce are not
+  // the same amount of anything, and collapsing them to one picker would be
+  // worse than the three trips this replaces.
+  const [mealMode, setMealMode] = useState(false)
+  const [basket, setBasket] = useState<LoggedFoodEntry[]>([])
+  const [basketOpen, setBasketOpen] = useState(false)
+  const [mealName, setMealName] = useState('')
+  const [saveAsMeal, setSaveAsMeal] = useState(true)
+  const [submittingMany, setSubmittingMany] = useState(false)
   const addingRef = useRef(false)
   // User-picked log date as YYYY-MM-DD — null means "Now" (today @ current
   // wall-clock time). Lets users backdate to yesterday / earlier. No time
@@ -913,13 +953,7 @@ export default function FoodSearchModal({
       // logged{Quantity,Unit,GramsPerServing,MlPerServing} fields the API
       // tolerates. Nutrition stays as a per-serving snapshot; `servings`
       // carries the selected amount and quantity multiplier for server totals.
-      const entry: IFoodEntry & {
-        servingLabel?: string
-        loggedQuantity?: number
-        loggedUnit?: Unit
-        loggedGramsPerServing?: number
-        loggedMlPerServing?: number
-      } = {
+      const entry: LoggedFoodEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         foodId: isObjectIdString(foodId) ? foodId : undefined,
         variantId: resolvedVariantId,
@@ -967,12 +1001,19 @@ export default function FoodSearchModal({
         ? { repeat: { every: repeatEvery, count: repeatCount } }
         : undefined
 
-      await onSelectFood(
-        entry,
-        tagPickerEnabled ? activeTag : undefined,
-        loggedAtIso,
-        planOptions,
-      )
+      if (mealMode) {
+        // Straight into the basket. Everything below still runs, so the sheet
+        // returns to the list ready for the next item — which is the whole
+        // point of the mode.
+        setBasket(prev => [...prev, entry])
+      } else {
+        await onSelectFood(
+          entry,
+          tagPickerEnabled ? activeTag : undefined,
+          loggedAtIso,
+          planOptions,
+        )
+      }
       setSelectedFood(null)
       setSelection(null)
       setAddQuantity('1')
@@ -986,6 +1027,76 @@ export default function FoodSearchModal({
     } finally {
       addingRef.current = false
       setAdding(false)
+    }
+  }
+
+  // Running totals for the tray. Each entry's nutrition is PER SERVING and
+  // `servings` carries the multiplier, so the basket has to multiply — summing
+  // the raw nutrition would under-count anyone who logged two of something.
+  const basketTotals = useMemo(() => {
+    return basket.reduce(
+      (t, it) => {
+        const mult = it.servings || 1
+        t.calories += (it.nutrition?.calories ?? 0) * mult
+        t.protein += (it.nutrition?.protein ?? 0) * mult
+        t.carbs += (it.nutrition?.carbs ?? 0) * mult
+        t.fats += (it.nutrition?.fats ?? 0) * mult
+        return t
+      },
+      { calories: 0, protein: 0, carbs: 0, fats: 0 },
+    )
+  }, [basket])
+
+  /**
+   * A name they can accept without thinking about it.
+   *
+   * Naming is friction at exactly the moment someone wants to be finished, so
+   * this is always pre-filled and always editable in place. Two or three items
+   * read best as their names; beyond that the list stops being a name.
+   */
+  const defaultMealName = useMemo(() => {
+    if (basket.length === 0) return ''
+    const names = basket.map(b => b.name.trim()).filter(Boolean)
+    if (names.length <= 3) return names.join(' + ')
+    return `${names.slice(0, 2).join(' + ')} +${names.length - 2} more`
+  }, [basket])
+
+  const removeFromBasket = (idx: number) => {
+    setBasket(prev => {
+      const next = prev.filter((_, i) => i !== idx)
+      if (next.length === 0) setBasketOpen(false)
+      return next
+    })
+  }
+
+  const exitMealMode = () => {
+    setMealMode(false)
+    setBasket([])
+    setBasketOpen(false)
+    setMealName('')
+    setSaveAsMeal(true)
+  }
+
+  const handleSubmitBasket = async () => {
+    if (basket.length === 0 || submittingMany || !onAddMany) return
+    setSubmittingMany(true)
+    try {
+      let loggedAtIso: string | undefined
+      if (!isPlanMode && customDate) loggedAtIso = combineDateWithNowTime(customDate)
+      await onAddMany(basket, {
+        tag: tagPickerEnabled ? activeTag : undefined,
+        loggedAt: loggedAtIso,
+        // Only ask for a meal when they can keep one AND want to. Without this
+        // the items are still logged together, which is the part that matters.
+        mealName:
+          canSaveMeals && saveAsMeal
+            ? (mealName.trim() || defaultMealName || 'Meal')
+            : undefined,
+      })
+      exitMealMode()
+      onClose()
+    } finally {
+      setSubmittingMany(false)
     }
   }
 
@@ -1067,6 +1178,24 @@ export default function FoodSearchModal({
                     <span className="hidden sm:inline">Custom Food</span>
                     <span className="sm:hidden">Custom</span>
                   </Link>
+                  {onAddMany && !isPlanMode && (
+                    <button
+                      type="button"
+                      onClick={() => (mealMode ? exitMealMode() : setMealMode(true))}
+                      data-testid="toggle-meal-mode"
+                      aria-pressed={mealMode}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                        mealMode
+                          ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
+                      }`}
+                      title={mealMode ? 'Stop building a meal' : 'Add several items at once'}
+                    >
+                      <ChefHat className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">{mealMode ? 'Building' : 'Add to meal'}</span>
+                      <span className="sm:hidden">{mealMode ? 'Building' : 'Meal'}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setTagDropdownOpen(v => !v)}
@@ -1935,7 +2064,9 @@ export default function FoodSearchModal({
                                               ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
                                               : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
                                           )
-                                        : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                        : mealMode
+                                          ? 'Add to meal'
+                                          : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
                                     </>
                                   )}
                                 </button>
@@ -1950,6 +2081,109 @@ export default function FoodSearchModal({
                 </div>
               )}
             </div>
+
+            {/* Basket tray — docked under the results while building a meal. */}
+            {mealMode && (
+              <div
+                data-testid="meal-basket"
+                className="shrink-0 border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
+              >
+                {basket.length === 0 ? (
+                  <p className="py-1 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                    Add each item as usual &mdash; they&rsquo;ll collect here.
+                  </p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setBasketOpen(v => !v)}
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                    >
+                      <span className="text-xs font-semibold text-zinc-900 dark:text-white">
+                        {basket.length} item{basket.length === 1 ? '' : 's'}
+                        <span className="ml-2 font-normal tabular-nums text-zinc-500 dark:text-zinc-400">
+                          {Math.round(basketTotals.calories)} cal &middot; {Math.round(basketTotals.protein)}p{' '}
+                          {Math.round(basketTotals.carbs)}c {Math.round(basketTotals.fats)}f
+                        </span>
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${basketOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+
+                    {basketOpen && (
+                      <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                        {basket.map((it, i) => (
+                          <li
+                            key={`${it.id}-${i}`}
+                            className="flex items-center gap-2 rounded-lg bg-zinc-50 px-2 py-1.5 dark:bg-zinc-800"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-700 dark:text-zinc-200">
+                              {it.name}
+                              {it.servingLabel ? (
+                                <span className="text-zinc-400"> &middot; {it.servingLabel}</span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+                              {Math.round((it.nutrition?.calories ?? 0) * (it.servings || 1))} cal
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeFromBasket(i)}
+                              aria-label={`Remove ${it.name}`}
+                              className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-red-600 dark:hover:bg-zinc-700"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {canSaveMeals && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSaveAsMeal(v => !v)}
+                          aria-pressed={saveAsMeal}
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                            saveAsMeal
+                              ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                              : 'border-zinc-300 dark:border-zinc-600'
+                          }`}
+                        >
+                          {saveAsMeal && <Check className="h-3 w-3" />}
+                        </button>
+                        {/* Pre-filled and editable in place: naming is friction at
+                            exactly the moment they want to be done. */}
+                        <input
+                          value={mealName}
+                          onChange={e => setMealName(e.target.value)}
+                          disabled={!saveAsMeal}
+                          placeholder={defaultMealName}
+                          data-testid="meal-name"
+                          aria-label="Meal name"
+                          className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 placeholder-zinc-400 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleSubmitBasket}
+                      disabled={submittingMany}
+                      data-testid="submit-basket"
+                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                    >
+                      {submittingMany && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {canSaveMeals && saveAsMeal
+                        ? `Add to meal and log ${basket.length}`
+                        : `Log ${basket.length} item${basket.length === 1 ? '' : 's'}`}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Save toast */}
             <AnimatePresence>

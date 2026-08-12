@@ -11,7 +11,7 @@ import NutritionAITeaser from '@/components/nutrition/NutritionAITeaser'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import TagSection, { type MealLogLite } from '@/components/nutrition/TagSection'
 import WaterTracker from '@/components/nutrition/WaterTracker'
-import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import FoodSearchModal, { type LoggedFoodEntry } from '@/components/nutrition/FoodSearchModal'
 import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
@@ -165,6 +165,10 @@ function NutritionPageInner() {
   // this meal" on a logged meal group) rather than the smart tag-append.
   const [addToLogId, setAddToLogId] = useState<string | null>(null)
   const { toast, showToast } = useToast(4000)
+  // Saving a reusable meal needs `custom-meals`; multi-add does not. Fetched
+  // rather than assumed so a free member sees "Log 3 items" instead of an
+  // "Add to meal" that the server would reject.
+  const [canSaveMeals, setCanSaveMeals] = useState(false)
   // "+ Add tag" inline input state
   const [showAddTagInput, setShowAddTagInput] = useState(false)
   const [newTagInput, setNewTagInput] = useState('')
@@ -263,6 +267,18 @@ function NutritionPageInner() {
   }, [])
 
   // ── Fetchers ───────────────────────────────────────────────────────────────
+
+  const fetchEntitlements = useCallback(async () => {
+    try {
+      const res = await fetch('/api/me/entitlements', { headers: getHeaders() })
+      if (!res.ok) return
+      const data = await res.json()
+      setCanSaveMeals(Boolean(data?.features?.['custom-meals']?.allowed))
+    } catch {
+      // Leave it false: the worst case is multi-add without meal saving, which
+      // still logs everything they picked.
+    }
+  }, [getHeaders])
 
   const fetchMealLogs = useCallback(async () => {
     try {
@@ -363,11 +379,11 @@ function NutritionPageInner() {
   useEffect(() => {
     async function init() {
       if (!didInitialLoad.current) setLoading(true)
-      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchEntitlements()])
       if (!didInitialLoad.current) { setLoading(false); didInitialLoad.current = true }
     }
     init()
-  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchEntitlements])
 
   // Re-open a saved scan to edit (?scan=<id> from the Scan history "Edit"):
   // fetch it and open the plate review pre-loaded with its items.
@@ -479,6 +495,89 @@ function NutritionPageInner() {
       return primary === norm
     })
   }, [logs])
+
+  /**
+   * The legacy IFoodEntry shape -> MealItemInput. Shared so the single-add and
+   * multi-add paths cannot drift on which provenance fields they forward.
+   */
+  const toMealItemInput = (food: LoggedFoodEntry) => ({
+    foodId: food.foodId,
+    variantId: food.variantId,
+    variantName: food.variantName,
+    name: food.name,
+    brand: food.brand,
+    servingSize: food.servingSize,
+    servingUnit: food.servingUnit,
+    servings: food.servings,
+    nutrition: food.nutrition,
+    servingLabel: food.servingLabel,
+    loggedQuantity: food.loggedQuantity,
+    loggedUnit: food.loggedUnit,
+    loggedGramsPerServing: food.loggedGramsPerServing,
+    loggedMlPerServing: food.loggedMlPerServing,
+  })
+
+  /**
+   * Log a whole basket in one pass, optionally keeping it as a reusable meal.
+   *
+   * Logging several items together is the point — a burger, its bun and the
+   * sauce were three round trips through the search sheet. Saving the MEAL is
+   * the extra, and it is what needs `custom-meals`, so a member without the
+   * entitlement still gets the multi-add.
+   *
+   * Order matters: the log is what the member asked for, so it goes first and
+   * a failure to save the meal never costs them the log.
+   */
+  const handleAddMany = async (
+    entries: LoggedFoodEntry[],
+    opts: { tag?: string; loggedAt?: string; mealName?: string },
+  ) => {
+    if (entries.length === 0) return
+    const useTag = (opts.tag || foodSearchTag || 'snack').toLowerCase()
+    const items = entries.map(toMealItemInput)
+
+    try {
+      const res = await fetch('/api/meal-logs', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          source: 'manual',
+          tags: [useTag],
+          items,
+          // Name the log even when they are not saving a reusable meal, so the
+          // day reads "Turkey sandwich" instead of three loose rows.
+          ...(opts.mealName ? { mealName: opts.mealName } : {}),
+          ...(opts.loggedAt ? { loggedAt: opts.loggedAt } : {}),
+        }),
+      })
+      if (!res.ok) {
+        showToast('Could not log those items.', 'error')
+        return
+      }
+
+      if (opts.mealName) {
+        // Best effort. The items are already logged; failing to keep the meal
+        // is worth a quieter message than losing the log would be.
+        const mealRes = await fetch('/api/meals', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ name: opts.mealName, items }),
+        })
+        showToast(
+          mealRes.ok
+            ? `Logged ${entries.length} items and saved "${opts.mealName}"`
+            : `Logged ${entries.length} items. Could not save the meal.`,
+          mealRes.ok ? 'success' : 'error',
+        )
+      } else {
+        showToast(`Logged ${entries.length} item${entries.length === 1 ? '' : 's'}`, 'success')
+      }
+
+      await fetchMealLogs()
+    } catch {
+      showToast('Could not log those items.', 'error')
+    }
+  }
 
   const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string) => {
     const useTag = (tag || foodSearchTag || 'snack').toLowerCase()
@@ -1222,6 +1321,8 @@ function NutritionPageInner() {
         onUpload={() => openSnapUpload()}
         onDescribe={(text) => openDescribe(text)}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null); setAddToLogId(null) }}
+        onAddMany={handleAddMany}
+        canSaveMeals={canSaveMeals}
         onSelectFood={(entry, tag, loggedAt) => {
           if (planForDate) {
             // Submit to /api/meal-plans inline since the nutrition page's
