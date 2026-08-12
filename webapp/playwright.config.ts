@@ -259,6 +259,12 @@ export default defineConfig({
       },
     },
     {
+      name: 'meal-multiselect',
+      testMatch: '**/meal-multiselect.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
       name: 'nutrition-regression',
       testMatch: '**/nutrition-regression.spec.ts',
       timeout: 120_000,
