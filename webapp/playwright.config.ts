@@ -259,6 +259,13 @@ export default defineConfig({
       },
     },
     {
+      name: 'mind-audit',
+      testMatch: '**/mind-session-audit.spec.ts',
+      timeout: 180_000,
+      retries: 0,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
       name: 'meal-combine',
       testMatch: '**/meal-combine.spec.ts',
       timeout: 120_000,
