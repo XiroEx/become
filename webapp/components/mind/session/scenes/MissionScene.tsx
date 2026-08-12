@@ -24,10 +24,17 @@ import type { SceneProps } from '@/lib/mind/moves'
 const QUESTION = 'What is your one move today?'
 
 export default function MissionScene({ move, onDone }: SceneProps) {
-  // A saved daily action is a suggestion, not the answer. Anything long or
-  // question-shaped is composer commentary, not something to commit to.
+  // A saved daily action is a suggestion, not the answer.
+  //
+  // This used to disqualify anything over 14 words, on the theory that long text
+  // was composer commentary. But `move.prompt` is the member's OWN saved mission
+  // action, and theirs ran 15 words — so their real move was demoted to grey
+  // commentary and they got a screen with no question on it at all. Length is
+  // not the signal; shape is. Reject what reads like a prompt back at them,
+  // and otherwise trust what they saved.
   const saved = move.prompt?.trim()
-  const savedIsAction = !!saved && saved.split(/\s+/).length <= 14 && !saved.endsWith('?')
+  const COMMENTARY = /^(consider|think about|notice|reflect|ask yourself|try|remember)\b/i
+  const savedIsAction = !!saved && !saved.endsWith('?') && !COMMENTARY.test(saved)
 
   const [writing, setWriting] = useState(!savedIsAction)
   const [text, setText] = useState('')
@@ -60,10 +67,13 @@ export default function MissionScene({ move, onDone }: SceneProps) {
       <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15">
         <Target className="h-6 w-6 text-amber-300" />
       </span>
-      <p className="text-xs uppercase tracking-widest text-white/40">Your one move today</p>
-      <h1 className="mt-4 max-w-sm text-2xl font-extrabold leading-snug">{move.title || QUESTION}</h1>
+      <p className="text-xs uppercase tracking-widest text-white/40">{move.title || 'Your one move today'}</p>
+      {/* The heading is the QUESTION. It used to be `move.title || QUESTION`,
+          and title is always set ("Lock in"), so the screen asked nothing and
+          the member had to infer what it wanted from them. */}
+      <h1 className="mt-4 max-w-sm text-2xl font-extrabold leading-snug">{QUESTION}</h1>
 
-      {/* Composer commentary is context, never the answer. */}
+      {/* Anything prompt-shaped is context, never the answer. */}
       {saved && !savedIsAction && (
         <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/50">{saved}</p>
       )}
