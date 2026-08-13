@@ -734,9 +734,11 @@ function mapOffToVariant(off: IOpenFoodFact): IFoodVariant {
   const n = off.nutriments
   const nutrition = {
     calories: plausibleOffKcal(n),
-    protein: Math.round((n.proteins_100g ?? 0) * 10) / 10,
-    carbs: Math.round((n.carbohydrates_100g ?? 0) * 10) / 10,
-    fats: Math.round((n.fat_100g ?? 0) * 10) / 10,
+    // Kept exact: these are a per-100 basis that every serving is scaled FROM,
+    // so a tenth of a gram lost here is multiplied by every portion after it.
+    protein: n.proteins_100g ?? 0,
+    carbs: n.carbohydrates_100g ?? 0,
+    fats: n.fat_100g ?? 0,
     fiber: n.fiber_100g != null ? Math.round(n.fiber_100g * 10) / 10 : undefined,
     sugar: n.sugars_100g != null ? Math.round(n.sugars_100g * 10) / 10 : undefined,
     sodium: n.sodium_100g != null ? Math.round(n.sodium_100g * 1000) / 1000 : undefined,
