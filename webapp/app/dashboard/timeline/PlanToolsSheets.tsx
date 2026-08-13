@@ -526,7 +526,7 @@ export function ApplyMealToDaysSheet({
             {step === 'pick-meal' ? (
               <div className="flex-1 overflow-y-auto p-5 space-y-3">
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Pick a meal template to apply across one or more days.
+                  Pick a saved meal to apply across one or more days.
                 </p>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />

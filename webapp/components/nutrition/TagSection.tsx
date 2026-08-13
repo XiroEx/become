@@ -426,7 +426,7 @@ export default function TagSection({
                             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                           >
                             <ChefHat className="h-3.5 w-3.5 text-orange-500" />
-                            Apply meal template…
+                            Apply a saved meal…
                           </button>
                         )}
                         {canCombine && (
@@ -622,40 +622,57 @@ export default function TagSection({
                     )
                   ))}
 
-                  {/* Planned rows — one per item per plan. Visually distinct
-                      via a "Planned" pill on the leading row. */}
+                  {/* Planned block.
+                      A plan made FROM A MEAL keeps its shape here: it renders as
+                      one collapsed card (meal name + total), matching how a
+                      logged meal renders above, instead of spilling its
+                      ingredients into the tag as loose rows. Planning a 3-item
+                      meal used to produce 3 unrelated "Planned" rows with the
+                      meal names collapsed into a comma list in this header, so
+                      nothing tied an item to the meal it came from.
+                      Plans without a mealName are genuinely loose items and
+                      still render as individual rows. */}
                   {plans.length > 0 && (
                     <div className={flat.length > 0 ? 'border-t border-zinc-200 dark:border-zinc-800' : ''}>
                       <div className="flex items-center gap-1.5 bg-blue-50/60 px-3 py-1.5 dark:bg-blue-900/10">
                         <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                           Planned
                         </span>
-                        {plans.some(p => p.mealName) && (
-                          <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                            {plans.filter(p => p.mealName).map(p => p.mealName).join(', ')}
-                          </span>
-                        )}
-                        {onLogPlan && (
+                        {/* Only offer a blanket "log everything" when it would do
+                            something a single meal card's own button cannot. */}
+                        {onLogPlan && (plans.length > 1 || plans.some(p => !p.mealName)) && (
                           <button
                             onClick={() => plans.forEach(p => onLogPlan(p._id))}
                             className="ml-auto inline-flex shrink-0 items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700"
                           >
-                            Log it
+                            {plans.length > 1 ? 'Log all' : 'Log it'}
                           </button>
                         )}
                       </div>
                       <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                        {plans.map((plan) =>
-                          plan.items.map((item) => (
-                            <PlanItemRow
-                              key={`${plan._id}-${item._id ?? Math.random()}`}
-                              planId={plan._id}
-                              item={item}
-                              onEdit={onEditPlanItem ? () => onEditPlanItem(plan._id, item, plan.items) : undefined}
-                              onDelete={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                        {plans.map((plan) => (
+                          plan.mealName ? (
+                            <PlannedMealCard
+                              key={plan._id}
+                              plan={plan}
+                              onLog={onLogPlan ? () => onLogPlan(plan._id) : undefined}
+                              onRemove={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                              onEditItem={onEditPlanItem
+                                ? (item) => onEditPlanItem(plan._id, item, plan.items)
+                                : undefined}
                             />
-                          )),
-                        )}
+                          ) : (
+                            plan.items.map((item) => (
+                              <PlanItemRow
+                                key={`${plan._id}-${item._id ?? Math.random()}`}
+                                planId={plan._id}
+                                item={item}
+                                onEdit={onEditPlanItem ? () => onEditPlanItem(plan._id, item, plan.items) : undefined}
+                                onDelete={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                              />
+                            ))
+                          )
+                        ))}
                       </div>
                     </div>
                   )}
@@ -757,6 +774,85 @@ function MealGroupCard({
   )
 }
 
+// ── Planned meal card ────────────────────────────────────────────────────────
+//
+// The planned twin of MealGroupCard. A plan created from a saved meal is ONE
+// plan document carrying mealId + mealName + every item, so the grouping was
+// always in the data; the tag section just used to flatten it away and render
+// each ingredient as its own "Planned" row.
+//
+// Deliberately mirrors MealGroupCard's shape (collapsed to name + total, tap to
+// expand) so a meal reads the same whether it is planned or already eaten, and
+// only the colour changes: blue for planned, orange for logged.
+interface PlannedMealCardProps {
+  plan: MealPlan
+  /** Promote just this meal. Absent on days where logging makes no sense. */
+  onLog?: () => void
+  onRemove?: () => void
+  onEditItem?: (item: IMealItem & { _id?: string }) => void
+}
+
+function PlannedMealCard({ plan, onLog, onRemove, onEditItem }: PlannedMealCardProps) {
+  const [open, setOpen] = useState(false)
+  // expectedNutrition is authoritative (the server computed it when the plan was
+  // created); fall back to summing items if an older plan predates it.
+  const totalCal = Math.round(
+    plan.expectedNutrition?.calories
+    ?? plan.items.reduce((s, it) => s + (it.nutrition?.calories ?? 0) * (it.servings ?? 1), 0),
+  )
+  return (
+    <div className="mx-3 my-2 overflow-hidden rounded-xl border border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-900/10">
+      <div className={`flex items-center gap-1.5 px-3 py-2.5 ${open ? 'border-b border-blue-200/70 dark:border-blue-900/40' : ''}`}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          aria-expanded={open}
+        >
+          <ChefHat className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-blue-700/70 dark:text-blue-300/70">Meal</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{plan.mealName}</span>
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
+          <ChevronDown className={`h-4 w-4 shrink-0 text-blue-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+        </button>
+        {onLog && (
+          <button
+            onClick={onLog}
+            className="inline-flex shrink-0 items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            Log it
+          </button>
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-blue-100 dark:divide-blue-900/30">
+              {plan.items.map((item, idx) => (
+                <PlanItemRow
+                  key={`${plan._id}-${item._id ?? idx}`}
+                  planId={plan._id}
+                  item={item}
+                  hideBadge
+                  onEdit={onEditItem ? () => onEditItem(item) : undefined}
+                  // Deleting one ingredient of a planned meal deletes the plan,
+                  // same as the flat rows did — the plan is the unit.
+                  onDelete={onRemove}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 // ── Capture group — a multi-food capture (photo / barcode / upload / describe)
 // that wasn't saved as a Meal. Groups the foods under a source-colored, bordered
 // card with the matching icon + label, so it reads as one capture at a glance. ──
@@ -821,9 +917,13 @@ interface PlanItemRowProps {
   item: IMealItem & { _id?: string }
   onEdit?: () => void
   onDelete?: () => void
+  /** Drop the per-row "Planned" pill. Set inside a PlannedMealCard, where the
+   *  card sits under the PLANNED header already and repeating the word on every
+   *  ingredient is just noise. */
+  hideBadge?: boolean
 }
 
-function PlanItemRow({ item, onEdit, onDelete }: PlanItemRowProps) {
+function PlanItemRow({ item, onEdit, onDelete, hideBadge }: PlanItemRowProps) {
   const showVariant = shouldShowVariantName(item.variantName)
   return (
     <div className="bg-blue-50/30 dark:bg-blue-900/5">
@@ -834,7 +934,7 @@ function PlanItemRow({ item, onEdit, onDelete }: PlanItemRowProps) {
         brand={item.brand}
         servingLabel={item.servingLabel}
         hardAmount={hardAmountOf(item)}
-        badges={[{ label: 'Planned', tone: 'zinc' }]}
+        badges={hideBadge ? [] : [{ label: 'Planned', tone: 'zinc' }]}
         calories={Math.round((item.nutrition?.calories ?? 0) * (item.servings ?? 1))}
         macros={scaledMacrosOf(item)}
         onEdit={onEdit}

@@ -13,7 +13,7 @@
 //                     opens the FoodSearchModal in plan mode pinned to the
 //                     drawer's date. Also exposes per-slot "↻ Apply meal" which
 //                     opens MealApplySheet in plan mode.
-//   • From template — pick a saved Meal template and apply it to a tag across
+//   • From meals — pick a saved Meal and apply it to a tag across
 //                     a range of future dates with optional recurrence. POSTs
 //                     to /api/meal-plans/bulk-from-meal.
 //   • Copy day      — duplicate a source day's logs or plans onto target
@@ -492,7 +492,7 @@ export default function ScheduleMealsDrawer({
                   active={activeTab === 'from-template'}
                   onClick={() => setActiveTab('from-template')}
                   icon={<ChefHat className="h-3.5 w-3.5" />}
-                  label="From template"
+                  label="From meals"
                 />
                 <TabButton
                   active={activeTab === 'copy-day'}
@@ -762,9 +762,9 @@ function ByDayTab({
               <button
                 type="button"
                 onClick={() => onApplyMeal(tag)}
-                aria-label={`Apply meal template to ${titleCaseTag(tag)}`}
+                aria-label={`Apply a saved meal to ${titleCaseTag(tag)}`}
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                title="Apply meal template"
+                title="Apply a saved meal"
               >
                 <ChefHat className="h-4 w-4" />
               </button>
@@ -955,7 +955,7 @@ function FromTemplateTab({ fromKey, toKey, availableTags, onApplied }: FromTempl
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Apply a saved meal template across {targetDates.length === 1 ? 'this date' : `${targetDates.length} dates`}
+        Apply a saved meal across {targetDates.length === 1 ? 'this date' : `${targetDates.length} dates`}
         {repeatOpen && repeatCount > 1 ? ` × ${repeatCount} (${totalTargets} plans)` : ''}.
       </p>
 
