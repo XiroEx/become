@@ -9,6 +9,7 @@
 // misreading of a label change what everybody else sees.
 
 import { useRef, useState } from 'react'
+import EvidencePhotoPicker from './EvidencePhotoPicker'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, Check, X, Loader2, Pencil, Camera, ImagePlus, Trash2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
@@ -76,6 +77,11 @@ export default function FlagFoodSheet({
   // reason. Uploaded ahead of the report so the flag carries a durable URL
   // rather than an object URL that dies with the tab.
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  // Extra shots beyond the first. One frame rarely carries BOTH the barcode and
+  // the panel, and the reviewer needs both to tell a wrong number from a
+  // different product — which is exactly the mistake it made on Mission's
+  // tortillas.
+  const [extraPhotos, setExtraPhotos] = useState<string[]>([])
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
@@ -148,7 +154,8 @@ export default function FlagFoodSheet({
           kind: kinds[0],
           kinds,
           note: note.trim() || undefined,
-          photoUrl: photoUrl || undefined,
+          photoUrl: photoUrl || extraPhotos[0] || undefined,
+          photoUrls: [photoUrl, ...extraPhotos].filter(Boolean),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -391,6 +398,15 @@ export default function FlagFoodSheet({
                     </button>
                   </div>
                 )}
+
+                <div className="mb-4">
+                  <EvidencePhotoPicker
+                    photos={extraPhotos}
+                    onChange={setExtraPhotos}
+                    onError={setError}
+                    disabled={submitting}
+                  />
+                </div>
 
                 <label htmlFor="flag-note" className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Anything else? (optional)

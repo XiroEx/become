@@ -55,6 +55,12 @@ export interface IFoodFlag {
   escalatedAt?: Date
   /** How many times this report has been reviewed. Re-uploads bump it. */
   rounds?: number
+  /**
+   * When the reporter last opened the outcome. Unread until then, which is what
+   * puts the badge on their avatar — a report that came back "no change" is
+   * worth telling them about, not just filing.
+   */
+  seenAt?: Date
 
   /** What the user believes the values should be. A HINT for the reviewer, not
    *  a correction to apply — users misread panels too, and the per-100g vs
@@ -95,6 +101,7 @@ const FoodFlagSchema = new Schema<IFoodFlag>(
     photoUrls: { type: [String], default: undefined },
     escalatedAt: { type: Date },
     rounds: { type: Number, default: 1, min: 1 },
+    seenAt: { type: Date },
 
     claimedValues: {
       calories: { type: Number },
