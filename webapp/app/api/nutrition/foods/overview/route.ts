@@ -6,9 +6,18 @@ import Food from '@/models/Food'
 import Meal from '@/models/Meal'
 import User from '@/models/User'
 import mongoose from 'mongoose'
+import { flattenFoodForResponse } from '@/lib/foodImport'
+import type { IFood } from '@/models/Food'
 
 /**
  * The four short lists behind the empty search box.
+ *
+ * EVERY food row goes through flattenFoodForResponse. The rest of the app —
+ * rowCalories, preferredServingLabel, the whole result row — reads a FLATTENED
+ * shape where nutrition/servingSize sit at the top level. A raw Food doc keeps
+ * those on the default variant instead, so returning one crashes the row
+ * renderer outright (`food.nutrition.calories` on undefined) and takes the page
+ * down with it. That is exactly what the first version of this endpoint did.
  *
  * Opening the sheet used to dump the member's entire saved-foods list under a
  * "FOODS" banner — which was byte-for-byte the Foods filter, minus the banner.
@@ -102,7 +111,7 @@ export async function GET(request: NextRequest) {
         return (savedAtById.get(kb) ?? 0) - (savedAtById.get(ka) ?? 0)
       })
       .slice(0, PER_SECTION)
-      .map(f => ({ ...f, isSaved: true }))
+      .map(f => ({ ...flattenFoodForResponse(f as unknown as IFood & { _id: mongoose.Types.ObjectId }), isSaved: true }))
 
     // ── Meals: same ordering rule ────────────────────────────────────────────
     const mealDocs = await Meal.find({ user: auth.userId })
@@ -129,7 +138,7 @@ export async function GET(request: NextRequest) {
     const recent = recentItems.map(({ item }) => {
       const id = item.foodId ? String(item.foodId) : null
       const doc = id ? recentById.get(id) : null
-      if (doc) return doc
+      if (doc) return flattenFoodForResponse(doc as unknown as IFood & { _id: mongoose.Types.ObjectId })
       // Logged without a Food behind it (a quick-add or a photo estimate). Keep
       // the row rather than dropping it — it is still the thing they ate.
       return {
@@ -172,6 +181,7 @@ export async function GET(request: NextRequest) {
     const frequent = frequentIds
       .map(id => frequentDocs.find(f => String(f._id) === id))
       .filter(Boolean)
+      .map(f => flattenFoodForResponse(f as unknown as IFood & { _id: mongoose.Types.ObjectId }))
 
     return NextResponse.json({ foods, meals, recent, frequent })
   } catch (error) {
