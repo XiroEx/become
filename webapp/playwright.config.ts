@@ -266,6 +266,13 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
     },
     {
+      name: 'search-overview',
+      testMatch: '**/search-overview.spec.ts',
+      timeout: 120_000,
+      retries: 0,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
       name: 'meal-combine',
       testMatch: '**/meal-combine.spec.ts',
       timeout: 120_000,
