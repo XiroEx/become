@@ -39,7 +39,22 @@ export interface IFoodFlag {
 
   /** The user's own photo of the nutrition panel. The single strongest evidence
    *  type we can get — they are holding the package. Fed to the evidence run. */
+  /** First photo, kept for rows written before multi-upload existed. */
   photoUrl?: string
+  /**
+   * Every photo on this report. A single shot rarely carries both the barcode
+   * and the panel, and the reviewer needs both to tie a label to a product.
+   */
+  photoUrls?: string[]
+  /**
+   * Escalated to a human because review ended in no change while the member was
+   * still holding a photo that contradicts the record. The online sources and
+   * our own row can BOTH be stale copies of the same wrong figure, and no amount
+   * of re-reading them fixes that — only a person with the packet in hand can.
+   */
+  escalatedAt?: Date
+  /** How many times this report has been reviewed. Re-uploads bump it. */
+  rounds?: number
 
   /** What the user believes the values should be. A HINT for the reviewer, not
    *  a correction to apply — users misread panels too, and the per-100g vs
@@ -77,6 +92,9 @@ const FoodFlagSchema = new Schema<IFoodFlag>(
     kinds: [{ type: String, enum: ['calories', 'macros', 'serving', 'other'] }],
     note: { type: String, maxlength: 1000 },
     photoUrl: { type: String },
+    photoUrls: { type: [String], default: undefined },
+    escalatedAt: { type: Date },
+    rounds: { type: Number, default: 1, min: 1 },
 
     claimedValues: {
       calories: { type: Number },
