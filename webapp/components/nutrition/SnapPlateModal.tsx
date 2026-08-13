@@ -138,7 +138,7 @@ type ModalState =
   | { phase: 'describe' }
   | { phase: 'compose'; dataUrl: string }
   | { phase: 'loading'; loadingMsg: string }
-  | { phase: 'error'; message: string }
+  | { phase: 'error'; message: string; hint?: string }
   | { phase: 'review'; items: ReviewItem[]; imageThumb: string }
   | { phase: 'logging' }
 
@@ -712,23 +712,46 @@ export default function SnapPlateModal({
   const pickGallery = () => galleryInputRef.current?.click()
 
   // Shared loading→review/error wrapper for any estimate source.
+  //
+  // Two different failures used to print the same sentence, and the sentence
+  // blamed the member either way:
+  //
+  //   1. The model answered and found nothing in what they gave us. Asking for
+  //      more detail is the right response.
+  //   2. Nothing came back at all — the AI backend was down, over its spend cap,
+  //      or timed out. Asking for more detail sends someone off rewriting a
+  //      perfectly good description against a service that is not answering.
+  //
+  // Those are distinguishable for free: aiEngine RETURNS `items: []` for (1) and
+  // THROWS for (2), because it only throws when no usable response arrived. So
+  // the catch branch is the service-fault branch by construction, and it says so.
+  //
+  // (2) is not hypothetical: on 2026-08-13 the Gemini spend cap was hit and every
+  // estimate failed for ~4.5h while telling members their descriptions were the
+  // problem.
   const runEstimate = useCallback(async (
     make: () => Promise<PlateEstimate>,
     imageThumb: string,
     failMsg: string,
     loadingMsg = 'Reading your plate…',
+    /** Photo-only advice. Must stay off the text path, where it is a non-sequitur. */
+    failHint?: string,
   ) => {
     setState({ phase: 'loading', loadingMsg })
     try {
       const estimate = await make()
       if (!estimate.items || estimate.items.length === 0) {
-        setState({ phase: 'error', message: failMsg })
+        setState({ phase: 'error', message: failMsg, hint: failHint })
         return
       }
       setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
       if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] estimate error', err)
-      setState({ phase: 'error', message: failMsg })
+      setState({
+        phase: 'error',
+        message: "Couldn't reach the food AI just now.",
+        hint: 'That one is on our end, not yours. Give it a minute and try again.',
+      })
     }
   }, [])
 
@@ -739,7 +762,7 @@ export default function SnapPlateModal({
     runEstimate(
       () => plateEstimator.estimateFromText({ description: t }, { userId: '' }),
       '',
-      "Couldn't estimate that — try adding a little more detail.",
+      "Couldn't estimate that. Try adding a little more detail.",
       'Estimating…',
     )
   }
@@ -751,8 +774,9 @@ export default function SnapPlateModal({
     runEstimate(
       () => plateEstimator.estimate(dataUrl, { userId: '' }, noteArg),
       dataUrl,
-      "Couldn't read that plate — try a clearer, well-lit photo.",
+      "Couldn't read that plate.",
       'Reading your plate…',
+      'For best results, use good lighting and show the whole plate.',
     )
   }
 
@@ -774,17 +798,18 @@ export default function SnapPlateModal({
         estimate = await plateEstimator.estimateFromText({ priorEstimate: prior, correction: c }, { userId: '' })
       }
       if (!estimate.items || estimate.items.length === 0) {
-        // Return to the review with the original items + show a toast.
+        // The model answered and could not act on the wording. Rephrasing helps.
         setState({ phase: 'review', items: priorItems, imageThumb })
-        showToast("Couldn't apply that — try rephrasing.", 'error')
+        showToast("Couldn't apply that. Try rephrasing.", 'error')
         return
       }
       setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
       if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] correction error', err)
-      // Stay on review with original items.
+      // Nothing came back at all. Rephrasing cannot fix a backend that is not
+      // answering, so do not ask for it. See runEstimate for the full reasoning.
       setState({ phase: 'review', items: priorItems, imageThumb })
-      showToast("Couldn't apply that — try rephrasing.", 'error')
+      showToast("Couldn't reach the food AI. Try again in a minute.", 'error')
     }
   }, [showToast])
 
@@ -1284,9 +1309,9 @@ export default function SnapPlateModal({
                     </div>
                     <div>
                       <p className="font-semibold text-zinc-900 dark:text-white">{state.message}</p>
-                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        For best results, use good lighting and show the whole plate.
-                      </p>
+                      {state.hint && (
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{state.hint}</p>
+                      )}
                     </div>
                     <div className="flex gap-2 mt-2">
                       <button
