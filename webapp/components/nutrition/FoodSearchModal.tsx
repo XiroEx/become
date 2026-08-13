@@ -331,6 +331,18 @@ export default function FoodSearchModal({
   // is active rather than being a tab of its own, so "Recent, verified only" and
   // "search chicken, verified only" both work.
   const [verifiedOnly, setVerifiedOnly] = useState(false)
+  /**
+   * The four short lists behind an empty search box.
+   *
+   * Opening the sheet used to dump the whole saved-foods list under a "FOODS"
+   * banner — byte-for-byte the Foods filter minus the banner, which left three
+   * of the four chips unexplained until you tapped one. A preview of each makes
+   * the chips read as "more of that".
+   */
+  const [overview, setOverview] = useState<{
+    foods: FoodResult[]; meals: MealResult[]; recent: FoodResult[]; frequent: FoodResult[]
+  } | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(false)
 
   // Verified is hidden while the box is empty, so it must also be RELEASED then.
   // Otherwise clearing the query leaves a filter switched on with no chip on
@@ -576,6 +588,61 @@ export default function FoodSearchModal({
     }
   }, [])
 
+  /**
+   * The overview flattened into one list, with the index each section starts at.
+   *
+   * The row markup lives inline in the results map and is several hundred lines;
+   * rendering four sections meant either duplicating it or threading section
+   * boundaries through it. This is the second, which keeps one renderer.
+   *
+   * A food can legitimately appear in more than one section (a saved food eaten
+   * this morning is both a Food and Recent) — that is the point of showing them
+   * separately, so they are NOT deduped across sections.
+   */
+  /** The empty-box landing state on the default filter. */
+  const showOverview = activeTab === 'all' && query.trim().length < 2 && !!overview
+
+  const overviewRows = useMemo(() => {
+    if (!overview) return { rows: [] as FoodResult[], headers: new Map<number, string>() }
+    const rows: FoodResult[] = []
+    const headers = new Map<number, string>()
+    const push = (label: string, items: FoodResult[]) => {
+      if (!items.length) return
+      headers.set(rows.length, label)
+      rows.push(...items)
+    }
+    push('Your foods', overview.foods)
+    push('Recent', overview.recent)
+    push('Frequent', overview.frequent)
+    return { rows, headers }
+  }, [overview])
+
+  const fetchOverview = useCallback(async () => {
+    setOverviewLoading(true)
+    try {
+      const token = getToken()
+      const res = await fetch('/api/nutrition/foods/overview', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) { setOverview(null); return }
+      const data = await res.json()
+      const next = {
+        foods: data.foods ?? [],
+        meals: data.meals ?? [],
+        recent: data.recent ?? [],
+        frequent: data.frequent ?? [],
+      }
+      setOverview(next)
+      // Meals render through the existing Meals section rather than a fourth
+      // copy of the row markup.
+      setMealResults(next.meals)
+    } catch {
+      setOverview(null)
+    } finally {
+      setOverviewLoading(false)
+    }
+  }, [])
+
   const fetchResults = useCallback(
     async (searchQuery: string, tab: TabId, verified: boolean) => {
       setLoading(true)
@@ -639,15 +706,16 @@ export default function FoodSearchModal({
       return
     }
 
-    // "all" tab with an empty query: show the user's saved foods as the landing
-    // view. Falls back to the standard "type 2 chars" empty state if they have none.
+    // Default filter, empty box: the four-section overview rather than a dump of
+    // saved foods (which was identical to the Foods filter and explained none of
+    // the other chips).
     if (query.trim().length < 2) {
+      setResults([])
       if (activeTab === 'all') {
-        fetchResults('', 'mine', verifiedOnly)
+        fetchOverview() // repopulates mealResults from the overview
       } else {
-        setResults([])
+        setMealResults([])
       }
-      setMealResults([])
       return
     }
 
@@ -661,7 +729,7 @@ export default function FoodSearchModal({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
    
-  }, [query, activeTab, verifiedOnly, isOpen, fetchResults, fetchMeals])
+  }, [query, activeTab, verifiedOnly, isOpen, fetchResults, fetchMeals, fetchOverview])
 
   // Active variant for the currently selected food (or null)
   const activeVariant = useMemo<FoodVariant | null>(() => {
@@ -1509,7 +1577,7 @@ export default function FoodSearchModal({
             >
               {/* Meals section — only on "all" tab + query (≥2 chars). Sticky-style header
                   matches the "My Foods" header pattern; chevron toggles collapse. */}
-              {((activeTab === 'all' && query.trim().length >= 2 && (mealsLoading || mealResults.length > 0)) || (activeTab === 'meals' && (mealsLoading || mealResults.length > 0))) && (
+              {((activeTab === 'all' && (query.trim().length >= 2 || showOverview) && (mealsLoading || mealResults.length > 0)) || (activeTab === 'meals' && (mealsLoading || mealResults.length > 0))) && (
                 <div className="border-b border-zinc-100 dark:border-zinc-800">
                   <button
                     type="button"
@@ -1676,9 +1744,15 @@ export default function FoodSearchModal({
                       </p>
                     </div>
                   )}
-                  {results.map((food, idx) => {
-                    const prev = idx > 0 ? results[idx - 1] : null
+                  {(showOverview ? overviewRows.rows : results).map((food, idx) => {
+                    const list = showOverview ? overviewRows.rows : results
+                    const prev = idx > 0 ? list[idx - 1] : null
+                    const overviewHeader = showOverview ? overviewRows.headers.get(idx) : undefined
+                    // The overview supplies its own section headers; the
+                    // saved/other split below is a SEARCH-time distinction and
+                    // would double up on them.
                     const showMyFoodsHeader =
+                      !showOverview &&
                       activeTab !== 'mine' &&
                       food.isSaved === true &&
                       (idx === 0 || prev?.isSaved !== true)
@@ -1689,9 +1763,14 @@ export default function FoodSearchModal({
                       prev?.isSaved === true
                     return (
                   <div
-                    key={food._id}
+                    key={showOverview ? `${food._id}-${idx}` : food._id}
                     className={`relative ${selectedFood?._id === food._id ? 'z-[70]' : 'z-0'}`}
                   >
+                    {overviewHeader && (
+                      <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-zinc-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-600 backdrop-blur dark:bg-zinc-800/60 dark:text-zinc-300">
+                        {overviewHeader}
+                      </div>
+                    )}
                     {showMyFoodsHeader && (
                       <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-amber-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 backdrop-blur dark:bg-amber-900/30 dark:text-amber-200">
                         <Bookmark className="h-3 w-3 fill-current" />
