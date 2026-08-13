@@ -272,10 +272,21 @@ function titleCaseTag(tag: string): string {
 
 type TabId = 'all' | 'meals' | 'mine' | 'recent' | 'frequent'
 
+/**
+ * The filter chips. There is deliberately NO "All" chip.
+ *
+ * 'all' is still the default STATE — it is the unfiltered list, which already
+ * shows foods — but it never needed a chip of its own. With no search text the
+ * unfiltered list and the "All" tab were the same thing, so the chip occupied
+ * the first slot of a scrolling row to express "no filter", which is what
+ * having nothing selected already means.
+ *
+ * Foods leads because it is the one people reach for; Meals came first only by
+ * accident of declaration order.
+ */
 const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
-  { id: 'all', label: 'All', Icon: Search },
-  { id: 'meals', label: 'Meals', Icon: ChefHat },
   { id: 'mine', label: 'Foods', Icon: Bookmark },
+  { id: 'meals', label: 'Meals', Icon: ChefHat },
   { id: 'recent', label: 'Recent', Icon: Clock },
   { id: 'frequent', label: 'Frequent', Icon: Star },
 ]
@@ -320,6 +331,13 @@ export default function FoodSearchModal({
   // is active rather than being a tab of its own, so "Recent, verified only" and
   // "search chicken, verified only" both work.
   const [verifiedOnly, setVerifiedOnly] = useState(false)
+
+  // Verified is hidden while the box is empty, so it must also be RELEASED then.
+  // Otherwise clearing the query leaves a filter switched on with no chip on
+  // screen to switch it off — results quietly narrowed by an invisible control.
+  useEffect(() => {
+    if (query.trim().length === 0 && verifiedOnly) setVerifiedOnly(false)
+  }, [query, verifiedOnly])
   const [flagOpen, setFlagOpen] = useState(false)
   // Per-serving values the user corrected BEFORE logging. Applies to their
   // entry only; the catalogue is the agent's to write.
@@ -1433,11 +1451,13 @@ export default function FoodSearchModal({
               )}
               {/* Tabs — horizontally scrollable so no chip wraps or gets cut off */}
               <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {/* Verified filter, leading the row. Deliberately NOT a sixth
-                    tab: it narrows whichever tab is active rather than
+                {/* Verified narrows whichever tab is active rather than
                     replacing it, so "Recent, verified only" is expressible.
+                    Hidden until there is a query: with an empty box there is no
+                    result set to narrow, so it was offering to filter nothing.
                     First position because the row scrolls — placed after
                     "Frequent" it sat off-screen on a phone. */}
+                {query.trim().length > 0 && (
                 <button
                   onClick={() => setVerifiedOnly(v => !v)}
                   aria-pressed={verifiedOnly}
@@ -1451,11 +1471,18 @@ export default function FoodSearchModal({
                   <BadgeCheck className="h-3 w-3" />
                   Verified
                 </button>
-                <span className="mx-1 w-px shrink-0 self-stretch bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+                )}
+                {query.trim().length > 0 && (
+                  <span className="mx-1 w-px shrink-0 self-stretch bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+                )}
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    // Tapping the active chip clears it. Without this the only
+                    // way out of a filter was to pick a different one, which is
+                    // a trap once the "All" escape hatch is gone.
+                    onClick={() => setActiveTab(prev => (prev === tab.id ? 'all' : tab.id))}
+                    aria-pressed={activeTab === tab.id}
                     className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                       activeTab === tab.id
                         ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
