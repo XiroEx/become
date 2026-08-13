@@ -161,3 +161,30 @@ export function combineDateWithNowTime(dateKey: string, now: Date = new Date()):
   )
   return combined.toISOString()
 }
+
+/**
+ * Build the `loggedAt` for a manually-timed entry.
+ *
+ * `dateKey` null means today; `timeHHMM` null means the current wall clock (the
+ * long-standing behaviour of combineDateWithNowTime). Supplying a time matters
+ * now that the day view sorts by clock: three foods backdated to yesterday used
+ * to all receive the same current minute, so they stacked in entry order rather
+ * than in the order they were eaten.
+ */
+export function buildLoggedAt(
+  dateKey: string | null,
+  timeHHMM: string | null,
+  fallbackDate?: Date,
+  now: Date = new Date(),
+): string {
+  const base = dateKey ?? todayLocalKey(fallbackDate ?? now)
+  if (!timeHHMM) return combineDateWithNowTime(base, now)
+  const m = /^(\d{1,2}):(\d{2})$/.exec(timeHHMM.trim())
+  if (!m) return combineDateWithNowTime(base, now)
+  const dm = YYYY_MM_DD.exec(base)
+  if (!dm) throw new Error(`Invalid date key: ${base} (expected YYYY-MM-DD)`)
+  return new Date(
+    Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]),
+    Number(m[1]), Number(m[2]), 0, 0,
+  ).toISOString()
+}

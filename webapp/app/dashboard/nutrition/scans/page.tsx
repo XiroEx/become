@@ -10,6 +10,7 @@ import { Card, EmptyState, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
 import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2, X, Maximize2 } from 'lucide-react'
+import { useMealSchedule } from '@/hooks/useMealSchedule'
 
 interface ScanItem {
   foodId?: string
@@ -40,13 +41,6 @@ function authHeaders(): HeadersInit {
   return { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) }
 }
 
-function defaultTagForNow(): string {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 11) return 'breakfast'
-  if (h >= 11 && h < 14) return 'lunch'
-  if (h >= 17 && h < 21) return 'dinner'
-  return 'snack'
-}
 
 function whenLabel(iso: string): string {
   const d = new Date(iso)
@@ -61,6 +55,7 @@ export default function ScanHistoryPage() {
   // imageUrl when we have it, else the inline thumb).
   const [lightbox, setLightbox] = useState<string | null>(null)
   const { toast, showToast } = useToast(3000)
+  const { defaultTagNow } = useMealSchedule()
 
   const load = useCallback(async () => {
     try {
@@ -90,7 +85,7 @@ export default function ScanHistoryPage() {
       const res = await fetch('/api/meal-logs', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ items, tags: [scan.tag || defaultTagForNow()], loggedAt: new Date().toISOString() }),
+        body: JSON.stringify({ items, tags: [scan.tag || defaultTagNow()], loggedAt: new Date().toISOString() }),
       })
       showToast(res.ok ? 'Logged to today' : 'Could not log. Try again.', res.ok ? 'success' : 'error')
     } catch {
