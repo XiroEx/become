@@ -404,20 +404,22 @@ function entryToReviewItem(entry: IFoodEntry): ReviewItem {
 }
 
 /**
- * Round PER-UNIT nutrition without annihilating it.
+ * Per-unit nutrition, stored EXACTLY as computed.
  *
- * These values are per ONE unit and get multiplied by `servings`, which for a
- * drink measured in ml is in the hundreds. Rounding calories to a whole number
- * first turned 130 cal / 325 ml = 0.4 into 0, and 0 x 325 is 0 — a Joyburst
- * coffee logged as 0 cal alongside 32.5 g of protein, because the macros were
- * kept to one decimal and survived while the calories did not.
+ * These values are per ONE unit and get multiplied by `servings` later, so any
+ * rounding here is multiplied too. Rounding calories to a whole number turned
+ * 130 cal / 325 ml = 0.4 into 0, and 0 x 325 is 0 — a coffee logged as 0 cal
+ * beside 32.5 g of protein, because the macros kept one decimal and survived
+ * while the calories did not.
  *
- * Four decimals keeps the error under a tenth of a calorie even at a thousand
- * units, which is far below anything a member could notice.
+ * Four decimals was the first fix and it was still wrong in kind: an
+ * intermediate value has no business being rounded at all. Precision is free
+ * here and the error compounds, so keep the number and round only where a human
+ * reads it.
  */
-const PER_UNIT_DP = 10_000
-function roundPerUnit(value: number | undefined): number {
-  return Math.round((value ?? 0) * PER_UNIT_DP) / PER_UNIT_DP
+function perUnit(value: number | undefined): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
 }
 
 /** Map review items → the PlateScan history item shape (used for both the
@@ -434,10 +436,10 @@ function buildScanItems(items: ReviewItem[]) {
       servingUnit: it.unitLabel || 'serving',
       servings: it.multiplier,
       nutrition: {
-        calories: roundPerUnit(n.calories),
-        protein: roundPerUnit(n.protein),
-        carbs: roundPerUnit(n.carbs),
-        fats: roundPerUnit(n.fats),
+        calories: perUnit(n.calories),
+        protein: perUnit(n.protein),
+        carbs: perUnit(n.carbs),
+        fats: perUnit(n.fats),
       },
       confidence: it.confidence,
       ...(it.match ? { matchKind: it.match.kind } : {}),
@@ -965,10 +967,10 @@ export default function SnapPlateModal({
           servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
-            calories: roundPerUnit(n.calories),
-            protein: roundPerUnit(n.protein),
-            carbs: roundPerUnit(n.carbs),
-            fats: roundPerUnit(n.fats),
+            calories: perUnit(n.calories),
+            protein: perUnit(n.protein),
+            carbs: perUnit(n.carbs),
+            fats: perUnit(n.fats),
           },
         }
       })
@@ -1048,10 +1050,10 @@ export default function SnapPlateModal({
         servingUnit: it.unitLabel || 'serving',
         servings: it.multiplier,
         nutrition: {
-          calories: roundPerUnit(n.calories),
-          protein: roundPerUnit(n.protein),
-          carbs: roundPerUnit(n.carbs),
-          fats: roundPerUnit(n.fats),
+          calories: perUnit(n.calories),
+          protein: perUnit(n.protein),
+          carbs: perUnit(n.carbs),
+          fats: perUnit(n.fats),
         },
       }
     })
