@@ -195,7 +195,10 @@ function rowCalories(food: FoodResult): number {
     && Math.abs(food.mlPerServing - food.servingSize) > 0.001) {
     scale = food.mlPerServing / food.servingSize
   }
-  return Math.round((food.nutrition.calories ?? 0) * scale)
+  // Defensive: a row arriving without flattened nutrition used to throw here and
+  // unmount the whole sheet ("This page couldn't load"). A missing number should
+  // cost one wrong row, never the page.
+  return Math.round((food.nutrition?.calories ?? 0) * scale)
 }
 
 function preferredServingLabel(food: FoodResult): string {
@@ -599,8 +602,15 @@ export default function FoodSearchModal({
    * this morning is both a Food and Recent) — that is the point of showing them
    * separately, so they are NOT deduped across sections.
    */
-  /** The empty-box landing state on the default filter. */
-  const showOverview = activeTab === 'all' && query.trim().length < 2 && !!overview
+  /**
+   * The default filter with an empty box — i.e. the overview is what should be
+   * on screen. Separate from `showOverview` (which additionally needs the data
+   * to have ARRIVED), because the render has to know the difference between
+   * "no overview yet" and "nothing to search for". Conflating them is what made
+   * the whole default view collapse to "Type at least 2 characters".
+   */
+  const showOverviewPending = activeTab === 'all' && query.trim().length < 2
+  const showOverview = showOverviewPending && !!overview
 
   const overviewRows = useMemo(() => {
     if (!overview) return { rows: [] as FoodResult[], headers: new Map<number, string>() }
@@ -1686,14 +1696,14 @@ export default function FoodSearchModal({
 
               {activeTab === 'meals' ? null :
               !foodsExpanded && activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 ? null :
-              loading ? (
+              loading || (showOverviewPending && overviewLoading) ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Searching...
+                    {showOverviewPending ? 'Loading…' : 'Searching...'}
                   </span>
                 </div>
-              ) : results.length === 0 ? (
+              ) : (showOverview ? overviewRows.rows.length === 0 && mealResults.length === 0 : results.length === 0) ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 px-4">
                   {activeTab === 'mine' ? (
                     <>
