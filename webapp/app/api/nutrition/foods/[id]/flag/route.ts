@@ -6,6 +6,9 @@ import Food from '@/models/Food'
 import FoodFlag from '@/models/FoodFlag'
 import User from '@/models/User'
 import { decideFlag, ownFlagPhotoUrl, CLAIM_TTL_MS, type FlagContext } from '@/lib/nutrition/flagPolicy'
+
+/** More than this on one report is someone testing the upload, not evidence. */
+const MAX_PHOTOS = 6
 import { verifyFood } from '@/lib/nutrition/verifyFood'
 
 // ---------------------------------------------------------------------------
@@ -78,7 +81,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // Anything that is not our own upload, owned by this caller, is discarded
     // rather than rejected: the report itself is still worth keeping.
-    const photoUrl = ownFlagPhotoUrl(body?.photoUrl, auth.userId!)
+    // Multiple shots, because one photo rarely carries BOTH the barcode and the
+    // nutrition panel — and the reviewer needs both to tie a label to a product.
+    // Every URL is validated as the caller's own upload; a forged path would
+    // otherwise let someone point us at an arbitrary fetch target.
+    const rawPhotos: unknown[] = Array.isArray(body?.photoUrls)
+      ? body.photoUrls.slice(0, MAX_PHOTOS)
+      : []
+    const photoUrls = [
+      ...new Set(
+        [body?.photoUrl, ...rawPhotos]
+          .map(u => ownFlagPhotoUrl(u, auth.userId!))
+          .filter((u): u is string => !!u),
+      ),
+    ]
+    // The first is kept in the legacy single field so older readers still work.
+    const photoUrl = photoUrls[0]
 
     const [alreadyFlaggedByUser, userFlagsToday, user] = await Promise.all([
       FoodFlag.exists({ foodId, userId }),
@@ -113,6 +131,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         kinds,
         note: typeof body?.note === 'string' ? body.note.slice(0, 1000) : undefined,
         photoUrl,
+        ...(photoUrls.length ? { photoUrls } : {}),
         claimedValues: body?.claimedValues,
         status: decision.action === 'attach' ? 'attached' : 'open',
         runId: decision.action === 'attach' ? decision.runId : undefined,

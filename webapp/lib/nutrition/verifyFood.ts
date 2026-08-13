@@ -27,6 +27,7 @@ import FoodFlag from '@/models/FoodFlag'
 import { gatherEvidence, type EvidenceBundle, type EvidenceValues } from './evidence'
 import { runStructuredTask } from '@/lib/ai/becomeGraph'
 import { getBlobStore } from '@/lib/blobStorage'
+import { escalateFlagToHuman, shouldEscalate } from '@/lib/nutrition/escalateFlag'
 
 /**
  * Below this, a correction is recorded but NOT written to the shared record.
@@ -422,6 +423,14 @@ export async function verifyFood(
     // when the shared record really changed: a verdict of corrected that the
     // write gate refused is, from their side, still an unresolved report, and
     // saying otherwise would be a lie they cannot check.
+    const openFlags = await FoodFlag.find({ foodId, status: { $in: ['open', 'attached'] } })
+      .select('_id photoUrl photoUrls kind kinds note rounds escalatedAt userId')
+      .lean<Array<{
+        _id: unknown; photoUrl?: string; photoUrls?: string[]
+        kind?: string; kinds?: string[]; note?: string
+        rounds?: number; escalatedAt?: Date; userId?: unknown
+      }>>()
+
     await FoodFlag.updateMany(
       { foodId, status: { $in: ['open', 'attached'] } },
       {
@@ -432,6 +441,45 @@ export async function verifyFood(
         },
       },
     )
+
+    // No change, but the member handed us a photograph. The machine has run out
+    // of road: our record and every source it consulted can be copies of the
+    // same stale figure, and re-reading them will never reveal that. Only a
+    // person holding the packet can. Best-effort — a failed send must not undo
+    // a completed review.
+    for (const f of openFlags) {
+      const photos = [...new Set([...(f.photoUrls ?? []), ...(f.photoUrl ? [f.photoUrl] : [])])]
+      if (!shouldEscalate({ changed: written, photoCount: photos.length, alreadyEscalated: !!f.escalatedAt })) {
+        continue
+      }
+      const sent = await escalateFlagToHuman({
+        flagId: String(f._id),
+        food: {
+          id: String(foodId),
+          name: food.name ?? 'this food',
+          brand: food.brand,
+          barcode: food.barcode,
+          servingLabel: stored?.servingLabel,
+          nutrition: storedVariantNutrition(food),
+        },
+        reporter: {},
+        kinds: f.kinds ?? (f.kind ? [f.kind] : []),
+        note: f.note,
+        photoUrls: photos,
+        verdict: review.verdict,
+        reasoning: review.reasoning,
+        sources: search?.sources,
+        rounds: f.rounds ?? 1,
+        appUrl: process.env.NEXT_PUBLIC_APP_URL,
+      }).catch(() => false)
+
+      if (sent) {
+        await FoodFlag.updateOne(
+          { _id: f._id as never },
+          { $set: { escalatedAt: new Date() } },
+        ).catch(() => {})
+      }
+    }
 
     return {
       foodId,
@@ -458,6 +506,14 @@ export async function verifyFood(
  * settle it, which from the reporter's side is the same as insufficient. The
  * reasoning string carries the distinction.
  */
+/** The default variant's macros, as the member would see them in the app. */
+function storedVariantNutrition(
+  food: { variants?: Array<{ isDefault?: boolean; nutrition?: Record<string, number | undefined> }> },
+): Record<string, number | undefined> | undefined {
+  const v = food.variants?.find(x => x.isDefault) ?? food.variants?.[0]
+  return v?.nutrition
+}
+
 export function flagStatusFor(
   verdict: ReviewVerdict['verdict'],
   written: boolean,
