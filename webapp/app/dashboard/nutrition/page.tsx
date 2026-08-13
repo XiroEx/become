@@ -1066,8 +1066,17 @@ function NutritionPageInner() {
         />
 
         {/* Future-day schedule CTA — static across future-day paging, so it
-            sits OUTSIDE the sliding region. */}
-        {viewingFuture && visibleTags.length > 0 && (
+            sits OUTSIDE the sliding region.
+            
+            NOT gated on visibleTags. It used to be, which meant the button only
+            existed once the day already had something on it — so on a fresh
+            future day it rendered from the PREVIOUS day's tags still sitting in
+            state, then vanished the moment they cleared. It read as a flash.
+            Worse, a member with quick-adds configured fell between this and the
+            empty state below (which requires no quick-adds) and got no way to
+            schedule at all. Scheduling is exactly what a future day is for; the
+            button should never be conditional on the day being non-empty. */}
+        {viewingFuture && (
           <button
             type="button"
             onClick={() => setScheduleDrawerOpen(true)}
@@ -1114,13 +1123,10 @@ function NutritionPageInner() {
             action={
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {viewingFuture ? (
-                  <button
-                    onClick={() => setScheduleDrawerOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                    Schedule meals
-                  </button>
+                  // The blue CTA above is always present on a future day now, so
+                  // a second Schedule button here would just be the same action
+                  // twice on one screen.
+                  null
                 ) : (
                   <>
                     <button
