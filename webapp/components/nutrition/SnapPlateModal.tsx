@@ -403,6 +403,23 @@ function entryToReviewItem(entry: IFoodEntry): ReviewItem {
   }
 }
 
+/**
+ * Round PER-UNIT nutrition without annihilating it.
+ *
+ * These values are per ONE unit and get multiplied by `servings`, which for a
+ * drink measured in ml is in the hundreds. Rounding calories to a whole number
+ * first turned 130 cal / 325 ml = 0.4 into 0, and 0 x 325 is 0 — a Joyburst
+ * coffee logged as 0 cal alongside 32.5 g of protein, because the macros were
+ * kept to one decimal and survived while the calories did not.
+ *
+ * Four decimals keeps the error under a tenth of a calorie even at a thousand
+ * units, which is far below anything a member could notice.
+ */
+const PER_UNIT_DP = 10_000
+function roundPerUnit(value: number | undefined): number {
+  return Math.round((value ?? 0) * PER_UNIT_DP) / PER_UNIT_DP
+}
+
 /** Map review items → the PlateScan history item shape (used for both the
  *  generation-time save and the on-log update). Excludes removed items. */
 function buildScanItems(items: ReviewItem[]) {
@@ -417,10 +434,10 @@ function buildScanItems(items: ReviewItem[]) {
       servingUnit: it.unitLabel || 'serving',
       servings: it.multiplier,
       nutrition: {
-        calories: Math.round(n.calories ?? 0),
-        protein: Math.round((n.protein ?? 0) * 10) / 10,
-        carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-        fats: Math.round((n.fats ?? 0) * 10) / 10,
+        calories: roundPerUnit(n.calories),
+        protein: roundPerUnit(n.protein),
+        carbs: roundPerUnit(n.carbs),
+        fats: roundPerUnit(n.fats),
       },
       confidence: it.confidence,
       ...(it.match ? { matchKind: it.match.kind } : {}),
@@ -948,10 +965,10 @@ export default function SnapPlateModal({
           servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
-            calories: Math.round(n.calories ?? 0),
-            protein: Math.round((n.protein ?? 0) * 10) / 10,
-            carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-            fats: Math.round((n.fats ?? 0) * 10) / 10,
+            calories: roundPerUnit(n.calories),
+            protein: roundPerUnit(n.protein),
+            carbs: roundPerUnit(n.carbs),
+            fats: roundPerUnit(n.fats),
           },
         }
       })
@@ -1031,10 +1048,10 @@ export default function SnapPlateModal({
         servingUnit: it.unitLabel || 'serving',
         servings: it.multiplier,
         nutrition: {
-          calories: Math.round(n.calories ?? 0),
-          protein: Math.round((n.protein ?? 0) * 10) / 10,
-          carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-          fats: Math.round((n.fats ?? 0) * 10) / 10,
+          calories: roundPerUnit(n.calories),
+          protein: roundPerUnit(n.protein),
+          carbs: roundPerUnit(n.carbs),
+          fats: roundPerUnit(n.fats),
         },
       }
     })
