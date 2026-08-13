@@ -254,6 +254,8 @@ function NutritionPageInner() {
   // morning should appear on today's nutrition page, not only on the plan/timeline
   // page). Past days render logs only.
   const showPlans = dateParam >= todayLocalKey()
+  // Exactly today — not future, not past. Drives where "Schedule meals" sits.
+  const viewingToday = dateParam === todayLocalKey()
 
   // ── Auth helper ────────────────────────────────────────────────────────────
 
@@ -947,6 +949,33 @@ function NutritionPageInner() {
   // FeatureGuard while the food DB + macro tracker stabilized. Kept the
   // FeatureGuard component around in case we need to gate other surfaces
   // again, but nutrition is unlocked for every authed user.
+
+  // "Schedule meals" is the same control everywhere, but WHERE it sits is what
+  // tells you what it means:
+  //
+  //   future day → above the timeline. Scheduling is the only thing you can do
+  //                on a day you have not lived yet, so it leads.
+  //   today      → below the water tracker, at the very end of the day. You
+  //                scroll down past what you have already eaten and it is
+  //                waiting there, which reads as "the rest of today" rather
+  //                than as a second, competing way to add food. Planning a meal
+  //                you have not eaten yet has always worked (the API allows
+  //                today; see /api/meal-plans §past-date check) — there was
+  //                simply nowhere on this page to reach it.
+  //   past day   → not rendered. There is no future left to plan.
+  //
+  // One definition, two placements, so the two can never drift apart.
+  const scheduleMealsButton = (
+    <button
+      type="button"
+      onClick={() => setScheduleDrawerOpen(true)}
+      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+    >
+      <CalendarDays className="h-4 w-4" />
+      Schedule meals
+    </button>
+  )
+
   return (
     <>
       {/* pb-28 keeps the last interactive controls (water +oz, Quick Add / Meal
@@ -1076,16 +1105,7 @@ function NutritionPageInner() {
             empty state below (which requires no quick-adds) and got no way to
             schedule at all. Scheduling is exactly what a future day is for; the
             button should never be conditional on the day being non-empty. */}
-        {viewingFuture && (
-          <button
-            type="button"
-            onClick={() => setScheduleDrawerOpen(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-          >
-            <CalendarDays className="h-4 w-4" />
-            Schedule meals
-          </button>
-        )}
+        {viewingFuture && scheduleMealsButton}
 
         {/* Date-scoped content — slides horizontally on date change (same
             motion as the calendar grid). popLayout keeps exit/enter stacked. */}
@@ -1270,6 +1290,9 @@ function NutritionPageInner() {
           goal={goals.waterGoal}
           onAddWater={handleAddWater}
         />
+
+        {/* End of today: what is still ahead of you. See scheduleMealsButton. */}
+        {viewingToday && scheduleMealsButton}
 
         </motion.div>
         </AnimatePresence>
