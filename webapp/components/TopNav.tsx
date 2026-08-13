@@ -128,17 +128,6 @@ export default function TopNav() {
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
                   </div>
                 )}
-                <button
-                  onClick={() => { setIsOpen(false); setReportsOpen(true) }}
-                  data-testid="open-food-reports"
-                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                >
-                  <Bell className="h-4 w-4" />
-                  Food reports
-                  {unread > 0 && (
-                    <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{unread}</span>
-                  )}
-                </button>
                 {isAdmin && (
                   <Link
                     href="/dashboard/admin"
@@ -165,6 +154,17 @@ export default function TopNav() {
                   <Settings className="h-4 w-4" />
                   Settings
                 </Link>
+                <button
+                  onClick={() => { setIsOpen(false); setReportsOpen(true) }}
+                  data-testid="open-food-reports"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <Bell className="h-4 w-4" />
+                  Food reports
+                  {unread > 0 && (
+                    <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{unread}</span>
+                  )}
+                </button>
                 <button
                   onClick={() => {
                     setIsOpen(false)
