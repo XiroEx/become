@@ -18,14 +18,8 @@ import {
 import type { IMeal, IMealItem, IMealRecipe } from '@/models/Meal'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
+import { useMealSchedule } from '@/hooks/useMealSchedule'
 
-function getDefaultTagForNow(): string {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 11) return 'breakfast'
-  if (h >= 11 && h < 14) return 'lunch'
-  if (h >= 17 && h < 21) return 'dinner'
-  return 'snack'
-}
 
 interface MealResponse extends Omit<IMeal, '_id' | 'createdBy'> {
   _id: string
@@ -61,6 +55,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
   const [converting, setConverting] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const { toast, showToast } = useToast()
+  const { defaultTagNow } = useMealSchedule()
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
     defaults: [], userTags: [],
   })
@@ -347,7 +342,7 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
           recipe: meal.recipe ? { servings: meal.recipe.servings } : undefined,
           tags: meal.tags,
         } : null}
-        defaultTag={meal.defaultTag || getDefaultTagForNow()}
+        defaultTag={meal.defaultTag || defaultTagNow()}
         availableTags={tagsResp}
         onClose={() => setApplySheetOpen(false)}
         onApplied={() => {

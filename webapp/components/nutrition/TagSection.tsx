@@ -30,6 +30,7 @@ import { Card } from '@/components/ui'
 import { formatQuantity, type Unit } from '@/lib/units'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import FoodItemRow from '@/components/nutrition/FoodItemRow'
+import { formatClockLabel } from '@/lib/nutrition/mealSchedule'
 
 /** The hard-metric amount line for a logged/planned item — the user's actual
  *  logged quantity+unit when present, else the legacy "X servings · size unit". */
@@ -95,6 +96,12 @@ interface TagSectionProps {
   // with a "Planned" pill. Optional handlers let the parent delete a plan or
   // edit a plan item without re-implementing modal plumbing here.
   plans?: MealPlan[]
+  /** Minutes from local midnight of this SITTING's first log. Rendered next to
+   *  the tag name so two sections of the same tag are tellable apart — without
+   *  it, two "Snack" headers on one day look like a duplicate render rather than
+   *  two separate sittings. Undefined for planned or empty sections, which have
+   *  no real moment of their own. */
+  occurrenceAt?: number
   onRemovePlan?: (planId: string) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   /** "Log it" — promote a plan into a real log (today). When provided, a Log it
@@ -202,6 +209,7 @@ export default function TagSection({
   onApplyMeal,
   futureDate = false,
   plans = [],
+  occurrenceAt,
   onRemovePlan,
   onEditPlanItem,
   onLogPlan,
@@ -352,6 +360,11 @@ export default function TagSection({
             <span className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
               {label}
             </span>
+            {occurrenceAt != null && (
+              <span className="shrink-0 text-[11px] tabular-nums text-zinc-400 dark:text-zinc-500">
+                {formatClockLabel(occurrenceAt)}
+              </span>
+            )}
             {hasContent && (
               <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400 shrink-0">
                 {totalCalories} cal
