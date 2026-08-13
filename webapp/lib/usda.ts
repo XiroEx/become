@@ -275,13 +275,15 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
         const servingUnit = (typeof food.servingSizeUnit === 'string' ? food.servingSizeUnit : 'g').toLowerCase()
         const scale = servingSize / 100
 
+        // See the note on scaling above: these are stored and multiplied later,
+        // so they are kept exact rather than rounded into the record.
         const nutrition = {
-          calories: Math.round(cal * scale),
-          protein: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.protein) ?? 0)) * scale * 10) / 10,
-          carbs: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs) ?? 0)) * scale * 10) / 10,
-          fats: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.fat) ?? 0)) * scale * 10) / 10,
+          calories: cal * scale,
+          protein: (getNutrient(food.foodNutrients, NUTRIENT_IDS.protein) ?? 0) * scale,
+          carbs: (getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs) ?? 0) * scale,
+          fats: (getNutrient(food.foodNutrients, NUTRIENT_IDS.fat) ?? 0) * scale,
           fiber: getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber) != null
-            ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)!) * scale * 10) / 10
+            ? getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)! * scale
             : undefined,
           sugar: getNutrient(food.foodNutrients, NUTRIENT_IDS.sugar) != null
             ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.sugar)!) * scale * 10) / 10
@@ -340,14 +342,19 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
   const servingSize = food.servingSize || 100
   const servingUnit = (food.servingSizeUnit || 'g').toLowerCase()
 
+// USDA nutrients are per 100 g and get scaled to the serving below. The scaled
+// values are STORED and later multiplied by a serving count, so rounding them
+// here compounds: a low-calorie food in a small serving (scale 0.05) rounded to
+// a whole number lands on 0 and stays 0 forever. Keep the exact figure; round
+// only where it is displayed.
   // USDA nutrients are per 100g. Scale to actual serving size.
   const scale = servingSize / 100
 
   const nutrition = {
-    calories: Math.round(cal * scale),
-    protein:  Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.protein)  ?? 0)) * scale * 10) / 10,
-    carbs:    Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs)    ?? 0)) * scale * 10) / 10,
-    fats:     Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.fat)      ?? 0)) * scale * 10) / 10,
+    calories: cal * scale,
+    protein:  (getNutrient(food.foodNutrients, NUTRIENT_IDS.protein)  ?? 0) * scale,
+    carbs:    (getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs)    ?? 0) * scale,
+    fats:     (getNutrient(food.foodNutrients, NUTRIENT_IDS.fat)      ?? 0) * scale,
     fiber: getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber) != null
       ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)!) * scale * 10) / 10
       : undefined,
