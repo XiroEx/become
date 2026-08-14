@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, ChevronDown, Tag as TagIcon, CalendarDays, ChefHat, Loader2 } from 'lucide-react'
+import { X, Check, ChevronDown, Tag as TagIcon, CalendarDays, ChefHat, Loader2, Clock } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
-import { combineDateWithNowTime } from '@/lib/mealPlanDates'
+import { buildLoggedAt } from '@/lib/mealPlanDates'
+import { useMealSchedule } from '@/hooks/useMealSchedule'
+import { anchorMinutesForTag, formatHHMM, formatClockLabel, parseHHMM, minutesOfDay, windowForTag } from '@/lib/nutrition/mealSchedule'
 
 interface MealApplyMeal {
   _id: string
@@ -102,6 +104,14 @@ export default function MealApplySheet({
   // wall-clock time). Submission grafts the wall-clock time onto the picked
   // date via combineDateWithNowTime().
   const [customDate, setCustomDate] = useState<string | null>(null)
+  // Same three-way model as the food picker: now / a typed time / no time.
+  //
+  // Meals had NO time control at all — every meal landed at the current minute,
+  // which on a time-ordered day view meant a breakfast logged at 9pm sorted to
+  // the end of the day. Foods gained this and meals were left behind.
+  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('now')
+  const [customTime, setCustomTime] = useState<string | null>(null)
+  const { windows: scheduleWindows } = useMealSchedule()
   const [dateEditOpen, setDateEditOpen] = useState(false)
 
   const [applying, setApplying] = useState(false)
@@ -120,6 +130,9 @@ export default function MealApplySheet({
       setCustomMode(false)
       setCustomValue('1')
       setCustomDate(null)
+      // A time belongs to the entry it was chosen for, not the next one.
+      setCustomTime(null)
+      setTimeMode('now')
       setDateEditOpen(false)
       setApplied(false)
       setError(null)
@@ -215,11 +228,16 @@ export default function MealApplySheet({
           }),
         })
       } else {
-        // No time picker — when the user picked a date, graft the current
-        // wall-clock time onto it; otherwise just "now".
-        const loggedAt = customDate
-          ? combineDateWithNowTime(customDate)
-          : new Date().toISOString()
+        // An untimed meal still gets a loggedAt, stamped at its tag's ANCHOR so
+        // anything reading only the timestamp still orders it sensibly; the
+        // `untimed` flag is what makes the day view ignore the clock.
+        const loggedAt = buildLoggedAt(
+          customDate,
+          timeMode === 'none'
+            ? formatHHMM(anchorMinutesForTag(scheduleWindows, activeTag))
+            : timeMode === 'custom' ? customTime : null,
+          viewedDate,
+        )
         res = await fetch(`/api/meals/${meal._id}/log`, {
           method: 'POST',
           headers,
@@ -227,6 +245,7 @@ export default function MealApplySheet({
             portion: effectivePortion,
             tags: [activeTag],
             loggedAt,
+            untimed: timeMode === 'none',
           }),
         })
       }
@@ -460,8 +479,35 @@ export default function MealApplySheet({
                         <X className="h-3 w-3" />
                       </button>
                     )}
+                    {timeMode === 'custom' && customTime && (
+                      <button
+                        type="button"
+                        onClick={() => setDateEditOpen(v => !v)}
+                        data-testid="meal-time-pill"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                        aria-label={`Logging at ${formatClockLabel(parseHHMM(customTime) ?? 0)}, tap to change`}
+                      >
+                        <Clock className="h-3 w-3" />
+                        <span className="tabular-nums">{formatClockLabel(parseHHMM(customTime) ?? 0)}</span>
+                      </button>
+                    )}
+                    {timeMode === 'none' && (
+                      <button
+                        type="button"
+                        onClick={() => setDateEditOpen(v => !v)}
+                        data-testid="meal-no-time-pill"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200"
+                        aria-label="No time set, tap to change"
+                      >
+                        No time
+                      </button>
+                    )}
                     <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                      {customDate ? 'Logged on chosen day' : 'Logged now'}
+                      {timeMode === 'none'
+                        ? 'Placed by meal order'
+                        : timeMode === 'custom'
+                          ? 'Logged at chosen time'
+                          : customDate ? 'Logged on chosen day' : 'Logged now'}
                     </span>
                   </div>
                   <AnimatePresence initial={false}>
@@ -478,13 +524,72 @@ export default function MealApplySheet({
                           value={customDate ?? dateToKey(viewedDate ?? new Date())}
                           maxDate={dateToKey(new Date())}
                           showTodayChip
-                          onClear={() => { setCustomDate(null); setDateEditOpen(false) }}
+                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('now'); setDateEditOpen(false) }}
                           onChange={(next) => {
                             const todayKey = dateToKey(new Date())
                             setCustomDate(next === todayKey ? null : next)
-                            setDateEditOpen(false)
+                            // Backdating is where a time starts mattering: without
+                            // one every entry filed to that day lands on the current
+                            // minute and the day reads in entry order.
+                            if (next !== todayKey && timeMode === 'now') {
+                              const w = windowForTag(scheduleWindows, activeTag)
+                              setCustomTime(formatHHMM(w ? w.startMinutes : minutesOfDay(new Date())))
+                              setTimeMode('custom')
+                            }
                           }}
                         />
+                        {/* Time row — same three controls as the food picker, so
+                            logging a meal and logging a food behave alike. */}
+                        <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                            <span className="shrink-0 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Time</span>
+                            <input
+                              type="time"
+                              value={timeMode === 'custom' && customTime ? customTime : formatHHMM(minutesOfDay(new Date()))}
+                              onChange={(ev) => {
+                                const v = ev.target.value
+                                if (!v) { setCustomTime(null); setTimeMode('now'); return }
+                                setCustomTime(v); setTimeMode('custom')
+                              }}
+                              disabled={timeMode === 'none'}
+                              data-testid="meal-time-input"
+                              aria-label="Time this was eaten"
+                              className="ml-auto rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs tabular-nums text-zinc-900 disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => { setCustomTime(null); setTimeMode('now') }}
+                              data-testid="meal-time-now"
+                              aria-label="Use the current time"
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                                timeMode === 'now'
+                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                  : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                              }`}
+                            >
+                              Now
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setCustomTime(null); setTimeMode('none') }}
+                              data-testid="meal-time-clear"
+                              aria-label="Clear the time and log for the day only"
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                timeMode === 'none'
+                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                  : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                              }`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <p className="mt-1.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                            {timeMode === 'none'
+                              ? 'No time. This sits in your meal order rather than at a clock position.'
+                              : 'Tap the X to log for the day with no time at all.'}
+                          </p>
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
