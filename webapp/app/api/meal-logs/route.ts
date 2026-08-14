@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
     const log = await MealLog.create({
       user: authResult.userId,
       loggedAt,
+      untimed: body.untimed === true,
       items,
       mealId,
       mealName: typeof body.mealName === 'string' ? body.mealName : undefined,
