@@ -29,13 +29,19 @@
  */
 
 import type { TagWindow } from '@/lib/nutrition/mealSchedule'
-import { minutesOfDay, sortMinutesForTag } from '@/lib/nutrition/mealSchedule'
+import { minutesOfDay, sortMinutesForTag, anchorMinutesForTag, orderIndexForTag } from '@/lib/nutrition/mealSchedule'
 
 /** Minimal shape this module needs from a meal log. */
 export interface OrderableLog {
   _id: string
   loggedAt: string | Date
   tags?: string[]
+  /**
+   * Logged for a DAY with no time. Its clock reading is meaningless — someone up
+   * at 1am filing food for the day just ended would otherwise sort to the top of
+   * that day. Position comes from the tag's anchor instead.
+   */
+  untimed?: boolean
 }
 
 /** Minimal shape this module needs from a meal plan. */
@@ -57,6 +63,8 @@ export interface Occurrence<L extends OrderableLog, P extends OrderablePlan> {
   plans: P[]
   /** True when nothing here has been eaten yet. */
   planned: boolean
+  /** True when this sitting carries no clock time — placed by tag anchor. */
+  untimed: boolean
 }
 
 /** A log with no tags at all still has to appear somewhere. */
@@ -90,45 +98,50 @@ export function buildDayOccurrences<L extends OrderableLog, P extends OrderableP
   // ── Logged occurrences ────────────────────────────────────────────────────
   // One entry per (log, tag) pair: a log tagged both "lunch" and "post-workout"
   // legitimately appears under both, exactly as it did before.
-  const entries: { tag: string; at: number; log: L }[] = []
+  // An untimed log sorts by its tag's ANCHOR, not by the clock it happened to be
+  // entered at. Resolving it here means the walk below and the final sort both
+  // see one comparable number, whatever its source.
+  const entries: { tag: string; at: number; log: L; untimed: boolean }[] = []
   for (const log of logs) {
-    const at = timeOf(log)
-    for (const tag of tagsOf(log)) entries.push({ tag, at, log })
+    for (const tag of tagsOf(log)) {
+      const untimed = Boolean(log.untimed)
+      const at = untimed
+        ? anchorMinutesForTag(windows, tag) * 60_000
+        : timeOf(log)
+      entries.push({ tag, at, log, untimed })
+    }
   }
   // Stable within the same instant so two foods logged in one action keep the
   // order they were saved in.
   entries.sort((a, b) => a.at - b.at)
 
   const occurrences: Occurrence<L, P>[] = []
-  let run: { tag: string; at: number; logs: L[] } | null = null
+  let run: { tag: string; at: number; logs: L[]; untimed: boolean } | null = null
+  const flush = (r: NonNullable<typeof run>) => {
+    occurrences.push({
+      key: `log:${r.tag}:${r.logs[0]?._id ?? r.at}`,
+      tag: r.tag,
+      // An untimed run was anchored in minutes above; a timed one is a real
+      // instant that has to come back down to minutes-of-day.
+      sortMinutes: r.untimed ? Math.round(r.at / 60_000) : minutesOfDay(new Date(r.at)),
+      logs: r.logs,
+      plans: [],
+      planned: false,
+      untimed: r.untimed,
+    })
+  }
   for (const e of entries) {
-    if (run && run.tag === e.tag) {
+    // A timed and an untimed sitting of the same tag are different sittings:
+    // merging them would hide that one has a real clock reading and one does not.
+    if (run && run.tag === e.tag && run.untimed === e.untimed) {
       // Same tag as the previous entry in time order — same sitting.
       if (!run.logs.some(l => l._id === e.log._id)) run.logs.push(e.log)
       continue
     }
-    if (run) {
-      occurrences.push({
-        key: `log:${run.tag}:${run.logs[0]?._id ?? run.at}`,
-        tag: run.tag,
-        sortMinutes: minutesOfDay(new Date(run.at)),
-        logs: run.logs,
-        plans: [],
-        planned: false,
-      })
-    }
-    run = { tag: e.tag, at: e.at, logs: [e.log] }
+    if (run) flush(run)
+    run = { tag: e.tag, at: e.at, logs: [e.log], untimed: e.untimed }
   }
-  if (run) {
-    occurrences.push({
-      key: `log:${run.tag}:${run.logs[0]?._id ?? run.at}`,
-      tag: run.tag,
-      sortMinutes: minutesOfDay(new Date(run.at)),
-      logs: run.logs,
-      plans: [],
-      planned: false,
-    })
-  }
+  if (run) flush(run)
 
   // ── Planned occurrences ───────────────────────────────────────────────────
   // Each active plan is its own section, positioned by its tag's window start
@@ -146,14 +159,25 @@ export function buildDayOccurrences<L extends OrderableLog, P extends OrderableP
         logs: [],
         plans: [plan],
         planned: true,
+        untimed: false,
       })
     }
   }
 
   // Ties go to what actually happened: a logged meal outranks a plan pencilled
   // in for the same minute.
+  // Ties are real and common: several unscheduled tags share one anchor by
+  // design. The member's own meal order is what separates them, which is exactly
+  // what the ordering screen is for. Falling back to index length keeps unlisted
+  // tags after listed ones rather than jumping to the front.
+  const orderIdx = (tag: string) => {
+    const i = orderIndexForTag(windows, tag)
+    return i >= 0 ? i : windows.length + 1
+  }
   occurrences.sort((a, b) => {
     if (a.sortMinutes !== b.sortMinutes) return a.sortMinutes - b.sortMinutes
+    const ia = orderIdx(a.tag), ib = orderIdx(b.tag)
+    if (ia !== ib) return ia - ib
     if (a.planned !== b.planned) return a.planned ? 1 : -1
     return 0
   })

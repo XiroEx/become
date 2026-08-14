@@ -10,6 +10,8 @@ export interface IMealLog {
   _id?: Types.ObjectId
   user: Types.ObjectId
   loggedAt: Date
+  /** Logged for a DAY with no time — see the untimed field below. */
+  untimed?: boolean
 
   items: IMealItem[]
 
@@ -77,6 +79,14 @@ const MealLogSchema = new Schema<IMealLog>({
     index: true,
   },
   loggedAt: { type: Date, required: true },
+  // Logged for a day with no time of its own.
+  //
+  // loggedAt is still populated (nothing downstream should have to cope with a
+  // missing timestamp) but its CLOCK reading is not meaningful. The day view
+  // places these by the tag's anchor instead. This exists because someone up
+  // past midnight logging food for the day that just ended would otherwise have
+  // every one of those entries sort to the very top of that day.
+  untimed: { type: Boolean, default: false },
 
   items: { type: [MealLogItemSchema], default: [] },
 

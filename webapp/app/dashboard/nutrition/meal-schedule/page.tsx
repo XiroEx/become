@@ -1,10 +1,19 @@
 'use client'
 
-// Meal Schedule — assign an optional time window to each meal tag.
+// Meal Schedule — the ORDER of your meals, and an optional time window for each.
 //
-// The windows do two things and nothing else:
-//   1. Preselect a tag when the food picker opens.
-//   2. Position a PLANNED meal on the day view, which has no time of its own.
+// Two jobs:
+//
+//   ORDER  — the sequence here is your day's shape. It places anything logged
+//            without a time, and it breaks ties between meals that share an
+//            anchor. Someone who never sets a single time still gets a sensible
+//            day out of this list alone.
+//
+//   TIMES  — optional per meal. They preselect a tag when the picker opens,
+//            position a PLANNED meal, and act as ANCHORS: an unscheduled meal
+//            sits at the END of the nearest scheduled meal above it, so a dinner
+//            eaten early at 3pm falls before an untimed snack while one at 5pm
+//            falls after.
 //
 // They never restrict logging. A member whose "Bed" window is 11pm-2am can still
 // log Bed at 8pm; the picker just points out that it is outside the usual time
@@ -20,7 +29,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
-import { ArrowLeft, Loader2, X, Check, Plus } from 'lucide-react'
+import { ArrowLeft, Loader2, X, Check, Plus, ChevronUp, ChevronDown, GripVertical } from 'lucide-react'
 import {
   formatHHMM,
   parseHHMM,
@@ -72,12 +81,17 @@ export default function MealSchedulePage() {
       for (const t of (tagsData?.userTags ?? []) as string[]) known.add(String(t).toLowerCase())
       for (const t of byTag.keys()) known.add(t)
 
-      const next: Row[] = Array.from(known).sort().map(tag => {
+      // Saved order first, in the order it was saved; then anything new the
+      // member has used since, appended alphabetically so it is findable. Sorting
+      // the whole list would throw away the order they set.
+      const savedOrder = windows.map(w => w.tag.toLowerCase())
+      const rest = Array.from(known).filter(tg => !savedOrder.includes(tg)).sort()
+      const next: Row[] = [...savedOrder, ...rest].map(tag => {
         const w = byTag.get(tag)
         return {
           tag,
-          start: w ? formatHHMM(w.startMinutes) : '',
-          end: w ? formatHHMM(w.endMinutes) : '',
+          start: w && w.startMinutes != null ? formatHHMM(w.startMinutes) : '',
+          end: w && w.endMinutes != null ? formatHHMM(w.endMinutes) : '',
         }
       })
       setRows(next)
@@ -118,11 +132,14 @@ export default function MealSchedulePage() {
     }
     setSaving(true)
     try {
-      const windows = rows
-        .filter(r => r.start && r.end)
-        .map(r => ({ tag: r.tag, startMinutes: parseHHMM(r.start), endMinutes: parseHHMM(r.end) }))
-        .filter((w): w is { tag: string; startMinutes: number; endMinutes: number } =>
-          w.startMinutes !== null && w.endMinutes !== null)
+      // Every row, in order — including the unscheduled ones, whose position is
+      // the whole point. Sending only the scheduled ones would forget where the
+      // untimed meals sit.
+      const windows = rows.map(r => ({
+        tag: r.tag,
+        startMinutes: r.start ? parseHHMM(r.start) : null,
+        endMinutes: r.end ? parseHHMM(r.end) : null,
+      }))
 
       const res = await fetch('/api/nutrition/meal-schedule', {
         method: 'PUT',
@@ -150,12 +167,27 @@ export default function MealSchedulePage() {
       return
     }
     const s = suggestedWindowForTag(tag)
+    // Appended, never sorted in: the member owns this order.
     setRows(prev => [...prev, {
       tag,
-      start: s ? formatHHMM(s.startMinutes) : '',
-      end: s ? formatHHMM(s.endMinutes) : '',
-    }].sort((a, b) => a.tag.localeCompare(b.tag)))
+      start: s && s.startMinutes != null ? formatHHMM(s.startMinutes) : '',
+      end: s && s.endMinutes != null ? formatHHMM(s.endMinutes) : '',
+    }])
     setNewTag('')
+  }
+
+  /** Move a row one slot. Up/down buttons rather than drag: this list is short,
+   *  it lives inside a scrolling page, and a mis-grabbed drag on a phone is a
+   *  worse failure than one extra tap. */
+  const move = (index: number, delta: number) => {
+    setRows(prev => {
+      const to = index + delta
+      if (to < 0 || to >= prev.length) return prev
+      const next = prev.slice()
+      const [row] = next.splice(index, 1)
+      next.splice(to, 0, row)
+      return next
+    })
   }
 
   const scheduledCount = rows.filter(r => r.start && r.end).length
@@ -189,6 +221,11 @@ export default function MealSchedulePage() {
             Leave a meal blank if it does not have a set time. If your shift moves, &ldquo;Before Work&rdquo;
             is better left open than pinned to an hour that is usually wrong.
           </p>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+            The <span className="font-semibold">order</span> below is your day&rsquo;s shape. Anything you log
+            without a time lands in this sequence rather than at a clock position &mdash; useful when your day
+            runs past midnight and last night&rsquo;s food would otherwise jump to the top.
+          </p>
         </Card>
 
         {loading ? (
@@ -199,7 +236,7 @@ export default function MealSchedulePage() {
           <>
             <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {rows.map(row => {
+                {rows.map((row, idx) => {
                   const s = parseHHMM(row.start)
                   const e = parseHHMM(row.end)
                   const wraps = s !== null && e !== null && e <= s
@@ -213,6 +250,29 @@ export default function MealSchedulePage() {
                           them beside a label crushed the tag to "B." and "Befo..."
                           at phone width. */}
                       <div className="flex items-center gap-2">
+                        <div className="flex shrink-0 flex-col">
+                          <button
+                            type="button"
+                            onClick={() => move(idx, -1)}
+                            disabled={idx === 0}
+                            aria-label={`Move ${titleCase(row.tag)} earlier`}
+                            data-testid={`up-${row.tag}`}
+                            className="flex h-4 w-5 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 disabled:opacity-25 dark:hover:bg-zinc-800"
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => move(idx, 1)}
+                            disabled={idx === rows.length - 1}
+                            aria-label={`Move ${titleCase(row.tag)} later`}
+                            data-testid={`down-${row.tag}`}
+                            className="flex h-4 w-5 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 disabled:opacity-25 dark:hover:bg-zinc-800"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <GripVertical className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" />
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900 dark:text-white">
                           {titleCase(row.tag)}
                         </span>
@@ -302,7 +362,7 @@ export default function MealSchedulePage() {
             className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg transition-colors hover:bg-blue-700 disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            {saving ? 'Saving…' : `Save schedule (${scheduledCount} scheduled)`}
+            {saving ? 'Saving…' : `Save order & times (${scheduledCount} timed)`}
           </button>
         </div>
       )}

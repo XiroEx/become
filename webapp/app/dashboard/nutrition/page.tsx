@@ -461,6 +461,7 @@ function NutritionPageInner() {
         logs: [] as MealLogLite[],
         plans: [] as MealPlan[],
         planned: false,
+        untimed: false,
         empty: true,
       }))
     return [...withContent, ...empties].sort((a, b) => {
@@ -561,7 +562,7 @@ function NutritionPageInner() {
    */
   const handleAddMany = async (
     entries: LoggedFoodEntry[],
-    opts: { tag?: string; loggedAt?: string; mealName?: string },
+    opts: { tag?: string; loggedAt?: string; mealName?: string; untimed?: boolean },
   ) => {
     if (entries.length === 0) return
     const useTag = (opts.tag || foodSearchTag || 'snack').toLowerCase()
@@ -579,6 +580,7 @@ function NutritionPageInner() {
           // day reads "Turkey sandwich" instead of three loose rows.
           ...(opts.mealName ? { mealName: opts.mealName } : {}),
           ...(opts.loggedAt ? { loggedAt: opts.loggedAt } : {}),
+          untimed: opts.untimed === true,
         }),
       })
       if (!res.ok) {
@@ -610,7 +612,7 @@ function NutritionPageInner() {
     }
   }
 
-  const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string) => {
+  const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string, untimed?: boolean) => {
     const useTag = (tag || foodSearchTag || 'snack').toLowerCase()
     try {
       // Build a MealItemInput from the legacy IFoodEntry shape. The
@@ -675,6 +677,9 @@ function NutritionPageInner() {
             items: [itemPayload],
             tags: [useTag],
             loggedAt,
+            // Logged for the day with no clock. The day view places it by the
+            // tag's anchor rather than by loggedAt's time-of-day.
+            untimed: untimed === true,
           }),
         })
       }
@@ -1189,7 +1194,11 @@ function NutritionPageInner() {
             tag={section.tag}
             logs={section.logs}
             plans={section.plans}
-            occurrenceAt={section.logs.length > 0 ? section.sortMinutes : undefined}
+            // No clock label on an untimed sitting: it has a position, not a
+            // time, and printing the anchor would read as a time the member
+            // never entered.
+            occurrenceAt={section.logs.length > 0 && !section.untimed ? section.sortMinutes : undefined}
+            untimed={section.untimed}
             onAddFood={(t) => openFoodSearch(t, false)}
             onAddToMeal={(logId, t) => openAddToMeal(logId, t)}
             onEditEntry={(logId, item) => setEditEntry({ logId, item })}
@@ -1388,7 +1397,7 @@ function NutritionPageInner() {
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null); setAddToLogId(null) }}
         onAddMany={handleAddMany}
         canSaveMeals={canSaveMeals}
-        onSelectFood={(entry, tag, loggedAt) => {
+        onSelectFood={(entry, tag, loggedAt, _planOptions, untimed) => {
           if (planForDate) {
             // Submit to /api/meal-plans inline since the nutrition page's
             // handleAddFood targets the log endpoint by default.
@@ -1434,7 +1443,7 @@ function NutritionPageInner() {
               showErrorToast('Failed to plan food. Check your connection.')
             })
           }
-          return handleAddFood(entry, tag, loggedAt)
+          return handleAddFood(entry, tag, loggedAt, untimed)
         }}
       />
 

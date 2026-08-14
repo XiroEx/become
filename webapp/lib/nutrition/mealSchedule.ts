@@ -17,8 +17,19 @@ export const MINUTES_PER_DAY = 1440
 
 export interface TagWindow {
   tag: string
+  /** Null when the tag has no set time. It is still ORDERED. */
+  startMinutes: number | null
+  endMinutes: number | null
+}
+
+/** A window with both ends set — the only shape the time checks can act on. */
+export interface ScheduledWindow extends TagWindow {
   startMinutes: number
   endMinutes: number
+}
+
+export function isScheduled(w: TagWindow | null | undefined): w is ScheduledWindow {
+  return Boolean(w) && typeof w!.startMinutes === 'number' && typeof w!.endMinutes === 'number'
 }
 
 /** "HH:MM" -> minutes from midnight, or null when unparseable. */
@@ -58,7 +69,7 @@ export function minutesOfDay(date: Date | string): number {
  * How long a window lasts, in minutes. Wrap-aware, so a 23:00-02:00 window is
  * 180 minutes rather than a negative number.
  */
-export function windowLength(w: TagWindow): number {
+export function windowLength(w: ScheduledWindow): number {
   const raw = w.endMinutes - w.startMinutes
   return raw > 0 ? raw : raw + MINUTES_PER_DAY
 }
@@ -69,17 +80,28 @@ export function windowLength(w: TagWindow): number {
  * A window whose end is <= its start wraps past midnight, so the test flips
  * from "between" to "outside the gap".
  */
-export function windowContains(w: TagWindow, minutes: number): boolean {
+export function windowContains(w: ScheduledWindow, minutes: number): boolean {
   const t = ((Math.round(minutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
   if (w.endMinutes > w.startMinutes) return t >= w.startMinutes && t < w.endMinutes
   // Wraps midnight: inside means at-or-after the start OR before the end.
   return t >= w.startMinutes || t < w.endMinutes
 }
 
-/** The window configured for a tag, if any. */
-export function windowForTag(windows: TagWindow[], tag: string): TagWindow | null {
+/** The SCHEDULED window for a tag, if it has one. Order-only rows return null. */
+export function windowForTag(windows: TagWindow[], tag: string): ScheduledWindow | null {
   const lower = tag.toLowerCase()
-  return windows.find(w => w.tag.toLowerCase() === lower) ?? null
+  const found = windows.find(w => w.tag.toLowerCase() === lower)
+  return isScheduled(found) ? found : null
+}
+
+/** Every tag the member has ordered, in their order. */
+export function orderedTags(windows: TagWindow[]): string[] {
+  return windows.map(w => w.tag.toLowerCase())
+}
+
+/** Position in the member's meal order; -1 when the tag is not listed. */
+export function orderIndexForTag(windows: TagWindow[], tag: string): number {
+  return windows.findIndex(w => w.tag.toLowerCase() === tag.toLowerCase())
 }
 
 /**
@@ -94,7 +116,7 @@ export function windowForTag(windows: TagWindow[], tag: string): TagWindow | nul
  * member who only scheduled breakfast — the caller decides what to fall back to.
  */
 export function tagForMinutes(windows: TagWindow[], minutes: number): string | null {
-  const hits = windows.filter(w => windowContains(w, minutes))
+  const hits = windows.filter(isScheduled).filter(w => windowContains(w, minutes))
   if (hits.length === 0) return null
   let best = hits[0]
   for (const w of hits) if (windowLength(w) < windowLength(best)) best = w
@@ -157,4 +179,50 @@ export function isOutsideWindow(windows: TagWindow[], tag: string, minutes: numb
   const w = windowForTag(windows, tag)
   if (!w) return false
   return !windowContains(w, minutes)
+}
+
+/**
+ * Where an entry logged WITHOUT a time belongs on the day.
+ *
+ * The member's own framing: "if I have lunch -> snack -> dinner as the order set,
+ * and lunch is 1-4pm and dinner is 6pm-10pm, and I log dinner one day at 3pm,
+ * then log a snack with no time, it should appear after that dinner. The 4pm and
+ * 6pm act as the true anchors in that case. If the dinner I logged was 5pm, and I
+ * also log a snack with no time later, it should appear before that dinner."
+ *
+ * So the anchor for an unscheduled tag is the END of the nearest scheduled tag
+ * ABOVE it in the order — 4pm for snack in that example. A dinner actually eaten
+ * at 3pm falls before it; one at 5pm falls after. Both readings match what the
+ * member expects without anyone having to type a time.
+ *
+ * Resolution order:
+ *   1. the tag's own window start, when it has one
+ *   2. the end of the nearest scheduled tag above it
+ *   3. the start of the nearest scheduled tag below it
+ *   4. the app-wide table, then midday
+ *
+ * Ties are broken by order index at the call site, which is what keeps several
+ * unscheduled tags sharing one anchor in the member's chosen sequence.
+ */
+export function anchorMinutesForTag(windows: TagWindow[], tag: string): number {
+  const lower = tag.toLowerCase()
+  const i = windows.findIndex(w => w.tag.toLowerCase() === lower)
+
+  if (i >= 0) {
+    const own = windows[i]
+    if (isScheduled(own)) return own.startMinutes
+
+    for (let j = i - 1; j >= 0; j--) {
+      const w = windows[j]
+      if (isScheduled(w)) return w.endMinutes
+    }
+    for (let j = i + 1; j < windows.length; j++) {
+      const w = windows[j]
+      if (isScheduled(w)) return w.startMinutes
+    }
+  }
+
+  // Not in the member's list at all, or nothing in the list is scheduled.
+  const [h, m] = defaultTimeForTag(lower)
+  return h * 60 + m
 }
