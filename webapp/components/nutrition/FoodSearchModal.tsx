@@ -21,6 +21,7 @@ import {
 import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
 import { displayServingCalories } from '@/lib/nutrition/rowServing'
+import { shouldShowOverview } from '@/lib/nutrition/overviewSections'
 import type { ServingUnit } from '@/models/Food'
 
 /**
@@ -618,9 +619,8 @@ export default function FoodSearchModal({
    * rendering four sections meant either duplicating it or threading section
    * boundaries through it. This is the second, which keeps one renderer.
    *
-   * A food can legitimately appear in more than one section (a saved food eaten
-   * this morning is both a Food and Recent) — that is the point of showing them
-   * separately, so they are NOT deduped across sections.
+   * Sections are deduped server-side and backfilled, so one food never appears
+   * under Foods AND Recent AND Frequent — see the overview route.
    */
   /**
    * The default filter with an empty box — i.e. the overview is what should be
@@ -628,8 +628,15 @@ export default function FoodSearchModal({
    * to have ARRIVED), because the render has to know the difference between
    * "no overview yet" and "nothing to search for". Conflating them is what made
    * the whole default view collapse to "Type at least 2 characters".
+   *
+   * `results.length` is part of the gate because an explicit result set must
+   * always beat the default view. A BARCODE SCAN fills `results` and opens the
+   * scanned food without ever touching `query`, so gating on the query alone
+   * rendered the default list instead of the thing just scanned — and the add
+   * panel, which renders inline under its row, never appeared. It only looked
+   * like it worked when the scanned item happened to already be in the overview.
    */
-  const showOverviewPending = activeTab === 'all' && query.trim().length < 2
+  const showOverviewPending = shouldShowOverview({ activeTab, query, resultCount: results.length })
   const showOverview = showOverviewPending && !!overview
 
   const overviewRows = useMemo(() => {
