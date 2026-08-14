@@ -7,7 +7,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cleanMinutes } from '../../app/api/nutrition/meal-schedule/route'
+import { cleanMinutes } from '../../lib/nutrition/mealSchedule'
 
 test('an absent time stays absent instead of becoming midnight', () => {
   assert.equal(cleanMinutes(null), null, 'Number(null) === 0 is the trap')

@@ -226,3 +226,24 @@ export function anchorMinutesForTag(windows: TagWindow[], tag: string): number {
   const [h, m] = defaultTimeForTag(lower)
   return h * 60 + m
 }
+
+/**
+ * Accept only whole minutes inside a day; null means "no time set".
+ *
+ * Lives here rather than in the API route because a Next.js App Router route
+ * file may only export its HTTP handlers — exporting this helper from there to
+ * make it testable broke `next build` with "cleanMinutes is not a valid Route
+ * export field", and `tsc --noEmit` does not catch that.
+ *
+ * The explicit null/''/undefined check is load-bearing: `Number(null)` is 0, so
+ * without it an UNSCHEDULED tag arrives as midnight paired with a midnight end,
+ * trips the zero-length-window guard, and the whole save is rejected.
+ */
+export function cleanMinutes(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const rounded = Math.round(n)
+  if (rounded < 0 || rounded >= MINUTES_PER_DAY) return null
+  return rounded
+}
