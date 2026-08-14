@@ -28,6 +28,7 @@ import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 import { invalidateMindSession } from '@/lib/mind/sessionCache'
 import { buildDayOccurrences } from '@/lib/nutrition/dayOrder'
+import { createMealTag } from '@/hooks/useMealSchedule'
 import { defaultTagAt, minutesOfDay, sortMinutesForTag, type TagWindow } from '@/lib/nutrition/mealSchedule'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -864,6 +865,10 @@ function NutritionPageInner() {
     if (!sections.some(s => s.tag === norm)) {
       setSessionTags(prev => [...prev, norm])
     }
+    // sessionTags is session-only by design (an empty section you added but
+    // never used should not linger), but the TAG itself must survive so it is
+    // offered next time. Those are different things and only the second is saved.
+    void createMealTag(norm)
     setNewTagInput('')
     setShowAddTagInput(false)
   }

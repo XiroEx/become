@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import { verifyAuth } from '@/lib/auth'
 import MealTagSchedule from '@/models/MealTagSchedule'
-import { MINUTES_PER_DAY } from '@/lib/nutrition/mealSchedule'
+import { cleanMinutes } from '@/lib/nutrition/mealSchedule'
 
 /**
  * The member's meal-tag time windows.
@@ -24,22 +24,6 @@ interface WindowInput {
   endMinutes?: unknown
 }
 
-/**
- * Accept only whole minutes inside a day; null means "no time set".
- *
- * The explicit null/''/undefined check is load-bearing: `Number(null)` is 0, so
- * without it an UNSCHEDULED tag arrived as midnight, paired with a midnight end,
- * and the zero-length guard below rejected the whole save with "starts and ends
- * at the same time" — silently losing every reorder.
- */
-export function cleanMinutes(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null
-  const n = Number(value)
-  if (!Number.isFinite(n)) return null
-  const rounded = Math.round(n)
-  if (rounded < 0 || rounded >= MINUTES_PER_DAY) return null
-  return rounded
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -117,5 +101,53 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('PUT /api/nutrition/meal-schedule error:', error)
     return NextResponse.json({ error: 'Failed to save meal schedule' }, { status: 500 })
+  }
+}
+
+/**
+ * POST — append ONE tag to the member's ordered list.
+ *
+ * Tags used to exist only as a side effect of logging: /api/tags returns
+ * `distinct` over meal logs and saved meals, so a tag you created but had not
+ * yet eaten under simply did not exist. Creating "Before Work" in the picker or
+ * on the schedule screen looked like it worked and was gone on the next load.
+ *
+ * The ordered window list is the real home for a tag, so creating one writes
+ * here. Append rather than replace: this is called from screens that are not
+ * holding the whole list, and a read-modify-write from each of them would race.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success || !auth.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json().catch(() => null)
+    const tag = typeof body?.tag === 'string' ? body.tag.trim().toLowerCase() : ''
+    if (!tag) return NextResponse.json({ error: 'tag is required' }, { status: 400 })
+
+    await dbConnect()
+    // $addToSet cannot be used: it compares whole subdocuments, so the same tag
+    // with different times would be appended twice. Match on the tag instead and
+    // only push when the array does not already contain it.
+    const doc = await MealTagSchedule.findOneAndUpdate(
+      { user: auth.userId, 'windows.tag': { $ne: tag } },
+      { $push: { windows: { tag, startMinutes: null, endMinutes: null } } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).select('windows').lean<{ windows?: unknown[] } | null>().catch(async (err: unknown) => {
+      // Upsert races on the unique user index when the tag already exists: the
+      // filter excludes the existing doc, so Mongo tries to insert a second one.
+      // That means "already there", which is a success for an append.
+      if ((err as { code?: number })?.code === 11000) {
+        return MealTagSchedule.findOne({ user: auth.userId }).select('windows').lean()
+      }
+      throw err
+    })
+
+    return NextResponse.json({ windows: doc?.windows ?? [] })
+  } catch (error) {
+    console.error('POST /api/nutrition/meal-schedule error:', error)
+    return NextResponse.json({ error: 'Failed to add that meal' }, { status: 500 })
   }
 }

@@ -23,7 +23,7 @@
 // Leaving a tag blank is a first-class answer. Shift work means "Before Work"
 // genuinely has no time, and forcing one would make every default wrong.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { Card, Toast } from '@/components/ui'
@@ -60,7 +60,12 @@ export default function MealSchedulePage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
   const [newTag, setNewTag] = useState('')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Never autosave the rows we just LOADED — that would immediately PUT the
+  // list straight back on every visit, including for members who only looked.
+  const loadedRef = useRef(false)
 
   const load = useCallback(async () => {
     try {
@@ -95,6 +100,7 @@ export default function MealSchedulePage() {
         }
       })
       setRows(next)
+      loadedRef.current = true
     } catch {
       showToast('Could not load your schedule.', 'error')
     } finally {
@@ -108,38 +114,51 @@ export default function MealSchedulePage() {
     setRows(prev => prev.map(r => (r.tag === tag ? { ...r, ...patch } : r)))
   }
 
-  /** Rows the member has half-filled. Saving one end without the other is
-   *  ambiguous, so it is surfaced before it silently becomes "unscheduled". */
-  const incomplete = useMemo(
-    () => rows.filter(r => (r.start && !r.end) || (!r.start && r.end)).map(r => r.tag),
-    [rows],
-  )
-  /** A zero-length window would match the entire day in windowContains. */
-  const zeroLength = useMemo(
-    () => rows.filter(r => r.start && r.end && r.start === r.end).map(r => r.tag),
-    [rows],
-  )
+  /**
+   * Rows that cannot be saved as a window YET, flagged inline under the row.
+   *
+   * With autosave there is no moment where the member says "done", so a
+   * half-typed row is not a mistake to block on — it is someone mid-keystroke.
+   * These are surfaced as a quiet note and simply left unscheduled until they
+   * make sense; the rest of the list keeps saving.
+   */
+  const rowIssue = useCallback((r: Row): string | null => {
+    if ((r.start && !r.end) || (!r.start && r.end)) return 'Needs both a start and an end to count as a time.'
+    // Equal ends would be a zero-length window, which windowContains treats as
+    // wrapping the entire day and swallowing every other meal.
+    if (r.start && r.end && r.start === r.end) return 'Start and end are the same, so this has no window yet.'
+    return null
+  }, [])
 
-  const save = async () => {
-    if (saving) return
-    if (zeroLength.length > 0) {
-      showToast(`${titleCase(zeroLength[0])} starts and ends at the same time.`, 'error')
-      return
-    }
-    if (incomplete.length > 0) {
-      showToast(`${titleCase(incomplete[0])} needs both a start and an end.`, 'error')
-      return
-    }
+  /**
+   * Autosave.
+   *
+   * Debounced because the time inputs fire on every keystroke — a native
+   * <input type="time"> emits a change per digit, so an unthrottled save would
+   * PUT four times while someone types "07:30", and the intermediate values are
+   * half-typed nonsense.
+   *
+   * Rows that are mid-edit (one end filled, or a zero-length window) are simply
+   * not sent yet rather than shown as an error. Autosave has no moment where the
+   * member declares they are finished, so treating a half-typed row as a mistake
+   * would scold them for typing. The rest of the list still saves; the
+   * unfinished row is flagged inline underneath and joins the next save once it
+   * makes sense.
+   */
+  const saveNow = useCallback(async (next: Row[]) => {
     setSaving(true)
     try {
       // Every row, in order — including the unscheduled ones, whose position is
       // the whole point. Sending only the scheduled ones would forget where the
       // untimed meals sit.
-      const windows = rows.map(r => ({
-        tag: r.tag,
-        startMinutes: r.start ? parseHHMM(r.start) : null,
-        endMinutes: r.end ? parseHHMM(r.end) : null,
-      }))
+      const windows = next.map(r => {
+        const s = r.start ? parseHHMM(r.start) : null
+        const e = r.end ? parseHHMM(r.end) : null
+        // Not finished typing: keep the tag (its ORDER still matters) but leave
+        // it unscheduled until both ends are real and different.
+        const usable = s !== null && e !== null && s !== e
+        return { tag: r.tag, startMinutes: usable ? s : null, endMinutes: usable ? e : null }
+      })
 
       const res = await fetch('/api/nutrition/meal-schedule', {
         method: 'PUT',
@@ -151,13 +170,21 @@ export default function MealSchedulePage() {
         showToast(d?.error || 'Could not save that.', 'error')
         return
       }
-      showToast('Schedule saved.', 'success')
+      setSavedAt(Date.now())
     } catch {
       showToast('Could not save that.', 'error')
     } finally {
       setSaving(false)
     }
-  }
+  }, [showToast])
+
+  // Debounced autosave on any change to the list.
+  useEffect(() => {
+    if (loading || !loadedRef.current) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => { void saveNow(rows) }, 700)
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
+  }, [rows, loading, saveNow])
 
   const addTag = () => {
     const tag = newTag.trim().toLowerCase()
@@ -168,12 +195,17 @@ export default function MealSchedulePage() {
     }
     const s = suggestedWindowForTag(tag)
     // Appended, never sorted in: the member owns this order.
-    setRows(prev => [...prev, {
+    const next: Row[] = [...rows, {
       tag,
       start: s && s.startMinutes != null ? formatHHMM(s.startMinutes) : '',
       end: s && s.endMinutes != null ? formatHHMM(s.endMinutes) : '',
-    }])
+    }]
+    setRows(next)
     setNewTag('')
+    // Saved right away rather than waiting on the debounce: creating a meal is
+    // the one action someone is most likely to follow with an immediate back
+    // tap, and losing it was the reported bug.
+    void saveNow(next)
   }
 
   /** Move a row one slot. Up/down buttons rather than drag: this list is short,
@@ -313,9 +345,9 @@ export default function MealSchedulePage() {
                           Runs past midnight &mdash; {formatClockLabel(s!)} to {formatClockLabel(e!)}, {Math.round(len / 60 * 10) / 10}h
                         </p>
                       )}
-                      {((row.start && !row.end) || (!row.start && row.end)) && (
+                      {rowIssue(row) && (
                         <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
-                          Needs both a start and an end, or clear it to leave this meal unscheduled.
+                          {rowIssue(row)}
                         </p>
                       )}
                     </li>
@@ -352,18 +384,22 @@ export default function MealSchedulePage() {
         )}
       </div>
 
-      {/* Save bar — clears the floating nav. */}
+      {/* Autosave status. Not a button: there is nothing to press, and a
+          disabled-looking Save would imply changes were still pending. */}
       {!loading && (
-        <div className="fixed inset-x-0 bottom-20 z-30 px-4">
-          <button
-            onClick={save}
-            disabled={saving}
-            data-testid="save-schedule"
-            className="mx-auto flex w-full max-w-md items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg transition-colors hover:bg-blue-700 disabled:opacity-60"
+        <div className="fixed inset-x-0 bottom-20 z-30 flex justify-center px-4">
+          <span
+            data-testid="save-status"
+            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900/90 px-3 py-1.5 text-[11px] font-semibold text-white shadow-lg backdrop-blur dark:bg-white/90 dark:text-black"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            {saving ? 'Saving…' : `Save order & times (${scheduledCount} timed)`}
-          </button>
+            {saving ? (
+              <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>
+            ) : savedAt ? (
+              <><Check className="h-3 w-3" /> Saved &middot; {scheduledCount} timed</>
+            ) : (
+              <>Changes save automatically</>
+            )}
+          </span>
         </div>
       )}
 

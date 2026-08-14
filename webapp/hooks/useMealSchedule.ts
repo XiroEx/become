@@ -70,3 +70,32 @@ export function useMealSchedule(): { windows: TagWindow[]; defaultTagNow: () => 
     defaultTagNow: () => defaultTagAt(windows, minutesOfDay(new Date())),
   }
 }
+
+/**
+ * Create a meal tag so it OUTLIVES the screen that made it.
+ *
+ * Tags used to exist only as a side effect of logging: /api/tags is `distinct`
+ * over meal logs and saved meals, so a tag you created but had not yet eaten
+ * under simply did not exist. Both the picker's "custom tag" field and the day
+ * view's "+ Add tag" set local state and nothing else, so the tag vanished the
+ * moment you navigated away.
+ *
+ * The ordered schedule is the real home for a tag, so creating one appends it
+ * there. Fire-and-forget on purpose: the caller has already switched to the tag
+ * locally, and a failed write should not block someone from logging their food.
+ */
+export async function createMealTag(tag: string): Promise<void> {
+  const norm = tag.trim().toLowerCase()
+  if (!norm) return
+  try {
+    const token = getToken()
+    const res = await fetch('/api/nutrition/meal-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ tag: norm }),
+    })
+    if (res.ok) invalidateMealSchedule()
+  } catch {
+    // Nothing to recover: the tag still works for this log either way.
+  }
+}

@@ -13,7 +13,7 @@ import MealApplySheet from '@/components/meals/MealApplySheet'
 import QuantityPicker, { type QuantityPickerSelection } from './QuantityPicker'
 import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
 import { buildLoggedAt } from '@/lib/mealPlanDates'
-import { useMealSchedule } from '@/hooks/useMealSchedule'
+import { useMealSchedule, createMealTag } from '@/hooks/useMealSchedule'
 import {
   isOutsideWindow, windowForTag, formatClockLabel, formatHHMM, parseHHMM, minutesOfDay,
   anchorMinutesForTag,
@@ -1327,6 +1327,8 @@ export default function FoodSearchModal({
     setActiveTag(norm)
     setCustomTagInput('')
     setTagDropdownOpen(false)
+    // Persist it, or the tag exists only until this sheet closes.
+    void createMealTag(norm)
   }
 
   return (
