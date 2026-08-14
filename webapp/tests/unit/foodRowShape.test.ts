@@ -10,6 +10,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { displayServingCalories } from '../../lib/nutrition/rowServing'
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8')
 
@@ -23,9 +24,31 @@ test('the overview flattens every food row it returns', () => {
 })
 
 test('a row without nutrition costs one row, not the page', () => {
+  // Asserted as BEHAVIOUR rather than as a source string. The guard used to be a
+  // literal `food.nutrition?.calories` inside rowCalories; it now lives in the
+  // shared row-serving helper, and a test pinned to the old spelling failed on a
+  // refactor that kept the guarantee perfectly intact.
+  assert.equal(displayServingCalories({}), 0)
+  assert.equal(displayServingCalories({ nutrition: null }), 0)
+  assert.equal(displayServingCalories({ nutrition: { calories: undefined } }), 0)
+  // And the row must actually go through it.
   const src = read('components/nutrition/FoodSearchModal.tsx')
-  assert.match(src, /food\.nutrition\?\.calories/,
-    'rowCalories must not dereference nutrition unguarded')
+  assert.match(src, /displayServingCalories\(food\)/,
+    'rowCalories must delegate to the shared helper')
+})
+
+test('the row number describes the row label for an Open Food Facts import', () => {
+  // The reported row read "1 portion (46 g)  ·  457 cal". OFF stores per 100 g
+  // and never sets gramsPerServing, carrying the real serving in
+  // alternateServings[0].multiplier instead — the one signal the old scaler did
+  // not read.
+  assert.equal(Math.round(displayServingCalories({
+    servingSize: 100,
+    servingUnit: 'g',
+    displayLabel: '1 portion (46 g)',
+    alternateServings: [{ label: '1 portion (46 g)', multiplier: 0.46 }],
+    nutrition: { calories: 457 },
+  })), 210)
 })
 
 test('the empty state knows about the overview', () => {
