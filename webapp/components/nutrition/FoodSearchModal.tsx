@@ -19,6 +19,7 @@ import {
 } from '@/lib/nutrition/mealSchedule'
 import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
+import { displayServingCalories } from '@/lib/nutrition/rowServing'
 import type { ServingUnit } from '@/models/Food'
 
 /**
@@ -186,23 +187,16 @@ const ROW_PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|m
 // to its "actual" per-serving when gramsPerServing / mlPerServing diverge
 // from servingSize. Mirrors the QuantityPicker primary-chip behavior so the
 // number alongside the search result matches what the picker will preview.
+// Delegates to the shared helper so the row's number always describes the row's
+// label. This used to hand-roll the scale and understood only the gram/ml
+// bridge, which Open Food Facts imports do not have — so every OFF row printed
+// its per-100 g calories beside a label naming a much smaller portion.
+//
+// Defensive rounding stays here: a row arriving without flattened nutrition once
+// threw and unmounted the whole sheet ("This page couldn't load"). A missing
+// number should cost one wrong row, never the page.
 function rowCalories(food: FoodResult): number {
-  let scale = 1
-  if (food.servingUnit === 'g'
-    && food.gramsPerServing != null
-    && food.gramsPerServing > 0
-    && Math.abs(food.gramsPerServing - food.servingSize) > 0.001) {
-    scale = food.gramsPerServing / food.servingSize
-  } else if (food.servingUnit === 'ml'
-    && food.mlPerServing != null
-    && food.mlPerServing > 0
-    && Math.abs(food.mlPerServing - food.servingSize) > 0.001) {
-    scale = food.mlPerServing / food.servingSize
-  }
-  // Defensive: a row arriving without flattened nutrition used to throw here and
-  // unmount the whole sheet ("This page couldn't load"). A missing number should
-  // cost one wrong row, never the page.
-  return Math.round((food.nutrition?.calories ?? 0) * scale)
+  return Math.round(displayServingCalories(food))
 }
 
 function preferredServingLabel(food: FoodResult): string {
