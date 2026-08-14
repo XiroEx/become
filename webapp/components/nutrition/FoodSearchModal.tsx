@@ -2153,12 +2153,32 @@ export default function FoodSearchModal({
                                     <button
                                       type="button"
                                       onClick={() => setFlagOpen(true)}
-                                      className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium text-zinc-400 underline-offset-2 hover:text-amber-600 hover:underline dark:text-zinc-500 dark:hover:text-amber-400"
+                                      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium underline-offset-2 hover:underline ${
+                                        nutritionOverride
+                                          ? 'text-amber-600 dark:text-amber-400'
+                                          : 'text-zinc-400 hover:text-amber-600 dark:text-zinc-500 dark:hover:text-amber-400'
+                                      }`}
                                     >
                                       <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
-                                      {nutritionOverride ? 'Edited for this entry' : 'Something look wrong?'}
+                                      {nutritionOverride ? 'Macros edited' : 'Something look wrong?'}
                                     </button>
                                   </div>
+                                  {nutritionOverride && (
+                                    <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1.5 dark:bg-amber-900/20">
+                                      <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                                      <span className="min-w-0 flex-1 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                                        Your macros are ready. Tap <span className="font-semibold">Add</span> below to log them.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setNutritionOverride(null)}
+                                        data-testid="undo-macro-edit"
+                                        className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
+                                      >
+                                        Undo
+                                      </button>
+                                    </div>
+                                  )}
                                   {/* Logging a scheduled tag outside its window.
                                       Not a warning and not a block -- going to bed
                                       at 8pm is allowed. It states what will happen
@@ -2541,6 +2561,12 @@ export default function FoodSearchModal({
             protein: Math.round(activeVariant.nutrition.protein * 10) / 10,
             carbs: Math.round(activeVariant.nutrition.carbs * 10) / 10,
             fats: Math.round(activeVariant.nutrition.fats * 10) / 10,
+          } : undefined}
+          // What the picker is showing right now, so the correction fields match
+          // the number on screen rather than the food's storage basis.
+          portion={selection ? {
+            label: servingLabelDraft.trim() || variantFriendlyLabel(activeVariant),
+            factor: selection.multiplier * (addQuantityMultiplier || 1),
           } : undefined}
           onApplyToLog={setNutritionOverride}
           onClose={() => setFlagOpen(false)}
