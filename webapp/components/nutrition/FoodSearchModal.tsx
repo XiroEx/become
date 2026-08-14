@@ -12,7 +12,11 @@ import BarcodeScanner from './BarcodeScanner'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import QuantityPicker, { type QuantityPickerSelection } from './QuantityPicker'
 import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
-import { combineDateWithNowTime } from '@/lib/mealPlanDates'
+import { buildLoggedAt } from '@/lib/mealPlanDates'
+import { useMealSchedule } from '@/hooks/useMealSchedule'
+import {
+  isOutsideWindow, windowForTag, formatClockLabel, formatHHMM, parseHHMM, minutesOfDay,
+} from '@/lib/nutrition/mealSchedule'
 import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
@@ -396,6 +400,14 @@ export default function FoodSearchModal({
   // wall-clock time). Lets users backdate to yesterday / earlier. No time
   // component — see combineDateWithNowTime() at submit.
   const [customDate, setCustomDate] = useState<string | null>(null)
+  // Explicit "HH:MM" for this entry. null = use the wall clock at submit.
+  //
+  // Time never used to be surfaced at all: a backdated entry got the CURRENT
+  // wall-clock time grafted onto the chosen day. That was harmless while the day
+  // view sorted by tag, and wrong the moment it started sorting by time -- three
+  // meals backdated to yesterday all landed at the same minute in whatever order
+  // they were entered.
+  const [customTime, setCustomTime] = useState<string | null>(null)
   // When true, the inline DateOnlyPicker disclosure is open.
   const [dateEditOpen, setDateEditOpen] = useState(false)
   // Recurrence disclosure (plan mode only). null = one-time plan; otherwise
@@ -496,6 +508,7 @@ export default function FoodSearchModal({
       setCustomTagInput('')
       setSaveToast(null)
       setCustomDate(null)
+      setCustomTime(null)
       setDateEditOpen(false)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
@@ -1096,8 +1109,8 @@ export default function FoodSearchModal({
       // even though the user never picked a time. When the user didn't pick a
       // date we send undefined so the server stamps "now".
       let loggedAtIso: string | undefined
-      if (!isPlanMode && customDate) {
-        loggedAtIso = combineDateWithNowTime(customDate)
+      if (!isPlanMode && (customDate || customTime)) {
+        loggedAtIso = buildLoggedAt(customDate, customTime, viewedDate)
       }
 
       // Plan-mode recurrence — pass only when the user opened the disclosure
@@ -1129,6 +1142,7 @@ export default function FoodSearchModal({
       setServingLabelEditing(false)
       setSelectedVariantIdx(0)
       setCustomDate(null)
+      setCustomTime(null)
       setDateEditOpen(false)
       setRepeatOpen(false)
       setRepeatCount(6)
@@ -1223,7 +1237,7 @@ export default function FoodSearchModal({
     setSubmittingMany(true)
     try {
       let loggedAtIso: string | undefined
-      if (!isPlanMode && customDate) loggedAtIso = combineDateWithNowTime(customDate)
+      if (!isPlanMode && (customDate || customTime)) loggedAtIso = buildLoggedAt(customDate, customTime, viewedDate)
       await onAddMany(basket, {
         tag: tagPickerEnabled ? activeTag : undefined,
         loggedAt: loggedAtIso,
@@ -1242,6 +1256,27 @@ export default function FoodSearchModal({
   }
 
   const tagLabel = tagPickerEnabled ? titleCaseTag(activeTag) : ''
+
+  // ── Schedule awareness ──────────────────────────────────────────────────────
+  //
+  // The schedule sets DEFAULTS, never rules. Someone who goes to bed at 8pm must
+  // still be able to log "Bed" at 8pm without fighting the app, so nothing here
+  // blocks or reassigns anything — it points out that the entry is landing
+  // outside its usual window and offers the scheduled time as ONE TAP, which the
+  // member is free to ignore.
+  const { windows: scheduleWindows } = useMealSchedule()
+  /** The minute this entry will actually be filed at. */
+  const effectiveMinutes = customTime != null
+    ? (parseHHMM(customTime) ?? minutesOfDay(new Date()))
+    : minutesOfDay(new Date())
+  const tagWindow = tagPickerEnabled ? windowForTag(scheduleWindows, activeTag) : null
+  // Only meaningful for today: on a backdated entry "outside its window" says
+  // nothing useful, since the member is reconstructing a past day anyway.
+  const outsideSchedule = !isPlanMode
+    && !customDate
+    && tagPickerEnabled
+    && isOutsideWindow(scheduleWindows, activeTag, effectiveMinutes)
+
 
   // Build the unified tag list for the dropdown (defaults first, then user tags)
   const allTagOptions = useMemo<string[]>(() => {
@@ -2090,8 +2125,25 @@ export default function FoodSearchModal({
                                           <X className="h-3 w-3" />
                                         </button>
                                       )}
+                                      {/* The time pill only appears once a time is
+                                          actually chosen, so the common "just log it
+                                          now" path keeps exactly one control. */}
+                                      {customTime && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDateEditOpen(v => !v)}
+                                          data-testid="log-time-pill"
+                                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200"
+                                          aria-label={`Logging at ${formatClockLabel(parseHHMM(customTime) ?? 0)}, tap to change`}
+                                        >
+                                          <Clock className="h-3 w-3" />
+                                          <span className="tabular-nums">{formatClockLabel(parseHHMM(customTime) ?? 0)}</span>
+                                        </button>
+                                      )}
                                       <span className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">
-                                        {customDate ? 'Logged on chosen day' : 'Logged now'}
+                                        {customTime
+                                          ? 'Logged at chosen time'
+                                          : customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
                                     {/* Shares the date row rather than sitting under the
@@ -2107,6 +2159,27 @@ export default function FoodSearchModal({
                                       {nutritionOverride ? 'Edited for this entry' : 'Something look wrong?'}
                                     </button>
                                   </div>
+                                  {/* Logging a scheduled tag outside its window.
+                                      Not a warning and not a block -- going to bed
+                                      at 8pm is allowed. It states what will happen
+                                      and offers the usual time as one tap. */}
+                                  {outsideSchedule && tagWindow && (
+                                    <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1.5 dark:bg-amber-900/20">
+                                      <Clock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                                      <span className="min-w-0 flex-1 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                                        {tagLabel} usually runs {formatClockLabel(tagWindow.startMinutes)}
+                                        {' '}to {formatClockLabel(tagWindow.endMinutes)}.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCustomTime(formatHHMM(tagWindow.startMinutes))}
+                                        data-testid="use-scheduled-time"
+                                        className="shrink-0 rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-amber-700"
+                                      >
+                                        Use {formatClockLabel(tagWindow.startMinutes)}
+                                      </button>
+                                    </div>
+                                  )}
                                   <AnimatePresence initial={false}>
                                     {dateEditOpen && (
                                       <motion.div
@@ -2121,16 +2194,53 @@ export default function FoodSearchModal({
                                           value={customDate ?? dateToKey(viewedDate ?? new Date())}
                                           maxDate={dateToKey(new Date())}
                                           showTodayChip
-                                          onClear={() => { setCustomDate(null); setDateEditOpen(false) }}
+                                          onClear={() => { setCustomDate(null); setCustomTime(null); setDateEditOpen(false) }}
                                           onChange={(next) => {
                                             // When the user picks "today", treat it as "Now"
                                             // (null) so the pill reflects that and we don't
                                             // pin a stale wall-clock time on submit.
                                             const todayKey = dateToKey(new Date())
                                             setCustomDate(next === todayKey ? null : next)
-                                            setDateEditOpen(false)
+                                            // Picking a PAST day is the moment a time starts
+                                            // mattering: without one, every entry backdated to
+                                            // that day lands at the current minute and the day
+                                            // reads in entry order instead of eating order. So
+                                            // the time control appears here, pre-filled with the
+                                            // tag's scheduled start when it has one.
+                                            if (next !== todayKey && customTime == null) {
+                                              const w = tagPickerEnabled ? windowForTag(scheduleWindows, activeTag) : null
+                                              setCustomTime(formatHHMM(w ? w.startMinutes : minutesOfDay(new Date())))
+                                            }
                                           }}
                                         />
+                                        {/* Time control. Present whenever a specific day is
+                                            chosen, and reachable any time via the time pill. */}
+                                        {(customDate || customTime) && (
+                                          <div className="mt-2 flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60">
+                                            <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                                            <span className="shrink-0 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
+                                              Time
+                                            </span>
+                                            <input
+                                              type="time"
+                                              value={customTime ?? formatHHMM(minutesOfDay(new Date()))}
+                                              onChange={(ev) => setCustomTime(ev.target.value || null)}
+                                              data-testid="log-time-input"
+                                              aria-label="Time this was eaten"
+                                              className="ml-auto rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs tabular-nums text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+                                            />
+                                            {customTime && (
+                                              <button
+                                                type="button"
+                                                onClick={() => setCustomTime(null)}
+                                                aria-label="Clear time"
+                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                                              >
+                                                <X className="h-3 w-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
                                       </motion.div>
                                     )}
                                   </AnimatePresence>

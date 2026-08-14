@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
+import { useMealSchedule } from '@/hooks/useMealSchedule'
 
 interface RecipeIngredient {
   name: string
@@ -51,13 +52,6 @@ interface MeResponse {
   _id?: string; id?: string; userId?: string
 }
 
-function getDefaultTagForNow(): string {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 11) return 'breakfast'
-  if (h >= 11 && h < 14) return 'lunch'
-  if (h >= 17 && h < 21) return 'dinner'
-  return 'snack'
-}
 
 function titleCaseTag(tag: string): string {
   return tag.split(/[-_\s]+/).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join('-')
@@ -79,6 +73,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
   const [logTargetFood, setLogTargetFood] = useState<Record<string, unknown> | null>(null)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({ defaults: [], userTags: [] })
   const { toast, showToast } = useToast()
+  const { defaultTagNow } = useMealSchedule()
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -328,7 +323,7 @@ export default function RecipeDetailPage({ params }: { params: Promise<{ id: str
       <FoodLogSheet
         isOpen={!!logTargetFood}
         food={logTargetFood as Parameters<typeof FoodLogSheet>[0]['food']}
-        defaultTag={getDefaultTagForNow()}
+        defaultTag={defaultTagNow()}
         availableTags={tagsResp}
         onClose={() => setLogTargetFood(null)}
         onLogged={() => { showToast('Logged to your day', 'success'); setLogTargetFood(null) }}

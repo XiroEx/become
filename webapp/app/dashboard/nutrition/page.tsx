@@ -16,7 +16,7 @@ import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History, ChevronDown } from 'lucide-react'
+import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, CalendarClock, Copy, Camera, ImagePlus, Upload, PencilLine, History, ChevronDown } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
@@ -27,6 +27,8 @@ import { isFutureLocalDate, todayLocalKey } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 import { invalidateMindSession } from '@/lib/mind/sessionCache'
+import { buildDayOccurrences } from '@/lib/nutrition/dayOrder'
+import { defaultTagAt, minutesOfDay, sortMinutesForTag, type TagWindow } from '@/lib/nutrition/mealSchedule'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -58,13 +60,7 @@ function formatDateParam(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function getDefaultTagForNow(): string {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 11) return 'breakfast'
-  if (h >= 11 && h < 14) return 'lunch'
-  if (h >= 17 && h < 21) return 'dinner'
-  return 'snack'
-}
+
 
 // ── Defaults ───────────────────────────────────────────────────────────────────
 
@@ -175,6 +171,10 @@ function NutritionPageInner() {
   // Plans for the visible date — fetched only when viewingFuture (today/past
   // days don't render plans).
   const [plans, setPlans] = useState<MealPlan[]>([])
+  // The member's meal-tag time windows. Empty is the normal state for someone
+  // who has never opened the Meal Schedule screen, and everything downstream
+  // falls back to the app-wide table in that case.
+  const [scheduleWindows, setScheduleWindows] = useState<TagWindow[]>([])
   // Schedule-meals drawer — opens on "Schedule meals" CTA when viewingFuture.
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false)
 
@@ -358,6 +358,20 @@ function NutritionPageInner() {
     }
   }, [getHeaders])
 
+  // Fetched once per mount: the windows change on a settings screen, not while
+  // scrolling days, and a failure here is not worth surfacing — an empty
+  // schedule is a valid state that falls back to app-wide defaults.
+  const fetchSchedule = useCallback(async () => {
+    try {
+      const res = await fetch('/api/nutrition/meal-schedule', { headers: getHeaders() })
+      if (!res.ok) return
+      const data = await res.json().catch(() => null)
+      if (Array.isArray(data?.windows)) setScheduleWindows(data.windows as TagWindow[])
+    } catch {
+      // Keep the empty default.
+    }
+  }, [getHeaders])
+
   // Fetch plans for the visible date. Only meaningful when viewingFuture, but
   // we always fetch so that switching between today→future doesn't introduce
   // a flash of stale state. The view filters on viewingFuture downstream.
@@ -381,11 +395,11 @@ function NutritionPageInner() {
   useEffect(() => {
     async function init() {
       if (!didInitialLoad.current) setLoading(true)
-      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchEntitlements()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchEntitlements(), fetchSchedule()])
       if (!didInitialLoad.current) { setLoading(false); didInitialLoad.current = true }
     }
     init()
-  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchEntitlements])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchEntitlements, fetchSchedule])
 
   // Re-open a saved scan to edit (?scan=<id> from the Scan history "Edit"):
   // fetch it and open the plate review pre-loaded with its items.
@@ -412,69 +426,49 @@ function NutritionPageInner() {
     })()
   }, [searchParams, getHeaders])
 
-  // ── Visible tags ──────────────────────────────────────────────────────────────
-  // Only show tags that have content today, plus any session-added empty tags.
-  // Empty default sections (breakfast/lunch/etc with no entries) are hidden so
-  // the page isn't dominated by stub headers — the empty-state CTA invites the
-  // first log instead.
+  // ── The day, in the order it happened ─────────────────────────────────────────
+  //
+  // The unit here used to be the TAG: one section per tag, defaults in a fixed
+  // canonical sequence and custom tags ALPHABETICALLY after them. That produced
+  // two wrong readings of the same day:
+  //
+  //   • breakfast, snack, lunch, snack collapsed into ONE snack section holding
+  //     both snacks, rendered below lunch. The day no longer read in order and
+  //     the two sittings were pooled as though they were one.
+  //   • a "Bed" meal planned for 11pm sorted ABOVE a "Before Work" meal already
+  //     eaten at 8pm, purely because "bed" < "before work".
+  //
+  // The unit is now the OCCURRENCE — one contiguous sitting of one tag — and the
+  // whole day sorts by clock time. See lib/nutrition/dayOrder.ts for the rule.
+  //
+  // Empty tags the member added this session still need somewhere to live, so
+  // they are folded in at their scheduled position rather than pinned to the end.
+  const occurrences = useMemo(
+    () => buildDayOccurrences<MealLogLite, MealPlan>(logs, plans, scheduleWindows, { includePlans: showPlans }),
+    [logs, plans, scheduleWindows, showPlans],
+  )
 
-  const visibleTags = useMemo<string[]>(() => {
-    const defaultsWithContent: string[] = []
-    const customTagsToday = new Set<string>()
-    const addTag = (t: string) => {
-      if (DEFAULT_TAGS.includes(t)) {
-        if (!defaultsWithContent.includes(t)) defaultsWithContent.push(t)
-      } else {
-        customTagsToday.add(t)
-      }
-    }
-    for (const log of logs) {
-      const tags = (log.tags ?? []).map(t => String(t).toLowerCase())
-      const effective = tags.length === 0 ? ['snack'] : tags
-      for (const t of effective) addTag(t)
-    }
-    // When viewing a future date, plans drive section visibility too — a tag
-    // with only plans (no logs) still gets a row so the user sees what's
-    // scheduled.
-    if (showPlans) {
-      for (const p of plans) addTag(String(p.tag).toLowerCase())
-    }
-    // Defaults preserved in canonical order, then custom-with-content sorted, then session-added.
-    const out: string[] = DEFAULT_TAGS.filter(t => defaultsWithContent.includes(t))
-    const customSorted = Array.from(customTagsToday).sort()
-    for (const t of customSorted) if (!out.includes(t)) out.push(t)
-    for (const t of sessionTags) if (!out.includes(t)) out.push(t)
-    return out
-  }, [logs, sessionTags, showPlans, plans])
-
-  // Map tag -> logs that include this tag.
-  const logsByTag = useMemo<Record<string, MealLogLite[]>>(() => {
-    const map: Record<string, MealLogLite[]> = {}
-    for (const t of visibleTags) map[t] = []
-    for (const log of logs) {
-      const tags = (log.tags || []).map(t => String(t).toLowerCase())
-      // If the log has no tags at all, treat it as a "snack" so it stays visible.
-      const effective = tags.length === 0 ? ['snack'] : tags
-      for (const t of effective) {
-        if (!map[t]) map[t] = []
-        map[t].push(log)
-      }
-    }
-    return map
-  }, [visibleTags, logs])
-
-  // Map tag -> plans that target this tag. Empty when not viewing future.
-  const plansByTag = useMemo<Record<string, MealPlan[]>>(() => {
-    const map: Record<string, MealPlan[]> = {}
-    if (!showPlans) return map
-    for (const t of visibleTags) map[t] = []
-    for (const p of plans) {
-      const key = String(p.tag).toLowerCase()
-      if (!map[key]) map[key] = []
-      map[key].push(p)
-    }
-    return map
-  }, [showPlans, plans, visibleTags])
+  const sections = useMemo(() => {
+    const withContent = occurrences.map(o => ({ ...o, empty: false }))
+    const used = new Set(withContent.map(o => o.tag))
+    const empties = sessionTags
+      .map(t => String(t).toLowerCase())
+      .filter(t => !used.has(t))
+      .map(tag => ({
+        key: `empty:${tag}`,
+        tag,
+        sortMinutes: sortMinutesForTag(scheduleWindows, tag),
+        logs: [] as MealLogLite[],
+        plans: [] as MealPlan[],
+        planned: false,
+        empty: true,
+      }))
+    return [...withContent, ...empties].sort((a, b) => {
+      if (a.sortMinutes !== b.sortMinutes) return a.sortMinutes - b.sortMinutes
+      if (a.planned !== b.planned) return a.planned ? 1 : -1
+      return 0
+    })
+  }, [occurrences, sessionTags, scheduleWindows])
 
   // ── Date navigation ───────────────────────────────────────────────────────
 
@@ -691,7 +685,7 @@ function NutritionPageInner() {
         setFoodSearchOpen(false)
         setFoodSearchAutoScan(false)
         setAddToLogId(null)
-        // Once a session-added tag has content, it'll appear via logsByTag — drop it.
+        // Once a session-added tag has content it becomes a real occurrence — drop it.
         setSessionTags(prev => prev.filter(t => t !== useTag))
       } else {
         const data = await res.json().catch(() => null)
@@ -860,7 +854,9 @@ function NutritionPageInner() {
   const handleAddSessionTag = () => {
     const norm = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
     if (!norm) return
-    if (!visibleTags.includes(norm)) {
+    // Only needs adding when nothing on the day already covers it; an existing
+    // occurrence of that tag is already a section.
+    if (!sections.some(s => s.tag === norm)) {
       setSessionTags(prev => [...prev, norm])
     }
     setNewTagInput('')
@@ -1010,6 +1006,9 @@ function NutritionPageInner() {
                     <Link href={`/dashboard/timeline?date=${dateParam}`} onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
                       <Clock className="h-4 w-4" /> Timeline
                     </Link>
+                    <Link href="/dashboard/nutrition/meal-schedule" onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                      <CalendarClock className="h-4 w-4" /> Meal Schedule
+                    </Link>
                     <Link href="/dashboard/nutrition/scans" onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
                       <History className="h-4 w-4" /> Estimate history
                     </Link>
@@ -1024,7 +1023,7 @@ function NutritionPageInner() {
             (take photo / scan barcode) and an upload (upload photo / describe). */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => openFoodSearch(getDefaultTagForNow())}
+            onClick={() => openFoodSearch(defaultTagAt(scheduleWindows, minutesOfDay(new Date())))}
             data-tour="nutrition-search"
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
@@ -1049,7 +1048,7 @@ function NutritionPageInner() {
                   <button onClick={() => { setCaptureMenu(null); openSnapCamera() }} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     <Camera className="h-4 w-4" /> Take photo
                   </button>
-                  <button onClick={() => { setCaptureMenu(null); openFoodSearch(getDefaultTagForNow(), true) }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  <button onClick={() => { setCaptureMenu(null); openFoodSearch(defaultTagAt(scheduleWindows, minutesOfDay(new Date())), true) }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     <ScanBarcode className="h-4 w-4" /> Scan barcode
                   </button>
                 </div>
@@ -1133,7 +1132,7 @@ function NutritionPageInner() {
         />
 
         {/* Empty state — nothing logged today yet (or nothing planned, on a future day) */}
-        {visibleTags.length === 0 && quickAdds.length === 0 && (
+        {sections.length === 0 && quickAdds.length === 0 && (
           <EmptyState
             icon={<UtensilsCrossed className="h-6 w-6" />}
             title={viewingFuture ? 'Nothing planned yet' : 'Nothing logged yet'}
@@ -1180,13 +1179,17 @@ function NutritionPageInner() {
 
 
 
-        {/* Tag Sections */}
-        {visibleTags.map(tag => (
+        {/* One section per OCCURRENCE, in clock order — so a second snack later
+            in the day is its own section rather than being pooled into the
+            first one. Keyed by occurrence, not tag; two snack sections would
+            collide on a tag key. */}
+        {sections.map(section => (
           <TagSection
-            key={tag}
-            tag={tag}
-            logs={logsByTag[tag] || []}
-            plans={plansByTag[tag] || []}
+            key={section.key}
+            tag={section.tag}
+            logs={section.logs}
+            plans={section.plans}
+            occurrenceAt={section.logs.length > 0 ? section.sortMinutes : undefined}
             onAddFood={(t) => openFoodSearch(t, false)}
             onAddToMeal={(logId, t) => openAddToMeal(logId, t)}
             onEditEntry={(logId, item) => setEditEntry({ logId, item })}
@@ -1194,11 +1197,7 @@ function NutritionPageInner() {
             onRemovePlan={handleRemovePlan}
             onLogPlan={dateParam === todayLocalKey() ? handleLogPlan : undefined}
             onRemoveTag={handleRemoveSessionTag}
-            removable={
-              sessionTags.includes(tag)
-              && (logsByTag[tag] || []).length === 0
-              && (plansByTag[tag] || []).length === 0
-            }
+            removable={section.empty && sessionTags.includes(section.tag)}
             onPlan={(t) => openPlanDatePicker(t)}
             onCombine={handleCombine}
             canSaveMeals={canSaveMeals}
@@ -1352,7 +1351,7 @@ function NutritionPageInner() {
           as the day view scrolls. Sits above the floating BottomNav (z-40) and
           clears it via bottom-28; modals (z-50+) overlay it. */}
       <button
-        onClick={() => openFoodSearch(getDefaultTagForNow())}
+        onClick={() => openFoodSearch(defaultTagAt(scheduleWindows, minutesOfDay(new Date())))}
         aria-label={viewingFuture ? 'Schedule food' : 'Add food'}
         className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg shadow-zinc-900/30 transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-zinc-900"
       >
@@ -1362,7 +1361,7 @@ function NutritionPageInner() {
       {/* Snap Plate Modal — AI vision plate estimator */}
       <SnapPlateModal
         open={snapPlateOpen}
-        tag={getDefaultTagForNow()}
+        tag={defaultTagAt(scheduleWindows, minutesOfDay(new Date()))}
         tagOptions={Array.from(new Set([...tagsResp.defaults, ...tagsResp.userTags]))}
         dateKey={dateParam}
         initialPhase={snapPlatePhase}

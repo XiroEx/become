@@ -13,6 +13,7 @@ import { Search, Plus, ChefHat, ScrollText, Loader2, X, Tag as TagIcon, Bookmark
 import { EmptyState, Toast, SegmentedControl } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { useToast } from '@/hooks/useToast'
+import { useMealSchedule } from '@/hooks/useMealSchedule'
 
 interface MealLite {
   _id: string
@@ -73,13 +74,6 @@ interface SavedFoodLite {
   }>
 }
 
-function getDefaultTagForNow(): string {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 11) return 'breakfast'
-  if (h >= 11 && h < 14) return 'lunch'
-  if (h >= 17 && h < 21) return 'dinner'
-  return 'snack'
-}
 
 function titleCaseTag(tag: string): string {
   return tag
@@ -112,6 +106,7 @@ export default function MealsPage() {
   const [loggedFoodIds, setLoggedFoodIds] = useState<Set<string>>(new Set())
   const [removingFoodId, setRemovingFoodId] = useState<string | null>(null)
   const { toast, showToast } = useToast()
+  const { defaultTagNow } = useMealSchedule()
 
   const getHeaders = useCallback((): HeadersInit => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -581,7 +576,7 @@ export default function MealsPage() {
       <FoodLogSheet
         isOpen={!!logTargetFood}
         food={logTargetFood}
-        defaultTag={getDefaultTagForNow()}
+        defaultTag={defaultTagNow()}
         availableTags={tagsResp}
         onClose={() => setLogTargetFood(null)}
         onLogged={(foodId) => handleFoodLogged(foodId)}
@@ -598,7 +593,7 @@ export default function MealsPage() {
           recipe: applyTargetMeal.recipe ? { servings: applyTargetMeal.recipe.servings } : undefined,
           tags: applyTargetMeal.tags,
         } : null}
-        defaultTag={applyTargetMeal?.defaultTag || getDefaultTagForNow()}
+        defaultTag={applyTargetMeal?.defaultTag || defaultTagNow()}
         availableTags={tagsResp}
         onClose={() => setApplyTargetMeal(null)}
         onApplied={() => {
