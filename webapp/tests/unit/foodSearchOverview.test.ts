@@ -14,11 +14,19 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8')
 const api = read('app/api/nutrition/foods/overview/route.ts')
 const ui = read('components/nutrition/FoodSearchModal.tsx')
 
-test('each section is capped at five', () => {
+test('each section is capped at five, and the four are deduped against each other', () => {
   assert.match(api, /const PER_SECTION = 5/)
-  assert.equal((api.match(/slice\(0, PER_SECTION\)/g) ?? []).length, 3,
-    'foods, meals and frequent are all sliced; recent is capped as it is built')
-  assert.match(api, /recentItems\.length < PER_SECTION/)
+  // Capping moved from four separate slices to one shared picker, because the
+  // sections also have to dedupe against each other now — a saved food eaten
+  // this morning is legitimately a Food AND a Recent AND a Frequent, and showing
+  // it three times filled the default view with the same handful of items.
+  assert.match(api, /pickUnseen/, 'sections share one dedupe+cap helper')
+  assert.equal((api.match(/take\(/g) ?? []).length, 4,
+    'foods, meals, recent and frequent each go through the shared picker')
+  // Deduping without backfilling would leave later sections short, so the
+  // candidate pool must be bigger than what is displayed.
+  assert.match(api, /const POOL = \d+/)
+  assert.match(api, /recentItems\.length < POOL/)
 })
 
 test('foods and meals are ordered by what was LOGGED, not by saved-order', () => {

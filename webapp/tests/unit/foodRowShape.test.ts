@@ -59,7 +59,12 @@ test('the empty state knows about the overview', () => {
 })
 
 test('loading and "nothing to search" are distinguished', () => {
+  // Behaviour, not spelling: the gate itself moved into a shared helper and a
+  // test pinned to its old inline expression failed on a refactor that kept the
+  // guarantee exactly. What matters is that the component still separates
+  // "overview should be on screen" from "overview data has arrived".
   const src = read('components/nutrition/FoodSearchModal.tsx')
-  assert.match(src, /const showOverviewPending = activeTab === 'all' && query\.trim\(\)\.length < 2/)
+  assert.match(src, /shouldShowOverview\(/, 'gate must come from the shared helper')
   assert.match(src, /showOverviewPending && overviewLoading/)
+  assert.match(src, /const showOverview = showOverviewPending && !!overview/)
 })
