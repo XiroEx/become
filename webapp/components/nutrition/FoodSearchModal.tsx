@@ -16,6 +16,7 @@ import { buildLoggedAt } from '@/lib/mealPlanDates'
 import { useMealSchedule } from '@/hooks/useMealSchedule'
 import {
   isOutsideWindow, windowForTag, formatClockLabel, formatHHMM, parseHHMM, minutesOfDay,
+  anchorMinutesForTag,
 } from '@/lib/nutrition/mealSchedule'
 import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
@@ -66,7 +67,7 @@ interface FoodSearchModalProps {
    */
   onAddMany?: (
     items: LoggedFoodEntry[],
-    opts: { tag?: string; loggedAt?: string; mealName?: string },
+    opts: { tag?: string; loggedAt?: string; mealName?: string; untimed?: boolean },
   ) => Promise<void> | void
   /** False hides the "save it as a meal" half of the flow (needs `custom-meals`). */
   canSaveMeals?: boolean
@@ -78,6 +79,8 @@ interface FoodSearchModalProps {
     tag?: string,
     loggedAt?: string,
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
+    /** True when the member cleared the time: log for the DAY, no clock. */
+    untimed?: boolean,
   ) => void | Promise<void>
   autoScan?: boolean
   // Capture hub: when provided, the modal shows Snap / Upload / Describe buttons
@@ -394,13 +397,22 @@ export default function FoodSearchModal({
   // wall-clock time). Lets users backdate to yesterday / earlier. No time
   // component — see combineDateWithNowTime() at submit.
   const [customDate, setCustomDate] = useState<string | null>(null)
-  // Explicit "HH:MM" for this entry. null = use the wall clock at submit.
+  // How this entry gets its time. Three states, not two, because "no time" is a
+  // real choice and not the absence of one:
   //
-  // Time never used to be surfaced at all: a backdated entry got the CURRENT
-  // wall-clock time grafted onto the chosen day. That was harmless while the day
-  // view sorted by tag, and wrong the moment it started sorting by time -- three
-  // meals backdated to yesterday all landed at the same minute in whatever order
-  // they were entered.
+  //   'now'    — stamp the wall clock at submit. The default.
+  //   'custom' — the member typed a time.
+  //   'none'   — logged for the DAY, no time. The day view places it by its
+  //              tag's anchor instead of by a clock reading.
+  //
+  // 'none' exists for people whose day runs past midnight. Logging last night's
+  // food at 1am with a real timestamp drops it at the TOP of that day, ahead of
+  // breakfast; without a time it falls into its natural slot in the order.
+  //
+  // This used to be a bare `customTime: string | null`, where clearing the time
+  // silently meant "use the current clock" — so the X read as a reset rather
+  // than a clear, which is exactly what it was reported as.
+  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('now')
   const [customTime, setCustomTime] = useState<string | null>(null)
   // When true, the inline DateOnlyPicker disclosure is open.
   const [dateEditOpen, setDateEditOpen] = useState(false)
@@ -503,6 +515,7 @@ export default function FoodSearchModal({
       setSaveToast(null)
       setCustomDate(null)
       setCustomTime(null)
+      setTimeMode('now')
       setDateEditOpen(false)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
@@ -1103,8 +1116,17 @@ export default function FoodSearchModal({
       // even though the user never picked a time. When the user didn't pick a
       // date we send undefined so the server stamps "now".
       let loggedAtIso: string | undefined
-      if (!isPlanMode && (customDate || customTime)) {
-        loggedAtIso = buildLoggedAt(customDate, customTime, viewedDate)
+      // An untimed entry still gets a loggedAt (nothing downstream should have to
+      // cope with a missing timestamp) but it is stamped at the tag's ANCHOR, so
+      // even a consumer that only reads loggedAt orders it sensibly. The
+      // `untimed` flag is what makes the day view ignore the clock entirely.
+      const anchorHHMM = () => formatHHMM(anchorMinutesForTag(scheduleWindows, activeTag))
+      if (!isPlanMode && (customDate || timeMode !== 'now')) {
+        loggedAtIso = buildLoggedAt(
+          customDate,
+          timeMode === 'none' ? anchorHHMM() : customTime,
+          viewedDate,
+        )
       }
 
       // Plan-mode recurrence — pass only when the user opened the disclosure
@@ -1127,6 +1149,7 @@ export default function FoodSearchModal({
           tagPickerEnabled ? activeTag : undefined,
           loggedAtIso,
           planOptions,
+          !isPlanMode && timeMode === 'none',
         )
       }
       setSelectedFood(null)
@@ -1137,6 +1160,7 @@ export default function FoodSearchModal({
       setSelectedVariantIdx(0)
       setCustomDate(null)
       setCustomTime(null)
+      setTimeMode('now')
       setDateEditOpen(false)
       setRepeatOpen(false)
       setRepeatCount(6)
@@ -1231,10 +1255,17 @@ export default function FoodSearchModal({
     setSubmittingMany(true)
     try {
       let loggedAtIso: string | undefined
-      if (!isPlanMode && (customDate || customTime)) loggedAtIso = buildLoggedAt(customDate, customTime, viewedDate)
+      if (!isPlanMode && (customDate || timeMode !== 'now')) {
+        loggedAtIso = buildLoggedAt(
+          customDate,
+          timeMode === 'none' ? formatHHMM(anchorMinutesForTag(scheduleWindows, activeTag)) : customTime,
+          viewedDate,
+        )
+      }
       await onAddMany(basket, {
         tag: tagPickerEnabled ? activeTag : undefined,
         loggedAt: loggedAtIso,
+        untimed: !isPlanMode && timeMode === 'none',
         // Only ask for a meal when they can keep one AND want to. Without this
         // the items are still logged together, which is the part that matters.
         mealName:
@@ -1260,7 +1291,7 @@ export default function FoodSearchModal({
   // member is free to ignore.
   const { windows: scheduleWindows } = useMealSchedule()
   /** The minute this entry will actually be filed at. */
-  const effectiveMinutes = customTime != null
+  const effectiveMinutes = timeMode === 'custom' && customTime != null
     ? (parseHHMM(customTime) ?? minutesOfDay(new Date()))
     : minutesOfDay(new Date())
   const tagWindow = tagPickerEnabled ? windowForTag(scheduleWindows, activeTag) : null
@@ -1268,6 +1299,9 @@ export default function FoodSearchModal({
   // nothing useful, since the member is reconstructing a past day anyway.
   const outsideSchedule = !isPlanMode
     && !customDate
+    // An untimed entry is not "outside" anything — it has no clock to be
+    // outside of, and it is placed by the anchor the hint would point at.
+    && timeMode !== 'none'
     && tagPickerEnabled
     && isOutsideWindow(scheduleWindows, activeTag, effectiveMinutes)
 
@@ -2122,7 +2156,7 @@ export default function FoodSearchModal({
                                       {/* The time pill only appears once a time is
                                           actually chosen, so the common "just log it
                                           now" path keeps exactly one control. */}
-                                      {customTime && (
+                                      {timeMode === 'custom' && customTime && (
                                         <button
                                           type="button"
                                           onClick={() => setDateEditOpen(v => !v)}
@@ -2134,10 +2168,23 @@ export default function FoodSearchModal({
                                           <span className="tabular-nums">{formatClockLabel(parseHHMM(customTime) ?? 0)}</span>
                                         </button>
                                       )}
+                                      {timeMode === 'none' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDateEditOpen(v => !v)}
+                                          data-testid="no-time-pill"
+                                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-200"
+                                          aria-label="No time set, tap to change"
+                                        >
+                                          No time
+                                        </button>
+                                      )}
                                       <span className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">
-                                        {customTime
-                                          ? 'Logged at chosen time'
-                                          : customDate ? 'Logged on chosen day' : 'Logged now'}
+                                        {timeMode === 'none'
+                                          ? 'Placed by meal order'
+                                          : timeMode === 'custom'
+                                            ? 'Logged at chosen time'
+                                            : customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
                                     {/* Shares the date row rather than sitting under the
@@ -2186,7 +2233,7 @@ export default function FoodSearchModal({
                                       </span>
                                       <button
                                         type="button"
-                                        onClick={() => setCustomTime(formatHHMM(tagWindow.startMinutes))}
+                                        onClick={() => { setCustomTime(formatHHMM(tagWindow.startMinutes)); setTimeMode('custom') }}
                                         data-testid="use-scheduled-time"
                                         className="shrink-0 rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-amber-700"
                                       >
@@ -2208,7 +2255,7 @@ export default function FoodSearchModal({
                                           value={customDate ?? dateToKey(viewedDate ?? new Date())}
                                           maxDate={dateToKey(new Date())}
                                           showTodayChip
-                                          onClear={() => { setCustomDate(null); setCustomTime(null); setDateEditOpen(false) }}
+                                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('now'); setDateEditOpen(false) }}
                                           onChange={(next) => {
                                             // When the user picks "today", treat it as "Now"
                                             // (null) so the pill reflects that and we don't
@@ -2221,40 +2268,73 @@ export default function FoodSearchModal({
                                             // reads in entry order instead of eating order. So
                                             // the time control appears here, pre-filled with the
                                             // tag's scheduled start when it has one.
-                                            if (next !== todayKey && customTime == null) {
+                                            if (next !== todayKey && timeMode === 'now') {
                                               const w = tagPickerEnabled ? windowForTag(scheduleWindows, activeTag) : null
                                               setCustomTime(formatHHMM(w ? w.startMinutes : minutesOfDay(new Date())))
+                                              setTimeMode('custom')
                                             }
                                           }}
                                         />
                                         {/* Time control. Present whenever a specific day is
                                             chosen, and reachable any time via the time pill. */}
-                                        {(customDate || customTime) && (
-                                          <div className="mt-2 flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60">
+                                        <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60">
+                                          <div className="flex items-center gap-2">
                                             <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                                             <span className="shrink-0 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
                                               Time
                                             </span>
                                             <input
                                               type="time"
-                                              value={customTime ?? formatHHMM(minutesOfDay(new Date()))}
-                                              onChange={(ev) => setCustomTime(ev.target.value || null)}
+                                              value={timeMode === 'custom' && customTime
+                                                ? customTime
+                                                : formatHHMM(minutesOfDay(new Date()))}
+                                              onChange={(ev) => {
+                                                const v = ev.target.value
+                                                if (!v) { setCustomTime(null); setTimeMode('now'); return }
+                                                setCustomTime(v)
+                                                setTimeMode('custom')
+                                              }}
+                                              disabled={timeMode === 'none'}
                                               data-testid="log-time-input"
                                               aria-label="Time this was eaten"
-                                              className="ml-auto rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs tabular-nums text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+                                              className="ml-auto rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs tabular-nums text-zinc-900 disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
                                             />
-                                            {customTime && (
-                                              <button
-                                                type="button"
-                                                onClick={() => setCustomTime(null)}
-                                                aria-label="Clear time"
-                                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                                              >
-                                                <X className="h-3 w-3" />
-                                              </button>
-                                            )}
+                                            {/* Now and X are separate on purpose. The X used to mean
+                                                "back to the current clock", which reads as a reset, not
+                                                a clear — so there was no way to say "no time at all". */}
+                                            <button
+                                              type="button"
+                                              onClick={() => { setCustomTime(null); setTimeMode('now') }}
+                                              data-testid="log-time-now"
+                                              aria-label="Use the current time"
+                                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                                                timeMode === 'now'
+                                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                                  : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                                              }`}
+                                            >
+                                              Now
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => { setCustomTime(null); setTimeMode('none') }}
+                                              data-testid="log-time-clear"
+                                              aria-label="Clear the time and log for the day only"
+                                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                                timeMode === 'none'
+                                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                                  : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                                              }`}
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
                                           </div>
-                                        )}
+                                          <p className="mt-1.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                                            {timeMode === 'none'
+                                              ? 'No time. This sits in your meal order rather than at a clock position — useful when your day runs past midnight.'
+                                              : 'Tap the X to log for the day with no time at all.'}
+                                          </p>
+                                        </div>
                                       </motion.div>
                                     )}
                                   </AnimatePresence>

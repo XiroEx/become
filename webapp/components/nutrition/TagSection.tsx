@@ -61,6 +61,8 @@ export interface MealLogLite {
   mealName?: string
   source?: 'photo' | 'barcode' | 'upload' | 'describe' | 'search' | 'manual'
   notes?: string
+  /** Logged for the day with no time. Placed by tag anchor, not by the clock. */
+  untimed?: boolean
 }
 
 interface FlattenedItem {
@@ -102,6 +104,8 @@ interface TagSectionProps {
    *  two separate sittings. Undefined for planned or empty sections, which have
    *  no real moment of their own. */
   occurrenceAt?: number
+  /** This sitting was logged for the day with no time. */
+  untimed?: boolean
   onRemovePlan?: (planId: string) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   /** "Log it" — promote a plan into a real log (today). When provided, a Log it
@@ -210,6 +214,7 @@ export default function TagSection({
   futureDate = false,
   plans = [],
   occurrenceAt,
+  untimed = false,
   onRemovePlan,
   onEditPlanItem,
   onLogPlan,
@@ -363,6 +368,14 @@ export default function TagSection({
             {occurrenceAt != null && (
               <span className="shrink-0 text-[11px] tabular-nums text-zinc-400 dark:text-zinc-500">
                 {formatClockLabel(occurrenceAt)}
+              </span>
+            )}
+            {untimed && (
+              <span
+                title="Logged for the day, no time set"
+                className="shrink-0 text-[11px] text-zinc-400 dark:text-zinc-500"
+              >
+                no time
               </span>
             )}
             {hasContent && (

@@ -24,8 +24,16 @@ interface WindowInput {
   endMinutes?: unknown
 }
 
-/** Accept only whole minutes inside a day. */
-function cleanMinutes(value: unknown): number | null {
+/**
+ * Accept only whole minutes inside a day; null means "no time set".
+ *
+ * The explicit null/''/undefined check is load-bearing: `Number(null)` is 0, so
+ * without it an UNSCHEDULED tag arrived as midnight, paired with a midnight end,
+ * and the zero-length guard below rejected the whole save with "starts and ends
+ * at the same time" — silently losing every reorder.
+ */
+export function cleanMinutes(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
   const n = Number(value)
   if (!Number.isFinite(n)) return null
   const rounded = Math.round(n)
@@ -62,21 +70,32 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'windows[] is required' }, { status: 400 })
     }
 
+    // ORDER IS DATA. The array position is the member's meal order, which is
+    // what places entries logged without a time — so an UNSCHEDULED tag must be
+    // stored too, with null times, rather than dropped. Dropping them (which
+    // this route used to do) would silently forget where "Snack" sits.
+    //
     // Last write wins per tag, so a client that somehow sends a duplicate does
     // not create two rows that would both match in windowForTag.
-    const byTag = new Map<string, { tag: string; startMinutes: number; endMinutes: number }>()
+    const byTag = new Map<string, { tag: string; startMinutes: number | null; endMinutes: number | null }>()
     for (const raw of body.windows as WindowInput[]) {
       const tag = typeof raw?.tag === 'string' ? raw.tag.trim().toLowerCase() : ''
       if (!tag) continue
       const startMinutes = cleanMinutes(raw?.startMinutes)
       const endMinutes = cleanMinutes(raw?.endMinutes)
-      // A window needs both ends. A tag the member left blank simply is not
-      // scheduled — that is a valid state, so skip it rather than 400.
-      if (startMinutes === null || endMinutes === null) continue
+
+      // Both ends or neither. Half a window is ambiguous, and silently treating
+      // it as unscheduled would discard something the member typed.
+      if ((startMinutes === null) !== (endMinutes === null)) {
+        return NextResponse.json(
+          { error: `"${tag}" needs both a start and an end, or neither` },
+          { status: 400 },
+        )
+      }
       // Equal start and end would be a zero-length window that windowContains
       // treats as wrapping the ENTIRE day, swallowing every other tag. Reject it
       // rather than store a booby trap.
-      if (startMinutes === endMinutes) {
+      if (startMinutes !== null && startMinutes === endMinutes) {
         return NextResponse.json(
           { error: `"${tag}" starts and ends at the same time` },
           { status: 400 },

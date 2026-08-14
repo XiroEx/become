@@ -23,14 +23,19 @@ import mongoose, { Schema, Document } from 'mongoose'
 export interface IMealTagWindow {
   /** Lowercased tag name. */
   tag: string
-  /** Minutes from local midnight, 0-1439. */
-  startMinutes: number
-  /** Minutes from local midnight, 0-1439. */
-  endMinutes: number
+  /** Minutes from local midnight, 0-1439. Null when the tag has no set time. */
+  startMinutes: number | null
+  /** Minutes from local midnight, 0-1439. Null when the tag has no set time. */
+  endMinutes: number | null
 }
 
 export interface IMealTagSchedule extends Document {
   user: mongoose.Types.ObjectId
+  /**
+   * Ordered. Position in this array IS the member's meal order, used to place
+   * entries logged without a time. Entries with null start/end are unscheduled
+   * but still ordered.
+   */
   windows: IMealTagWindow[]
   createdAt: Date
   updatedAt: Date
@@ -38,12 +43,15 @@ export interface IMealTagSchedule extends Document {
 
 const MealTagWindowSchema = new Schema<IMealTagWindow>({
   tag: { type: String, required: true, lowercase: true, trim: true },
+  // Null is a first-class value: an UNSCHEDULED tag still needs a row here so
+  // its position in the array is remembered. Array order is the member's chosen
+  // meal order, which is what orders entries logged without a time.
   // Stored as minutes rather than "HH:MM" so comparison is integer maths and
   // never depends on string collation or locale. A window whose end is <= its
   // start WRAPS past midnight (Bed 23:00-02:00 => start 1380, end 120); that is
   // a legitimate window, not bad data, so there is no validator forbidding it.
-  startMinutes: { type: Number, required: true, min: 0, max: 1439 },
-  endMinutes: { type: Number, required: true, min: 0, max: 1439 },
+  startMinutes: { type: Number, default: null, min: 0, max: 1439 },
+  endMinutes: { type: Number, default: null, min: 0, max: 1439 },
 }, { _id: false })
 
 const MealTagScheduleSchema = new Schema<IMealTagSchedule>({
