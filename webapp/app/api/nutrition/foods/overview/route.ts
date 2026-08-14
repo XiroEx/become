@@ -7,6 +7,7 @@ import Meal from '@/models/Meal'
 import User from '@/models/User'
 import mongoose from 'mongoose'
 import { flattenFoodForResponse } from '@/lib/foodImport'
+import { pickUnseen } from '@/lib/nutrition/overviewSections'
 import type { IFood } from '@/models/Food'
 
 /**
@@ -35,6 +36,15 @@ import type { IFood } from '@/models/Food'
  */
 
 const PER_SECTION = 5
+/**
+ * How many candidates to gather per section before deduping.
+ *
+ * Sections are deduped against each other, so a section needs spares to backfill
+ * with. Without a pool, a food that is saved AND recent AND frequent would be
+ * removed from two of the three and those sections would come up short — which
+ * is a different kind of wrong from showing it three times.
+ */
+const POOL = 40
 /** How far back to look for the recency ordering. */
 const RECENCY_WINDOW_DAYS = 90
 
@@ -78,10 +88,22 @@ export async function GET(request: NextRequest) {
         const key = fid || String(item.name ?? '')
         if (key && !seenRecent.has(key)) {
           seenRecent.add(key)
-          if (recentItems.length < PER_SECTION) recentItems.push({ item, loggedAt: log.loggedAt })
+          if (recentItems.length < POOL) recentItems.push({ item, loggedAt: log.loggedAt })
         }
       }
     }
+
+    // One food is one row on this screen.
+    //
+    // The sections overlap heavily by nature — a saved food eaten this morning is
+    // legitimately a Food, a Recent AND a Frequent — and showing it three times
+    // filled the default view with the same handful of items. First section in
+    // DISPLAY order keeps it, so reading top to bottom you meet each food once,
+    // in the first place it qualifies; later sections backfill from their pool so
+    // they still offer five real suggestions.
+    const seen = new Set<string>()
+    const take = <T,>(candidates: T[], keyOf: (x: T) => string, n = PER_SECTION): T[] =>
+      pickUnseen(candidates, keyOf, seen, n)
 
     // ── Foods: the member's saved foods, most recently LOGGED first ──────────
     const user = await User.findById(auth.userId)
@@ -100,7 +122,7 @@ export async function GET(request: NextRequest) {
       (user?.savedFoods ?? []).map(s => [String(s.foodId), s.savedAt ? new Date(s.savedAt).getTime() : 0]),
     )
 
-    const foods = savedDocs
+    const foodsSorted = savedDocs
       .sort((a, b) => {
         const ka = String(a._id), kb = String(b._id)
         // Logged recency wins. A saved food never logged falls back to when it
@@ -110,21 +132,22 @@ export async function GET(request: NextRequest) {
         if (la !== lb) return lb - la
         return (savedAtById.get(kb) ?? 0) - (savedAtById.get(ka) ?? 0)
       })
-      .slice(0, PER_SECTION)
+    const foodsPicked = take(foodsSorted, f => `food:${String(f._id)}`)
+    const foods = foodsPicked
       .map(f => ({ ...flattenFoodForResponse(f as unknown as IFood & { _id: mongoose.Types.ObjectId }), isSaved: true }))
 
     // ── Meals: same ordering rule ────────────────────────────────────────────
     const mealDocs = await Meal.find({ user: auth.userId })
       .lean<Array<Record<string, unknown>>>()
 
-    const meals = mealDocs
+    const mealsSorted = mealDocs
       .sort((a, b) => {
         const la = lastLoggedMeal.get(String(a._id)) ?? 0
         const lb = lastLoggedMeal.get(String(b._id)) ?? 0
         if (la !== lb) return lb - la
         return ((b.usageCount as number) ?? 0) - ((a.usageCount as number) ?? 0)
       })
-      .slice(0, PER_SECTION)
+    const meals = take(mealsSorted, m => `meal:${String(m._id)}`)
 
     // ── Recent: distinct items in log order, resolved to their Food docs ─────
     const recentFoodIds = recentItems
@@ -135,7 +158,14 @@ export async function GET(request: NextRequest) {
       : []
     const recentById = new Map(recentDocs.map(f => [String(f._id), f]))
 
-    const recent = recentItems.map(({ item }) => {
+    // Keyed by foodId when there is one, else by name — a quick-add has no id but
+    // is still the same thing twice if it shows up again.
+    const recentPicked = take(
+      recentItems,
+      ({ item }) => (item.foodId ? `food:${String(item.foodId)}` : `name:${String(item.name ?? '').toLowerCase()}`),
+    )
+
+    const recent = recentPicked.map(({ item }) => {
       const id = item.foodId ? String(item.foodId) : null
       const doc = id ? recentById.get(id) : null
       if (doc) return flattenFoodForResponse(doc as unknown as IFood & { _id: mongoose.Types.ObjectId })
@@ -168,11 +198,16 @@ export async function GET(request: NextRequest) {
         counts.set(k, (counts.get(k) ?? 0) + 1)
       }
     }
-    const frequentIds = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, PER_SECTION)
-      .map(([id]) => id)
-      .filter(id => mongoose.Types.ObjectId.isValid(id))
+    // Deduped LAST, so a food already shown above drops out and the next most
+    // frequent takes its place rather than the section coming up short.
+    const frequentIds = take(
+      [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([id]) => id)
+        .filter(id => mongoose.Types.ObjectId.isValid(id))
+        .slice(0, POOL),
+      id => `food:${id}`,
+    )
 
     const frequentDocs = frequentIds.length
       ? await Food.find({ _id: { $in: frequentIds } }).lean<Array<Record<string, unknown>>>()
