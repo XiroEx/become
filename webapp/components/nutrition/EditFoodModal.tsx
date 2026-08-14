@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Pencil, AlertTriangle } from 'lucide-react'
-import FlagFoodSheet from '@/components/nutrition/FlagFoodSheet'
+import FlagFoodSheet, { type LogCorrection } from '@/components/nutrition/FlagFoodSheet'
 import { useLockScroll } from '@/lib/useLockScroll'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import type { IMealItem } from '@/models/Meal'
@@ -93,6 +93,10 @@ export default function EditFoodModal({
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
   const [saving, setSaving] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
+  // A macro correction the member typed for THIS entry, on the item's storage
+  // basis. Held until save so it travels with the amount edit rather than being
+  // a second, invisible write.
+  const [nutritionOverride, setNutritionOverride] = useState<LogCorrection | null>(null)
   const [error, setError] = useState('')
 
   // Local bridge edits — start from the logged snapshot. Saving the form
@@ -114,6 +118,9 @@ export default function EditFoodModal({
     if (item) {
       setSelection(null)
       setError('')
+      // A pending correction belongs to the entry it was typed for. Leaving it
+      // set would silently apply one row's macros to the next row opened.
+      setNutritionOverride(null)
       setBridge({
         gramsPerServing: item.loggedGramsPerServing,
         mlPerServing: item.loggedMlPerServing,
@@ -133,8 +140,20 @@ export default function EditFoodModal({
     }
   }, [derived, bridge.gramsPerServing, bridge.mlPerServing])
 
-  // Live preview: the selection itself carries the scaled nutrition.
-  const preview = selection?.nutrition
+  // Live preview: the selection itself carries the scaled nutrition. A pending
+  // correction is per storage basis, so it scales by the same multiplier.
+  const preview = useMemo(() => {
+    if (!selection) return undefined
+    if (!nutritionOverride) return selection.nutrition
+    const f = selection.multiplier > 0 ? selection.multiplier : 1
+    return {
+      ...selection.nutrition,
+      calories: nutritionOverride.calories * f,
+      protein: nutritionOverride.protein * f,
+      carbs: nutritionOverride.carbs * f,
+      fats: nutritionOverride.fats * f,
+    }
+  }, [selection, nutritionOverride])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -207,6 +226,10 @@ export default function EditFoodModal({
           body: JSON.stringify({
             // Back-compat: keep `servings` (multiplier) flowing for legacy readers.
             servings: selection.multiplier,
+            // Only present when the member corrected the macros. The route
+            // replaces nutrition wholesale, so sending it unconditionally would
+            // rewrite good data with a round-tripped copy of itself.
+            ...(nutritionOverride ? { nutrition: nutritionOverride } : {}),
             // New shape — picked up by the route updates in this PR.
             loggedQuantity: selection.quantity,
             loggedUnit: selection.unit,
@@ -340,20 +363,31 @@ export default function EditFoodModal({
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
               )}
 
-              {/* Report bad catalogue data. Sits under the edit controls on
-                  purpose: fixing YOUR entry is right there and instant, while
-                  reporting hands it to the agent that owns the shared record.
-                  Only for real catalogue foods — a quick-add has no foodId. */}
-              {item?.foodId && (
-                <button
-                  type="button"
-                  onClick={() => setFlagOpen(true)}
-                  className="flex w-full items-center justify-center gap-1.5 pt-1 text-xs font-medium text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400"
-                >
-                  <AlertTriangle className="h-3 w-3 text-amber-500" />
-                  Something look wrong?
-                </button>
-              )}
+              {/* Two different jobs behind one control, and which one is on offer
+                  depends on whether a shared record exists.
+
+                  With a foodId: report the catalogue AND fix your own entry.
+                  Without one (an AI photo/describe estimate that never matched a
+                  product): fixing your own entry is the only thing that means
+                  anything, so that is all it offers.
+
+                  This used to be gated on foodId outright, which is why a
+                  described protein bar had no way to correct its macros at all.
+                  The only route people found was deleting the row and re-adding
+                  it through search. */}
+              <button
+                type="button"
+                onClick={() => setFlagOpen(true)}
+                data-testid="fix-or-report"
+                className={`flex w-full items-center justify-center gap-1.5 pt-1 text-xs font-medium underline-offset-2 hover:underline ${
+                  nutritionOverride ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-500 dark:text-zinc-400'
+                }`}
+              >
+                <AlertTriangle className="h-3 w-3 text-amber-500" />
+                {nutritionOverride
+                  ? 'Macros edited — save to apply'
+                  : item?.foodId ? 'Something look wrong?' : 'Fix these macros'}
+              </button>
 
               {/* Actions */}
               <div className="flex gap-3 pt-1">
@@ -378,11 +412,37 @@ export default function EditFoodModal({
         </motion.div>
       )}
 
-      {item?.foodId && (
+      {/* Mounted for every item, not just catalogue ones — see the button above. */}
+      {item && (
         <FlagFoodSheet
           isOpen={flagOpen}
-          foodId={String(item.foodId)}
+          canReport={Boolean(item.foodId)}
+          foodId={item.foodId ? String(item.foodId) : ''}
           foodName={item.name ?? 'this food'}
+          currentNutrition={{
+            calories: nutritionOverride?.calories ?? item.nutrition.calories,
+            protein: nutritionOverride?.protein ?? item.nutrition.protein,
+            carbs: nutritionOverride?.carbs ?? item.nutrition.carbs,
+            fats: nutritionOverride?.fats ?? item.nutrition.fats,
+          }}
+          // storage basis -> the portion on screen. Prefer the live picker, but
+          // fall back to the item's own `servings`, which IS that same factor and
+          // is available immediately. Depending on `selection` alone made this
+          // silently no-op: the sheet can render before the picker has emitted,
+          // and a factor of 1 puts the raw 100 g numbers back in the fields --
+          // the exact bug being fixed.
+          portion={{
+            label: item.servingLabel
+              || (item.loggedQuantity != null && item.loggedUnit
+                ? `${item.loggedQuantity} ${item.loggedUnit}`
+                : selection ? `${selection.quantity} ${selection.unit}` : 'this entry'),
+            factor: selection?.multiplier ?? item.servings ?? 1,
+          }}
+          // Correcting an ALREADY-LOGGED entry was impossible: this sheet was
+          // mounted without onApplyToLog, so it could only file a report. The
+          // member's only route to right numbers was to delete the row and
+          // re-add it through search, which is exactly what people did.
+          onApplyToLog={setNutritionOverride}
           onClose={() => setFlagOpen(false)}
         />
       )}

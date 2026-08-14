@@ -8,11 +8,12 @@
 // that is deliberate: it unblocks them in seconds without letting one person's
 // misreading of a label change what everybody else sees.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import EvidencePhotoPicker from './EvidencePhotoPicker'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, Check, X, Loader2, Pencil, Camera, ImagePlus, Trash2 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { toDisplayBasis, toStorageBasis, safeFactor } from '@/lib/nutrition/portionBasis'
 import { resizeImageToBlob } from '@/lib/imageResize'
 
 type Kind = 'calories' | 'macros' | 'serving' | 'other'
@@ -37,8 +38,37 @@ export interface FlagFoodSheetProps {
   foodId: string
   foodName: string
   onClose: () => void
-  /** Current per-serving values, prefilled into the correction fields. */
+  /** Current values on the FOOD'S OWN basis, prefilled into the correction fields. */
   currentNutrition?: LogCorrection
+  /**
+   * The amount the member is actually looking at, so the correction fields can
+   * be shown on THAT basis instead of the food's storage basis.
+   *
+   * These are not the same thing and assuming they were is what produced
+   * "457 calories, 34.8 protein" on a 190-calorie protein bar. Imported records
+   * store nutrition per 100 g with a separate gramsPerServing (FitCrunch:
+   * 413 cal per 100 g, 46 g per bar). The picker correctly renders "1 bar (46 g)
+   * · 190 cal", but this sheet used to prefill the raw 413 under a heading that
+   * said "Per serving". Correct the 190 you can see, not the 413 you cannot.
+   *
+   * `factor` converts storage basis -> displayed portion (0.46 for that bar).
+   */
+  portion?: { label?: string; factor: number }
+  /**
+   * False when there is no shared catalogue record behind this entry, i.e. an AI
+   * photo/describe estimate that never matched one. The sheet then does the one
+   * thing that IS possible -- fix the member's own numbers -- and hides the
+   * report half entirely.
+   *
+   * This is not an edge case. A described "Mint Chocolate Chip Protein Bar" does
+   * not match the catalogue's "High Protein Baked Bar" (FITCRUNCH), because the
+   * flavour lives in the brand, not the name, and the matcher requires FULL
+   * coverage of the query's content words. Rather than fabricate a link to a
+   * record that may be a different product, this admits there is nothing to
+   * report and still lets them fix their own log -- which used to require
+   * deleting the row and re-adding it through search.
+   */
+  canReport?: boolean
   /**
    * When provided, the sheet offers "just fix it for my entry" ALONGSIDE
    * reporting. Offered BEFORE logging on purpose: making someone log a number
@@ -52,8 +82,11 @@ export interface FlagFoodSheetProps {
 }
 
 export default function FlagFoodSheet({
-  isOpen, foodId, foodName, onClose, currentNutrition, onApplyToLog,
+  isOpen, foodId, foodName, onClose, currentNutrition, portion, canReport = true, onApplyToLog,
 }: FlagFoodSheetProps) {
+  // A missing or nonsensical factor means "already on the right basis".
+  const factor = safeFactor(portion?.factor)
+  const basisLabel = portion?.label?.trim() || 'serving'
   // Multi-select: "the calories AND the macros are both off" is an ordinary
   // report, and forcing one radio button made people file the half of it they
   // thought we were more likely to believe.
@@ -130,17 +163,30 @@ export default function FlagFoodSheet({
   }
 
   const startFixing = () => {
-    setDraft(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 })
+    setDraft(toDisplayBasis(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 }, factor))
     setFixing(true)
   }
 
+  // With no catalogue record behind the entry, the report half has nothing to
+  // act on, so open directly on the fields that do.
+  useEffect(() => {
+    if (isOpen && !canReport && !fixing) {
+      setDraft(toDisplayBasis(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 }, factor))
+      setFixing(true)
+    }
+  }, [isOpen, canReport, fixing, currentNutrition, factor])
+
   const applyFix = () => {
     if (!draft || !onApplyToLog) return
-    onApplyToLog(draft)
+    // Back to the storage basis. Full precision on the way out: rounding here
+    // would drift the number the member just typed once it is scaled again for
+    // display (413.04 -> 190 reads fine; 413 -> 189.98 does not).
+    onApplyToLog(toStorageBasis(draft, factor))
     close()
   }
 
   const submit = async () => {
+    if (!canReport || !foodId) return
     setSubmitting(true)
     setError(null)
     try {
@@ -211,8 +257,11 @@ export default function FlagFoodSheet({
                   </button>
                 </div>
                 <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-                  Per serving, for your log only. The shared food isn&rsquo;t changed — report it below and we&rsquo;ll
-                  check it against the label.
+                  For <span className="font-semibold text-zinc-700 dark:text-zinc-200">{basisLabel}</span>, your log
+                  only.{' '}
+                  {canReport
+                    ? <>The shared food isn&rsquo;t changed — report it below and we&rsquo;ll check it against the label.</>
+                    : <>This one was estimated rather than matched to a product, so there is nothing shared to report — correcting it here is the whole fix.</>}
                 </p>
                 <div className="mb-4 grid grid-cols-2 gap-2">
                   {([
@@ -240,10 +289,10 @@ export default function FlagFoodSheet({
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setFixing(false)}
+                    onClick={() => (canReport ? setFixing(false) : close())}
                     className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
                   >
-                    Back
+                    {canReport ? 'Back' : 'Cancel'}
                   </button>
                   <button
                     type="button"
