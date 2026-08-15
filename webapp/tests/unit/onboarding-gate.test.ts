@@ -96,3 +96,61 @@ test('the verdict is sampled once per page load, not recomputed as the tour fini
 test('no tutorial provider means no gate', () => {
   assert.match(DASHBOARD, /if \(!tutorial\) \{ setTourWasSettled\(true\); return \}/)
 })
+
+// ── Abandoned tours ─────────────────────────────────────────────────────────
+//
+// Reported as "why do I no longer get my daily check in message for weight and
+// mood". A real account had been sitting at status 'in-progress' for weeks —
+// stopped part-way through the workout-schedule segment — while its HOME segment
+// was long since completed. The gate only accepted 'completed'/'dismissed', so it
+// returned false on every load, the check-in fell through to the 6-second
+// fail-safe timer, and tapping into any section before that timer fired meant
+// never seeing it.
+
+test('a tour abandoned mid-way is settled once its DASHBOARD segment is done', () => {
+  const settled = onboardingSettled({
+    getStatus: () => ({
+      status: 'in-progress',
+      version: becomeOnboardingTour.version ?? 1,
+      segments: { home: 'completed', 'workout-schedule': 'in-progress' as never },
+    }),
+  })
+  assert.equal(settled, true, 'nothing can draw over the dashboard any more')
+})
+
+test('a dismissed dashboard segment counts too', () => {
+  assert.equal(onboardingSettled({
+    getStatus: () => ({
+      status: 'in-progress',
+      version: becomeOnboardingTour.version ?? 1,
+      segments: { home: 'dismissed' },
+    }),
+  }), true)
+})
+
+test('an in-progress tour that has NOT reached the dashboard segment still holds', () => {
+  // This is the case the hold exists for: the tour is about to draw on the very
+  // screen the check-in wants.
+  assert.equal(onboardingSettled({
+    getStatus: () => ({
+      status: 'in-progress',
+      version: becomeOnboardingTour.version ?? 1,
+      segments: {},
+    }),
+  }), false)
+  assert.equal(onboardingSettled({
+    getStatus: () => ({ status: 'in-progress', version: becomeOnboardingTour.version ?? 1 }),
+  }), false, 'no segment record at all')
+})
+
+test('a stale VERSION still holds, even with the home segment done', () => {
+  // A revised tour replays from the start, so the dashboard segment is coming
+  // round again and the check-in must keep waiting.
+  assert.equal(onboardingSettled({
+    getStatus: () => ({
+      status: 'in-progress',
+      version: 0,
+      segments: { home: 'completed' },
+    }),
+  }), false)
+})
