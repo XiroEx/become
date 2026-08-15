@@ -18,6 +18,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
+import { isSetFilled, resolveTrackingInputs } from "@/lib/trackingInputs";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -53,6 +54,7 @@ function VideoPlayer({
 }) {
   const videoUrl = getExerciseVideoUrl(exerciseName);
   const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const [isPlaying, setIsPlaying] = useState(false);
   // Direct = anything that ends in a known video extension, regardless of
   // whether it's a local path or a remote https:// URL.
   const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
@@ -94,7 +96,6 @@ function VideoPlayer({
   // Anything else (an unknown remote URL) also falls here and renders the
   // thumbnail + play button; tapping launches the URL in an iframe which is
   // probably wrong, so guard with a check.
-  const [isPlaying, setIsPlaying] = useState(false);
   const isYouTube = isYouTubeUrl(videoUrl);
 
   // Only YouTube URLs get the iframe treatment — handing a random video URL
@@ -237,35 +238,6 @@ const fallbackWorkout: WorkoutData = {
     { name: "Bicep Curls", type: "strength", sets: 3, reps: "12-15", rest: "45s" },
   ],
 };
-
-// A set "counts as done" once its required inputs (per tracking type) are filled.
-// Drives auto-checking the DONE box so the user doesn't tick every set by hand.
-function isSetFilled(tracking: string | undefined, set: SetData): boolean {
-  const num = (v: string) => {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-  const reps = (set.reps ?? "").trim();
-  const weight = (set.weight ?? "").trim();
-  const duration = (set.duration ?? "").trim();
-  const distance = (set.distance ?? "").trim();
-  switch (tracking || "reps_weight") {
-    case "reps_weight":
-      return reps !== "" && weight !== "" && num(reps) > 0;
-    case "reps_bodyweight":
-    case "reps_only":
-      return reps !== "" && num(reps) > 0;
-    case "time":
-    case "intervals":
-      return duration !== "" && num(duration) > 0;
-    case "time_distance":
-      return (duration !== "" && num(duration) > 0) || (distance !== "" && num(distance) > 0);
-    case "none":
-      return false; // no inputs — completed via the manual check only
-    default:
-      return reps !== "" && num(reps) > 0;
-  }
-}
 
 export default function WorkoutFormPage() {
   const router = useRouter();
@@ -1229,8 +1201,9 @@ export default function WorkoutFormPage() {
                           {/* Prescription meta — details / tempo / muscles */}
                           {(() => {
                             const tracking = exercise.trackingType || "reps_weight"
-                            const showWeight = tracking === "reps_weight"
-                            const isTimeBased = ["time", "time_distance", "intervals"].includes(tracking)
+                            const inputPlan = resolveTrackingInputs(exercise.trackingType)
+                            const showWeight = inputPlan.weight !== "hidden"
+                            const isTimeBased = inputPlan.duration
                             const isNone = tracking === "none"
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
@@ -1281,14 +1254,14 @@ export default function WorkoutFormPage() {
                                 {/* Column headers */}
                                 <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                                   <div className="col-span-2">Set</div>
-                                  {showWeight && <div className="col-span-3">Weight</div>}
+                                  {showWeight && <div className="col-span-3">{inputPlan.weight === "optional" ? "Added load" : "Weight"}</div>}
                                   {!isNone && (
                                     <div className={showWeight ? "col-span-3" : "col-span-6"}>
                                       {isTimeBased ? (tracking === "time_distance" ? "Sec" : "Sec") : "Reps"}
                                     </div>
                                   )}
-                                  {tracking === "time_distance" && <div className="col-span-2">Dist (m)</div>}
-                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
+                                  {inputPlan.distance && <div className="col-span-2">Dist (m)</div>}
+                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : inputPlan.distance ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
                                 </div>
                               </div>
                             )
@@ -1297,8 +1270,9 @@ export default function WorkoutFormPage() {
                           {/* Set rows */}
                           {(() => {
                             const tracking = exercise.trackingType || "reps_weight"
-                            const showWeight = tracking === "reps_weight"
-                            const isTimeBased = ["time", "time_distance", "intervals"].includes(tracking)
+                            const inputPlan = resolveTrackingInputs(exercise.trackingType)
+                            const showWeight = inputPlan.weight !== "hidden"
+                            const isTimeBased = inputPlan.duration
                             const isNone = tracking === "none"
                             const repPlaceholder = isTimeBased
                               ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
@@ -1322,7 +1296,7 @@ export default function WorkoutFormPage() {
                                         {setIndex + 1}
                                       </span>
                                     </div>
-                                    {/* Weight input — only for reps_weight */}
+                                    {/* Weight input — required weight or optional added load */}
                                     {showWeight && (
                                       <div className="col-span-3">
                                         <input
@@ -1349,7 +1323,7 @@ export default function WorkoutFormPage() {
                                       </div>
                                     )}
                                     {/* Distance input — time_distance only */}
-                                    {tracking === "time_distance" && (
+                                    {inputPlan.distance && (
                                       <div className="col-span-2">
                                         <input
                                           type="number"
@@ -1362,7 +1336,7 @@ export default function WorkoutFormPage() {
                                       </div>
                                     )}
                                     {/* Actions */}
-                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
+                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : inputPlan.distance ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
                                       {!set.completed && !set.weight && !set.reps && !isNone && showWeight && (
                                         <button
                                           onClick={() => openSkipModal(exerciseIndex, setIndex)}
