@@ -10,25 +10,26 @@ import { Play } from 'lucide-react'
 // marked complete. Sits between the dashboard tile grid and the
 // "Up Next" card.
 //
-// Wiring:
-//   1. GET /api/programs/active → pick the first 'in-progress' program
-//   2. GET /api/workouts?programId=X&day=Y&tz=... → if isResume === true
-//      AND the workout is not completed, render the pill.
-//   3. CTA → /dashboard/workout/<id>/workout/live?day=<dayLabel>
-
-interface ActiveProgram {
-  programId: string
-  programName: string
-  currentDay: string
-  currentPhase: number
-  status?: string
-}
+// Wiring: GET /api/workouts/in-progress → the open log itself.
+//
+// It used to derive the workout from the ENROLMENT instead: read
+// /api/programs/active, take the first in-progress program, then ask
+// /api/workouts for that program's `currentDay`. That missed two real cases,
+// and the pill simply never appeared:
+//
+//   1. WRONG DAY. The enrolment's currentDay had advanced to 'Day 5' while the
+//      workout actually open was 'Day 1'. The lookup asked about a day with no
+//      open log and concluded there was nothing to resume. This is what was
+//      reported — mid-workout, no pill.
+//   2. NO ENROLMENT. An open log can belong to a program the member is not
+//      currently enrolled in, and the old path bailed before ever reading it.
+//
+// The open LOG is the source of truth for "you are mid-workout". Asking it
+// directly removes both failure modes and one of the two round trips.
 
 interface ResumeState {
   programId: string
-  programName: string
   day: string
-  workoutTitle?: string
 }
 
 export default function ResumeWorkoutButton() {
@@ -41,37 +42,19 @@ export default function ResumeWorkoutButton() {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
         if (!token) return
 
-        // 1) Find the user's primary in-progress program
-        const activeRes = await fetch('/api/programs/active', {
+        const tz = new Date().getTimezoneOffset()
+        const res = await fetch(`/api/workouts/in-progress?tz=${tz}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (!activeRes.ok) return
-        const activeData = (await activeRes.json()) as { activePrograms?: ActiveProgram[] }
-        const program = (activeData.activePrograms || []).find(
-          (p) => p.status === 'in-progress' || p.status === 'active' || !p.status,
-        )
-        if (!program) return
-
-        // 2) Ask the workouts API if today has an in-progress log for it
-        const tz = new Date().getTimezoneOffset()
-        const wkRes = await fetch(
-          `/api/workouts?programId=${encodeURIComponent(program.programId)}&day=${encodeURIComponent(program.currentDay)}&tz=${tz}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        )
-        if (!wkRes.ok) return
-        const wkData = (await wkRes.json()) as {
-          workout?: { completed?: boolean }
-          isResume?: boolean
+        if (!res.ok) return
+        const data = (await res.json()) as {
+          workout?: { programId: string | null; day: string | null } | null
         }
         if (cancelled) return
 
-        // Only show while the workout is still open (started but not done)
-        if (wkData.isResume && wkData.workout && !wkData.workout.completed) {
-          setResume({
-            programId: program.programId,
-            programName: program.programName,
-            day: program.currentDay,
-          })
+        // Both are needed to build a link back into the live screen.
+        if (data.workout?.programId && data.workout.day) {
+          setResume({ programId: data.workout.programId, day: data.workout.day })
         } else {
           setResume(null)
         }
@@ -80,8 +63,15 @@ export default function ResumeWorkoutButton() {
       }
     }
     check()
+
+    // Re-check when the tab is brought back to the front. Someone finishing a
+    // workout in another tab, or returning after backgrounding the PWA, should
+    // not be shown a stale pill — and someone who STARTED one should get it.
+    const onVisible = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
 
@@ -121,9 +111,6 @@ export default function ResumeWorkoutButton() {
             </div>
             <div className="truncate text-base font-bold text-white">
               Get back into the workout
-            </div>
-            <div className="truncate text-xs text-white/80">
-              {resume.programName}
             </div>
           </div>
 
