@@ -5,6 +5,7 @@ import { macroStatus, macroBarClass, MACRO_COLORS, type MacroKind } from '@/lib/
 import Link from 'next/link'
 import { Droplets, UtensilsCrossed, Zap } from 'lucide-react'
 import { Card } from '@/components/ui'
+import type { NutritionTrend } from '@/lib/dashboard/nutritionTrend'
 
 interface MacroValues {
   current: number
@@ -17,6 +18,8 @@ interface NutritionSummaryCardProps {
   carbs: MacroValues
   fats: MacroValues
   water: MacroValues
+  /** Last-7-days read, e.g. "Logged 5 of 7 days · protein hit 4". */
+  trend?: NutritionTrend | null
 }
 
 function MiniMacroBar({
@@ -47,6 +50,7 @@ export default function NutritionSummaryCard({
   carbs,
   fats,
   water,
+  trend,
 }: NutritionSummaryCardProps) {
   const calPct = Math.min(calories.consumed / calories.goal, 1)
   const remaining = calories.goal - calories.consumed
@@ -173,6 +177,13 @@ export default function NutritionSummaryCard({
           </div>
         </div>
       </div>
+
+      {/* Last 7 days — the trend under today's numbers */}
+      {trend && (
+        <p data-testid="nutrition-trend" className="mt-3 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+          <span className="font-medium text-zinc-600 dark:text-zinc-300">Last 7 days:</span> {trend.line.replace(/^Logged /, 'logged ')}
+        </p>
+      )}
 
       {/* Action buttons */}
       <div className="mt-3 grid grid-cols-2 gap-2">

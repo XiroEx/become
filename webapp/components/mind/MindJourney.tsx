@@ -12,6 +12,7 @@ import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-reac
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
+import { isMoodLevel, seedStateForMood, type TodayMood } from '@/lib/mind/moodBridge'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import TrainingGrounds from '@/components/mind/TrainingGrounds'
 import SuggestedActions from '@/components/mind/SuggestedActions'
@@ -96,6 +97,7 @@ export default function MindJourney() {
   const [streak, setStreak] = useState(0)
   const [recentState, setRecentState] = useState<MindState | null>(null)
   const [recentFeeling, setRecentFeeling] = useState<string | null>(null)
+  const [moodToday, setMoodToday] = useState<TodayMood | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [lastBreathAt, setLastBreathAt] = useState<number | null>(null)
   const [recentKinds, setRecentKinds] = useState<string[]>([])
@@ -123,7 +125,7 @@ export default function MindJourney() {
         fetch('/api/mind/identity', { headers: h }),
         fetch('/api/mind/progress', { headers: h }),
         fetch(`/api/mind/session?tz=${new Date().getTimezoneOffset()}`, { headers: h }),
-        fetch('/api/mind/state', { headers: h }),
+        fetch(`/api/mind/state?tz=${new Date().getTimezoneOffset()}`, { headers: h }),
         fetch('/api/mind/mission', { headers: h }),
       ])
       const identity = identityRes.ok ? await identityRes.json() : null
@@ -162,6 +164,22 @@ export default function MindJourney() {
         const last = Array.isArray(st.logs) && st.logs.length > 0 ? st.logs[0] : null
         if (last?.state) setRecentState(last.state as MindState)
         if (typeof last?.feeling === 'string') setRecentFeeling(last.feeling)
+        // The dashboard mood, when it is newer than the last Mind check-in,
+        // seeds the session instead: "Bad" on the home screen an hour ago says
+        // more about right now than "Locked in" from yesterday. The live
+        // check-in still overrides at play time.
+        const mood = st.todayMood as TodayMood | null | undefined
+        if (mood && isMoodLevel(mood.value)) {
+          setMoodToday(mood)
+          const lastAt = last?.timestamp ? new Date(last.timestamp).getTime() : 0
+          if (mood.at > lastAt) {
+            const seeded = seedStateForMood(mood.value)
+            if (seeded) {
+              setRecentState(seeded)
+              setRecentFeeling(mood.label)
+            }
+          }
+        }
       }
       if (missionRes.ok) {
         const m = await missionRes.json()
@@ -187,6 +205,7 @@ export default function MindJourney() {
       unlockedSystems: progress.unlockedSystems,
       recentState,
       recentFeeling,
+      moodToday,
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       recentKinds,
@@ -196,7 +215,7 @@ export default function MindJourney() {
       now: Date.now(),
       lastBreathAt,
     }
-  }, [progress, recentState, recentFeeling, missionAction, sessionSeed, lastBreathAt, recentKinds])
+  }, [progress, recentState, recentFeeling, moodToday, missionAction, sessionSeed, lastBreathAt, recentKinds])
 
   const plan = useMemo<MindSessionPlan | null>(
     () => (sessionContext ? composeSession(sessionContext) : null),

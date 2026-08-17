@@ -3,6 +3,9 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import StateLog, { MindState } from '@/models/StateLog'
 import MindProgress from '@/models/MindProgress'
+import UserProgress from '@/models/UserProgress'
+import { readTzOffset, localDateKey, isEntryOnDay } from '@/lib/dayWindow'
+import { isMoodLevel, MOOD_LABELS, MOOD_RELEVANT_MS, type TodayMood } from '@/lib/mind/moodBridge'
 
 // What we say back the moment someone names their state.
 //
@@ -78,6 +81,29 @@ function revealFor(state: MindState, priorCount: number, feeling?: string): stri
   return pool[Math.abs(priorCount) % pool.length]
 }
 
+/**
+ * Today's dashboard mood for this member, if logged within MOOD_RELEVANT_MS.
+ * moodHistory rows are day markers; the moment it was logged lives in
+ * moodChangeHistory (the last change for today's day key).
+ */
+async function readTodayMood(userId: string, tz: number): Promise<TodayMood | null> {
+  const up = await UserProgress.findOne({ userId })
+    .select('moodHistory moodChangeHistory')
+    .lean<{
+      moodHistory?: Array<{ date: Date; mood: number }>
+      moodChangeHistory?: Array<{ timestamp: Date; date: Date; newMood: number }>
+    } | null>()
+  if (!up) return null
+  const todayKey = localDateKey(null, tz)
+  const entry = (up.moodHistory ?? []).find(m => isEntryOnDay(m.date, todayKey, tz))
+  if (!entry || !isMoodLevel(entry.mood)) return null
+  const changes = (up.moodChangeHistory ?? []).filter(c => isEntryOnDay(c.date, todayKey, tz))
+  const last = changes.length ? changes[changes.length - 1] : null
+  const at = last ? new Date(last.timestamp).getTime() : Date.now()
+  if (Date.now() - at > MOOD_RELEVANT_MS) return null
+  return { value: entry.mood, label: MOOD_LABELS[entry.mood], at }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
@@ -88,12 +114,18 @@ export async function GET(request: NextRequest) {
     const limitParam = Number(new URL(request.url).searchParams.get('limit'))
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(100, Math.floor(limitParam)) : 7
 
-    const logs = await StateLog.find({ userId: auth.userId })
-      .sort({ timestamp: -1 })
-      .limit(limit)
-      .lean()
+    const [logs, todayMood] = await Promise.all([
+      StateLog.find({ userId: auth.userId })
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .lean(),
+      // The dashboard's 1–5 mood, if it was logged recently. The session opener
+      // reads it so someone who tapped "Bad" on the home screen is not asked
+      // cold "how are you feeling?" a minute later.
+      readTodayMood(auth.userId!, readTzOffset(new URL(request.url).searchParams)),
+    ])
 
-    return NextResponse.json({ logs })
+    return NextResponse.json({ logs, todayMood })
   } catch (err) {
     console.error('GET /api/mind/state error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
