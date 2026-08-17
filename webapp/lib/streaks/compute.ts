@@ -2,7 +2,12 @@
 // /api/admin/streaks (the same numbers for a chosen member, plus credits).
 //
 //   overall    the stored "day streak" (any activity; freezes, milestones)
-//   workout    WEEKS in a row hitting the weekly target (workouts aren't daily)
+//   workout    DAYS in a row your training week stayed on track. Workouts are
+//              not a daily habit, so counting days you trained would break on
+//              every rest day; counting WEEKS made the card unreadable beside
+//              three day-based pillars and needed three perfect weeks before it
+//              showed anything at all. A day counts while the week can still
+//              hit (or has hit) its target — rest days included.
 //   nutrition  days in a row with food logged
 //   mindset    days in a row with a mood check-in, a mind check-in, a session
 //              or a journal entry
@@ -29,7 +34,7 @@ import { STREAK_MILESTONES } from '@/lib/streakConstants'
 import { localDateKey, dateKey } from '@/lib/dayWindow'
 import {
   dayStreak, weekStreak, workoutOrRestDays, dayRange, intersectDays,
-  STREAK_VISIBLE_MIN, shiftDay, lostWeeks, withoutLostWeeks, weekdayOf,
+  STREAK_VISIBLE_MIN, shiftDay, lostWeeks, withoutLostWeeks, onTrackDays, weekdayOf,
 } from '@/lib/streaks/pillars'
 
 export const LOOKBACK_DAYS = 365
@@ -56,7 +61,14 @@ export interface StreaksPayload {
     lastActivityDate: string | null
   }
   pillars: {
-    workout: { unit: 'weeks'; current: number; best: number; thisWeek: number; target: number | null; metThisWeek: boolean; weekLost: boolean }
+    workout: {
+      unit: 'days'; current: number; best: number
+      thisWeek: number; target: number | null; metThisWeek: boolean; weekLost: boolean
+      /** Secondary stat: consecutive weeks that hit the target. */
+      weeksOnTarget: number
+      /** Sessions still needed this week (0 once the target is hit). */
+      remainingThisWeek: number
+    }
     nutrition: { unit: 'days'; current: number; best: number; activeToday: boolean }
     mindset: { unit: 'days'; current: number; best: number; activeToday: boolean }
     super: {
@@ -137,6 +149,8 @@ export async function computeStreaks(userId: string, tz: number): Promise<Streak
   const trainedOrRest = workoutOrRestDays(workoutDays, allDays, trainingWeekdays)
   const lost = weeklyTarget ? lostWeeks(workoutDays, weeklyTarget, todayKey, trainingWeekdays) : new Set<string>()
   const workoutHalf = withoutLostWeeks(trainedOrRest, lost)
+  // Workout streak: days whose training week is on track (rest days included).
+  const workoutStreak = weeklyTarget ? dayStreak(onTrackDays(allDays, lost), todayKey) : null
   const superDays = intersectDays(nutritionDays, mindDays, workoutHalf)
   const superStreak = dayStreak(superDays, todayKey)
   const thisWeekKey = shiftDay(todayKey, -weekdayOf(todayKey))
@@ -160,9 +174,23 @@ export async function computeStreaks(userId: string, tz: number): Promise<Streak
     minVisible: STREAK_VISIBLE_MIN,
     overall,
     pillars: {
-      workout: workout
-        ? { unit: 'weeks', current: workout.current, best: workout.best, thisWeek: workout.thisWeekCount, target: workout.target, metThisWeek: workout.metThisWeek, weekLost: !weekOnTrack }
-        : { unit: 'weeks', current: 0, best: 0, thisWeek: [...workoutDays].filter(k => k >= thisWeekKey).length, target: null, metThisWeek: false, weekLost: false },
+      workout: workout && workoutStreak
+        ? {
+            unit: 'days',
+            current: workoutStreak.current,
+            best: workoutStreak.best,
+            thisWeek: workout.thisWeekCount,
+            target: workout.target,
+            metThisWeek: workout.metThisWeek,
+            weekLost: !weekOnTrack,
+            weeksOnTarget: workout.current,
+            remainingThisWeek: Math.max(0, workout.target - workout.thisWeekCount),
+          }
+        : {
+            unit: 'days', current: 0, best: 0,
+            thisWeek: [...workoutDays].filter(k => k >= thisWeekKey).length,
+            target: null, metThisWeek: false, weekLost: false, weeksOnTarget: 0, remainingThisWeek: 0,
+          },
       nutrition: { unit: 'days', current: nutrition.current, best: nutrition.best, activeToday: nutrition.activeToday },
       mindset: { unit: 'days', current: mindset.current, best: mindset.best, activeToday: mindset.activeToday },
       super: {

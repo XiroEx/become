@@ -16,9 +16,13 @@ import { streakDisplay, STREAK_VISIBLE_MIN } from '@/lib/streaks/pillars'
 import { readCache, writeCache } from '@/lib/clientCache'
 
 interface DayPillar { unit: 'days'; current: number; best: number; activeToday: boolean }
-interface WeekPillar { unit: 'weeks'; current: number; best: number; thisWeek: number; target: number | null; metThisWeek: boolean }
+interface WorkoutPillar {
+  unit: 'days'; current: number; best: number
+  thisWeek: number; target: number | null; metThisWeek: boolean; weekLost: boolean
+  weeksOnTarget: number; remainingThisWeek: number
+}
 interface SuperPillar extends DayPillar {
-  today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean }
+  today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean; weekOnTrack: boolean }
 }
 interface StreaksPayload {
   todayKey: string
@@ -32,7 +36,7 @@ interface StreaksPayload {
     activeToday: boolean
   }
   pillars: {
-    workout: WeekPillar
+    workout: WorkoutPillar
     nutrition: DayPillar
     mindset: DayPillar
     super: SuperPillar
@@ -194,17 +198,26 @@ export default function StreaksClient() {
                   p.workout.target ? (
                     <>
                       <div className="mt-1">
-                        <StreakValue current={p.workout.current} unit="weeks" tone="text-zinc-900 dark:text-white" />
+                        <StreakValue current={p.workout.current} unit="days" tone="text-zinc-900 dark:text-white" />
                         <BuildBar current={p.workout.current} tone="bg-green-500" />
                       </div>
                       <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                        Weeks in a row hitting your {p.workout.target}-a-week target.
-                        {p.workout.best > 0 && <> Best: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{unitWord(p.workout.best, 'weeks')}</span>.</>}
+                        Days in a row your training week stayed on track. You train {p.workout.target}× a week —
+                        {' '}<span className="font-medium text-zinc-700 dark:text-zinc-200">rest days count</span>, and
+                        falling short of that weekly target is what breaks it.
+                        {p.workout.best > 0 && <> Best: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{unitWord(p.workout.best, 'days')}</span>.</>}
+                        {p.workout.weeksOnTarget > 0 && <> {unitWord(p.workout.weeksOnTarget, 'weeks')} in a row on target.</>}
                       </p>
                       <div className="mt-2">
                         <TodayDot
                           done={p.workout.metThisWeek}
-                          label={p.workout.metThisWeek ? `This week done · ${p.workout.thisWeek}/${p.workout.target}` : `This week ${p.workout.thisWeek}/${p.workout.target}`}
+                          label={
+                            p.workout.metThisWeek
+                              ? `This week ${p.workout.thisWeek}/${p.workout.target} · target hit`
+                              : p.workout.weekLost
+                                ? `This week ${p.workout.thisWeek}/${p.workout.target} · can't reach ${p.workout.target} this week`
+                                : `This week ${p.workout.thisWeek}/${p.workout.target} · ${p.workout.remainingThisWeek} to go`
+                          }
                         />
                       </div>
                     </>
@@ -212,7 +225,7 @@ export default function StreaksClient() {
                     <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                       Set how many days a week you train in{' '}
                       <Link href="/dashboard/settings" className="font-medium text-blue-600 dark:text-blue-400">Settings</Link>{' '}
-                      and this counts weeks in a row you hit it.
+                      and this counts the days your training week stays on track.
                     </p>
                   )
                 ) : (
@@ -295,13 +308,14 @@ export default function StreaksClient() {
                       <BuildBar current={p.super.current} tone="bg-amber-500" />
                     </div>
                     <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                      All three pillars, every day: food logged, mindset checked in, and trained (a scheduled rest day counts).
+                      All three pillars, every day: food logged, mindset checked in, and trained (a scheduled rest day counts) — with the training week on track.
                       {p.super.best > 0 && <> Best: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{unitWord(p.super.best, 'days')}</span>.</>}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
                       <TodayDot done={p.super.today.nutrition} label="Food" />
                       <TodayDot done={p.super.today.mindset} label="Mindset" />
                       <TodayDot done={p.super.today.trained} label={p.super.today.restDay ? 'Rest day' : 'Trained'} />
+                      <TodayDot done={p.super.today.weekOnTrack} label="Week on track" />
                     </div>
                   </>
                 ) : (
