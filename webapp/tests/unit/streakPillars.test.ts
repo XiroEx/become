@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   dayStreak, weekStreak, weekKeyOf, shiftDay, workoutOrRestDays, dayRange,
-  intersectDays, streakDisplay, STREAK_VISIBLE_MIN, lostWeeks, withoutLostWeeks,
+  intersectDays, streakDisplay, STREAK_VISIBLE_MIN, lostWeeks, withoutLostWeeks, onTrackDays,
 } from '../../lib/streaks/pillars'
 
 test('day streak counts back from today when today is active', () => {
@@ -149,4 +149,41 @@ test('Jon last week: rest days do not rescue a super streak when the workout wee
   const workoutHalf = withoutLostWeeks(workoutOrRestDays(trained, all, [1, 2, 3, 4, 6]), lost)
   const s = dayStreak(intersectDays(new Set(all), new Set(all), workoutHalf), '2026-08-17')
   assert.equal(s.current, 2, 'only Sun 16 + Mon 17 (this week, still on track) count')
+})
+
+// ── Workout streak counts DAYS your week stayed on track ────────────────────
+//
+// "I'd need to train daily to keep it alive?" — no. That was the whole reason
+// this stopped being a week counter.
+
+test('rest days keep the workout streak alive while the week is on track', () => {
+  // Target 4, no schedule. Trained Mon+Tue of this week (Sun Aug 16 start),
+  // today is Tue Aug 18 — 2 done, Wed–Sat left, so the week is fine.
+  const trained = ['2026-08-17', '2026-08-18']
+  const lost = lostWeeks(trained, 4, '2026-08-18', null)
+  const s = dayStreak(onTrackDays(dayRange('2026-08-16', '2026-08-18'), lost), '2026-08-18')
+  assert.equal(s.current, 3, 'Sun (rest) + Mon + Tue all count')
+})
+
+test("George's week: a week that hit the target carries every one of its days", () => {
+  // Week of Aug 9: 7 credited/trained days (≥ 4) ✓. Week of Aug 16: 2 so far,
+  // still reachable. Week of Aug 2: nothing → lost, and that is where it stops.
+  const trained = ['2026-08-09','2026-08-10','2026-08-11','2026-08-12','2026-08-13','2026-08-14','2026-08-15','2026-08-16','2026-08-17']
+  const lost = lostWeeks(trained, 4, '2026-08-18', null)
+  const s = dayStreak(onTrackDays(dayRange('2026-07-01', '2026-08-18'), lost), '2026-08-18')
+  assert.equal(s.current, 10, 'Aug 9 → Aug 18')
+  assert.equal(lost.has('2026-08-02'), true)
+})
+
+test('missing the weekly target is what breaks it, and only once the week is unreachable', () => {
+  // Target 4, no schedule, nothing trained. Sat Aug 22: 1 day left → lost.
+  const lost = lostWeeks([], 4, '2026-08-22', null)
+  const s = dayStreak(onTrackDays(dayRange('2026-08-16', '2026-08-22'), lost), '2026-08-22')
+  assert.equal(s.current, 0)
+})
+
+test('a fresh week always starts on track — you have not failed yet', () => {
+  const lost = lostWeeks([], 5, '2026-08-16', [1, 2, 3, 4, 6])
+  assert.equal(lost.has('2026-08-16'), false)
+  assert.equal(onTrackDays(['2026-08-16'], lost).has('2026-08-16'), true)
 })
