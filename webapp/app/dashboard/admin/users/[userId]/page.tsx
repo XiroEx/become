@@ -13,6 +13,7 @@ import {
   CartesianGrid,
 } from 'recharts'
 import PageTransition from '@/components/PageTransition'
+import StreakManager from '@/components/admin/StreakManager'
 
 interface UserDetail {
   _id: string
@@ -594,6 +595,9 @@ export default function AdminUserDetailPage() {
           )}
         </div>
       )}
+
+      {/* Streaks — view, credit, repair (audited) */}
+      <StreakManager userId={userId} />
 
       {/* Actions */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">

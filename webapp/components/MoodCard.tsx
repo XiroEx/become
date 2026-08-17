@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, X } from 'lucide-react'
 import { moodGateway } from '@/lib/mind/moodBridge'
+import { FitText } from '@/components/ui/FitText'
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
@@ -323,7 +324,10 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
 
   return (
     <div className="relative h-full">
-      {/* Main Card - tap to open the picker. Matches StatTile shape (h-9 icon
+      {/* Main Card - tap to open the picker. No chevron: the whole tile is the
+          tap target (like every other tile) and the 28px it took was what
+          squeezed "Pretty Good" down to 13px next to 24px neighbours.
+          Matches StatTile shape (h-9 icon
           badge, xs label, 2xl extrabold value) so the four dashboard stat
           tiles share one visual language. h-full so it fills the fixed-height
           dashboard grid cell and matches the other tiles exactly. */}
@@ -355,17 +359,9 @@ export default function MoodCard({ currentMood, onMoodChange, isUpdating = false
             <p className={`text-2xl font-extrabold leading-none tracking-tight ${
               config ? config.textColor : 'text-zinc-900 dark:text-white'
             }`}>
-              {config ? config.label : 'Set'}
+              <FitText>{config ? config.label : 'Set'}</FitText>
             </p>
           </div>
-          <svg
-            className="h-4 w-4 shrink-0 text-zinc-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
         </div>
 
         <div className="w-full">

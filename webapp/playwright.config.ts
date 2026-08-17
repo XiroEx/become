@@ -304,6 +304,12 @@ export default defineConfig({
       },
     },
     {
+      name: 'admin-streaks',
+      testMatch: '**/admin-streaks.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], video: 'off', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+    },
+    {
       name: 'dashboard-fixes',
       testMatch: '**/dashboard-fixes.spec.ts',
       timeout: 120_000,

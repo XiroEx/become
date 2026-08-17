@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Card } from "./Card";
+import { FitText } from "./FitText";
 import { cn } from "@/lib/cn";
 
 export type StatTileAccent =
@@ -97,7 +98,7 @@ export function StatTile({
             {labelExtra}
           </div>
           <div className="text-3xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
-            {value}
+            <FitText>{value}</FitText>
           </div>
         </div>
       </div>
@@ -120,7 +121,7 @@ export function StatTile({
             {labelExtra}
           </div>
           <div className="text-2xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
-            {value}
+            <FitText>{value}</FitText>
           </div>
         </div>
       </div>
