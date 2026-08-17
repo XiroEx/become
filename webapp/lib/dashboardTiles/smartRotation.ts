@@ -37,8 +37,8 @@ export function scoreStatTile(id: StatTileId, ctx: DashboardTileContext): number
     }
     case 'weekly': {
       const done = data.stats.thisWeekWorkouts
-      const goal = weeklyAvailability > 0 ? weeklyAvailability : 0
-      if (goal > 0 && done < goal) return 0.6 // behind pace
+      const target = data.goal?.weeklyAvailability ?? weeklyAvailability ?? 0
+      if (target > 0 && done < target) return 0.6 // behind pace
       return 0.4
     }
     case 'calories': {

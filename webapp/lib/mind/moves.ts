@@ -179,6 +179,10 @@ export interface SessionContext {
   /** The exact word they last tapped ("Grateful", "Drained"). Twenty feelings map
    *  onto four states, so the composer needs the word, not just the bucket. */
   recentFeeling?: string | null
+  /** Today's dashboard mood (1–5), if logged recently. The home-screen tile and
+   *  the Mind check-in used to be unconnected; this is how a session opens from
+   *  what the member already said. */
+  moodToday?: { value: 1 | 2 | 3 | 4 | 5; label: string; at: number } | null
   missionAction?: string | null
   identityStatement?: string | null
   /** Effective move kinds from the user's PREVIOUS session — the composer avoids

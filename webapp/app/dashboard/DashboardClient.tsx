@@ -16,6 +16,11 @@ import ProgramNudgeModal, {
   recordNudgeDismiss,
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
+import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
+import MoodGatewayBanner from '@/components/dashboard/MoodGatewayBanner'
+import { AnimatePresence } from 'framer-motion'
+import { kgToUnit } from '@/lib/dashboard/goalTile'
+import { describeNutritionTrend, type NutritionTrend } from '@/lib/dashboard/nutritionTrend'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import ResumeWorkoutButton from '@/components/ResumeWorkoutButton'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
@@ -88,7 +93,14 @@ export default function DashboardClient() {
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
-  const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
+  // No invented default. Until the profile answers, "This Week" shows the count
+  // alone rather than a fraction against a target nobody set.
+  const [weeklyAvailability, setWeeklyAvailability] = useState<number | null>(null)
+  const [mindSummary, setMindSummary] = useState<MindSummary | null>(null)
+  // Set when the daily check-in just logged a mood → the one-line gateway to
+  // Mindset shows under the tiles until dismissed or the next load.
+  const [gatewayMood, setGatewayMood] = useState<MoodLevel | null>(null)
+  const [nutritionTrend, setNutritionTrend] = useState<NutritionTrend | null>(null)
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
   // Queued like the check-in — waits its turn behind the onboarding tour.
@@ -176,14 +188,28 @@ export default function DashboardClient() {
         }
 
         const tz = new Date().getTimezoneOffset()
-        const [logRes, goalsRes] = await Promise.all([
+        const [logRes, goalsRes, weekRes] = await Promise.all([
           fetch(`/api/nutrition/log?tz=${tz}`, { headers }),
-          fetch('/api/nutrition/goals', { headers })
+          fetch('/api/nutrition/goals', { headers }),
+          fetch(`/api/nutrition/summary?period=week&tz=${tz}`, { headers }),
         ])
 
         if (logRes.ok && goalsRes.ok) {
           const logData = await logRes.json()
           const goalsData = await goalsRes.json()
+
+          // Last 7 days → the one-line trend under today's numbers ("logged 5
+          // of 7 days · protein hit 4"). Today's card was accurate but flat: it
+          // said nothing about whether logging is going anywhere.
+          if (weekRes.ok) {
+            try {
+              const week = await weekRes.json()
+              setNutritionTrend(describeNutritionTrend(week.days ?? [], {
+                calories: goalsData.calories || 0,
+                protein: goalsData.protein || 0,
+              }))
+            } catch { /* trend is optional */ }
+          }
 
           // logData.water may be an object {current, goal} or a number
           const waterCurrent = typeof logData.water === 'object' ? logData.water?.current ?? 0 : logData.water ?? 0
@@ -241,6 +267,20 @@ export default function DashboardClient() {
       }
     }
 
+    // Fetch the little the Mindset card needs (level, today's session, mood
+    // this week). Read-only endpoint — the full /api/mind/progress runs
+    // migrations and is for the Mind hub itself.
+    async function fetchMind() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`/api/mind/summary?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setMindSummary(await res.json())
+      } catch {
+        // non-critical
+      }
+    }
+
     // Fetch the unified dashboard tile layout (source of truth for the grid).
     // Owned here so a save in the customizer can update it in place without a
     // full reload.
@@ -289,6 +329,7 @@ export default function DashboardClient() {
         fetchStreak(),
         fetchProfile(),
         fetchLayout(),
+        fetchMind(),
       ])
       checkProgramNudge(!!progressData?.currentProgram)
     }
@@ -393,6 +434,7 @@ export default function DashboardClient() {
     
     if (checkInData.mood) {
       setTodaysMood(checkInData.mood)
+      setGatewayMood(checkInData.mood)
       // Update mood data in state for chart
       setData(prev => ({
         ...prev,
@@ -549,6 +591,13 @@ export default function DashboardClient() {
         </div>
       </div>
 
+      {/* Mood → Mindset gateway, once, right after the daily check-in */}
+      <AnimatePresence>
+        {gatewayMood && !mindSummary?.sessionDoneToday && (
+          <MoodGatewayBanner mood={gatewayMood} onDismiss={() => setGatewayMood(null)} />
+        )}
+      </AnimatePresence>
+
       {/* Resume Active Workout — only renders when there's an in-progress
           workout log for today; quietly disappears once it's completed. */}
       <ResumeWorkoutButton />
@@ -564,6 +613,8 @@ export default function DashboardClient() {
         leanMassData={data.leanMassData}
         moodData={data.moodData}
         fitnessGoal={fitnessGoal}
+        targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+        weightUnit={data.goal?.weightUnit ?? weightUnit}
       />
 
       {/* Nutrition Summary */}
@@ -574,6 +625,7 @@ export default function DashboardClient() {
           carbs={nutritionData.carbs}
           fats={nutritionData.fats}
           water={nutritionData.water}
+          trend={nutritionTrend}
         />
       )}
 
@@ -659,87 +711,22 @@ export default function DashboardClient() {
           </Card>
         )}
 
-        {/* Mindset Card */}
-        <Card>
-          <div className="mb-3 flex items-center justify-between sm:mb-4">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Mindset</h2>
-            <Link
-              href="/dashboard/mind"
-              className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
-            >
-              View
-            </Link>
-          </div>
-
-          <div className="mb-3 sm:mb-4">
-            <h3 className="font-medium text-zinc-900 dark:text-white">Daily Reflection</h3>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Track your mental wellness journey
-            </p>
-          </div>
-
-          {/* Mood Summary — flat tinted nested block (no border). Padding
-              tightened from p-3 to p-2.5 so it doesn't read as another card. */}
-          <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50 sm:mb-4">
-            <div className="flex -space-x-1">
-              {data.moodData.slice(-3).map((mood, idx) => {
-                const moodColors: Record<number, string> = {
-                  1: 'bg-red-400',
-                  2: 'bg-orange-400',
-                  3: 'bg-amber-400',
-                  4: 'bg-lime-400',
-                  5: 'bg-emerald-400'
-                }
-                const moodEmojis: Record<number, string> = {
-                  1: '😞',
-                  2: '😕',
-                  3: '😐',
-                  4: '🙂',
-                  5: '😊'
-                }
-                return (
-                  <div
-                    key={idx}
-                    className={`flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-white dark:ring-zinc-900 ${
-                      moodColors[mood.value] || 'bg-zinc-400'
-                    }`}
-                  >
-                    <span className="text-sm">
-                      {moodEmojis[mood.value] || '😐'}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {data.moodData.length > 0 ? `${data.moodData.length} mood entries` : 'No entries yet'}
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Last 7 days</p>
-            </div>
-          </div>
-
-          <Link
-            href="/dashboard/mind"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:py-3"
-          >
-            <span>Explore Mindset</span>
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-        </Card>
+        {/* Mindset Card — real content (level, today's session, this week's
+            check-ins) and a mood-aware CTA. Replaced a static blurb that
+            claimed "110 mood entries · Last 7 days" (110 was all-time). */}
+        <MindsetCard summary={mindSummary} todaysMood={todaysMood} />
       </div>
 
-      {/* Quick Links — 4-tile grid. Visually identical except icon + label.
-          Card primitive, hover swap on border (not shadow elevation). */}
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+      {/* Quick Links — 2×2 on every width so the row costs half the height it
+          used to (four stacked full-width cards). Card primitive, hover swap on
+          border (not shadow elevation). */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {[
           {
             href: '/dashboard/workout',
             icon: <ClipboardList className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
             title: 'All Programs',
-            description: 'Browse training plans',
+            description: 'Training plans',
           },
           {
             href: '/dashboard/nutrition',
@@ -753,7 +740,7 @@ export default function DashboardClient() {
             href: '/dashboard/progress',
             icon: <TrendingUp className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
             title: 'Progress',
-            description: 'Log weight & measurements',
+            description: 'Weight & PRs',
           },
           {
             href: '/dashboard/chat',
@@ -766,18 +753,16 @@ export default function DashboardClient() {
             key={link.href}
             as={Link}
             href={link.href}
-            className="flex items-center gap-3 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
+            variant="compact"
+            className="flex items-center gap-2.5 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
               {link.icon}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-zinc-900 dark:text-white">{link.title}</h3>
-              <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">{link.description}</p>
+              <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{link.title}</h3>
+              <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{link.description}</p>
             </div>
-            <svg className="h-5 w-5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
           </Card>
         ))}
       </div>

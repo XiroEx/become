@@ -31,6 +31,8 @@ interface ProgressChartProps {
   moodData: MetricData[]
   fitnessGoal?: FitnessGoal
   targetWeight?: number
+  /** Unit the weight/lean-mass series are in (defaults to lbs). */
+  weightUnit?: 'lbs' | 'kg'
   defaultChart?: ChartType
 }
 
@@ -58,7 +60,7 @@ function weightTrendSentiment(trend: 'up' | 'down' | 'neutral', goal?: FitnessGo
 
 export default function ProgressChart({
   weightData, bmiData, bodyFatData = [], leanMassData = [], moodData,
-  fitnessGoal, targetWeight, defaultChart
+  fitnessGoal, targetWeight, weightUnit = 'lbs', defaultChart
 }: ProgressChartProps) {
   const allTabs: ChartType[] = ['weight', 'bmi']
   if (bodyFatData.length > 0) allTabs.push('body_fat')
@@ -81,7 +83,9 @@ export default function ProgressChart({
   }
 
   const data = getData()
-  const config = chartConfig[activeChart]
+  const config = activeChart === 'weight' || activeChart === 'lean_mass'
+    ? { ...chartConfig[activeChart], unit: weightUnit }
+    : chartConfig[activeChart]
 
   const getStats = () => {
     if (data.length === 0) return { current: 0, change: 0, trend: 'neutral' as const }
@@ -207,7 +211,7 @@ export default function ProgressChart({
                     stroke="#22c55e"
                     strokeDasharray="4 4"
                     strokeWidth={1.5}
-                    label={{ value: `Goal ${targetWeight} lbs`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                    label={{ value: `Goal ${targetWeight} ${weightUnit}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
                   />
                 )}
                 <Area type="monotone" dataKey="value" stroke={config.color} strokeWidth={2} fill={`url(#gradient-${activeChart})`} name={config.label} />
