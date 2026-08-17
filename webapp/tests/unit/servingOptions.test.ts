@@ -49,10 +49,16 @@ describe('servingOptions', () => {
     assert.ok(cupServing)
     assert.ok(cupUnit)
     assert.equal(groups.servings.some(choice => choice.label === '100 g'), false)
+    // The primary is now a COUNTABLE serving, not a cup shortcut: pick it and
+    // the box reads "1 serving", so "4" means four cups without any arithmetic.
+    // The cup weight rides along as the bridge and the caption.
     assert.equal(cupServing.quantity, 1)
-    assert.equal(cupServing.unit, 'cup')
+    assert.equal(cupServing.unit, 'serving')
+    assert.deepEqual(cupServing.perServing, { quantity: 240, unit: 'g' })
 
     const effective = variantForServingChoice({ ...variant, nutrition }, cupServing)
+    // One serving and one cup must be the same amount of food.
+    assert.equal(Math.round(scalingFactor(effective, 1, 'serving') * 100), 240)
     assert.equal(Math.round(scalingFactor(effective, 1, 'cup') * 100), 240)
   })
 
@@ -178,10 +184,11 @@ describe('servingOptions', () => {
     assert.equal(groups.servings[0]?.label, '1 patty (85 g)')
   })
 
-  it('leaves a same-dimension named serving untouched', () => {
-    // The new label-derived bridge must only engage when the label's dimension
-    // differs from the storage unit. A gram label on a gram-native food needs
-    // no bridge and must keep converting natively.
+  it('a same-dimension named serving becomes a countable serving that knows its weight', () => {
+    // Previously "1 bar (45 g)" on a gram-native food was left as a 45 g gram
+    // shortcut, and deriveBridge deliberately stayed out of same-dimension
+    // labels. A countable serving cannot rely on that: without its own weight
+    // the maths falls back to the 100 g basis and one bar counts as 100 g.
     const variant = {
       servingSize: 100,
       servingUnit: 'g' as const,
@@ -193,8 +200,15 @@ describe('servingOptions', () => {
     const groups = buildServingChoiceGroups(variant)
     const primary = groups.servings.find(choice => choice.id === 'serving-primary')
     assert.ok(primary)
-    assert.equal(primary.unit, 'g')
-    assert.equal(primary.quantity, 45)
+    assert.equal(primary.unit, 'serving')
+    assert.equal(primary.quantity, 1)
+    assert.equal(primary.gramsPerServing, 45, 'the bar weight rides along as the bridge')
+
+    const effective = variantForServingChoice(variant, primary)
+    assert.equal(Math.round(scalingFactor(effective, 1, 'serving') * 100), 45)
+    assert.equal(Math.round(scalingFactor(effective, 4, 'serving') * 100), 180, 'four bars, no arithmetic')
+    // And grams still convert natively, exactly as before.
+    assert.equal(Math.round(scalingFactor(effective, 45, 'g') * 100), 45)
   })
   it('prefers a stored bridge over one derived from the label text', () => {
     // Sardines: the label calls it "1 can (3.75 oz)" = 106 g, but the nutrition

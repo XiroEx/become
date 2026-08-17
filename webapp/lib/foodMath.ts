@@ -25,9 +25,30 @@ export type VariantForMath = Pick<
 >
 
 /**
+ * The weight (g) or volume (ml) of ONE real-world serving of this food, when
+ * the food defines one. This is what a member means by "a portion".
+ *
+ * Imported records store nutrition per 100 g with the household portion in
+ * gramsPerServing (broccoli: 100 g basis, 85 g bag). A mass-native food with no
+ * bridge is its own serving (servingSize in servingUnit). A discrete food (1 bar,
+ * 1 scoop) has no weight unless a bridge says so.
+ */
+export function realServing(
+  variant: Pick<VariantForMath, 'servingSize' | 'servingUnit' | 'gramsPerServing' | 'mlPerServing'>,
+): { grams?: number; ml?: number } | null {
+  if (variant.gramsPerServing != null && variant.gramsPerServing > 0) return { grams: variant.gramsPerServing }
+  if (variant.mlPerServing != null && variant.mlPerServing > 0) return { ml: variant.mlPerServing }
+  const fam = familyOf(variant.servingUnit as Unit)
+  if (fam === 'mass') return { grams: convert(variant.servingSize, variant.servingUnit as Unit, 'g') }
+  if (fam === 'volume') return { ml: convert(variant.servingSize, variant.servingUnit as Unit, 'ml') }
+  return null
+}
+
+/**
  * Multiplier applied to the variant's per-serving nutrition for a given
  * quantity in some unit. Throws if the unit can't be reconciled.
  *
+ *   0. unit === 'serving':                  quantity × (one real serving)
  *   1. unit === variant.servingUnit:        quantity / servingSize
  *   2. same family as variant.servingUnit:  convert(quantity → servingUnit) / servingSize
  *   3. cross-family with bridge:            convertWithBridge → divide by servingSize
@@ -43,6 +64,26 @@ export function scalingFactor(
 
   if (!Number.isFinite(servingSize) || servingSize <= 0) {
     throw new Error(`variant.servingSize must be > 0 (got ${servingSize})`)
+  }
+
+  // 'serving' means N × the food's REAL portion, for any food that has one.
+  //
+  // Picking "1 portion (85 g)" used to hand the member the gram equivalent —
+  // fill the box with 85, set the unit to g — so four portions meant working
+  // out 4 × 85 by hand. Making the portion itself the unit lets them type 4.
+  //
+  // The maths route is deliberate: express N portions as a mass or volume, then
+  // fall through to the ordinary paths below. That way this stays consistent
+  // with what the picker previews for the same weight, rather than being a
+  // second calculation that could drift from it (the 457-calorie protein bar
+  // was exactly a number and a label describing different amounts).
+  if (unit === 'serving' && target !== 'serving') {
+    const one = realServing(variant)
+    if (one?.grams != null) return scalingFactor(variant, quantity * one.grams, 'g')
+    if (one?.ml != null) return scalingFactor(variant, quantity * one.ml, 'ml')
+    // A discrete food with no bridge: one serving IS the variant's own unit.
+    if (familyOf(target) === 'discrete') return quantity
+    throw new Error('cannot resolve a serving for this food')
   }
 
   if (unit === target) {
