@@ -14,6 +14,8 @@ import { Card, StatTile, type StatTileAccent, type StatTileSize } from '@/compon
 import { cn } from '@/lib/cn'
 import MoodCard, { type MoodLevel } from '@/components/MoodCard'
 import { STREAK_MILESTONES } from '@/lib/streakConstants'
+import { streakDisplay, STREAK_VISIBLE_MIN } from '@/lib/streaks/pillars'
+import { describeGoal } from '@/lib/dashboard/goalTile'
 import type { MetricData } from '@/components/ProgressChart'
 
 /* -------------------------------------------------------------------------- */
@@ -53,6 +55,16 @@ export interface UserProgressData {
     thisWeekWorkouts: number
     goalProgress: number
   }
+  /** The member's goals from their profile — see /api/progress. */
+  goal?: {
+    fitnessGoal: string | null
+    nutritionDirection: string | null
+    targetWeightKg: number | null
+    startWeightKg: number | null
+    weeklyAvailability: number | null
+    weightUnit: 'lbs' | 'kg'
+  } | null
+  longestStreak?: number
 }
 
 export interface DashboardStreakData {
@@ -76,7 +88,8 @@ export interface DashboardTileContext {
   data: UserProgressData
   streakData: DashboardStreakData | null
   nutritionData: DashboardNutritionData | null
-  weeklyAvailability: number
+  /** Workouts per week the member committed to; null when they never set one. */
+  weeklyAvailability: number | null
   weightUnit: 'lbs' | 'kg'
   todaysMood: MoodLevel | null
   isMoodUpdating: boolean
@@ -162,30 +175,48 @@ function renderStreak(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
   const { streakData, data } = ctx
   const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
   const next = streakData?.nextMilestone
+  const shown = streakDisplay(days)
 
+  // A streak is not a streak until it is three long. Below that the tile says
+  // "Building" and counts up to the first real one, rather than announcing a
+  // one-day "streak" that resets tomorrow.
   let footer: React.ReactNode
-  if (next && days > 0) {
-    const prev = STREAK_MILESTONES.filter(m => m <= days).slice(-1)[0] ?? 0
-    const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
+  let value: React.ReactNode
+  if (!shown.visible) {
+    const pct = Math.round((Math.min(days, STREAK_VISIBLE_MIN) / STREAK_VISIBLE_MIN) * 100)
+    value = <span className="text-zinc-400 dark:text-zinc-500">Building</span>
     footer = (
       <div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-amber-500 transition-all duration-500"
-            style={{ width: `${pct}%` }}
-          />
+          <div className="h-full rounded-full bg-amber-500/70 transition-all duration-500" style={{ width: `${pct}%` }} />
         </div>
-        <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{next - days}d to 🏆</p>
+        <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
+          {days}/{STREAK_VISIBLE_MIN} · {shown.remaining} more {shown.remaining === 1 ? 'day' : 'days'}
+        </p>
       </div>
     )
   } else {
-    footer = <PlaceholderFooter label="Start your streak" />
+    value = days
+    if (next) {
+      const prev = STREAK_MILESTONES.filter(m => m <= days).slice(-1)[0] ?? 0
+      const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
+      footer = (
+        <div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{next - days}d to {next}-day 🏆</p>
+        </div>
+      )
+    } else {
+      footer = <PlaceholderFooter label="Every milestone reached" />
+    }
   }
 
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress"
+      href="/dashboard/streaks"
       accent="amber"
       icon={<Flame className={`${size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
       label="Day Streak"
@@ -194,7 +225,7 @@ function renderStreak(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
           {'❄'.repeat(streakData.streakFreezes)}
         </span>
       ) : null}
-      value={days}
+      value={value}
       footer={footer}
     />
   )
@@ -214,19 +245,34 @@ function renderMood(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Reac
 
 function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
   if (ctx.loading) return <StatTileSkeleton size={size} />
-  const { data, weeklyAvailability } = ctx
-  const pct = weeklyAvailability > 0
-    ? Math.min(100, Math.round((data.stats.thisWeekWorkouts / weeklyAvailability) * 100))
-    : 0
-  const remaining = Math.max(0, weeklyAvailability - data.stats.thisWeekWorkouts)
+  const { data } = ctx
+  // The target is what the member set (profile.weeklyAvailability). No target
+  // means no fraction — "2/4" against an invented 4 was a goal nobody chose.
+  const target = data.goal?.weeklyAvailability ?? ctx.weeklyAvailability ?? null
+  const done = data.stats.thisWeekWorkouts
+  if (!target) {
+    return (
+      <StatTile
+        size={size}
+        href="/dashboard/settings"
+        accent="green"
+        icon={<TrendingUp className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+        label="This Week"
+        value={done}
+        footer={<PlaceholderFooter label="Set a weekly target" />}
+      />
+    )
+  }
+  const pct = Math.min(100, Math.round((done / target) * 100))
+  const remaining = Math.max(0, target - done)
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress#workouts"
+      href="/dashboard/streaks"
       accent="green"
       icon={<TrendingUp className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="This Week"
-      value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
+      value={`${done}/${target}`}
       footer={(
         <div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -236,7 +282,7 @@ function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
             />
           </div>
           <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
-            {remaining === 0 ? 'Weekly goal hit 🎉' : `${remaining} to weekly goal`}
+            {remaining === 0 ? 'Weekly target hit 🎉' : `${remaining} to weekly target`}
           </p>
         </div>
       )}
@@ -247,24 +293,52 @@ function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
 function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
   if (ctx.loading) return <StatTileSkeleton size={size} />
   const { data } = ctx
-  const pct = Math.min(100, Math.max(0, data.stats.goalProgress))
+  const unit = data.goal?.weightUnit ?? ctx.weightUnit
+  const weights = data.weightData
+  const view = describeGoal({
+    fitnessGoal: data.goal?.fitnessGoal,
+    nutritionDirection: data.goal?.nutritionDirection,
+    targetWeightKg: data.goal?.targetWeightKg,
+    startWeightKg: data.goal?.startWeightKg,
+    // weightData is in the member's unit already (weight is stored as logged).
+    latestWeight: weights.length ? weights[weights.length - 1].value : null,
+    earliestWeight: weights.length ? weights[0].value : null,
+    weightUnit: unit,
+    program: data.currentProgram
+      ? {
+          name: data.currentProgram.name,
+          completedWorkouts: data.currentProgram.completedWorkouts,
+          totalWorkouts: data.currentProgram.totalWorkouts,
+          currentWeek: data.currentProgram.currentWeek,
+          totalWeeks: data.currentProgram.totalWeeks,
+          programId: data.currentProgram.programId,
+        }
+      : null,
+  })
+  const barClass = view.atTarget ? 'bg-green-500' : 'bg-purple-500'
   return (
     <StatTile
       size={size}
+      href={view.href}
       accent="purple"
       icon={<Target className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
-      label="Goal"
-      value={`${data.stats.goalProgress}%`}
+      label={view.label}
+      value={
+        view.kind === 'unset'
+          ? <span className="text-zinc-400 dark:text-zinc-500">{view.value}</span>
+          // "12 lbs to go" wraps at 2xl on a 1x1 tile; step long values down a size.
+          : view.value.length > 8 ? <span className="text-xl">{view.value}</span> : view.value
+      }
       footer={(
         <div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
-              className="h-full rounded-full bg-purple-500 transition-all duration-500"
-              style={{ width: `${pct}%` }}
+              className={`h-full rounded-full ${barClass} transition-all duration-500`}
+              style={{ width: `${view.pct}%` }}
             />
           </div>
-          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
-            {pct >= 100 ? 'Annual goal hit 🎯' : 'Annual goal'}
+          <p className="mt-0.5 truncate text-[11px] text-zinc-400 dark:text-zinc-600">
+            {view.direction === 'down' ? '↓ ' : view.direction === 'up' ? '↑ ' : ''}{view.footer}
           </p>
         </div>
       )}
@@ -496,7 +570,7 @@ export const TILE_DEFS: Record<DashboardTileId, DashboardTileDef> = {
   weekly: {
     id: 'weekly',
     label: 'This Week',
-    description: 'Workouts logged this week',
+    description: 'Workouts finished vs your weekly target',
     accent: 'green',
     Icon: TrendingUp,
     render: renderWeekly,
@@ -504,7 +578,7 @@ export const TILE_DEFS: Record<DashboardTileId, DashboardTileDef> = {
   goal: {
     id: 'goal',
     label: 'Goal',
-    description: 'Annual goal progress',
+    description: 'How far to your target',
     accent: 'purple',
     Icon: Target,
     render: renderGoal,

@@ -208,7 +208,7 @@ export function formatProgressData(
   progress: ProgressInput,
   programName: string = 'BECOME — 12 Week Fat-Loss Foundation',
   nextWorkout: string = 'Day 1 - Start Training',
-  overrides?: { totalWeeks?: number; nextWorkoutDay?: string }
+  overrides?: { totalWeeks?: number; nextWorkoutDay?: string; tzOffsetMinutes?: number; now?: Date }
 ) {
   const weightData = progress.weightHistory.map(entry => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -240,15 +240,18 @@ export function formatProgressData(
     value: entry.mood
   }))
 
-  // Calculate this week's workouts
-  const now = new Date()
-  const startOfWeek = new Date(now)
-  startOfWeek.setDate(now.getDate() - now.getDay())
-  startOfWeek.setHours(0, 0, 0, 0)
-  
-  const thisWeekWorkouts = progress.workoutLogs.filter(log => 
-    new Date(log.date) >= startOfWeek
-  ).length
+  // This week's workouts — COMPLETED sessions since the member's local Sunday.
+  //
+  // Two things used to be wrong here, and Jon's tile read "2/5" because of
+  // both. The count took every log since Sunday, so a workout he opened and
+  // walked away from (completed: false) counted the same as one he finished.
+  // And "Sunday" was the server's Sunday: the container runs in UTC, so a
+  // Saturday-night session in New York belonged to next week.
+  const thisWeekWorkouts = countThisWeekWorkouts(
+    progress.workoutLogs,
+    overrides?.tzOffsetMinutes ?? 0,
+    overrides?.now ?? new Date(),
+  )
 
   return {
     weightData,
@@ -271,7 +274,41 @@ export function formatProgressData(
       streakDays: progress.streakDays,
       totalWorkouts: progress.totalWorkouts,
       thisWeekWorkouts,
-      goalProgress: Math.round((progress.currentProgram?.currentWeek || 0) / (overrides?.totalWeeks ?? 12) * 100)
+      // Program completion. Session-based when the schedule gave us counts, so
+      // it is the SAME number the Current Program card shows; the week ratio is
+      // only the fallback. (This was labelled "Annual goal" on the dashboard —
+      // it never was one. It is how far through the current program you are.)
+      goalProgress: programCompletionPct(progress.currentProgram, overrides?.totalWeeks ?? 12),
     }
   }
+}
+
+/** Local Sunday 00:00 for a caller in `tzOffsetMinutes` (browser-style, +west). */
+export function startOfLocalWeek(now: Date, tzOffsetMinutes: number): Date {
+  const shifted = new Date(now.getTime() - tzOffsetMinutes * 60_000)
+  const localMidnight = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate())
+  const sunday = localMidnight - shifted.getUTCDay() * 86_400_000
+  return new Date(sunday + tzOffsetMinutes * 60_000)
+}
+
+/** Completed workouts logged since the member's local Sunday. */
+export function countThisWeekWorkouts(
+  logs: Array<{ date: Date | string; completed?: boolean }>,
+  tzOffsetMinutes: number,
+  now: Date = new Date(),
+): number {
+  const start = startOfLocalWeek(now, tzOffsetMinutes)
+  return logs.filter(log => log.completed === true && new Date(log.date) >= start).length
+}
+
+/** % through the current program — sessions when known, else weeks. */
+export function programCompletionPct(
+  program: { currentWeek: number; completedWorkouts?: number; totalWorkouts?: number } | null | undefined,
+  totalWeeks: number,
+): number {
+  if (!program) return 0
+  if (program.totalWorkouts && program.totalWorkouts > 0 && program.completedWorkouts != null) {
+    return Math.min(100, Math.round((program.completedWorkouts / program.totalWorkouts) * 100))
+  }
+  return Math.min(100, Math.round((program.currentWeek || 0) / (totalWeeks || 12) * 100))
 }

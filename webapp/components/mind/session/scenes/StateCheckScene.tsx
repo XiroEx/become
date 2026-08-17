@@ -21,6 +21,7 @@ import {
 import type { MindState } from '@/lib/mindContent'
 import { recentFeelingLabel } from '@/lib/mind/recentFeeling'
 import type { SceneProps } from '@/lib/mind/moves'
+import { feelingOrderForMood, isMoodLevel, moodOpenerLine, type TodayMood } from '@/lib/mind/moodBridge'
 
 // Within this window of your last check-in, a new session skips the full grid.
 const RECENT_WINDOW_MS = 4 * 60 * 60 * 1000
@@ -71,6 +72,13 @@ const FEELINGS: { label: string; value: MindState; Icon: LucideIcon }[] = [
   { label: 'Angry', value: 'stressed', Icon: Angry },
 ]
 
+/** The grid, with the bucket that matches today's dashboard mood first. */
+function orderedFeelings(mood: TodayMood | null): typeof FEELINGS {
+  const order = feelingOrderForMood(mood ? mood.value : null)
+  const rank = new Map(order.map((st, i) => [st, i]))
+  return [...FEELINGS].sort((a, b) => (rank.get(a.value) ?? 9) - (rank.get(b.value) ?? 9))
+}
+
 const FALLBACK_MESSAGES: Record<MindState, string> = {
   stressed: "Noticing it is the first move. Let's bring the system down a notch.",
   distracted: "The scatter is normal. We'll pull the focus back to one point.",
@@ -97,6 +105,11 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
   // back reads as though the app misheard them — pick "Scattered" and it replies
   // "distracted", which is simply the first amber tile in the grid.
   const [recentFeeling, setRecentFeeling] = useState<string | null>(null)
+  // The dashboard's 1–5 mood from earlier today, when there is one. Not a Mind
+  // state — we do not pretend it is — but the opener reads it back and puts the
+  // matching feelings first, so "Bad" on the home screen is not followed by a
+  // cold "how are you feeling?" here.
+  const [todayMood, setTodayMood] = useState<TodayMood | null>(null)
   const [recheck, setRecheck] = useState(false)
   // Re-check that changed state → capture "what changed?".
   const [pendingState, setPendingState] = useState<MindState | null>(null)
@@ -108,11 +121,13 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/mind/state', { headers: authHeaders() })
+        const res = await fetch(`/api/mind/state?tz=${new Date().getTimezoneOffset()}`, { headers: authHeaders() })
         if (res.ok) {
           const data = (await res.json()) as {
             logs?: { state: MindState; timestamp: string; feeling?: string }[]
+            todayMood?: TodayMood | null
           }
+          if (!cancelled && data.todayMood && isMoodLevel(data.todayMood.value)) setTodayMood(data.todayMood)
           const last = data.logs?.[0]
           if (last && Date.now() - new Date(last.timestamp).getTime() < RECENT_WINDOW_MS) {
             if (!cancelled) {
@@ -291,9 +306,15 @@ export default function StateCheckScene({ move, onState, onDone, preview }: Scen
           >
             <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center">
               <h1 className="text-center text-2xl font-extrabold">{move.title}</h1>
-              {move.subtitle && <p className="mt-2 text-center text-white/50">{move.subtitle}</p>}
+              {todayMood && !recheck ? (
+                <p className="mt-2 text-center text-white/50">
+                  {moodOpenerLine(todayMood)} <span className="text-white/80">Which of these is closest?</span>
+                </p>
+              ) : (
+                move.subtitle && <p className="mt-2 text-center text-white/50">{move.subtitle}</p>
+              )}
               <div className="mt-6 grid grid-cols-2 gap-2.5">
-                {FEELINGS.map(({ label, value, Icon }) => (
+                {orderedFeelings(todayMood).map(({ label, value, Icon }) => (
                   <button
                     key={label}
                     onClick={() => pick(value, label)}

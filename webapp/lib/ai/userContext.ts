@@ -43,6 +43,10 @@ export interface UserContext {
   lastWorkout?: { title: string; daysAgo: number }
   workoutsLast7Days?: number
   mood?: { avg7: number; entries7: number }
+  /** Today's dashboard mood check-in (1–5), when there is one. This is the
+   *  member telling us how they feel RIGHT NOW — the Mind session composer
+   *  should open from it rather than the 7-day average. */
+  moodToday?: { value: number; label: string; hoursAgo: number }
   program?: { name: string; phase?: number; day?: string }
   /** Schedule adherence for the active program — so the AI knows when the user
    *  is behind (missed / overdue) and what their next session actually is. */
@@ -178,6 +182,17 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
   if (recentMoods.length) {
     const avg = recentMoods.reduce((s, m) => s + (m.mood as number), 0) / recentMoods.length
     ctx.mood = { avg7: Math.round(avg * 10) / 10, entries7: recentMoods.length }
+  }
+  // Today's check-in specifically. moodHistory rows are UTC-midnight day
+  // markers; the moment it was tapped is the last matching change entry.
+  const todayMarker = moodHist.find((m) => daysAgo(m.date as Date, now) === 0 && typeof m.mood === 'number')
+  if (todayMarker) {
+    const value = todayMarker.mood as number
+    const changes = Array.isArray(progress?.moodChangeHistory) ? (progress!.moodChangeHistory as Array<Record<string, unknown>>) : []
+    const lastChange = [...changes].reverse().find((c) => daysAgo(c.date as Date, now) === 0)
+    const at = lastChange?.timestamp ? new Date(lastChange.timestamp as Date).getTime() : now
+    const labels: Record<number, string> = { 1: 'Bad', 2: 'Not great', 3: 'Okay', 4: 'Pretty good', 5: 'Great' }
+    ctx.moodToday = { value, label: labels[value] ?? String(value), hoursAgo: Math.max(0, Math.round((now - at) / 3_600_000)) }
   }
 
   // Active program: the one the user has actually STARTED and is most recently
@@ -336,6 +351,7 @@ function renderSummary(c: UserContext): string {
   if (c.streak) lines.push(`Streak: ${c.streak.current} day${c.streak.current === 1 ? '' : 's'} (best ${c.streak.longest}).`)
   if (c.lastWorkout) lines.push(`Last workout: ${c.lastWorkout.title}, ${c.lastWorkout.daysAgo === 0 ? 'today' : `${c.lastWorkout.daysAgo}d ago`}.`)
   if (typeof c.workoutsLast7Days === 'number') lines.push(`Workouts in last 7 days: ${c.workoutsLast7Days}.`)
+  if (c.moodToday) lines.push(`Mood check-in TODAY: ${c.moodToday.label} (${c.moodToday.value}/5), ${c.moodToday.hoursAgo === 0 ? 'within the hour' : `${c.moodToday.hoursAgo}h ago`}. Open from this — acknowledge it before anything else.`)
   if (c.mood) lines.push(`Mood (7-day avg): ${c.mood.avg7}/5 over ${c.mood.entries7} check-in${c.mood.entries7 === 1 ? '' : 's'}.`)
   if (c.program) lines.push(`Program: ${c.program.name}${c.program.phase ? `, phase ${c.program.phase}` : ''}${c.program.day ? `, ${c.program.day}` : ''}.`)
   if (c.schedule) {

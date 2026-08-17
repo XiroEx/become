@@ -220,11 +220,50 @@ export async function GET(request: NextRequest) {
       },
       programName,
       nextWorkout,
-      { totalWeeks: scheduleTotalWeeks, nextWorkoutDay: scheduleNextWorkoutDay }
+      {
+        totalWeeks: scheduleTotalWeeks,
+        nextWorkoutDay: scheduleNextWorkoutDay,
+        tzOffsetMinutes: readTzOffset(request.nextUrl.searchParams),
+      }
     )
 
+    // The member's goals, read once and returned on BOTH the summary and the
+    // detailed shape. The dashboard fetches the summary, and until now the
+    // profile fields were only attached to `?detailed=1` — so the Goal and This
+    // Week tiles never saw a target weight or a weekly target even when the
+    // member had set them at onboarding.
+    const UserModel = (await import('@/models/User')).default
+    const user = await UserModel.findById(authResult.userId, 'profile').lean() as {
+      profile?: {
+        fitnessGoal?: string
+        nutritionDirection?: string
+        targetWeightKg?: number
+        currentWeightKg?: number
+        weeklyAvailability?: number
+        weightUnit?: string
+      }
+    } | null
+    const targetWeightKg = user?.profile?.targetWeightKg
+    const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
+    const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
+    const goal = {
+      fitnessGoal: user?.profile?.fitnessGoal ?? null,
+      nutritionDirection: user?.profile?.nutritionDirection ?? null,
+      targetWeightKg: targetWeightKg ?? null,
+      // Weight recorded at onboarding — the "where you started" end of the bar.
+      startWeightKg: user?.profile?.currentWeightKg ?? null,
+      weeklyAvailability,
+      weightUnit: user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs',
+    }
+
     const detailed = request.nextUrl.searchParams.get('detailed') === '1'
-    if (!detailed) return NextResponse.json(formattedData)
+    if (!detailed) {
+      return NextResponse.json({
+        ...formattedData,
+        goal,
+        longestStreak: (progress.longestStreak as number) || 0,
+      })
+    }
 
     // ── Detailed extras: PBs, recent workouts, profile data ──────────────────
     // Personal bests — read from the persisted `exercisePRs` subdoc populated
@@ -327,15 +366,9 @@ export async function GET(request: NextRequest) {
       .map(([, data]) => ({ week: data.display, volume: data.volume, workouts: data.workouts }))
     totalVolumeLbs = Math.round(totalVolumeLbs)
 
-    // Profile — target weight and weekly availability
-    const UserModel = (await import('@/models/User')).default
-    const user = await UserModel.findById(authResult.userId, 'profile').lean() as { profile?: { targetWeightKg?: number; weeklyAvailability?: number } } | null
-    const targetWeightKg = user?.profile?.targetWeightKg
-    const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
-    const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
-
     return NextResponse.json({
       ...formattedData,
+      goal,
       longestStreak: (progress.longestStreak as number) || 0,
       pbs: Object.values(pbs).sort((a, b) => b.weight - a.weight),
       recentWorkouts,
