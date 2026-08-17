@@ -190,6 +190,22 @@ export function lostWeeks(
   return lost
 }
 
+/**
+ * The days that count toward the WORKOUT streak.
+ *
+ * A workout streak in DAYS that only counts days you trained would break on
+ * every rest day, and one counted in WEEKS is unreadable next to three
+ * day-based pillars (and needs three perfect weeks before it shows anything).
+ * So: a day counts while its training week is on track — you trained, or you
+ * have not failed the week yet. Rest days count. Falling short of the weekly
+ * target is what breaks it.
+ */
+export function onTrackDays(allDays: Iterable<string>, lost: Set<string>): Set<string> {
+  const out = new Set<string>()
+  for (const k of allDays) if (!lost.has(weekKeyOf(k))) out.add(k)
+  return out
+}
+
 /** Drop every day whose week is lost. */
 export function withoutLostWeeks(days: Iterable<string>, lost: Set<string>): Set<string> {
   const out = new Set<string>()
