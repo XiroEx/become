@@ -323,12 +323,7 @@ function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Reac
       accent="purple"
       icon={<Target className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label={view.label}
-      value={
-        view.kind === 'unset'
-          ? <span className="text-zinc-400 dark:text-zinc-500">{view.value}</span>
-          // "12 lbs to go" wraps at 2xl on a 1x1 tile; step long values down a size.
-          : view.value.length > 8 ? <span className="text-xl">{view.value}</span> : view.value
-      }
+      value={view.kind === 'unset' ? <span className="text-zinc-400 dark:text-zinc-500">{view.value}</span> : view.value}
       footer={(
         <div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">

@@ -151,6 +151,52 @@ export function workoutOrRestDays(
   return out
 }
 
+/**
+ * Weeks that can no longer hit the target: past weeks that fell short, and the
+ * current week if the days left cannot make up the gap. The super streak's
+ * workout half drops every day in a lost week — otherwise a member could hold
+ * a "super" streak on rest days while their workout week was already blown.
+ *
+ * "Days left" for the current week are today (if not yet trained) plus the
+ * remaining training weekdays on the schedule; with no schedule, every
+ * remaining day counts as a chance.
+ */
+export function lostWeeks(
+  workoutDays: Iterable<string>,
+  target: number,
+  todayKey: string,
+  trainingWeekdays: number[] | null,
+  weeksBack = 60,
+): Set<string> {
+  const days = new Set<string>()
+  for (const k of workoutDays) if (!Number.isNaN(parseKey(k))) days.add(k)
+  const counts = new Map<string, number>()
+  for (const k of days) { const wk = weekKeyOf(k); counts.set(wk, (counts.get(wk) ?? 0) + 1) }
+  const safeTarget = Math.max(1, Math.round(target))
+  const thisWeek = weekKeyOf(todayKey)
+  const lost = new Set<string>()
+  for (let i = 1; i <= weeksBack; i++) {
+    const wk = shiftDay(thisWeek, -7 * i)
+    if ((counts.get(wk) ?? 0) < safeTarget) lost.add(wk)
+  }
+  // Current week: still achievable?
+  const done = counts.get(thisWeek) ?? 0
+  let chances = 0
+  for (let d = todayKey; weekKeyOf(d) === thisWeek; d = shiftDay(d, 1)) {
+    if (d === todayKey && days.has(d)) continue // already trained today
+    if (!trainingWeekdays || trainingWeekdays.length === 0 || trainingWeekdays.includes(weekdayOf(d))) chances += 1
+  }
+  if (done + chances < safeTarget) lost.add(thisWeek)
+  return lost
+}
+
+/** Drop every day whose week is lost. */
+export function withoutLostWeeks(days: Iterable<string>, lost: Set<string>): Set<string> {
+  const out = new Set<string>()
+  for (const k of days) if (!lost.has(weekKeyOf(k))) out.add(k)
+  return out
+}
+
 /** Every day key from `fromKey` to `toKey` inclusive. */
 export function dayRange(fromKey: string, untilKey: string): string[] {
   const out: string[] = []
