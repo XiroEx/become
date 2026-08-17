@@ -1,7 +1,6 @@
 import {
   type Unit,
   convert,
-  convertWithBridge,
   familyOf,
   formatQuantity,
   parseQuantityString,
@@ -9,6 +8,7 @@ import {
   unitLabel,
 } from '@/lib/units'
 import type { IFoodVariant } from '@/models/Food'
+import { scalingFactor } from '@/lib/foodMath'
 
 export type ServingChoiceGroup = 'servings' | 'weight' | 'volume'
 
@@ -30,6 +30,12 @@ export interface ServingChoice {
   gramsPerServing?: number
   mlPerServing?: number
   derivedFromLabel?: string
+  /**
+   * For a countable 'serving' choice: what ONE of them is, in a measurable
+   * unit, so the picker can caption "85 g each · 340 g total". Absent when the
+   * food has no weight to show (a discrete bar with no bridge).
+   */
+  perServing?: { quantity: number; unit: Unit }
 }
 
 export interface ServingChoiceGroups {
@@ -213,6 +219,62 @@ function choiceFromLabel(args: {
     quantity = args.fallbackQuantity
     unit = args.fallbackUnit
   }
+
+  // The PRIMARY serving becomes a COUNTABLE unit, not a gram shortcut.
+  //
+  // Picking "1 portion (85 g)" used to fill the box with 85 g — right for one
+  // portion, and arithmetic for any other number of them. The member's own words:
+  // "I need a better solution for multiple servings than just doing math of
+  // 4*85." So the primary is emitted as {1, 'serving'}: pick it, type 4, done.
+  // The gram/ml weight rides along as the bridge, which is what the maths and
+  // the "85 g each · 340 g total" caption both read.
+  //
+  // Only the primary. Alternates ("1 cup", "3 oz cooked") describe a DIFFERENT
+  // amount from the food's own serving, so counting them in 'serving' units
+  // would silently mean the wrong thing.
+  //
+  // A countable serving MUST carry its own weight as the bridge, even when the
+  // label is same-dimension as the storage unit. deriveBridge deliberately stays
+  // out of that case (a "45 g" label on a gram-native food needed no bridge to
+  // convert grams to grams), but "1 serving" is not grams: without the bridge
+  // the maths falls back to the 100 g basis and one bar counts as 100 g, not 45.
+  //
+  // WHICH label counts as the food's own portion is decided by weight, not by
+  // slot. Open Food Facts imports store the household portion as
+  // alternateServings[0] with displayLabel EMPTY, so the "primary" is a bare
+  // "85 g" that shouldShowServingChoice suppresses — leaving the alternate as
+  // the only servings entry. Gating on isPrimary alone therefore missed the
+  // exact food that was reported (Steam-in-Bag Broccoli: displayLabel null,
+  // alternateServings [{ "1 portion (85 g)", 0.85 }], gramsPerServing 85).
+  // An alternate whose weight equals gramsPerServing IS the portion.
+  const perServing = (args.isPrimary || describesOwnPortion(args.variant, args.fallbackQuantity, args.fallbackUnit))
+    ? resolvedPerServing(args.variant, bridge, quantity, unit)
+    : undefined
+  const servingBridge = perServing
+    ? {
+        gramsPerServing: perServing.unit === 'g'
+          ? perServing.quantity
+          : familyOf(perServing.unit) === 'mass' ? convert(perServing.quantity, perServing.unit, 'g') : bridge?.gramsPerServing,
+        mlPerServing: perServing.unit === 'ml'
+          ? perServing.quantity
+          : familyOf(perServing.unit) === 'volume' ? convert(perServing.quantity, perServing.unit, 'ml') : bridge?.mlPerServing,
+      }
+    : bridge
+  const asServing: ServingChoice | null = perServing
+    ? {
+        id: args.id,
+        group: 'servings',
+        label,
+        quantity: 1,
+        unit: 'serving',
+        gramsPerServing: servingBridge?.gramsPerServing,
+        mlPerServing: servingBridge?.mlPerServing,
+        derivedFromLabel: servingBridge ? label : undefined,
+        // What one of these weighs, on the same basis the maths will use.
+        perServing,
+      }
+    : null
+  if (asServing && canResolveChoice(args.variant, asServing)) return asServing
 
   const choice: ServingChoice = {
     id: args.id,
@@ -400,23 +462,63 @@ function deriveBridge(
 function canResolveChoice(variant: ServingOptionVariant, choice: ServingChoice): boolean {
   if (!(choice.quantity > 0)) return false
   const effective = variantForServingChoice(variant, choice)
-  const target = effective.servingUnit as Unit
-  const source = choice.unit
-  if (source === target) return true
-  if (familyOf(source) === familyOf(target)) {
-    try {
-      convert(choice.quantity, source, target)
-      return true
-    } catch {
-      return false
-    }
+  // One definition of "can this food honour this unit": the same function the
+  // preview and the saved log use. Re-deriving it here with a private copy of
+  // the bridge rules is how 'serving' would end up offered by the dropdown but
+  // rejected by the maths, or vice versa.
+  try {
+    // VariantForMath narrows servingUnit to the storable ServingUnit set, but a
+    // choice's effective variant can carry any Unit; scalingFactor only ever
+    // reads it as a Unit, so the widening is safe here.
+    const f = scalingFactor(
+      { ...effective, nutrition: EMPTY_NUTRITION } as unknown as Parameters<typeof scalingFactor>[0],
+      choice.quantity,
+      choice.unit,
+    )
+    return Number.isFinite(f) && f > 0
+  } catch {
+    return false
   }
-  return convertWithBridge(choice.quantity, source, target, {
-    servingSize: effective.servingSize,
-    servingUnit: target,
-    gramsPerServing: effective.gramsPerServing,
-    mlPerServing: effective.mlPerServing,
-  }) != null
+}
+
+/** scalingFactor never reads nutrition; this just satisfies its input type. */
+const EMPTY_NUTRITION = { calories: 0, protein: 0, carbs: 0, fats: 0 }
+
+/**
+ * Does an alternate serving describe the food's OWN portion — the amount its
+ * gramsPerServing/mlPerServing refers to? Compared by weight on the storage
+ * basis, with a small tolerance for label rounding.
+ */
+function describesOwnPortion(variant: ServingOptionVariant, quantity: number, unit: Unit): boolean {
+  const g = variant.gramsPerServing
+  if (g != null && g > 0 && familyOf(unit) === 'mass') {
+    try { return Math.abs(convert(quantity, unit, 'g') - g) / g < 0.02 } catch { return false }
+  }
+  const ml = variant.mlPerServing
+  if (ml != null && ml > 0 && familyOf(unit) === 'volume') {
+    try { return Math.abs(convert(quantity, unit, 'ml') - ml) / ml < 0.02 } catch { return false }
+  }
+  return false
+}
+
+/**
+ * What one serving of this food weighs/measures, for the caption under a
+ * countable 'serving' choice. Prefers the bridge (the weight nutrition is
+ * actually recorded against), then whatever the label parsed to.
+ */
+function resolvedPerServing(
+  variant: ServingOptionVariant,
+  bridge: { gramsPerServing?: number; mlPerServing?: number } | null | undefined,
+  parsedQty: number,
+  parsedUnit: Unit,
+): { quantity: number; unit: Unit } | undefined {
+  const g = bridge?.gramsPerServing ?? variant.gramsPerServing
+  if (g != null && g > 0) return { quantity: g, unit: 'g' }
+  const ml = bridge?.mlPerServing ?? variant.mlPerServing
+  if (ml != null && ml > 0) return { quantity: ml, unit: 'ml' }
+  const fam = familyOf(parsedUnit)
+  if (fam === 'mass' || fam === 'volume') return { quantity: parsedQty, unit: parsedUnit }
+  return undefined
 }
 
 function primaryQuantity(variant: ServingOptionVariant): number {

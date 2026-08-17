@@ -28,7 +28,6 @@ import { Check, ChevronDown, Pencil } from 'lucide-react'
 import {
   type Unit,
   convert,
-  convertWithBridge,
   familyOf,
   unitLabel,
   parseQuantityString,
@@ -393,10 +392,38 @@ export default function QuantityPicker({
     return dropdownChoices.find(choice => choice.group !== 'servings' && choice.unit === customUnit) ?? null
   }, [choiceGroups.servings, customUnit, customValue, dropdownChoices, selectedInlineChoiceId])
   const selectedChoiceId = selectedChoice?.id ?? ''
-  // Servings are SHORTCUTS, not a selected "unit" — the unit button always shows
-  // the real measurable unit (g / cup / …). Picking a serving fills the amount
-  // and this unit; the serving itself just shows a ✓ in the menu when they match.
-  const unitButtonLabel = unitLabel(customUnit)
+  // The food's OWN serving is a countable unit. Picking "1 portion (85 g)" sets
+  // the unit to 'serving' and the box to 1, so four portions is typing 4 — no
+  // arithmetic. (It used to hand over the gram equivalent instead: right for one
+  // portion, and 4 × 85 by hand for any other number of them.)
+  //
+  // The button shows the serving's own NOUN — "portion", "bar", "cup" — pulled
+  // from the label, so the row reads "4 portion" rather than "4 × 1 portion
+  // (85 g)". Alternates ("3 oz cooked") stay as ordinary measurable units.
+  // Found by UNIT, not by slot: the countable serving may be the primary or an
+  // own-portion alternate (the OFF import shape stores the portion as
+  // alternateServings[0] with displayLabel empty).
+  const primaryServing = choiceGroups.servings.find(c => c.unit === 'serving') ?? null
+  const servingNoun = useMemo(() => {
+    if (!primaryServing) return 'serving'
+    // "1 portion (85 g)" -> "portion"; "1 cup" -> "cup"; "1 bar (45 g)" -> "bar".
+    const bare = primaryServing.label
+      .replace(/\([^)]*\)/g, ' ')          // drop the "(85 g)"
+      .replace(/^\s*[\d.\/½¼¾⅓⅔⅛⅜⅝⅞]+\s*/, '') // drop the leading count
+      .trim()
+      .toLowerCase()
+    return bare.split(/\s+/)[0] || 'serving'
+  }, [primaryServing])
+  const unitButtonLabel = customUnit === 'serving' ? servingNoun : unitLabel(customUnit)
+
+  const servingCaption = useMemo(() => {
+    if (customUnit !== 'serving' || !primaryServing?.perServing) return null
+    const each = primaryServing.perServing
+    const n = parseLeadingNumber(customValue)
+    const eachLabel = formatQuantity(each.quantity, each.unit)
+    if (n == null || !(n > 0) || Math.abs(n - 1) < QTY_EPSILON) return `${eachLabel} each`
+    return `${eachLabel} each · ${formatQuantity(each.quantity * n, each.unit)} total`
+  }, [customUnit, primaryServing, customValue])
 
   useEffect(() => {
     if (!unitMenuOpen) return
@@ -521,7 +548,12 @@ export default function QuantityPicker({
 
   const onInlineChoiceSelect = (choice: ServingChoice) => {
     setSelectedInlineChoiceId(choice.id)
-    if (choice.group === 'servings') {
+    // A measurable serving SHORTCUT ("3 oz cooked", "2 bars (90 g)") fills the
+    // box with its own amount — that is what a shortcut is for. A COUNTABLE
+    // serving is a unit, so it falls through to the conversion below: 340 g
+    // becomes 4 portions, not 1. Otherwise switching g -> portion -> g would
+    // silently shrink four portions to one.
+    if (choice.group === 'servings' && choice.unit !== 'serving') {
       setCustomValue(formatNumberForInput(choice.quantity))
       setCustomUnit(choice.unit)
       setUnitMenuOpen(false)
@@ -534,18 +566,40 @@ export default function QuantityPicker({
       const bridge = choice.gramsPerServing != null || choice.mlPerServing != null
         ? choice
         : activeBridge
-      const converted = convertWithBridge(numeric, customUnit, nextUnit, {
-        servingSize: variant.servingSize,
-        servingUnit: variant.servingUnit as Unit,
-        gramsPerServing: bridge?.gramsPerServing ?? variant.gramsPerServing,
-        mlPerServing: bridge?.mlPerServing ?? variant.mlPerServing,
-      })
+      // Switching unit converts the AMOUNT, it does not reset it: 4 portions
+      // becomes 340 g, so the gram escape hatch survives counting in servings.
+      //
+      // Done as factor-in / factor-out through the same scalingFactor the
+      // preview and the saved log use, rather than convertWithBridge directly.
+      // That is the only way a 'serving' leg is guaranteed to agree with what
+      // the preview shows for the same food — a second conversion path with its
+      // own bridge rules is exactly how a number and a label end up describing
+      // different amounts.
+      const converted = convertViaFactor(numeric, customUnit, nextUnit, bridge)
       if (converted != null && Number.isFinite(converted) && converted > 0) {
         setCustomValue(formatNumberForInput(converted))
       }
     }
     setCustomUnit(nextUnit)
     setUnitMenuOpen(false)
+  }
+
+  /** value in `from` → value in `to`, via the food's per-basis factor. */
+  function convertViaFactor(
+    value: number,
+    from: Unit,
+    to: Unit,
+    bridge: Pick<ServingChoice, 'gramsPerServing' | 'mlPerServing'> | null,
+  ): number | null {
+    const v = variantForServingChoice(variantForMath, bridge)
+    try {
+      const factor = scalingFactor(v, value, from)      // how many BASIS units
+      const perOne = scalingFactor(v, 1, to)            // basis units per 1 `to`
+      if (!(perOne > 0)) return null
+      return factor / perOne
+    } catch {
+      return null
+    }
   }
 
   const openUnitMenu = () => {
@@ -588,6 +642,7 @@ export default function QuantityPicker({
   return (
     <div className={className}>
       {isInline ? (
+        <div className="overflow-visible">
         <div className={`relative flex items-stretch gap-2 overflow-visible ${unitMenuOpen ? 'z-[90]' : ''}`}>
           <input
             type="text"
@@ -598,7 +653,9 @@ export default function QuantityPicker({
             placeholder={primaryOption?.label ?? 'Amount'}
             className="min-w-0 flex-[2] appearance-none rounded-lg border border-zinc-200 bg-white/70 px-3 py-2 text-sm font-medium tabular-nums text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:bg-white focus:ring-2 focus:ring-zinc-400/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:bg-zinc-950 dark:[-webkit-text-fill-color:#f4f4f5] dark:[color-scheme:dark]"
           />
-          <div className="relative min-w-[88px] flex-1 overflow-visible">
+          {/* Wide enough for a serving noun ("portion", "scoop") — 88px truncated
+              "portion" to "por…", which defeats the point of showing the noun. */}
+          <div className="relative min-w-[110px] flex-1 overflow-visible">
             <button
               ref={unitButtonRef}
               type="button"
@@ -612,6 +669,15 @@ export default function QuantityPicker({
             </button>
             {inlineUnitMenu}
           </div>
+        </div>
+        {/* Counting in servings hides the weight, and the weight is what the
+            member used to see. Keep it visible: what one is, and what the
+            total comes to. Omitted for a food with no weight to show. */}
+        {servingCaption && (
+          <p className="mt-1 px-0.5 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+            {servingCaption}
+          </p>
+        )}
         </div>
       ) : mode === 'quick' ? (
         <div className="flex flex-wrap items-center gap-1.5">
