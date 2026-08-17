@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   dayStreak, weekStreak, weekKeyOf, shiftDay, workoutOrRestDays, dayRange,
-  intersectDays, streakDisplay, STREAK_VISIBLE_MIN,
+  intersectDays, streakDisplay, STREAK_VISIBLE_MIN, lostWeeks, withoutLostWeeks,
 } from '../../lib/streaks/pillars'
 
 test('day streak counts back from today when today is active', () => {
@@ -106,4 +106,47 @@ test(`nothing shows until ${STREAK_VISIBLE_MIN} days`, () => {
   assert.deepEqual(streakDisplay(2), { visible: false, remaining: 1 })
   assert.deepEqual(streakDisplay(3), { visible: true, remaining: 0 })
   assert.deepEqual(streakDisplay(18), { visible: true, remaining: 0 })
+})
+
+// ── Super streak needs the workout week to be on track ──────────────────────
+
+test('a past week that missed the target is lost; a week that hit it is not', () => {
+  const trained = ['2026-08-03', '2026-08-05', '2026-08-06', '2026-08-07', '2026-08-08', // wk Aug 2 → 5 ✓
+                   '2026-08-12', '2026-08-15']                                          // wk Aug 9 → 2 ✗
+  const lost = lostWeeks(trained, 5, '2026-08-17', [1, 2, 3, 4, 6])
+  assert.equal(lost.has('2026-08-02'), false)
+  assert.equal(lost.has('2026-08-09'), true)
+})
+
+test('the current week is not lost while the remaining training days can still make it', () => {
+  // Jon: Mon–Thu + Sat. Monday Aug 17 trained; Tue Wed Thu Sat left → 1 + 4 = 5 ≥ 5.
+  const lost = lostWeeks(['2026-08-17'], 5, '2026-08-17', [1, 2, 3, 4, 6])
+  assert.equal(lost.has('2026-08-16'), false)
+})
+
+test('the current week IS lost once the days left cannot cover the gap', () => {
+  // Thursday Aug 20, nothing trained yet: Thu + Sat left = 2 < 5.
+  const lost = lostWeeks([], 5, '2026-08-20', [1, 2, 3, 4, 6])
+  assert.equal(lost.has('2026-08-16'), true)
+})
+
+test('today still counts as a chance if not yet trained; without a schedule every day is a chance', () => {
+  assert.equal(lostWeeks([], 3, '2026-08-20', null).has('2026-08-16'), false, 'Thu Fri Sat = 3 chances')
+  assert.equal(lostWeeks([], 4, '2026-08-20', null).has('2026-08-16'), true)
+})
+
+test('withoutLostWeeks strips every day of a lost week from the super candidates', () => {
+  const lost = new Set(['2026-08-09'])
+  const kept = withoutLostWeeks(['2026-08-14', '2026-08-15', '2026-08-16', '2026-08-17'], lost)
+  assert.deepEqual([...kept].sort(), ['2026-08-16', '2026-08-17'])
+})
+
+test('Jon last week: rest days do not rescue a super streak when the workout week was blown', () => {
+  // Trained Wed 12 + Sat 15 (2/5). Rest Sun 16. Trained Mon 17. Nutrition + mindset every day.
+  const trained = ['2026-08-12', '2026-08-15', '2026-08-17']
+  const all = dayRange('2026-08-09', '2026-08-17')
+  const lost = lostWeeks(trained, 5, '2026-08-17', [1, 2, 3, 4, 6])
+  const workoutHalf = withoutLostWeeks(workoutOrRestDays(trained, all, [1, 2, 3, 4, 6]), lost)
+  const s = dayStreak(intersectDays(new Set(all), new Set(all), workoutHalf), '2026-08-17')
+  assert.equal(s.current, 2, 'only Sun 16 + Mon 17 (this week, still on track) count')
 })

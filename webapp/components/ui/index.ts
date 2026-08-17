@@ -19,3 +19,6 @@ export type { Segment } from "./SegmentedControl";
 export { HeaderPillLink, HeaderPillButton } from "./HeaderPill";
 
 export { default as Fab } from "./Fab";
+
+export { FitText } from "./FitText";
+export type { FitTextProps } from "./FitText";
