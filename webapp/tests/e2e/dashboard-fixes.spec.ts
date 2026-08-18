@@ -50,6 +50,17 @@ test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
   await settle(page)
   await page.waitForTimeout(1500)
 
+  // The Becoming doorway is the first thing on the page.
+  const door = page.locator('[data-testid="becoming-door"]')
+  await expect(door).toBeVisible()
+  const doorText = (await door.innerText()).replace(/\s+/g, ' ')
+  console.log('DOOR  :', doorText)
+  expect(doorText).toMatch(/THE BECOMING/i)
+  expect(doorText).toMatch(/MIND/i); expect(doorText).toMatch(/NUTRITION/i); expect(doorText).toMatch(/TRAINING/i)
+  const doorBox = await door.boundingBox(); const tilesBox = await page.locator('[data-testid="tilegrid"]').boundingBox()
+  expect(doorBox!.y).toBeLessThan(tilesBox!.y)
+  expect(await door.getAttribute('href')).toBe('/dashboard/mind/becoming')
+
   const weekly = page.locator('[data-tour="tile-weekly"]')
   const goal = page.locator('[data-tour="tile-goal"]')
   const streak = page.locator('[data-tour="tile-streak"]')

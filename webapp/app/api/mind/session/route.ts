@@ -256,7 +256,8 @@ export async function POST(request: NextRequest) {
       // sessions, The Becoming after 5) — surfaced on the payoff.
       featureUnlocks: [
         ...(counted && newCount === 3 ? ['coach'] : []),
-        ...(counted && newCount === 5 ? ['becoming'] : []),
+        // The Becoming is open to everyone now (it led the dashboard from
+        // 2026-08-18); nothing to unlock at session 5 any more.
       ],
     })
   } catch (err) {
