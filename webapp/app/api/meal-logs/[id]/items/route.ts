@@ -4,6 +4,7 @@ import MealLog from '@/models/MealLog'
 import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
 import { resolveItemFromInput, MealItemInput } from '@/lib/mealItems'
+import { bustTilesCache } from '@/lib/redis'
 
 // POST: append a single item to an existing meal log (owner only)
 export async function POST(
@@ -43,6 +44,9 @@ export async function POST(
     if (item.foodId) {
       await Food.updateOne({ _id: item.foodId }, { $inc: { usageCount: 1 } }).catch(() => null)
     }
+
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
 
     return NextResponse.json({ success: true, log }, { status: 201 })
   } catch (error) {

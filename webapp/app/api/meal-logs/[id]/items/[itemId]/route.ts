@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import MealLog from '@/models/MealLog'
 import { verifyAuth } from '@/lib/auth'
+import { bustTilesCache } from '@/lib/redis'
 import mongoose from 'mongoose'
 
 function findItemIndex(log: { items: { _id?: mongoose.Types.ObjectId }[] }, itemId: string): number {
@@ -91,6 +92,9 @@ export async function PATCH(
     log.markModified('items')
     await log.save()
 
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
+
     return NextResponse.json({ success: true, log })
   } catch (error) {
     console.error('Error updating meal log item:', error)
@@ -135,11 +139,16 @@ export async function DELETE(
     // No items left → remove the whole log.
     if (updated.items.length === 0) {
       await MealLog.deleteOne({ _id: id })
+      await bustTilesCache(authResult.userId!)
       return NextResponse.json({ success: true, deleted: true })
     }
 
     // Recompute totals (the pre-save hook reruns computeTotalNutrition on save).
     await updated.save()
+
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
+
     return NextResponse.json({ success: true, log: updated })
   } catch (error) {
     console.error('Error deleting meal log item:', error)

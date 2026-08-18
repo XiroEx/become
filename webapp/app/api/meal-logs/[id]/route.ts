@@ -4,6 +4,7 @@ import MealLog from '@/models/MealLog'
 import MealPlan from '@/models/MealPlan'
 import { verifyAuth } from '@/lib/auth'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
+import { bustTilesCache } from '@/lib/redis'
 
 // GET: single log
 export async function GET(
@@ -74,6 +75,9 @@ export async function PATCH(
 
     await log.save()
 
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
+
     return NextResponse.json({ success: true, log })
   } catch (error) {
     console.error('Error updating meal log:', error)
@@ -115,6 +119,9 @@ export async function DELETE(
         { $set: { status: 'active' }, $unset: { logId: '', promotedAt: '' } },
       ).catch(() => null)
     }
+
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
 
     return NextResponse.json({ success: true })
   } catch (error) {
