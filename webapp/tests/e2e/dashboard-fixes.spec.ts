@@ -66,7 +66,7 @@ test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
   // Goal: build muscle, 3 lbs to 205.
   expect(goalText).toMatch(/Goal · Build muscle/)
   expect(goalText).toMatch(/3 lbs to go/)
-  expect(goalText).toMatch(/208 → 205 lbs/)
+  expect(goalText).toMatch(/→ 205 lbs · (~\d wks?|\d+(\.\d)? lbs? behind)|208 → 205 lbs/)
   expect(goalText).not.toMatch(/Annual/)
   // Streak of 2 is not shown as a streak yet.
   expect(streakText).toMatch(/Building/)

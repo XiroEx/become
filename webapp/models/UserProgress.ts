@@ -142,6 +142,7 @@ export interface IUserProgress {
     chatMessage?: boolean
     /** The daily Mind session nudge — the core ritual, which had no reminder at all. */
     mindReminder?: boolean
+    goalNudge?: boolean
   }
   lastPushSentAt?: {
     streakAtRisk?: Date
@@ -151,6 +152,9 @@ export interface IUserProgress {
     mindReminder?: Date
     /** "Your program has no training days set" nudge. */
     scheduleSetup?: Date
+    goalNudge?: Date
+    goalNudgeKey?: string
+    goalNudgeKeyAt?: Date
   }
   // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
   // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
@@ -386,6 +390,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     reEngagement: { type: Boolean },
     chatMessage: { type: Boolean },
     mindReminder: { type: Boolean },
+    goalNudge: { type: Boolean },
   },
   lastPushSentAt: {
     streakAtRisk: { type: Date },
@@ -394,6 +399,9 @@ const UserProgressSchema = new Schema<IUserProgress>({
     reEngagement: { type: Date },
     mindReminder: { type: Date },
     scheduleSetup: { type: Date },
+    goalNudge: { type: Date },
+    goalNudgeKey: { type: String },
+    goalNudgeKeyAt: { type: Date },
   },
   timezoneOffset: { type: Number },
   timezone: { type: String },

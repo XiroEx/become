@@ -29,6 +29,8 @@ export interface GoalTileInputs {
   /** Oldest logged weight in the chart window, in `weightUnit` (start fallback). */
   earliestWeight?: number | null
   weightUnit: WeightUnit
+  /** The plan behind the goal (lib/goals): chosen pace and where you stand against it. */
+  pace?: { status: string; eta: string; behindByKg: number } | null
   program?: {
     name: string
     completedWorkouts?: number | null
@@ -130,13 +132,20 @@ export function describeGoal(input: GoalTileInputs): GoalTileView {
         : 0
     }
 
+    // Footer: the target, and where you stand against the plan when we know it —
+    // "→ 205 lbs · ~3 wks" / "→ 205 lbs · 1.5 lbs behind". Without a pace read,
+    // the plain "208 → 205 lbs".
+    const p = input.pace
+    let footer: string
+    if (atTarget) footer = `Holding ${formatWeight(target, unit)} ${unit}`
+    else if (p && p.status === 'behind' && p.behindByKg > 0) footer = `→ ${formatWeight(target, unit)} ${unit} · ${formatWeightDelta(kgToUnit(p.behindByKg, unit), unit)} behind`
+    else if (p && (p.status === 'on' || p.status === 'ahead') && p.eta) footer = `→ ${formatWeight(target, unit)} ${unit} · ${p.eta}${p.status === 'ahead' ? ' · ahead' : ''}`
+    else footer = `${formatWeight(latest, unit)} → ${formatWeight(target, unit)} ${unit}`
     return {
       kind: 'weight',
       label,
       value: atTarget ? 'On target' : `${formatWeightDelta(diff, unit)} to go`,
-      footer: atTarget
-        ? `Holding ${formatWeight(target, unit)} ${unit}`
-        : `${formatWeight(latest, unit)} → ${formatWeight(target, unit)} ${unit}`,
+      footer,
       pct,
       href: '/dashboard/progress',
       direction,

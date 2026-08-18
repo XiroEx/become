@@ -1,14 +1,16 @@
 'use client'
 
-// The Becoming — the "training log for the mind". Makes progress FELT:
-// where you started → where you are → what's next, the chapter arc, your
-// Becoming score, a state/mood trend, an evidence wall of banked wins, and a
-// gentle "where to work on next." Read-only; pulls from the existing Mind APIs.
+// The Becoming — where you started → where you are → what's next, for all
+// three pillars. Mind: the chapter arc, your Becoming score, a state/mood
+// trend and the evidence wall. Nutrition and Training: then → now → next
+// against the member's Goal (lib/goals). Plus one "where to work on next" per
+// pillar — the same rules the nudges read. Read-only.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Flame, Trophy, Lock, ArrowRight, Sparkles } from 'lucide-react'
+import { Flame, Trophy, Lock, ArrowRight } from 'lucide-react'
+import PillarsSection from '@/components/becoming/PillarsSection'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
@@ -244,17 +246,9 @@ export default function BecomingClient() {
         </Card>
       )}
 
-      {/* Where to work on */}
-      {focus && (
-        <Card className="mb-4 flex items-start gap-3">
-          <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-500" />
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Where to work on</p>
-            <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">{focus.title}</p>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{focus.sub}</p>
-          </div>
-        </Card>
-      )}
+      {/* Nutrition + Training, then → now → next, and "Where to work on" for
+          all three pillars (Mind's focus comes from the state trend above). */}
+      <PillarsSection mindFocus={focus} />
 
       {/* Evidence wall */}
       <Card data-tour="becoming-wins">

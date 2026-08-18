@@ -304,6 +304,12 @@ export default defineConfig({
       },
     },
     {
+      name: 'goals',
+      testMatch: '**/goals.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+    },
+    {
       name: 'admin-streaks',
       testMatch: '**/admin-streaks.spec.ts',
       timeout: 120_000,
