@@ -7,7 +7,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
 import type { JourneyPayload } from '@/lib/becoming/journey'
 import JourneyCanvas from '@/components/becoming/journey/JourneyCanvas'
 import BecomingDetails from '@/components/becoming/BecomingDetails'
@@ -42,6 +41,8 @@ export default function BecomingClient() {
   const [data, setData] = useState<JourneyPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [details, setDetails] = useState(false)
+  // A week picked from the details Story screen → the stage flies there.
+  const [jumpTo, setJumpTo] = useState<{ index: number; nonce: number } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +56,8 @@ export default function BecomingClient() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const j = (await res.json()) as JourneyPayload
         if (!cancelled) { setData(j); writeCache(key, j) }
+        // The dashboard door goes calm once this week's Becoming has been seen.
+        try { localStorage.setItem(`becoming.seen.${localWeekKey()}`, '1') } catch { /* ignore */ }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load')
       }
@@ -113,7 +116,7 @@ export default function BecomingClient() {
 
   return (
     <>
-      <JourneyCanvas data={data} onClose={close} onDetails={() => setDetails(true)} initialWeekKey={initialWeekKey} inert={details} />
+      <JourneyCanvas data={data} onClose={close} onDetails={() => setDetails(true)} initialWeekKey={initialWeekKey} inert={details} jumpTo={jumpTo} />
 
       {/* Screen-reader / no-gesture fallback: the weeks as a list. */}
       <ol className="sr-only" aria-label="Your Becoming, week by week">
@@ -124,22 +127,12 @@ export default function BecomingClient() {
 
       <AnimatePresence>
         {details && (
-          <>
-            <motion.div key="bd" className="fixed inset-0 z-[94] bg-black/50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDetails(false)} />
-            <motion.div
-              key="sheet"
-              role="dialog" aria-modal="true" aria-label="Becoming details"
-              data-testid="becoming-details"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-              className="fixed inset-x-0 bottom-0 z-[95] mx-auto max-h-[88vh] max-w-3xl overflow-y-auto rounded-t-3xl bg-zinc-50 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] pt-3 dark:bg-zinc-950 sm:px-6"
-            >
-              <div className="sticky top-0 z-10 -mx-3 mb-2 flex items-center justify-between bg-zinc-50/90 px-3 py-2 backdrop-blur dark:bg-zinc-950/90 sm:-mx-6 sm:px-6">
-                <p className="text-sm font-bold text-zinc-900 dark:text-white">The Becoming · details</p>
-                <button type="button" onClick={() => setDetails(false)} aria-label="Close details" className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200/70 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"><X className="h-4 w-4" /></button>
-              </div>
-              <BecomingDetails />
-            </motion.div>
-          </>
+          <BecomingDetails
+            weeks={data.weeks}
+            unit={data.unit}
+            onClose={() => setDetails(false)}
+            onJumpToWeek={(i) => { setDetails(false); setJumpTo({ index: i, nonce: Date.now() }) }}
+          />
         )}
       </AnimatePresence>
     </>

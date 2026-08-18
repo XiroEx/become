@@ -49,6 +49,8 @@ export interface JourneyCanvasProps {
   initialWeekKey?: string | null
   /** True while a sheet is open over the stage: gestures and keys are ignored. */
   inert?: boolean
+  /** Fly to a week on request (from the details Story screen). */
+  jumpTo?: { index: number; nonce: number } | null
 }
 
 function weekKeyOfToday(todayKey: string): string {
@@ -57,7 +59,7 @@ function weekKeyOfToday(todayKey: string): string {
   return dt.toISOString().slice(0, 10)
 }
 
-export default function JourneyCanvas({ data, onClose, onDetails, initialWeekKey, inert = false }: JourneyCanvasProps) {
+export default function JourneyCanvas({ data, onClose, onDetails, initialWeekKey, inert = false, jumpTo = null }: JourneyCanvasProps) {
   const reduced = !!useReducedMotion()
   const stageRef = useRef<HTMLDivElement>(null)
   // The stage is measured synchronously before anything positions itself; until
@@ -184,6 +186,14 @@ export default function JourneyCanvas({ data, onClose, onDetails, initialWeekKey
     setMode('overview')
   }, [overviewTarget, camX, camY, camS, reduced])
   const focusOn = useCallback((index: number) => { setMode('focus'); flyTo(index, { click: true }) }, [flyTo])
+
+  // Requested jumps (details → a week).
+  useEffect(() => {
+    if (!jumpTo) return
+    if (modeRef.current === 'intro') return
+    setMode('focus'); flyTo(jumpTo.index, { click: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTo?.nonce])
 
   // Re-centre on resize/rotation (and on the intro→focus handover) without animation.
   useEffect(() => {

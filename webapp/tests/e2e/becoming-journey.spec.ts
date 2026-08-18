@@ -90,10 +90,16 @@ test('intro plays, lands on the current week; swipe back; pinch out to the line;
   // Details sheet.
   await page.locator('[data-testid="week-card-details"]').click()
   await expect(page.locator('[data-testid="becoming-details"]')).toBeVisible()
-  await expect(page.locator('[data-testid="becoming-nutrition"]')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-testid="details-screen-mind"]')).toBeVisible({ timeout: 30_000 })
+  await page.waitForTimeout(800)
   await page.screenshot({ path: 'tests/e2e/screenshots/journey-details.png' })
-  await page.locator('button[aria-label="Close details"]').click()
+  await page.locator('[data-testid="details-tab-fuel"]').click()
+  await expect(page.locator('[data-testid="details-screen-fuel"]')).toBeVisible()
+  await page.screenshot({ path: 'tests/e2e/screenshots/journey-details-fuel.png' })
+  // Escape closes the sheet, not the page.
+  await page.keyboard.press('Escape')
   await expect(page.locator('[data-testid="becoming-details"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid="journey-stage"]')).toBeVisible()
 
   // Keyboard.
   await page.keyboard.press('End')

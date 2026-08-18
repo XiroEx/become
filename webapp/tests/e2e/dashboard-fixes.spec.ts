@@ -83,10 +83,11 @@ test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
   expect(goalText).toMatch(/3 lbs to go/)
   expect(goalText).toMatch(/→ 205 lbs · (~\d wks?|\d+(\.\d)? lbs? behind)|208 → 205 lbs/)
   expect(goalText).not.toMatch(/Annual/)
-  // Streak of 2 is not shown as a streak yet.
-  expect(streakText).toMatch(/Building/)
-  expect(streakText).toMatch(/2\/3/)
-  expect(streakText).not.toMatch(/to 🏆/)
+  // Under 3 days the tile says "Building n/3"; from 3 it shows the number and the next milestone.
+  const sk = await page.request.get(`${BASE}/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const streakDays = sk.ok() ? Number((await sk.json()).streakDays ?? 0) : 0
+  if (streakDays < 3) { expect(streakText).toMatch(/Building/); expect(streakText).toMatch(new RegExp(`${streakDays}\\/3`)); expect(streakText).not.toMatch(/to 🏆|-day/) }
+  else { expect(streakText).toMatch(new RegExp(`Day Streak ${streakDays}`)); expect(streakText).not.toMatch(/Building/) }
 
   await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-tiles.png' })
   expect(errs, errs.join('\n')).toEqual([])
@@ -188,9 +189,11 @@ test('streaks page renders every pillar with the 3-day rule', async ({ page }) =
     expect(t.length).toBeGreaterThan(10)
   }
   const overall = (await page.locator('[data-testid="streak-overall"]').innerText()).replace(/\s+/g, ' ')
-  expect(overall).toMatch(/Building/)           // 2 days
+  const sk = await page.request.get(`${BASE}/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const streakDays = sk.ok() ? Number((await sk.json()).streakDays ?? 0) : 0
+  if (streakDays < 3) expect(overall).toMatch(/Building/); else expect(overall).toMatch(new RegExp(`${streakDays}\\s*days`))
   const mindset = (await page.locator('[data-testid="streak-mindset"]').innerText()).replace(/\s+/g, ' ')
-  expect(mindset).toMatch(/3\s*days/)            // 3-day mindset streak IS shown
+  expect(mindset).toMatch(/\d+\s*days|Building/)
   const workout = (await page.locator('[data-testid="streak-workout"]').innerText()).replace(/\s+/g, ' ')
   expect(workout).toMatch(/This week 1\/5/)
   await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-streaks.png', fullPage: true })

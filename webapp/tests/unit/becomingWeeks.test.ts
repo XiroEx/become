@@ -165,3 +165,20 @@ test('a collapsed gap is labelled from its keys, end month included', () => {
   const w = buildWeeks({ ...base, days: days({ '2026-07-05': { workouts: ['x'] }, '2026-08-17': { foodLogged: true } }) })
   assert.equal(w[1].label, 'Jul 12 – Aug 15')
 })
+
+test('the live week speaks in the present tense until Sunday', () => {
+  // Tue Aug 18: one workout Mon, one meal, target 5 → "1 down, 4 to go"
+  let w = buildWeeks({ ...base, weeklyTarget: 5, days: days({ '2026-08-03': { workouts: ['x'] }, '2026-08-17': { workouts: ['a'], foodLogged: true } }), todayKey: '2026-08-18' })
+  let live = w[w.length - 1]
+  assert.equal(live.headline, '1 down, 4 to go'); assert.match(live.sub, /days left/)
+  // Two PRs on the live week → "so far", not "the strongest week on paper so far." past-tense form
+  w = buildWeeks({ ...base, days: days({ '2026-08-03': { workouts: ['x'] }, '2026-08-17': { workouts: ['a'], prs: [{ name: 'Bench', e1RM: 200 }, { name: 'Curl', e1RM: 100 }] } }), todayKey: '2026-08-18' })
+  live = w[w.length - 1]
+  assert.equal(live.headline, '2 personal records, so far'); assert.match(live.sub, /days left/)
+  // Frozen weeks keep the past tense
+  const frozen = w.find(x => x.weekKey === '2026-08-02')!
+  assert.match(frozen.headline, /Where it started/)
+  // Week hit early
+  w = buildWeeks({ ...base, weeklyTarget: 2, days: days({ '2026-08-03': { workouts: ['x'] }, '2026-08-16': { workouts: ['a'] }, '2026-08-17': { workouts: ['b'] } }), todayKey: '2026-08-18' })
+  assert.match(w[w.length - 1].headline, /Week hit, 4 days left/)
+})
