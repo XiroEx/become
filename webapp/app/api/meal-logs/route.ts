@@ -6,6 +6,7 @@ import Food from '@/models/Food'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 import { computeTotalNutrition, IMealNutrition } from '@/models/Meal'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 import { readTzOffset, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
 import mongoose from 'mongoose'
 
@@ -175,6 +176,9 @@ export async function POST(request: NextRequest) {
     }
 
     const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
+
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
 
     return NextResponse.json({
       success: true,
