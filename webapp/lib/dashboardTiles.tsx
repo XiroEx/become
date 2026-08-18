@@ -269,7 +269,9 @@ function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
   return (
     <StatTile
       size={size}
-      href="/dashboard/streaks"
+      // The training log — the sessions this number counts. (It used to open the
+      // streaks page, which is where the flame tile goes.)
+      href="/dashboard/history"
       accent="green"
       icon={<TrendingUp className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="This Week"
@@ -521,7 +523,7 @@ function renderWorkouts(ctx: DashboardTileContext, size: StatTileSize = '1x1'): 
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress#workouts"
+      href="/dashboard/history"
       accent="zinc"
       icon={<Dumbbell className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="Total Workouts"
