@@ -4,6 +4,7 @@ import MealLog from '@/models/MealLog'
 import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
 import { hasFeature, loadUserEntitlement } from '@/lib/entitlements'
+import { bustTilesCache } from '@/lib/redis'
 import mongoose from 'mongoose'
 
 /**
@@ -149,6 +150,9 @@ export async function POST(request: NextRequest) {
       log.totalNutrition = computeTotalNutrition(remaining as never)
       await log.save()
     }
+
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(auth.userId)
 
     return NextResponse.json({
       success: true,

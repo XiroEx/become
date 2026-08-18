@@ -5,6 +5,7 @@ import MealPlan from '@/models/MealPlan'
 import MealLog from '@/models/MealLog'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 import { defaultTimeForTag } from '@/lib/mealPlanTimes'
 import { serializePlan, cloneItemsForSnapshot } from '@/lib/mealPlanShared'
 
@@ -128,6 +129,9 @@ export async function POST(
       const Meal = (await import('@/models/Meal')).default
       await Meal.updateOne({ _id: flipped.mealId }, { $inc: { usageCount: 1 } }).catch(() => null)
     }
+
+    // Meal logs feed dashboard tiles — invalidate so they show immediately.
+    await bustTilesCache(authResult.userId!)
 
     return NextResponse.json({
       success: true,
