@@ -304,6 +304,12 @@ export default defineConfig({
       },
     },
     {
+      name: 'becoming-journey',
+      testMatch: '**/becoming-journey.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, video: 'off', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+    },
+    {
       name: 'goals',
       testMatch: '**/goals.spec.ts',
       timeout: 120_000,
