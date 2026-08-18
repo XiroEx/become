@@ -20,6 +20,7 @@ import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCar
 import MoodGatewayBanner from '@/components/dashboard/MoodGatewayBanner'
 import BecomingDoor from '@/components/dashboard/BecomingDoor'
 import type { GoalProgress } from '@/lib/goals/progress'
+import type { StreaksLite } from '@/lib/streaks/tile'
 import { AnimatePresence } from 'framer-motion'
 import { kgToUnit } from '@/lib/dashboard/goalTile'
 import { describeNutritionTrend, type NutritionTrend } from '@/lib/dashboard/nutritionTrend'
@@ -100,6 +101,8 @@ export default function DashboardClient() {
   const [weeklyAvailability, setWeeklyAvailability] = useState<number | null>(null)
   const [mindSummary, setMindSummary] = useState<MindSummary | null>(null)
   const [goalProgress, setGoalProgress] = useState<GoalProgress | null>(null)
+  // Every streak (day / workout / nutrition / mindset / super) — the streak tile pages through them.
+  const [streaksData, setStreaksData] = useState<StreaksLite | null>(null)
   // Set when the daily check-in just logged a mood → the one-line gateway to
   // Mindset shows under the tiles until dismissed or the next load.
   const [gatewayMood, setGatewayMood] = useState<MoodLevel | null>(null)
@@ -247,6 +250,18 @@ export default function DashboardClient() {
       }
     }
 
+    // Every streak, for the paging streak tile.
+    async function fetchStreaks() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`/api/streaks?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setStreaksData(await res.json())
+      } catch {
+        // non-critical
+      }
+    }
+
     // Fetch user profile for goal-aware UI framing
     async function fetchProfile() {
       try {
@@ -342,6 +357,7 @@ export default function DashboardClient() {
         fetchProgress(),
         fetchNutrition(),
         fetchStreak(),
+        fetchStreaks(),
         fetchProfile(),
         fetchLayout(),
         fetchMind(),
@@ -528,6 +544,7 @@ export default function DashboardClient() {
   const tileCtx = useMemo<DashboardTileContext>(() => ({
     data,
     streakData,
+    streaks: streaksData,
     nutritionData: nutritionData
       ? {
           calories: nutritionData.calories,
@@ -546,7 +563,7 @@ export default function DashboardClient() {
     // progress load is in flight. A cache hit clears `loading` synchronously on
     // mount, so reopens never show the skeleton.
     loading,
-  }), [data, streakData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange, loading])
+  }), [data, streakData, streaksData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange, loading])
 
   return (
     <>

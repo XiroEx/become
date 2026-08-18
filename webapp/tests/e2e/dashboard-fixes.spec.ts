@@ -83,11 +83,29 @@ test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
   expect(goalText).toMatch(/3 lbs to go/)
   expect(goalText).toMatch(/→ 205 lbs · (~\d wks?|\d+(\.\d)? lbs? behind)|208 → 205 lbs/)
   expect(goalText).not.toMatch(/Annual/)
-  // Under 3 days the tile says "Building n/3"; from 3 it shows the number and the next milestone.
-  const sk = await page.request.get(`${BASE}/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
-  const streakDays = sk.ok() ? Number((await sk.json()).streakDays ?? 0) : 0
-  if (streakDays < 3) { expect(streakText).toMatch(/Building/); expect(streakText).toMatch(new RegExp(`${streakDays}\\/3`)); expect(streakText).not.toMatch(/to 🏆|-day/) }
-  else { expect(streakText).toMatch(new RegExp(`Day Streak ${streakDays}`)); expect(streakText).not.toMatch(/Building/) }
+  // The tile pages through every streak: a super streak leads (pulsing orange),
+  // otherwise the day streak does — "Building n/3" until it reaches three.
+  const sr = await page.request.get(`${BASE}/api/streaks?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const streaks = sr.ok() ? await sr.json() : null
+  const superDays = Number(streaks?.pillars?.super?.current ?? 0)
+  const streakDays = Number(streaks?.overall?.current ?? 0)
+  expect(await page.locator('[data-testid="streak-tile"]').getAttribute('data-page')).toBe(superDays >= 3 ? 'super' : 'overall')
+  if (superDays >= 3) {
+    expect(streakText).toMatch(/Super Streak/)
+    expect(await page.locator('[data-testid="streak-super-value"]').innerText()).toBe(String(superDays))
+  } else if (streakDays < 3) {
+    expect(streakText).toMatch(/Building/); expect(streakText).toMatch(new RegExp(`${streakDays}\\/3`))
+  } else {
+    expect(streakText).toMatch(new RegExp(`Day Streak ${streakDays}`))
+  }
+  // Paging: the dots move it to another streak without navigating away.
+  const dots = page.locator('[data-testid="streak-tile-dots"] button')
+  if (await dots.count() > 1) {
+    await dots.nth(1).click()
+    await page.waitForTimeout(500)
+    expect(page.url()).toContain('/dashboard')
+    expect(await page.locator('[data-testid="streak-tile"]').getAttribute('data-page')).not.toBe(superDays >= 3 ? 'super' : 'overall')
+  }
 
   await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-tiles.png' })
   expect(errs, errs.join('\n')).toEqual([])
