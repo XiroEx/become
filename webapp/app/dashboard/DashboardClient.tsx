@@ -18,6 +18,8 @@ import ProgramNudgeModal, {
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
 import MoodGatewayBanner from '@/components/dashboard/MoodGatewayBanner'
+import BecomingDoor from '@/components/dashboard/BecomingDoor'
+import type { GoalProgress } from '@/lib/goals/progress'
 import { AnimatePresence } from 'framer-motion'
 import { kgToUnit } from '@/lib/dashboard/goalTile'
 import { describeNutritionTrend, type NutritionTrend } from '@/lib/dashboard/nutritionTrend'
@@ -97,6 +99,7 @@ export default function DashboardClient() {
   // alone rather than a fraction against a target nobody set.
   const [weeklyAvailability, setWeeklyAvailability] = useState<number | null>(null)
   const [mindSummary, setMindSummary] = useState<MindSummary | null>(null)
+  const [goalProgress, setGoalProgress] = useState<GoalProgress | null>(null)
   // Set when the daily check-in just logged a mood → the one-line gateway to
   // Mindset shows under the tiles until dismissed or the next load.
   const [gatewayMood, setGatewayMood] = useState<MoodLevel | null>(null)
@@ -281,6 +284,18 @@ export default function DashboardClient() {
       }
     }
 
+    // The plan per pillar (lib/goals) — feeds the Becoming doorway at the top.
+    async function fetchGoals() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setGoalProgress(await res.json())
+      } catch {
+        // non-critical
+      }
+    }
+
     // Fetch the unified dashboard tile layout (source of truth for the grid).
     // Owned here so a save in the customizer can update it in place without a
     // full reload.
@@ -330,6 +345,7 @@ export default function DashboardClient() {
         fetchProfile(),
         fetchLayout(),
         fetchMind(),
+        fetchGoals(),
       ])
       checkProgramNudge(!!progressData?.currentProgram)
     }
@@ -571,6 +587,9 @@ export default function DashboardClient() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Dashboard</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Track your fitness journey</p>
       </header>
+
+      {/* The Becoming — the doorway, first thing on the page. */}
+      <BecomingDoor goals={goalProgress} mind={mindSummary} />
 
       {/* Unified tile grid — one themed grid rendering stat + metric +
           smart-rotating tiles (and dashboard-surface suggestion cards) from
