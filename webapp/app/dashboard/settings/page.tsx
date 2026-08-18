@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
+import PacePicker from '@/components/goals/PacePicker'
+import { defaultPaceKg } from '@/lib/goals/pace'
 import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import Toast from '@/components/ui/Toast'
@@ -72,6 +74,7 @@ interface NotificationPrefs {
   reEngagement: boolean
   chatMessage: boolean
   mindReminder: boolean
+  goalNudge: boolean
 }
 
 type NotificationPrefKey = keyof NotificationPrefs
@@ -82,6 +85,7 @@ interface PreferencesResponse {
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
   { key: 'mindReminder', label: 'Daily mindset session', sublabel: 'Morning nudge when your session is ready' },
+  { key: 'goalNudge', label: 'Goal nudges', sublabel: 'Behind pace, protein floor missed, tight training week — evenings, at most one a day' },
   { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
   { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
   { key: 'mealReminder', label: 'Meal log reminder', sublabel: "Evening nudge when you haven't logged any food" },
@@ -128,6 +132,9 @@ export default function SettingsPage() {
   // Weight — display values in current unit
   const [weightDisplay, setWeightDisplay] = useState<string>('')
   const [targetWeightDisplay, setTargetWeightDisplay] = useState<string>('')
+  // Pace toward the target — lives on the dated Goal (/api/goals), not the profile.
+  const [paceKgPerWeek, setPaceKgPerWeek] = useState<number | null>(null)
+  const [nutritionDirection, setNutritionDirection] = useState<'lose' | 'maintain' | 'gain' | null>(null)
 
   const [equipmentAccess, setEquipmentAccess] = useState<EquipmentType[]>([])
   const [injuryNotes, setInjuryNotes] = useState<string>('')
@@ -144,6 +151,7 @@ export default function SettingsPage() {
     streakAtRisk: true,
     workoutReminder: true,
     mindReminder: true,
+    goalNudge: true,
     mealReminder: true,
     reEngagement: true,
     chatMessage: true,
@@ -179,6 +187,17 @@ export default function SettingsPage() {
 
       const unit: WeightUnit = p.weightUnit ?? 'lbs'
       setWeightUnit(unit)
+      setNutritionDirection(p.nutritionDirection ?? null)
+
+      // The plan's pace (chosen at onboarding, or defaulted by direction).
+      fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => (r.ok ? r.json() : null))
+        .then((g: { nutrition?: { target?: { paceKgPerWeek?: number | null }; direction?: 'lose' | 'maintain' | 'gain' | null } } | null) => {
+          if (!g?.nutrition) return
+          if (g.nutrition.direction) setNutritionDirection(g.nutrition.direction)
+          setPaceKgPerWeek(g.nutrition.target?.paceKgPerWeek ?? null)
+        })
+        .catch(() => {})
 
       if (unit === 'lbs') {
         // Convert stored cm → ft/in
@@ -225,6 +244,7 @@ export default function SettingsPage() {
       const p = data.preferences ?? {}
       setNotifPrefs({
         mindReminder: p.mindReminder ?? true,
+        goalNudge: p.goalNudge ?? true,
         streakAtRisk: p.streakAtRisk ?? true,
         workoutReminder: p.workoutReminder ?? true,
         mealReminder: p.mealReminder ?? true,
@@ -444,6 +464,15 @@ export default function SettingsPage() {
         body: JSON.stringify({ name, profile }),
       })
       if (res.ok) {
+        // Pace rides on the goal, which ensureGoals rebuilds from the profile we
+        // just saved (a changed target starts a fresh plan from today's weight).
+        if (storedTargetKg !== undefined && paceKgPerWeek) {
+          await fetch('/api/goals', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pillar: 'nutrition', paceKgPerWeek, tz: new Date().getTimezoneOffset() }),
+          }).catch(() => {})
+        }
         showToast('Profile saved successfully')
       } else {
         showToast('Failed to save profile', 'error')
@@ -701,6 +730,27 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+
+            {/* Pace toward the target — the plan behind the Goal tile and the Becoming page. */}
+            {targetWeightDisplay !== '' && weightDisplay !== '' && (() => {
+              const cur = Number(weightDisplay), tgt = Number(targetWeightDisplay)
+              const dir: 'lose' | 'maintain' | 'gain' =
+                nutritionDirection && nutritionDirection !== 'maintain' ? nutritionDirection
+                : Math.abs(cur - tgt) < (isImperial ? 2 : 0.9) ? 'maintain' : tgt < cur ? 'lose' : 'gain'
+              if (dir === 'maintain') return null
+              return (
+                <div className="mt-4">
+                  <PacePicker
+                    unit={isImperial ? 'lbs' : 'kg'}
+                    direction={dir}
+                    valueKgPerWeek={paceKgPerWeek ?? defaultPaceKg(dir)}
+                    onChange={setPaceKgPerWeek}
+                    latestWeight={cur}
+                    targetWeight={tgt}
+                  />
+                </div>
+              )
+            })()}
           </section>
 
           <SaveButton />

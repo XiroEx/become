@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       .select('notificationPrefs')
       .lean()
 
-    const defaults = { streakAtRisk: true, workoutReminder: true, mealReminder: true, reEngagement: true, chatMessage: true, mindReminder: true }
+    const defaults = { streakAtRisk: true, workoutReminder: true, mealReminder: true, reEngagement: true, chatMessage: true, mindReminder: true, goalNudge: true }
     return NextResponse.json({ preferences: { ...defaults, ...progress?.notificationPrefs } })
   } catch (error) {
     console.error('Error fetching notification preferences:', error)
@@ -32,7 +32,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const allowed = ['streakAtRisk', 'workoutReminder', 'mealReminder', 'reEngagement', 'chatMessage', 'mindReminder']
+    const allowed = ['streakAtRisk', 'workoutReminder', 'mealReminder', 'reEngagement', 'chatMessage', 'mindReminder', 'goalNudge']
     const updates: Record<string, boolean> = {}
     for (const key of allowed) {
       if (typeof body[key] === 'boolean') updates[`notificationPrefs.${key}`] = body[key]

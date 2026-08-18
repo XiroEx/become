@@ -63,6 +63,7 @@ export interface UserProgressData {
     startWeightKg: number | null
     weeklyAvailability: number | null
     weightUnit: 'lbs' | 'kg'
+    pace?: { kgPerWeek: number | null; status: string; etaWeeks: number | null; eta: string; behindByKg: number } | null
   } | null
   longestStreak?: number
 }
@@ -304,6 +305,7 @@ function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Reac
     latestWeight: weights.length ? weights[weights.length - 1].value : null,
     earliestWeight: weights.length ? weights[0].value : null,
     weightUnit: unit,
+    pace: data.goal?.pace ?? null,
     program: data.currentProgram
       ? {
           name: data.currentProgram.name,

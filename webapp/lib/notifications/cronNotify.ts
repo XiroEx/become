@@ -121,6 +121,12 @@ export const WORKOUT_REMINDER_END_HOUR = 11
  *  land in the same minute; they are separate reminders, not competing ones. */
 export const MIND_REMINDER_START_HOUR = 8
 export const MIND_REMINDER_END_HOUR = 11
+/** Goal nudges (behind pace, protein floor, tight training week) — early evening,
+ *  when the day's logging is mostly done and there is still time to act. */
+export const GOAL_NUDGE_START_HOUR = 17
+export const GOAL_NUDGE_END_HOUR = 20
+/** The same rule is not repeated within this many days. */
+export const GOAL_NUDGE_KEY_COOLDOWN_DAYS = 3
 export const REENGAGEMENT_START_HOUR = 12
 export const REENGAGEMENT_END_HOUR = 18
 export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'
