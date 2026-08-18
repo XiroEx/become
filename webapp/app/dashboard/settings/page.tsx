@@ -75,6 +75,7 @@ interface NotificationPrefs {
   chatMessage: boolean
   mindReminder: boolean
   goalNudge: boolean
+  superStreakAtRisk: boolean
 }
 
 type NotificationPrefKey = keyof NotificationPrefs
@@ -86,6 +87,7 @@ interface PreferencesResponse {
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
   { key: 'mindReminder', label: 'Daily mindset session', sublabel: 'Morning nudge when your session is ready' },
   { key: 'goalNudge', label: 'Goal nudges', sublabel: 'Behind pace, protein floor missed, tight training week — evenings, at most one a day' },
+  { key: 'superStreakAtRisk', label: 'Super streak at risk', sublabel: 'Late afternoon, when one pillar is still missing and the streak would break tonight' },
   { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
   { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
   { key: 'mealReminder', label: 'Meal log reminder', sublabel: "Evening nudge when you haven't logged any food" },
@@ -152,6 +154,7 @@ export default function SettingsPage() {
     workoutReminder: true,
     mindReminder: true,
     goalNudge: true,
+    superStreakAtRisk: true,
     mealReminder: true,
     reEngagement: true,
     chatMessage: true,
@@ -245,6 +248,7 @@ export default function SettingsPage() {
       setNotifPrefs({
         mindReminder: p.mindReminder ?? true,
         goalNudge: p.goalNudge ?? true,
+        superStreakAtRisk: p.superStreakAtRisk ?? true,
         streakAtRisk: p.streakAtRisk ?? true,
         workoutReminder: p.workoutReminder ?? true,
         mealReminder: p.mealReminder ?? true,
