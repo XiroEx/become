@@ -22,6 +22,8 @@ import {
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
 import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
+import PacePicker from '@/components/goals/PacePicker'
+import { defaultPaceKg, kgToUnit as goalKgToUnit } from '@/lib/goals/pace'
 import {
   explainCalories,
   explainMacro,
@@ -71,6 +73,9 @@ interface ProfileData {
   heightCm?: number
   currentWeightKg?: number
   targetWeightKg?: number
+  /** Chosen pace toward the target (kg/week). Lives on the Goal, not the profile;
+   *  posted to /api/goals right after the profile is saved. */
+  paceKgPerWeek?: number
   equipmentAccess?: EquipmentType[]
   injuryNotes?: string
   weeklyAvailability?: number
@@ -408,7 +413,7 @@ export default function OnboardingPage() {
         },
         body: JSON.stringify({
           profile: {
-            ...payload,
+            ...Object.fromEntries(Object.entries(payload).filter(([k]) => k !== 'paceKgPerWeek')),
             // fitnessGoal stays the single primary goal — the dashboard, nudge
             // modal, profile icon and AI context all read that one field.
             fitnessGoal: payloadGoals[0],
@@ -432,6 +437,19 @@ export default function OnboardingPage() {
       // user who entered 175 lb got a first log entry of 79 — which then showed
       // up as "79 lbs" on the dashboard/progress chart until they logged again.
       const seeds: Promise<unknown>[] = []
+
+      // The chosen pace lives on the dated Goal (lib/goals), created from the
+      // profile we just saved. Default by direction if the member never touched
+      // the chips.
+      if (payload.targetWeightKg && payloadDirection !== 'maintain') {
+        seeds.push(
+          fetch('/api/goals', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pillar: 'nutrition', paceKgPerWeek: payload.paceKgPerWeek ?? defaultPaceKg(payloadDirection), tz: new Date().getTimezoneOffset() }),
+          }).catch(() => {})
+        )
+      }
 
       if (payload.currentWeightKg) {
         const unit = payload.weightUnit ?? 'lbs'
@@ -1243,6 +1261,20 @@ function Step3({
             </div>
           )}
         </div>
+
+        {/* ── Pace toward the target ─────────────────────────────────────── */}
+        {showTargetWeight && profile.targetWeightKg && profile.currentWeightKg ? (
+          <div className="pt-1">
+            <PacePicker
+              unit={useImperial ? 'lbs' : 'kg'}
+              direction={direction}
+              valueKgPerWeek={profile.paceKgPerWeek ?? defaultPaceKg(direction)}
+              onChange={(kg) => onChange({ paceKgPerWeek: kg })}
+              latestWeight={goalKgToUnit(profile.currentWeightKg, useImperial ? 'lbs' : 'kg')}
+              targetWeight={goalKgToUnit(profile.targetWeightKg, useImperial ? 'lbs' : 'kg')}
+            />
+          </div>
+        ) : null}
 
         {/* ── Calorie direction ─────────────────────────────────────────── */}
         <div className="pt-2">

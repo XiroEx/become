@@ -112,3 +112,11 @@ test('delta formatting keeps a decimal only when it matters', () => {
   assert.equal(formatWeightDelta(12.4, 'lbs'), '12 lbs')
   assert.equal(formatWeightDelta(-0.8, 'kg'), '0.8 kg')
 })
+
+test('with a pace read the footer says the ETA, or how far behind', () => {
+  const base = { fitnessGoal: 'gain_muscle', targetWeightKg: 205 * KG, startWeightKg: 208 * KG, latestWeight: 208, weightUnit: 'lbs' as const }
+  assert.equal(describeGoal({ ...base, pace: { status: 'on', eta: '~3 wks', behindByKg: 0 } }).footer, '→ 205 lbs · ~3 wks')
+  assert.equal(describeGoal({ ...base, pace: { status: 'ahead', eta: '~2 wks', behindByKg: 0 } }).footer, '→ 205 lbs · ~2 wks · ahead')
+  assert.equal(describeGoal({ ...base, pace: { status: 'behind', eta: '~4 wks', behindByKg: 1.5 * KG } }).footer, '→ 205 lbs · 1.5 lbs behind')
+  assert.equal(describeGoal({ ...base, pace: null }).footer, '208 → 205 lbs')
+})

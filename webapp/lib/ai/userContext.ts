@@ -47,6 +47,8 @@ export interface UserContext {
    *  member telling us how they feel RIGHT NOW — the Mind session composer
    *  should open from it rather than the 7-day average. */
   moodToday?: { value: number; label: string; hoursAgo: number }
+  /** The member's plan (lib/goals): where they stand against their own targets. */
+  goals?: { nutrition?: string; training?: string }
   program?: { name: string; phase?: number; day?: string }
   /** Schedule adherence for the active program — so the AI knows when the user
    *  is behind (missed / overdue) and what their next session actually is. */
@@ -194,6 +196,27 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     const labels: Record<number, string> = { 1: 'Bad', 2: 'Not great', 3: 'Okay', 4: 'Pretty good', 5: 'Great' }
     ctx.moodToday = { value, label: labels[value] ?? String(value), hoursAgo: Math.max(0, Math.round((now - at) / 3_600_000)) }
   }
+
+  // The plan: pace / ETA / adherence for nutrition, week + consistency for
+  // training, and each pillar's "work on next". Best effort — never blocks.
+  try {
+    const { computeGoalProgress } = await import('@/lib/goals/progress')
+    const gp = await computeGoalProgress(userId, 0)
+    const n = gp.nutrition, t = gp.training
+    const goals: { nutrition?: string; training?: string } = {}
+    if (n.target.weight) {
+      const bits = [`target ${Math.round(n.target.weight)} ${n.unit}${n.direction ? ` (${n.direction})` : ''}`]
+      if (n.now.weight != null) bits.push(`now ${Math.round(n.now.weight)}`)
+      if (n.pace) bits.push(n.pace.status === 'behind' ? `behind pace by ${(n.pace.behindByKg / 0.45359237).toFixed(1)} lb` : n.pace.status === 'ahead' ? 'ahead of pace' : n.pace.status === 'on' ? `on pace, ${n.pace.eta}` : n.pace.status)
+      if (n.adherence) bits.push(`logged ${n.adherence.logDays}/7 days${n.adherence.proteinJudged ? `, protein hit ${n.adherence.proteinDays}/7` : ''}`)
+      bits.push(`next: ${n.suggestion.title}`)
+      goals.nutrition = bits.join('; ')
+    }
+    if (t.target.daysPerWeek) {
+      goals.training = `${t.thisWeek.done}/${t.target.daysPerWeek} this week${t.thisWeek.weekLost ? ' (week off track)' : ''}${t.avgLast4 != null ? `, avg ${t.avgLast4}/wk last 4` : ''}; next: ${t.suggestion.title}`
+    }
+    if (goals.nutrition || goals.training) ctx.goals = goals
+  } catch { /* optional */ }
 
   // Active program: the one the user has actually STARTED and is most recently
   // active in. We must exclude programs whose startDate is in the future (e.g.
@@ -353,6 +376,8 @@ function renderSummary(c: UserContext): string {
   if (typeof c.workoutsLast7Days === 'number') lines.push(`Workouts in last 7 days: ${c.workoutsLast7Days}.`)
   if (c.moodToday) lines.push(`Mood check-in TODAY: ${c.moodToday.label} (${c.moodToday.value}/5), ${c.moodToday.hoursAgo === 0 ? 'within the hour' : `${c.moodToday.hoursAgo}h ago`}. Open from this — acknowledge it before anything else.`)
   if (c.mood) lines.push(`Mood (7-day avg): ${c.mood.avg7}/5 over ${c.mood.entries7} check-in${c.mood.entries7 === 1 ? '' : 's'}.`)
+  if (c.goals?.nutrition) lines.push(`Nutrition plan: ${c.goals.nutrition}.`)
+  if (c.goals?.training) lines.push(`Training plan: ${c.goals.training}.`)
   if (c.program) lines.push(`Program: ${c.program.name}${c.program.phase ? `, phase ${c.program.phase}` : ''}${c.program.day ? `, ${c.program.day}` : ''}.`)
   if (c.schedule) {
     const s = c.schedule

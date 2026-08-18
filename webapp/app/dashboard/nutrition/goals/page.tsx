@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { ArrowLeft, Save, Calculator } from 'lucide-react'
 import { Card } from '@/components/ui'
+import PlanCard from '@/components/goals/PlanCard'
 import {
   ACTIVITY_LABELS,
   DIRECTION_ADJUSTMENT,
@@ -352,6 +353,9 @@ export default function NutritionGoalsPage() {
       </div>
 
       {/* User Stats */}
+      {/* The weight goal as a plan: target, pace, ETA, on/behind pace. */}
+      <PlanCard className="mb-4 sm:mb-6" />
+
       <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
         <div className="flex flex-wrap gap-6">

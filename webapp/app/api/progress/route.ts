@@ -246,14 +246,24 @@ export async function GET(request: NextRequest) {
     const targetWeightKg = user?.profile?.targetWeightKg
     const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
     const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
+    // The dated goal (lib/goals): the plan's baseline and pace. Cheap read of the
+    // active document; ensureGoals runs only when there is a target and no goal
+    // yet (first load after this shipped, or right after onboarding).
+    const nutritionGoal = await readNutritionGoalForTile(authResult.userId!, {
+      targetWeightKg: targetWeightKg ?? null,
+      weightUnit: user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs',
+      latestWeightEntry: (progress.weightHistory as Array<{ weight: number; unit?: 'lbs' | 'kg'; date: Date }> | undefined)?.slice(-1)[0] ?? null,
+    })
     const goal = {
       fitnessGoal: user?.profile?.fitnessGoal ?? null,
       nutritionDirection: user?.profile?.nutritionDirection ?? null,
       targetWeightKg: targetWeightKg ?? null,
-      // Weight recorded at onboarding — the "where you started" end of the bar.
-      startWeightKg: user?.profile?.currentWeightKg ?? null,
+      // Where the plan started — the goal's baseline (NOT profile.currentWeightKg,
+      // which every weigh-in overwrites).
+      startWeightKg: nutritionGoal?.baselineKg ?? null,
       weeklyAvailability,
       weightUnit: user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs',
+      pace: nutritionGoal?.pace ?? null,
     }
 
     const detailed = request.nextUrl.searchParams.get('detailed') === '1'
@@ -442,5 +452,42 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error updating progress:', error)
     return NextResponse.json({ error: 'Failed to update progress' }, { status: 500 })
+  }
+}
+
+
+/**
+ * The plan behind the Goal tile: baseline weight/date and the pace read.
+ * Returns null when the member has no target weight.
+ */
+async function readNutritionGoalForTile(
+  userId: string,
+  ctx: { targetWeightKg: number | null; weightUnit: 'lbs' | 'kg'; latestWeightEntry: { weight: number; unit?: 'lbs' | 'kg'; date: Date } | null },
+): Promise<{ baselineKg: number | null; pace: { kgPerWeek: number | null; status: string; etaWeeks: number | null; eta: string; behindByKg: number } | null } | null> {
+  if (!ctx.targetWeightKg) return null
+  try {
+    const { default: Goal } = await import('@/models/Goal')
+    let g = await Goal.findOne({ userId, pillar: 'nutrition', status: 'active' })
+      .select('baseline target').lean() as { baseline?: { weightKg?: number; date?: Date }; target?: { weightKg?: number; direction?: 'lose' | 'maintain' | 'gain'; paceKgPerWeek?: number } } | null
+    if (!g) {
+      const { ensureGoals } = await import('@/lib/goals/ensure')
+      g = (await ensureGoals(userId)).nutrition as typeof g
+    }
+    if (!g) return null
+    const { paceRead, formatEta, unitToKg } = await import('@/lib/goals/pace')
+    const baselineKg = g.baseline?.weightKg ?? null
+    const latest = ctx.latestWeightEntry
+    if (!baselineKg || !g.baseline?.date || !latest || !g.target?.weightKg || !g.target.direction) {
+      return { baselineKg, pace: null }
+    }
+    const r = paceRead({
+      baselineKg, baselineDate: new Date(g.baseline.date),
+      latestKg: unitToKg(latest.weight, latest.unit ?? ctx.weightUnit),
+      targetKg: g.target.weightKg, paceKg: g.target.paceKgPerWeek ?? 0, direction: g.target.direction, now: new Date(),
+    })
+    return { baselineKg, pace: { kgPerWeek: g.target.paceKgPerWeek ?? null, status: r.status, etaWeeks: r.etaWeeks, eta: formatEta(r.etaWeeks), behindByKg: r.behindByKg } }
+  } catch (err) {
+    console.error('goal tile read failed:', err)
+    return null
   }
 }

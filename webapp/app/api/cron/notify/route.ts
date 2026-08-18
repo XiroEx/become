@@ -5,6 +5,8 @@ import Schedule from '@/models/Schedule'
 import ProgramModel from '@/models/Program'
 import MealLog from '@/models/MealLog'
 import { sendPushToUser, type PushPayload } from '@/lib/pushNotification'
+import { computeGoalProgress } from '@/lib/goals/progress'
+import { pickGoalNudge } from '@/lib/goals/suggestions'
 import MindProgress from '@/models/MindProgress'
 import MindSession from '@/models/MindSession'
 import { mainSessionAvailable } from '@/lib/mindXP'
@@ -20,6 +22,9 @@ import {
   localHourForUser,
   workoutTitleForDay,
   MIND_REMINDER_START_HOUR,
+  GOAL_NUDGE_START_HOUR,
+  GOAL_NUDGE_END_HOUR,
+  GOAL_NUDGE_KEY_COOLDOWN_DAYS,
   slotDateKey,
   MIND_REMINDER_END_HOUR,
 } from '@/lib/notifications/cronNotify'
@@ -98,6 +103,7 @@ export async function GET(request: NextRequest) {
     reEngagement: tally(),
     mindReminder: tally(),
     scheduleSetup: tally(),
+    goalNudge: tally(),
   }
   const results = {
     missedSlotsSynced: 0,
@@ -412,6 +418,57 @@ export async function GET(request: NextRequest) {
     }
   } catch (err) {
     console.error('mind-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.65 Goal nudges (5pm-8pm LOCAL) ──────────────────────────────────────
+  // "Where to work on next" per pillar (lib/goals/suggestions) — the SAME rules
+  // the Becoming page shows, delivered as a push when they are actionable:
+  // behind pace, protein floor missed, logging thin, tight training week, a
+  // lift within reach. One goal nudge per member per local day, and the same
+  // rule is not repeated within GOAL_NUDGE_KEY_COOLDOWN_DAYS. Never fires for
+  // 'good' or 'info' reads — those are the page's job, not a notification's.
+  try {
+    const goalCandidates = await UserProgress.find({
+      'notificationPrefs.goalNudge': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of goalCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < GOAL_NUDGE_START_HOUR || userLocalHour > GOAL_NUDGE_END_HOUR) continue
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.goalNudge
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      let read
+      try {
+        read = await computeGoalProgress(String(progress.userId), progress.timezoneOffset ?? 0, now)
+      } catch { continue }
+      // Actionable only; warnings first; no repeat of the same rule inside the cooldown.
+      const pick = pickGoalNudge(
+        [read.nutrition.suggestion, read.training.suggestion],
+        { key: progress?.lastPushSentAt?.goalNudgeKey, at: progress?.lastPushSentAt?.goalNudgeKeyAt ? new Date(progress.lastPushSentAt.goalNudgeKeyAt).getTime() : null },
+        now.getTime(),
+        GOAL_NUDGE_KEY_COOLDOWN_DAYS * 86_400_000,
+      )
+      if (!pick) continue
+
+      await deliver(t.goalNudge, String(progress.userId), {
+        title: pick.title,
+        body: pick.sub,
+        url: pick.url,
+        tag: 'goal-nudge',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.goalNudge': now, 'lastPushSentAt.goalNudgeKey': pick.key, 'lastPushSentAt.goalNudgeKeyAt': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('goal-nudge sweep failed:', err)
     results.errors++
   }
 
