@@ -7,6 +7,8 @@ import MealLog from '@/models/MealLog'
 import { sendPushToUser, type PushPayload } from '@/lib/pushNotification'
 import { computeGoalProgress } from '@/lib/goals/progress'
 import { pickGoalNudge } from '@/lib/goals/suggestions'
+import { computeStreaks } from '@/lib/streaks/compute'
+import { superAtRisk, SUPER_AT_RISK_START_HOUR, SUPER_AT_RISK_END_HOUR, type StreaksLite } from '@/lib/streaks/tile'
 import MindProgress from '@/models/MindProgress'
 import MindSession from '@/models/MindSession'
 import { mainSessionAvailable } from '@/lib/mindXP'
@@ -104,6 +106,7 @@ export async function GET(request: NextRequest) {
     mindReminder: tally(),
     scheduleSetup: tally(),
     goalNudge: tally(),
+    superStreakAtRisk: tally(),
   }
   const results = {
     missedSlotsSynced: 0,
@@ -418,6 +421,49 @@ export async function GET(request: NextRequest) {
     }
   } catch (err) {
     console.error('mind-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.6b Super streak at risk (4pm-9pm LOCAL) ─────────────────────────────
+  // The super streak (food + mindset + trained, every day) is the hardest thing
+  // to hold, and it is lost silently at midnight. Late afternoon, while there is
+  // still time to act, tell the member exactly which piece is missing. Only for
+  // streaks long enough to be worth protecting, once per local day.
+  try {
+    const superCandidates = await UserProgress.find({
+      'notificationPrefs.superStreakAtRisk': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of superCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < SUPER_AT_RISK_START_HOUR || userLocalHour > SUPER_AT_RISK_END_HOUR) continue
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.superStreakAtRisk
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      let streaks: StreaksLite
+      try {
+        streaks = await computeStreaks(String(progress.userId), progress.timezoneOffset ?? 0, now) as unknown as StreaksLite
+      } catch { continue }
+      const risk = superAtRisk(streaks, userLocalHour)
+      if (!risk.atRisk) continue
+
+      await deliver(t.superStreakAtRisk, String(progress.userId), {
+        title: risk.title,
+        body: risk.body,
+        url: '/dashboard/streaks',
+        tag: 'super-streak-at-risk',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.superStreakAtRisk': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('super-streak sweep failed:', err)
     results.errors++
   }
 

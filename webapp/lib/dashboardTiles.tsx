@@ -13,8 +13,8 @@ import {
 import { Card, StatTile, type StatTileAccent, type StatTileSize } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import MoodCard, { type MoodLevel } from '@/components/MoodCard'
-import { STREAK_MILESTONES } from '@/lib/streakConstants'
-import { streakDisplay, STREAK_VISIBLE_MIN } from '@/lib/streaks/pillars'
+import type { StreaksLite } from '@/lib/streaks/tile'
+import StreakTile from '@/components/dashboard/StreakTile'
 import { describeGoal } from '@/lib/dashboard/goalTile'
 import type { MetricData } from '@/components/ProgressChart'
 
@@ -89,6 +89,8 @@ export interface DashboardTileContext {
   data: UserProgressData
   streakData: DashboardStreakData | null
   nutritionData: DashboardNutritionData | null
+  /** Every streak the member is running (GET /api/streaks) — the streak tile pages through them. */
+  streaks?: StreaksLite | null
   /** Workouts per week the member committed to; null when they never set one. */
   weeklyAvailability: number | null
   weightUnit: 'lbs' | 'kg'
@@ -172,64 +174,24 @@ function StatTileSkeleton({ size = '1x1' }: { size?: StatTileSize }): React.Reac
 /* -------------------------------------------------------------------------- */
 
 function renderStreak(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton size={size} />
-  const { streakData, data } = ctx
-  const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
-  const next = streakData?.nextMilestone
-  const shown = streakDisplay(days)
-
-  // A streak is not a streak until it is three long. Below that the tile says
-  // "Building" and counts up to the first real one, rather than announcing a
-  // one-day "streak" that resets tomorrow.
-  let footer: React.ReactNode
-  let value: React.ReactNode
-  if (!shown.visible) {
-    const pct = Math.round((Math.min(days, STREAK_VISIBLE_MIN) / STREAK_VISIBLE_MIN) * 100)
-    value = <span className="text-zinc-400 dark:text-zinc-500">Building</span>
-    footer = (
-      <div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-          <div className="h-full rounded-full bg-amber-500/70 transition-all duration-500" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
-          {days}/{STREAK_VISIBLE_MIN} · {shown.remaining} more {shown.remaining === 1 ? 'day' : 'days'}
-        </p>
-      </div>
-    )
-  } else {
-    value = days
-    if (next) {
-      const prev = STREAK_MILESTONES.filter(m => m <= days).slice(-1)[0] ?? 0
-      const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
-      footer = (
-        <div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <div className="h-full rounded-full bg-amber-500 transition-all duration-500" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{next - days}d to {next}-day 🏆</p>
-        </div>
-      )
-    } else {
-      footer = <PlaceholderFooter label="Every milestone reached" />
-    }
-  }
-
-  return (
-    <StatTile
-      size={size}
-      href="/dashboard/streaks"
-      accent="amber"
-      icon={<Flame className={`${size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
-      label="Day Streak"
-      labelExtra={streakData && streakData.streakFreezes > 0 ? (
-        <span className="ml-1.5 text-blue-500 dark:text-blue-400">
-          {'❄'.repeat(streakData.streakFreezes)}
-        </span>
-      ) : null}
-      value={value}
-      footer={footer}
-    />
-  )
+  // Every streak, one page at a time — super first when there is one. Falls
+  // back to the day streak alone while /api/streaks is still in flight.
+  const fallback: StreaksLite | null = ctx.streaks ?? (ctx.streakData ? {
+    overall: {
+      current: ctx.streakData.streakDays,
+      best: ctx.streakData.longestStreak,
+      nextMilestone: ctx.streakData.nextMilestone,
+      activeToday: ctx.streakData.activityToday,
+      freezes: ctx.streakData.streakFreezes,
+    },
+    pillars: {
+      workout: { unit: 'days', current: 0, best: 0, thisWeek: 0, target: null, weekLost: false },
+      nutrition: { current: 0, best: 0, activeToday: false },
+      mindset: { current: 0, best: 0, activeToday: false },
+      super: { current: 0, best: 0, activeToday: false, today: { nutrition: false, mindset: false, trained: false, restDay: false, weekOnTrack: true } },
+    },
+  } : null)
+  return <StreakTile streaks={fallback} size={size} loading={ctx.loading && !fallback} />
 }
 
 function renderMood(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {

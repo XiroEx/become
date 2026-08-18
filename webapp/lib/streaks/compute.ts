@@ -80,8 +80,8 @@ export interface StreaksPayload {
   credits: Record<CreditPillar, string[]>
 }
 
-export async function computeStreaks(userId: string, tz: number): Promise<StreaksPayload> {
-  const todayKey = localDateKey(null, tz)
+export async function computeStreaks(userId: string, tz: number, now = new Date()): Promise<StreaksPayload> {
+  const todayKey = localDateKey(null, tz, now)
   const fromKey = shiftDay(todayKey, -LOOKBACK_DAYS)
   const since = new Date(Date.UTC(
     Number(fromKey.slice(0, 4)), Number(fromKey.slice(5, 7)) - 1, Number(fromKey.slice(8, 10)),
