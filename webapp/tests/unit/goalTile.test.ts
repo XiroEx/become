@@ -25,7 +25,7 @@ test("Jon: build muscle, target 205, weighing 208 → '3 lbs to go', direction d
   assert.equal(v.footer, '208 → 205 lbs')
   assert.equal(v.direction, 'down', 'target below current weight → down, whatever the goal is called')
   assert.equal(v.pct, 0, 'no movement since onboarding yet')
-  assert.equal(v.href, '/dashboard/progress')
+  assert.equal(v.href, '/dashboard/nutrition/goals', 'the goal opens its plan, not the training log')
 })
 
 test('progress bar runs from the onboarding weight to the target', () => {

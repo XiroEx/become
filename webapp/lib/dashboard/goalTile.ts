@@ -147,7 +147,8 @@ export function describeGoal(input: GoalTileInputs): GoalTileView {
       value: atTarget ? 'On target' : `${formatWeightDelta(diff, unit)} to go`,
       footer,
       pct,
-      href: '/dashboard/progress',
+      // The plan behind the goal: target weight, pace and ETA live here.
+      href: '/dashboard/nutrition/goals',
       direction,
       atTarget,
     }
@@ -161,7 +162,7 @@ export function describeGoal(input: GoalTileInputs): GoalTileView {
       value: `${formatWeight(target, unit)} ${unit}`,
       footer: 'Log a weigh-in to track it',
       pct: 0,
-      href: '/dashboard/progress',
+      href: '/dashboard/progress',  // no weigh-in yet → go and log one
       direction: null,
       atTarget: false,
     }
