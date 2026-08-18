@@ -492,33 +492,22 @@ export default function MindJourney() {
         </motion.div>
       )}
 
-      {/* The Becoming — progression / training log. Unlocks after 5 main
-          sessions; until then it shows locked so the path ahead is visible. */}
-      {(progress?.mainSessionCount ?? 0) >= 5 ? (
-        <Link
-          href="/dashboard/mind/becoming"
-          data-tour="mind-becoming-link"
-          className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-        >
-          <div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Where you started, where you are, what&apos;s next
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-zinc-400" />
-        </Link>
-      ) : (
-        <div className="mt-3 flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/40">
-          <div>
-            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">The Becoming</p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Your training log — unlocks after your 5th main session ({progress?.mainSessionCount ?? 0}/5 done)
-            </p>
-          </div>
-          <Lock className="h-4 w-4 text-zinc-400" />
+      {/* The Becoming — where you started, where you are, what's next, for
+          all three pillars. Open to everyone (it used to unlock after the 5th
+          main session; the dashboard now leads with it). */}
+      <Link
+        href="/dashboard/mind/becoming"
+        data-tour="mind-becoming-link"
+        className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+      >
+        <div>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Where you started, where you are, what&apos;s next
+          </p>
         </div>
-      )}
+        <ChevronRight className="h-5 w-5 text-zinc-400" />
+      </Link>
 
       {/* AI coach — unlocks after 3 main sessions. */}
       {(progress?.mainSessionCount ?? 0) >= 3 ? (
