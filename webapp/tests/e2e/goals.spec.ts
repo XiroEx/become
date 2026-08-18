@@ -27,11 +27,15 @@ async function settle(page: Page) {
 
 test.use({ viewport: { width: 390, height: 844 } })
 
-test('Becoming shows Nutrition + Training then→now→next and a 3-pillar work-on card', async ({ page }) => {
+test('Becoming details show Nutrition + Training then→now→next and a 3-pillar work-on card', async ({ page }) => {
   const errs = await signIn(page)
+  await page.emulateMedia({ reducedMotion: 'reduce' }) // skip the stage intro; we are testing the details sheet
   await page.goto(`${BASE}/dashboard/mind/becoming`, { waitUntil: 'domcontentloaded' })
+  await page.waitForResponse(r => r.url().includes('/api/becoming/journey') && r.ok(), { timeout: 60_000 })
+  await settle(page)
+  await page.locator('[data-testid="week-card-details"]').click({ timeout: 15_000 })
   await page.waitForResponse(r => r.url().includes('/api/goals') && r.ok(), { timeout: 60_000 })
-  await settle(page); await page.waitForTimeout(1200)
+  await page.waitForTimeout(1200)
   const nut = (await page.locator('[data-testid="becoming-nutrition"]').innerText()).replace(/\s+/g, ' ')
   const tr = (await page.locator('[data-testid="becoming-training"]').innerText()).replace(/\s+/g, ' ')
   const wo = (await page.locator('[data-testid="becoming-work-on"]').innerText()).replace(/\s+/g, ' ')
@@ -44,7 +48,7 @@ test('Becoming shows Nutrition + Training then→now→next and a 3-pillar work-
   expect(wo).toMatch(/Where to work on/i)
   const rows = await page.locator('[data-testid="becoming-work-on"] a').count()
   expect(rows).toBe(2) // nutrition + training links (mind focus is a plain row)
-  await page.evaluate(() => { const el = document.getElementById('app-scroll') || document.scrollingElement!; el.scrollTop = 900 })
+  await page.locator('[data-testid="becoming-nutrition"]').scrollIntoViewIfNeeded()
   await page.waitForTimeout(400)
   await page.screenshot({ path: 'tests/e2e/screenshots/becoming-pillars.png' })
   expect(errs, errs.join('\n')).toEqual([])
