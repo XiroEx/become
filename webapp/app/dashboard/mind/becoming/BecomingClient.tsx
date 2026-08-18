@@ -1,298 +1,140 @@
 'use client'
 
-// The Becoming — where you started → where you are → what's next, for all
-// three pillars. Mind: the chapter arc, your Becoming score, a state/mood
-// trend and the evidence wall. Nutrition and Training: then → now → next
-// against the member's Goal (lib/goals). Plus one "where to work on next" per
-// pillar — the same rules the nudges read. Read-only.
+// The Becoming — the page. Loads the journey (every week, scored and placed
+// on the path) and hands it to the stage. "Details" opens the reading view
+// (BecomingDetails: arc, pillars, evidence wall) as a sheet over the stage.
 
-import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { Flame, Trophy, Lock, ArrowRight } from 'lucide-react'
-import PillarsSection from '@/components/becoming/PillarsSection'
-import PageTransition from '@/components/PageTransition'
-import { Card } from '@/components/ui'
-import { BackButton } from '@/components/ui/BackButton'
-import { CHAPTERS, SYSTEM_INFO, getXpToNextChapter } from '@/lib/mindXP'
-import type { MindState } from '@/lib/mindContent'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
+import type { JourneyPayload } from '@/lib/becoming/journey'
+import JourneyCanvas from '@/components/becoming/journey/JourneyCanvas'
+import BecomingDetails from '@/components/becoming/BecomingDetails'
+import { readCache, writeCache } from '@/lib/clientCache'
 
-interface ProgressData {
-  chapter: number
-  xp: number
-  xpBank: number
-  vision: { identityStatement?: string } | null
-  chapterHistory: { chapter: number; unlockedAt: string }[]
+// Cached per member (the payload is personal: identity statement, wins) and
+// only reused inside the same week — a stale week would start the intro on
+// last week's card and restart it when the fresh payload lands.
+function cacheKey(): string {
+  try {
+    const token = localStorage.getItem('token') ?? ''
+    const payload = JSON.parse(atob(token.split('.')[1] ?? '')) as { userId?: string }
+    return `becoming.journey.${payload.userId ?? 'anon'}`
+  } catch { return 'becoming.journey.anon' }
 }
-interface Win { _id?: string; win: string; date: string }
-interface StateLogEntry { state: MindState; timestamp: string }
-
-const STATE_META: Record<MindState, { label: string; dot: string; text: string }> = {
-  locked_in:  { label: 'Locked in',  dot: 'bg-emerald-400', text: 'text-emerald-400' },
-  low_energy: { label: 'Low energy', dot: 'bg-blue-400',    text: 'text-blue-400' },
-  distracted: { label: 'Distracted', dot: 'bg-amber-400',   text: 'text-amber-400' },
-  stressed:   { label: 'Stressed',   dot: 'bg-red-400',     text: 'text-red-400' },
+function localWeekKey(): string {
+  const d = new Date(); d.setDate(d.getDate() - d.getDay())
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-
-// Gentle "where to work on" suggestion from the dominant recent off-state.
-const FOCUS_BY_STATE: Record<MindState, { title: string; sub: string }> = {
-  stressed:   { title: 'Calm the storm', sub: 'Stress keeps showing up — lean on state-shift + breath.' },
-  distracted: { title: 'Cut the noise',  sub: 'Distraction is the pattern — practice focus + one-thing.' },
-  low_energy: { title: 'Do it anyway',   sub: 'Low energy lately — discipline reps move you regardless.' },
-  locked_in:  { title: 'Keep stacking',  sub: 'You’re locked in — bank the momentum and protect the streak.' },
-}
-
-function fmtDate(d: string | number | Date): string {
-  return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
-function relDay(d: string | number | Date): string {
-  const days = Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000)
-  if (days <= 0) return 'today'
-  if (days === 1) return 'yesterday'
-  if (days < 7) return `${days}d ago`
-  return fmtDate(d)
+function sameWeek(todayKey: string): boolean {
+  const [y, m, dd] = todayKey.split('-').map(Number)
+  const d = new Date(y, m - 1, dd); d.setDate(d.getDate() - d.getDay())
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === localWeekKey()
 }
 
 export default function BecomingClient() {
-  const [prog, setProg] = useState<ProgressData | null>(null)
-  const [wins, setWins] = useState<Win[]>([])
-  const [logs, setLogs] = useState<StateLogEntry[]>([])
-  const [streak, setStreak] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const search = useSearchParams()
+  const initialWeekKey = search?.get('week') ?? null
+  // Starts empty on both server and client (no hydration mismatch); the same-week
+  // cache repaints on the first client effect, the fresh payload replaces it.
+  const [data, setData] = useState<JourneyPayload | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [details, setDetails] = useState(false)
+  // A week picked from the details Story screen → the stage flies there.
+  const [jumpTo, setJumpTo] = useState<{ index: number; nonce: number } | null>(null)
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false
+    const key = cacheKey()
+    const cached = readCache<JourneyPayload>(key)
+    if (cached && cached.weeks?.length && sameWeek(cached.todayKey)) setData(cached)
+    ;(async () => {
       try {
         const token = localStorage.getItem('token')
-        if (!token) { setLoading(false); return }
-        const h = { Authorization: `Bearer ${token}` }
-        const tz = new Date().getTimezoneOffset()
-        const [pRes, wRes, sRes, sessRes] = await Promise.all([
-          fetch('/api/mind/progress', { headers: h }),
-          fetch('/api/mind/wins?limit=30', { headers: h }),
-          fetch('/api/mind/state?limit=60', { headers: h }),
-          fetch(`/api/mind/session?tz=${tz}`, { headers: h }),
-        ])
-        if (pRes.ok) setProg(await pRes.json())
-        if (wRes.ok) setWins((await wRes.json()).wins ?? [])
-        if (sRes.ok) setLogs((await sRes.json()).logs ?? [])
-        if (sessRes.ok) setStreak((await sessRes.json()).streak ?? 0)
-      } catch {
-        /* ignore */
-      } finally {
-        setLoading(false)
+        const res = await fetch(`/api/becoming/journey?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token ?? ''}` } })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const j = (await res.json()) as JourneyPayload
+        if (!cancelled) { setData(j); writeCache(key, j) }
+        // The dashboard door goes calm once this week's Becoming has been seen.
+        try { localStorage.setItem(`becoming.seen.${localWeekKey()}`, '1') } catch { /* ignore */ }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load')
       }
-    }
-    load()
+    })()
+    return () => { cancelled = true }
   }, [])
 
-  const chapter = prog?.chapter ?? 1
-  const score = prog?.xpBank ?? 0
-  const identity = prog?.vision?.identityStatement?.trim() || null
-  const xpProgress = useMemo(() => getXpToNextChapter(chapter, prog?.xp ?? 0), [chapter, prog?.xp])
+  // Escape closes the sheet first; the stage only sees keys when no sheet is open.
+  useEffect(() => {
+    if (!details) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setDetails(false) } }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [details])
 
-  // "Since" — the earliest signal we can find.
-  const sinceDate = useMemo(() => {
-    const candidates: number[] = []
-    if (logs.length) candidates.push(new Date(logs[logs.length - 1].timestamp).getTime())
-    const firstCh = prog?.chapterHistory?.[0]?.unlockedAt
-    if (firstCh) candidates.push(new Date(firstCh).getTime())
-    if (wins.length) candidates.push(new Date(wins[wins.length - 1].date).getTime())
-    return candidates.length ? Math.min(...candidates) : null
-  }, [logs, wins, prog])
+  const close = () => {
+    if (window.history.length > 1) router.back()
+    else router.push('/dashboard')
+  }
 
-  // Recent state trend (last ~14, oldest→newest for the strip).
-  const recentStates = useMemo(() => logs.slice(0, 14).reverse(), [logs])
-  const dominantState = useMemo<MindState | null>(() => {
-    if (!logs.length) return null
-    const counts: Record<string, number> = {}
-    for (const l of logs.slice(0, 14)) counts[l.state] = (counts[l.state] ?? 0) + 1
-    return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] as MindState) ?? null
-  }, [logs])
-  const lockedInPct = useMemo(() => {
-    const recent = logs.slice(0, 14)
-    if (!recent.length) return null
-    return Math.round((recent.filter((l) => l.state === 'locked_in').length / recent.length) * 100)
-  }, [logs])
-
-  const currentCh = CHAPTERS[chapter - 1]
-  const nextCh = chapter < 5 ? CHAPTERS[chapter] : null
-  const focus = dominantState ? FOCUS_BY_STATE[dominantState] : null
-
-  if (loading) {
+  if (error) {
     return (
-      <PageTransition className="pb-8">
-        <div className="mb-5 flex items-center gap-3"><BackButton fallbackHref="/dashboard/mind" /></div>
-        <div className="h-40 animate-pulse rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
-      </PageTransition>
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#07060d] p-6 text-center text-white">
+        <div>
+          <p className="text-lg font-bold">Couldn&apos;t load your Becoming</p>
+          <p className="mt-1 text-sm text-white/60">{error}</p>
+          <button type="button" onClick={close} className="mt-6 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Back</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#07060d] text-white" data-testid="journey-loading">
+        <div className="text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/50">The Becoming</p>
+          <div className="mx-auto mt-4 h-1 w-24 overflow-hidden rounded-full bg-white/10"><div className="h-full w-1/2 animate-pulse rounded-full bg-violet-400" /></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (data.weeks.length === 0) {
+    return (
+      <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#07060d] p-6 text-center text-white">
+        <div className="max-w-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/50">The Becoming</p>
+          <h1 className="mt-2 text-3xl font-black">Who am I becoming?</h1>
+          <p className="mt-3 text-sm text-white/65">Your first week writes the first card. Log a meal, finish a workout or open a Mind session and come back on Sunday.</p>
+          <button type="button" onClick={close} className="mt-6 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black">Back</button>
+        </div>
+      </div>
     )
   }
 
   return (
-    <PageTransition className="pb-10">
-      <div className="mb-5 flex items-center gap-3">
-        <BackButton fallbackHref="/dashboard/mind" />
-        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">The Becoming</h1>
-      </div>
+    <>
+      <JourneyCanvas data={data} onClose={close} onDetails={() => setDetails(true)} initialWeekKey={initialWeekKey} inert={details} jumpTo={jumpTo} />
 
-      {/* Becoming score */}
-      {/* data-tour anchors the onboarding tour (lib/tutorials/sections/mind.ts) */}
-      <Card data-tour="becoming-score" className="mb-4 overflow-hidden bg-gradient-to-br from-violet-600 to-violet-500 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-white/70">
-              <Trophy className="h-3.5 w-3.5" /> Becoming score
-            </p>
-            <p className="mt-1 text-4xl font-extrabold tabular-nums">{score.toLocaleString()}</p>
-          </div>
-          {streak > 0 && (
-            <div className="flex flex-col items-center rounded-2xl bg-white/15 px-4 py-2">
-              <Flame className="h-5 w-5 text-orange-300" />
-              <span className="mt-0.5 text-lg font-bold tabular-nums">{streak}</span>
-              <span className="text-[10px] uppercase tracking-wide text-white/70">day streak</span>
-            </div>
-          )}
-        </div>
-        {identity && <p className="mt-4 text-sm font-medium text-white/90">“{identity}”</p>}
-      </Card>
+      {/* Screen-reader / no-gesture fallback: the weeks as a list. */}
+      <ol className="sr-only" aria-label="Your Becoming, week by week">
+        {data.weeks.map(w => (
+          <li key={w.weekKey}>Week {w.index + 1}, {w.label}: {w.headline}. {w.sub}</li>
+        ))}
+      </ol>
 
-      {/* Then → Now → Next */}
-      <div className="mb-4 grid grid-cols-3 gap-2" data-tour="becoming-journey">
-        <Card className="p-3 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Then</p>
-          <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">
-            {sinceDate ? fmtDate(sinceDate) : '—'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">where you started</p>
-        </Card>
-        <Card className={`p-3 text-center ${currentCh?.border ?? ''}`}>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Now</p>
-          <p className={`mt-1 text-sm font-bold ${currentCh?.color ?? 'text-zinc-900 dark:text-white'}`}>
-            Ch {chapter} · {currentCh?.name}
-          </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">{currentCh?.theme}</p>
-        </Card>
-        <Card className="p-3 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Next</p>
-          <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-white">
-            {nextCh ? nextCh.name : 'Architect+'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-            {nextCh ? nextCh.theme : 'keep building'}
-          </p>
-        </Card>
-      </div>
-
-      {/* The arc */}
-      <Card className="mb-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">The arc</p>
-        <div className="space-y-2">
-          {CHAPTERS.map((c) => {
-            const done = c.id < chapter
-            const active = c.id === chapter
-            const locked = c.id > chapter
-            return (
-              <div
-                key={c.id}
-                className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
-                  active ? `${c.bg} ${c.border}` : 'border-transparent'
-                }`}
-              >
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  done ? 'bg-emerald-500 text-white'
-                  : active ? `${c.bg} ${c.color}`
-                  : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800'
-                }`}>
-                  {locked ? <Lock className="h-3.5 w-3.5" /> : c.id}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-semibold ${locked ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-900 dark:text-white'}`}>
-                    {c.name}
-                  </p>
-                  <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{c.theme}</p>
-                </div>
-                {active && xpProgress && (
-                  <span className="shrink-0 text-xs font-semibold text-zinc-400">{xpProgress.pct}%</span>
-                )}
-                {done && <span className="shrink-0 text-xs font-semibold text-emerald-500">✓</span>}
-              </div>
-            )
-          })}
-        </div>
-      </Card>
-
-      {/* State trend */}
-      {recentStates.length > 0 && (
-        <Card className="mb-4">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">How you’ve shown up</p>
-            {lockedInPct !== null && (
-              <span className="text-xs font-semibold text-emerald-500">{lockedInPct}% locked in</span>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {recentStates.map((l, i) => (
-              <span key={i} title={`${STATE_META[l.state].label} · ${relDay(l.timestamp)}`}
-                className={`h-3 w-3 rounded-full ${STATE_META[l.state].dot}`} />
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-            {(Object.keys(STATE_META) as MindState[]).map((s) => (
-              <span key={s} className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                <span className={`h-2 w-2 rounded-full ${STATE_META[s].dot}`} /> {STATE_META[s].label}
-              </span>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Nutrition + Training, then → now → next, and "Where to work on" for
-          all three pillars (Mind's focus comes from the state trend above). */}
-      <PillarsSection mindFocus={focus} />
-
-      {/* Evidence wall */}
-      <Card data-tour="becoming-wins">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">Evidence wall</p>
-        {wins.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            No wins banked yet. Bank one in a session — the proof that you’re changing builds here.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {wins.map((w, i) => (
-              <motion.div
-                key={w._id ?? i}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                className="flex items-start gap-2.5 rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60"
-              >
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-zinc-800 dark:text-zinc-200">{w.win}</p>
-                  <p className="mt-0.5 text-[11px] text-zinc-400">{relDay(w.date)}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+      <AnimatePresence>
+        {details && (
+          <BecomingDetails
+            weeks={data.weeks}
+            unit={data.unit}
+            onClose={() => setDetails(false)}
+            onJumpToWeek={(i) => { setDetails(false); setJumpTo({ index: i, nonce: Date.now() }) }}
+          />
         )}
-      </Card>
-
-      {/* Unlocked next */}
-      {nextCh && (
-        <Link
-          href="/dashboard/mind"
-          className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">Next: {nextCh.name}</p>
-            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-              Unlocks {nextCh.systems.map((s) => SYSTEM_INFO[s]?.label ?? s).join(', ')}
-            </p>
-          </div>
-          <ArrowRight className="h-5 w-5 shrink-0 text-zinc-400" />
-        </Link>
-      )}
-    </PageTransition>
+      </AnimatePresence>
+    </>
   )
 }
