@@ -196,11 +196,14 @@ export function storyFor(w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags'>, inp
   if (m.chapterUnlocked) tags.push(`Ch ${m.chapterUnlocked}`)
 
   const nothingSubstantive = t.workouts === 0 && n.logDays === 0 && m.sessions === 0 && t.prCount === 0
-  // The live week: still being written, never "away".
-  if (w.isCurrent && nothingSubstantive) {
-    if (w.daysElapsed <= 1) return { headline: 'A new week of becoming', sub: 'Blank so far. What you do in the next six days is what this card will say.', tags }
-    const checked = m.moodDays ? ` You have checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}.` : ''
-    return { headline: 'Still being written', sub: `Day ${w.daysElapsed} of 7.${checked} A workout, a meal or a session puts the first real line on this card.`, tags }
+  // The live week speaks in the present tense until it settles on Sunday.
+  if (w.isCurrent) {
+    if (nothingSubstantive) {
+      if (w.daysElapsed <= 1) return { headline: 'A new week of becoming', sub: 'Blank so far. What you do in the next six days is what this card will say.', tags }
+      const checked = m.moodDays ? ` You have checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}.` : ''
+      return { headline: 'Still being written', sub: `Day ${w.daysElapsed} of 7.${checked} A workout, a meal or a session puts the first real line on this card.`, tags }
+    }
+    return { ...liveStoryFor(w, { delta, scaleMoved, scaleRightWay, scaleWrongWay, unit }), tags }
   }
   if (w.isFirst && !w.isCurrent) {
     return { headline: 'Where it started', sub: `Your first week. ${t.workouts ? `${t.workouts} workout${t.workouts === 1 ? '' : 's'}` : 'No workouts yet'}${n.logDays ? `, food logged ${n.logDays} day${n.logDays === 1 ? '' : 's'}` : ''}. Everything since is measured from here.`, tags }
@@ -252,6 +255,55 @@ export function storyFor(w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags'>, inp
     return { headline: 'Weighed in, that was it', sub: `${n.weightEnd} ${unit} on the scale${n.delta !== 0 ? ` (${n.delta > 0 ? '+' : ''}${n.delta})` : ''}. Nothing else logged. The path holds.`, tags }
   }
   return { headline: 'A week away', sub: 'Nothing logged. The path holds; it just does not climb.', tags }
+}
+
+/**
+ * The live week, in the present tense. Same priorities as the frozen rules,
+ * but "so far" — the card is still being written until Sunday.
+ */
+function liveStoryFor(
+  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags'>,
+  x: { delta: number | null; scaleMoved: boolean; scaleRightWay: boolean; scaleWrongWay: boolean; unit: 'lbs' | 'kg' },
+): { headline: string; sub: string } {
+  const t = w.training, n = w.nutrition, m = w.mind
+  const left = 7 - w.daysElapsed
+  const daysLeft = left <= 0 ? 'the week seals tonight' : left === 1 ? 'one day left' : `${left} days left`
+  const need = t.target ? Math.max(0, t.target - t.workouts) : 0
+  if (m.chapterUnlocked && m.chapterUnlocked > 1) {
+    return { headline: `Chapter ${m.chapterUnlocked} is open`, sub: `Your mind work just earned the next chapter — and ${daysLeft} to build on it.` }
+  }
+  if (t.prCount >= 2) {
+    return { headline: `${t.prCount} personal records, so far`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. Already the strongest week on paper, and ${daysLeft}.` }
+  }
+  if (t.hit && n.logDays >= Math.min(5, w.daysElapsed) && m.sessions >= 3) {
+    return { headline: 'The whole system is working', sub: `Training ${t.workouts}/${t.target}, food logged ${n.logDays} of ${w.daysElapsed} days, ${m.sessions} mind sessions. Keep it rolling through Saturday.` }
+  }
+  if (x.scaleRightWay) {
+    return { headline: 'The scale is moving', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far this week, the way you want${t.hit ? ', with the training week already hit' : ''}.` }
+  }
+  if (t.hit) {
+    return { headline: `${t.workouts} of ${t.target}. Week hit, ${daysLeft}.`, sub: n.logDays >= 4 ? `And ${n.logDays} days of food logged behind it.` : n.logDays > 0 ? `Food logged ${n.logDays} of ${w.daysElapsed} — the training is carrying it so far.` : 'Training is carrying it; the logging has not shown up yet.' }
+  }
+  if (t.prCount === 1) {
+    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift has moved the week already, and there is ${daysLeft}.` }
+  }
+  if (t.target && t.workouts > 0 && need > 0) {
+    return { headline: `${t.workouts} down, ${need} to go`, sub: `${daysLeft} to hit ${t.target}.${n.logDays ? ` Food logged ${n.logDays} of ${w.daysElapsed}.` : ' Nothing logged yet on the food side.'}${m.sessions ? ` ${m.sessions} mind session${m.sessions === 1 ? '' : 's'}.` : ''}` }
+  }
+  if (m.sessions >= 2 && t.workouts === 0) {
+    return { headline: 'The mind is showing up', sub: `${m.sessions} sessions so far and no training yet — the body is next, and there is ${daysLeft}.` }
+  }
+  if (n.logDays >= 2 && t.workouts === 0) {
+    return { headline: 'Logging every day, lifting nothing yet', sub: `${n.logDays} of ${w.daysElapsed} days of food. Honest, and it counts. ${daysLeft.charAt(0).toUpperCase() + daysLeft.slice(1)}.` }
+  }
+  if (x.scaleWrongWay) {
+    return { headline: 'The scale is pushing back', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far — ${n.logDays >= 3 ? 'you are logging, so it is data, not a mystery' : 'with thin logging, hard to say why yet'}.` }
+  }
+  const bits: string[] = []
+  if (t.workouts) bits.push(`${t.workouts} workout${t.workouts === 1 ? '' : 's'}${t.target ? ` of ${t.target}` : ''}`)
+  if (n.logDays) bits.push(`${n.logDays} day${n.logDays === 1 ? '' : 's'} logged`)
+  if (m.sessions) bits.push(`${m.sessions} mind session${m.sessions === 1 ? '' : 's'}`)
+  return { headline: 'Keeping it moving', sub: `${bits.join(', ')} so far. ${daysLeft.charAt(0).toUpperCase() + daysLeft.slice(1)}.` }
 }
 
 export function buildWeeks(input: WeekInput): WeekSnapshot[] {
