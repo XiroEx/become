@@ -75,9 +75,21 @@ test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
   console.log('GOAL  :', goalText)
   console.log('STREAK:', streakText)
 
-  // Jon: 1 completed workout this week, target 5 (was "2/5" from an abandoned log).
-  expect(weeklyText).toMatch(/1\/5/)
-  expect(weeklyText).toMatch(/4 to weekly target/)
+  // The tile has to agree with the endpoint it reads, not with a number written
+  // down here — this used to pin Jon's live week and broke every time he
+  // trained. (Deliberately /api/progress, not /api/streaks: the streak pillars
+  // also count admin-granted credits, so the two legitimately differ.)
+  const prog = await page.evaluate(async () => {
+    const res = await fetch(`/api/progress?tz=${new Date().getTimezoneOffset()}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+    })
+    return res.ok ? await res.json() : null
+  })
+  const doneThisWeek = prog?.stats?.thisWeekWorkouts
+  const target = prog?.weeklyAvailability ?? prog?.goal?.weeklyAvailability
+  expect(doneThisWeek, 'the progress endpoint answers').not.toBeUndefined()
+  expect(weeklyText).toContain(`${doneThisWeek}/${target}`)
+  expect(weeklyText).toContain(`${Math.max(0, target - doneThisWeek)} to weekly target`)
   // Goal: build muscle, 3 lbs to 205.
   expect(goalText).toMatch(/Goal · Build muscle/)
   expect(goalText).toMatch(/3 lbs to go/)

@@ -143,11 +143,26 @@ export function workoutOrRestDays(
   workoutDays: Iterable<string>,
   allDays: Iterable<string>,
   trainingWeekdays: number[] | null,
+  /**
+   * Weekly training target, used when there is no schedule to name the rest
+   * days. Nobody trains seven days a week, and a member who trains four times
+   * on no fixed days was losing the super streak on the three days off — the
+   * rule says "a scheduled rest day counts", and they had no schedule to have
+   * one on. With a target, every day that is not a training day is a rest day;
+   * the lost-week rule is what stops anyone coasting on that.
+   */
+  weeklyTarget?: number | null,
 ): Set<string> {
   const out = new Set<string>(workoutDays)
-  if (!trainingWeekdays || trainingWeekdays.length === 0) return out
-  const training = new Set(trainingWeekdays)
-  for (const k of allDays) if (!training.has(weekdayOf(k))) out.add(k)
+  if (trainingWeekdays && trainingWeekdays.length > 0) {
+    const training = new Set(trainingWeekdays)
+    for (const k of allDays) if (!training.has(weekdayOf(k))) out.add(k)
+    return out
+  }
+  // No schedule: a target of N a week means 7 − N days off are legitimate.
+  if (weeklyTarget && weeklyTarget > 0 && weeklyTarget < 7) {
+    for (const k of allDays) out.add(k)
+  }
   return out
 }
 
