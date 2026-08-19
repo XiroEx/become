@@ -18,7 +18,8 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import ThinSessionModal from "@/components/workout/ThinSessionModal";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
@@ -772,6 +773,9 @@ export default function WorkoutFormPage() {
   // persisted immediately — an exercise that only exists in this tab is one the
   // calendar and the history never hear about.
   const [showAddExercise, setShowAddExercise] = useState(false);
+  // "Finish with two exercises?" — asked once, on the way out of a thin session.
+  const [showThinFinish, setShowThinFinish] = useState(false);
+  const [thinFinishAcked, setThinFinishAcked] = useState(false);
   const reducedMotion = useReducedMotion();
   const shouldNudgeAddExercise = needsMoreExercises(workout?.exercises.length ?? 0);
 
@@ -1821,7 +1825,15 @@ export default function WorkoutFormPage() {
             >
               <button
                 disabled={isCompleting}
+                data-testid="track-complete-workout"
                 onClick={async () => {
+                  // A session you built yourself, thinner than a session usually
+                  // is: ask before it becomes a finished workout. Programs are a
+                  // coach's call and are never questioned here.
+                  if (shouldWarnBeforeFinish({ selfBuilt: isQuick, exerciseCount: workout?.exercises.length ?? 0, alreadyAsked: thinFinishAcked })) {
+                    setShowThinFinish(true);
+                    return;
+                  }
                   setIsCompleting(true);
                   try {
                     await autoSave(exerciseProgress);
@@ -1954,6 +1966,24 @@ export default function WorkoutFormPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ThinSessionModal
+        open={showThinFinish}
+        exerciseCount={workout?.exercises.length ?? 0}
+        onClose={() => setShowThinFinish(false)}
+        onAddExercise={() => { setShowThinFinish(false); setShowAddExercise(true); }}
+        onFinishAnyway={async () => {
+          setThinFinishAcked(true);
+          setShowThinFinish(false);
+          setIsCompleting(true);
+          try {
+            await autoSave(exerciseProgress);
+            setShowSummary(true);
+          } finally {
+            setIsCompleting(false);
+          }
+        }}
+      />
 
       <AddExerciseSheet
         open={showAddExercise}
