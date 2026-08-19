@@ -2,61 +2,61 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildWeightSeries, weightCaption, type WeekWeight } from '../../lib/becoming/weightSeries'
+import { buildWeightSeries, weightCaption, yTicksFor, dayOfWeekLabel, type WeighIn } from '../../lib/becoming/weightSeries'
 
-// /api/progress returns { date, value }; older callers pass { label, value }.
-const history = [
-  { date: 'Jan 18', value: 202 }, { date: 'Apr 5', value: 211 },
-  { date: 'Jun 14', value: 210 }, { date: 'Aug 17', value: 208 },
+// Week of Sun 2026-08-16; "today" is Tue 2026-08-18.
+const week: WeighIn[] = [
+  { day: '2026-08-16', value: 209 },
+  { day: '2026-08-17', value: 208.4 },
+  { day: '2026-08-18', value: 208 },
 ]
-const weeks: WeekWeight[] = [
-  { weekKey: '2026-07-26', label: 'Jul 26 – Aug 1', end: 209, start: 210 },
-  { weekKey: '2026-08-02', label: 'Aug 2–8', end: null, start: null },   // no weigh-in → carries 209
-  { weekKey: '2026-08-09', label: 'Aug 9–15', end: 208, start: 210 },
-  { weekKey: '2026-08-16', label: 'Aug 16–22', end: 208, start: 208 },
+const history: WeighIn[] = [
+  { day: '2026-01-18', value: 202 }, { day: '2026-04-05', value: 211 },
+  { day: '2026-06-14', value: 210 }, ...week,
 ]
 
-test('all-time view plots every weigh-in in order, first → last', () => {
-  const s = buildWeightSeries(history, weeks, 'all', 205)
-  assert.equal(s.points.length, 4)
+test('the week view lays out Sun→Sat, labels the days, and keeps empty days as gaps', () => {
+  const s = buildWeightSeries(week, 'week', 205, '2026-08-18')
+  assert.deepEqual(s.xTicks.map(t => t.label), ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
+  assert.equal(s.points.length, 3)
+  assert.deepEqual(s.points.map(p => p.label), ['Sun', 'Mon', 'Tue'])
+  assert.equal(s.gaps.length, 4, 'Wed–Sat have no weigh-in yet')
+  assert.equal(s.points[0].x, 0)
+  assert.ok(Math.abs(s.points[2].x - 2 / 6) < 1e-9, 'Tuesday sits two sevenths along')
+  assert.equal(s.points[2].longLabel, 'Tue, Aug 18')
+})
+
+test('the all-time view plots every weigh-in and labels months', () => {
+  const s = buildWeightSeries(history, 'all', 205, '2026-08-18')
+  assert.equal(s.points.length, 6)
+  assert.deepEqual(s.xTicks.map(t => t.label), ['Jan', 'Apr', 'Jun', 'Aug'])
   assert.equal(s.first?.value, 202); assert.equal(s.last?.value, 208)
   assert.equal(s.delta, 6)
-  assert.equal(s.points[0].x, 0); assert.equal(s.points[3].x, 1)
-  // higher weight sits higher on the chart (smaller y)
-  assert.ok(s.points[1].y < s.points[0].y)
 })
 
-test('weeks view is one point per week and carries through weeks with no weigh-in', () => {
-  const s = buildWeightSeries(history, weeks, 'weeks', 205)
-  assert.equal(s.points.length, 4)
-  assert.deepEqual(s.points.map(p => p.value), [209, 209, 208, 208])
-  assert.equal(s.last?.label, 'Aug 16–22')
+test('y ticks are round numbers inside the range, and the goal gets a line when it fits', () => {
+  const s = buildWeightSeries(history, 'all', 205, '2026-08-18')
+  assert.ok(s.yTicks.length >= 2)
+  for (const t of s.yTicks) { const v = Number(t.label); assert.ok(v >= Math.floor(s.min) && v <= Math.ceil(s.max)) }
+  assert.ok(s.targetY != null && s.targetY > 0 && s.targetY < 1)
+  assert.deepEqual(yTicksFor(200, 212, 3), [200, 205, 210])
 })
 
-test('the target is inside the range and gets a y; an out-of-range target does not', () => {
-  const inRange = buildWeightSeries(history, weeks, 'all', 205)
-  assert.ok(inRange.targetY != null && inRange.targetY > 0 && inRange.targetY < 1)
-  assert.ok(inRange.min <= 202 && inRange.max >= 211)
-  const far = buildWeightSeries(history, weeks, 'all', 120)
-  assert.ok(far.min <= 120, 'the target widens the range so the line stays readable')
+test('a week with no weigh-ins still draws the seven days', () => {
+  const s = buildWeightSeries([], 'week', 205, '2026-08-18')
+  assert.equal(s.points.length, 0)
+  assert.equal(s.gaps.length, 7)
+  assert.deepEqual(s.xTicks.map(t => t.label), ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
+  assert.equal(weightCaption(s, 'lbs'), 'No weigh-ins this week')
 })
 
-test('a single weigh-in sits in the middle rather than at an edge', () => {
-  const s = buildWeightSeries([{ date: 'Aug 17', value: 208 }], [], 'all', null)
-  assert.equal(s.points.length, 1); assert.equal(s.points[0].x, 0.5)
-  assert.equal(s.delta, 0)
+test('captions read the direction and the span', () => {
+  assert.equal(weightCaption(buildWeightSeries(week, 'week', 205, '2026-08-18'), 'lbs'), 'down 1.0 lbs this week')
+  assert.equal(weightCaption(buildWeightSeries(history, 'all', 205, '2026-08-18'), 'lbs'), 'up 6.0 lbs since Jan 18')
+  assert.match(weightCaption(buildWeightSeries([{ day: '2026-08-17', value: 208 }, { day: '2026-08-18', value: 208 }], 'week', null, '2026-08-18'), 'lbs'), /Steady at 208 lbs/)
 })
 
-test('no data is empty, not a crash', () => {
-  const s = buildWeightSeries([], [], 'all', 205)
-  assert.deepEqual(s.points, []); assert.equal(s.first, null)
-  assert.equal(weightCaption(s, 'lbs'), 'No weigh-ins yet')
-})
-
-test('caption reads the direction and the span', () => {
-  assert.equal(weightCaption(buildWeightSeries(history, weeks, 'all', 205), 'lbs'), 'up 6.0 lbs since Jan 18')
-  assert.equal(weightCaption(buildWeightSeries(history, weeks, 'weeks', 205), 'lbs'), 'down 1.0 lbs over 4 weeks')
-  assert.match(weightCaption(buildWeightSeries([{ date: 'a', value: 208 }, { date: 'b', value: 208 }], [], 'all', null), 'lbs'), /Steady at 208 lbs/)
-  // Either shape works, and a missing label never leaks "undefined" into the caption.
-  assert.equal(weightCaption(buildWeightSeries([{ value: 200 }, { value: 198 }], [], 'all', null), 'lbs'), 'down 2.0 lbs')
+test('day labels come from the day key, not the device clock', () => {
+  assert.equal(dayOfWeekLabel('2026-08-16'), 'Sun')
+  assert.equal(dayOfWeekLabel('2026-08-22'), 'Sat')
 })

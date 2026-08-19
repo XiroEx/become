@@ -12,6 +12,7 @@ import { useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Flame, Dumbbell, UtensilsCrossed, Brain } from 'lucide-react'
+import FireNumber from '@/components/streaks/FireNumber'
 import { PILLAR, STREAK_INK } from '@/lib/pillarColors'
 import { Card, type StatTileSize } from '@/components/ui'
 import { streakPages, type StreakPage, type StreakPageId, type StreaksLite } from '@/lib/streaks/tile'
@@ -103,7 +104,7 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
       {p.emphasis && (
         <motion.div
           aria-hidden="true"
-          className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-orange-500/25 blur-2xl"
+          className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-orange-400/40 blur-2xl dark:bg-orange-500/25"
           animate={reduced ? { opacity: 0.5 } : { opacity: [0.35, 0.6, 0.4, 0.55, 0.35] }}
           transition={reduced ? { duration: 0 } : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
         />
@@ -120,36 +121,26 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
           className="relative flex h-full flex-col justify-center gap-2"
         >
           <div className="flex items-center gap-2.5">
-            <motion.span
+            <span
               className={`relative flex shrink-0 items-center justify-center rounded-full ${wide ? 'h-11 w-11' : 'h-9 w-9'} ${INK[p.id].badge} ${p.doneToday || p.emphasis ? '' : 'opacity-60'}`}
-              // Fire, not a heartbeat: the flame flickers — quick, uneven, warm.
-              animate={p.emphasis && !reduced ? { scale: [1, 1.06, 0.99, 1.04, 1], rotate: [0, -2, 1.5, -1, 0] } : { scale: 1, rotate: 0 }}
-              transition={p.emphasis && !reduced ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
             >
               {p.emphasis && (
                 <motion.span
                   aria-hidden="true"
                   className="absolute inset-0 rounded-full"
-                  style={{ boxShadow: '0 0 14px 2px rgba(249,115,22,0.55)' }}
-                  animate={reduced ? { opacity: 0.6 } : { opacity: [0.45, 0.85, 0.5, 0.75, 0.45] }}
-                  transition={reduced ? { duration: 0 } : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ boxShadow: '0 0 12px 1px rgba(234,88,12,0.45)' }}
+                  animate={reduced ? { opacity: 0.5 } : { opacity: [0.35, 0.6, 0.4, 0.55, 0.35] }}
+                  transition={reduced ? { duration: 0 } : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                 />
               )}
               <Icon className={`relative ${wide ? 'h-5 w-5' : 'h-4 w-4'}`} />
-            </motion.span>
+            </span>
 
             <div className="min-w-0 flex-1">
               <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{p.label}</span>
               <div className={`mt-0.5 flex items-baseline gap-1 ${wide ? 'text-3xl' : 'text-2xl'} font-extrabold leading-none tracking-tight`}>
                 {p.emphasis ? (
-                  <motion.span
-                    className="inline-block bg-gradient-to-b from-amber-300 via-orange-400 to-orange-600 bg-clip-text text-transparent"
-                    data-testid="streak-super-value"
-                    animate={reduced ? {} : { opacity: [1, 0.82, 1, 0.9, 1], filter: ['drop-shadow(0 0 0px rgba(249,115,22,0))', 'drop-shadow(0 0 10px rgba(249,115,22,0.75))', 'drop-shadow(0 0 3px rgba(249,115,22,0.35))', 'drop-shadow(0 0 8px rgba(249,115,22,0.6))', 'drop-shadow(0 0 0px rgba(249,115,22,0))'] }}
-                    transition={reduced ? {} : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                  >
-                    {p.value}
-                  </motion.span>
+                  <span data-testid="streak-super-value"><FireNumber>{p.value}</FireNumber></span>
                 ) : (
                   <span className="text-zinc-900 dark:text-white">{p.value}</span>
                 )}

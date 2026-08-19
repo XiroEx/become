@@ -129,6 +129,8 @@ export default function BecomingClient() {
         {details && (
           <BecomingDetails
             weeks={data.weeks}
+            weighIns={data.weights ?? []}
+            todayKey={data.todayKey}
             unit={data.unit}
             onClose={() => setDetails(false)}
             onJumpToWeek={(i) => { setDetails(false); setJumpTo({ index: i, nonce: Date.now() }) }}
