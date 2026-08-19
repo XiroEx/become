@@ -235,6 +235,28 @@ export function removeExercise<T extends WorkoutExercise>(list: T[], index: numb
 }
 
 /**
+ * Move an exercise up or down the workout.
+ *
+ * Reordering can carry an exercise out of the superset it belonged to, or drop
+ * an outsider into the middle of one — `sanitizeGroups` settles that afterwards,
+ * because a group whose members are no longer neighbours is not a group.
+ */
+export function moveExercise<T extends WorkoutExercise>(list: T[], from: number, to: number): MutationResult<T> {
+  if (from === to || from < 0 || from >= list.length || to < 0 || to >= list.length) {
+    return { exercises: list, order: identityOrder(list.length) }
+  }
+  const order = identityOrder(list.length)
+  const [moved] = order.splice(from, 1)
+  order.splice(to, 0, moved!)
+  return { exercises: sanitizeGroups(order.map(i => list[i]!)), order }
+}
+
+/** A workout with nothing in it is not a workout — the last exercise stays. */
+export function canRemoveExercise(list: unknown[]): boolean {
+  return list.length > 1
+}
+
+/**
  * Move a caller's parallel array (set data, per-exercise progress, …) through a
  * mutation. `make(newIndex)` supplies a fresh row for an exercise that did not
  * exist before.

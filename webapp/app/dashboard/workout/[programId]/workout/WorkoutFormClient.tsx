@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { X, Plus, Layers, Unlink } from "lucide-react";
+import { X, Plus, Layers, Unlink, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
@@ -19,7 +19,8 @@ import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import ConfirmModal from "@/components/workout/ConfirmModal";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
@@ -776,6 +777,8 @@ export default function WorkoutFormPage() {
   // "Finish with two exercises?" — asked once, on the way out of a thin session.
   const [showThinFinish, setShowThinFinish] = useState(false);
   const [thinFinishAcked, setThinFinishAcked] = useState(false);
+  // Removing an exercise that already has sets against it asks first.
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
   const reducedMotion = useReducedMotion();
   const shouldNudgeAddExercise = needsMoreExercises(workout?.exercises.length ?? 0);
 
@@ -878,6 +881,33 @@ export default function WorkoutFormPage() {
     applyWorkoutChange(res.exercises as Exercise[], res.order);
     setExpandedExercise(res.index);
   }, [workout, expandedExercise, applyWorkoutChange]);
+
+  /** Drop an exercise from today's session. The program itself is untouched. */
+  const dropExerciseAt = useCallback((idx: number) => {
+    const list = (workout?.exercises ?? []) as AdHocExercise[];
+    if (!canRemoveExercise(list)) return;
+    const res = removeExercise<AdHocExercise>(list, idx);
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+    setConfirmRemoveIdx(null);
+    setExpandedExercise((cur) => (cur == null ? cur : Math.max(0, Math.min(cur, res.exercises.length - 1))));
+  }, [workout, applyWorkoutChange]);
+
+  /** Ask first when there is logged work to lose; otherwise just drop it. */
+  const requestRemoveAt = useCallback((idx: number) => {
+    const progress = exerciseProgress.find((ep) => ep.exerciseIndex === idx);
+    const hasWork = (progress?.sets ?? []).some((set) => set.completed || set.reps || set.weight || set.duration || set.distance);
+    if (hasWork) setConfirmRemoveIdx(idx);
+    else dropExerciseAt(idx);
+  }, [exerciseProgress, dropExerciseAt]);
+
+  const moveExerciseBy = useCallback((idx: number, delta: number) => {
+    const list = (workout?.exercises ?? []) as AdHocExercise[];
+    const to = idx + delta;
+    if (to < 0 || to >= list.length) return;
+    const res = moveExercise<AdHocExercise>(list, idx, to);
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+    setExpandedExercise(to);
+  }, [workout, applyWorkoutChange]);
 
   const toggleGroupAt = useCallback((idx: number) => {
     const list = (workout?.exercises ?? []) as AdHocExercise[];
@@ -1596,6 +1626,39 @@ export default function WorkoutFormPage() {
                               </div>
                             )
                           })()}
+
+                          {/* Reorder it, or drop it from today's session. Down
+                              here rather than in the header, where five icons
+                              squeezed the exercise name to nothing. */}
+                          <div className="mt-4 flex items-center gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveExerciseBy(exerciseIndex, -1); }}
+                              disabled={exerciseIndex === 0}
+                              data-testid={`track-move-up-${exerciseIndex}`}
+                              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-700 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                              Move up
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveExerciseBy(exerciseIndex, 1); }}
+                              disabled={exerciseIndex === (workout?.exercises.length ?? 0) - 1}
+                              data-testid={`track-move-down-${exerciseIndex}`}
+                              className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-700 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                              Move down
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); requestRemoveAt(exerciseIndex); }}
+                              disabled={!canRemoveExercise(workout?.exercises ?? [])}
+                              data-testid={`track-remove-${exerciseIndex}`}
+                              className="ml-auto flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50 disabled:opacity-30 dark:hover:bg-red-950/40"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       </motion.div>
                     )}
@@ -1696,6 +1759,17 @@ export default function WorkoutFormPage() {
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2">
+                                    {roundIndex === 0 && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); requestRemoveAt(originalIndex); }}
+                                        disabled={!canRemoveExercise(workout?.exercises ?? [])}
+                                        data-testid={`track-remove-${originalIndex}`}
+                                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-all hover:bg-red-100 hover:text-red-600 disabled:opacity-30 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                                        title="Remove exercise"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1966,6 +2040,17 @@ export default function WorkoutFormPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal
+        open={confirmRemoveIdx !== null}
+        destructive
+        title={`Remove ${confirmRemoveIdx !== null ? workout?.exercises[confirmRemoveIdx]?.name ?? "this exercise" : ""}?`}
+        body="You have already logged sets against it. They go with it."
+        confirmLabel="Remove it"
+        cancelLabel="Keep it"
+        onConfirm={() => { if (confirmRemoveIdx !== null) dropExerciseAt(confirmRemoveIdx); }}
+        onCancel={() => setConfirmRemoveIdx(null)}
+      />
 
       <ThinSessionModal
         open={showThinFinish}
