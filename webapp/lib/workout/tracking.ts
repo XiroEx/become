@@ -70,6 +70,19 @@ export function tracksTime(value?: string | null): boolean {
 }
 
 /**
+ * The word for one pass through this exercise: "Round" for timed/interval
+ * work, "Set" for counted work. Timed exercises were reading as "3 Sets" of
+ * a duration, which doesn't parse — the app already calls a lap of interval
+ * work a "round" in a couple of places, so this just makes that consistent
+ * across every timed tracking type instead of only 'intervals'.
+ */
+export function setUnitLabel(value: string | null | undefined, count: number): string {
+  const noun = tracksTime(value) ? 'round' : 'set'
+  const word = count === 1 ? noun : `${noun}s`
+  return word.charAt(0).toUpperCase() + word.slice(1)
+}
+
+/**
  * Best guess at a tracking type for a log written before the type was stored.
  * A recorded duration means timed work; a recorded load means loaded work;
  * otherwise fall back to the catalog's answer, then to the default.
