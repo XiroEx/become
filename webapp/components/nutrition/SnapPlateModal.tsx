@@ -22,7 +22,7 @@ import ServingQuantityControls from '@/components/nutrition/ServingQuantityContr
 import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
 import { scalingFactor, nutritionForQuantity } from '@/lib/foodMath'
 import { variantForServingChoice, buildServingChoiceGroups, type ServingChoice } from '@/lib/nutrition/servingOptions'
-import type { Unit } from '@/lib/units'
+import { parseQuantityString, type Unit } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -189,9 +189,33 @@ function normUnit(u: string): string {
   if (x === 'liter' || x === 'liters' || x === 'litre') return 'l'
   return x
 }
-/** Parse an AI serving string ("1 kiwi", "6 bites", "~150 g", "1 cup (240 g)") → count + unit. */
+/**
+ * Parse an AI serving string ("1 kiwi", "6 bites", "~150 g", "1 cup (240 g)",
+ * "3/4 cup") → count + unit.
+ *
+ * A fractional AI estimate ("3/4 cup", "¾ cup", "1 1/2 tbsp") used to break
+ * this: the old hand-rolled regex only recognized digits and a decimal point
+ * ([\d.]+), so "3/4 cup" — the "/" isn't in that class — read as qty=3 with
+ * the unit garbled to "/4 cup", a token no downstream unit lookup recognizes.
+ * A food whose real serving is 3/4 cup ended up logged/displayed against the
+ * wrong quantity. `parseQuantityString` already handles ascii and unicode
+ * fractions correctly and is the same parser the rest of the serving-picker
+ * trusts, so route real units through it instead of re-deriving fraction
+ * math here.
+ */
 function parseServing(s?: string): { qty: number; unit: string } {
   const str = (s || '').trim()
+  if (!str) return { qty: 1, unit: 'serving' }
+
+  // Strip the leading "~" and any "(240 g)" bridge parenthetical before
+  // handing off — parseQuantityString expects a bare "qty unit" string.
+  const stripped = str.replace(/\([^)]*\)/g, '').trim().replace(/^~\s*/, '')
+  const parsed = parseQuantityString(stripped)
+  if (parsed) return { qty: parsed.value, unit: parsed.unit }
+
+  // Household/count words ("kiwi", "bites") aren't real units, so
+  // parseQuantityString can't resolve them — fall back to plain leading-number
+  // extraction for those.
   const m = str.match(/^~?\s*([\d.]+)\s*(.*)$/)
   if (!m) return { qty: 1, unit: str ? normUnit(str) : 'serving' }
   const qty = parseFloat(m[1]) || 1
