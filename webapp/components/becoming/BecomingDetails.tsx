@@ -22,7 +22,9 @@ import type { MindState } from '@/lib/mindContent'
 import type { GoalProgress } from '@/lib/goals/progress'
 import type { WeekSnapshot } from '@/lib/becoming/weeks'
 import { fmtUnit } from '@/lib/goals/pace'
-import { SUBJECT, weekColor } from '@/components/becoming/journey/WeekCard'
+import { PILLAR as SUBJECT, pillarColor as weekColor, STREAK_INK } from '@/lib/pillarColors'
+import WeightChart from '@/components/becoming/WeightChart'
+import type { WeightPoint } from '@/lib/becoming/weightSeries'
 
 type Tab = 'mind' | 'fuel' | 'training' | 'story'
 const TABS: Array<{ id: Tab; label: string; Icon: typeof Brain; hue: string }> = [
@@ -36,6 +38,7 @@ interface ProgressData { chapter: number; xp: number; xpBank: number; vision: { 
 interface Win { _id?: string; win: string; date: string }
 interface StateLogEntry { state: MindState; timestamp: string }
 interface ProgramLite { name: string; completedWorkouts?: number; totalWorkouts?: number; currentWeek: number; totalWeeks: number; programId: string }
+interface ProgressLite { currentProgram: ProgramLite | null; weightData?: WeightPoint[] }
 
 const STATE_META: Record<MindState, { label: string; dot: string }> = {
   locked_in:  { label: 'Locked in',  dot: '#34d399' },
@@ -69,10 +72,12 @@ function Glass({ children, className = '', hue }: { children: React.ReactNode; c
 }
 function Eyebrow({ children }: { children: React.ReactNode }) { return <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">{children}</p> }
 function Cell({ label, value, sub, hue }: { label: string; value: string; sub?: string; hue?: string }) {
+  // Pillar colours identify the pillar; they are not status. Tint them up so a
+  // red "now" weight reads as nutrition, not as an error.
   return (
     <div className="rounded-xl bg-white/[0.06] p-2.5 text-center ring-1 ring-white/5">
       <p className="text-[9px] font-semibold uppercase tracking-widest text-white/45">{label}</p>
-      <p className="mt-1 truncate text-sm font-bold" style={{ color: hue ?? 'white' }}>{value}</p>
+      <p className="mt-1 truncate text-sm font-bold" style={{ color: hue ? `color-mix(in srgb, ${hue} 62%, white)` : 'white' }}>{value}</p>
       {sub && <p className="mt-0.5 truncate text-[11px] text-white/55">{sub}</p>}
     </div>
   )
@@ -105,6 +110,7 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
   const [streak, setStreak] = useState(0)
   const [goals, setGoals] = useState<GoalProgress | null>(null)
   const [program, setProgram] = useState<ProgramLite | null>(null)
+  const [weightHistory, setWeightHistory] = useState<WeightPoint[]>([])
   const [settingLifts, setSettingLifts] = useState(false)
   const tz = new Date().getTimezoneOffset()
 
@@ -124,7 +130,11 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
         if (sRes.ok) setLogs((await sRes.json()).logs ?? [])
         if (sessRes.ok) setStreak((await sessRes.json()).streak ?? 0)
         if (gRes.ok) setGoals(await gRes.json())
-        if (prRes.ok) setProgram((await prRes.json()).currentProgram ?? null)
+        if (prRes.ok) {
+          const pr = (await prRes.json()) as ProgressLite
+          setProgram(pr.currentProgram ?? null)
+          setWeightHistory(Array.isArray(pr.weightData) ? pr.weightData : [])
+        }
       } catch { /* screens show what they have */ }
     })()
     return () => { cancelled = true }
@@ -198,7 +208,7 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
       className="dark fixed inset-0 z-[95] flex flex-col bg-[#07060d] text-white"
     >
       {/* Sky, tinted by the active screen */}
-      <div className="pointer-events-none absolute inset-0 transition-[background] duration-500" style={{ background: `radial-gradient(120% 60% at 50% -10%, ${hue}55, transparent 60%), radial-gradient(80% 60% at 90% 110%, rgba(16,185,129,0.12), transparent 60%)` }} />
+      <div className="pointer-events-none absolute inset-0 transition-[background] duration-500" style={{ background: `radial-gradient(120% 55% at 50% -10%, ${hue}2e, transparent 62%), radial-gradient(80% 60% at 90% 110%, rgba(255,255,255,0.05), transparent 60%)` }} />
 
       {/* Header + tabs */}
       <div className="relative shrink-0 px-3 pt-[calc(env(safe-area-inset-top,0px)+10px)]">
@@ -249,7 +259,7 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
                       </div>
                       {streak > 0 && (
                         <div className="flex flex-col items-center rounded-2xl bg-white/15 px-4 py-2">
-                          <Flame className="h-5 w-5 text-orange-300" />
+                          <Flame className="h-5 w-5" style={{ color: STREAK_INK.day.hex }} />
                           <span className="mt-0.5 text-lg font-bold tabular-nums">{streak}</span>
                           <span className="text-[10px] uppercase tracking-wide text-white/70">day streak</span>
                         </div>
@@ -327,6 +337,17 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
                       <p className="text-sm text-white/60">No target weight yet — set one in <Link href="/dashboard/settings" onClick={onClose} className="font-medium text-amber-300">Settings</Link> and this becomes then → now → next.</p>
                     )}
                   </Glass>
+                  {(weightHistory.length > 0 || weeks.length > 0) && (
+                    <Glass hue={SUBJECT.fuel.hex}>
+                      <WeightChart
+                        history={weightHistory}
+                        weeks={weeks.map(w => ({ weekKey: w.weekKey, label: w.label, end: w.nutrition.weightEnd, start: w.nutrition.weightStart }))}
+                        target={n?.target.weight ?? null}
+                        unit={unit}
+                        direction={n?.direction ?? null}
+                      />
+                    </Glass>
+                  )}
                   {n && <Next title={n.suggestion.title} sub={n.suggestion.sub} url={n.suggestion.url} hue={SUBJECT.fuel.hex} onClose={onClose} />}
                   <Link href="/dashboard/nutrition/goals" onClick={onClose} className="flex items-center justify-between rounded-2xl bg-white/[0.06] px-4 py-3 ring-1 ring-white/10 hover:bg-white/[0.09]"><span className="text-sm font-semibold">Pace, targets and macros</span><ArrowRight className="h-5 w-5 text-white/40" /></Link>
                 </>
