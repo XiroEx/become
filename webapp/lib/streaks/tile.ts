@@ -25,7 +25,10 @@ export interface StreaksLite {
 
 export interface StreakPage {
   id: StreakPageId
+  /** Short label for the tile (the icon and colour carry the rest). */
   label: string
+  /** Full name, for screen readers and the dot buttons. */
+  fullLabel: string
   /** The number, already formatted ("9", "Building"). */
   value: string
   /** Unit word shown after the value, when there is one. */
@@ -70,7 +73,7 @@ export function streakPages(s: StreaksLite | null): StreakPage[] {
     const missing = superMissing(s)
     pages.push({
       id: 'super',
-      label: 'Super Streak',
+      label: 'Super Streak', fullLabel: 'Super streak',
       value: String(sup.current),
       unit: sup.current === 1 ? 'day' : 'days',
       footer: sup.activeToday
@@ -90,7 +93,7 @@ export function streakPages(s: StreaksLite | null): StreakPage[] {
   const prevMilestone = next ? Math.max(0, next - 7) : 0
   pages.push({
     id: 'overall',
-    label: 'Day Streak',
+    label: 'Day Streak', fullLabel: 'Day streak',
     value: visible ? String(days) : 'Building',
     unit: visible ? (days === 1 ? 'day' : 'days') : undefined,
     footer: visible
@@ -107,7 +110,7 @@ export function streakPages(s: StreaksLite | null): StreakPage[] {
   if (w.current >= STREAK_VISIBLE_MIN && w.target) {
     pages.push({
       id: 'workout',
-      label: 'Workout Streak',
+      label: 'Workout', fullLabel: 'Workout streak',
       value: String(w.current),
       unit: w.current === 1 ? 'day' : 'days',
       footer: `This week ${w.thisWeek}/${w.target}${w.weekLost ? ' · off track' : ''}`,
@@ -118,11 +121,11 @@ export function streakPages(s: StreaksLite | null): StreakPage[] {
   }
   const n = s.pillars.nutrition
   if (n.current >= STREAK_VISIBLE_MIN) {
-    pages.push({ id: 'nutrition', label: 'Nutrition Streak', value: String(n.current), unit: n.current === 1 ? 'day' : 'days', footer: n.activeToday ? `Logged today · best ${n.best}` : 'Log a meal to keep it', pct: Math.min(100, Math.round((n.current / Math.max(n.best, n.current)) * 100)), doneToday: n.activeToday, emphasis: false })
+    pages.push({ id: 'nutrition', label: 'Nutrition', fullLabel: 'Nutrition streak', value: String(n.current), unit: n.current === 1 ? 'day' : 'days', footer: n.activeToday ? `Logged today · best ${n.best}` : 'Log a meal to keep it', pct: Math.min(100, Math.round((n.current / Math.max(n.best, n.current)) * 100)), doneToday: n.activeToday, emphasis: false })
   }
   const m = s.pillars.mindset
   if (m.current >= STREAK_VISIBLE_MIN) {
-    pages.push({ id: 'mindset', label: 'Mindset Streak', value: String(m.current), unit: m.current === 1 ? 'day' : 'days', footer: m.activeToday ? `Checked in today · best ${m.best}` : 'Check in to keep it', pct: Math.min(100, Math.round((m.current / Math.max(m.best, m.current)) * 100)), doneToday: m.activeToday, emphasis: false })
+    pages.push({ id: 'mindset', label: 'Mindset', fullLabel: 'Mindset streak', value: String(m.current), unit: m.current === 1 ? 'day' : 'days', footer: m.activeToday ? `Checked in today · best ${m.best}` : 'Check in to keep it', pct: Math.min(100, Math.round((m.current / Math.max(m.best, m.current)) * 100)), doneToday: m.activeToday, emphasis: false })
   }
   return pages
 }

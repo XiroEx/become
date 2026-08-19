@@ -281,12 +281,14 @@ function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Reac
         }
       : null,
   })
-  const barClass = view.atTarget ? 'bg-green-500' : 'bg-purple-500'
+  // Amber: a goal is a target, the same gold the streaks and a complete week
+  // wear. Violet is the mind pillar, and this tile is not mind.
+  const barClass = view.atTarget ? 'bg-green-500' : 'bg-amber-500'
   return (
     <StatTile
       size={size}
       href={view.href}
-      accent="purple"
+      accent="amber"
       icon={<Target className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label={view.label}
       value={view.kind === 'unset' ? <span className="text-zinc-400 dark:text-zinc-500">{view.value}</span> : view.value}

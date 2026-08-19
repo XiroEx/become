@@ -11,22 +11,20 @@
 import { useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Flame, Sparkles, Dumbbell, UtensilsCrossed, Brain } from 'lucide-react'
+import { Flame, Dumbbell, UtensilsCrossed, Brain } from 'lucide-react'
+import { PILLAR, STREAK_INK } from '@/lib/pillarColors'
 import { Card, type StatTileSize } from '@/components/ui'
 import { streakPages, type StreakPage, type StreakPageId, type StreaksLite } from '@/lib/streaks/tile'
 
 const ICON: Record<StreakPageId, typeof Flame> = {
-  super: Sparkles, overall: Flame, workout: Dumbbell, nutrition: UtensilsCrossed, mindset: Brain,
+  super: Flame, overall: Flame, workout: Dumbbell, nutrition: UtensilsCrossed, mindset: Brain,
 }
-const BADGE: Record<StreakPageId, string> = {
-  super: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300',
-  overall: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
-  workout: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300',
-  nutrition: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300',
-  mindset: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300',
-}
-const BAR: Record<StreakPageId, string> = {
-  super: 'bg-orange-500', overall: 'bg-amber-500', workout: 'bg-green-500', nutrition: 'bg-red-500', mindset: 'bg-purple-500',
+const INK: Record<StreakPageId, { badge: string; bar: string }> = {
+  super: STREAK_INK.super,
+  overall: STREAK_INK.day,
+  workout: PILLAR.training,
+  nutrition: PILLAR.fuel,
+  mindset: PILLAR.mind,
 }
 
 export default function StreakTile({ streaks, size = '1x1', loading }: { streaks: StreaksLite | null; size?: StatTileSize; loading?: boolean }) {
@@ -101,6 +99,16 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
       onPointerCancel={() => { drag.current = null }}
       onClick={(e: React.MouseEvent) => { if (drag.current?.moved) { e.preventDefault(); e.stopPropagation() } }}
     >
+      {/* Ember glow behind a super streak — the tile itself catches light. */}
+      {p.emphasis && (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-orange-500/25 blur-2xl"
+          animate={reduced ? { opacity: 0.5 } : { opacity: [0.35, 0.6, 0.4, 0.55, 0.35] }}
+          transition={reduced ? { duration: 0 } : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
+
       <AnimatePresence mode="wait" initial={false} custom={dir}>
         <motion.div
           key={p.id}
@@ -109,59 +117,73 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
           animate={reduced ? { opacity: 1 } : { opacity: 1, x: 0 }}
           exit={reduced ? { opacity: 0 } : { opacity: 0, x: -dir * 18 }}
           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-          className="flex h-full flex-col justify-center gap-1.5"
+          className="relative flex h-full flex-col justify-center gap-2"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <motion.span
-              className={`flex shrink-0 items-center justify-center rounded-full ${wide ? 'h-11 w-11' : 'h-9 w-9'} ${BADGE[p.id]} ${p.doneToday ? '' : 'opacity-60'}`}
-              animate={p.emphasis && !reduced ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-              transition={p.emphasis && !reduced ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+              className={`relative flex shrink-0 items-center justify-center rounded-full ${wide ? 'h-11 w-11' : 'h-9 w-9'} ${INK[p.id].badge} ${p.doneToday || p.emphasis ? '' : 'opacity-60'}`}
+              // Fire, not a heartbeat: the flame flickers — quick, uneven, warm.
+              animate={p.emphasis && !reduced ? { scale: [1, 1.06, 0.99, 1.04, 1], rotate: [0, -2, 1.5, -1, 0] } : { scale: 1, rotate: 0 }}
+              transition={p.emphasis && !reduced ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
             >
-              <Icon className={wide ? 'h-5 w-5' : 'h-4 w-4'} />
+              {p.emphasis && (
+                <motion.span
+                  aria-hidden="true"
+                  className="absolute inset-0 rounded-full"
+                  style={{ boxShadow: '0 0 14px 2px rgba(249,115,22,0.55)' }}
+                  animate={reduced ? { opacity: 0.6 } : { opacity: [0.45, 0.85, 0.5, 0.75, 0.45] }}
+                  transition={reduced ? { duration: 0 } : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              )}
+              <Icon className={`relative ${wide ? 'h-5 w-5' : 'h-4 w-4'}`} />
             </motion.span>
+
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">{p.label}</div>
-              <div className={`${wide ? 'text-3xl' : 'text-2xl'} font-extrabold leading-none tracking-tight ${p.emphasis ? 'text-orange-500 dark:text-orange-400' : 'text-zinc-900 dark:text-white'}`}>
-                {p.emphasis && !reduced ? (
+              <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{p.label}</span>
+              <div className={`mt-0.5 flex items-baseline gap-1 ${wide ? 'text-3xl' : 'text-2xl'} font-extrabold leading-none tracking-tight`}>
+                {p.emphasis ? (
                   <motion.span
-                    className="inline-block"
+                    className="inline-block bg-gradient-to-b from-amber-300 via-orange-400 to-orange-600 bg-clip-text text-transparent"
                     data-testid="streak-super-value"
-                    animate={{ opacity: [1, 0.55, 1], textShadow: ['0 0 0px rgba(249,115,22,0)', '0 0 14px rgba(249,115,22,0.65)', '0 0 0px rgba(249,115,22,0)'] }}
-                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                    animate={reduced ? {} : { opacity: [1, 0.82, 1, 0.9, 1], filter: ['drop-shadow(0 0 0px rgba(249,115,22,0))', 'drop-shadow(0 0 10px rgba(249,115,22,0.75))', 'drop-shadow(0 0 3px rgba(249,115,22,0.35))', 'drop-shadow(0 0 8px rgba(249,115,22,0.6))', 'drop-shadow(0 0 0px rgba(249,115,22,0))'] }}
+                    transition={reduced ? {} : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
                   >
                     {p.value}
                   </motion.span>
                 ) : (
-                  <span data-testid={p.emphasis ? 'streak-super-value' : undefined}>{p.value}</span>
+                  <span className="text-zinc-900 dark:text-white">{p.value}</span>
                 )}
-                {p.unit && <span className="ml-1 text-sm font-semibold text-zinc-400 dark:text-zinc-500">{p.unit}</span>}
+                {p.unit && <span className="text-[13px] font-semibold text-zinc-400 dark:text-zinc-500">{p.unit}</span>}
               </div>
             </div>
           </div>
+
           <div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-              <div className={`h-full rounded-full ${BAR[p.id]} transition-all duration-500`} style={{ width: `${p.pct}%` }} />
+              <div className={`h-full rounded-full ${INK[p.id].bar} transition-all duration-500`} style={{ width: `${p.pct}%` }} />
             </div>
-            <p className="mt-0.5 truncate text-[11px] text-zinc-400 dark:text-zinc-600">{p.footer}</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="min-w-0 flex-1 truncate text-[11px] leading-tight text-zinc-400 dark:text-zinc-500">{p.footer}</p>
+              {pages.length > 1 && (
+                <span className="flex shrink-0 items-center gap-[3px]" data-testid="streak-tile-dots">
+                  {pages.map((pg, idx) => (
+                    <button
+                      key={pg.id}
+                      type="button"
+                      aria-label={pg.fullLabel}
+                      aria-current={idx === i}
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); goTo(idx, idx > i ? 1 : -1) }}
+                      className={`h-1 rounded-full transition-all ${idx === i ? `w-2.5 ${pg.id === 'super' ? 'bg-orange-500' : 'bg-zinc-400 dark:bg-zinc-500'}` : 'w-1 bg-zinc-200 dark:bg-zinc-700'}`}
+                    />
+                  ))}
+                </span>
+              )}
+            </div>
           </div>
         </motion.div>
       </AnimatePresence>
 
-      {/* Page dots — tap to jump, and the affordance that says "there is more". */}
-      {pages.length > 1 && (
-        <div className="absolute right-2 top-2 flex items-center gap-1" data-testid="streak-tile-dots">
-          {pages.map((pg, idx) => (
-            <button
-              key={pg.id}
-              type="button"
-              aria-label={pg.label}
-              onPointerDown={e => e.stopPropagation()}
-              onClick={e => { e.preventDefault(); e.stopPropagation(); goTo(idx, idx > i ? 1 : -1) }}
-              className={`h-1.5 rounded-full transition-all ${idx === i ? `w-3 ${pg.id === 'super' ? 'bg-orange-500' : 'bg-zinc-400 dark:bg-zinc-500'}` : 'w-1.5 bg-zinc-200 dark:bg-zinc-700'}`}
-            />
-          ))}
-        </div>
-      )}
     </Card>
   )
 }

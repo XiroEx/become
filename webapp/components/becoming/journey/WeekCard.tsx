@@ -14,22 +14,13 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowUpRight, ArrowRight, ArrowDownRight, Flag, Brain, UtensilsCrossed, Dumbbell, Sparkles, Trophy, ChevronRight, Compass } from 'lucide-react'
-import type { WeekSnapshot, Subject } from '@/lib/becoming/weeks'
+import type { WeekSnapshot } from '@/lib/becoming/weeks'
+import { PILLAR, pillarColor } from '@/lib/pillarColors'
 
-export const SUBJECT: Record<Subject, { name: string; hue: number; sat: number; light: string; hex: string }> = {
-  training: { name: 'a training week', hue: 16,  sat: 90, light: 'text-orange-200',  hex: '#ff7a59' },
-  fuel:     { name: 'a fuel week',     hue: 40,  sat: 90, light: 'text-amber-200',   hex: '#f5b342' },
-  mind:     { name: 'a mind week',     hue: 250, sat: 85, light: 'text-violet-200',  hex: '#9b8cff' },
-  all:      { name: 'the whole system',hue: 168, sat: 70, light: 'text-teal-200',    hex: '#3ed2b0' },
-  empty:    { name: 'a quiet week',    hue: 250, sat: 8,  light: 'text-zinc-300',    hex: '#5c5b66' },
-}
-
-/** CSS colour for a week: hue by subject, saturation by consistency (a thin week is dusty, a full one vivid). */
-export function weekColor(subject: Subject, score: number, l = 60, a = 1): string {
-  const s = SUBJECT[subject]
-  const sat = subject === 'empty' ? 8 : Math.round(30 + (s.sat - 30) * Math.max(0, Math.min(1, score / 100)))
-  return `hsl(${s.hue} ${sat}% ${l}% / ${a})`
-}
+// The pillar palette lives in lib/pillarColors so the journey, the details, the
+// streaks page and the dashboard tiles cannot drift apart.
+export { PILLAR as SUBJECT } from '@/lib/pillarColors'
+export { pillarColor as weekColor } from '@/lib/pillarColors'
 
 function Strip({ days, pick, tone }: { days: WeekSnapshot['days']; pick: (d: WeekSnapshot['days'][number]) => boolean; tone: string }) {
   return (
@@ -88,9 +79,9 @@ function Sparkline({ altitudes, at, color, onClick }: { altitudes: number[]; at:
 }
 
 function WeekCardImpl({ week: w, unit, width, height, focused, landed, compact, exitEdge, totalWeeks, identity, next, onDetails, reduced, isPeak, spark, onSparkline }: WeekCardProps) {
-  const subj = SUBJECT[w.subject]
-  const tone = weekColor(w.subject, w.score, 62)
-  const toneSoft = weekColor(w.subject, w.score, 60, 0.18)
+  const subj = PILLAR[w.subject]
+  const tone = pillarColor(w.subject, w.score, 62)
+  const toneSoft = pillarColor(w.subject, w.score, 60, 0.18)
   const StepIcon = w.step === 'up' ? ArrowUpRight : w.step === 'down' ? ArrowDownRight : w.step === 'start' ? Flag : ArrowRight
   const stepText = w.gap ? 'held' : isPeak ? 'new high' : w.step === 'up' ? 'climbed' : w.step === 'flat' ? 'held' : w.step === 'down' ? 'a dip' : 'start'
   const wins = w.mind.wins.slice(0, 2)
@@ -102,7 +93,7 @@ function WeekCardImpl({ week: w, unit, width, height, focused, landed, compact, 
   if (compact) {
     // ── Overview tile: colour + week + one line ──
     return (
-      <div className={shell} style={{ width, height, background: `linear-gradient(160deg, ${weekColor(w.subject, w.score, 48)} 0%, ${weekColor(w.subject, w.score, 30)} 100%)`, boxShadow: `${shadow}, inset 0 0 0 1px rgba(255,255,255,0.15)` }} data-week-index={w.index}>
+      <div className={shell} style={{ width, height, background: `linear-gradient(160deg, ${pillarColor(w.subject, w.score, 48)} 0%, ${pillarColor(w.subject, w.score, 30)} 100%)`, boxShadow: `${shadow}, inset 0 0 0 1px rgba(255,255,255,0.15)` }} data-week-index={w.index}>
         <div className="flex h-full flex-col justify-between p-7">
           <div>
             <p className="text-[40px] font-black leading-none tracking-tight">{w.gap ? '…' : `W${w.index + 1}`}</p>
@@ -120,17 +111,17 @@ function WeekCardImpl({ week: w, unit, width, height, focused, landed, compact, 
   return (
     <div
       className={shell}
-      style={{ width, height, background: '#0e0c17', boxShadow: `${shadow}, inset 0 0 0 ${w.isCurrent ? 2 : 1}px ${w.isCurrent ? weekColor(w.subject, w.score, 65, 0.9) : toneSoft}` }}
+      style={{ width, height, background: '#0e0c17', boxShadow: `${shadow}, inset 0 0 0 ${w.isCurrent ? 2 : 1}px ${w.isCurrent ? pillarColor(w.subject, w.score, 65, 0.9) : toneSoft}` }}
       data-week-index={w.index}
       data-testid={w.isCurrent ? 'week-card-current' : undefined}
     >
       {/* Sky: tinted by the subject; the "sun" sits high on a climb, low on a dip */}
-      <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(90% 60% at ${w.step === 'down' ? '80% 100%' : w.step === 'up' ? '75% 0%' : '90% 40%'}, ${weekColor(w.subject, w.score, 55, 0.35)}, transparent 60%), linear-gradient(160deg, ${weekColor(w.subject, w.score, 40, 0.28)} 0%, rgba(14,12,23,0) 55%)` }} />
+      <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(90% 60% at ${w.step === 'down' ? '80% 100%' : w.step === 'up' ? '75% 0%' : '90% 40%'}, ${pillarColor(w.subject, w.score, 55, 0.35)}, transparent 60%), linear-gradient(160deg, ${pillarColor(w.subject, w.score, 40, 0.28)} 0%, rgba(14,12,23,0) 55%)` }} />
       {/* Edge light toward the next card */}
       {focused && exitEdge && (
         <div
           className={`pointer-events-none absolute animate-pulse ${exitEdge === 'up' ? 'inset-x-10 top-0 h-[3px]' : exitEdge === 'down' ? 'inset-x-10 bottom-0 h-[3px]' : 'inset-y-10 right-0 w-[3px]'}`}
-          style={{ background: tone, boxShadow: `0 0 18px 4px ${weekColor(w.subject, w.score, 60, 0.6)}`, borderRadius: 3 }}
+          style={{ background: tone, boxShadow: `0 0 18px 4px ${pillarColor(w.subject, w.score, 60, 0.6)}`, borderRadius: 3 }}
           data-testid="week-card-exit"
         />
       )}
@@ -168,21 +159,21 @@ function WeekCardImpl({ week: w, unit, width, height, focused, landed, compact, 
             <div className="flex items-center justify-between gap-2 text-[12px]">
               <span className="flex items-center gap-1.5 text-white/80"><Brain className="h-3.5 w-3.5 text-violet-300" /> Mind</span>
               <span className="flex items-center gap-2 text-white/60">
-                <Strip days={w.days} pick={d => d.mind} tone={SUBJECT.mind.hex} />
+                <Strip days={w.days} pick={d => d.mind} tone={PILLAR.mind.hex} />
                 <span className="tabular-nums">{w.mind.sessions}s · {w.mind.moodDays}m{dominant ? ` · ${dominant.replace('_', ' ')}` : ''}</span>
               </span>
             </div>
             <div className="flex items-center justify-between gap-2 text-[12px]">
               <span className="flex items-center gap-1.5 text-white/80"><UtensilsCrossed className="h-3.5 w-3.5 text-amber-300" /> Fuel</span>
               <span className="flex items-center gap-2 text-white/60">
-                <Strip days={w.days} pick={d => d.food} tone={SUBJECT.fuel.hex} />
+                <Strip days={w.days} pick={d => d.food} tone={PILLAR.fuel.hex} />
                 <span className="tabular-nums">{w.nutrition.logDays}/{w.isCurrent ? w.daysElapsed : 7}{w.nutrition.delta != null && w.nutrition.delta !== 0 ? ` · ${w.nutrition.delta > 0 ? '+' : ''}${w.nutrition.delta} ${unit}` : ''}</span>
               </span>
             </div>
             <div className="flex items-center justify-between gap-2 text-[12px]">
               <span className="flex items-center gap-1.5 text-white/80"><Dumbbell className="h-3.5 w-3.5 text-orange-300" /> Training</span>
               <span className="flex items-center gap-2 text-white/60">
-                <Strip days={w.days} pick={d => d.workout} tone={SUBJECT.training.hex} />
+                <Strip days={w.days} pick={d => d.workout} tone={PILLAR.training.hex} />
                 <span className="tabular-nums">{w.training.workouts}{w.training.target ? `/${w.training.target}` : ''}{w.training.prs.length ? ` · ${w.training.prs.length} PR${w.training.prs.length === 1 ? '' : 's'}` : ''}</span>
               </span>
             </div>
