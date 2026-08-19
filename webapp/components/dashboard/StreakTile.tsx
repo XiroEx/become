@@ -102,11 +102,9 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
     >
       {/* Ember glow behind a super streak — the tile itself catches light. */}
       {p.emphasis && (
-        <motion.div
+        <div
           aria-hidden="true"
           className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-orange-400/40 blur-2xl dark:bg-orange-500/25"
-          animate={reduced ? { opacity: 0.5 } : { opacity: [0.35, 0.6, 0.4, 0.55, 0.35] }}
-          transition={reduced ? { duration: 0 } : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
 
@@ -124,13 +122,13 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
             <span
               className={`relative flex shrink-0 items-center justify-center rounded-full ${wide ? 'h-11 w-11' : 'h-9 w-9'} ${INK[p.id].badge} ${p.doneToday || p.emphasis ? '' : 'opacity-60'}`}
             >
+              {/* A steady warm ring. The icon used to pulse, which read as
+                  "loading" and stole attention from the number that is on fire. */}
               {p.emphasis && (
-                <motion.span
+                <span
                   aria-hidden="true"
                   className="absolute inset-0 rounded-full"
-                  style={{ boxShadow: '0 0 12px 1px rgba(234,88,12,0.45)' }}
-                  animate={reduced ? { opacity: 0.5 } : { opacity: [0.35, 0.6, 0.4, 0.55, 0.35] }}
-                  transition={reduced ? { duration: 0 } : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ boxShadow: '0 0 10px 1px rgba(234,88,12,0.35)' }}
                 />
               )}
               <Icon className={`relative ${wide ? 'h-5 w-5' : 'h-4 w-4'}`} />
@@ -138,7 +136,7 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
 
             <div className="min-w-0 flex-1">
               <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{p.label}</span>
-              <div className={`mt-0.5 flex items-baseline gap-1 ${wide ? 'text-3xl' : 'text-2xl'} font-extrabold leading-none tracking-tight`}>
+              <div className={`mt-0.5 flex items-baseline gap-1 ${p.emphasis ? (wide ? 'text-4xl' : 'text-3xl') : (wide ? 'text-3xl' : 'text-2xl')} font-extrabold leading-none tracking-tight`}>
                 {p.emphasis ? (
                   <span data-testid="streak-super-value"><FireNumber>{p.value}</FireNumber></span>
                 ) : (

@@ -146,7 +146,7 @@ export async function computeStreaks(userId: string, tz: number, now = new Date(
   const mindset = dayStreak(mindDays, todayKey)
   const workout = weeklyTarget ? weekStreak(workoutDays, weeklyTarget, todayKey) : null
   const allDays = dayRange(fromKey, todayKey)
-  const trainedOrRest = workoutOrRestDays(workoutDays, allDays, trainingWeekdays)
+  const trainedOrRest = workoutOrRestDays(workoutDays, allDays, trainingWeekdays, weeklyTarget)
   const lost = weeklyTarget ? lostWeeks(workoutDays, weeklyTarget, todayKey, trainingWeekdays) : new Set<string>()
   const workoutHalf = withoutLostWeeks(trainedOrRest, lost)
   // Workout streak: days whose training week is on track (rest days included).
