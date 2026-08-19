@@ -11,7 +11,7 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
-import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, stashQuickSessionWithId, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
@@ -140,6 +140,14 @@ export default function LiveWorkoutPage() {
   const [thinFinishAcked, setThinFinishAcked] = useState(false);
   // Removing an exercise that already has sets against it asks first.
   const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
+  // Long-press a row in the exercise list to pick it up and move it. Tap it to
+  // go to that exercise. The arrows that used to sit on every row crowded out
+  // the exercise name, and this is the gesture people already expect.
+  const [drag, setDrag] = useState<{ from: number; to: number; dy: number } | null>(null);
+  const dragRef = useRef<{ from: number; startY: number; rowH: number } | null>(null);
+  const pressRef = useRef<{ idx: number; y: number } | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeIndicator, setShowResumeIndicator] = useState(false);
   // Active-seconds tracking: time persists across resume sessions.
@@ -287,6 +295,7 @@ export default function LiveWorkoutPage() {
     speed?: number;
     duration?: number;
     distance?: number;
+    date?: string;
   };
   const initializeExercises = (
     exList: Exercise[],
@@ -342,10 +351,71 @@ export default function LiveWorkoutPage() {
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (!res.ok) return {};
-      const data = (await res.json()) as { performances?: Record<string, PerformanceEntry | null> };
+      const data = (await res.json()) as {
+        performances?: Record<string, PerformanceEntry | null>
+        prs?: Record<string, { weight: number; reps: number }>
+      };
+      // Quick sessions have no program to hang a history request off, so this
+      // one call carries both: last time's numbers and the standing records.
+      if (data.prs) setExercisePRs(data.prs);
       return data.performances ?? {};
     } catch {
       return {};
+    }
+  };
+
+  /** Rebuild a quick session from its server log and re-stash it locally. */
+  const rebuildQuickFromServer = async (sessionId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return null;
+      const res = await fetch(`/api/workouts/session?id=${encodeURIComponent(sessionId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as {
+        session?: {
+          title?: string
+          focus?: string
+          exercises?: Array<{
+            name: string
+            exerciseSlug?: string
+            trackingType?: string
+            groupId?: string
+            groupType?: string
+            groupLabel?: string
+            groupRounds?: number
+            addedAdHoc?: boolean
+            prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
+            sets?: Array<{ reps?: number | null; duration?: number | null }>
+          }>
+        } | null
+      };
+      const sess = body.session;
+      if (!sess?.exercises?.length) return null;
+      const exercises = sess.exercises.map((ex) => {
+        const p = ex.prescription;
+        const first = ex.sets?.[0];
+        return {
+          exerciseSlug: ex.exerciseSlug || "",
+          name: ex.name,
+          trackingType: p?.trackingType || ex.trackingType || "reps_weight",
+          sets: p?.sets ?? (ex.sets?.length || 1),
+          reps: p?.reps ?? (first?.reps != null && first.reps > 0 ? String(first.reps) : ""),
+          ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
+          ...(p?.rest ? { rest: p.rest } : {}),
+          ...(ex.groupId ? { groupId: ex.groupId } : {}),
+          ...(ex.groupType ? { groupType: ex.groupType } : {}),
+          ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+          ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+          ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
+        };
+      });
+      const draft = { title: sess.title || "Quick Session", ...(sess.focus ? { focus: sess.focus as never } : {}), exercises };
+      stashQuickSessionWithId(draft, sessionId);
+      return readQuickSession(sessionId);
+    } catch {
+      return null;
     }
   };
 
@@ -355,7 +425,15 @@ export default function LiveWorkoutPage() {
       try {
         // ── Quick-session mode: load the stashed draft, no program fetches ──
         if (isQuick) {
-          const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
+          let stored = quickSessionId ? readQuickSession(quickSessionId) : null;
+          // The stash is per-browser. Resuming from the dashboard pill on
+          // another device — or after clearing site data — has to rebuild the
+          // session from its log, or the live view would offer demo exercises
+          // in place of the workout the member is standing in.
+          if (quickSessionId && !stored?.exercises?.length) {
+            const rebuilt = await rebuildQuickFromServer(quickSessionId);
+            if (rebuilt) stored = rebuilt;
+          }
           const draftExercises = stored?.exercises ?? [];
           const exs: Exercise[] = draftExercises.map((d) => ({
             exerciseSlug: d.exerciseSlug,
@@ -399,6 +477,24 @@ export default function LiveWorkoutPage() {
           // Prefill last-time numbers (slug-based — works without a program).
           const token = localStorage.getItem("token");
           const lastPerformance = token ? await fetchLastPerformance(token, exs) : {};
+          // "Last session: 185 lbs × 8" and the summary's PR count both read
+          // exerciseHistory, keyed by NAME. Programs get it from the workouts
+          // endpoint; a quick session had nothing, so it never celebrated a PR
+          // it had just watched you set.
+          const quickHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {};
+          for (const ex of exs) {
+            const slug = (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || '').toLowerCase();
+            const prior = slug ? lastPerformance[slug] : null;
+            if (prior) {
+              quickHistory[ex.name] = {
+                weight: prior.weight ?? 0,
+                reps: prior.reps ?? 0,
+                ...(prior.duration != null && { duration: prior.duration }),
+                date: prior.date ?? '',
+              };
+            }
+          }
+          setExerciseHistory(quickHistory);
           const { data, flow } = initializeExercises(exs, lastPerformance);
           // Restore shared progress from the Track view (reps/weight/completed) so
           // flipping the Track|Live tab never loses entered sets.
@@ -1346,6 +1442,70 @@ export default function LiveWorkoutPage() {
     applyWorkoutChange(res.exercises as Exercise[], res.order);
   }, [exercises, applyWorkoutChange]);
 
+  /** Jump to an exercise: its first set that still needs doing. */
+  const goToExercise = useCallback((idx: number) => {
+    const target = workoutFlow.findIndex(
+      (st) => st.exerciseIndex === idx && !exerciseData[st.exerciseIndex]?.[st.setIndex]?.completed,
+    );
+    const at = target === -1 ? workoutFlow.findIndex((st) => st.exerciseIndex === idx) : target;
+    if (at === -1) return;
+    setCurrentStepIndex(at);
+    const step = workoutFlow[at];
+    const set = step ? exerciseData[step.exerciseIndex]?.[step.setIndex] : null;
+    setCurrentReps(set?.reps ?? "");
+    setCurrentWeight(set?.weight ?? "");
+    setCurrentSpeed(set?.speed ?? "");
+    setIsResting(false);
+    setShowExerciseList(false);
+  }, [workoutFlow, exerciseData]);
+
+  const startLongPress = useCallback((idx: number, clientY: number) => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    pressRef.current = { idx, y: clientY };
+    longPressRef.current = setTimeout(() => {
+      const rows = listRef.current?.children;
+      const rowH = rows && rows.length > 1
+        ? (rows[1] as HTMLElement).offsetTop - (rows[0] as HTMLElement).offsetTop
+        : ((rows?.[0] as HTMLElement | undefined)?.offsetHeight ?? 48) + 8;
+      dragRef.current = { from: idx, startY: clientY, rowH: Math.max(24, rowH) };
+      setDrag({ from: idx, to: idx, dy: 0 });
+      // A short buzz, where the platform offers one: the row is now in hand.
+      try { navigator.vibrate?.(15) } catch { /* not everywhere */ }
+    }, 400);
+  }, []);
+
+  const moveDrag = useCallback((clientY: number) => {
+    const d = dragRef.current;
+    if (!d) {
+      // A real scroll cancels the hold; a few pixels of jitter does not, or the
+      // gesture would be impossible to land with a thumb.
+      const press = pressRef.current;
+      if (press && Math.abs(clientY - press.y) > 8 && longPressRef.current) {
+        clearTimeout(longPressRef.current);
+        longPressRef.current = null;
+      }
+      return;
+    }
+    const dy = clientY - d.startY;
+    const to = Math.max(0, Math.min(exercises.length - 1, d.from + Math.round(dy / d.rowH)));
+    setDrag({ from: d.from, to, dy });
+  }, [exercises.length]);
+
+  const endPress = useCallback((idx: number, wasDrag: boolean) => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+    pressRef.current = null;
+    const d = dragRef.current;
+    dragRef.current = null;
+    const preview = drag;
+    setDrag(null);
+    if (d && preview && preview.to !== d.from) {
+      const res = moveExercise<AdHocExercise>(exercises as AdHocExercise[], d.from, preview.to);
+      applyWorkoutChange(res.exercises as Exercise[], res.order);
+      return;
+    }
+    if (!wasDrag && !d) goToExercise(idx);
+  }, [drag, exercises, applyWorkoutChange, goToExercise]);
+
   /** Superset the exercise at `idx` with the one after it (or break the group). */
   const toggleGroupAt = useCallback((idx: number) => {
     const ex = exercises[idx];
@@ -1633,91 +1793,92 @@ export default function LiveWorkoutPage() {
                   className="mr-3 w-[19rem] max-w-[calc(100vw-3.5rem)] rounded-xl bg-black/80 p-3 backdrop-blur-md"
                 >
                   <p className="mb-2 text-xs font-medium text-white/50">EXERCISES</p>
-                  <div className="space-y-2">
-                    {exercises.map((exercise, idx) => (
+                  <p className="mb-2 text-[10px] text-white/30">Tap to jump · hold to move</p>
+                  <div className="space-y-2" ref={listRef}>
+                    {exercises.map((exercise, idx) => {
+                      // While a row is in hand, the list shows where it would land.
+                      const lifted = drag?.from === idx;
+                      const shift = drag && !lifted
+                        ? (drag.from < idx && idx <= drag.to ? -1 : drag.to <= idx && idx < drag.from ? 1 : 0)
+                        : 0;
+                      return (
                       <div
                         key={idx}
-                        className={`rounded-lg px-3 py-2 transition-colors ${
-                          idx === currentExerciseIndex ? "bg-white/10" : "hover:bg-white/5"
+                        data-testid={`live-row-${idx}`}
+                        onPointerDown={(e) => { e.stopPropagation(); startLongPress(idx, e.clientY); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); }}
+                        onPointerMove={(e) => moveDrag(e.clientY)}
+                        onPointerUp={(e) => { e.stopPropagation(); endPress(idx, false); }}
+                        onPointerCancel={() => endPress(idx, true)}
+                        style={{
+                          transform: lifted ? `translateY(${drag!.dy}px) scale(1.02)` : shift ? `translateY(${shift * 100}%)` : undefined,
+                          transition: lifted ? "none" : "transform 120ms ease",
+                          touchAction: "none",
+                        }}
+                        className={`relative flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-3 py-2 transition-colors ${
+                          lifted
+                            ? "z-10 bg-white/20 shadow-lg shadow-black/40 ring-1 ring-white/30"
+                            : idx === currentExerciseIndex
+                            ? "bg-white/10"
+                            : "hover:bg-white/5"
                         }`}
                       >
-                        {/* The name gets the full width — four controls beside it
-                            truncated everything down to "Hip Abducti…". */}
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                              isExerciseComplete(idx)
-                                ? "bg-green-500 text-white"
-                                : idx === currentExerciseIndex
-                                ? "bg-white text-black"
-                                : "bg-white/20 text-white/60"
-                            }`}
-                          >
-                            {isExerciseComplete(idx) ? (
-                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              idx + 1
-                            )}
-                          </div>
-                          <p className={`min-w-0 flex-1 truncate text-sm font-medium ${
+                        <div
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            isExerciseComplete(idx)
+                              ? "bg-green-500 text-white"
+                              : idx === currentExerciseIndex
+                              ? "bg-white text-black"
+                              : "bg-white/20 text-white/60"
+                          }`}
+                        >
+                          {isExerciseComplete(idx) ? (
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            idx + 1
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`truncate text-sm font-medium ${
                             idx === currentExerciseIndex ? "text-white" : "text-white/70"
                           }`}>
                             {exercise.name}
                           </p>
-                          {idx === currentExerciseIndex && (
-                            <span className="shrink-0 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-400">
-                              Now
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-1 flex items-center gap-1 pl-8.5">
-                          <p className="min-w-0 flex-1 truncate text-xs text-white/40">
+                          <p className="truncate text-xs text-white/40">
                             {exercise.sets} sets × {exercise.reps}
                             {exercise.groupId && <span className="ml-1 text-purple-300/80">· {exercise.groupLabel || "Superset"}</span>}
                           </p>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); moveExerciseBy(idx, -1); }}
-                            disabled={idx === 0}
-                            aria-label={`Move ${exercise.name} up`}
-                            data-testid={`live-move-up-${idx}`}
-                            className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 disabled:opacity-20"
-                          >
-                            <ChevronUp className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); moveExerciseBy(idx, 1); }}
-                            disabled={idx === exercises.length - 1}
-                            aria-label={`Move ${exercise.name} down`}
-                            data-testid={`live-move-down-${idx}`}
-                            className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 disabled:opacity-20"
-                          >
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          </button>
-                          {(exercise.groupId || idx + 1 < exercises.length) && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleGroupAt(idx); }}
-                              aria-label={exercise.groupId ? `Ungroup ${exercise.name}` : `Superset ${exercise.name} with the next exercise`}
-                              data-testid={`live-group-toggle-${idx}`}
-                              className={`rounded-lg p-1.5 transition-colors ${exercise.groupId ? "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
-                            >
-                              {exercise.groupId ? <Unlink className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); requestRemoveAt(idx); }}
-                            disabled={!canRemoveExercise(exercises)}
-                            aria-label={`Remove ${exercise.name}`}
-                            data-testid={`live-remove-${idx}`}
-                            className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-red-500/20 hover:text-red-300 disabled:opacity-20"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
                         </div>
+                        {idx === currentExerciseIndex && !drag && (
+                          <span className="shrink-0 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-400">
+                            Now
+                          </span>
+                        )}
+                        {(exercise.groupId || idx + 1 < exercises.length) && (
+                          <button
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); toggleGroupAt(idx); }}
+                            aria-label={exercise.groupId ? `Ungroup ${exercise.name}` : `Superset ${exercise.name} with the next exercise`}
+                            data-testid={`live-group-toggle-${idx}`}
+                            className={`shrink-0 rounded-lg p-1.5 transition-colors ${exercise.groupId ? "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
+                          >
+                            {exercise.groupId ? <Unlink className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+                        <button
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.stopPropagation(); requestRemoveAt(idx); }}
+                          disabled={!canRemoveExercise(exercises)}
+                          aria-label={`Remove ${exercise.name}`}
+                          data-testid={`live-remove-${idx}`}
+                          className="shrink-0 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-red-500/20 hover:text-red-300 disabled:opacity-20"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                    ))}
+                      );
+                    })}
 
                     {/* Build as you go — the workout is not fixed at the door. Fewer than
                         RECOMMENDED_MIN_EXERCISES exercises and the button nudges you to add more. */}
