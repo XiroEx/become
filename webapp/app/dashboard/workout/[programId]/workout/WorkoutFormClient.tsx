@@ -22,7 +22,7 @@ import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
-import { normalizeTracking, tracksTime } from "@/lib/workout/tracking";
+import { normalizeTracking, tracksTime, setUnitLabel } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -1374,7 +1374,7 @@ export default function WorkoutFormPage() {
                       <div className="mt-1 flex items-center gap-2">
                         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                            {exercise.sets} sets
+                            {exercise.sets} {setUnitLabel(exercise.trackingType, exercise.sets || 3).toLowerCase()}
                             {exercise.duration
                               ? ` × ${exercise.duration}`
                               : exercise.reps
@@ -1538,7 +1538,7 @@ export default function WorkoutFormPage() {
                                 })()}
                                 {/* Column headers */}
                                 <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                                  <div className="col-span-2">Set</div>
+                                  <div className="col-span-2">{setUnitLabel(tracking, 1)}</div>
                                   {showWeight && <div className="col-span-3">Weight</div>}
                                   {!isNone && (
                                     <div className={showWeight ? "col-span-3" : "col-span-6"}>
@@ -2011,57 +2011,66 @@ export default function WorkoutFormPage() {
                 </svg>
               </div>
 
-              <h3 className="mb-2 text-center text-xl font-bold text-zinc-900 dark:text-white">
-                Skip Set?
-              </h3>
-              
-              <p className="mb-1 text-center text-sm text-zinc-600 dark:text-zinc-400">
-                Are you sure you want to skip this set of{" "}
-                <span className="font-semibold text-zinc-900 dark:text-white">
-                  {workout?.exercises[skipModalExerciseIndex]?.name}
-                </span>?
-              </p>
+              {(() => {
+                const skipEx = workout?.exercises[skipModalExerciseIndex];
+                const unit = setUnitLabel(skipEx?.trackingType, 1);
+                const unitPlural = setUnitLabel(skipEx?.trackingType, skipEx?.sets ?? 0);
+                return (
+                  <>
+                    <h3 className="mb-2 text-center text-xl font-bold text-zinc-900 dark:text-white">
+                      Skip {unit}?
+                    </h3>
 
-              <p className="mb-6 text-center text-xs text-zinc-500 dark:text-zinc-500">
-                Set {skipModalSetIndex + 1} of {workout?.exercises[skipModalExerciseIndex]?.sets}
-              </p>
+                    <p className="mb-1 text-center text-sm text-zinc-600 dark:text-zinc-400">
+                      Are you sure you want to skip this {unit.toLowerCase()} of{" "}
+                      <span className="font-semibold text-zinc-900 dark:text-white">
+                        {skipEx?.name}
+                      </span>?
+                    </p>
 
-              <div className="flex flex-col gap-3">
-                {/* Swap alternative option */}
-                <button
-                  onClick={() => {
-                    setShowSkipModal(false);
-                    openSwapModal(skipModalExerciseIndex);
-                  }}
-                  className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
-                  Swap for Alternative
-                </button>
+                    <p className="mb-6 text-center text-xs text-zinc-500 dark:text-zinc-500">
+                      {unit} {skipModalSetIndex + 1} of {skipEx?.sets}
+                    </p>
 
-                <button
-                  onClick={() => skipSet(skipModalExerciseIndex, skipModalSetIndex)}
-                  className="rounded-lg bg-zinc-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-                >
-                  Skip This Set Only
-                </button>
+                    <div className="flex flex-col gap-3">
+                      {/* Swap alternative option */}
+                      <button
+                        onClick={() => {
+                          setShowSkipModal(false);
+                          openSwapModal(skipModalExerciseIndex);
+                        }}
+                        className="rounded-lg bg-blue-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-blue-700 flex items-center justify-center gap-2"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                        </svg>
+                        Swap for Alternative
+                      </button>
 
-                <button
-                  onClick={() => skipExercise(skipModalExerciseIndex)}
-                  className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
-                >
-                  Skip All Sets ({workout?.exercises[skipModalExerciseIndex]?.sets} sets total)
-                </button>
+                      <button
+                        onClick={() => skipSet(skipModalExerciseIndex, skipModalSetIndex)}
+                        className="rounded-lg bg-zinc-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600"
+                      >
+                        Skip This {unit} Only
+                      </button>
 
-                <button
-                  onClick={() => setShowSkipModal(false)}
-                  className="rounded-lg border border-zinc-300 px-4 py-3 font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Cancel
-                </button>
-              </div>
+                      <button
+                        onClick={() => skipExercise(skipModalExerciseIndex)}
+                        className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
+                      >
+                        Skip All {unitPlural} ({skipEx?.sets} {unitPlural.toLowerCase()} total)
+                      </button>
+
+                      <button
+                        onClick={() => setShowSkipModal(false)}
+                        className="rounded-lg border border-zinc-300 px-4 py-3 font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </motion.div>
           </motion.div>
         )}

@@ -3,10 +3,19 @@
 import { useState, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, BellOff, Check, X } from 'lucide-react'
+import {
+  DENIED_AT_KEY,
+  REPROMPT_SHOWN_AT_KEY,
+  parseStoredTimestamp,
+  resolveDeniedAt,
+  shouldShowDeniedReprompt,
+} from '@/lib/push/reprompt'
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ''
 const DISMISSED_KEY = 'notification_prompt_dismissed_at'
 const DISMISS_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+type PromptMode = 'opt-in' | 'denied'
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
@@ -17,6 +26,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 export default function NotificationOptIn() {
   const [show, setShow] = useState(false)
+  const [mode, setMode] = useState<PromptMode>('opt-in')
   const [subscribing, setSubscribing] = useState(false)
   const [enabled, setEnabled] = useState(false)
 
@@ -24,20 +34,49 @@ export default function NotificationOptIn() {
   // their subscription alive is PushSubscriptionSync's job, mounted in the
   // dashboard layout.
   useEffect(() => {
-    // Don't show if: no SW support, no VAPID key, already granted/denied, or
-    // dismissed within the last 30 days.
     if (
       !('serviceWorker' in navigator) ||
       !('PushManager' in window) ||
-      !VAPID_PUBLIC_KEY ||
-      Notification.permission !== 'default'
+      !('Notification' in window) ||
+      !VAPID_PUBLIC_KEY
     ) return
 
+    const permission = Notification.permission
+
+    if (permission === 'granted') {
+      // Permission is on. Clear any denial bookkeeping so that IF the user
+      // blocks notifications again later, the 7-day/monthly cadence restarts
+      // from that fresh denial instead of resuming a stale one.
+      localStorage.removeItem(DENIED_AT_KEY)
+      localStorage.removeItem(REPROMPT_SHOWN_AT_KEY)
+      return
+    }
+
+    if (permission === 'denied') {
+      const now = Date.now()
+      const deniedAt = resolveDeniedAt(localStorage.getItem(DENIED_AT_KEY), now)
+      localStorage.setItem(DENIED_AT_KEY, String(deniedAt))
+
+      const lastShownAt = parseStoredTimestamp(localStorage.getItem(REPROMPT_SHOWN_AT_KEY))
+      if (!shouldShowDeniedReprompt(deniedAt, lastShownAt, now)) return
+
+      // Delay so it doesn't pop immediately on load
+      const t = setTimeout(() => {
+        localStorage.setItem(REPROMPT_SHOWN_AT_KEY, String(Date.now()))
+        setMode('denied')
+        setShow(true)
+      }, 3000)
+      return () => clearTimeout(t)
+    }
+
+    // permission === 'default'
     const dismissedAt = Number(localStorage.getItem(DISMISSED_KEY))
     if (dismissedAt && Date.now() - dismissedAt < DISMISS_TTL_MS) return
 
-    // Delay so it doesn't pop immediately on load
-    const t = setTimeout(() => setShow(true), 3000)
+    const t = setTimeout(() => {
+      setMode('opt-in')
+      setShow(true)
+    }, 3000)
     return () => clearTimeout(t)
   }, [])
 
@@ -104,7 +143,36 @@ export default function NotificationOptIn() {
           transition={{ duration: 0.22, ease: 'easeOut' }}
           className="fixed bottom-28 left-4 right-4 z-[70] mx-auto max-w-sm rounded-2xl bg-zinc-900 p-4 shadow-xl dark:bg-zinc-800 sm:left-auto sm:right-6 sm:w-80"
         >
-          {enabled ? (
+          {mode === 'denied' ? (
+            <>
+              <button
+                onClick={() => setShow(false)}
+                className="absolute right-3 top-3 text-zinc-400 hover:text-zinc-200"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="mb-3 flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-700">
+                  <BellOff className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-sm font-semibold text-white">Notifications are blocked</p>
+              </div>
+
+              <p className="mb-4 text-xs leading-relaxed text-zinc-400">
+                You won&rsquo;t get streak or workout reminders. Enable notifications for Become
+                in your browser or device settings to turn them back on.
+              </p>
+
+              <button
+                onClick={() => setShow(false)}
+                className="w-full rounded-xl bg-zinc-700 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600"
+              >
+                Got it
+              </button>
+            </>
+          ) : enabled ? (
             <div className="flex flex-col items-center gap-2 py-2 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600">
                 <Check className="h-5 w-5 text-white" />

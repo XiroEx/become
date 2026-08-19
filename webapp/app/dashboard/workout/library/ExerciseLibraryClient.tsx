@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import { ArrowLeft, Plus, Trash2, Dumbbell } from "lucide-react";
 import { Card } from "@/components/ui";
+import { setUnitLabel } from "@/lib/workout/tracking";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -327,7 +328,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               {/* Sets + Reps */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default Sets</label>
+                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default {setUnitLabel(form.trackingType, 2)}</label>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -450,7 +451,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                 <div className="mt-1 flex items-center gap-2">
                   {ex.defaultSets && (
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                      {ex.defaultSets} sets
+                      {ex.defaultSets} {setUnitLabel(ex.trackingType, ex.defaultSets).toLowerCase()}
                     </span>
                   )}
                   {ex.defaultReps && (

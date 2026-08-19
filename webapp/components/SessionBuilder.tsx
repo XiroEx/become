@@ -14,6 +14,7 @@ import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/qu
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
+import { setUnitLabel } from "@/lib/workout/tracking";
 
 interface SearchExercise {
   slug: string;
@@ -431,7 +432,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                   −
                 </button>
                 <span className="w-10 text-center text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  {ex.sets} set{ex.sets !== 1 ? "s" : ""}
+                  {ex.sets} {setUnitLabel(ex.trackingType, ex.sets).toLowerCase()}
                 </span>
                 <button
                   onClick={() => setSets(ex.exerciseSlug, ex.sets + 1)}

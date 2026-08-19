@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, Minus, Plus } from 'lucide-react'
 import {
   buildServingChoiceGroups,
+  servingChoiceDisplayLabel,
   type ServingChoice,
 } from '@/lib/nutrition/servingOptions'
 import { formatQuantity } from '@/lib/units'
@@ -36,14 +37,15 @@ import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicke
  *  servings keep their friendly label as-is — except a serving collapsed from
  *  a measurable unit ("3/4 cup" -> quantity 1, unit 'serving'), where the
  *  label's own count no longer matches the quantity box next to it. That case
- *  shows the generic word "serving" instead of a noun that could be mistaken
+ *  shows the generic word "serving" — with the real amount named in parens,
+ *  e.g. "serving (3/4 cup)" — instead of a bare noun that could be mistaken
  *  for a literal amount (see `measurableAsServing` on ServingChoice). */
 function optionLabel(c: ServingChoice): string {
   if (c.group !== 'servings') return formatQuantity(c.quantity, c.unit)
-  return c.measurableAsServing ? 'serving' : c.label
+  return servingChoiceDisplayLabel(c)
 }
 
-function round(n: number, dp = 2): number {
+function round(n: number, dp = 3): number {
   const f = 10 ** dp
   return Math.round((n ?? 0) * f) / f
 }

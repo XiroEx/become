@@ -52,6 +52,17 @@ export interface ServingChoice {
   measurableAsServing?: boolean
 }
 
+/**
+ * Display text for a 'servings' choice. A `measurableAsServing` choice shows
+ * the generic word "serving" (see above) but still names what one of them
+ * actually is — "serving (3/4 cup)" — so the picker doesn't just say
+ * "serving" with no way to tell a 3/4-cup serving from a 1-cup one. A
+ * discrete named serving ("1 portion (85 g)") keeps its own label as-is.
+ */
+export function servingChoiceDisplayLabel(choice: Pick<ServingChoice, 'label' | 'measurableAsServing'>): string {
+  return choice.measurableAsServing ? `serving (${choice.label})` : choice.label
+}
+
 export interface ServingChoiceGroups {
   servings: ServingChoice[]
   weight: ServingChoice[]

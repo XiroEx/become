@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 
 import {
   buildServingChoiceGroups,
+  servingChoiceDisplayLabel,
   variantForServingChoice,
 } from '@/lib/nutrition/servingOptions'
 import { scalingFactor } from '@/lib/foodMath'
@@ -424,6 +425,29 @@ describe('servingOptions', () => {
       assert.ok(two)
       assert.equal(two.unit, 'g')
       assert.ok(!two.measurableAsServing)
+    })
+  })
+
+  describe('servingChoiceDisplayLabel — names the real amount behind the generic "serving" word', () => {
+    // Bare "serving" alone can't tell a 3/4-cup serving from a 1-cup one apart
+    // — the follow-up ask was to name the amount in parens instead of hiding
+    // it entirely, without bringing back the misleading "1 cup" reading.
+    it('appends the raw label in parens for a measurable-as-serving choice', () => {
+      assert.equal(
+        servingChoiceDisplayLabel({ label: '3/4 cup', measurableAsServing: true }),
+        'serving (3/4 cup)',
+      )
+    })
+
+    it('leaves a discrete named serving untouched', () => {
+      assert.equal(
+        servingChoiceDisplayLabel({ label: '1 portion (85 g)', measurableAsServing: false }),
+        '1 portion (85 g)',
+      )
+    })
+
+    it('treats an undefined flag the same as false', () => {
+      assert.equal(servingChoiceDisplayLabel({ label: '1 bar (45 g)' }), '1 bar (45 g)')
     })
   })
 })
