@@ -873,7 +873,7 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) => {
         if (i !== idx) return it
-        const multiplier = Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2)))
+        const multiplier = Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(3)))
         // When a DB serving is selected, keep the combined "N × serving" label in
         // sync; otherwise clear any stale freeform label.
         const labelOverride = it.servingLabelBase ? combinedServingLabel(it.servingLabelBase, multiplier) : undefined
