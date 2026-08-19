@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
+import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 
@@ -87,6 +88,16 @@ export async function GET(request: NextRequest) {
       programNames.set(p.programId, p.programName)
     }
 
+    // Only the reopen path needs this: what each exercise asks you to log, so a
+    // session reopened from history comes back with its weight column intact.
+    const trackingMap = withExercises
+      ? await trackingBySlug(
+          (userProgress?.workoutLogs ?? [])
+            .filter((l) => l.kind === 'quick' || !l.programId)
+            .flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)),
+        )
+      : {}
+
     const logs = (userProgress?.workoutLogs ?? [])
       .filter((log) => includeIncomplete || log.completed)
       .map((log) => {
@@ -124,7 +135,7 @@ export async function GET(request: NextRequest) {
                   // Every save writes a name; the fallback only guards a
                   // hand-edited log so the row can't render blank.
                   name: ex.name || 'Exercise',
-                  trackingType: p?.trackingType ?? (isTime ? ('time' as const) : ('reps' as const)),
+                  trackingType: trackingFor(ex, trackingMap),
                   sets: p?.sets ?? (ex.sets?.length || 1),
                   reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
                   ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),

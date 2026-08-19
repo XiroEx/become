@@ -115,6 +115,28 @@ test('a session started with one exercise grows while it runs, and every surface
   expect(logged[superIdx]!.groupId).toBe(logged[pushIdx]!.groupId)
   expect(Math.abs(superIdx - pushIdx)).toBe(1)
 
+  // ── A superset you did not mean to make can be taken back ─────────────────
+  await expect(page.locator('[data-testid="live-ungroup-pill"]')).toBeVisible()
+  await page.locator('[data-testid="live-ungroup-pill"]').click()
+  await expect.poll(async () => {
+    const res = await api.get(`/api/workouts/session?id=${sessionId}`)
+    if (!res.ok()) return -1
+    const body = await res.json()
+    return ((body.session?.exercises ?? []) as LoggedExercise[]).filter(e => e.groupId).length
+  }, { timeout: 20_000, message: 'ungrouping must reach the log too' }).toBe(0)
+  await expect(page.locator('[data-testid="live-ungroup-pill"]')).toHaveCount(0)
+  console.log('UNGROUPED: the superset came apart again')
+
+  // Put it back so the rest of the test still covers a grouped session.
+  await page.locator('[data-tour="live-exercise-dots"]').click()
+  await page.locator('[data-testid="live-group-toggle-0"]').click()
+  await expect.poll(async () => {
+    const res = await api.get(`/api/workouts/session?id=${sessionId}`)
+    if (!res.ok()) return -1
+    const body = await res.json()
+    return ((body.session?.exercises ?? []) as LoggedExercise[]).filter(e => e.groupId).length
+  }, { timeout: 20_000 }).toBe(2)
+
   // ── The Track view is the same session: it shows what was added ───────────
   await page.goto(`${BASE_URL}/dashboard/workout/quick/workout?session=${sessionId}`)
   await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
