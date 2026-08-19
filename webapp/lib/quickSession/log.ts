@@ -31,6 +31,20 @@ export function buildLoggedExercises(exercises: DraftExercise[], done: boolean) 
         ...(durSec != null && { duration: durSec }),
         completed: done,
       })),
+      // A superset planned here is still a superset when the session is
+      // started later — the log is what the planned session is rebuilt from.
+      ...(ex.groupId && { groupId: ex.groupId }),
+      ...(ex.groupType && { groupType: ex.groupType }),
+      ...(ex.groupLabel && { groupLabel: ex.groupLabel }),
+      ...(ex.groupRounds && { groupRounds: ex.groupRounds }),
+      ...(ex.addedAdHoc && { addedAdHoc: true }),
+      prescription: {
+        sets: nSets,
+        ...(ex.reps ? { reps: ex.reps } : {}),
+        ...(ex.duration ? { duration: ex.duration } : {}),
+        ...(ex.rest ? { rest: ex.rest } : {}),
+        ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
+      },
     }
   })
 }

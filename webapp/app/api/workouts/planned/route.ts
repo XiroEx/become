@@ -9,7 +9,17 @@ import { verifyAuth } from '@/lib/auth'
 // the same sessionId, so finishing it consumes the plan).
 
 interface RawSet { reps?: number | null; duration?: number | null; completed?: boolean }
-interface RawEx { name: string; exerciseSlug?: string; sets?: RawSet[] }
+interface RawEx {
+  name: string
+  exerciseSlug?: string
+  sets?: RawSet[]
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  addedAdHoc?: boolean
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
+}
 interface RawLog {
   kind?: string
   sessionId?: string
@@ -48,13 +58,21 @@ export async function GET(request: NextRequest) {
           // the Track view writes `reps: 0` beside the duration, so checking
           // only for a null reps would call a 45-second plank a 0-rep set.
           const isTime = !!first && first.duration != null && !(first.reps && first.reps > 0)
+          const p = ex.prescription
           return {
             exerciseSlug: ex.exerciseSlug || '',
             name: ex.name,
-            trackingType: isTime ? 'time' : 'reps',
-            sets: ex.sets?.length || 1,
-            reps: !isTime && first?.reps != null ? String(first.reps) : '',
-            ...(first?.duration != null ? { duration: String(first.duration) } : {}),
+            trackingType: p?.trackingType || (isTime ? 'time' : 'reps'),
+            sets: p?.sets ?? (ex.sets?.length || 1),
+            reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
+            ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
+            ...(p?.rest ? { rest: p.rest } : {}),
+            // Grouping survives the round trip, so a planned superset is still
+            // a superset when the session is started.
+            ...(ex.groupId ? { groupId: ex.groupId } : {}),
+            ...(ex.groupType ? { groupType: ex.groupType } : {}),
+            ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+            ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
           }
         }),
       }))

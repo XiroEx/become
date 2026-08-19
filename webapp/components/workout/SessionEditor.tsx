@@ -9,8 +9,9 @@
 // plus the server for a session that already exists there).
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Check, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Layers, Plus, Search, Trash2, Unlink, X } from 'lucide-react'
 import type { DraftExercise } from '@/lib/quickSession/types'
+import { groupIndexes, sanitizeGroups, ungroupAt } from '@/lib/workout/buildAsYouGo'
 
 interface SearchExercise {
   slug: string
@@ -27,6 +28,16 @@ export interface SessionEditorProps {
   saveLabel?: string
   saving?: boolean
   error?: string | null
+}
+
+function stripGroup(ex: DraftExercise): DraftExercise {
+  const next = { ...ex }
+  delete next.groupId
+  delete next.groupType
+  delete next.groupLabel
+  delete next.groupRest
+  delete next.groupRounds
+  return next
 }
 
 function authHeaders(): HeadersInit {
@@ -81,7 +92,26 @@ export default function SessionEditor({
   const patchRow = (i: number, patch: Partial<DraftExercise>) =>
     setRows((prev) => prev.map((ex, idx) => (idx === i ? { ...ex, ...patch } : ex)))
 
-  const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i))
+  const removeRow = (i: number) =>
+    setRows((prev) => {
+      const gid = prev[i]?.groupId
+      const next = prev.filter((_, idx) => idx !== i)
+      // A superset of one is not a superset.
+      if (gid && next.filter((e) => e.groupId === gid).length < 2) {
+        return next.map((e) => (e.groupId === gid ? stripGroup(e) : e))
+      }
+      return next
+    })
+
+  /** Superset this exercise with the one below it — or break the group up. */
+  const toggleGroup = (i: number) =>
+    setRows((prev) => {
+      const row = prev[i]
+      if (!row) return prev
+      if (row.groupId) return ungroupAt(prev, i).exercises
+      if (i + 1 >= prev.length) return prev
+      return groupIndexes(prev, [i, i + 1], 'superset').exercises
+    })
 
   const moveRow = (i: number, delta: number) =>
     setRows((prev) => {
@@ -89,7 +119,9 @@ export default function SessionEditor({
       if (j < 0 || j >= prev.length) return prev
       const next = [...prev]
       ;[next[i], next[j]] = [next[j], next[i]]
-      return next
+      // Reordering can carry an exercise out of its superset — a group whose
+      // members are no longer neighbours is not a group any more.
+      return sanitizeGroups(next)
     })
 
   const addExercise = (ex: SearchExercise) => {
@@ -140,8 +172,26 @@ export default function SessionEditor({
               className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900"
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 flex-1 text-sm font-semibold text-zinc-900 dark:text-white">{ex.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-white">{ex.name}</p>
+                  {ex.groupId && (
+                    <p className="text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                      {ex.groupLabel || 'Superset'}
+                    </p>
+                  )}
+                </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  {(ex.groupId || i + 1 < rows.length) && (
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(i)}
+                      aria-label={ex.groupId ? `Break up the group containing ${ex.name}` : `Superset ${ex.name} with the next exercise`}
+                      data-testid={`editor-group-toggle-${i}`}
+                      className={`rounded-lg p-1.5 ${ex.groupId ? 'text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/40' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}
+                    >
+                      {ex.groupId ? <Unlink className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => moveRow(i, -1)}

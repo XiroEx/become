@@ -41,6 +41,23 @@ export interface IExerciseLog {
   // Grouping metadata (mirrors program exercise grouping for analysis)
   groupId?: string
   groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  // Added mid-session ("build as you go") rather than programmed. A program
+  // workout rebuilds its exercise list from the program on every load, so
+  // without this flag anything added during the session would vanish on
+  // resume and leave its logged sets orphaned.
+  addedAdHoc?: boolean
+  // What was prescribed for an added exercise (sets/reps/duration/rest). The
+  // logged sets alone cannot say whether an untouched 3x12 was three sets of
+  // twelve or three sets of nothing.
+  prescription?: {
+    sets?: number
+    reps?: string
+    duration?: string
+    rest?: string
+    trackingType?: string
+  }
   // Exercise swap tracking
   originalExerciseSlug?: string  // If swapped, the originally programmed exercise slug
   swappedFromName?: string       // The original exercise name before swap
@@ -252,12 +269,24 @@ const SetLogSchema = new Schema<ISetLog>({
   completed: { type: Boolean, default: false }
 }, { _id: false })
 
+const PrescriptionSchema = new Schema({
+  sets: { type: Number },
+  reps: { type: String },
+  duration: { type: String },
+  rest: { type: String },
+  trackingType: { type: String },
+}, { _id: false })
+
 const ExerciseLogSchema = new Schema<IExerciseLog>({
   name: { type: String, required: true },
   exerciseSlug: { type: String },
   sets: [SetLogSchema],
   groupId: { type: String },
   groupType: { type: String },
+  groupLabel: { type: String },
+  groupRounds: { type: Number },
+  addedAdHoc: { type: Boolean },
+  prescription: { type: PrescriptionSchema, default: undefined },
   originalExerciseSlug: { type: String },
   swappedFromName: { type: String }
 }, { _id: false })

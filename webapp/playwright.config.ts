@@ -73,6 +73,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], video: 'off' },
     },
     {
+      name: 'build-as-you-go',
+      testMatch: '**/build-as-you-go.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: false, video: 'off' },
+    },
+    {
       name: 'quick-session-abandon-save',
       testMatch: '**/quick-session-abandon-save.spec.ts',
       timeout: 60_000,

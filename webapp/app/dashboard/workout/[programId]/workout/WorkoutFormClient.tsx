@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Plus, Layers, Unlink } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
@@ -16,7 +16,9 @@ import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
-import { readQuickSession, clearQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
+import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, prescriptionOf, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -174,6 +176,12 @@ interface SavedExercise {
   sets: SavedSetData[];
   originalExerciseSlug?: string;
   swappedFromName?: string;
+  groupId?: string;
+  groupType?: string;
+  groupLabel?: string;
+  groupRounds?: number;
+  addedAdHoc?: boolean;
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string };
 }
 
 interface SavedWorkout {
@@ -206,6 +214,8 @@ interface Exercise {
   groupLabel?: string;
   groupRest?: string;
   groupRounds?: number;
+  /** Added mid-session rather than programmed / drafted up front. */
+  addedAdHoc?: boolean;
 }
 
 interface WorkoutData {
@@ -369,6 +379,14 @@ export default function WorkoutFormPage() {
             reps: d.reps,
             ...(d.rest && { rest: d.rest }),
             ...(d.duration && { duration: d.duration }),
+            // Supersets made mid-session live in the stash — without these the
+            // Track view would draw a circuit as four unrelated exercises.
+            ...(d.groupId && { groupId: d.groupId }),
+            ...(d.groupType && { groupType: d.groupType }),
+            ...(d.groupLabel && { groupLabel: d.groupLabel }),
+            ...(d.groupRest && { groupRest: d.groupRest }),
+            ...(d.groupRounds && { groupRounds: d.groupRounds }),
+            ...(d.addedAdHoc && { addedAdHoc: true }),
           }));
           const title = stored?.title || "Quick Session";
           const wd: WorkoutData = { day: title, title, exercises: exs.length ? exs : fallbackWorkout.exercises };
@@ -461,8 +479,14 @@ export default function WorkoutFormPage() {
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
 
-              // Restore swapped exercises from saved workout
-              const updatedExercises = [...workoutData.exercises];
+              // Restore swapped exercises, and bring back anything added
+              // mid-session — a program workout rebuilds its list from the
+              // program, so an added exercise would otherwise vanish on reload.
+              const updatedExercises = mergeAdHocFromLog<Exercise>(
+                [...workoutData.exercises],
+                savedWorkout.exercises,
+              ) as Exercise[];
+              const addedBack = updatedExercises.length - workoutData.exercises.length;
               const restoredSwaps: Record<number, { originalSlug: string; originalName: string }> = {};
 
               savedWorkout.exercises?.forEach((savedEx, idx) => {
@@ -487,7 +511,7 @@ export default function WorkoutFormPage() {
                 }
               });
 
-              if (Object.keys(restoredSwaps).length > 0) {
+              if (Object.keys(restoredSwaps).length > 0 || addedBack > 0) {
                 workoutData = { ...workoutData, exercises: updatedExercises };
                 setWorkout(workoutData);
                 setSwappedExercises(restoredSwaps);
@@ -575,15 +599,16 @@ export default function WorkoutFormPage() {
   }, [programId, requestedDay]);
 
   // Auto-save function
-  const autoSave = useCallback(async (progress: ExerciseProgress[]) => {
+  const autoSave = useCallback(async (progress: ExerciseProgress[], exercisesOverride?: Exercise[]) => {
     if (!workout) return;
+    const exList = exercisesOverride ?? workout.exercises;
 
     // ── Quick-session mode: persist the shared progress draft (so the Live view
     //    resumes with no loss), and POST kind:'quick' once every set is done. ──
     if (isQuick) {
       writeQuickProgress(
         quickSessionId,
-        workout.exercises.map((ex, i) => {
+        exList.map((ex, i) => {
           const ep = progress.find((p) => p.exerciseIndex === i);
           return {
             name: ex.name,
@@ -598,7 +623,7 @@ export default function WorkoutFormPage() {
         try {
           const token = localStorage.getItem("token");
           const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
-          const exercisesToSave = workout.exercises.map((ex, i) => {
+          const exercisesToSave = exList.map((ex, i) => {
             const ep = progress.find((p) => p.exerciseIndex === i);
             const isTimeBased = ["time", "time_distance", "intervals"].includes(ex.trackingType || "");
             return {
@@ -612,6 +637,11 @@ export default function WorkoutFormPage() {
                 ...(set.duration && { duration: parseFloat(set.duration) }),
                 ...(set.distance && { distance: parseFloat(set.distance) }),
               })),
+              ...(ex.groupId && { groupId: ex.groupId }),
+              ...(ex.groupType && { groupType: ex.groupType }),
+              ...(ex.groupLabel && { groupLabel: ex.groupLabel }),
+              ...(ex.groupRounds && { groupRounds: ex.groupRounds }),
+              ...(ex.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(ex) }),
             };
           });
           await fetch("/api/workouts", {
@@ -650,7 +680,7 @@ export default function WorkoutFormPage() {
       );
       const isComplete = completedSets === totalSets && totalSets > 0;
 
-      const exercises = workout.exercises.map((exercise, index) => {
+      const exercises = exList.map((exercise, index) => {
         const ep = progress.find((p) => p.exerciseIndex === index);
         const swap = swappedExercises[index];
         return {
@@ -670,6 +700,11 @@ export default function WorkoutFormPage() {
           // Pass through grouping metadata for analytics
           ...(exercise.groupId && { groupId: exercise.groupId }),
           ...(exercise.groupType && { groupType: exercise.groupType }),
+          ...(exercise.groupLabel && { groupLabel: exercise.groupLabel }),
+          ...(exercise.groupRounds && { groupRounds: exercise.groupRounds }),
+          // Build as you go: the log is the only record of an exercise that is
+          // not in the program, so it carries its prescription home too.
+          ...(exercise.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(exercise) }),
           // Swap tracking
           ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
@@ -715,6 +750,127 @@ export default function WorkoutFormPage() {
       autoSave(progress);
     }, 500);
   }, [autoSave]);
+
+  // ── Build as you go ────────────────────────────────────────────────────────
+  //
+  // Add an exercise to a workout that is already underway, superset two of them
+  // on the spot, or break a group apart. Set data moves with its exercise via
+  // the `order` permutation from lib/workout/buildAsYouGo, and the change is
+  // persisted immediately — an exercise that only exists in this tab is one the
+  // calendar and the history never hear about.
+  const [showAddExercise, setShowAddExercise] = useState(false);
+
+  const applyWorkoutChange = useCallback((next: Exercise[], order: number[]) => {
+    const nextProgress = applyOrder(exerciseProgress, order, (i) => ({
+      exerciseIndex: i,
+      sets: Array.from({ length: next[i]?.sets || 3 }, () => ({ reps: "", weight: "", completed: false, duration: "", distance: "" })),
+    })).map((ep, i) => ({ ...ep, exerciseIndex: i }));
+
+    setWorkout((w) => (w ? { ...w, exercises: next } : w));
+    setExerciseProgress(nextProgress);
+    setSwappedExercises((prev) => applyOrderToRecord(prev, order));
+
+    if (isQuick && quickSessionId) {
+      // The stash is the quick session's shape — the Live view and the
+      // overview both read it, so it has to know before the tab is flipped.
+      updateQuickSession(quickSessionId, {
+        exercises: next.map((e) => ({
+          exerciseSlug: e.exerciseSlug ?? "",
+          name: e.name,
+          trackingType: e.trackingType ?? "reps_weight",
+          sets: e.sets ?? 3,
+          reps: e.reps ?? "",
+          ...(e.rest && { rest: e.rest }),
+          ...(e.duration && { duration: e.duration }),
+          ...(e.primaryMuscles && { primaryMuscles: e.primaryMuscles }),
+          ...(e.groupId && { groupId: e.groupId }),
+          ...(e.groupType && { groupType: e.groupType }),
+          ...(e.groupLabel && { groupLabel: e.groupLabel }),
+          ...(e.groupRest && { groupRest: e.groupRest }),
+          ...(e.groupRounds && { groupRounds: e.groupRounds }),
+          ...(e.addedAdHoc && { addedAdHoc: true }),
+        })),
+      });
+      // Put the session on the server now, incomplete, so today's calendar and
+      // the sessions list show what is actually being trained.
+      const token = localStorage.getItem("token");
+      const stored = readQuickSession(quickSessionId);
+      void fetch("/api/workouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+        body: JSON.stringify({
+          kind: "quick",
+          sessionId: quickSessionId,
+          title: workout?.title ?? stored?.title ?? "Quick Session",
+          ...(stored?.focus && { focus: stored.focus }),
+          exercises: next.map((ex, i) => {
+            const ep = nextProgress.find((p) => p.exerciseIndex === i);
+            const isTimeBased = ["time", "time_distance", "intervals"].includes(ex.trackingType || "");
+            return {
+              name: ex.name,
+              ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+              sets: (ep?.sets ?? []).map((set, si) => ({
+                setNumber: si + 1,
+                reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
+                weight: parseFloat(set.weight) || 0,
+                completed: set.completed,
+                ...(set.duration && { duration: parseFloat(set.duration) }),
+                ...(set.distance && { distance: parseFloat(set.distance) }),
+              })),
+              ...(ex.groupId && { groupId: ex.groupId }),
+              ...(ex.groupType && { groupType: ex.groupType }),
+              ...(ex.groupLabel && { groupLabel: ex.groupLabel }),
+              ...(ex.groupRounds && { groupRounds: ex.groupRounds }),
+              ...(ex.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(ex) }),
+            };
+          }),
+          completed: false,
+          tz: new Date().getTimezoneOffset(),
+        }),
+      }).catch(() => { /* the next set save retries this */ });
+      writeQuickProgress(
+        quickSessionId,
+        next.map((ex, i) => {
+          const ep = nextProgress.find((p) => p.exerciseIndex === i);
+          return {
+            name: ex.name,
+            ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+            sets: (ep?.sets ?? []).map((st) => ({ reps: st.reps, weight: st.weight, completed: st.completed, duration: st.duration, distance: st.distance })),
+          };
+        }),
+      );
+      return;
+    }
+
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    void autoSave(nextProgress, next);
+  }, [exerciseProgress, isQuick, quickSessionId, workout, autoSave]);
+
+  const handleAddExercise = useCallback((r: AddExerciseResult) => {
+    const list = (workout?.exercises ?? []) as AdHocExercise[];
+    const fresh = { ...r.exercise, addedAdHoc: true } as AdHocExercise;
+    // "Into the group" attaches to the exercise being worked on — in the Track
+    // view that is the open card, falling back to the last exercise.
+    const anchor = expandedExercise ?? list.length - 1;
+    const res = r.placement === "group" && list[anchor]
+      ? addIntoGroup<AdHocExercise>(list, anchor, fresh, r.groupKind)
+      : appendExercise<AdHocExercise>(list, fresh);
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+    setExpandedExercise(res.index);
+  }, [workout, expandedExercise, applyWorkoutChange]);
+
+  const toggleGroupAt = useCallback((idx: number) => {
+    const list = (workout?.exercises ?? []) as AdHocExercise[];
+    const ex = list[idx];
+    if (!ex) return;
+    const res = ex.groupId
+      ? ungroupAt<AdHocExercise>(list, idx)
+      : idx + 1 < list.length
+        ? groupIndexes<AdHocExercise>(list, [idx, idx + 1], "superset")
+        : null;
+    if (!res) return;
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+  }, [workout, applyWorkoutChange]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -1148,6 +1304,21 @@ export default function WorkoutFormPage() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                          {/* Superset it with the next exercise, or break the group */}
+                          {(exercise.groupId || exerciseIndex + 1 < (workout?.exercises.length ?? 0)) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleGroupAt(exerciseIndex); }}
+                              data-testid={`track-group-toggle-${exerciseIndex}`}
+                              title={exercise.groupId ? "Break up this group" : "Superset with the next exercise"}
+                              className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+                                exercise.groupId
+                                  ? "bg-purple-100 text-purple-600 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400"
+                                  : "bg-zinc-100 text-zinc-400 hover:bg-purple-100 hover:text-purple-600 dark:bg-zinc-800 dark:text-zinc-500 dark:hover:bg-purple-900/30 dark:hover:text-purple-400"
+                              }`}
+                            >
+                              {exercise.groupId ? <Unlink className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
                           {/* Swap button */}
                           <button
                             onClick={(e) => {
@@ -1566,6 +1737,16 @@ export default function WorkoutFormPage() {
               renderExerciseCard(exercise, originalIndex, false)
             );
           })}
+
+          {/* Build as you go — the workout is not fixed at the door */}
+          <button
+            onClick={() => setShowAddExercise(true)}
+            data-testid="track-add-exercise"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 py-3.5 text-sm font-semibold text-zinc-500 transition-colors hover:border-green-400 hover:bg-green-50 hover:text-green-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+          >
+            <Plus className="h-4 w-4" />
+            Add exercise
+          </button>
         </div>
 
         {/* Workout notes — appears once any set is completed */}
@@ -1728,6 +1909,14 @@ export default function WorkoutFormPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AddExerciseSheet
+        open={showAddExercise}
+        onClose={() => setShowAddExercise(false)}
+        onAdd={handleAddExercise}
+        anchorName={expandedExercise != null ? workout?.exercises[expandedExercise]?.name : workout?.exercises.at(-1)?.name}
+        anchorInGroup={!!(expandedExercise != null ? workout?.exercises[expandedExercise]?.groupId : workout?.exercises.at(-1)?.groupId)}
+      />
 
       {/* Exercise Swap Modal */}
       {swapExerciseIndex !== null && workout?.exercises[swapExerciseIndex] && (
