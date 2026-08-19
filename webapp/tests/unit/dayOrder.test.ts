@@ -89,6 +89,21 @@ test('the fix does not depend on Before Work having a window of its own', () => 
   assert.equal(occ[0].sortMinutes, at(20))
 })
 
+test('a planned Bed meal with no window of its own still sorts BELOW a Dinner logged earlier', () => {
+  // The actual reported bug: the member added "Bed" as a custom tag on the Meal
+  // Schedule screen, ordered after Dinner, but left it unscheduled (a
+  // first-class choice per that screen's own copy). A plan under that tag used
+  // to fall straight through to the flat DEFAULT_TAG_TIMES table, which has no
+  // entry for "bed" and landed it at that table's noon default — ahead of any
+  // dinner eaten after breakfast. It should anchor to the END of the nearest
+  // scheduled tag above it instead, exactly like an untimed log does.
+  const logs = [log('porkloin', '19:00', 'dinner')]
+  const plans = [plan('shake', 'bed')]
+  const windows = [win('dinner', at(18), at(21)), { tag: 'bed', startMinutes: null, endMinutes: null }]
+  const occ = buildDayOccurrences(logs, plans, windows)
+  assert.deepEqual(shape(occ), ['dinner:porkloin', 'bed(planned):shake'])
+})
+
 test('with no window configured, a planned tag falls back to the app-wide table', () => {
   const occ = buildDayOccurrences([], [plan('p1', 'breakfast'), plan('p2', 'dinner')], [])
   assert.deepEqual(occ.map(o => o.tag), ['breakfast', 'dinner'])
