@@ -18,6 +18,8 @@ import {
   sanitizeGroups,
   needsMoreExercises,
   shouldWarnBeforeFinish,
+  moveExercise,
+  canRemoveExercise,
   RECOMMENDED_MIN_EXERCISES,
   type AdHocExercise,
 } from '@/lib/workout/buildAsYouGo'
@@ -205,4 +207,41 @@ test('a thin session you built yourself asks once before it is called done', () 
   assert.equal(ask(2, false), false)
   // And it only asks once — "finish anyway" settles it.
   assert.equal(ask(2, true, true), false)
+})
+
+test('an exercise can be moved, and its set data goes with it', () => {
+  const list = [ex('Bench'), ex('Squat'), ex('Row')]
+  const down = moveExercise(list, 0, 1)
+  assert.deepEqual(down.exercises.map(e => e.name), ['Squat', 'Bench', 'Row'])
+  assert.deepEqual(down.order, [1, 0, 2])
+  assert.deepEqual(applyOrder([['b'], ['s'], ['r']], down.order, () => ['new']), [['s'], ['b'], ['r']])
+
+  const up = moveExercise(list, 2, 0)
+  assert.deepEqual(up.exercises.map(e => e.name), ['Row', 'Bench', 'Squat'])
+
+  // Off either end, or nowhere at all, changes nothing.
+  assert.equal(moveExercise(list, 0, 0).exercises, list)
+  assert.equal(moveExercise(list, 0, 5).exercises, list)
+  assert.equal(moveExercise(list, -1, 1).exercises, list)
+})
+
+test('moving an exercise out of a superset dissolves the group', () => {
+  const gid = 'g1'
+  const list = [
+    ex('Bench', 3, { groupId: gid, groupType: 'superset', groupLabel: 'Superset' }),
+    ex('Row', 3, { groupId: gid, groupType: 'superset', groupLabel: 'Superset' }),
+    ex('Squat'),
+  ]
+  // Squat jumps between the pair: they are no longer neighbours, so they are
+  // no longer a superset — the flow would have stopped interleaving them.
+  const r = moveExercise(list, 2, 1)
+  assert.deepEqual(r.exercises.map(e => e.name), ['Bench', 'Squat', 'Row'])
+  assert.equal(r.exercises[0]!.groupId, undefined)
+  assert.equal(r.exercises[2]!.groupId, undefined)
+})
+
+test('the last exercise cannot be removed', () => {
+  assert.equal(canRemoveExercise([ex('Bench')]), false)
+  assert.equal(canRemoveExercise([ex('Bench'), ex('Row')]), true)
+  assert.equal(canRemoveExercise([]), false)
 })

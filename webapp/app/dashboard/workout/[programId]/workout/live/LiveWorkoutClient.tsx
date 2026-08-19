@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Dumbbell, X, Plus, Layers, Unlink } from "lucide-react";
+import { Dumbbell, X, Plus, Layers, Unlink, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
@@ -14,7 +14,8 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import ConfirmModal from "@/components/workout/ConfirmModal";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { normalizeTracking } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
@@ -137,6 +138,8 @@ export default function LiveWorkoutPage() {
   // "Finish with two exercises?" — asked once, on the way out of a thin session.
   const [showThinFinish, setShowThinFinish] = useState(false);
   const [thinFinishAcked, setThinFinishAcked] = useState(false);
+  // Removing an exercise that already has sets against it asks first.
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeIndicator, setShowResumeIndicator] = useState(false);
   // Active-seconds tracking: time persists across resume sessions.
@@ -1318,6 +1321,31 @@ export default function LiveWorkoutPage() {
     applyWorkoutChange(res.exercises as Exercise[], res.order);
   }, [exercises, currentExerciseIndex, applyWorkoutChange]);
 
+  /** Drop an exercise from this workout. The program is untouched — this is
+   *  today's session, not the plan. */
+  const dropExerciseAt = useCallback((idx: number) => {
+    if (!canRemoveExercise(exercises)) return;
+    const res = removeExercise<AdHocExercise>(exercises as AdHocExercise[], idx);
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+    setConfirmRemoveIdx(null);
+  }, [exercises, applyWorkoutChange]);
+
+  /** Ask first when there is logged work to lose; otherwise just drop it.
+   *  Only COMPLETED sets count: the inputs come pre-filled with last session's
+   *  numbers, and those are a suggestion, not work done today. */
+  const requestRemoveAt = useCallback((idx: number) => {
+    const hasWork = (exerciseData[idx] ?? []).some((set) => set.completed);
+    if (hasWork) setConfirmRemoveIdx(idx);
+    else dropExerciseAt(idx);
+  }, [exerciseData, dropExerciseAt]);
+
+  const moveExerciseBy = useCallback((idx: number, delta: number) => {
+    const to = idx + delta;
+    if (to < 0 || to >= exercises.length) return;
+    const res = moveExercise<AdHocExercise>(exercises as AdHocExercise[], idx, to);
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+  }, [exercises, applyWorkoutChange]);
+
   /** Superset the exercise at `idx` with the one after it (or break the group). */
   const toggleGroupAt = useCallback((idx: number) => {
     const ex = exercises[idx];
@@ -1602,54 +1630,72 @@ export default function LiveWorkoutPage() {
                   animate={{ opacity: 1, x: 0, scale: 1 }}
                   exit={{ opacity: 0, x: 20, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
-                  className="mr-3 rounded-xl bg-black/80 p-3 backdrop-blur-md"
+                  className="mr-3 w-[19rem] max-w-[calc(100vw-3.5rem)] rounded-xl bg-black/80 p-3 backdrop-blur-md"
                 >
                   <p className="mb-2 text-xs font-medium text-white/50">EXERCISES</p>
                   <div className="space-y-2">
                     {exercises.map((exercise, idx) => (
                       <div
                         key={idx}
-                        className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                          idx === currentExerciseIndex
-                            ? "bg-white/10"
-                            : "hover:bg-white/5"
+                        className={`rounded-lg px-3 py-2 transition-colors ${
+                          idx === currentExerciseIndex ? "bg-white/10" : "hover:bg-white/5"
                         }`}
                       >
-                        <div
-                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                            isExerciseComplete(idx)
-                              ? "bg-green-500 text-white"
-                              : idx === currentExerciseIndex
-                              ? "bg-white text-black"
-                              : "bg-white/20 text-white/60"
-                          }`}
-                        >
-                          {isExerciseComplete(idx) ? (
-                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            idx + 1
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-sm font-medium truncate ${
+                        {/* The name gets the full width — four controls beside it
+                            truncated everything down to "Hip Abducti…". */}
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                              isExerciseComplete(idx)
+                                ? "bg-green-500 text-white"
+                                : idx === currentExerciseIndex
+                                ? "bg-white text-black"
+                                : "bg-white/20 text-white/60"
+                            }`}
+                          >
+                            {isExerciseComplete(idx) ? (
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              idx + 1
+                            )}
+                          </div>
+                          <p className={`min-w-0 flex-1 truncate text-sm font-medium ${
                             idx === currentExerciseIndex ? "text-white" : "text-white/70"
                           }`}>
                             {exercise.name}
                           </p>
-                          <p className="text-xs text-white/40">
+                          {idx === currentExerciseIndex && (
+                            <span className="shrink-0 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-400">
+                              Now
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-1 flex items-center gap-1 pl-8.5">
+                          <p className="min-w-0 flex-1 truncate text-xs text-white/40">
                             {exercise.sets} sets × {exercise.reps}
                             {exercise.groupId && <span className="ml-1 text-purple-300/80">· {exercise.groupLabel || "Superset"}</span>}
                           </p>
-                        </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                          {idx === currentExerciseIndex && (
-                            <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
-                              Current
-                            </span>
-                          )}
-                          {/* Superset it with the next one, or break the group */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); moveExerciseBy(idx, -1); }}
+                            disabled={idx === 0}
+                            aria-label={`Move ${exercise.name} up`}
+                            data-testid={`live-move-up-${idx}`}
+                            className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 disabled:opacity-20"
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); moveExerciseBy(idx, 1); }}
+                            disabled={idx === exercises.length - 1}
+                            aria-label={`Move ${exercise.name} down`}
+                            data-testid={`live-move-down-${idx}`}
+                            className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 disabled:opacity-20"
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
                           {(exercise.groupId || idx + 1 < exercises.length) && (
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleGroupAt(idx); }}
@@ -1660,6 +1706,15 @@ export default function LiveWorkoutPage() {
                               {exercise.groupId ? <Unlink className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
                             </button>
                           )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); requestRemoveAt(idx); }}
+                            disabled={!canRemoveExercise(exercises)}
+                            aria-label={`Remove ${exercise.name}`}
+                            data-testid={`live-remove-${idx}`}
+                            className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-red-500/20 hover:text-red-300 disabled:opacity-20"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -2324,6 +2379,18 @@ export default function LiveWorkoutPage() {
       </AnimatePresence>
 
       {/* Exercise Swap Modal — always mounted to prevent unmount/remount flashing */}
+      <ConfirmModal
+        open={confirmRemoveIdx !== null}
+        tone="dark"
+        destructive
+        title={`Remove ${confirmRemoveIdx !== null ? exercises[confirmRemoveIdx]?.name ?? "this exercise" : ""}?`}
+        body="You have already logged sets against it. They go with it."
+        confirmLabel="Remove it"
+        cancelLabel="Keep it"
+        onConfirm={() => { if (confirmRemoveIdx !== null) dropExerciseAt(confirmRemoveIdx); }}
+        onCancel={() => setConfirmRemoveIdx(null)}
+      />
+
       <ThinSessionModal
         open={showThinFinish}
         exerciseCount={exercises.length}

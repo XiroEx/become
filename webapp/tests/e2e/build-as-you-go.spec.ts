@@ -344,3 +344,92 @@ test('the track view also asks before finishing a thin session', async ({ page, 
   await page.locator('[data-testid="thin-session-finish"]').click()
   await expect(page.getByText(/workout done|you crushed it|program complete/i).first()).toBeVisible({ timeout: 20_000 })
 })
+
+/**
+ * Exercises can be dropped and reordered mid-session, in both views, and the
+ * log follows. A duplicate you added by mistake should not have to be trained.
+ */
+test('exercises can be removed and reordered from the live view and the track view', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-edit-${Date.now()}`
+
+  const api = await request.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+  await context.addCookies([{
+    name: 'auth_token',
+    value: token,
+    domain: new URL(BASE_URL).hostname,
+    path: '/',
+    httpOnly: false,
+    secure: BASE_URL.startsWith('https'),
+    sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+  await page.evaluate(({ id }) => {
+    localStorage.setItem(`quick_session_${id}`, JSON.stringify({
+      sessionId: id,
+      title: 'E2E Edit Session',
+      exercises: [
+        { exerciseSlug: 'push-up', name: 'Push-Up', trackingType: 'reps_bodyweight', sets: 3, reps: '10' },
+        { exerciseSlug: 'bodyweight-squat', name: 'Bodyweight Squat', trackingType: 'reps_bodyweight', sets: 3, reps: '12' },
+        // The duplicate — exactly the thing you want gone.
+        { exerciseSlug: 'plank', name: 'Plank', trackingType: 'time', sets: 3, duration: '45 sec', reps: '' },
+      ],
+    }))
+  }, { id: sessionId })
+
+  const names = async () => {
+    const res = await api.get(`/api/workouts/session?id=${sessionId}`)
+    if (!res.ok()) return []
+    const body = await res.json()
+    return ((body.session?.exercises ?? []) as LoggedExercise[]).map(e => e.name)
+  }
+
+  // ── Live view: drop the third, then move the second to the top ────────────
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout/live?session=${sessionId}`)
+  await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
+  await page.locator('[data-tour="live-exercise-dots"]').click()
+  await expect(page.locator('[data-testid="live-remove-2"]')).toBeVisible({ timeout: 10_000 })
+  await page.locator('[data-testid="live-remove-2"]').click({ force: true })
+  await expect.poll(names, { timeout: 20_000, message: 'the removal reaches the log' }).toEqual(['Push-Up', 'Bodyweight Squat'])
+  console.log('LIVE REMOVED: Plank is gone')
+
+  await page.locator('[data-tour="live-exercise-dots"]').click()
+  await page.locator('[data-testid="live-move-up-1"]').click({ force: true })
+  await expect.poll(names, { timeout: 20_000, message: 'the reorder reaches the log' }).toEqual(['Bodyweight Squat', 'Push-Up'])
+  console.log('LIVE MOVED: the squat came first')
+  await page.screenshot({ path: 'tests/e2e/screenshots/edit-live-drawer.png' })
+
+  // ── Track view: the same controls, and the same result ────────────────────
+  // They live at the foot of the open card — the header had no room left.
+  // Clicking an open card closes it, so only click when it is shut.
+  const openCard = async (name: string, index: number) => {
+    if (await page.locator(`[data-testid="track-remove-${index}"]`).isVisible().catch(() => false)) return
+    await page.getByText(name, { exact: false }).first().click()
+    await page.waitForTimeout(400)
+  }
+
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout?session=${sessionId}`)
+  await expect(page.locator('[data-testid="track-add-exercise"]')).toBeVisible({ timeout: 20_000 })
+  await openCard('Bodyweight Squat', 0)
+  await expect(page.locator('[data-testid="track-move-down-0"]')).toBeVisible({ timeout: 10_000 })
+  await page.locator('[data-testid="track-move-down-0"]').click()
+  await expect.poll(names, { timeout: 20_000 }).toEqual(['Push-Up', 'Bodyweight Squat'])
+  console.log('TRACK MOVED: back the other way')
+
+  await openCard('Bodyweight Squat', 1)
+  await expect(page.locator('[data-testid="track-remove-1"]')).toBeVisible({ timeout: 10_000 })
+  await page.locator('[data-testid="track-remove-1"]').click()
+  await expect.poll(names, { timeout: 20_000 }).toEqual(['Push-Up'])
+  console.log('TRACK REMOVED: down to one')
+
+  // The last exercise stays: a workout with nothing in it is not a workout.
+  await openCard('Push-Up', 0)
+  await expect(page.locator('[data-testid="track-remove-0"]')).toBeDisabled()
+  await page.screenshot({ path: 'tests/e2e/screenshots/edit-track-cards.png', fullPage: true })
+
+  await api.dispose()
+})
