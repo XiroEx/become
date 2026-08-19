@@ -21,6 +21,16 @@ interface SearchExercise {
   trackingType: string;
 }
 
+const CUSTOM_TRACKING_OPTIONS: { value: string; label: string }[] = [
+  { value: "reps_weight", label: "Sets & Reps" },
+  { value: "reps_bodyweight", label: "Bodyweight" },
+  { value: "reps_only", label: "Reps Only" },
+  { value: "time", label: "Timed" },
+  { value: "time_distance", label: "Time + Distance" },
+  { value: "intervals", label: "Intervals" },
+  { value: "none", label: "No Tracking" },
+];
+
 interface SearchResponse {
   exercises: SearchExercise[];
 }
@@ -57,6 +67,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   // Your custom exercises — merged into search results; creatable inline below.
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
   const [creating, setCreating] = useState(false);
+  const [newTrackingType, setNewTrackingType] = useState("reps_weight");
   // Log-or-plan (no playthrough): past/today date → logged done, future → planned.
   const [logOpen, setLogOpen] = useState(false);
   const [logDate, setLogDate] = useState(localDateStr());
@@ -85,6 +96,11 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
     })();
     return () => { cancelled = true };
   }, []);
+
+  // A fresh search starts from the default tracking type again.
+  useEffect(() => {
+    setNewTrackingType("reps_weight");
+  }, [query]);
 
   // Debounced exercise search.
   useEffect(() => {
@@ -271,7 +287,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: "reps_weight", muscleGroup: "other", category: "strength" }),
+        body: JSON.stringify({ name, trackingType: newTrackingType, muscleGroup: "other", category: "strength" }),
       });
       if (!res.ok) return;
       const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string } };
@@ -282,7 +298,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
     } catch { /* leave the query for retry */ } finally {
       setCreating(false);
     }
-  }, [query, creating, addExercise]);
+  }, [query, creating, addExercise, newTrackingType]);
 
   // Log (past/today) or plan (future) the built session without playing it —
   // the backfill path for "I worked out yesterday and never logged it".
@@ -353,16 +369,34 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
             })}
             {/* No exact match? Create it right here and keep building. */}
             {q.length >= 2 && !merged.some((r) => r.name.toLowerCase() === q) && (
-              <button
-                onClick={createCustom}
-                disabled={creating}
-                className="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-700/50"
-              >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin text-green-600" /> : <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />}
-                <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                  {creating ? "Creating…" : `Create "${query.trim()}" as a new exercise`}
-                </span>
-              </button>
+              <div className="border-t border-zinc-100 px-3 py-2.5 dark:border-zinc-700">
+                <div className="mb-1.5 flex flex-wrap gap-1">
+                  {CUSTOM_TRACKING_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setNewTrackingType(opt.value)}
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                        newTrackingType === opt.value
+                          ? "bg-green-600 text-white"
+                          : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-400"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={createCustom}
+                  disabled={creating}
+                  className="flex w-full items-center gap-2 text-left transition-colors disabled:opacity-50"
+                >
+                  {creating ? <Loader2 className="h-4 w-4 animate-spin text-green-600" /> : <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />}
+                  <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                    {creating ? "Creating…" : `Create "${query.trim()}" as a new exercise`}
+                  </span>
+                </button>
+              </div>
             )}
           </div>
         )}

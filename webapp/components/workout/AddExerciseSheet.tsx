@@ -52,6 +52,16 @@ function authHeaders(): HeadersInit {
 
 const isTimed = (t?: string) => !!t && (t.startsWith('time') || t === 'intervals')
 
+const CUSTOM_TRACKING_OPTIONS: { value: string; label: string }[] = [
+  { value: 'reps_weight', label: 'Sets & Reps' },
+  { value: 'reps_bodyweight', label: 'Bodyweight' },
+  { value: 'reps_only', label: 'Reps Only' },
+  { value: 'time', label: 'Timed' },
+  { value: 'time_distance', label: 'Time + Distance' },
+  { value: 'intervals', label: 'Intervals' },
+  { value: 'none', label: 'No Tracking' },
+]
+
 export default function AddExerciseSheet({
   open,
   onClose,
@@ -72,6 +82,7 @@ export default function AddExerciseSheet({
   const [seconds, setSeconds] = useState(45)
   const [placement, setPlacement] = useState<Placement>('end')
   const [groupKind, setGroupKind] = useState<GroupKind>('superset')
+  const [customType, setCustomType] = useState<string>('reps_weight')
   const [adding, setAdding] = useState(false)
   const seq = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -84,7 +95,7 @@ export default function AddExerciseSheet({
     if (!open) return
     setQuery(''); setResults([]); setPicked(null)
     setSets(3); setReps('8-12'); setSeconds(45)
-    setPlacement('end'); setGroupKind('superset')
+    setPlacement('end'); setGroupKind('superset'); setCustomType('reps_weight')
     const t = setTimeout(() => inputRef.current?.focus(), 120)
     return () => clearTimeout(t)
   }, [open])
@@ -103,6 +114,10 @@ export default function AddExerciseSheet({
     })()
     return () => { cancelled = true }
   }, [open, customs.length])
+
+  useEffect(() => {
+    setCustomType('reps_weight')
+  }, [query])
 
   useEffect(() => {
     const q = query.trim()
@@ -139,7 +154,7 @@ export default function AddExerciseSheet({
       const res = await fetch('/api/exercises/custom', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: 'reps_weight', muscleGroup: 'other', category: 'strength' }),
+        body: JSON.stringify({ name, trackingType: customType, muscleGroup: 'other', category: 'strength' }),
       })
       if (!res.ok) return
       const data = (await res.json()) as { exercise?: SearchExercise }
@@ -150,7 +165,7 @@ export default function AddExerciseSheet({
     } catch { /* leave the text for a retry */ } finally {
       setCreating(false)
     }
-  }, [query, creating, choose])
+  }, [query, creating, choose, customType])
 
   const submit = useCallback(async () => {
     if (!picked || adding) return
@@ -227,14 +242,36 @@ export default function AddExerciseSheet({
                 </button>
               ))}
               {q.length >= 2 && !searching && merged.length === 0 && (
-                <button
-                  onClick={createCustom}
-                  disabled={creating}
-                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
-                >
-                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  <span>Create &ldquo;{query.trim()}&rdquo;</span>
-                </button>
+                <div className={`rounded-xl px-3 py-2.5 ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}>
+                  <p className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>
+                    Create &ldquo;{query.trim()}&rdquo; as
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CUSTOM_TRACKING_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setCustomType(opt.value)}
+                        data-testid={`add-exercise-create-type-${opt.value}`}
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                          customType === opt.value
+                            ? 'bg-green-500 text-white'
+                            : dark ? 'bg-white/10 text-white/70' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={createCustom}
+                    disabled={creating}
+                    data-testid="add-exercise-create-confirm"
+                    className={`mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold text-green-600 dark:text-green-400 ${rowIdle}`}
+                  >
+                    {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Create exercise
+                  </button>
+                </div>
               )}
               {q.length < 2 && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
             </div>
