@@ -17,7 +17,7 @@ import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
-import { normalizeTracking } from "@/lib/workout/tracking";
+import { normalizeTracking, setUnitLabel } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -254,6 +254,8 @@ export default function LiveWorkoutPage() {
   const showTimeInput = ["time", "time_distance", "intervals"].includes(tracking);
   const isIntervalExercise = tracking === "intervals";
   const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
+  const setUnit = setUnitLabel(tracking, 1);
+  const setUnitPlural = setUnitLabel(tracking, totalSets);
 
   // Per-bell weight convention: when the exercise name implies a dumbbell or
   // kettlebell, the user logs the per-bell weight (e.g. "90" for a pair of
@@ -1675,7 +1677,8 @@ export default function LiveWorkoutPage() {
 
                         <div className="mt-1 flex items-center gap-1 pl-8.5">
                           <p className="min-w-0 flex-1 truncate text-xs text-white/40">
-                            {exercise.sets} sets × {exercise.reps}
+                            {exercise.sets} {setUnitLabel(exercise.trackingType, exercise.sets || 3).toLowerCase()}
+                            {exercise.duration ? ` × ${exercise.duration}` : exercise.reps ? ` × ${exercise.reps}` : ""}
                             {exercise.groupId && <span className="ml-1 text-purple-300/80">· {exercise.groupLabel || "Superset"}</span>}
                           </p>
                           <button
@@ -1800,7 +1803,7 @@ export default function LiveWorkoutPage() {
                 </span>
               ) : totalSets > 1 ? (
                 <span className="ml-2 text-sm text-white/60">
-                  (Set {currentSetIndex + 1} of {totalSets})
+                  ({setUnit} {currentSetIndex + 1} of {totalSets})
                 </span>
               ) : null}
             </p>
@@ -1854,7 +1857,7 @@ export default function LiveWorkoutPage() {
               <div className="flex items-center gap-2 text-sm text-white/60">
                 <span>Exercise {currentExerciseIndex + 1}/{totalExercises}</span>
                 <span>•</span>
-                <span>Set {currentSetIndex + 1}/{totalSets}</span>
+                <span>{setUnit} {currentSetIndex + 1}/{totalSets}</span>
                 {supersetLabel && (
                   <>
                     <span>•</span>
@@ -2153,10 +2156,10 @@ export default function LiveWorkoutPage() {
                 {isLastStep
                   ? "Finish Workout"
                   : isSkipping
-                  ? "Skip Set →"
+                  ? `Skip ${setUnit} →`
                   : isIntervalExercise
                   ? "Done →"
-                  : "Complete Set →"}
+                  : `Complete ${setUnit} →`}
               </button>
             </div>
 
@@ -2170,7 +2173,7 @@ export default function LiveWorkoutPage() {
                   : showWeightInput
                   ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
                   : showTimeInput
-                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
+                  ? `Last ${setUnit.toLowerCase()}: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
                   : `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
               </p>
             )}
@@ -2232,15 +2235,15 @@ export default function LiveWorkoutPage() {
               </div>
 
               <h3 className="mb-2 text-center text-xl font-bold text-white">
-                Skip Set?
+                Skip {setUnit}?
               </h3>
 
               <p className="mb-1 text-center text-sm text-zinc-400">
-                Are you sure you want to skip this set of <span className="font-semibold text-white">{currentExercise?.name}</span>?
+                Are you sure you want to skip this {setUnit.toLowerCase()} of <span className="font-semibold text-white">{currentExercise?.name}</span>?
               </p>
 
               <p className="mb-6 text-center text-xs text-zinc-500">
-                Set {currentSetIndex + 1} of {totalSets}
+                {setUnit} {currentSetIndex + 1} of {totalSets}
               </p>
 
               <div className="flex flex-col gap-3">
@@ -2262,14 +2265,14 @@ export default function LiveWorkoutPage() {
                   onClick={() => skipSet()}
                   className="rounded-lg bg-zinc-700 px-4 py-3 font-semibold text-white transition-colors hover:bg-zinc-600"
                 >
-                  Skip This Set Only
+                  Skip This {setUnit} Only
                 </button>
 
                 <button
                   onClick={() => skipExercise()}
                   className="rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-amber-700"
                 >
-                  Skip All Sets ({totalSets} sets total)
+                  Skip All {setUnitPlural} ({totalSets} {setUnitPlural.toLowerCase()} total)
                 </button>
 
                 <button

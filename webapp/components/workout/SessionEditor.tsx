@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, Layers, Plus, Search, Trash2, Unlink, X } from 'lucide-react'
 import type { DraftExercise } from '@/lib/quickSession/types'
 import { groupIndexes, sanitizeGroups, ungroupAt } from '@/lib/workout/buildAsYouGo'
+import { setUnitLabel } from '@/lib/workout/tracking'
 
 interface SearchExercise {
   slug: string
@@ -223,7 +224,7 @@ export default function SessionEditor({
 
               <div className="mt-2 flex items-center gap-2">
                 <label className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  Sets
+                  {setUnitLabel(ex.trackingType, ex.sets)}
                   <input
                     type="number"
                     min={1}
@@ -233,7 +234,7 @@ export default function SessionEditor({
                     onChange={(e) =>
                       patchRow(i, { sets: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })
                     }
-                    aria-label={`Sets for ${ex.name}`}
+                    aria-label={`${setUnitLabel(ex.trackingType, ex.sets)} for ${ex.name}`}
                     className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                   />
                 </label>
