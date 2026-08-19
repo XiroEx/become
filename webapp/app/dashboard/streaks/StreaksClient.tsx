@@ -9,9 +9,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Flame, Dumbbell, UtensilsCrossed, Brain, Sparkles, Snowflake, Check, Circle } from 'lucide-react'
+import { ArrowLeft, Flame, Dumbbell, UtensilsCrossed, Brain, Snowflake, Check, Circle } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui'
+import FireNumber from '@/components/streaks/FireNumber'
 import { streakDisplay, STREAK_VISIBLE_MIN } from '@/lib/streaks/pillars'
 import { readCache, writeCache } from '@/lib/clientCache'
 
@@ -51,7 +52,7 @@ function unitWord(n: number, unit: 'days' | 'weeks'): string {
 }
 
 /** The big number, or the "Building" state before a streak exists. */
-function StreakValue({ current, unit, tone }: { current: number; unit: 'days' | 'weeks'; tone: string }) {
+function StreakValue({ current, unit, tone, fire = false }: { current: number; unit: 'days' | 'weeks'; tone: string; fire?: boolean }) {
   const d = streakDisplay(current)
   if (!d.visible) {
     return (
@@ -66,7 +67,7 @@ function StreakValue({ current, unit, tone }: { current: number; unit: 'days' | 
   return (
     <div>
       <p className={`text-3xl font-extrabold tracking-tight ${tone}`}>
-        {current}
+        {fire ? <FireNumber>{current}</FireNumber> : current}
         <span className="ml-1 text-base font-semibold text-zinc-500 dark:text-zinc-400">{unit}</span>
       </p>
     </div>
@@ -294,18 +295,18 @@ export default function StreaksClient() {
           </Card>
 
           {/* Super */}
-          <Card data-testid="streak-super" className="border-amber-200/70 dark:border-amber-900/40">
+          <Card data-testid="streak-super" className="border-orange-200/70 dark:border-orange-900/40">
             <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/30">
-                <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-orange-200 dark:from-amber-900/40 dark:to-orange-900/30">
+                <Flame className="h-5 w-5 text-orange-700 dark:text-orange-400" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-zinc-900 dark:text-white">Super streak</p>
                 {p ? (
                   <>
                     <div className="mt-1">
-                      <StreakValue current={p.super.current} unit="days" tone="text-amber-600 dark:text-amber-400" />
-                      <BuildBar current={p.super.current} tone="bg-amber-500" />
+                      <StreakValue current={p.super.current} unit="days" tone="text-orange-700 dark:text-orange-400" fire />
+                      <BuildBar current={p.super.current} tone="bg-orange-600 dark:bg-orange-500" />
                     </div>
                     <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
                       All three pillars, every day: food logged, mindset checked in, and trained (a scheduled rest day counts) — with the training week on track.

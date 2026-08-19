@@ -45,6 +45,27 @@ test('Becoming details: Fuel and Training screens show then→now→next; Story 
   expect(ft).toMatch(/Then/i); expect(ft).toMatch(/Now/i); expect(ft).toMatch(/Next/i)
   expect(ft).toMatch(/205 lbs/)
   expect(ft).toMatch(/Logged \d\/7 days/)
+
+  // The weight line sits ABOVE the plan, opens on this week, and names its axes.
+  const chart = page.locator('[data-testid="weight-chart"]')
+  await expect(chart).toBeVisible()
+  const chartTop = (await chart.boundingBox())!.y
+  const planTop = (await page.locator('[data-testid="weight-plan"]').boundingBox())!.y
+  expect(chartTop).toBeLessThan(planTop)
+  await expect(page.locator('[data-testid="weight-view-week"]')).toHaveAttribute('aria-pressed', 'true')
+  const chartText = (await chart.innerText()).replace(/\s+/g, ' ')
+  console.log('CHART:', chartText.slice(0, 200))
+  for (const d of ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) expect(chartText).toContain(d)
+  expect(chartText).toMatch(/\d/)   // y numbers
+  // All time keeps the line and switches the axis to months.
+  await page.locator('[data-testid="weight-view-all"]').click()
+  await page.waitForTimeout(500)
+  const allText = (await chart.innerText()).replace(/\s+/g, ' ')
+  console.log('CHART ALL:', allText.slice(0, 200))
+  expect(allText).toMatch(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/)
+  await page.screenshot({ path: 'tests/e2e/screenshots/becoming-weight-chart.png' })
+  await page.locator('[data-testid="weight-view-week"]').click()
+
   await page.locator('[data-testid="details-tab-training"]').click()
   const tr = page.locator('[data-testid="details-screen-training"]')
   await expect(tr).toBeVisible(); await page.waitForTimeout(500)

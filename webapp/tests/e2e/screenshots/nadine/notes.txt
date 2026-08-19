@@ -1,0 +1,250 @@
+[STEP 1] STEP 1 OF 5 · GOALS
+What are you here to do?
+Pick up to 3. Your first pick is your primary goal — it drives your program, your calories and your dashboard.
+Lose Weight
+Build Muscle
+Maintain & Tone
+Improve Performance
+General Health
+Back
+Skip for now
+Next
+[TAP] Lose Weight
+[TAP] General Health
+[TAP] Next
+[STEP 2] STEP 2 OF 5 · BACKGROUND
+Your background
+This sets the difficulty of the program we match you with, and how active we assume you are when we work out your calories.
+Experience level
+Beginner
+New to structured training
+Intermediate
+1-3 years of consistent training
+Advanced
+3+ years, familiar with programming
+Days available per week
+−
+3
++
+days / week
+We'll only recommend programs that fit inside 3 d
+[TAP] Beginner
+[TAP] Next
+[STEP 3] STEP 3 OF 5 · BODY & NUTRITION
+Body stats
+These four numbers are what your daily calories and macros are built from. Nothing here is shared.
+Imperial
+Metric
+Age
+Height
+ft
+in
+Biological sex
+Male
+Female
+Prefer not to say
+The Mifflin-St Jeor equation needs this. Choosing "prefer not to say" means we can't calculate your calories automatically.
+Current weight (lbs)
+lbs
+Target weight (lbs)
+lbs
+Which way are you eating?
+Pre-set from your primary goal — change it if you disagree.
+Lose Weight
+TDEE − 500
+Maintain
+TDEE
+Gain Weight
+TDEE + 300
+How active is your day, outside training?
+Your job and daily movement, not your workouts. This has the biggest effect on your calories.
+Sedentary
+Desk job, mostly sitting, little walking
+×1.2
+Lightly Active
+On your feet some of the day, light walking
+×1.375
+Moderately Active
+Moving a good part of the day
+×1.55
+Active
+On your feet most of the day, or a physical
+[TAP] Female
+[FILL] age 36, 5ft 5in, 178lb now, 150lb target
+[TAP] Lightly Active
+[TAP] Recommended
+[STEP 3 FILLED] STEP 3 OF 5 · BODY & NUTRITION
+Body stats
+These four numbers are what your daily calories and macros are built from. Nothing here is shared.
+Imperial
+Metric
+Age
+Height
+ft
+in
+Biological sex
+Male
+Female
+Prefer not to say
+The Mifflin-St Jeor equation needs this. Choosing "prefer not to say" means we can't calculate your calories automatically.
+Current weight (lbs)
+lbs
+Target weight (lbs)
+lbs
+Which way are you eating?
+Pre-set from your primary goal — change it if you disagree.
+Lose Weight
+TDEE − 500
+Maintain
+TDEE
+Gain Weight
+TDEE + 300
+How active is your day, outside training?
+Your job and daily movement, not your workouts. This has the biggest effect on your calories.
+Sedentary
+Desk job, mostly sitting, little walking
+×1.2
+Lightly Active
+On your feet some of the day, light walking
+×1.375
+Moderately Active
+Moving a good part of the day
+×1.55
+Active
+On your feet most of the day, or a physical job
+×1.725
+Very Active
+Hard physical work all day
+×1.9
+How do you want your macros split?
+You can change this any time in Nutrition.
+Recommended
+Tuned to your goal — the safe default.
+35/35/30
+Balanced
+An even 30/40/30. Works for most people.
+30/40/30
+High Protein
+FOR YOUR GOAL
+More protein, fewer carbs. Good when building or holding muscle.
+40/30/30
+Lower Carb
+Carbs down, fats up. For people who feel better eating this way.
+35/25/40
+YOUR DAILY TARGETS
+1,648 cal / day
+178g
+PROTEIN
+126g
+CARBS
+48
+[TAP] Next
+[STEP 4] STEP 4 OF 5 · EQUIPMENT
+Equipment & injuries
+We won't recommend a barbell program to someone training in a living room. Tell us what you actually have.
+Equipment access
+None
+Dumbbells
+Barbell
+Cables
+Full Gym
+Injury notes
+Back
+Skip for now
+Next
+[TAP] Dumbbells
+[TAP] Next
+[STEP 5 REVIEW] STEP 5 OF 5 · REVIEW
+Here's what we heard
+Everything below shapes what the app does for you. Edit anything that isn't right, then finish.
+Your goals
+Edit
+Primary
+Lose Weight
+Also #2
+General Health
+Your primary goal (Lose Weight) drives your program match and dashboard. Your other goal still shifts which programs we rank highest.
+Training
+Edit
+Experience
+Beginner
+Days / week
+3
+We treat 3 sessions a week as "moderate" when calculating your calories, and we only surface programs that fit that schedule.
+Body & nutrition
+Edit
+Age
+36
+Height
+5'5"
+Current weight
+178 lbs
+Target weight
+150 lbs
+Eating
+Calorie deficit
+Daily calories
+1,648 cal
+Macros
+178p / 126c / 48f
+Mifflin-St Jeor puts your TDEE at ~2,060 cal. We applied a 500 calorie deficit — about 1 lb of fat loss per week. These land in your nutrition tab the moment you finish — no setup needed.
+Equipment & injuries
+Edit
+Equipment
+Dumbbells
+Injury notes
+None
+Programs that need gear you don't have get pushed down your recommendations, and your injury notes ride along with your coach's view of your account.
+Your program match
+RECOMMENDED FOR YOU
+No Excuses: At-Home Transformation
+4 weeks · 4 days/week · Beginner to Intermediate
+Built aroun
+[TAP] Finish
+[URL] https://become.redbtn.io/dashboard
+[AFTER] BECOME
+Dashboard
+Track your fitness journey
+Day Streak❄
+1
+2d to 🏆
+?
+Today's Mood
+Set
+No entries yet
+This Week
+0/4
+4 to weekly goal
+Goal
+0%
+Annual goal
+Calories
+0/1648
+1648 cal left
+Customize tiles
+Weight
+BMI
+Mood
+178.0
+lbs
+Aug 5
+176
+177
+178
+179
+180
+Nutrition
+View All
+1648
+left
+Protein
+0g / 178g
+Carbs
+0g / 126g
+Fats
+0g / 48g
+0/89 oz
+Log Meal
+Quick Add
+No program yet
+Browse programs and enroll when

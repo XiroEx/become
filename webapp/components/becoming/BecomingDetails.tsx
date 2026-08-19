@@ -24,7 +24,7 @@ import type { WeekSnapshot } from '@/lib/becoming/weeks'
 import { fmtUnit } from '@/lib/goals/pace'
 import { PILLAR as SUBJECT, pillarColor as weekColor, STREAK_INK } from '@/lib/pillarColors'
 import WeightChart from '@/components/becoming/WeightChart'
-import type { WeightPoint } from '@/lib/becoming/weightSeries'
+
 
 type Tab = 'mind' | 'fuel' | 'training' | 'story'
 const TABS: Array<{ id: Tab; label: string; Icon: typeof Brain; hue: string }> = [
@@ -38,7 +38,7 @@ interface ProgressData { chapter: number; xp: number; xpBank: number; vision: { 
 interface Win { _id?: string; win: string; date: string }
 interface StateLogEntry { state: MindState; timestamp: string }
 interface ProgramLite { name: string; completedWorkouts?: number; totalWorkouts?: number; currentWeek: number; totalWeeks: number; programId: string }
-interface ProgressLite { currentProgram: ProgramLite | null; weightData?: WeightPoint[] }
+interface ProgressLite { currentProgram: ProgramLite | null }
 
 const STATE_META: Record<MindState, { label: string; dot: string }> = {
   locked_in:  { label: 'Locked in',  dot: '#34d399' },
@@ -55,6 +55,12 @@ const FOCUS_BY_STATE: Record<MindState, { title: string; sub: string }> = {
 
 function authHeaders(): HeadersInit { return { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` } }
 function fmtDate(d: string | number | Date | null | undefined): string { return d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—' }
+// Weigh-ins are stored as UTC-midnight DAY MARKERS, not instants: read one in
+// local time west of UTC and it slides to the day before. Format those in UTC
+// so this card and the chart above it name the same day.
+function fmtDayMarker(d: string | number | Date | null | undefined): string {
+  return d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '—'
+}
 function relDay(d: string | number | Date): string {
   const days = Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000)
   if (days <= 0) return 'today'; if (days === 1) return 'yesterday'; if (days < 7) return `${days}d ago`
@@ -62,9 +68,9 @@ function relDay(d: string | number | Date): string {
 }
 
 /* ── glass primitives ─────────────────────────────────────────────────── */
-function Glass({ children, className = '', hue }: { children: React.ReactNode; className?: string; hue?: string }) {
+function Glass({ children, className = '', hue, ...rest }: { children: React.ReactNode; className?: string; hue?: string } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-white/[0.06] p-4 ring-1 ring-white/10 ${className}`}>
+    <div className={`relative overflow-hidden rounded-2xl bg-white/[0.06] p-4 ring-1 ring-white/10 ${className}`} {...rest}>
       {hue && <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full blur-2xl" style={{ background: hue, opacity: 0.18 }} />}
       <div className="relative">{children}</div>
     </div>
@@ -94,6 +100,9 @@ function Next({ title, sub, url, hue, onClose }: { title: string; sub: string; u
 
 export interface BecomingDetailsProps {
   weeks?: WeekSnapshot[]
+  /** Every weigh-in by local day, for the weight chart. */
+  weighIns?: Array<{ day: string; value: number }>
+  todayKey?: string
   unit?: 'lbs' | 'kg'
   onClose: () => void
   /** Fly the stage to a week (index) — from the Story screen. */
@@ -101,7 +110,7 @@ export interface BecomingDetailsProps {
   initialTab?: Tab
 }
 
-export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJumpToWeek, initialTab = 'mind' }: BecomingDetailsProps) {
+export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = '', unit = 'lbs', onClose, onJumpToWeek, initialTab = 'mind' }: BecomingDetailsProps) {
   const [tab, setTab] = useState<Tab>(initialTab)
   const [dir, setDir] = useState(1)
   const [prog, setProg] = useState<ProgressData | null>(null)
@@ -110,7 +119,6 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
   const [streak, setStreak] = useState(0)
   const [goals, setGoals] = useState<GoalProgress | null>(null)
   const [program, setProgram] = useState<ProgramLite | null>(null)
-  const [weightHistory, setWeightHistory] = useState<WeightPoint[]>([])
   const [settingLifts, setSettingLifts] = useState(false)
   const tz = new Date().getTimezoneOffset()
 
@@ -130,11 +138,7 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
         if (sRes.ok) setLogs((await sRes.json()).logs ?? [])
         if (sessRes.ok) setStreak((await sessRes.json()).streak ?? 0)
         if (gRes.ok) setGoals(await gRes.json())
-        if (prRes.ok) {
-          const pr = (await prRes.json()) as ProgressLite
-          setProgram(pr.currentProgram ?? null)
-          setWeightHistory(Array.isArray(pr.weightData) ? pr.weightData : [])
-        }
+        if (prRes.ok) setProgram(((await prRes.json()) as ProgressLite).currentProgram ?? null)
       } catch { /* screens show what they have */ }
     })()
     return () => { cancelled = true }
@@ -312,7 +316,14 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
 
               {tab === 'fuel' && (
                 <>
-                  <Glass hue={SUBJECT.fuel.hex}>
+                  {/* The line first: where you have been is the story; the plan
+                      is the commentary. */}
+                  {weighIns.length > 0 && (
+                    <Glass hue={SUBJECT.fuel.hex}>
+                      <WeightChart weighIns={weighIns} target={n?.target.weight ?? null} unit={unit} todayKey={todayKey} direction={n?.direction ?? null} />
+                    </Glass>
+                  )}
+                  <Glass hue={SUBJECT.fuel.hex} data-testid="weight-plan">
                     <div className="mb-2 flex items-center justify-between">
                       <Eyebrow>Weight plan</Eyebrow>
                       {n?.pace && n.status === 'active' && <span className={`text-xs font-semibold ${n.pace.status === 'behind' ? 'text-amber-300' : 'text-emerald-400'}`}>{n.pace.status === 'behind' ? `${fmtUnit(n.pace.behindByKg, unit)} behind pace` : n.pace.status === 'ahead' ? `${fmtUnit(n.pace.aheadByKg, unit)} ahead` : n.pace.status === 'on' ? 'On pace' : n.pace.status === 'done' ? 'At target' : ''}</span>}
@@ -322,10 +333,10 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
                       <>
                         <div className="grid grid-cols-3 gap-2">
                           <Cell label="Then" value={n.baseline.weight != null ? `${Math.round(n.baseline.weight)} ${unit}` : '—'} sub={n.baseline.date ? `plan from ${fmtDate(n.baseline.date)}` : undefined} />
-                          <Cell label="Now" value={n.now.weight != null ? `${Math.round(n.now.weight)} ${unit}` : '—'} sub={n.now.fourWeeksAgo != null && n.now.weight != null ? `${n.now.weight - n.now.fourWeeksAgo <= -0.05 ? '↓' : n.now.weight - n.now.fourWeeksAgo >= 0.05 ? '↑' : '→'} ${Math.abs(n.now.weight - n.now.fourWeeksAgo).toFixed(1)} in 4 wks` : n.now.date ? fmtDate(n.now.date) : undefined} hue={SUBJECT.fuel.hex} />
+                          <Cell label="Now" value={n.now.weight != null ? `${Math.round(n.now.weight)} ${unit}` : '—'} sub={n.now.fourWeeksAgo != null && n.now.weight != null ? `${n.now.weight - n.now.fourWeeksAgo <= -0.05 ? '↓' : n.now.weight - n.now.fourWeeksAgo >= 0.05 ? '↑' : '→'} ${Math.abs(n.now.weight - n.now.fourWeeksAgo).toFixed(1)} in 4 wks` : n.now.date ? fmtDayMarker(n.now.date) : undefined} hue={SUBJECT.fuel.hex} />
                           <Cell label="Next" value={`${Math.round(n.target.weight)} ${unit}`} sub={n.pace?.etaDate ? `${n.pace.eta} → ${fmtDate(n.pace.etaDate)}` : n.direction === 'maintain' ? 'hold ±2' : n.target.pacePerWeek ? `${n.target.pacePerWeek} ${unit}/wk` : undefined} />
                         </div>
-                        {n.journeyStart.weight != null && n.journeyStart.date && n.baseline.date && new Date(n.journeyStart.date) < new Date(n.baseline.date) && <p className="mt-2 text-[11px] text-white/45">First weigh-in {Math.round(n.journeyStart.weight)} {unit} on {fmtDate(n.journeyStart.date)}.</p>}
+                        {n.journeyStart.weight != null && n.journeyStart.date && n.baseline.date && new Date(n.journeyStart.date) < new Date(n.baseline.date) && <p className="mt-2 text-[11px] text-white/45">First weigh-in {Math.round(n.journeyStart.weight)} {unit} on {fmtDayMarker(n.journeyStart.date)}.</p>}
                         {n.adherence && (
                           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                             <span className={`inline-flex items-center gap-1 ${n.adherence.logOk ? 'text-emerald-400' : 'text-white/60'}`}>{n.adherence.logOk ? <Check className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}Logged {n.adherence.logDays}/{n.adherence.totalDays} days <span className="text-white/40">(aim {n.adherence.logTarget})</span></span>
@@ -337,17 +348,6 @@ export default function BecomingDetails({ weeks = [], unit = 'lbs', onClose, onJ
                       <p className="text-sm text-white/60">No target weight yet — set one in <Link href="/dashboard/settings" onClick={onClose} className="font-medium text-amber-300">Settings</Link> and this becomes then → now → next.</p>
                     )}
                   </Glass>
-                  {(weightHistory.length > 0 || weeks.length > 0) && (
-                    <Glass hue={SUBJECT.fuel.hex}>
-                      <WeightChart
-                        history={weightHistory}
-                        weeks={weeks.map(w => ({ weekKey: w.weekKey, label: w.label, end: w.nutrition.weightEnd, start: w.nutrition.weightStart }))}
-                        target={n?.target.weight ?? null}
-                        unit={unit}
-                        direction={n?.direction ?? null}
-                      />
-                    </Glass>
-                  )}
                   {n && <Next title={n.suggestion.title} sub={n.suggestion.sub} url={n.suggestion.url} hue={SUBJECT.fuel.hex} onClose={onClose} />}
                   <Link href="/dashboard/nutrition/goals" onClick={onClose} className="flex items-center justify-between rounded-2xl bg-white/[0.06] px-4 py-3 ring-1 ring-white/10 hover:bg-white/[0.09]"><span className="text-sm font-semibold">Pace, targets and macros</span><ArrowRight className="h-5 w-5 text-white/40" /></Link>
                 </>
