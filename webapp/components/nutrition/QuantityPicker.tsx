@@ -38,6 +38,7 @@ import {
 import {
   buildServingChoiceGroups,
   findBestBridgeForUnit,
+  servingChoiceDisplayLabel,
   type ServingChoice,
   variantForServingChoice,
 } from '@/lib/nutrition/servingOptions'
@@ -409,8 +410,9 @@ export default function QuantityPicker({
     // A measurable label ("3/4 cup", "45 g") loses its own count in this
     // collapse — showing the bare noun ("cup") next to the quantity box's "1"
     // would read as "1 cup", a different amount than the food's real serving.
-    // Fall back to the generic word rather than a noun that doubles as a unit.
-    if (primaryServing.measurableAsServing) return 'serving'
+    // Fall back to the generic word (still naming the real amount in parens)
+    // rather than a noun that doubles as a unit.
+    if (primaryServing.measurableAsServing) return servingChoiceDisplayLabel(primaryServing)
     // "1 portion (85 g)" -> "portion"; "1 bar (45 g)" -> "bar".
     const bare = primaryServing.label
       .replace(/\([^)]*\)/g, ' ')          // drop the "(85 g)"
@@ -736,7 +738,7 @@ export default function QuantityPicker({
               {choiceGroups.servings.length > 0 && (
                 <optgroup label="Servings">
                   {choiceGroups.servings.map(choice => (
-                    <option key={choice.id} value={choice.id}>{choice.measurableAsServing ? 'serving' : choice.label}</option>
+                    <option key={choice.id} value={choice.id}>{servingChoiceDisplayLabel(choice)}</option>
                   ))}
                 </optgroup>
               )}
@@ -874,7 +876,7 @@ function ChoiceSection({
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800"
           >
             <Check className={`h-4 w-4 shrink-0 ${checked ? 'opacity-100' : 'opacity-0'}`} />
-            <span className="min-w-0 truncate">{choice.measurableAsServing ? 'serving' : choice.label}</span>
+            <span className="min-w-0 truncate">{servingChoiceDisplayLabel(choice)}</span>
           </button>
         )
       })}

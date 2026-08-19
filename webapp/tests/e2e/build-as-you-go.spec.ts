@@ -40,6 +40,17 @@ async function addExercise(page: Page, query: string, placement: 'end' | 'group'
   return name
 }
 
+async function openExerciseList(page: Page) {
+  for (let i = 0; i < 4; i++) {
+    if (await page.locator('[data-testid="live-row-0"]').isVisible().catch(() => false)) {
+      await page.waitForTimeout(250)
+      if (await page.locator('[data-testid="live-row-0"]').isVisible().catch(() => false)) return
+    }
+    await page.locator('[data-tour="live-exercise-dots"]').click()
+    await page.waitForTimeout(400)
+  }
+}
+
 test('a session started with one exercise grows while it runs, and every surface agrees', async ({ page, context }) => {
   const token = signToken(E2E_USER.id, E2E_USER.email)
   const sessionId = `e2e-bayg-${Date.now()}`
@@ -391,16 +402,33 @@ test('exercises can be removed and reordered from the live view and the track vi
   // ── Live view: drop the third, then move the second to the top ────────────
   await page.goto(`${BASE_URL}/dashboard/workout/quick/workout/live?session=${sessionId}`)
   await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
-  await page.locator('[data-tour="live-exercise-dots"]').click()
+  await openExerciseList(page)
   await expect(page.locator('[data-testid="live-remove-2"]')).toBeVisible({ timeout: 10_000 })
   await page.locator('[data-testid="live-remove-2"]').click({ force: true })
   await expect.poll(names, { timeout: 20_000, message: 'the removal reaches the log' }).toEqual(['Push-Up', 'Bodyweight Squat'])
   console.log('LIVE REMOVED: Plank is gone')
 
-  await page.locator('[data-tour="live-exercise-dots"]').click()
-  await page.locator('[data-testid="live-move-up-1"]').click({ force: true })
+  // Hold a row and drag it: the arrows came off the rows, because they left no
+  // room for the exercise name.
+  await openExerciseList(page)
+  const row = page.locator('[data-testid="live-row-1"]')
+  const box = (await row.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(600)                      // past the long-press threshold
+  await page.mouse.move(box.x + box.width / 2, box.y - box.height, { steps: 8 })
+  await page.mouse.up()
   await expect.poll(names, { timeout: 20_000, message: 'the reorder reaches the log' }).toEqual(['Bodyweight Squat', 'Push-Up'])
-  console.log('LIVE MOVED: the squat came first')
+  console.log('LIVE MOVED: held the squat and dragged it to the top')
+
+  // A tap on a row goes to that exercise — the list is navigation, not a label.
+  // (The dots TOGGLE the drawer, so poke until it is actually open.)
+  await openExerciseList(page)
+  await page.locator('[data-testid="live-row-1"]').click()
+  await page.waitForTimeout(600)
+  const nowOn = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+  console.log('TAPPED ROW 2:', (nowOn.match(/Exercise \d+\/\d+/) ?? ['?'])[0])
+  expect(nowOn).toContain('Exercise 2/2')
   await page.screenshot({ path: 'tests/e2e/screenshots/edit-live-drawer.png' })
 
   // ── Track view: the same controls, and the same result ────────────────────
@@ -430,6 +458,71 @@ test('exercises can be removed and reordered from the live view and the track vi
   await openCard('Push-Up', 0)
   await expect(page.locator('[data-testid="track-remove-0"]')).toBeDisabled()
   await page.screenshot({ path: 'tests/e2e/screenshots/edit-track-cards.png', fullPage: true })
+
+  await api.dispose()
+})
+
+/**
+ * A session you built yourself resumes from the dashboard the same way a
+ * program does — the pill used to need a programId, so a quick session left
+ * mid-flight was invisible from the home screen.
+ */
+test('an open quick session shows the resume pill on the dashboard, and it goes back in', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-resume-${Date.now()}`
+
+  const api = await request.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+  // An open session on the server, with nothing in this browser's stash: the
+  // live view has to rebuild it from the log.
+  await api.post('/api/workouts', {
+    data: {
+      kind: 'quick',
+      sessionId,
+      title: 'E2E Resume Session',
+      completed: false,
+      tz: new Date().getTimezoneOffset(),
+      exercises: [{
+        name: 'Barbell Bench Press',
+        exerciseSlug: 'barbell-bench-press',
+        prescription: { sets: 3, reps: '5', trackingType: 'reps_weight' },
+        sets: [{ setNumber: 1, reps: 5, weight: 185, completed: false }],
+      }],
+    },
+  })
+
+  await context.addCookies([{
+    name: 'auth_token',
+    value: token,
+    domain: new URL(BASE_URL).hostname,
+    path: '/',
+    httpOnly: false,
+    secure: BASE_URL.startsWith('https'),
+    sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+  await page.goto(`${BASE_URL}/dashboard`)
+  await page.locator('button[aria-label="Skip tour"]').first().click({ force: true }).catch(() => {})
+  const skip = page.locator('button:has-text("Skip for today"), button:has-text("Skip")').first()
+  if (await skip.isVisible().catch(() => false)) await skip.click({ force: true }).catch(() => {})
+
+  const pill = page.locator('a[aria-label*="Get back into"]')
+  await expect(pill, 'a quick session is resumable from the home screen').toBeVisible({ timeout: 30_000 })
+  const href = await pill.getAttribute('href')
+  console.log('RESUME PILL:', (await pill.innerText()).replace(/\s+/g, ' '), '→', href)
+  expect(href).toContain(`session=${sessionId}`)
+
+  // Following it rebuilds the session from its log — this browser has never
+  // seen the session, so without that the live view would offer demo exercises.
+  await page.goto(`${BASE_URL}${href}`)
+  await expect(page.getByText('Barbell Bench Press').first()).toBeVisible({ timeout: 30_000 })
+  const live = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+  expect(live, 'the rebuilt session is the real one, not the demo fallback').not.toContain('Seated Cable Row')
+  expect(live).toContain('Exercise 1/1')
+  console.log('REBUILT FROM LOG:', (live.match(/Exercise \d+\/\d+ . Set \d+\/\d+/) ?? ['?'])[0], '| history:', /Last:/.test(live), '| PR shown:', /PR:/.test(live))
 
   await api.dispose()
 })

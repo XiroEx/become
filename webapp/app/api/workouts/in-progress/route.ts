@@ -55,11 +55,18 @@ export async function GET(request: NextRequest) {
 
     if (!open) return NextResponse.json({ workout: null })
 
+    // Quick sessions are workouts too: they are the ones you built yourself,
+    // and leaving them out meant the pill only ever came back for a program.
+    const kind = open.kind === 'quick' || !open.programId ? 'quick' : 'program'
     return NextResponse.json({
       workout: {
+        kind,
         programId: open.programId ? String(open.programId) : null,
         day: open.day ? String(open.day) : null,
         phase: typeof open.phase === 'number' ? open.phase : null,
+        sessionId: open.sessionId ? String(open.sessionId) : null,
+        title: open.title ? String(open.title) : null,
+        exerciseCount: Array.isArray(open.exercises) ? open.exercises.length : 0,
         startedAt: open.date,
       },
     })
