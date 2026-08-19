@@ -13,7 +13,8 @@ import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import ThinSessionModal from "@/components/workout/ThinSessionModal";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { normalizeTracking } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
@@ -133,6 +134,9 @@ export default function LiveWorkoutPage() {
   const [showExerciseList, setShowExerciseList] = useState(false);
   // Build as you go: the add-an-exercise sheet, reachable from the exercise list.
   const [showAddExercise, setShowAddExercise] = useState(false);
+  // "Finish with two exercises?" — asked once, on the way out of a thin session.
+  const [showThinFinish, setShowThinFinish] = useState(false);
+  const [thinFinishAcked, setThinFinishAcked] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeIndicator, setShowResumeIndicator] = useState(false);
   // Active-seconds tracking: time persists across resume sessions.
@@ -1098,6 +1102,17 @@ export default function LiveWorkoutPage() {
   const skipExercise = useCallback(async () => {
     if (!currentStep) return;
 
+    // Skipping the last exercise ends the workout just as surely as finishing it.
+    let nextAfterSkip = currentStepIndex + 1;
+    while (nextAfterSkip < workoutFlow.length && workoutFlow[nextAfterSkip].exerciseIndex === currentStep.exerciseIndex) {
+      nextAfterSkip++;
+    }
+    if (nextAfterSkip >= workoutFlow.length && shouldAskBeforeFinish()) {
+      setShowSkipModal(false);
+      setShowThinFinish(true);
+      return;
+    }
+
     // Mark all sets for the current exercise as skipped
     const updatedData = exerciseData.map((sets, exIdx) =>
       exIdx === currentStep.exerciseIndex
@@ -1282,6 +1297,17 @@ export default function LiveWorkoutPage() {
     saveWorkout(nextData, false, next);
   }, [exerciseData, swappedExercises, currentExerciseIndex, currentSetIndex, currentStepIndex, isQuick, quickSessionId, saveWorkout]);
 
+  /**
+   * True when we should stop and ask before finishing: a session you built as
+   * you went, with fewer exercises in it than a session usually has. Programs
+   * are prescribed by a coach — a three-exercise day there is deliberate, so
+   * this only asks about sessions the member assembled themselves.
+   */
+  const shouldAskBeforeFinish = useCallback(
+    () => shouldWarnBeforeFinish({ selfBuilt: isQuick, exerciseCount: exercises.length, alreadyAsked: thinFinishAcked }),
+    [isQuick, thinFinishAcked, exercises.length],
+  );
+
   const handleAddExercise = useCallback((r: AddExerciseResult) => {
     const fresh: Exercise = { ...r.exercise, addedAdHoc: true } as Exercise;
     const res = r.placement === "group" && exercises[currentExerciseIndex]
@@ -1310,6 +1336,13 @@ export default function LiveWorkoutPage() {
     // On the final step, empty inputs just finish the workout — don't prompt to skip
     if (isSkipping && !isLastStep) {
       setShowSkipModal(true);
+      return;
+    }
+
+    // Last set of a session you built yourself, and it is thinner than a
+    // session usually is: ask before it becomes a finished workout.
+    if (isLastStep && shouldAskBeforeFinish()) {
+      setShowThinFinish(true);
       return;
     }
 
@@ -2291,6 +2324,20 @@ export default function LiveWorkoutPage() {
       </AnimatePresence>
 
       {/* Exercise Swap Modal — always mounted to prevent unmount/remount flashing */}
+      <ThinSessionModal
+        open={showThinFinish}
+        exerciseCount={exercises.length}
+        tone="dark"
+        onClose={() => setShowThinFinish(false)}
+        onAddExercise={() => { setShowThinFinish(false); setShowAddExercise(true); }}
+        onFinishAnyway={() => {
+          // Asked and answered — this session will not ask again.
+          setThinFinishAcked(true);
+          setShowThinFinish(false);
+          completeSet();
+        }}
+      />
+
       <AddExerciseSheet
         open={showAddExercise}
         onClose={() => setShowAddExercise(false)}
