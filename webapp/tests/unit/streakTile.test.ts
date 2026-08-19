@@ -22,6 +22,8 @@ test('the super streak leads the tile and is the emphasised page', () => {
   assert.equal(p[0].footer, 'Today: check in')
   assert.equal(p[1].id, 'overall')
   assert.deepEqual(p.map(x => x.id), ['super', 'overall', 'workout', 'nutrition', 'mindset'])
+  assert.deepEqual(p.map(x => x.label), ['Super Streak', 'Day Streak', 'Workout', 'Nutrition', 'Mindset'], 'short labels leave room for the dots')
+  assert.equal(p[2].fullLabel, 'Workout streak')
 })
 
 test('no super streak → the day streak leads and nothing is emphasised', () => {

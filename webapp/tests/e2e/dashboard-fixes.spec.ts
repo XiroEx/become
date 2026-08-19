@@ -207,13 +207,16 @@ test('streaks page renders every pillar with the 3-day rule', async ({ page }) =
     expect(t.length).toBeGreaterThan(10)
   }
   const overall = (await page.locator('[data-testid="streak-overall"]').innerText()).replace(/\s+/g, ' ')
-  const sk = await page.request.get(`${BASE}/api/streak?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
-  const streakDays = sk.ok() ? Number((await sk.json()).streakDays ?? 0) : 0
+  const sr = await page.request.get(`${BASE}/api/streaks?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const streaks = sr.ok() ? await sr.json() : null
+  const streakDays = Number(streaks?.overall?.current ?? 0)
   if (streakDays < 3) expect(overall).toMatch(/Building/); else expect(overall).toMatch(new RegExp(`${streakDays}\\s*days`))
   const mindset = (await page.locator('[data-testid="streak-mindset"]').innerText()).replace(/\s+/g, ' ')
   expect(mindset).toMatch(/\d+\s*days|Building/)
   const workout = (await page.locator('[data-testid="streak-workout"]').innerText()).replace(/\s+/g, ' ')
-  expect(workout).toMatch(/This week 1\/5/)
+  const sw = streaks?.pillars?.workout
+  if (sw?.target) expect(workout).toMatch(new RegExp(`This week ${sw.thisWeek}\\/${sw.target}`))
+  else expect(workout).toMatch(/Set how many days a week/)
   await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-streaks.png', fullPage: true })
   expect(errs, errs.join('\n')).toEqual([])
 })

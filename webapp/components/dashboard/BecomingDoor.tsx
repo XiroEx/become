@@ -13,6 +13,7 @@ import { ArrowRight, Brain, UtensilsCrossed, Dumbbell, Sparkles, Compass } from 
 import type { GoalProgress } from '@/lib/goals/progress'
 import type { Suggestion } from '@/lib/goals/suggestions'
 import type { MindSummary } from '@/components/dashboard/MindsetCard'
+import { PILLAR } from '@/lib/pillarColors'
 import { fmtUnit } from '@/lib/goals/pace'
 
 const RANK: Record<Suggestion['severity'], number> = { warn: 0, nudge: 1, info: 2, good: 3 }
@@ -47,10 +48,10 @@ function useUnread(): boolean {
   return useSyncExternalStore(() => () => {}, readUnread, () => false)
 }
 
-function Chip({ icon, label, value, sub, tone, loud }: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: string; loud: boolean }) {
+function Chip({ icon, label, value, sub, tone, loud, ink }: { icon: React.ReactNode; label: string; value: string; sub?: string; tone?: string; loud: boolean; ink?: string }) {
   return (
     <div className={`flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 ${loud ? 'bg-white/10' : 'bg-zinc-50 dark:bg-zinc-800/60'}`}>
-      <span className={`shrink-0 ${loud ? 'opacity-90' : 'text-zinc-500 dark:text-zinc-400'}`}>{icon}</span>
+      <span className={`shrink-0 ${loud ? 'opacity-90' : ink ?? 'text-zinc-500 dark:text-zinc-400'}`}>{icon}</span>
       <div className="min-w-0">
         <p className={`text-[9px] font-semibold uppercase tracking-widest ${loud ? 'text-white/60' : 'text-zinc-400 dark:text-zinc-500'}`}>{label}</p>
         <p className={`truncate text-[12px] font-bold leading-tight ${tone ?? (loud ? 'text-white' : 'text-zinc-900 dark:text-white')}`}>{value}</p>
@@ -110,9 +111,9 @@ export default function BecomingDoor({ goals, mind }: { goals: GoalProgress | nu
         <ArrowRight className={`h-5 w-5 shrink-0 ${loud ? 'text-white/80' : 'text-zinc-400'}`} />
       </div>
       <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-        <Chip loud={loud} icon={<Brain className="h-3.5 w-3.5" />} label="Mind" value={mindChip.value} sub={mindChip.sub} />
-        <Chip loud={loud} icon={<UtensilsCrossed className="h-3.5 w-3.5" />} label="Nutrition" value={nutritionChip.value} sub={nutritionChip.sub} tone={n?.pace?.status === 'behind' ? (loud ? 'text-amber-200' : 'text-amber-600 dark:text-amber-400') : undefined} />
-        <Chip loud={loud} icon={<Dumbbell className="h-3.5 w-3.5" />} label="Training" value={trainingChip.value} sub={trainingChip.sub} tone={t?.thisWeek.weekLost ? (loud ? 'text-amber-200' : 'text-amber-600 dark:text-amber-400') : undefined} />
+        <Chip loud={loud} ink={PILLAR.mind.text} icon={<Brain className="h-3.5 w-3.5" />} label="Mind" value={mindChip.value} sub={mindChip.sub} />
+        <Chip loud={loud} ink={PILLAR.fuel.text} icon={<UtensilsCrossed className="h-3.5 w-3.5" />} label="Nutrition" value={nutritionChip.value} sub={nutritionChip.sub} tone={n?.pace?.status === 'behind' ? (loud ? 'text-amber-200' : 'text-amber-600 dark:text-amber-400') : undefined} />
+        <Chip loud={loud} ink={PILLAR.training.text} icon={<Dumbbell className="h-3.5 w-3.5" />} label="Training" value={trainingChip.value} sub={trainingChip.sub} tone={t?.thisWeek.weekLost ? (loud ? 'text-amber-200' : 'text-amber-600 dark:text-amber-400') : undefined} />
       </div>
       {top && (
         <p className={`mt-2 flex items-center gap-1.5 truncate text-[11px] ${loud ? 'text-white/85' : 'text-zinc-600 dark:text-zinc-300'}`} data-testid="becoming-door-next">
