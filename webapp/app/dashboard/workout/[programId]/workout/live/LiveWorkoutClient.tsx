@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Dumbbell, X, Plus, Layers, Unlink } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
@@ -13,7 +13,7 @@ import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, prescriptionOf, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
@@ -102,6 +102,7 @@ const fallbackExercises: Exercise[] = [
 
 export default function LiveWorkoutPage() {
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
   const params = useParams();
   const searchParams = useSearchParams();
   const programId = params.programId as string;
@@ -189,6 +190,7 @@ export default function LiveWorkoutPage() {
   const currentExercise = exercises[currentExerciseIndex];
   const totalExercises = exercises.length;
   const totalSets = currentExercise?.sets || 3;
+  const shouldNudgeAddExercise = needsMoreExercises(totalExercises);
 
   const isLastStep = currentStepIndex === workoutFlow.length - 1;
 
@@ -1624,17 +1626,24 @@ export default function LiveWorkoutPage() {
                       </div>
                     ))}
 
-                    {/* Build as you go — the workout is not fixed at the door */}
-                    <button
+                    {/* Build as you go — the workout is not fixed at the door. Fewer than
+                        RECOMMENDED_MIN_EXERCISES exercises and the button nudges you to add more. */}
+                    <motion.button
                       onClick={(e) => { e.stopPropagation(); setShowAddExercise(true); }}
                       data-testid="live-add-exercise"
-                      className="flex w-full items-center gap-3 rounded-lg border border-dashed border-white/20 px-3 py-2 text-left text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
+                      animate={shouldNudgeAddExercise && !reducedMotion ? { scale: [1, 1.02, 1] } : { scale: 1 }}
+                      transition={shouldNudgeAddExercise && !reducedMotion ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+                      className={`flex w-full items-center gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm font-medium transition-colors ${
+                        shouldNudgeAddExercise
+                          ? "border-green-400/60 bg-green-500/10 text-green-300 hover:border-green-400 hover:bg-green-500/15"
+                          : "border-white/20 text-white/70 hover:border-white/40 hover:bg-white/5 hover:text-white"
+                      }`}
                     >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10">
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${shouldNudgeAddExercise ? "bg-green-500/20" : "bg-white/10"}`}>
                         <Plus className="h-3.5 w-3.5" />
                       </span>
                       Add exercise
-                    </button>
+                    </motion.button>
                   </div>
                 </motion.div>
               )}
@@ -1779,14 +1788,20 @@ export default function LiveWorkoutPage() {
                   </svg>
                   Swap Exercise
                 </button>
-                <button
+                <motion.button
                   onClick={() => setShowAddExercise(true)}
                   data-testid="live-add-exercise-pill"
-                  className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/20 hover:text-white active:bg-white/30"
+                  animate={shouldNudgeAddExercise && !reducedMotion ? { scale: [1, 1.05, 1] } : { scale: 1 }}
+                  transition={shouldNudgeAddExercise && !reducedMotion ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    shouldNudgeAddExercise
+                      ? "bg-green-500/25 text-green-300 hover:bg-green-500/35 active:bg-green-500/45"
+                      : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white active:bg-white/30"
+                  }`}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   Add Exercise
-                </button>
+                </motion.button>
               </div>
               {/* Tip / cue */}
               {currentExercise?.tip && (
