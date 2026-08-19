@@ -42,8 +42,13 @@ test('only streaks that reached the visible minimum get a page; the day streak a
 })
 
 test('a complete super day reads "All three today"', () => {
-  const p = streakPages(base({ super: { current: 6, best: 6, activeToday: true, today: { nutrition: true, mindset: true, trained: true, restDay: false, weekOnTrack: true } } }))
-  assert.equal(p[0].footer, 'All three today · best 6'); assert.equal(p[0].doneToday, true)
+  const day = { nutrition: true, mindset: true, trained: true, restDay: false, weekOnTrack: true }
+  // At the record, the record is not worth the width.
+  const atBest = streakPages(base({ super: { current: 6, best: 6, activeToday: true, today: day } }))
+  assert.equal(atBest[0].footer, 'All three today'); assert.equal(atBest[0].doneToday, true)
+  // Below it, there is something to chase.
+  const chasing = streakPages(base({ super: { current: 6, best: 11, activeToday: true, today: day } }))
+  assert.equal(chasing[0].footer, 'All three · best 11')
 })
 
 test('missing pieces are named, and read as a sentence', () => {

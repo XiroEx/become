@@ -76,8 +76,10 @@ export function streakPages(s: StreaksLite | null): StreakPage[] {
       label: 'Super Streak', fullLabel: 'Super streak',
       value: String(sup.current),
       unit: sup.current === 1 ? 'day' : 'days',
+      // The tile can be half a phone wide: the record only earns its place
+      // once it is actually a record to chase.
       footer: sup.activeToday
-        ? `All three today · best ${sup.best}`
+        ? sup.best > sup.current ? `All three · best ${sup.best}` : 'All three today'
         : missing.length === 0
           ? `Best ${sup.best}`
           : `Today: ${list(missing.map(m => MISSING_LABEL[m]))}`,

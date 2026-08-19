@@ -29,6 +29,9 @@ export interface JourneyPayload {
   next: { nutrition: { title: string; sub: string; url: string }; training: { title: string; sub: string; url: string } } | null
   becomingScore: number
   chapter: number
+  /** Every weigh-in, by the member's LOCAL day key — the weight chart needs
+   *  real dates (day of week, month boundaries), not display labels. */
+  weights: Array<{ day: string; value: number }>
 }
 
 const MAX_WEEKS = 52
@@ -111,6 +114,11 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
     identity: mind?.vision?.identityStatement?.trim() || null, maxWeeks: MAX_WEEKS,
   })
 
+  const weights = [...days.entries()]
+    .filter(([, d]) => d.weight != null && d.weight > 0)
+    .map(([day, d]) => ({ day, value: d.weight as number }))
+    .sort((a, b) => (a.day < b.day ? -1 : 1))
+
   return {
     todayKey,
     identity: mind?.vision?.identityStatement?.trim() || null,
@@ -127,5 +135,6 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
     next: goals ? { nutrition: goals.nutrition.suggestion, training: goals.training.suggestion } : null,
     becomingScore: mind?.xpBank ?? 0,
     chapter: mind?.chapter ?? 1,
+    weights,
   }
 }
