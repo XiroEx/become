@@ -29,7 +29,7 @@
  */
 
 import type { TagWindow } from '@/lib/nutrition/mealSchedule'
-import { minutesOfDay, sortMinutesForTag, anchorMinutesForTag, orderIndexForTag } from '@/lib/nutrition/mealSchedule'
+import { minutesOfDay, anchorMinutesForTag, orderIndexForTag } from '@/lib/nutrition/mealSchedule'
 
 /** Minimal shape this module needs from a meal log. */
 export interface OrderableLog {
@@ -144,10 +144,15 @@ export function buildDayOccurrences<L extends OrderableLog, P extends OrderableP
   if (run) flush(run)
 
   // ── Planned occurrences ───────────────────────────────────────────────────
-  // Each active plan is its own section, positioned by its tag's window start
-  // (or the app-wide table). Plans never merge into a logged occurrence: eaten
-  // and not-yet-eaten are different states and pooling them would hide which is
-  // which.
+  // Each active plan is its own section. A plan carries a date but never a
+  // moment, so it is positioned the same way an untimed LOG is: its own
+  // scheduled window if it has one, else anchored to the end of the nearest
+  // scheduled tag above it in the member's order (see mealSchedule.ts). Using
+  // sortMinutesForTag here instead used to skip that anchor and fall straight
+  // to the flat app-wide table — a "Bed" plan with no window of its own landed
+  // at that table's noon default and rendered above meals actually eaten that
+  // evening. Plans never merge into a logged occurrence: eaten and not-yet-eaten
+  // are different states and pooling them would hide which is which.
   if (opts.includePlans !== false) {
     for (const plan of plans) {
       if (plan.status && plan.status !== 'active') continue
@@ -155,7 +160,7 @@ export function buildDayOccurrences<L extends OrderableLog, P extends OrderableP
       occurrences.push({
         key: `plan:${plan._id}`,
         tag,
-        sortMinutes: sortMinutesForTag(windows, tag),
+        sortMinutes: anchorMinutesForTag(windows, tag),
         logs: [],
         plans: [plan],
         planned: true,
