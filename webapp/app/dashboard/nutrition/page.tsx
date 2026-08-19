@@ -30,6 +30,7 @@ import { invalidateMindSession } from '@/lib/mind/sessionCache'
 import { buildDayOccurrences } from '@/lib/nutrition/dayOrder'
 import { createMealTag } from '@/hooks/useMealSchedule'
 import { defaultTagAt, minutesOfDay, sortMinutesForTag, type TagWindow } from '@/lib/nutrition/mealSchedule'
+import { nutritionGoalLine, type Direction as GoalDirection, type PaceStatus } from '@/lib/nutrition/goalLine'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,12 @@ function NutritionPageInner() {
   const [water, setWater] = useState({ current: 0, goal: 96 })
   const [quickAdds, setQuickAdds] = useState<QuickAddRow[]>([])
   const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
+  // The weight-goal side of things (lib/goals) — just enough to tie the ring
+  // to the target: "2,910 cal/day, on track for 205 lb". Fetched once; it
+  // doesn't change while paging between days.
+  const [goalWeight, setGoalWeight] = useState<{
+    weight: number | null; unit: 'lbs' | 'kg'; direction: GoalDirection | null; paceStatus: PaceStatus | null
+  } | null>(null)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
     defaults: DEFAULT_TAGS, userTags: [],
   })
@@ -373,6 +380,26 @@ function NutritionPageInner() {
     }
   }, [getHeaders])
 
+  // Also fetched once per mount, same reasoning as fetchSchedule — the target
+  // weight and pace don't move while paging between days.
+  const fetchGoalWeight = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: getHeaders() })
+      if (!res.ok) return
+      const data = await res.json().catch(() => null)
+      const n = data?.nutrition
+      if (!n) return
+      setGoalWeight({
+        weight: n.target?.weight ?? null,
+        unit: n.unit === 'kg' ? 'kg' : 'lbs',
+        direction: n.direction ?? null,
+        paceStatus: n.pace?.status ?? null,
+      })
+    } catch {
+      // No goal line — the ring still stands on its own.
+    }
+  }, [getHeaders])
+
   // Fetch plans for the visible date. Only meaningful when viewingFuture, but
   // we always fetch so that switching between today→future doesn't introduce
   // a flash of stale state. The view filters on viewingFuture downstream.
@@ -396,11 +423,11 @@ function NutritionPageInner() {
   useEffect(() => {
     async function init() {
       if (!didInitialLoad.current) setLoading(true)
-      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchEntitlements(), fetchSchedule()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchEntitlements(), fetchSchedule(), fetchGoalWeight()])
       if (!didInitialLoad.current) { setLoading(false); didInitialLoad.current = true }
     }
     init()
-  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchEntitlements, fetchSchedule])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchEntitlements, fetchSchedule, fetchGoalWeight])
 
   // Re-open a saved scan to edit (?scan=<id> from the Scan history "Edit"):
   // fetch it and open the plate review pre-loaded with its items.
@@ -879,10 +906,10 @@ function NutritionPageInner() {
 
   // Quick-add total calories
   const quickAddCalories = quickAdds.reduce((s, qa) => s + (qa.calories || 0), 0)
-  // Planned totals for the visible date — only meaningful when viewingFuture
-  // (when not, plans is empty / filtered upstream).
+  // Planned totals for the visible date — meaningful whenever plans can exist
+  // for it (today or a future day; past days never render plans, see showPlans).
   const plannedTotals = useMemo(() => {
-    if (!viewingFuture) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+    if (!showPlans) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
     let c = 0, p = 0, cb = 0, f = 0, fib = 0
     for (const plan of plans) {
       const n = plan.expectedNutrition
@@ -896,7 +923,14 @@ function NutritionPageInner() {
       calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb),
       fats: Math.round(f), fiber: Math.round(fib),
     }
-  }, [viewingFuture, plans])
+  }, [showPlans, plans])
+
+  // Today only: meals still planned (not yet logged) render as a light shadow
+  // past the actual consumed arc/bars — a preview of where the day lands if
+  // the rest of today's plan gets eaten. Future days already show plannedTotals
+  // as the primary ring value (nothing to shadow against); past days don't
+  // carry a shadow since there's nothing left to eat.
+  const todayPlannedExtra = viewingToday ? plannedTotals : null
 
   // The CalorieRing shows MealLog daily totals + quick-add calories on today/
   // past dates. On future dates the ring previews PLANNED totals — there are
@@ -1135,11 +1169,26 @@ function NutritionPageInner() {
         <CalorieRing
           consumed={totalConsumedCalories}
           goal={goals.calories}
-          protein={{ current: totalProtein, goal: goals.protein }}
-          carbs={{ current: totalCarbs, goal: goals.carbs }}
+          protein={{ current: totalProtein, goal: goals.protein, planned: todayPlannedExtra?.protein }}
+          carbs={{ current: totalCarbs, goal: goals.carbs, planned: todayPlannedExtra?.carbs }}
           fiber={viewingFuture ? plannedTotals.fiber : dailyTotals.fiber}
-          fats={{ current: totalFats, goal: goals.fats }}
+          fats={{ current: totalFats, goal: goals.fats, planned: todayPlannedExtra?.fats }}
+          plannedExtra={todayPlannedExtra?.calories}
         />
+        {goalWeight && (
+          <p
+            data-testid="nutrition-goal-line"
+            className="-mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400"
+          >
+            {nutritionGoalLine({
+              calories: goals.calories,
+              targetWeight: goalWeight.weight,
+              unit: goalWeight.unit,
+              direction: goalWeight.direction,
+              paceStatus: goalWeight.paceStatus,
+            })}
+          </p>
+        )}
 
         {/* Empty state — nothing logged today yet (or nothing planned, on a future day) */}
         {sections.length === 0 && quickAdds.length === 0 && (

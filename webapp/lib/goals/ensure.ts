@@ -19,7 +19,7 @@ import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
 import Goal, { type IGoal, type GoalDirection } from '@/models/Goal'
 import { directionForGoal } from '@/lib/nutrition/tdee'
-import { defaultPaceKg, HOLD_BAND_KG, isAchieved, unitToKg } from '@/lib/goals/pace'
+import { defaultPaceKg, directionFromWeights, HOLD_BAND_KG, isAchieved, unitToKg } from '@/lib/goals/pace'
 import { topLifts, type PRSnapshot } from '@/lib/goals/training'
 
 export interface WeightPoint { kg: number; date: Date }
@@ -52,12 +52,8 @@ export function prSnapshot(prs: Array<{ exerciseSlug: string; exerciseName: stri
 
 export function resolveDirection(profile: ProfileLite, latestKg: number | null): GoalDirection {
   if (profile.nutritionDirection) return profile.nutritionDirection
-  const t = profile.targetWeightKg
-  if (t && latestKg != null) {
-    if (t < latestKg - HOLD_BAND_KG) return 'lose'
-    if (t > latestKg + HOLD_BAND_KG) return 'gain'
-    return 'maintain'
-  }
+  const derived = directionFromWeights(latestKg, profile.targetWeightKg)
+  if (derived) return derived
   return directionForGoal(profile.fitnessGoal as Parameters<typeof directionForGoal>[0])
 }
 
