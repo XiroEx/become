@@ -76,8 +76,12 @@ test('a session started with one exercise grows while it runs, and every surface
   // ── Add one on its own, from inside the running session ───────────────────
   // The pill sits next to Swap Exercise, in plain sight: the first cut hid the
   // only entry point inside a hover-only drawer, which on a phone never opened.
-  await expect(page.locator('[data-testid="live-add-exercise-pill"]')).toBeVisible()
-  await page.locator('[data-testid="live-add-exercise-pill"]').click()
+  const pill = page.locator('[data-testid="live-add-exercise-pill"]')
+  await expect(pill).toBeVisible()
+  await expect(pill).toBeEnabled()
+  // The pill pulses forever while the session is still thin, so it never
+  // settles for Playwright's stability check — the pulse is the point.
+  await pill.click({ force: true })
   const soloName = await addExercise(page, 'curl', 'end')
   console.log('ADDED SOLO:', soloName)
 
@@ -87,7 +91,8 @@ test('a session started with one exercise grows while it runs, and every surface
   await expect(page.locator('[data-testid="live-add-exercise"]')).toBeVisible()
 
   // ── Add one INTO a superset with the exercise being worked on ─────────────
-  await page.locator('[data-testid="live-add-exercise"]').click()
+  // Forced for the same reason as the pill: it pulses while the session is thin.
+  await page.locator('[data-testid="live-add-exercise"]').click({ force: true })
   const supersetName = await addExercise(page, 'plank', 'group')
   console.log('ADDED SUPERSET:', supersetName)
 
