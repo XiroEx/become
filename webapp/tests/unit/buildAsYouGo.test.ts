@@ -16,6 +16,8 @@ import {
   naturalKindFor,
   newGroupId,
   sanitizeGroups,
+  needsMoreExercises,
+  RECOMMENDED_MIN_EXERCISES,
   type AdHocExercise,
 } from '@/lib/workout/buildAsYouGo'
 import { buildWorkoutFlow, groupExercises } from '@/lib/workoutUtils'
@@ -177,4 +179,13 @@ test('a group that is split by a reorder stops calling itself a group', () => {
   assert.equal(cleaned[0]!.groupLabel, undefined)
   // A lone survivor is not a superset either.
   assert.equal(sanitizeGroups([grouped[0]!, grouped[2]!])[0]!.groupId, undefined)
+})
+
+test('a workout under the recommended minimum needs more exercises', () => {
+  assert.equal(RECOMMENDED_MIN_EXERCISES, 4)
+  assert.equal(needsMoreExercises(0), true)
+  assert.equal(needsMoreExercises(1), true)
+  assert.equal(needsMoreExercises(3), true)
+  assert.equal(needsMoreExercises(4), false)
+  assert.equal(needsMoreExercises(5), false)
 })

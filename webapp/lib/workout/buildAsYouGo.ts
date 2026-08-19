@@ -35,6 +35,14 @@ export interface MutationResult<T extends WorkoutExercise> {
 
 export const GROUP_KINDS: GroupKind[] = ['superset', 'circuit', 'triset', 'giant_set']
 
+/** Below this many exercises, a session reads as thin — the add-exercise button calls attention to itself. */
+export const RECOMMENDED_MIN_EXERCISES = 4
+
+/** Whether the workout is thin enough that "Add exercise" should call attention to itself. */
+export function needsMoreExercises(exerciseCount: number): boolean {
+  return exerciseCount < RECOMMENDED_MIN_EXERCISES
+}
+
 /** What a group of this kind and size is called on screen. */
 export function groupLabelFor(kind: GroupKind, size: number): string {
   if (kind === 'circuit') return 'Circuit'

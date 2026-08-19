@@ -36,6 +36,20 @@ export interface ServingChoice {
    * food has no weight to show (a discrete bar with no bridge).
    */
   perServing?: { quantity: number; unit: Unit }
+  /**
+   * True when a countable 'serving' choice was collapsed from a label whose
+   * OWN unit is a real measurable one (weight/volume — "3/4 cup", "45 g")
+   * rather than an inherently discrete noun ("1 portion", "1 bar"). The
+   * countable-serving transform below always reduces the choice to quantity 1,
+   * and a UI that then shows just the label's bare noun reads fine for a
+   * discrete noun ("4 portion" = four portions) but is actively wrong for a
+   * measurable one: "3/4 cup" strips down to "cup", and paired with the
+   * quantity box's "1" that reads as "1 cup" — a different amount than the
+   * food's real 3/4-cup serving. UI surfaces rendering this choice's own noun
+   * should show the generic word "serving" instead of the noun when this is
+   * true, never a bare unit word that could be mistaken for a literal amount.
+   */
+  measurableAsServing?: boolean
 }
 
 export interface ServingChoiceGroups {
@@ -55,8 +69,23 @@ const MASS_UNITS: Unit[] = ['g', 'oz', 'lb', 'kg', 'mg']
 const VOLUME_UNITS: Unit[] = ['tsp', 'tbsp', 'fl_oz', 'ml', 'cup', 'pint', 'quart', 'liter']
 const DISCRETE_UNITS = new Set<Unit>(['each', 'slice', 'scoop', 'serving'])
 
+// The whole+glyph alternative (`\d+[½¼¾…]`) MUST come before the bare-decimal
+// alternative (`\d*\.?\d+`). Both can start matching at the same position — a
+// leading digit — and without backtracking-order priority, "1¾ cup" picks the
+// decimal branch first: it consumes just "1", the required unit suffix then
+// fails against the following "¾" character, and JS regex alternation does
+// NOT retry with a shorter/different branch once the group as a whole has
+// already produced a match candidate elsewhere in the string. In practice the
+// engine falls back to matching the bare glyph "¾" on its own — silently
+// dropping the leading "1" and parsing "1¾ cup" as 0.75 cup instead of 1.75.
+// `formatQuantity` renders exactly this whole+glyph shape ("1¾ cup") for any
+// fractional serving, so every native mass/volume-unit food with no explicit
+// gram/ml bridge and a fractional servingSize hit this: the picker showed
+// "1 cup" (the "¾" silently vanishing once the input box holds a value) and
+// the per-serving bridge — hence the logged nutrition — was scaled to less
+// than half of the true amount.
 const QUANTITY_WITH_UNIT_RE =
-  /(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d*\.?\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:fl\s*oz|fluid\s*ounces?|milliliters?|millilitres?|kilograms?|milligrams?|grams?|ounces?|pounds?|cups?|tablespoons?|teaspoons?|pints?|quarts?|liters?|litres?|mls?|gr|g|oz|lbs?|lb|kgs?|kg|mg|c\.?|tbsp|tbs|tbl|tsp|pt|qt)\b/gi
+  /(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d+[½¼¾⅓⅔⅛⅜⅝⅞]|\d*\.?\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:fl\s*oz|fluid\s*ounces?|milliliters?|millilitres?|kilograms?|milligrams?|grams?|ounces?|pounds?|cups?|tablespoons?|teaspoons?|pints?|quarts?|liters?|litres?|mls?|gr|g|oz|lbs?|lb|kgs?|kg|mg|c\.?|tbsp|tbs|tbl|tsp|pt|qt)\b/gi
 
 export function buildServingChoiceGroups(variant: ServingOptionVariant): ServingChoiceGroups {
   const servings = buildServingChoices(variant)
@@ -272,6 +301,13 @@ function choiceFromLabel(args: {
         derivedFromLabel: servingBridge ? label : undefined,
         // What one of these weighs, on the same basis the maths will use.
         perServing,
+        // `hasServingWords` strips every "<count> <unit>" match out of the
+        // label and asks whether a descriptive word survives. "1 portion
+        // (85 g)" leaves "portion" — a real noun, keep it. "3/4 cup" leaves
+        // nothing: the whole label WAS the measured amount, so its only
+        // "noun" is the unit word itself ("cup"), which the countable
+        // collapse below is about to detach from its own quantity.
+        measurableAsServing: !hasServingWords(label),
       }
     : null
   if (asServing && canResolveChoice(args.variant, asServing)) return asServing

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { X, Plus, Layers, Unlink } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
@@ -18,7 +18,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, prescriptionOf, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
@@ -772,6 +772,8 @@ export default function WorkoutFormPage() {
   // persisted immediately — an exercise that only exists in this tab is one the
   // calendar and the history never hear about.
   const [showAddExercise, setShowAddExercise] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const shouldNudgeAddExercise = needsMoreExercises(workout?.exercises.length ?? 0);
 
   const applyWorkoutChange = useCallback((next: Exercise[], order: number[]) => {
     const nextProgress = applyOrder(exerciseProgress, order, (i) => ({
@@ -1774,15 +1776,22 @@ export default function WorkoutFormPage() {
             );
           })}
 
-          {/* Build as you go — the workout is not fixed at the door */}
-          <button
+          {/* Build as you go — the workout is not fixed at the door. Fewer than
+              RECOMMENDED_MIN_EXERCISES exercises and the button nudges you to add more. */}
+          <motion.button
             onClick={() => setShowAddExercise(true)}
             data-testid="track-add-exercise"
-            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-300 py-3.5 text-sm font-semibold text-zinc-500 transition-colors hover:border-green-400 hover:bg-green-50 hover:text-green-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+            animate={shouldNudgeAddExercise && !reducedMotion ? { scale: [1, 1.02, 1] } : { scale: 1 }}
+            transition={shouldNudgeAddExercise && !reducedMotion ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed py-3.5 text-sm font-semibold transition-colors ${
+              shouldNudgeAddExercise
+                ? "border-green-400 bg-green-50 text-green-600 dark:border-green-600 dark:bg-green-900/20 dark:text-green-400"
+                : "border-zinc-300 text-zinc-500 hover:border-green-400 hover:bg-green-50 hover:text-green-600 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+            }`}
           >
             <Plus className="h-4 w-4" />
             Add exercise
-          </button>
+          </motion.button>
         </div>
 
         {/* Workout notes — appears once any set is completed */}
