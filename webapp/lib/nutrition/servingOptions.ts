@@ -55,8 +55,23 @@ const MASS_UNITS: Unit[] = ['g', 'oz', 'lb', 'kg', 'mg']
 const VOLUME_UNITS: Unit[] = ['tsp', 'tbsp', 'fl_oz', 'ml', 'cup', 'pint', 'quart', 'liter']
 const DISCRETE_UNITS = new Set<Unit>(['each', 'slice', 'scoop', 'serving'])
 
+// The whole+glyph alternative (`\d+[½¼¾…]`) MUST come before the bare-decimal
+// alternative (`\d*\.?\d+`). Both can start matching at the same position — a
+// leading digit — and without backtracking-order priority, "1¾ cup" picks the
+// decimal branch first: it consumes just "1", the required unit suffix then
+// fails against the following "¾" character, and JS regex alternation does
+// NOT retry with a shorter/different branch once the group as a whole has
+// already produced a match candidate elsewhere in the string. In practice the
+// engine falls back to matching the bare glyph "¾" on its own — silently
+// dropping the leading "1" and parsing "1¾ cup" as 0.75 cup instead of 1.75.
+// `formatQuantity` renders exactly this whole+glyph shape ("1¾ cup") for any
+// fractional serving, so every native mass/volume-unit food with no explicit
+// gram/ml bridge and a fractional servingSize hit this: the picker showed
+// "1 cup" (the "¾" silently vanishing once the input box holds a value) and
+// the per-serving bridge — hence the logged nutrition — was scaled to less
+// than half of the true amount.
 const QUANTITY_WITH_UNIT_RE =
-  /(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d*\.?\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:fl\s*oz|fluid\s*ounces?|milliliters?|millilitres?|kilograms?|milligrams?|grams?|ounces?|pounds?|cups?|tablespoons?|teaspoons?|pints?|quarts?|liters?|litres?|mls?|gr|g|oz|lbs?|lb|kgs?|kg|mg|c\.?|tbsp|tbs|tbl|tsp|pt|qt)\b/gi
+  /(?:\d+\s+\d+\s*\/\s*\d+|\d+\s*\/\s*\d+|\d+[½¼¾⅓⅔⅛⅜⅝⅞]|\d*\.?\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:fl\s*oz|fluid\s*ounces?|milliliters?|millilitres?|kilograms?|milligrams?|grams?|ounces?|pounds?|cups?|tablespoons?|teaspoons?|pints?|quarts?|liters?|litres?|mls?|gr|g|oz|lbs?|lb|kgs?|kg|mg|c\.?|tbsp|tbs|tbl|tsp|pt|qt)\b/gi
 
 export function buildServingChoiceGroups(variant: ServingOptionVariant): ServingChoiceGroups {
   const servings = buildServingChoices(variant)
