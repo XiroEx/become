@@ -273,4 +273,49 @@ describe('servingOptions', () => {
     assert.ok(primary)
     assert.equal(variantForServingChoice(variant, primary).gramsPerServing, 30)
   })
+
+  it('does not drop the whole number off a "1¾ cup" fractional serving', () => {
+    // A native mass/volume-unit food with a fractional servingSize and no
+    // explicit gram/ml bridge — formatQuantity renders its own label as
+    // "1¾ cup" (glyph attached directly to the leading digit, no space). The
+    // picker parses that label straight back to derive the per-serving bridge,
+    // and the old QUANTITY_WITH_UNIT_RE had no alternative for "digit+glyph"
+    // stuck together, so it silently dropped the "1" and read the label as
+    // 0.75 cup — a food described as "1¾ cup" was logged as if "1" of it were
+    // worth 0.75 cup / 3⁄7 of the true nutrition.
+    const variant = {
+      servingSize: 1.75,
+      servingUnit: 'cup' as const,
+      nutrition: { calories: 400, protein: 10, carbs: 10, fats: 10 },
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+    const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+    assert.ok(primary)
+    assert.equal(primary.label, '1¾ cup')
+    assert.equal(primary.quantity, 1)
+    assert.equal(primary.unit, 'serving')
+    assert.deepEqual(primary.perServing, { quantity: 1.75, unit: 'cup' })
+    assert.equal(Math.round(primary.mlPerServing!), 420) // 1.75 cup, not 0.75 cup (180 ml)
+
+    const effective = variantForServingChoice(variant, primary)
+    // "1" of the food's own named serving must be the WHOLE 1¾-cup portion —
+    // full nutrition, not the 0.75/1.75 ≈ 43% a dropped "1" produced.
+    assert.equal(scalingFactor(effective, 1, 'serving'), 1)
+  })
+
+  it('parses a whole+glyph amount out of an alternate serving label too', () => {
+    const variant = {
+      servingSize: 100,
+      servingUnit: 'g' as const,
+      alternateServings: [{ label: '1¾ cup (210g)', multiplier: 2.1 }],
+      nutrition,
+    }
+
+    const groups = buildServingChoiceGroups(variant)
+    const cupServing = groups.servings.find(choice => choice.label === '1¾ cup (210g)')
+    assert.ok(cupServing)
+    assert.equal(cupServing.quantity, 1.75)
+    assert.equal(cupServing.unit, 'cup')
+  })
 })
