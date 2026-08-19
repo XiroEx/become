@@ -15,6 +15,7 @@ import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOv
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
+import { normalizeTracking } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -237,8 +238,10 @@ export default function LiveWorkoutPage() {
     }).catch(() => {});
   }, []);
 
-  // Determine which inputs to show based on trackingType
-  const tracking = currentExercise?.trackingType || "reps_weight";
+  // Determine which inputs to show based on trackingType. Normalized, because a
+  // session rebuilt from its log used to come back typed 'reps' — which matched
+  // no branch here, so the screen offered nothing to log at all.
+  const tracking = normalizeTracking(currentExercise?.trackingType);
   const showWeightInput = tracking === "reps_weight";
   const showRepsInput = ["reps_weight", "reps_bodyweight", "reps_only"].includes(tracking);
   const showTimeInput = ["time", "time_distance", "intervals"].includes(tracking);
@@ -857,9 +860,11 @@ export default function LiveWorkoutPage() {
           ...(exercise.groupType && { groupType: exercise.groupType }),
           ...(exercise.groupLabel && { groupLabel: exercise.groupLabel }),
           ...(exercise.groupRounds && { groupRounds: exercise.groupRounds }),
-          // Build-as-you-go: the log is the only record of an exercise that is
-          // not in the program, so it carries its prescription home too.
-          ...(exercise.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(exercise) }),
+          // What this exercise asks you to log, saved with it. Without this a
+          // session rebuilt from its log had to guess, guessed 'reps', and came
+          // back with no weight box on a loaded movement.
+          prescription: prescriptionOf(exercise),
+          ...(exercise.addedAdHoc && { addedAdHoc: true }),
           ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
       });
@@ -1802,6 +1807,17 @@ export default function LiveWorkoutPage() {
                   <Plus className="h-3.5 w-3.5" />
                   Add Exercise
                 </motion.button>
+                {/* The way back out of a group you did not mean to make */}
+                {currentExercise?.groupId && (
+                  <button
+                    onClick={() => toggleGroupAt(currentExerciseIndex)}
+                    data-testid="live-ungroup-pill"
+                    className="flex items-center gap-1.5 rounded-full bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-200 transition-colors hover:bg-purple-500/30 hover:text-white active:bg-purple-500/40"
+                  >
+                    <Unlink className="h-3.5 w-3.5" />
+                    Ungroup
+                  </button>
+                )}
               </div>
               {/* Tip / cue */}
               {currentExercise?.tip && (

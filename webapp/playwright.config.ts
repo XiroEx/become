@@ -73,6 +73,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], video: 'off' },
     },
     {
+      name: 'workout-integrity',
+      testMatch: '**/workout-integrity.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off' },
+    },
+    {
       name: 'build-as-you-go',
       testMatch: '**/build-as-you-go.spec.ts',
       timeout: 180_000,

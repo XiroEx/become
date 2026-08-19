@@ -4,11 +4,13 @@
 
 import { stashQuickSessionWithId, quickSessionOverviewHref } from './store'
 import { isFocusKey, type DraftExercise } from './types'
+import { normalizeTracking } from '@/lib/workout/tracking'
 
 interface SessionSet { reps?: number | null; duration?: number | null }
 interface SessionExercise {
   name: string
   exerciseSlug?: string
+  trackingType?: string
   sets?: SessionSet[]
   groupId?: string
   groupType?: string
@@ -43,7 +45,10 @@ export async function continueQuickSession(sessionId: string): Promise<string | 
       return {
         exerciseSlug: ex.exerciseSlug || '',
         name: ex.name,
-        trackingType: p?.trackingType || (isTime ? 'time' : 'reps'),
+        // The endpoint resolves this now (prescription, else the catalog, else
+        // what the sets imply) — inventing 'reps' here is what left a resumed
+        // session with no weight box.
+        trackingType: normalizeTracking(ex.trackingType || p?.trackingType || (isTime ? 'time' : undefined)),
         sets: p?.sets ?? (ex.sets?.length || 1),
         reps: p?.reps ?? (first?.reps != null ? String(first.reps) : ''),
         ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
