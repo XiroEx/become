@@ -31,7 +31,12 @@ interface MacroBarProps {
 }
 
 export default function MacroBar({ label, current, goal, color, unit = 'g', kind = 'ceiling', fiber }: MacroBarProps) {
-  const status = macroStatus(current, goal, kind)
+  // Fiber counts toward total carbs on the label but carries almost no energy,
+  // so it shouldn't be able to push the bar into "over" on its own — the
+  // over/warn/hit colour is judged against NET carbs (total minus fiber), even
+  // though the fill and the "123g / 200g" readout stay honest to the label.
+  const netCurrent = fiber != null && fiber > 0 ? Math.max(0, current - fiber) : current
+  const status = macroStatus(netCurrent, goal, kind)
   const remaining = Math.max(0, goal - current)
   const excess = Math.max(0, current - goal)
 
