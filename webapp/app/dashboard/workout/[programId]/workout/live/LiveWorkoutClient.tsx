@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Dumbbell, X } from "lucide-react";
+import { Dumbbell, X, Plus, Layers, Unlink } from "lucide-react";
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
@@ -11,7 +11,9 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
-import { readQuickSession, clearQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
+import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, prescriptionOf, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -37,6 +39,12 @@ interface SavedExercise {
   sets: SavedSetData[];
   originalExerciseSlug?: string;
   swappedFromName?: string;
+  groupId?: string;
+  groupType?: string;
+  groupLabel?: string;
+  groupRounds?: number;
+  addedAdHoc?: boolean;
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string };
 }
 
 interface SavedWorkout {
@@ -71,6 +79,8 @@ interface Exercise {
   groupLabel?: string;
   groupRest?: string;
   groupRounds?: number;
+  /** Added mid-session rather than programmed / drafted up front. */
+  addedAdHoc?: boolean;
 }
 
 interface WorkoutData {
@@ -118,6 +128,8 @@ export default function LiveWorkoutPage() {
   const [saving, setSaving] = useState(false);
   const [showInputs, setShowInputs] = useState(true);
   const [showExerciseList, setShowExerciseList] = useState(false);
+  // Build as you go: the add-an-exercise sheet, reachable from the exercise list.
+  const [showAddExercise, setShowAddExercise] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [showResumeIndicator, setShowResumeIndicator] = useState(false);
   // Active-seconds tracking: time persists across resume sessions.
@@ -341,6 +353,14 @@ export default function LiveWorkoutPage() {
             ...(d.rest && { rest: d.rest }),
             ...(d.duration && { duration: d.duration }),
             ...(d.primaryMuscles && { primaryMuscles: d.primaryMuscles }),
+            // A superset made mid-session lives in the stash — carry it back in
+            // or the flow stops interleaving the moment the view reloads.
+            ...(d.groupId && { groupId: d.groupId }),
+            ...(d.groupType && { groupType: d.groupType }),
+            ...(d.groupLabel && { groupLabel: d.groupLabel }),
+            ...(d.groupRest && { groupRest: d.groupRest }),
+            ...(d.groupRounds && { groupRounds: d.groupRounds }),
+            ...(d.addedAdHoc && { addedAdHoc: true }),
           }));
           const title = stored?.title || "Quick Session";
           setQuickMeta({ title, focus: stored?.focus });
@@ -454,8 +474,15 @@ export default function LiveWorkoutPage() {
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
 
-              // Restore swapped exercises from saved workout
-              const updatedExercises = [...workoutData.exercises];
+              // Restore swapped exercises from saved workout, and bring back
+              // anything added mid-session: a program workout rebuilds its
+              // exercise list from the program on every load, so without this
+              // an added exercise disappears and its logged sets are orphaned.
+              const updatedExercises = mergeAdHocFromLog<Exercise>(
+                [...workoutData.exercises],
+                savedWorkout.exercises,
+              ) as Exercise[];
+              const addedBack = updatedExercises.length - workoutData.exercises.length;
               const restoredSwaps: Record<number, { originalSlug: string; originalName: string }> = {};
 
               savedWorkout.exercises?.forEach((savedEx, idx) => {
@@ -480,7 +507,7 @@ export default function LiveWorkoutPage() {
                 }
               });
 
-              if (Object.keys(restoredSwaps).length > 0) {
+              if (Object.keys(restoredSwaps).length > 0 || addedBack > 0) {
                 setExercises(updatedExercises);
                 setSwappedExercises(restoredSwaps);
                 // Rebuild flow with updated exercises
@@ -777,7 +804,7 @@ export default function LiveWorkoutPage() {
   };
 
   // Save workout progress
-  const saveWorkout = useCallback(async (exerciseDataToSave: SetData[][], isComplete: boolean) => {
+  const saveWorkout = useCallback(async (exerciseDataToSave: SetData[][], isComplete: boolean, exercisesOverride?: Exercise[]) => {
     if (!workout) return;
     // Re-entrant guard: prevent double-tap / concurrent auto-save from firing two POSTs
     if (savingRef.current) return;
@@ -786,7 +813,7 @@ export default function LiveWorkoutPage() {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
-      const exercisesToSave = exercises.map((exercise, index) => {
+      const exercisesToSave = (exercisesOverride ?? exercises).map((exercise, index) => {
         const swap = swappedExercises[index];
         return {
           name: exercise.name,
@@ -800,6 +827,11 @@ export default function LiveWorkoutPage() {
           })) || [],
           ...(exercise.groupId && { groupId: exercise.groupId }),
           ...(exercise.groupType && { groupType: exercise.groupType }),
+          ...(exercise.groupLabel && { groupLabel: exercise.groupLabel }),
+          ...(exercise.groupRounds && { groupRounds: exercise.groupRounds }),
+          // Build-as-you-go: the log is the only record of an exercise that is
+          // not in the program, so it carries its prescription home too.
+          ...(exercise.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(exercise) }),
           ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
       });
@@ -1163,6 +1195,83 @@ export default function LiveWorkoutPage() {
     setShowSkipModal(false);
   }, [currentExerciseIndex, exercises, exerciseData, swappedExercises, saveWorkout, programId, isQuick, quickSessionId]);
 
+  // ── Build as you go ────────────────────────────────────────────────────────
+  //
+  // The workout is not fixed at the moment you start it. Adding an exercise,
+  // supersetting two of them or breaking a group apart all reshape the flow
+  // while it runs, so every parallel array (set data, swaps) has to move with
+  // its exercise and the member has to stay on the set they were mid-way
+  // through. `order[newIndex] = oldIndex` from lib/workout/buildAsYouGo is what
+  // makes that possible.
+  const applyWorkoutChange = useCallback((next: Exercise[], order: number[], landOn?: number) => {
+    const nextData = applyOrder(exerciseData, order, (i) =>
+      Array.from({ length: next[i]?.sets || 3 }, () => ({ reps: "", weight: "", speed: "", completed: false })),
+    );
+    const nextFlow = buildWorkoutFlow(next);
+    const stayOn = landOn ?? order.indexOf(currentExerciseIndex);
+    const keep = nextFlow.findIndex((st) => st.exerciseIndex === (stayOn === -1 ? 0 : stayOn) && st.setIndex === currentSetIndex);
+
+    setExercises(next);
+    setExerciseData(nextData);
+    setSwappedExercises(applyOrderToRecord(swappedExercises, order));
+    setWorkoutFlow(nextFlow);
+    setCurrentStepIndex(keep === -1 ? Math.min(currentStepIndex, Math.max(0, nextFlow.length - 1)) : keep);
+    setWorkout((w) => (w ? { ...w, exercises: next } : w));
+
+    // A quick session's shape lives in the stash — the Track view and the
+    // overview read it, so it has to know about the change before the member
+    // flips the tab.
+    if (isQuick && quickSessionId) {
+      updateQuickSession(quickSessionId, {
+        exercises: next.map((e) => ({
+          exerciseSlug: e.exerciseSlug ?? "",
+          name: e.name,
+          trackingType: e.trackingType ?? "reps_weight",
+          sets: e.sets ?? 3,
+          reps: e.reps ?? "",
+          ...(e.rest && { rest: e.rest }),
+          ...(e.duration && { duration: e.duration }),
+          ...(e.primaryMuscles && { primaryMuscles: e.primaryMuscles }),
+          ...(e.groupId && { groupId: e.groupId }),
+          ...(e.groupType && { groupType: e.groupType }),
+          ...(e.groupLabel && { groupLabel: e.groupLabel }),
+          ...(e.groupRest && { groupRest: e.groupRest }),
+          ...(e.groupRounds && { groupRounds: e.groupRounds }),
+          ...(e.addedAdHoc && { addedAdHoc: true }),
+        })),
+      });
+    }
+
+    // Save straight away: an added exercise that only exists in this tab is a
+    // workout the calendar and the history never hear about.
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    saveWorkout(nextData, false, next);
+  }, [exerciseData, swappedExercises, currentExerciseIndex, currentSetIndex, currentStepIndex, isQuick, quickSessionId, saveWorkout]);
+
+  const handleAddExercise = useCallback((r: AddExerciseResult) => {
+    const fresh: Exercise = { ...r.exercise, addedAdHoc: true } as Exercise;
+    const res = r.placement === "group" && exercises[currentExerciseIndex]
+      ? addIntoGroup<AdHocExercise>(exercises as AdHocExercise[], currentExerciseIndex, fresh as AdHocExercise, r.groupKind)
+      : appendExercise<AdHocExercise>(exercises as AdHocExercise[], fresh as AdHocExercise);
+    // Adding into the superset you are in keeps you where you are; adding one
+    // on the end does too — you asked for it later, not now.
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+  }, [exercises, currentExerciseIndex, applyWorkoutChange]);
+
+  /** Superset the exercise at `idx` with the one after it (or break the group). */
+  const toggleGroupAt = useCallback((idx: number) => {
+    const ex = exercises[idx];
+    if (!ex) return;
+    if (ex.groupId) {
+      const res = ungroupAt<AdHocExercise>(exercises as AdHocExercise[], idx);
+      applyWorkoutChange(res.exercises as Exercise[], res.order);
+      return;
+    }
+    if (idx + 1 >= exercises.length) return;
+    const res = groupIndexes<AdHocExercise>(exercises as AdHocExercise[], [idx, idx + 1], "superset");
+    applyWorkoutChange(res.exercises as Exercise[], res.order);
+  }, [exercises, applyWorkoutChange]);
+
   const handleCompleteOrSkipSet = () => {
     // On the final step, empty inputs just finish the workout — don't prompt to skip
     if (isSkipping && !isLastStep) {
@@ -1464,17 +1573,41 @@ export default function LiveWorkoutPage() {
                           </p>
                           <p className="text-xs text-white/40">
                             {exercise.sets} sets × {exercise.reps}
+                            {exercise.groupId && <span className="ml-1 text-purple-300/80">· {exercise.groupLabel || "Superset"}</span>}
                           </p>
                         </div>
-                        {idx === currentExerciseIndex && (
-                          <div className="ml-auto shrink-0">
+                        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                          {idx === currentExerciseIndex && (
                             <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
                               Current
                             </span>
-                          </div>
-                        )}
+                          )}
+                          {/* Superset it with the next one, or break the group */}
+                          {(exercise.groupId || idx + 1 < exercises.length) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleGroupAt(idx); }}
+                              aria-label={exercise.groupId ? `Ungroup ${exercise.name}` : `Superset ${exercise.name} with the next exercise`}
+                              data-testid={`live-group-toggle-${idx}`}
+                              className={`rounded-lg p-1.5 transition-colors ${exercise.groupId ? "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30" : "text-white/40 hover:bg-white/10 hover:text-white/80"}`}
+                            >
+                              {exercise.groupId ? <Unlink className="h-3.5 w-3.5" /> : <Layers className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
+
+                    {/* Build as you go — the workout is not fixed at the door */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowAddExercise(true); }}
+                      data-testid="live-add-exercise"
+                      className="flex w-full items-center gap-3 rounded-lg border border-dashed border-white/20 px-3 py-2 text-left text-sm font-medium text-white/70 transition-colors hover:border-white/40 hover:bg-white/5 hover:text-white"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10">
+                        <Plus className="h-3.5 w-3.5" />
+                      </span>
+                      Add exercise
+                    </button>
                   </div>
                 </motion.div>
               )}
@@ -2089,6 +2222,15 @@ export default function LiveWorkoutPage() {
       </AnimatePresence>
 
       {/* Exercise Swap Modal — always mounted to prevent unmount/remount flashing */}
+      <AddExerciseSheet
+        open={showAddExercise}
+        onClose={() => setShowAddExercise(false)}
+        onAdd={handleAddExercise}
+        anchorName={currentExercise?.name}
+        anchorInGroup={!!currentExercise?.groupId}
+        tone="dark"
+      />
+
       <ExerciseSwapModal
         isOpen={showSwapModal}
         onClose={() => setShowSwapModal(false)}

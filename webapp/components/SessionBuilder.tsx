@@ -9,10 +9,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles } from "lucide-react";
+import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles, Layers, Unlink } from "lucide-react";
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
+import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
 
 interface SearchExercise {
   slug: string;
@@ -186,7 +187,36 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   }, []);
 
   const removeExercise = useCallback((slug: string) => {
-    setChosen((prev) => prev.filter((e) => e.exerciseSlug !== slug));
+    setChosen((prev) => {
+      const gone = prev.find((e) => e.exerciseSlug === slug);
+      const next = prev.filter((e) => e.exerciseSlug !== slug);
+      // A superset of one is not a superset.
+      if (gone?.groupId && next.filter((e) => e.groupId === gone.groupId).length < 2) {
+        return next.map((e) => {
+          if (e.groupId !== gone.groupId) return e;
+          const cleaned = { ...e };
+          delete cleaned.groupId;
+          delete cleaned.groupType;
+          delete cleaned.groupLabel;
+          delete cleaned.groupRest;
+          delete cleaned.groupRounds;
+          return cleaned;
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  // Superset an exercise with the one under it, or break the group apart.
+  // The same gesture exists mid-session in the live and track views.
+  const toggleGroup = useCallback((slug: string) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      if (i === -1) return prev;
+      if (prev[i].groupId) return ungroupAt(prev, i).exercises;
+      if (i + 1 >= prev.length) return prev;
+      return groupIndexes(prev, [i, i + 1], "superset").exercises;
+    });
   }, []);
 
   const setSets = useCallback((slug: string, sets: number) => {
@@ -354,6 +384,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
                   {ex.reps ? `${ex.reps} reps` : ex.trackingType.replace(/_/g, " ")}
+                  {ex.groupId && <span className="ml-1 font-semibold text-purple-500 dark:text-purple-400">· {ex.groupLabel || "Superset"}</span>}
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -377,6 +408,14 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                   +
                 </button>
               </div>
+              <button
+                onClick={() => toggleGroup(ex.exerciseSlug)}
+                aria-label={ex.groupId ? `Break up the group containing ${ex.name}` : `Superset ${ex.name} with the next exercise`}
+                data-testid={`builder-group-toggle-${ex.exerciseSlug}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${ex.groupId ? "text-purple-500 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30" : "text-zinc-400 hover:bg-purple-50 hover:text-purple-500 dark:hover:bg-purple-950/30 dark:hover:text-purple-400"}`}
+              >
+                {ex.groupId ? <Unlink className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+              </button>
               <button
                 onClick={() => removeExercise(ex.exerciseSlug)}
                 aria-label="Remove exercise"

@@ -24,10 +24,18 @@ interface SetData {
 
 interface ExerciseData {
   name: string
+  exerciseSlug?: string
   sets: SetData[]
-  // Grouping metadata (optional, passed through from program data)
+  // Grouping metadata (optional, passed through from program data — or created
+  // mid-session when a member supersets two exercises on the fly)
   groupId?: string
   groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  // Build-as-you-go: added during the session, with what was prescribed for it
+  // so a resume can rebuild the exercise rather than just its sets.
+  addedAdHoc?: boolean
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
 }
 
 interface WorkoutSaveRequest {

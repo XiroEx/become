@@ -6,7 +6,17 @@ import { stashQuickSessionWithId, quickSessionOverviewHref } from './store'
 import { isFocusKey, type DraftExercise } from './types'
 
 interface SessionSet { reps?: number | null; duration?: number | null }
-interface SessionExercise { name: string; exerciseSlug?: string; sets?: SessionSet[] }
+interface SessionExercise {
+  name: string
+  exerciseSlug?: string
+  sets?: SessionSet[]
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  addedAdHoc?: boolean
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
+}
 interface QuickSessionResponse {
   session?: {
     sessionId?: string
@@ -29,13 +39,22 @@ export async function continueQuickSession(sessionId: string): Promise<string | 
     const exercises: DraftExercise[] = (s.exercises ?? []).map((ex) => {
       const first = ex.sets?.[0]
       const isTime = !!first && first.duration != null && first.reps == null
+      const p = ex.prescription
       return {
         exerciseSlug: ex.exerciseSlug || '',
         name: ex.name,
-        trackingType: isTime ? 'time' : 'reps',
-        sets: ex.sets?.length || 1,
-        reps: first?.reps != null ? String(first.reps) : '',
-        ...(first?.duration != null ? { duration: String(first.duration) } : {}),
+        trackingType: p?.trackingType || (isTime ? 'time' : 'reps'),
+        sets: p?.sets ?? (ex.sets?.length || 1),
+        reps: p?.reps ?? (first?.reps != null ? String(first.reps) : ''),
+        ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
+        ...(p?.rest ? { rest: p.rest } : {}),
+        // A superset built mid-session is part of the session, not a detail of
+        // one run of it — reopening has to bring it back.
+        ...(ex.groupId ? { groupId: ex.groupId } : {}),
+        ...(ex.groupType ? { groupType: ex.groupType } : {}),
+        ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+        ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+        ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
       }
     })
     stashQuickSessionWithId(
