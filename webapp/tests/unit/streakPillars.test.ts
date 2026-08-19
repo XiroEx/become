@@ -88,9 +88,26 @@ test('rest days on the schedule count for the workout half of super', () => {
   assert.deepEqual([...ok].sort(), ['2026-08-15', '2026-08-16', '2026-08-17'], 'Sat+Sun rest, Mon trained, Tue (training day) not done')
 })
 
-test('no schedule → only trained days count', () => {
+test('no schedule and no target → only trained days count', () => {
   const ok = workoutOrRestDays(['2026-08-17'], dayRange('2026-08-15', '2026-08-18'), null)
   assert.deepEqual([...ok], ['2026-08-17'])
+})
+
+test('no schedule but a weekly target → the days off are rest days', () => {
+  // Four sessions a week on no fixed days: the three days off are legitimate,
+  // and losing the super streak on them was the rule failing people who train
+  // hard but not on a timetable. The lost-week rule is what stops coasting.
+  const all = dayRange('2026-08-15', '2026-08-18')
+  const ok = workoutOrRestDays(['2026-08-17'], all, null, 4)
+  assert.deepEqual([...ok].sort(), all.slice().sort())
+
+  // Seven a week means there are no rest days to claim.
+  const every = workoutOrRestDays(['2026-08-17'], all, null, 7)
+  assert.deepEqual([...every], ['2026-08-17'])
+
+  // A schedule still wins when there is one.
+  const scheduled = workoutOrRestDays(['2026-08-17'], all, [1, 2, 5], 4)
+  assert.deepEqual([...scheduled].sort(), ['2026-08-15', '2026-08-16', '2026-08-17'])
 })
 
 test('super streak = intersection of pillars', () => {
