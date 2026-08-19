@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/planned — upcoming PLANNED quick sessions: future-dated,
 // incomplete, kind:'quick' workout logs. Returns each with a reconstructed
@@ -43,6 +44,10 @@ export async function GET(request: NextRequest) {
       .lean<{ workoutLogs?: RawLog[] } | null>()
 
     const now = Date.now()
+    const upcoming = (up?.workoutLogs ?? [])
+      .filter((l) => l.kind === 'quick' && !l.completed && !!l.sessionId && new Date(l.date).getTime() > now)
+    const bySlug = await trackingBySlug(upcoming.flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)))
+
     const planned = (up?.workoutLogs ?? [])
       .filter((l) => l.kind === 'quick' && !l.completed && !!l.sessionId && new Date(l.date).getTime() > now)
       .map((l) => ({
@@ -57,12 +62,12 @@ export async function GET(request: NextRequest) {
           // Time-based when a duration was recorded and no real rep count was —
           // the Track view writes `reps: 0` beside the duration, so checking
           // only for a null reps would call a 45-second plank a 0-rep set.
-          const isTime = !!first && first.duration != null && !(first.reps && first.reps > 0)
           const p = ex.prescription
+          const isTime = !!first && first.duration != null && !(first.reps && first.reps > 0)
           return {
             exerciseSlug: ex.exerciseSlug || '',
             name: ex.name,
-            trackingType: p?.trackingType || (isTime ? 'time' : 'reps'),
+            trackingType: trackingFor(ex, bySlug),
             sets: p?.sets ?? (ex.sets?.length || 1),
             reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
             ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),

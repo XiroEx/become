@@ -20,6 +20,7 @@ import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, needsMoreExercises, prescriptionOf, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
+import { normalizeTracking, tracksTime } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -635,7 +636,7 @@ export default function WorkoutFormPage() {
           const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
           const exercisesToSave = exList.map((ex, i) => {
             const ep = progress.find((p) => p.exerciseIndex === i);
-            const isTimeBased = ["time", "time_distance", "intervals"].includes(ex.trackingType || "");
+            const isTimeBased = tracksTime(ex.trackingType);
             return {
               name: ex.name,
               ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
@@ -651,7 +652,8 @@ export default function WorkoutFormPage() {
               ...(ex.groupType && { groupType: ex.groupType }),
               ...(ex.groupLabel && { groupLabel: ex.groupLabel }),
               ...(ex.groupRounds && { groupRounds: ex.groupRounds }),
-              ...(ex.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(ex) }),
+              prescription: prescriptionOf(ex),
+              ...(ex.addedAdHoc && { addedAdHoc: true }),
             };
           });
           await fetch("/api/workouts", {
@@ -697,7 +699,7 @@ export default function WorkoutFormPage() {
           name: exercise.name,
           ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
           sets: ep?.sets.map((set, setIndex) => {
-            const isTimeBased = ["time", "time_distance", "intervals"].includes(exercise.trackingType || "");
+            const isTimeBased = tracksTime(exercise.trackingType);
             return {
               setNumber: setIndex + 1,
               reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
@@ -712,9 +714,10 @@ export default function WorkoutFormPage() {
           ...(exercise.groupType && { groupType: exercise.groupType }),
           ...(exercise.groupLabel && { groupLabel: exercise.groupLabel }),
           ...(exercise.groupRounds && { groupRounds: exercise.groupRounds }),
-          // Build as you go: the log is the only record of an exercise that is
-          // not in the program, so it carries its prescription home too.
-          ...(exercise.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(exercise) }),
+          // What this exercise asks you to log travels with it (see the live
+          // view) — a rebuilt session used to guess and lose the weight column.
+          prescription: prescriptionOf(exercise),
+          ...(exercise.addedAdHoc && { addedAdHoc: true }),
           // Swap tracking
           ...(swap && { originalExerciseSlug: swap.originalSlug, swappedFromName: swap.originalName }),
         };
@@ -817,7 +820,7 @@ export default function WorkoutFormPage() {
           ...(stored?.focus && { focus: stored.focus }),
           exercises: next.map((ex, i) => {
             const ep = nextProgress.find((p) => p.exerciseIndex === i);
-            const isTimeBased = ["time", "time_distance", "intervals"].includes(ex.trackingType || "");
+            const isTimeBased = tracksTime(ex.trackingType);
             return {
               name: ex.name,
               ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
@@ -833,7 +836,8 @@ export default function WorkoutFormPage() {
               ...(ex.groupType && { groupType: ex.groupType }),
               ...(ex.groupLabel && { groupLabel: ex.groupLabel }),
               ...(ex.groupRounds && { groupRounds: ex.groupRounds }),
-              ...(ex.addedAdHoc && { addedAdHoc: true, prescription: prescriptionOf(ex) }),
+              prescription: prescriptionOf(ex),
+              ...(ex.addedAdHoc && { addedAdHoc: true }),
             };
           }),
           completed: false,
@@ -957,7 +961,7 @@ export default function WorkoutFormPage() {
   const updateSet = (exerciseIndex: number, setIndex: number, field: keyof SetData, value: string | boolean) => {
     rememberPosition(exerciseIndex, setIndex);
     setExerciseProgress((prev) => {
-      const tracking = workout?.exercises?.[exerciseIndex]?.trackingType;
+      const tracking = normalizeTracking(workout?.exercises?.[exerciseIndex]?.trackingType);
       const updated = prev.map((ep) =>
         ep.exerciseIndex === exerciseIndex
           ? {
@@ -1314,7 +1318,7 @@ export default function WorkoutFormPage() {
                             {exercise.duration
                               ? ` × ${exercise.duration}`
                               : exercise.reps
-                              ? ` × ${exercise.reps}${["time","time_distance","intervals"].includes(exercise.trackingType||"") ? "s" : ""}`
+                              ? ` × ${exercise.reps}${tracksTime(exercise.trackingType) ? "s" : ""}`
                               : ""}
                           </span>
                           {exercise.rest && <span className="text-xs text-green-600 dark:text-green-400">{exercise.rest} rest</span>}
@@ -1422,9 +1426,9 @@ export default function WorkoutFormPage() {
 
                           {/* Prescription meta — details / tempo / muscles */}
                           {(() => {
-                            const tracking = exercise.trackingType || "reps_weight"
+                            const tracking = normalizeTracking(exercise.trackingType)
                             const showWeight = tracking === "reps_weight"
-                            const isTimeBased = ["time", "time_distance", "intervals"].includes(tracking)
+                            const isTimeBased = tracksTime(tracking)
                             const isNone = tracking === "none"
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
@@ -1490,9 +1494,9 @@ export default function WorkoutFormPage() {
 
                           {/* Set rows */}
                           {(() => {
-                            const tracking = exercise.trackingType || "reps_weight"
+                            const tracking = normalizeTracking(exercise.trackingType)
                             const showWeight = tracking === "reps_weight"
-                            const isTimeBased = ["time", "time_distance", "intervals"].includes(tracking)
+                            const isTimeBased = tracksTime(tracking)
                             const isNone = tracking === "none"
                             const repPlaceholder = isTimeBased
                               ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
@@ -1630,8 +1634,19 @@ export default function WorkoutFormPage() {
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
                       — {group.exercises.length} exercises{group.groupRest ? `, ${group.groupRest} rest between rounds` : ", minimal rest between exercises"}
                     </span>
-                    {/* Group progress */}
+                    {/* Group progress, and the way back out of a group you did
+                        not mean to make — grouping was one tap, ungrouping was
+                        nothing at all once the rounds view took over. */}
                     <div className="ml-auto flex items-center gap-2">
+                      <button
+                        onClick={() => toggleGroupAt(group.exercises[0]?.originalIndex ?? 0)}
+                        data-testid={`track-ungroup-${group.groupId}`}
+                        title="Break up this group"
+                        className="flex items-center gap-1 rounded-full bg-white/70 px-2 py-1 text-[11px] font-semibold text-zinc-600 transition-colors hover:bg-white hover:text-purple-600 dark:bg-zinc-800/70 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-purple-400"
+                      >
+                        <Unlink className="h-3 w-3" />
+                        Ungroup
+                      </button>
                       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/40 dark:bg-zinc-700">
                         <div
                           className="h-full bg-linear-to-r from-green-500 to-emerald-500 transition-all"

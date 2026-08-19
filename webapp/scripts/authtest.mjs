@@ -1,0 +1,15 @@
+import { chromium } from 'playwright'
+import { authenticate, api, AUTH_TOKEN } from './nutrition-audit-lib.mjs'
+const browser = await chromium.launch()
+const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+const page = await context.newPage()
+await authenticate(page, context)
+const tok = await page.evaluate(() => localStorage.getItem('token'))
+console.log('localStorage token len:', (tok||'').length, 'matches AUTH_TOKEN:', tok === AUTH_TOKEN)
+const me = await api(page, 'GET', '/api/auth/me')
+console.log('GET /api/auth/me ->', me.status, me.text.slice(0,200))
+const goals = await api(page, 'GET', '/api/nutrition/goals')
+console.log('GET /api/nutrition/goals ->', goals.status, goals.text.slice(0,120))
+const logs = await api(page, 'GET', `/api/meal-logs?date=${new Date().toISOString().slice(0,10)}&tz=${new Date().getTimezoneOffset()}`)
+console.log('GET /api/meal-logs ->', logs.status, logs.text.slice(0,120))
+await browser.close()

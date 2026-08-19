@@ -76,8 +76,12 @@ test('a session started with one exercise grows while it runs, and every surface
   // ── Add one on its own, from inside the running session ───────────────────
   // The pill sits next to Swap Exercise, in plain sight: the first cut hid the
   // only entry point inside a hover-only drawer, which on a phone never opened.
-  await expect(page.locator('[data-testid="live-add-exercise-pill"]')).toBeVisible()
-  await page.locator('[data-testid="live-add-exercise-pill"]').click()
+  const pill = page.locator('[data-testid="live-add-exercise-pill"]')
+  await expect(pill).toBeVisible()
+  await expect(pill).toBeEnabled()
+  // The pill pulses forever while the session is still thin, so it never
+  // settles for Playwright's stability check — the pulse is the point.
+  await pill.click({ force: true })
   const soloName = await addExercise(page, 'curl', 'end')
   console.log('ADDED SOLO:', soloName)
 
@@ -87,7 +91,8 @@ test('a session started with one exercise grows while it runs, and every surface
   await expect(page.locator('[data-testid="live-add-exercise"]')).toBeVisible()
 
   // ── Add one INTO a superset with the exercise being worked on ─────────────
-  await page.locator('[data-testid="live-add-exercise"]').click()
+  // Forced for the same reason as the pill: it pulses while the session is thin.
+  await page.locator('[data-testid="live-add-exercise"]').click({ force: true })
   const supersetName = await addExercise(page, 'plank', 'group')
   console.log('ADDED SUPERSET:', supersetName)
 
@@ -114,6 +119,28 @@ test('a session started with one exercise grows while it runs, and every surface
   expect(logged[pushIdx]!.groupId, 'the anchor joined the group').toBeTruthy()
   expect(logged[superIdx]!.groupId).toBe(logged[pushIdx]!.groupId)
   expect(Math.abs(superIdx - pushIdx)).toBe(1)
+
+  // ── A superset you did not mean to make can be taken back ─────────────────
+  await expect(page.locator('[data-testid="live-ungroup-pill"]')).toBeVisible()
+  await page.locator('[data-testid="live-ungroup-pill"]').click()
+  await expect.poll(async () => {
+    const res = await api.get(`/api/workouts/session?id=${sessionId}`)
+    if (!res.ok()) return -1
+    const body = await res.json()
+    return ((body.session?.exercises ?? []) as LoggedExercise[]).filter(e => e.groupId).length
+  }, { timeout: 20_000, message: 'ungrouping must reach the log too' }).toBe(0)
+  await expect(page.locator('[data-testid="live-ungroup-pill"]')).toHaveCount(0)
+  console.log('UNGROUPED: the superset came apart again')
+
+  // Put it back so the rest of the test still covers a grouped session.
+  await page.locator('[data-tour="live-exercise-dots"]').click()
+  await page.locator('[data-testid="live-group-toggle-0"]').click()
+  await expect.poll(async () => {
+    const res = await api.get(`/api/workouts/session?id=${sessionId}`)
+    if (!res.ok()) return -1
+    const body = await res.json()
+    return ((body.session?.exercises ?? []) as LoggedExercise[]).filter(e => e.groupId).length
+  }, { timeout: 20_000 }).toBe(2)
 
   // ── The Track view is the same session: it shows what was added ───────────
   await page.goto(`${BASE_URL}/dashboard/workout/quick/workout?session=${sessionId}`)
