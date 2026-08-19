@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, Plus, X, Loader2, Layers, Minus } from 'lucide-react'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
+import { setUnitLabel } from '@/lib/workout/tracking'
 
 export type Placement = 'end' | 'group'
 
@@ -284,7 +285,7 @@ export default function AddExerciseSheet({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <Stepper label="Sets" value={sets} onChange={v => setSets(Math.max(1, Math.min(10, v)))} dark={dark} testid="add-exercise-sets" />
+              <Stepper label={setUnitLabel(picked?.trackingType, sets)} value={sets} onChange={v => setSets(Math.max(1, Math.min(10, v)))} dark={dark} testid="add-exercise-sets" />
               {timed ? (
                 <Stepper label="Seconds" value={seconds} step={15} onChange={v => setSeconds(Math.max(5, Math.min(600, v)))} dark={dark} testid="add-exercise-seconds" />
               ) : (

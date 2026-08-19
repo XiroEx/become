@@ -6,6 +6,7 @@ import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVi
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
+import { setUnitLabel } from "@/lib/workout/tracking";
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
@@ -722,7 +723,7 @@ export default function ExerciseSwapModal({
                   {/* Sets + Reps/Duration */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default Sets</label>
+                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default {setUnitLabel(customForm.trackingType, 2)}</label>
                       <input
                         type="number"
                         inputMode="numeric"
