@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLockScroll } from '@/lib/useLockScroll'
+import { formatWeight, formatWeightDelta, holdBand } from '@/lib/dashboard/goalTile'
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
@@ -13,6 +14,21 @@ interface DailyCheckInModalProps {
   daysSinceWeight?: number
   lastWeight?: number
   weightUnit?: 'lbs' | 'kg'
+  /** Target weight, already in `weightUnit`. Undefined when no goal is set. */
+  targetWeight?: number
+}
+
+/** What the weight step says about the goal, live as the member types — the
+ *  highest-attention moment for it, and previously the one place that said
+ *  nothing about the goal at all. */
+export function goalLine(typedWeight: string, targetWeight: number | undefined, unit: 'lbs' | 'kg'): string | null {
+  if (targetWeight == null || !(targetWeight > 0)) return null
+  const target = `${formatWeight(targetWeight, unit)} ${unit}`
+  const typed = parseFloat(typedWeight)
+  if (!(typed > 0)) return `Goal: ${target}`
+  const diff = typed - targetWeight
+  if (Math.abs(diff) <= holdBand(unit)) return `Goal: ${target} — right there`
+  return `Goal: ${target} — ${formatWeightDelta(diff, unit)} ${diff > 0 ? 'to go' : 'past it'}`
 }
 
 // Solid color face components - 5 mood levels
@@ -254,7 +270,8 @@ export default function DailyCheckInModal({
   daysSinceMood = 0,
   daysSinceWeight = 0,
   lastWeight,
-  weightUnit = 'lbs'
+  weightUnit = 'lbs',
+  targetWeight
 }: DailyCheckInModalProps) {
   const [selectedMood, setSelectedMood] = useState<MoodLevel | null>(null)
   const [weight, setWeight] = useState<string>('')
@@ -597,6 +614,11 @@ export default function DailyCheckInModal({
                 placeholder="e.g., 185.5"
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-center text-lg font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
               />
+              {targetWeight != null && (
+                <p className="mt-1.5 text-center text-xs text-zinc-500 dark:text-zinc-400" data-testid="checkin-goal-line">
+                  {goalLine(weight, targetWeight, weightUnit)}
+                </p>
+              )}
             </div>
 
             {/* Action Buttons */}
