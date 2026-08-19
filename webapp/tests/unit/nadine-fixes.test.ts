@@ -111,14 +111,25 @@ describe('stale targets are brought up to date on read', () => {
   })
 
   it('a row from an older version is recomputed', () => {
-    // The version check is now gated on `!broken`. A row whose calories and
-    // macros contradict each other is repaired on read EVEN at the current
-    // version — the stamp records which formula produced a row, not whether
-    // that row adds up. A real member's row read 2,214 cal against 2,317 cal of
-    // macros while carrying the current version, so the old early-return
-    // skipped it forever.
-    assert.match(GOALS, /if \(!broken && \(goals\.calcVersion as number \| undefined\) === MACRO_CALC_VERSION\) return null/)
+    // The version check is gated on `!broken` (and, since the adaptive-targets
+    // change, `!weightDrifted` too). A row whose calories and macros contradict
+    // each other is repaired on read EVEN at the current version — the stamp
+    // records which formula produced a row, not whether that row adds up. A
+    // real member's row read 2,214 cal against 2,317 cal of macros while
+    // carrying the current version, so the old early-return skipped it forever.
+    assert.match(GOALS, /const versionStale = \(goals\.calcVersion as number \| undefined\) !== MACRO_CALC_VERSION/)
+    assert.match(GOALS, /if \(!broken && !versionStale && !weightDrifted\) return null/)
     assert.match(GOALS, /computeNutritionTargets\(/)
+  })
+
+  it('logged weight drifting from the rolling average also triggers a recompute', () => {
+    // The adaptive part: targets no longer sit frozen at the onboarding weight
+    // forever just because the macro formula hasn't changed and the row is
+    // internally coherent — a real move in the trend weight is a third reason
+    // to recompute, alongside a version bump and a broken row.
+    assert.match(GOALS, /const weightDrifted = needsWeightRecalc\(goals\.calcWeightKg as number \| undefined, trendKg\)/)
+    assert.match(GOALS, /trendWeightKg\(series, new Date\(\)\)/)
+    assert.match(GOALS, /calcWeightKg: trendKg/)
   })
 
   it('an incoherent row is repaired on read regardless of version', () => {

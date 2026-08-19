@@ -2,7 +2,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { paceRead, etaWeeks, formatEta, defaultPaceKg, isAchieved, KG_PER_LB, fmtUnit, clampPaceKg } from '../../lib/goals/pace'
+import { paceRead, etaWeeks, formatEta, defaultPaceKg, isAchieved, KG_PER_LB, fmtUnit, clampPaceKg, directionFromWeights } from '../../lib/goals/pace'
 import { readAdherence } from '../../lib/goals/adherence'
 import { avgWorkoutsPerWeek, suggestLiftTargets, liftProgress } from '../../lib/goals/training'
 import { suggestNutrition, suggestTraining, pickGoalNudge } from '../../lib/goals/suggestions'
@@ -58,6 +58,18 @@ test('defaults and formatting', () => {
   assert.equal(fmtUnit(0.5, 'kg'), '0.5 kg')
   assert.equal(clampPaceKg(9), 1.5)
   assert.equal(clampPaceKg(0), 0)
+})
+
+test('directionFromWeights reads the target against today, not the goal name', () => {
+  // 209 current, 205 target, "Gain Weight" selected in the audit screenshot —
+  // the target says lose, whatever the direction button says.
+  assert.equal(directionFromWeights(209 * LB, 205 * LB), 'lose')
+  assert.equal(directionFromWeights(160 * LB, 175 * LB), 'gain')
+  assert.equal(directionFromWeights(180 * LB, 180 * LB), 'maintain')
+  assert.equal(directionFromWeights(180 * LB, 181 * LB), 'maintain', 'inside the hold band')
+  assert.equal(directionFromWeights(undefined, 180 * LB), null)
+  assert.equal(directionFromWeights(180 * LB, undefined), null)
+  assert.equal(directionFromWeights(null, null), null)
 })
 
 // ── adherence ────────────────────────────────────────────────────────────────

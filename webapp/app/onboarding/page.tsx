@@ -23,7 +23,7 @@ import {
 import { getToken } from '@/lib/clientAuth'
 import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
 import PacePicker from '@/components/goals/PacePicker'
-import { defaultPaceKg, kgToUnit as goalKgToUnit } from '@/lib/goals/pace'
+import { defaultPaceKg, directionFromWeights, kgToUnit as goalKgToUnit } from '@/lib/goals/pace'
 import {
   explainCalories,
   explainMacro,
@@ -396,6 +396,23 @@ export default function OnboardingPage() {
     setProfile((p) => ({ ...p, nutritionDirection: d }))
   }
 
+  /** Step 3's onChange. Body stats and weights flow straight into the profile,
+   *  but a change to either weight also re-derives the calorie direction from
+   *  them — target weight is the intent; direction is read off it, not
+   *  collected a second time. Only while the member hasn't picked a direction
+   *  explicitly (setDirectionChoice), same as the goal-based default it replaces. */
+  const handleStep3Change = useCallback((updates: Partial<ProfileData>) => {
+    setProfile((p) => {
+      const next = { ...p, ...updates }
+      if (!directionTouched && ('currentWeightKg' in updates || 'targetWeightKg' in updates)) {
+        next.nutritionDirection =
+          directionFromWeights(next.currentWeightKg, next.targetWeightKg) ??
+          directionForGoal(next.fitnessGoals?.[0])
+      }
+      return next
+    })
+  }, [directionTouched])
+
   // ── Submit (finish or skip) ──────────────────────────────────────────────
   async function submit(profileOverride?: ProfileData) {
     setIsSubmitting(true)
@@ -580,7 +597,7 @@ export default function OnboardingPage() {
                   direction={effectiveDirection}
                   targets={targets}
                   goals={goals}
-                  onChange={(updates) => setProfile((p) => ({ ...p, ...updates }))}
+                  onChange={handleStep3Change}
                   onDirectionChange={setDirectionChoice}
                 />
               )}
@@ -970,8 +987,12 @@ function Step3({
   const presetContext = targets && profile.currentWeightKg
     ? { weightLbs: profile.currentWeightKg * 2.2046226218, calories: targets.calories, goals }
     : undefined
-  // A target weight only makes sense when you're trying to move the number.
-  const showTargetWeight = direction !== 'maintain'
+  // What the target weight alone implies, so the direction buttons below can
+  // be checked against it instead of just accepting whatever's picked. Shown
+  // regardless of direction — a member coming from "Maintain" who then types a
+  // target is exactly the case the field used to hide from.
+  const derivedDirection = directionFromWeights(profile.currentWeightKg, profile.targetWeightKg)
+  const directionMismatch = derivedDirection != null && derivedDirection !== direction
 
   const [useImperial, setUseImperial] = useState(true)
 
@@ -1224,7 +1245,7 @@ function Step3({
         </div>
 
         {/* Weight fields */}
-        <div className={`grid gap-4 ${showTargetWeight ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
               Current weight ({useImperial ? 'lbs' : 'kg'})
@@ -1242,28 +1263,26 @@ function Step3({
             </div>
           </div>
 
-          {showTargetWeight && (
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-                Target weight ({useImperial ? 'lbs' : 'kg'})
-              </label>
-              <div className="relative">
-                <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
-                  placeholder={useImperial ? 'e.g. 165' : 'e.g. 75'}
-                  data-testid="stat-target-weight"
-                  value={useImperial ? targetLbs : targetKgDisplay}
-                  onChange={(e) => handleTargetWeightChange(e.target.value)}
-                  className={inputCls} />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
-                  {useImperial ? 'lbs' : 'kg'}
-                </span>
-              </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
+              Target weight ({useImperial ? 'lbs' : 'kg'})
+            </label>
+            <div className="relative">
+              <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
+                placeholder={useImperial ? 'e.g. 165' : 'e.g. 75'}
+                data-testid="stat-target-weight"
+                value={useImperial ? targetLbs : targetKgDisplay}
+                onChange={(e) => handleTargetWeightChange(e.target.value)}
+                className={inputCls} />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                {useImperial ? 'lbs' : 'kg'}
+              </span>
             </div>
-          )}
+          </div>
         </div>
 
         {/* ── Pace toward the target ─────────────────────────────────────── */}
-        {showTargetWeight && profile.targetWeightKg && profile.currentWeightKg ? (
+        {profile.targetWeightKg && profile.currentWeightKg ? (
           <div className="pt-1">
             <PacePicker
               unit={useImperial ? 'lbs' : 'kg'}
@@ -1282,7 +1301,9 @@ function Step3({
             Which way are you eating?
           </label>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Pre-set from your primary goal — change it if you disagree.
+            {derivedDirection
+              ? 'Pre-set from your target weight — change it if you disagree.'
+              : 'Pre-set from your primary goal — change it if you disagree.'}
           </p>
           <div className="mt-3 grid grid-cols-3 gap-2">
             {DIRECTION_OPTIONS.map(({ value, label, sub, Icon }) => {
@@ -1316,6 +1337,21 @@ function Step3({
               )
             })}
           </div>
+          {directionMismatch && derivedDirection && (
+            <button
+              type="button"
+              onClick={() => onDirectionChange(derivedDirection)}
+              data-testid="direction-mismatch-warning"
+              className="mt-2 flex w-full items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-left text-xs text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Your target is {derivedDirection === 'lose' ? 'below' : derivedDirection === 'gain' ? 'above' : 'close to'} your current weight
+                — that usually means {DIRECTION_OPTIONS.find((o) => o.value === derivedDirection)?.label}, not {DIRECTION_OPTIONS.find((o) => o.value === direction)?.label}.{' '}
+                <span className="font-semibold underline">Switch to {DIRECTION_OPTIONS.find((o) => o.value === derivedDirection)?.label}</span>
+              </span>
+            </button>
+          )}
         </div>
 
         {/* ── Activity level ────────────────────────────────────────────── */}
@@ -1757,7 +1793,7 @@ function Step5Review({
               : '—'}
           />
           <ReviewRow label="Current weight" value={showWeight(profile.currentWeightKg)} />
-          {direction !== 'maintain' && (
+          {profile.targetWeightKg != null && (
             <ReviewRow label="Target weight" value={showWeight(profile.targetWeightKg)} />
           )}
           <ReviewRow

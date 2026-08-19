@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "gen-test-token": "node scripts/gen-test-token.mjs",
-    "test:unit": "NODE_ENV=test JWT_SECRET=become-unit-test-secret MONGODB_URI=mongodb://127.0.0.1:27017/become-test tsx --test tests/unit/*.test.ts tests/unit/**/*.test.ts tests/unit/**/*.test.tsx",
+    "test:unit": "NODE_ENV=test JWT_SECRET=become-unit-test-secret MONGODB_URI=mongodb://127.0.0.1:27017/become-test tsx --test tests/unit/*.test.ts tests/unit/*.test.tsx tests/unit/**/*.test.ts tests/unit/**/*.test.tsx",
     "test:e2e": "playwright test",
     "test": "npm run test:unit"
   },

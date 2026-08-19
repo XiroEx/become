@@ -36,6 +36,7 @@ import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import { formatQuantity, type Unit } from '@/lib/units'
+import { weeklyChartBarHeightPct } from '@/lib/nutrition/weekChart'
 import MonthView from './MonthView'
 import type { MealPlan } from './planning'
 import { tagDotColors, fetchPlansInRange } from './planning'
@@ -1692,10 +1693,9 @@ function WeekView({
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             Calories per day
           </p>
-          <div className="flex h-24 items-end gap-1.5 sm:gap-2">
+          <div className="flex h-24 gap-1.5 sm:gap-2">
             {[...days].sort((a, b) => a.date.localeCompare(b.date)).map(d => {
               const cal = d.dailyTotals.calories || 0
-              const pct = summary.max > 0 ? (cal / summary.max) * 100 : 0
               const dt = parseDateParam(d.date)
               const isToday = isSameLocalDay(dt, new Date())
               const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'narrow' })
@@ -1707,10 +1707,15 @@ function WeekView({
                   aria-label={`Open ${d.date} in day view`}
                   className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded-lg transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                 >
-                  <div className="flex h-full w-full items-end">
+                  {/* flex-1 (not h-full) — the column has no explicit height of
+                      its own, so a percentage height here can't resolve against
+                      it and the bar silently renders at 0px. flex-1 grows this
+                      wrapper to fill the remaining space after the label below,
+                      which gives the bar's height% a real pixel basis. */}
+                  <div className="flex w-full flex-1 items-end">
                     <motion.div
                       initial={{ height: 0 }}
-                      animate={{ height: `${Math.max(pct, cal > 0 ? 4 : 0)}%` }}
+                      animate={{ height: `${weeklyChartBarHeightPct(cal, summary.max)}%` }}
                       transition={{ duration: 0.6, ease: 'easeOut' }}
                       className={`w-full rounded-t-md ${
                         isToday

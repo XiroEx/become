@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import NutritionGoal from '@/models/NutritionGoal'
 import User from '@/models/User'
+import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
 import {
   computeNutritionTargets,
@@ -10,6 +11,8 @@ import {
   type MacroPreset,
 } from '@/lib/nutrition/tdee'
 import { reconcileGoals, isCoherent } from '@/lib/nutrition/goalCoherence'
+import { weightSeriesKg } from '@/lib/goals/ensure'
+import { trendWeightKg, needsWeightRecalc } from '@/lib/goals/trend'
 
 const DEFAULT_GOALS = {
   calories: 2000,
@@ -46,12 +49,16 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Bring pre-fix targets up to date on read.
+ * Bring pre-fix or stale-weight targets up to date on read.
  *
- * Targets are computed once at onboarding and persisted, so fixing the macro
- * maths does nothing for anyone who already signed up — they keep the old
- * numbers forever. Rather than a migration, a row stamped with an older
- * calcVersion is recomputed the next time it is read.
+ * Targets are computed once and persisted, so nothing reaches an existing
+ * member unless it happens here, on the next read:
+ *   - a fix to the macro maths (calcVersion behind MACRO_CALC_VERSION)
+ *   - a row whose own numbers contradict each other (see `broken` below)
+ *   - logged weight has drifted from the (rolling-average) weight the row was
+ *     last computed from — the adaptive part. A single weigh-in is mostly
+ *     water, so this reacts to the TREND (lib/goals/trend.ts), not the latest
+ *     entry, and only past a threshold so it doesn't chase noise.
  *
  * Deliberately conservative:
  *   - a member who typed their own numbers (macroPreset 'custom') is never
@@ -91,8 +98,8 @@ async function refreshStaleTargets(
       })
       return saved as Record<string, unknown> | null
     }
-
-    if (!broken && (goals.calcVersion as number | undefined) === MACRO_CALC_VERSION) return null
+    // Hand-typed rows are exempt from every recompute below, whatever their
+    // calcVersion or weight drift says.
     if (goals.macroPreset === 'custom') return null
 
     const user = await User.findById(userId).select('profile').lean<{
@@ -100,14 +107,27 @@ async function refreshStaleTargets(
         currentWeightKg?: number; heightCm?: number; age?: number
         biologicalSex?: 'male' | 'female' | 'prefer_not_to_say'
         fitnessGoals?: string[]; nutritionDirection?: 'lose' | 'maintain' | 'gain'
+        weightUnit?: 'lbs' | 'kg'
       }
     }>()
     const p = user?.profile
     if (!p?.currentWeightKg || !p.heightCm || !p.age || !p.biologicalSex) return null
 
+    // The rolling-average logged weight, not a single reading — falls back to
+    // the profile's point-in-time weight when there's no log history yet.
+    const progress = await UserProgress.findOne({ userId }).select('weightHistory').lean<{
+      weightHistory?: Array<{ date: Date; weight: number; unit?: 'lbs' | 'kg' }>
+    }>()
+    const series = weightSeriesKg(progress?.weightHistory, p.weightUnit === 'kg' ? 'kg' : 'lbs')
+    const trendKg = trendWeightKg(series, new Date()) ?? p.currentWeightKg
+
+    const versionStale = (goals.calcVersion as number | undefined) !== MACRO_CALC_VERSION
+    const weightDrifted = needsWeightRecalc(goals.calcWeightKg as number | undefined, trendKg)
+    if (!broken && !versionStale && !weightDrifted) return null
+
     const preset = (goals.macroPreset as MacroPreset | undefined) ?? 'recommended'
     const targets = computeNutritionTargets({
-      currentWeightKg: p.currentWeightKg,
+      currentWeightKg: trendKg,
       heightCm: p.heightCm,
       age: p.age,
       biologicalSex: p.biologicalSex,
@@ -123,9 +143,10 @@ async function refreshStaleTargets(
       protein: targets.protein,
       carbs: targets.carbs,
       fats: targets.fats,
-      waterGoal: (goals.waterGoal as number | undefined) || waterGoalOz(p.currentWeightKg),
+      waterGoal: (goals.waterGoal as number | undefined) || waterGoalOz(trendKg),
       macroPreset: preset,
       calcVersion: MACRO_CALC_VERSION,
+      calcWeightKg: trendKg,
     }
     await NutritionGoal.updateOne({ userId }, { $set: next })
     return { ...goals, ...next }

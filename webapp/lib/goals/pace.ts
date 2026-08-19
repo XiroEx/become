@@ -28,6 +28,24 @@ export function defaultPaceKg(direction: Direction | null | undefined): number {
   return 0
 }
 
+/**
+ * The direction a target weight implies, from where the member stands today.
+ * The one place this comparison happens, so target weight and calorie
+ * direction are read from the same two numbers everywhere they're compared —
+ * onboarding's default, the reconciliation warning, and the Goal's own
+ * fallback (lib/goals/ensure.ts) all call this instead of each rolling their
+ * own band check.
+ */
+export function directionFromWeights(
+  currentKg?: number | null,
+  targetKg?: number | null,
+): Direction | null {
+  if (!currentKg || !targetKg) return null
+  const diff = targetKg - currentKg
+  if (Math.abs(diff) <= HOLD_BAND_KG) return 'maintain'
+  return diff < 0 ? 'lose' : 'gain'
+}
+
 /** Clamp a chosen pace to something sane (0.1–1.5 kg/wk ≈ 0.2–3.3 lb/wk). */
 export function clampPaceKg(pace: number): number {
   if (!Number.isFinite(pace) || pace <= 0) return 0

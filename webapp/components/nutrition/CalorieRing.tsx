@@ -16,6 +16,12 @@ import {
 interface MacroValues {
   current: number
   goal: number
+  /**
+   * Grams still planned (not yet logged) for today, on top of `current`.
+   * Rendered as a light shadow past the solid fill — a preview of where the
+   * bar lands if the rest of today's plan gets eaten.
+   */
+  planned?: number
 }
 
 interface CalorieRingProps {
@@ -26,9 +32,15 @@ interface CalorieRingProps {
   fats: MacroValues
   /** Grams of the day's carbs that are fiber. Shaded inside the carb bar. */
   fiber?: number
+  /**
+   * Calories still planned (not yet logged) for today, on top of `consumed`.
+   * Rendered as a light shadow arc past the solid ring — a preview of where
+   * the day lands if the rest of today's plan gets eaten.
+   */
+  plannedExtra?: number
 }
 
-export default function CalorieRing({ consumed, goal, protein, carbs, fats, fiber }: CalorieRingProps) {
+export default function CalorieRing({ consumed, goal, protein, carbs, fats, fiber, plannedExtra }: CalorieRingProps) {
   const router = useRouter()
   const remaining = goal - consumed
   // Calories are a ceiling: hitting the target is the win, a few over is a
@@ -37,12 +49,16 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats, fibe
   const status = macroStatus(consumed, goal, 'ceiling')
   const isOver = status === 'over' || status === 'warn'
   const percentage = goal > 0 ? Math.min(consumed / goal, 1) : 0
+  const plannedPercentage = goal > 0 && plannedExtra
+    ? Math.min((consumed + plannedExtra) / goal, 1)
+    : percentage
 
   const size = 180
   const strokeWidth = 14
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - percentage * circumference
+  const plannedDashoffset = circumference - plannedPercentage * circumference
 
   return (
     <Card>
@@ -82,6 +98,23 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats, fibe
               strokeWidth={strokeWidth}
               className="text-zinc-200 dark:text-zinc-700"
             />
+            {plannedPercentage > percentage && (
+              <motion.circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                initial={{ strokeDashoffset: circumference }}
+                animate={{ strokeDashoffset: plannedDashoffset }}
+                transition={{ duration: 1.2, ease: 'easeOut' }}
+                className="text-emerald-400/40 dark:text-emerald-500/30"
+                aria-hidden="true"
+              />
+            )}
             <motion.circle
               cx={size / 2}
               cy={size / 2}
@@ -136,9 +169,9 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats, fibe
       {/* Macro bars */}
       <div className="mt-5 space-y-3" data-tour="macro-rows">
         {/* Protein is a FLOOR — exceeding it is a good outcome, never a warning. */}
-        <MacroBar label="Protein" current={protein.current} goal={protein.goal} color={MACRO_COLORS.protein} kind="floor" />
-        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} fiber={fiber} />
-        <MacroBar label="Fats" current={fats.current} goal={fats.goal} color={MACRO_COLORS.fats} />
+        <MacroBar label="Protein" current={protein.current} goal={protein.goal} color={MACRO_COLORS.protein} kind="floor" plannedExtra={protein.planned} />
+        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} fiber={fiber} plannedExtra={carbs.planned} />
+        <MacroBar label="Fats" current={fats.current} goal={fats.goal} color={MACRO_COLORS.fats} plannedExtra={fats.planned} />
       </div>
     </Card>
   )
