@@ -249,6 +249,22 @@ function variantFriendlyLabel(variant: FoodVariant | null): string {
   return alt ? prettifyUnitCodes(alt.label.trim()) : ''
 }
 
+/**
+ * Has the picker's live selection moved off the "1 default serving" baseline
+ * it resolved to on mount? The seeded label ("3 oz (85 g)") only describes
+ * that one baseline amount — once quantity or unit diverges from it (a
+ * member typing a custom 95 g instead of the default 85 g serving), the
+ * label no longer describes what's about to be logged.
+ */
+export function selectionDivergedFromBaseline(
+  baseline: { quantity: number; unit: string } | null,
+  sel: { quantity: number; unit: string },
+  epsilon = 0.001,
+): boolean {
+  if (!baseline) return false
+  return sel.unit !== baseline.unit || Math.abs(sel.quantity - baseline.quantity) > epsilon
+}
+
 function positiveDecimal(value: string): number {
   const n = Number(value)
   return Number.isFinite(n) && n > 0 ? n : 0
@@ -374,6 +390,15 @@ export default function FoodSearchModal({
   const [addQuantity, setAddQuantity] = useState('1')
   const [servingLabelDraft, setServingLabelDraft] = useState('')
   const [servingLabelEditing, setServingLabelEditing] = useState(false)
+  // Was the current draft typed by the member (via the pencil), or just the
+  // variant's own default label ("3 oz (85 g)") seeded on selection? Only a
+  // typed label survives a quantity change — the seeded one describes ONE
+  // default serving and goes stale the moment the picker no longer says that.
+  const [servingLabelUserEdited, setServingLabelUserEdited] = useState(false)
+  // The picker's own first emission after a variant (re)mount — "1 default
+  // serving" in that variant's unit. Compared against later emissions to tell
+  // "the member changed the amount" from "the picker just resolved itself."
+  const pickerBaselineRef = useRef<{ quantity: number; unit: string } | null>(null)
   // Index into selectedFood.variants — defaults to the variant marked isDefault.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   const [variantMenuOpen, setVariantMenuOpen] = useState(false)
@@ -794,9 +819,28 @@ export default function FoodSearchModal({
   useEffect(() => {
     setServingLabelDraft(variantFriendlyLabel(activeVariant))
     setServingLabelEditing(false)
+    setServingLabelUserEdited(false)
+    pickerBaselineRef.current = null
     setAddQuantity('1')
     setVariantMenuOpen(false)
   }, [selectedFood?._id, selectedVariantIdx, activeVariant])
+
+  // The picker's default label ("3 oz (85 g)") only describes ONE serving. The
+  // moment the amount picked diverges from that default — the member typed a
+  // custom 95 g instead of the default 85 g serving — the seeded label starts
+  // lying about what's being logged (nutrition tracks the real amount fine;
+  // this caption doesn't). Clear it rather than submit a mismatched label,
+  // unless the member typed their own ("1 handful") — that survives any amount.
+  const handlePickerSelectionChange = useCallback((sel: QuantityPickerSelection) => {
+    setSelection(sel)
+    const baseline = pickerBaselineRef.current
+    if (!baseline) {
+      pickerBaselineRef.current = { quantity: sel.quantity, unit: sel.unit }
+      return
+    }
+    if (servingLabelUserEdited) return
+    if (selectionDivergedFromBaseline(baseline, sel)) setServingLabelDraft('')
+  }, [servingLabelUserEdited])
 
   // Copy-on-pick: external (usda-/off-) results get persisted to our Food
   // collection before being logged. Returns the resolved foodId + variants.
@@ -2067,7 +2111,7 @@ export default function FoodSearchModal({
                                           <input
                                             type="text"
                                             value={servingLabelDraft}
-                                            onChange={(e) => setServingLabelDraft(e.target.value)}
+                                            onChange={(e) => { setServingLabelDraft(e.target.value); setServingLabelUserEdited(true) }}
                                             onBlur={() => setServingLabelEditing(false)}
                                             onKeyDown={(e) => {
                                               if (e.key === 'Enter') {
@@ -2105,7 +2149,7 @@ export default function FoodSearchModal({
                                       <QuantityPicker
                                         variant={activeVariant}
                                         layout="inline"
-                                        onChange={setSelection}
+                                        onChange={handlePickerSelectionChange}
                                       />
                                     </div>
                                     <div className="pt-0.5 text-right">
