@@ -36,6 +36,20 @@ export interface ServingChoice {
    * food has no weight to show (a discrete bar with no bridge).
    */
   perServing?: { quantity: number; unit: Unit }
+  /**
+   * True when a countable 'serving' choice was collapsed from a label whose
+   * OWN unit is a real measurable one (weight/volume — "3/4 cup", "45 g")
+   * rather than an inherently discrete noun ("1 portion", "1 bar"). The
+   * countable-serving transform below always reduces the choice to quantity 1,
+   * and a UI that then shows just the label's bare noun reads fine for a
+   * discrete noun ("4 portion" = four portions) but is actively wrong for a
+   * measurable one: "3/4 cup" strips down to "cup", and paired with the
+   * quantity box's "1" that reads as "1 cup" — a different amount than the
+   * food's real 3/4-cup serving. UI surfaces rendering this choice's own noun
+   * should show the generic word "serving" instead of the noun when this is
+   * true, never a bare unit word that could be mistaken for a literal amount.
+   */
+  measurableAsServing?: boolean
 }
 
 export interface ServingChoiceGroups {
@@ -287,6 +301,13 @@ function choiceFromLabel(args: {
         derivedFromLabel: servingBridge ? label : undefined,
         // What one of these weighs, on the same basis the maths will use.
         perServing,
+        // `hasServingWords` strips every "<count> <unit>" match out of the
+        // label and asks whether a descriptive word survives. "1 portion
+        // (85 g)" leaves "portion" — a real noun, keep it. "3/4 cup" leaves
+        // nothing: the whole label WAS the measured amount, so its only
+        // "noun" is the unit word itself ("cup"), which the countable
+        // collapse below is about to detach from its own quantity.
+        measurableAsServing: !hasServingWords(label),
       }
     : null
   if (asServing && canResolveChoice(args.variant, asServing)) return asServing
