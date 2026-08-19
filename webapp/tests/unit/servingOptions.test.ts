@@ -297,6 +297,10 @@ describe('servingOptions', () => {
     assert.equal(primary.unit, 'serving')
     assert.deepEqual(primary.perServing, { quantity: 1.75, unit: 'cup' })
     assert.equal(Math.round(primary.mlPerServing!), 420) // 1.75 cup, not 0.75 cup (180 ml)
+    // The exact display bug this collapse causes: the label's only "noun" is
+    // the bare unit word "cup", so a UI must not show it next to the "1" in
+    // the quantity box — that would read "1 cup" for a 1¾-cup serving.
+    assert.equal(primary.measurableAsServing, true)
 
     const effective = variantForServingChoice(variant, primary)
     // "1" of the food's own named serving must be the WHOLE 1¾-cup portion —
@@ -317,5 +321,109 @@ describe('servingOptions', () => {
     assert.ok(cupServing)
     assert.equal(cupServing.quantity, 1.75)
     assert.equal(cupServing.unit, 'cup')
+  })
+
+  describe('measurableAsServing — flags a countable serving derived from a bare unit label', () => {
+    // The reported bug: a food whose own serving is "3/4 cup" collapses to a
+    // countable {1, 'serving'} choice (so N servings needs no math), but the
+    // label's only "noun" IS the unit word "cup" — a UI showing just that
+    // noun next to the "1" quantity box reads "1 cup", a different amount
+    // than the food's real 3/4-cup serving. This flag tells a consumer when
+    // the label has no descriptive noun of its own to fall back to the
+    // generic word "serving" instead.
+    it('flags a fractional-cup native serving ("3/4 cup") as measurable', () => {
+      const variant = {
+        servingSize: 0.75,
+        servingUnit: 'cup' as const,
+        displayLabel: '3/4 cup',
+        gramsPerServing: 180,
+        nutrition,
+      }
+      const groups = buildServingChoiceGroups(variant)
+      const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+      assert.ok(primary)
+      assert.equal(primary.unit, 'serving', 'still collapses to a countable serving')
+      assert.equal(primary.label, '3/4 cup', 'the raw label is untouched — data layer, not display')
+      assert.equal(primary.measurableAsServing, true)
+    })
+
+    it('flags a whole-number cup label ("1 cup") as measurable too — not just fractions', () => {
+      const variant = {
+        servingSize: 100,
+        servingUnit: 'g' as const,
+        displayLabel: '1 cup',
+        gramsPerServing: 240,
+        nutrition,
+      }
+      const groups = buildServingChoiceGroups(variant)
+      const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+      assert.ok(primary)
+      assert.equal(primary.unit, 'serving')
+      assert.equal(primary.measurableAsServing, true)
+    })
+
+    it('flags a bare fraction+unit label ("1/3 c") as measurable', () => {
+      const variant = {
+        servingSize: 32,
+        servingUnit: 'g' as const,
+        displayLabel: '1/3 c',
+        alternateServings: [{ label: '100 g', multiplier: 3.125 }],
+        nutrition: { calories: 110, protein: 24, carbs: 3, fats: 0 },
+      }
+      const groups = buildServingChoiceGroups(variant)
+      const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+      assert.ok(primary)
+      assert.equal(primary.measurableAsServing, true)
+    })
+
+    it('does NOT flag a discrete named serving ("1 portion (85 g)") — the noun is real', () => {
+      const variant = {
+        servingSize: 100,
+        servingUnit: 'g' as const,
+        displayLabel: '1 portion (85 g)',
+        gramsPerServing: 85,
+        nutrition,
+      }
+      const groups = buildServingChoiceGroups(variant)
+      const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+      assert.ok(primary)
+      assert.equal(primary.unit, 'serving')
+      assert.equal(primary.label, '1 portion (85 g)')
+      assert.ok(!primary.measurableAsServing, '"portion" is a real noun, not a bare unit word')
+    })
+
+    it('does NOT flag a discrete named serving ("1 bar (45 g)") either', () => {
+      const variant = {
+        servingSize: 100,
+        servingUnit: 'g' as const,
+        displayLabel: '1 bar (45 g)',
+        alternateServings: [{ label: '100 g', multiplier: 1 }],
+        nutrition,
+      }
+      const groups = buildServingChoiceGroups(variant)
+      const primary = groups.servings.find(choice => choice.id === 'serving-primary')
+      assert.ok(primary)
+      assert.ok(!primary.measurableAsServing)
+    })
+
+    it('does NOT flag a measurable choice that stays as its own unit (not countable)', () => {
+      // "2 bars (90 g)" is a different amount from the food's own 45 g bar, so
+      // it stays a measurable-unit SHORTCUT (quantity 90, unit 'g') rather
+      // than becoming a countable serving — measurableAsServing only applies
+      // to the countable-serving collapse, not every measurable choice.
+      const variant = {
+        servingSize: 100,
+        servingUnit: 'g' as const,
+        displayLabel: '1 bar (45 g)',
+        gramsPerServing: 45,
+        alternateServings: [{ label: '2 bars (90 g)', multiplier: 0.9 }],
+        nutrition,
+      }
+      const groups = buildServingChoiceGroups(variant)
+      const two = groups.servings.find(choice => choice.label === '2 bars (90 g)')
+      assert.ok(two)
+      assert.equal(two.unit, 'g')
+      assert.ok(!two.measurableAsServing)
+    })
   })
 })
