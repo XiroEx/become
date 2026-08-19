@@ -879,10 +879,10 @@ function NutritionPageInner() {
 
   // Quick-add total calories
   const quickAddCalories = quickAdds.reduce((s, qa) => s + (qa.calories || 0), 0)
-  // Planned totals for the visible date — only meaningful when viewingFuture
-  // (when not, plans is empty / filtered upstream).
+  // Planned totals for the visible date — meaningful whenever plans can exist
+  // for it (today or a future day; past days never render plans, see showPlans).
   const plannedTotals = useMemo(() => {
-    if (!viewingFuture) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+    if (!showPlans) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
     let c = 0, p = 0, cb = 0, f = 0, fib = 0
     for (const plan of plans) {
       const n = plan.expectedNutrition
@@ -896,7 +896,14 @@ function NutritionPageInner() {
       calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb),
       fats: Math.round(f), fiber: Math.round(fib),
     }
-  }, [viewingFuture, plans])
+  }, [showPlans, plans])
+
+  // Today only: meals still planned (not yet logged) render as a light shadow
+  // past the actual consumed arc/bars — a preview of where the day lands if
+  // the rest of today's plan gets eaten. Future days already show plannedTotals
+  // as the primary ring value (nothing to shadow against); past days don't
+  // carry a shadow since there's nothing left to eat.
+  const todayPlannedExtra = viewingToday ? plannedTotals : null
 
   // The CalorieRing shows MealLog daily totals + quick-add calories on today/
   // past dates. On future dates the ring previews PLANNED totals — there are
@@ -1135,10 +1142,11 @@ function NutritionPageInner() {
         <CalorieRing
           consumed={totalConsumedCalories}
           goal={goals.calories}
-          protein={{ current: totalProtein, goal: goals.protein }}
-          carbs={{ current: totalCarbs, goal: goals.carbs }}
+          protein={{ current: totalProtein, goal: goals.protein, planned: todayPlannedExtra?.protein }}
+          carbs={{ current: totalCarbs, goal: goals.carbs, planned: todayPlannedExtra?.carbs }}
           fiber={viewingFuture ? plannedTotals.fiber : dailyTotals.fiber}
-          fats={{ current: totalFats, goal: goals.fats }}
+          fats={{ current: totalFats, goal: goals.fats, planned: todayPlannedExtra?.fats }}
+          plannedExtra={todayPlannedExtra?.calories}
         />
 
         {/* Empty state — nothing logged today yet (or nothing planned, on a future day) */}

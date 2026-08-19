@@ -53,3 +53,33 @@ test('the displayed grams stay honest to the label even though the colour reads 
   assert.match(html, /\+10g/)
   assert.doesNotMatch(html, /bg-red-100/)
 })
+
+test('plannedExtra renders a light shadow past the solid fill, in the macro colour at low opacity', () => {
+  const html = renderToStaticMarkup(
+    MacroBar({ label: 'Protein', current: 80, goal: GOAL, color: 'bg-blue-600', kind: 'floor', plannedExtra: 40 }),
+  )
+  // Shadow layer: the macro's own colour, at reduced opacity.
+  assert.match(html, /opacity-25 bg-blue-600/)
+})
+
+test('no plannedExtra renders no shadow layer at all', () => {
+  const html = renderToStaticMarkup(
+    MacroBar({ label: 'Protein', current: 80, goal: GOAL, color: 'bg-blue-600', kind: 'floor' }),
+  )
+  assert.doesNotMatch(html, /opacity-25/)
+})
+
+test('plannedExtra that does not push past the current fill renders no shadow', () => {
+  // Already-logged amount alone clears the goal — nothing left to preview.
+  const html = renderToStaticMarkup(
+    MacroBar({ label: 'Protein', current: 200, goal: GOAL, color: 'bg-blue-600', kind: 'floor', plannedExtra: 10 }),
+  )
+  assert.doesNotMatch(html, /opacity-25/)
+})
+
+test('an excessive plannedExtra still just renders one shadow layer (clamped internally, not left to overflow)', () => {
+  const html = renderToStaticMarkup(
+    MacroBar({ label: 'Fats', current: 50, goal: GOAL, color: 'bg-yellow-400', plannedExtra: 300 }),
+  )
+  assert.match(html, /opacity-25 bg-yellow-400/)
+})

@@ -28,9 +28,15 @@ interface MacroBarProps {
    * really costing them anything is visible.
    */
   fiber?: number
+  /**
+   * Grams still planned (not yet logged) for today, on top of `current`.
+   * Rendered as a light shadow stretching past the solid fill — a preview of
+   * where the bar lands if the rest of today's plan gets eaten.
+   */
+  plannedExtra?: number
 }
 
-export default function MacroBar({ label, current, goal, color, unit = 'g', kind = 'ceiling', fiber }: MacroBarProps) {
+export default function MacroBar({ label, current, goal, color, unit = 'g', kind = 'ceiling', fiber, plannedExtra }: MacroBarProps) {
   // Fiber counts toward total carbs on the label but carries almost no energy,
   // so it shouldn't be able to push the bar into "over" on its own — the
   // over/warn/hit colour is judged against NET carbs (total minus fiber), even
@@ -43,6 +49,9 @@ export default function MacroBar({ label, current, goal, color, unit = 'g', kind
   // The fill still clamps at 100% — the bar cannot show "beyond full" — so the
   // colour is what carries the over-state.
   const percentage = goal > 0 ? Math.min((current / goal) * 100, 100) : 0
+  const plannedPercentage = goal > 0 && plannedExtra
+    ? Math.min(((current + plannedExtra) / goal) * 100, 100)
+    : percentage
 
   // The fiber slice is drawn as a share of the FILL, not of the whole track, so
   // it stays correct once the bar clamps at 100%.
@@ -73,12 +82,25 @@ export default function MacroBar({ label, current, goal, color, unit = 'g', kind
           ) : null}
         </div>
       </div>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+        {plannedPercentage > percentage && (
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${plannedPercentage}%` }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            // Sits under the actual fill, at low opacity — a preview of the
+            // reach if today's remaining plan gets eaten, not a competing bar.
+            // `color` is the macro's own Tailwind bg-* class (not a CSS
+            // colour), so opacity is applied as a class too.
+            className={`absolute inset-y-0 left-0 h-full rounded-full opacity-25 ${color}`}
+            aria-hidden="true"
+          />
+        )}
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
           transition={{ duration: 0.8, ease: 'easeOut' }}
-          className={`h-full rounded-full ${macroBarClass(status, color)}`}
+          className={`absolute inset-y-0 left-0 h-full rounded-full ${macroBarClass(status, color)}`}
         >
           {showFiber && (
             <motion.div
