@@ -584,6 +584,7 @@ export default function DashboardClient() {
         daysSinceWeight={checkInInfo.daysSinceWeight}
         lastWeight={checkInInfo.lastWeight}
         weightUnit={weightUnit}
+        targetWeight={goalProgress?.nutrition?.target?.weight ?? undefined}
       />
 
       <StreakMilestoneModal
