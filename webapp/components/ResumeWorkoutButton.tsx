@@ -28,8 +28,10 @@ import { Play } from 'lucide-react'
 // directly removes both failure modes and one of the two round trips.
 
 interface ResumeState {
-  programId: string
-  day: string
+  /** Where tapping it goes. */
+  href: string
+  /** What to call it: the program day, or the session's own title. */
+  label: string
 }
 
 export default function ResumeWorkoutButton() {
@@ -48,13 +50,28 @@ export default function ResumeWorkoutButton() {
         })
         if (!res.ok) return
         const data = (await res.json()) as {
-          workout?: { programId: string | null; day: string | null } | null
+          workout?: {
+            kind?: 'program' | 'quick'
+            programId: string | null
+            day: string | null
+            sessionId?: string | null
+            title?: string | null
+          } | null
         }
         if (cancelled) return
 
-        // Both are needed to build a link back into the live screen.
-        if (data.workout?.programId && data.workout.day) {
-          setResume({ programId: data.workout.programId, day: data.workout.day })
+        const w = data.workout
+        if (w?.kind === 'quick' && w.sessionId) {
+          // A session you built yourself resumes the same way a program does.
+          setResume({
+            href: `/dashboard/workout/quick/workout/live?session=${encodeURIComponent(w.sessionId)}`,
+            label: w.title || 'Quick session',
+          })
+        } else if (w?.programId && w.day) {
+          setResume({
+            href: `/dashboard/workout/${encodeURIComponent(w.programId)}/workout/live?day=${encodeURIComponent(w.day)}`,
+            label: w.day,
+          })
         } else {
           setResume(null)
         }
@@ -77,7 +94,7 @@ export default function ResumeWorkoutButton() {
 
   if (!resume) return null
 
-  const href = `/dashboard/workout/${encodeURIComponent(resume.programId)}/workout/live?day=${encodeURIComponent(resume.day)}`
+  const href = resume.href
 
   return (
     <motion.div
@@ -88,7 +105,7 @@ export default function ResumeWorkoutButton() {
       <Link
         href={href}
         className="group relative block overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 p-4 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.01] active:scale-[0.99] dark:from-emerald-600 dark:via-green-600 dark:to-teal-600"
-        aria-label={`Get back into ${resume.day} workout`}
+        aria-label={`Get back into ${resume.label}`}
       >
         {/* Animated shine sweeping across — gives it the "pop / live" feel */}
         <motion.div
@@ -107,7 +124,7 @@ export default function ResumeWorkoutButton() {
 
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">
-              Active · {resume.day}
+              Active · {resume.label}
             </div>
             <div className="truncate text-base font-bold text-white">
               Get back into the workout

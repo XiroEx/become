@@ -395,6 +395,32 @@ export default function WorkoutFormPage() {
           const title = stored?.title || "Quick Session";
           const wd: WorkoutData = { day: title, title, exercises: exs.length ? exs : fallbackWorkout.exercises };
           setWorkout(wd);
+
+          // "Last session: 185 lbs × 8" — a quick session has no program to ask
+          // for history, so it asks by exercise slug instead.
+          void (async () => {
+            try {
+              const t = localStorage.getItem("token");
+              const slugs = Array.from(new Set(wd.exercises
+                .map((ex) => (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "").toLowerCase())
+                .filter(Boolean)));
+              if (!t || slugs.length === 0) return;
+              const res = await fetch(`/api/workouts/last-performance?slugs=${encodeURIComponent(slugs.join(","))}`, {
+                headers: { Authorization: `Bearer ${t}` },
+              });
+              if (!res.ok) return;
+              const data = (await res.json()) as {
+                performances?: Record<string, { reps?: number; weight?: number; duration?: number; date?: string } | null>
+              };
+              const hist: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {};
+              for (const ex of wd.exercises) {
+                const slug = (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "").toLowerCase();
+                const prior = slug ? data.performances?.[slug] : null;
+                if (prior) hist[ex.name] = { weight: prior.weight ?? 0, reps: prior.reps ?? 0, ...(prior.duration != null && { duration: prior.duration }), date: prior.date ?? "" };
+              }
+              setExerciseHistory(hist);
+            } catch { /* history is a nicety, never a blocker */ }
+          })();
           const saved = readQuickProgress(quickSessionId);
           setExerciseProgress(
             wd.exercises.map((ex, i) => {
