@@ -14,6 +14,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import { readQuickSession, clearQuickSession, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, mergeAdHocFromLog, prescriptionOf, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -401,15 +402,20 @@ export default function LiveWorkoutPage() {
             : data;
           setExerciseData(restored);
           setWorkoutFlow(flow);
+          // Open on the set the member was last standing on — flipping to the
+          // Track view and back used to drop them at set 1 with three sets
+          // already done, which re-logged over finished work.
+          const startIdx = resolveStartStep(flow, restored, quickSessionId ? readPosition(quickScope(quickSessionId)) : null);
+          setCurrentStepIndex(startIdx);
           // The active-set inputs bind to currentWeight/currentReps (not exerciseData
-          // directly), so seed them from the restored first step — otherwise progress
-          // entered in the Track view wouldn't appear in the Live inputs.
-          const firstStep = flow[0];
-          const firstSet = firstStep ? restored[firstStep.exerciseIndex]?.[firstStep.setIndex] : null;
-          if (firstSet) {
-            setCurrentReps(firstSet.reps || "");
-            setCurrentWeight(firstSet.weight || "");
-            setCurrentSpeed(firstSet.speed ?? "");
+          // directly), so seed them from that step — otherwise progress entered in
+          // the Track view wouldn't appear in the Live inputs.
+          const startStep = flow[startIdx];
+          const startSet = startStep ? restored[startStep.exerciseIndex]?.[startStep.setIndex] : null;
+          if (startSet) {
+            setCurrentReps(startSet.reps || "");
+            setCurrentWeight(startSet.weight || "");
+            setCurrentSpeed(startSet.speed ?? "");
           }
           setLoading(false);
           return;
@@ -552,8 +558,13 @@ export default function LiveWorkoutPage() {
                 setSessionStartTime(Date.now());
               }
 
-              // Find first incomplete step (fixed: uses flow with early return)
-              const resumeIdx = findFirstIncompleteStep(flow, restoredData);
+              // Where they actually were, falling back to the first set that
+              // still needs doing (the old behaviour).
+              const resumeIdx = resolveStartStep(
+                flow,
+                restoredData,
+                readPosition(programScope(programId, workoutData.day)),
+              );
               setCurrentStepIndex(resumeIdx);
 
               // Restore partial input for the resume step
@@ -683,7 +694,22 @@ export default function LiveWorkoutPage() {
     );
   }, [isQuick, quickSessionId, workout, exerciseData, workoutFlow, currentStepIndex, currentWeight, currentReps, loading]);
 
-  // Find the first incomplete step in the flow
+  // Remember where the member is standing. The Track view reads this when they
+  // flip the tab, and the Live view reads it back on the way in — the two views
+  // are one workout, and it should not matter which one you look at it through.
+  useEffect(() => {
+    if (loading || !workout) return;
+    const step = workoutFlow[currentStepIndex];
+    if (!step) return;
+    const scope = isQuick
+      ? (quickSessionId ? quickScope(quickSessionId) : "")
+      : programScope(programId, workout.day);
+    if (scope) writePosition(scope, step.exerciseIndex, step.setIndex);
+  }, [loading, workout, workoutFlow, currentStepIndex, isQuick, quickSessionId, programId]);
+
+  // Find the first incomplete step in the flow. Normal resumes go through
+  // resolveStartStep (which prefers the remembered position); this is the
+  // fallback used when a stale workout is continued.
   function findFirstIncompleteStep(flow: WorkoutStep[], data: SetData[][]): number {
     for (let i = 0; i < flow.length; i++) {
       const step = flow[i];
@@ -882,6 +908,7 @@ export default function LiveWorkoutPage() {
         invalidateMindSession();
         // Clear the draft — workout is done, no need to resume
         try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
+        clearPosition(isQuick && quickSessionId ? quickScope(quickSessionId) : programScope(programId, workout.day));
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
@@ -1524,8 +1551,8 @@ export default function LiveWorkoutPage() {
             transition={{ duration: 0.2 }}
             className="absolute right-4 top-1/2 z-50 -translate-y-1/2 flex items-center"
             onClick={(e) => e.stopPropagation()}
-            onMouseEnter={() => setShowExerciseList(true)}
-            onMouseLeave={() => setShowExerciseList(false)}
+            onPointerEnter={(e) => { if (e.pointerType === "mouse") setShowExerciseList(true); }}
+            onPointerLeave={(e) => { if (e.pointerType === "mouse") setShowExerciseList(false); }}
           >
             {/* Expanded exercise list */}
             <AnimatePresence>
@@ -1741,15 +1768,26 @@ export default function LiveWorkoutPage() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setShowSwapModal(true)}
-                className="mt-1.5 flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/20 hover:text-white active:bg-white/30"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                </svg>
-                Swap Exercise
-              </button>
+              {/* Change what you are doing, or add to it, without leaving the set */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setShowSwapModal(true)}
+                  className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/20 hover:text-white active:bg-white/30"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  Swap Exercise
+                </button>
+                <button
+                  onClick={() => setShowAddExercise(true)}
+                  data-testid="live-add-exercise-pill"
+                  className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/20 hover:text-white active:bg-white/30"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Exercise
+                </button>
+              </div>
               {/* Tip / cue */}
               {currentExercise?.tip && (
                 <p className="mt-1 text-sm text-green-400">{currentExercise.tip}</p>

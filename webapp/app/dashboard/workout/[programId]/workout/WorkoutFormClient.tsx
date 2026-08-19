@@ -19,6 +19,7 @@ import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, groupIndexes, mergeAdHocFromLog, prescriptionOf, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -409,6 +410,9 @@ export default function WorkoutFormPage() {
             })
           );
           if (saved?.exercises?.some((e) => e.sets?.some((s) => s.completed || s.reps || s.weight))) setIsResuming(true);
+          // Open the exercise they were standing in over in the Live view.
+          const at = quickSessionId ? readPosition(quickScope(quickSessionId)) : null;
+          if (at && at.exerciseIndex < wd.exercises.length) setExpandedExercise(at.exerciseIndex);
           setLoading(false);
           return;
         }
@@ -549,11 +553,17 @@ export default function WorkoutFormPage() {
               setExerciseProgress(restoredProgress);
               setIsResuming(true);
 
-              // Expand first incomplete exercise
-              for (let i = 0; i < restoredProgress.length; i++) {
-                if (restoredProgress[i].sets.some(s => !s.completed)) {
-                  setExpandedExercise(i);
-                  break;
+              // Open where they were in the Live view, else the first exercise
+              // that still has a set to do.
+              const at = readPosition(programScope(programId, workoutData.day));
+              if (at && at.exerciseIndex < restoredProgress.length) {
+                setExpandedExercise(at.exerciseIndex);
+              } else {
+                for (let i = 0; i < restoredProgress.length; i++) {
+                  if (restoredProgress[i].sets.some(s => !s.completed)) {
+                    setExpandedExercise(i);
+                    break;
+                  }
                 }
               }
             }
@@ -933,7 +943,17 @@ export default function WorkoutFormPage() {
     }
   };
 
+  // The set you last touched here is where the Live view should open — the two
+  // views are one workout, and flipping should not move you.
+  const rememberPosition = useCallback((exerciseIndex: number, setIndex: number) => {
+    const scope = isQuick
+      ? (quickSessionId ? quickScope(quickSessionId) : "")
+      : (workout ? programScope(programId, workout.day) : "");
+    if (scope) writePosition(scope, exerciseIndex, setIndex);
+  }, [isQuick, quickSessionId, programId, workout]);
+
   const updateSet = (exerciseIndex: number, setIndex: number, field: keyof SetData, value: string | boolean) => {
+    rememberPosition(exerciseIndex, setIndex);
     setExerciseProgress((prev) => {
       const tracking = workout?.exercises?.[exerciseIndex]?.trackingType;
       const updated = prev.map((ep) =>
@@ -972,6 +992,7 @@ export default function WorkoutFormPage() {
       updateSet(exerciseIndex, setIndex, "completed", !progress.sets[setIndex].completed);
     }
   };
+
 
   const skipSet = useCallback((exerciseIndex: number, setIndex: number) => {
     setExerciseProgress((prev) => {

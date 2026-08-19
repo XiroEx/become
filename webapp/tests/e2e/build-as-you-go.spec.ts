@@ -74,13 +74,17 @@ test('a session started with one exercise grows while it runs, and every surface
   await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
 
   // ── Add one on its own, from inside the running session ───────────────────
-  await page.locator('[data-tour="live-exercise-dots"]').click()
-  await page.locator('[data-testid="live-add-exercise"]').click()
+  // The pill sits next to Swap Exercise, in plain sight: the first cut hid the
+  // only entry point inside a hover-only drawer, which on a phone never opened.
+  await expect(page.locator('[data-testid="live-add-exercise-pill"]')).toBeVisible()
+  await page.locator('[data-testid="live-add-exercise-pill"]').click()
   const soloName = await addExercise(page, 'curl', 'end')
   console.log('ADDED SOLO:', soloName)
 
+  // The list still opens from the dots, and still offers its own add button.
   await page.locator('[data-tour="live-exercise-dots"]').click()
   await expect(page.getByText(soloName, { exact: false }).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.locator('[data-testid="live-add-exercise"]')).toBeVisible()
 
   // ── Add one INTO a superset with the exercise being worked on ─────────────
   await page.locator('[data-testid="live-add-exercise"]').click()
@@ -130,4 +134,77 @@ test('a session started with one exercise grows while it runs, and every surface
   expect(onCalendar!.exercises?.filter(e => e.groupId).length).toBe(2)
 
   await api.dispose()
+})
+
+/**
+ * Flipping Track↔Live is looking at one workout two ways — it must not move you.
+ *
+ * The regression: Live rebuilt its flow on mount and always opened at set 1, so
+ * a member three sets into an exercise came back to the top and re-logged over
+ * work they had already done.
+ */
+test('switching to Track and back keeps the exercise and set you were on', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-flip-${Date.now()}`
+
+  await context.addCookies([{
+    name: 'auth_token',
+    value: token,
+    domain: new URL(BASE_URL).hostname,
+    path: '/',
+    httpOnly: false,
+    secure: BASE_URL.startsWith('https'),
+    sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+  await page.evaluate(({ id }) => {
+    localStorage.setItem(`quick_session_${id}`, JSON.stringify({
+      sessionId: id,
+      title: 'E2E Flip Views',
+      exercises: [
+        { exerciseSlug: 'push-up', name: 'Push-Up', trackingType: 'reps_bodyweight', sets: 4, reps: '10' },
+        { exerciseSlug: 'bodyweight-squat', name: 'Bodyweight Squat', trackingType: 'reps_bodyweight', sets: 3, reps: '12' },
+      ],
+    }))
+  }, { id: sessionId })
+
+  const position = async () => {
+    const text = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+    return (text.match(/Exercise \d+\/\d+ . Set \d+\/\d+/) ?? ['(not found)'])[0]
+  }
+
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout/live?session=${sessionId}`)
+  await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
+  expect(await position()).toContain('Set 1/4')
+
+  // Log three sets.
+  for (const reps of ['10', '11', '12']) {
+    await page.locator('button:has-text("Skip Rest")').first().click({ force: true }).catch(() => {})
+    await page.waitForTimeout(400)
+    const input = page.locator('input[inputmode="numeric"], input[type="number"]').first()
+    if (await input.count()) await input.fill(reps)
+    await page.locator('button:has-text("Complete Set"), button:has-text("Skip Set")').first().click({ force: true })
+    await page.waitForTimeout(1200)
+  }
+  await page.locator('button:has-text("Skip Rest")').first().click({ force: true }).catch(() => {})
+  await page.waitForTimeout(500)
+  const before = await position()
+  console.log('BEFORE FLIP:', before)
+  expect(before).toContain('Set 4/4')
+
+  await page.locator('button[role="tab"]:has-text("Track")').click({ force: true })
+  await expect(page.locator('[data-testid="track-add-exercise"]')).toBeVisible({ timeout: 20_000 })
+  await page.locator('button[role="tab"]:has-text("Live")').click({ force: true })
+  await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(1500)
+
+  const after = await position()
+  console.log('AFTER FLIP:', after)
+  expect(after, 'the flip must not move you').toBe(before)
+
+  // And the three logged sets are still logged — nothing to re-do.
+  const progress = await page.evaluate(({ id }) => JSON.parse(localStorage.getItem(`qs_progress_${id}`) || 'null'), { id: sessionId })
+  const done = (progress?.exercises?.[0]?.sets ?? []).filter((s: { completed?: boolean }) => s.completed).length
+  expect(done, 'the sets you already did stay done').toBe(3)
 })
