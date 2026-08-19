@@ -54,6 +54,16 @@ export interface DraftExercise {
   rest?: string
   duration?: string // timed prescription for time-based tracking
   primaryMuscles?: string[]
+  // Grouping — a superset or circuit, which can now be made mid-session
+  // (see lib/workout/buildAsYouGo). Consecutive exercises sharing a groupId
+  // are interleaved by the live flow builder.
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRest?: string
+  groupRounds?: number
+  /** Added while the session was already running. */
+  addedAdHoc?: boolean
 }
 
 /** Where a draft came from. Drives the overview's label — a session reopened

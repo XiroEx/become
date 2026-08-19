@@ -30,6 +30,12 @@ type RawLog = {
     exerciseSlug?: string
     name?: string
     sets?: Array<{ completed?: boolean; reps?: number; duration?: number }>
+    groupId?: string
+    groupType?: string
+    groupLabel?: string
+    groupRounds?: number
+    addedAdHoc?: boolean
+    prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
   }>
 }
 
@@ -112,15 +118,23 @@ export async function GET(request: NextRequest) {
                 // next to the duration, so "reps == null" alone would call a
                 // 45-second plank a 0-rep strength set.
                 const isTime = !!first && first.duration != null && !(first.reps && first.reps > 0)
+                const p = ex.prescription
                 return {
                   exerciseSlug: ex.exerciseSlug || '',
                   // Every save writes a name; the fallback only guards a
                   // hand-edited log so the row can't render blank.
                   name: ex.name || 'Exercise',
-                  trackingType: isTime ? ('time' as const) : ('reps' as const),
-                  sets: ex.sets?.length || 1,
-                  reps: !isTime && first?.reps != null ? String(first.reps) : '',
-                  ...(first?.duration != null ? { duration: String(first.duration) } : {}),
+                  trackingType: p?.trackingType ?? (isTime ? ('time' as const) : ('reps' as const)),
+                  sets: p?.sets ?? (ex.sets?.length || 1),
+                  reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
+                  ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
+                  ...(p?.rest ? { rest: p.rest } : {}),
+                  // Reopening a session has to bring its supersets with it.
+                  ...(ex.groupId ? { groupId: ex.groupId } : {}),
+                  ...(ex.groupType ? { groupType: ex.groupType } : {}),
+                  ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+                  ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+                  ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
                 }
               })
             : undefined

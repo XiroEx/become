@@ -8,7 +8,17 @@ import { verifyAuth } from '@/lib/auth'
 // "summary" (what you did) and "continue" (rebuild + resume) actions.
 
 interface RawSet { setNumber?: number; reps?: number | null; weight?: number | null; duration?: number | null; distance?: number | null; speed?: number | null; completed?: boolean }
-interface RawEx { name: string; exerciseSlug?: string; sets?: RawSet[] }
+interface RawEx {
+  name: string
+  exerciseSlug?: string
+  sets?: RawSet[]
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  addedAdHoc?: boolean
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
+}
 interface RawLog {
   kind?: string
   sessionId?: string
@@ -55,6 +65,15 @@ export async function GET(request: NextRequest) {
             duration: s.duration ?? null,
             completed: !!s.completed,
           })),
+          // Grouping and the prescription come back too: this is what
+          // "continue" rebuilds a session from, and a superset that is dropped
+          // here comes back as two unrelated exercises.
+          ...(ex.groupId ? { groupId: ex.groupId } : {}),
+          ...(ex.groupType ? { groupType: ex.groupType } : {}),
+          ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+          ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+          ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
+          ...(ex.prescription ? { prescription: ex.prescription } : {}),
         })),
       },
     })

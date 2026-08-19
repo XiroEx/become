@@ -20,36 +20,11 @@ import {
   type StoredQuickSession,
 } from '@/lib/quickSession/store'
 import { FOCUS_DEFS, type DraftExercise } from '@/lib/quickSession/types'
+import { buildLoggedExercises } from '@/lib/quickSession/log'
 
 // Local YYYY-MM-DD (not UTC) so the date picker + max match the user's day.
 function localDateStr(d = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-const firstInt = (s?: string): number | undefined => {
-  const m = s ? String(s).match(/\d+/) : null
-  return m ? parseInt(m[0], 10) : undefined
-}
-
-// Turn the planned session into a log: every planned set carries its prescribed
-// reps (or duration for time-based work). `done` marks the sets completed —
-// true when logging a past/today session, false when planning a future one.
-function buildLoggedExercises(exercises: DraftExercise[], done: boolean) {
-  return exercises.map((ex) => {
-    const nSets = Math.max(1, Number(ex.sets) || 1)
-    const reps = firstInt(ex.reps)
-    const durSec = firstInt(ex.duration)
-    return {
-      name: ex.name,
-      ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
-      sets: Array.from({ length: nSets }, (_, i) => ({
-        setNumber: i + 1,
-        ...(reps != null && { reps }),
-        ...(durSec != null && { duration: durSec }),
-        completed: done,
-      })),
-    }
-  })
 }
 
 export default function QuickSessionOverviewPage() {
