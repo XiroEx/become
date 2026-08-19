@@ -43,6 +43,22 @@ export function needsMoreExercises(exerciseCount: number): boolean {
   return exerciseCount < RECOMMENDED_MIN_EXERCISES
 }
 
+/**
+ * Whether to ask "finish with two exercises?" on the way out.
+ *
+ * Only for a session the member assembled themselves — a three-exercise day in
+ * a program is the coach's call and gets no second-guessing — and only once:
+ * answering "finish anyway" settles it for the rest of the session.
+ */
+export function shouldWarnBeforeFinish(opts: {
+  selfBuilt: boolean
+  exerciseCount: number
+  alreadyAsked: boolean
+}): boolean {
+  if (!opts.selfBuilt || opts.alreadyAsked) return false
+  return needsMoreExercises(opts.exerciseCount)
+}
+
 /** What a group of this kind and size is called on screen. */
 export function groupLabelFor(kind: GroupKind, size: number): string {
   if (kind === 'circuit') return 'Circuit'

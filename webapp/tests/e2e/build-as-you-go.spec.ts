@@ -235,3 +235,112 @@ test('switching to Track and back keeps the exercise and set you were on', async
   const done = (progress?.exercises?.[0]?.sets ?? []).filter((s: { completed?: boolean }) => s.completed).length
   expect(done, 'the sets you already did stay done').toBe(3)
 })
+
+/**
+ * A session you built yourself, finished with barely anything in it, gets one
+ * question on the way out — and the answer that leads somewhere is "add one".
+ */
+test('finishing a thin session asks first, and the ask leads to adding one', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-thin-${Date.now()}`
+
+  await context.addCookies([{
+    name: 'auth_token',
+    value: token,
+    domain: new URL(BASE_URL).hostname,
+    path: '/',
+    httpOnly: false,
+    secure: BASE_URL.startsWith('https'),
+    sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+  // One exercise, one set: three taps from the door to "done".
+  await page.evaluate(({ id }) => {
+    localStorage.setItem(`quick_session_${id}`, JSON.stringify({
+      sessionId: id,
+      title: 'E2E Thin Session',
+      exercises: [{ exerciseSlug: 'push-up', name: 'Push-Up', trackingType: 'reps_bodyweight', sets: 1, reps: '10' }],
+    }))
+  }, { id: sessionId })
+
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout/live?session=${sessionId}`)
+  await expect(page.getByText('Push-Up').first()).toBeVisible({ timeout: 20_000 })
+
+  // The only set is the last set, so this button says Finish Workout.
+  const finish = page.locator('[data-tour="live-complete-set"]')
+  await expect(finish).toHaveText(/finish workout/i)
+  await finish.click({ force: true })
+
+  const modal = page.locator('[data-testid="thin-session-modal"]')
+  await expect(modal, 'a one-exercise session asks before it is called done').toBeVisible({ timeout: 10_000 })
+  console.log('THIN PROMPT:', (await modal.innerText()).replace(/\s+/g, ' '))
+  await page.screenshot({ path: 'tests/e2e/screenshots/thin-session-prompt.png' })
+
+  // "Add an exercise" is the way out that leads somewhere.
+  await page.locator('[data-testid="thin-session-add"]').click()
+  await expect(page.locator('[data-testid="add-exercise-sheet"]')).toBeVisible({ timeout: 10_000 })
+  const added = await addExercise(page, 'curl', 'end')
+  console.log('ADDED FROM PROMPT:', added)
+
+  // Two exercises is still under four, so it asks again — and this time takes
+  // "finish anyway" for an answer. Work down to the last set first.
+  for (let i = 0; i < 12; i++) {
+    await page.locator('button:has-text("Skip Rest")').first().click({ force: true }).catch(() => {})
+    await page.waitForTimeout(300)
+    if (/finish workout/i.test(await finish.innerText())) break
+    // Empty inputs turn the button into "Skip Set", which opens a prompt of its
+    // own — fill them so each tap just completes the set.
+    const numbers = page.locator('input[inputmode="numeric"], input[inputmode="decimal"], input[type="number"]')
+    for (let f = 0; f < await numbers.count(); f++) await numbers.nth(f).fill('10').catch(() => {})
+    await finish.click({ force: true })
+    await page.waitForTimeout(900)
+  }
+  await expect(finish).toHaveText(/finish workout/i, { timeout: 10_000 })
+  await finish.click({ force: true })
+  await expect(modal, 'two exercises is still thin, so it asks again').toBeVisible({ timeout: 10_000 })
+  await page.locator('[data-testid="thin-session-finish"]').click()
+  await expect(page.getByText(/workout done|you crushed it|program complete/i).first()).toBeVisible({ timeout: 20_000 })
+  console.log('FINISHED ANYWAY: the summary came up')
+})
+
+/** The Track view asks the same question the Live view does. */
+test('the track view also asks before finishing a thin session', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-thin-track-${Date.now()}`
+
+  await context.addCookies([{
+    name: 'auth_token',
+    value: token,
+    domain: new URL(BASE_URL).hostname,
+    path: '/',
+    httpOnly: false,
+    secure: BASE_URL.startsWith('https'),
+    sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+  await page.evaluate(({ id }) => {
+    localStorage.setItem(`quick_session_${id}`, JSON.stringify({
+      sessionId: id,
+      title: 'E2E Thin Track',
+      exercises: [{ exerciseSlug: 'push-up', name: 'Push-Up', trackingType: 'reps_bodyweight', sets: 1, reps: '10' }],
+    }))
+  }, { id: sessionId })
+
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout?session=${sessionId}`)
+  await expect(page.locator('[data-testid="track-add-exercise"]')).toBeVisible({ timeout: 30_000 })
+
+  // Fill the single set so the workout reaches 100% and offers to complete.
+  const reps = page.locator('input[inputmode="numeric"], input[type="number"]').first()
+  await reps.fill('10')
+  const complete = page.locator('[data-testid="track-complete-workout"]')
+  await expect(complete).toBeVisible({ timeout: 15_000 })
+  await complete.click()
+
+  const modal = page.locator('[data-testid="thin-session-modal"]')
+  await expect(modal, 'the track view asks too').toBeVisible({ timeout: 10_000 })
+  console.log('TRACK THIN PROMPT:', (await modal.innerText()).replace(/\s+/g, ' ').slice(0, 80))
+  await page.locator('[data-testid="thin-session-finish"]').click()
+  await expect(page.getByText(/workout done|you crushed it|program complete/i).first()).toBeVisible({ timeout: 20_000 })
+})

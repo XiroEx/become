@@ -17,6 +17,7 @@ import {
   newGroupId,
   sanitizeGroups,
   needsMoreExercises,
+  shouldWarnBeforeFinish,
   RECOMMENDED_MIN_EXERCISES,
   type AdHocExercise,
 } from '@/lib/workout/buildAsYouGo'
@@ -188,4 +189,20 @@ test('a workout under the recommended minimum needs more exercises', () => {
   assert.equal(needsMoreExercises(3), true)
   assert.equal(needsMoreExercises(4), false)
   assert.equal(needsMoreExercises(5), false)
+})
+
+test('a thin session you built yourself asks once before it is called done', () => {
+  const ask = (exerciseCount: number, selfBuilt = true, alreadyAsked = false) =>
+    shouldWarnBeforeFinish({ selfBuilt, exerciseCount, alreadyAsked })
+
+  // Under the recommended count, and self-built: ask.
+  assert.equal(ask(1), true)
+  assert.equal(ask(3), true)
+  // At or over it: nothing to say.
+  assert.equal(ask(RECOMMENDED_MIN_EXERCISES), false)
+  assert.equal(ask(6), false)
+  // A program's short day is the coach's call.
+  assert.equal(ask(2, false), false)
+  // And it only asks once — "finish anyway" settles it.
+  assert.equal(ask(2, true, true), false)
 })
