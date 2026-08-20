@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Flame, Dumbbell, UtensilsCrossed, Brain, Snowflake, Check, Circle } from 'lucide-react'
+import { ArrowLeft, Flame, Dumbbell, UtensilsCrossed, Brain, Snowflake, Check, Circle, Loader2 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui'
 import FireNumber from '@/components/streaks/FireNumber'
@@ -24,6 +24,7 @@ interface WorkoutPillar {
 }
 interface SuperPillar extends DayPillar {
   today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean; weekOnTrack: boolean }
+  freeze: { available: boolean; returnsOn: string | null; usedDays: string[]; frozenToday: boolean }
 }
 interface StreaksPayload {
   todayKey: string
@@ -52,6 +53,13 @@ function unitWord(n: number, unit: 'days' | 'weeks'): string {
 }
 
 /** The big number, or the "Building" state before a streak exists. */
+/** A day key as a short date — the keys are plain YYYY-MM-DD, read in UTC so
+ *  the label cannot slide a day west of Greenwich. */
+function fmtDay(key: string): string {
+  const d = new Date(`${key}T12:00:00Z`)
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
 function StreakValue({ current, unit, tone, fire = false }: { current: number; unit: 'days' | 'weeks'; tone: string; fire?: boolean }) {
   const d = streakDisplay(current)
   if (!d.visible) {
@@ -118,6 +126,31 @@ export default function StreaksClient() {
     })()
     return () => { cancelled = true }
   }, [])
+
+  const [freezing, setFreezing] = useState(false)
+  const [freezeError, setFreezeError] = useState<string | null>(null)
+
+  /** Spend the one freeze on today, and take back the streak it just saved. */
+  const useFreeze = async () => {
+    if (freezing) return
+    setFreezing(true)
+    setFreezeError(null)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/streaks/freeze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ tz: new Date().getTimezoneOffset() }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { streaks?: StreaksPayload; error?: string }
+      if (!res.ok) throw new Error(json.error || 'Could not use your freeze')
+      if (json.streaks) { setData(json.streaks); writeCache(CACHE_KEY, json.streaks) }
+    } catch (e) {
+      setFreezeError(e instanceof Error ? e.message : 'Could not use your freeze')
+    } finally {
+      setFreezing(false)
+    }
+  }
 
   const overall = data?.overall
   const p = data?.pillars
@@ -317,6 +350,44 @@ export default function StreaksClient() {
                       <TodayDot done={p.super.today.mindset} label="Mindset" />
                       <TodayDot done={p.super.today.trained} label={p.super.today.restDay ? 'Rest day' : 'Trained'} />
                       <TodayDot done={p.super.today.weekOnTrack} label="Week on track" />
+                    </div>
+
+                    {/* The one freeze. Strict is the point — this is the single
+                        deliberate exception, and it costs a month to earn back. */}
+                    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-900/50 dark:bg-sky-950/30" data-testid="super-freeze">
+                      <div className="flex items-start gap-2">
+                        <Snowflake className={`mt-0.5 h-4 w-4 shrink-0 ${p.super.freeze.available ? 'text-sky-500' : 'text-zinc-400 dark:text-zinc-600'}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                            {p.super.freeze.frozenToday
+                              ? 'Today is frozen — the streak holds'
+                              : p.super.freeze.available
+                                ? 'One freeze, in hand'
+                                : 'Freeze spent'}
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                            {p.super.freeze.frozenToday
+                              ? 'It comes back in a month.'
+                              : p.super.freeze.available
+                                ? 'Covers one day the super streak would otherwise break. You get it back a month after you use it.'
+                                : p.super.freeze.returnsOn
+                                  ? `Back on ${fmtDay(p.super.freeze.returnsOn)}.`
+                                  : 'Recharging.'}
+                          </p>
+                          {freezeError && <p className="mt-1 text-[11px] text-red-500">{freezeError}</p>}
+                        </div>
+                        {p.super.freeze.available && !p.super.freeze.frozenToday && !p.super.activeToday && p.super.current >= (data?.minVisible ?? 3) && (
+                          <button
+                            onClick={useFreeze}
+                            disabled={freezing}
+                            data-testid="use-freeze"
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-sky-600 disabled:opacity-60"
+                          >
+                            {freezing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Snowflake className="h-3.5 w-3.5" />}
+                            Use it
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </>
                 ) : (

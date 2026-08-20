@@ -19,7 +19,12 @@ export interface StreaksLite {
     workout: { unit: 'days' | 'weeks'; current: number; best: number; thisWeek: number; target: number | null; remainingThisWeek?: number; weekLost: boolean }
     nutrition: { current: number; best: number; activeToday: boolean }
     mindset: { current: number; best: number; activeToday: boolean }
-    super: { current: number; best: number; activeToday: boolean; today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean; weekOnTrack: boolean } }
+    super: {
+      current: number; best: number; activeToday: boolean
+      today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean; weekOnTrack: boolean }
+      /** Optional so a cached payload from before freezes still parses. */
+      freeze?: { available: boolean; returnsOn: string | null; usedDays: string[]; frozenToday: boolean }
+    }
   }
 }
 
@@ -159,12 +164,16 @@ export function superAtRisk(s: StreaksLite | null, localHour: number): SuperRisk
   if (localHour < SUPER_AT_RISK_START_HOUR || localHour > SUPER_AT_RISK_END_HOUR) return none
   const missing = superMissing(s)
   if (missing.length === 0) return none
+  // When there is a freeze in hand, say so: the point of the exception is that
+  // people know it exists on the evening they need it.
+  const canFreeze = sup.freeze?.available === true && sup.freeze?.frozenToday !== true
+  const what = missing.length === 1
+    ? `Just ${MISSING_LABEL[missing[0]]} today and it survives.`
+    : `${list(missing.map(m => MISSING_LABEL[m]))} today and it survives.`
   return {
     atRisk: true,
     missing,
     title: `Your ${sup.current}-day super streak needs you ✨`,
-    body: missing.length === 1
-      ? `Just ${MISSING_LABEL[missing[0]]} today and it survives.`
-      : `${list(missing.map(m => MISSING_LABEL[m]))} today and it survives.`,
+    body: canFreeze ? `${what} Or use your one freeze to hold it.` : what,
   }
 }
