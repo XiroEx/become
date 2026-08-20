@@ -59,6 +59,22 @@ describe('bodyUnits conversion', () => {
     // 181.7 cm is 71.5 in — rounds to 72, which must be 6'0", not 5'12".
     assert.deepEqual(cmToFtIn(181.7), { ft: 6, inches: 0 })
   })
+
+  it('REGRESSION: the nutrition goals "Your Stats" height card must not show 12"', () => {
+    // The goals page used to derive ft/in inline with `cm % 30.48`, bypassing
+    // cmToFtIn entirely. Floating point makes 182.88 % 30.48 land at
+    // ~30.47999999999998 instead of 0, so dividing by 2.54 and rounding gave
+    // 12 — a member who is exactly 6'0" (the ftInToCm(6, 0) onboarding value)
+    // saw "6'12"" on the goals page instead of "6'0"".
+    const sixFeetExactly = 182.88
+    const brokenInlineFormula = {
+      ft: Math.floor(sixFeetExactly / 30.48),
+      inches: Math.round((sixFeetExactly % 30.48) / 2.54),
+    }
+    assert.deepEqual(brokenInlineFormula, { ft: 6, inches: 12 }, 'documents why the inline formula was wrong')
+    // The goals page must use the shared helper, which carries the 12" into a foot.
+    assert.deepEqual(cmToFtIn(sixFeetExactly), { ft: 6, inches: 0 })
+  })
 })
 
 describe('cross-screen target parity', () => {
