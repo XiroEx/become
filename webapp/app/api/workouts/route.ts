@@ -270,6 +270,72 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// DELETE /api/workouts?programId=&day=&tz= — hard-delete TODAY's open
+// (incomplete) log for a program+day. This is what the Resume pill's
+// hold-to-delete uses — the counterpart to DELETE /api/workouts/session for
+// quick sessions, scoped to today the same way GET/in-progress finds it.
+//
+// Schedule is deliberately left untouched: an in-progress program day has no
+// distinct schedule status to begin with (only 'scheduled'), so removing the
+// log already puts the day back to exactly the state it was in before the
+// workout was opened. Nothing here should mark it 'skipped' — that is a
+// different, remembered outcome the member didn't choose.
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const programId = searchParams.get('programId')
+    const day = searchParams.get('day')
+    if (!programId || !day) {
+      return NextResponse.json({ error: 'programId and day are required' }, { status: 400 })
+    }
+
+    await dbConnect()
+
+    const tzOffset = readTzOffset(searchParams)
+    const todayKey = localDateKey(null, tzOffset)
+    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
+
+    // `modifiedCount` is NOT a reliable "did the pull match anything" signal
+    // here — the schema's `timestamps: true` writes `updatedAt` on every call,
+    // so it comes back 1 even when the $pull removed nothing. Read the
+    // BEFORE state instead (same pattern as the POST handler's docBefore
+    // above) and check the log was actually there.
+    type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean }> }
+    const docBefore = await UserProgress.findOneAndUpdate(
+      { userId: authResult.userId },
+      {
+        $pull: {
+          workoutLogs: { programId, day, completed: false, date: { $gte: today, $lte: tomorrow } },
+        },
+      },
+      { returnDocument: 'before', lean: true }
+    ) as ProgressDoc | null
+
+    const existed = docBefore?.workoutLogs?.some(
+      (log) =>
+        log.programId === programId &&
+        log.day === day &&
+        !log.completed &&
+        new Date(log.date) >= today &&
+        new Date(log.date) <= tomorrow
+    )
+
+    if (!existed) {
+      return NextResponse.json({ error: 'No in-progress workout found for today' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting in-progress workout:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const authResult = await verifyAuth(request)

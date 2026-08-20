@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Dumbbell, Sparkles, Search, Wand2, History, Zap } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
+import ResumeWorkoutButton from "@/components/ResumeWorkoutButton";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
 import QuickSessionModal from "@/components/QuickSessionModal";
 import GenerateModal from "@/components/GenerateModal";
@@ -412,6 +413,10 @@ export default function WorkoutClient() {
           </button>
         </div>
       </div>
+
+      {/* Resume Active Workout — only renders when there's an in-progress
+          workout log for today; quietly disappears once it's completed. */}
+      <ResumeWorkoutButton className="mb-6" />
 
       {/* Schedule / Calendar Widget */}
       <div data-tour="workout-upcoming" className="mb-6">
