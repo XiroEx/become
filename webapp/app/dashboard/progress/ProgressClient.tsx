@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X, Scale } from 'lucide-react'
+import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
-import WeightLogSheet from '@/components/WeightLogSheet'
 import Link from 'next/link'
 import { getToken } from '@/lib/clientAuth'
 import type { FitnessGoal } from '@/models/User'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  AreaChart, Area, CartesianGrid, ReferenceLine,
+  AreaChart, Area, CartesianGrid,
   LineChart, Line,
 } from 'recharts'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -64,7 +63,6 @@ interface ProgressData {
   detailedWorkouts: DetailedWorkout[]
   weeklyVolume: WeekVolume[]
   totalVolumeLbs: number
-  targetWeightLbs: number | null
   weeklyAvailability: number | null
   fitnessGoal?: FitnessGoal
 }
@@ -390,7 +388,6 @@ export default function ProgressClient() {
   const [selectedPR, setSelectedPR] = useState<string | null>(null)
   const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE)
   const [pbsShown, setPbsShown] = useState(PRS_PAGE)
-  const [weightSheetOpen, setWeightSheetOpen] = useState(false)
 
   const fetchData = useCallback(async () => {
     const token = getToken()
@@ -412,16 +409,6 @@ export default function ProgressClient() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
-
-  function handleWeightLogged(weight: number) {
-    if (!data) return
-    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    setData(prev => {
-      if (!prev) return prev
-      const filtered = prev.weightData.filter(d => d.date !== today)
-      return { ...prev, weightData: [...filtered, { date: today, value: weight }] }
-    })
-  }
 
   if (loading) {
     return (
@@ -603,91 +590,6 @@ export default function ProgressClient() {
         </div>
       )}
 
-      {/* ── Body Weight ── */}
-      <div id="body">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white flex items-center gap-1.5">
-            <TrendingUp className="h-4 w-4 text-zinc-400" />
-            Body Weight
-          </h2>
-          {data?.targetWeightLbs && (
-            <span className="text-xs font-medium text-green-600 dark:text-green-400">
-              Goal: {data.targetWeightLbs} lbs
-            </span>
-          )}
-        </div>
-
-        {(data?.weightData?.length ?? 0) > 0 ? (
-          <div className="rounded-xl border border-zinc-200 bg-white px-2 pb-4 pt-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={data?.weightData ?? []} margin={{ left: -20, right: 8 }}>
-                <defs>
-                  <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#18181b" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#18181b" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: 'currentColor' }}
-                  tickLine={false} axisLine={false}
-                  interval="preserveStartEnd"
-                  className="text-zinc-400 dark:text-zinc-600"
-                />
-                <YAxis
-                  domain={['auto', 'auto']}
-                  tick={{ fontSize: 10, fill: 'currentColor' }}
-                  tickLine={false} axisLine={false}
-                  className="text-zinc-400 dark:text-zinc-600"
-                />
-                <Tooltip
-                  formatter={(v) => [`${v} lbs`, 'Weight']}
-                  contentStyle={{ fontSize: 12, borderRadius: 12 }}
-                />
-                {data?.targetWeightLbs && (
-                  <ReferenceLine
-                    y={data.targetWeightLbs}
-                    stroke="#22c55e"
-                    strokeDasharray="4 4"
-                    strokeWidth={1.5}
-                    label={{ value: `Goal ${data.targetWeightLbs}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
-                  />
-                )}
-                <Area
-                  type="monotone" dataKey="value"
-                  stroke="#18181b" strokeWidth={2}
-                  fill="url(#weightGrad)"
-                  dot={false} activeDot={{ r: 4 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="mt-2 px-2">
-              <button
-                type="button"
-                onClick={() => setWeightSheetOpen(true)}
-                className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-              >
-                <Scale className="h-4 w-4" />
-                Log Weight
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
-            <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">No weight logged yet</p>
-            <button
-              type="button"
-              onClick={() => setWeightSheetOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
-              <Scale className="h-4 w-4" />
-              Log Weight
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* ── Body Composition ── */}
       {((data?.bodyFatData?.length ?? 0) > 0 || (data?.leanMassData?.length ?? 0) > 0) && (
         <div id="body-comp">
@@ -716,14 +618,6 @@ export default function ProgressClient() {
           />
         )}
       </AnimatePresence>
-
-      <WeightLogSheet
-        isOpen={weightSheetOpen}
-        onClose={() => setWeightSheetOpen(false)}
-        onLogged={handleWeightLogged}
-        lastWeight={data?.weightData?.length ? data.weightData[data.weightData.length - 1].value : undefined}
-        targetWeight={data?.targetWeightLbs}
-      />
     </>
   )
 }
