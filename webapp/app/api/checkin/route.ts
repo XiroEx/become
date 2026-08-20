@@ -24,9 +24,10 @@ import {
   utcMidnightDateKey,
   isEntryOnDay,
   daysSinceEntry,
+  dateKey,
 } from '@/lib/dayWindow'
 import { checkInDecision } from '@/lib/checkin/status'
-import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
+import { checkInFactsForToday, checkInTzOffset } from '@/lib/checkin/todayFacts'
 
 /** Sentinel for "no entry has ever been logged", rendered as "First log". */
 const NEVER_LOGGED = 999
@@ -59,7 +60,9 @@ export async function GET(request: NextRequest) {
     const progress = await UserProgress.findOne({ userId: auth.userId }).lean()
 
     const tz = readTzOffset(request.nextUrl.searchParams)
-    const todayKey = localDateKey(null, tz)
+    // Check-in's own day, not the calendar's — see lib/checkin/todayFacts.
+    const checkInTz = checkInTzOffset(tz)
+    const todayKey = localDateKey(null, checkInTz)
 
     if (!progress) {
       // A brand-new member has logged nothing, so the check-in is genuinely due.
@@ -80,20 +83,29 @@ export async function GET(request: NextRequest) {
     const moodHistory = (progress.moodHistory ?? []) as (Entry & { mood: number })[]
     const weightHistory = (progress.weightHistory ?? []) as (Entry & { weight: number })[]
 
-    const todaysMoodEntry = entryOnDay(moodHistory, todayKey, tz) as
+    const todaysMoodEntry = entryOnDay(moodHistory, todayKey, checkInTz) as
       | (Entry & { mood: number })
       | undefined
-    const todaysWeightEntry = entryOnDay(weightHistory, todayKey, tz) as
+    const todaysWeightEntry = entryOnDay(weightHistory, todayKey, checkInTz) as
       | (Entry & { weight: number })
       | undefined
 
-    const { skippedToday } = checkInFactsForToday(progress, todayKey, tz)
+    const { skippedToday } = checkInFactsForToday(progress, todayKey, checkInTz)
+
+    const lastShownAt = progress.checkIn?.lastShownAt ?? null
+    // lastShownAt is always a real instant (never a UTC-midnight marker), so
+    // this uses the plain instant->local-day mapping rather than isEntryOnDay's
+    // marker-or-instant OR — that OR would let a raw-UTC-calendar-day
+    // coincidence count as "shown today" even when the member's actual local
+    // clock was still on the previous check-in day.
+    const shownToday = lastShownAt ? dateKey(new Date(lastShownAt), checkInTz) === todayKey : false
 
     const decision = checkInDecision({
       moodLoggedToday: !!todaysMoodEntry,
       weightLoggedToday: !!todaysWeightEntry,
       skippedToday,
-      lastShownAt: progress.checkIn?.lastShownAt ?? null,
+      lastShownAt,
+      shownToday,
     })
 
     const newestWeight = weightHistory.length
@@ -107,8 +119,8 @@ export async function GET(request: NextRequest) {
       moodLoggedToday: !!todaysMoodEntry,
       weightLoggedToday: !!todaysWeightEntry,
       skippedToday,
-      daysSinceMood: daysSince(moodHistory, todayKey, tz),
-      daysSinceWeight: daysSince(weightHistory, todayKey, tz),
+      daysSinceMood: daysSince(moodHistory, todayKey, checkInTz),
+      daysSinceWeight: daysSince(weightHistory, todayKey, checkInTz),
       todaysMood: todaysMoodEntry?.mood ?? null,
       lastWeight: newestWeight?.weight ?? null,
     })
@@ -137,6 +149,11 @@ export async function POST(request: NextRequest) {
     const tz = readTzOffsetFromBody(body)
     const todayKey = localDateKey(null, tz)
     const today = utcMidnightDateKey(todayKey)
+    // checkIn.lastSkippedDate closes the check-in's OWN day (4am-rolling — see
+    // lib/checkin/todayFacts), not the calendar day used below for
+    // weightSkipTracking, which is a separate, untouched feature.
+    const checkInTodayKey = localDateKey(null, checkInTzOffset(tz))
+    const checkInToday = utcMidnightDateKey(checkInTodayKey)
 
     const progress =
       (await UserProgress.findOne({ userId: auth.userId })) ??
@@ -147,7 +164,7 @@ export async function POST(request: NextRequest) {
     if (action === 'shown') {
       progress.checkIn.lastShownAt = new Date()
     } else {
-      progress.checkIn.lastSkippedDate = today
+      progress.checkIn.lastSkippedDate = checkInToday
       progress.checkIn.lastShownAt = new Date()
 
       // Skipping is a per-DAY event. The old flow POSTed {skip:true} to

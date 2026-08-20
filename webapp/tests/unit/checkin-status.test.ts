@@ -23,6 +23,7 @@ test('both halves logged closes the check-in for the day', () => {
         weightLoggedToday: true,
         skippedToday: false,
         lastShownAt: hoursAgo(h),
+        shownToday: true,
       },
       NOW,
     )
@@ -39,6 +40,7 @@ test('weight without mood is NOT a complete check-in', () => {
       weightLoggedToday: true,
       skippedToday: false,
       lastShownAt: hoursAgo(9),
+      shownToday: true,
     },
     NOW,
   )
@@ -54,6 +56,7 @@ test('a partial check-in is throttled for exactly 8 hours, then may ask again', 
         weightLoggedToday: true,
         skippedToday: false,
         lastShownAt: hoursAgo(h),
+        shownToday: true,
       },
       NOW,
     )
@@ -74,6 +77,7 @@ test('"Skip for Today" means the whole day, not 8 hours', () => {
         weightLoggedToday: false,
         skippedToday: true,
         lastShownAt: hoursAgo(h),
+        shownToday: true,
       },
       NOW,
     )
@@ -89,6 +93,7 @@ test('a member who has done nothing today is due', () => {
       weightLoggedToday: false,
       skippedToday: false,
       lastShownAt: null,
+      shownToday: false,
     },
     NOW,
   )
@@ -106,6 +111,7 @@ test('a clock that moved backwards does not pin the prompt shut', () => {
       weightLoggedToday: false,
       skippedToday: false,
       lastShownAt: new Date(NOW.getTime() + 72 * 60 * 60 * 1000),
+      shownToday: true,
     },
     NOW,
   )
@@ -119,6 +125,7 @@ test('lastShownAt accepts the ISO strings that come back over JSON', () => {
       weightLoggedToday: false,
       skippedToday: false,
       lastShownAt: hoursAgo(1).toISOString(),
+      shownToday: true,
     },
     NOW,
   )
@@ -133,6 +140,7 @@ test('an unparseable lastShownAt fails open rather than hiding the check-in', ()
       weightLoggedToday: false,
       skippedToday: false,
       lastShownAt: 'not a date',
+      shownToday: true,
     },
     NOW,
   )
@@ -149,7 +157,13 @@ test('at most 3 prompts a day was the old behaviour; complete/skip now cap it at
   for (let h = 0; h < 24; h++) {
     const at = new Date(NOW.getTime() + h * 60 * 60 * 1000)
     const d = checkInDecision(
-      { moodLoggedToday: false, weightLoggedToday: false, skippedToday: h > 0 && skippedToday, lastShownAt },
+      {
+        moodLoggedToday: false,
+        weightLoggedToday: false,
+        skippedToday: h > 0 && skippedToday,
+        lastShownAt,
+        shownToday: !!lastShownAt,
+      },
       at,
     )
     if (d.due) {
@@ -158,4 +172,62 @@ test('at most 3 prompts a day was the old behaviour; complete/skip now cap it at
     }
   }
   assert.equal(prompts, 1, 'a member who skips should be asked once per day')
+})
+
+// ─── shownToday: the first ask of a new check-in day always fires ───────────
+//
+// George's report on 2026-08-19: he opened the app repeatedly all day and
+// never saw the check-in. Root cause — a partial check-in got "shown" near
+// the previous day's tail end, and the raw 8-hour countdown from that stamp
+// kept blocking the modal well after that day's checkin-day (4am-rolling —
+// see lib/checkin/todayFacts) had already rolled over. `shownToday` is how
+// the caller tells checkInDecision "that stamp belongs to a PRIOR day" so the
+// throttle cannot leak across the boundary.
+
+test('shownToday=false always fires, even if lastShownAt was minutes ago', () => {
+  // e.g. shown at 11:55pm yesterday, checked again at 12:05am today — 10
+  // minutes elapsed, well inside the old 8h window, but it is a new
+  // check-in day and this is the first ask of it.
+  const d = checkInDecision(
+    {
+      moodLoggedToday: false,
+      weightLoggedToday: false,
+      skippedToday: false,
+      lastShownAt: new Date(NOW.getTime() - 10 * 60 * 1000),
+      shownToday: false,
+    },
+    NOW,
+  )
+  assert.equal(d.due, true)
+  assert.equal(d.reason, 'due')
+})
+
+test('shownToday=true still applies the 8h partial-reask throttle within the same day', () => {
+  const d = checkInDecision(
+    {
+      moodLoggedToday: false,
+      weightLoggedToday: true,
+      skippedToday: false,
+      lastShownAt: hoursAgo(2),
+      shownToday: true,
+    },
+    NOW,
+  )
+  assert.equal(d.due, false)
+  assert.equal(d.reason, 'throttled')
+})
+
+test('a complete check-in still wins over shownToday=false (nothing left to ask)', () => {
+  const d = checkInDecision(
+    {
+      moodLoggedToday: true,
+      weightLoggedToday: true,
+      skippedToday: false,
+      lastShownAt: hoursAgo(1),
+      shownToday: false,
+    },
+    NOW,
+  )
+  assert.equal(d.due, false)
+  assert.equal(d.reason, 'complete')
 })
