@@ -259,6 +259,18 @@ export default defineConfig({
       },
     },
     {
+      name: 'meal-schedule-save-nav',
+      testMatch: '**/meal-schedule-save-nav.spec.ts',
+      timeout: 60_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'keyboard-inset',
       testMatch: '**/keyboard-inset.spec.ts',
       timeout: 120_000,
