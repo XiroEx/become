@@ -385,9 +385,18 @@ export default function MealSchedulePage() {
       </div>
 
       {/* Autosave status. Not a button: there is nothing to press, and a
-          disabled-looking Save would imply changes were still pending. */}
+          disabled-looking Save would imply changes were still pending.
+          `bottom` is inline (not the bottom-20 Tailwind class) so it clears
+          the floating BottomNav pill, which shifts up by
+          env(safe-area-inset-bottom) — a plain bottom-20 sits still and the
+          nav's home-indicator offset pushes it right through this pill on
+          notched phones. Matches the offset ProgramCreator/ExerciseForm use
+          for their own floating Save button above the same nav. */}
       {!loading && (
-        <div className="fixed inset-x-0 bottom-20 z-30 flex justify-center px-4">
+        <div
+          className="fixed inset-x-0 z-30 flex justify-center px-4"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5rem)' }}
+        >
           <span
             data-testid="save-status"
             className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900/90 px-3 py-1.5 text-[11px] font-semibold text-white shadow-lg backdrop-blur dark:bg-white/90 dark:text-black"
