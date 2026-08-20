@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X } from 'lucide-react'
+import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X, Scale } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
+import WeightLogSheet from '@/components/WeightLogSheet'
 import Link from 'next/link'
 import { getToken } from '@/lib/clientAuth'
 import type { FitnessGoal } from '@/models/User'
@@ -90,48 +91,6 @@ function VolumeTooltip({ active, payload, label }: { active?: boolean; payload?:
       }
       <p className="text-zinc-500 dark:text-zinc-400">{d.workouts} {d.workouts === 1 ? 'workout' : 'workouts'}</p>
     </div>
-  )
-}
-
-// ── Weight Log Form ────────────────────────────────────────────────────────────
-
-function LogWeightForm({ onLogged }: { onLogged: (w: number) => void }) {
-  const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    const w = parseFloat(value)
-    if (!w || w <= 0) return
-    setSaving(true)
-    try {
-      const token = getToken()
-      const res = await fetch('/api/weight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ weight: w, tz: new Date().getTimezoneOffset() }),
-      })
-      if (res.ok) { setSaved(true); setValue(''); onLogged(w); setTimeout(() => setSaved(false), 3000) }
-    } finally { setSaving(false) }
-  }
-
-  if (saved) return <p className="text-sm font-medium text-green-600 dark:text-green-400">Weight logged ✓</p>
-
-  return (
-    <form onSubmit={submit} className="flex gap-2">
-      <input
-        type="number" inputMode="decimal" step="0.1" min="50" max="700"
-        placeholder="lbs" value={value} onChange={(e) => setValue(e.target.value)}
-        className="w-28 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-      />
-      <button
-        type="submit" disabled={saving || !value}
-        className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-40 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
-      >
-        {saving ? '…' : 'Log'}
-      </button>
-    </form>
   )
 }
 
@@ -431,6 +390,7 @@ export default function ProgressClient() {
   const [selectedPR, setSelectedPR] = useState<string | null>(null)
   const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE)
   const [pbsShown, setPbsShown] = useState(PRS_PAGE)
+  const [weightSheetOpen, setWeightSheetOpen] = useState(false)
 
   const fetchData = useCallback(async () => {
     const token = getToken()
@@ -703,13 +663,27 @@ export default function ProgressClient() {
               </AreaChart>
             </ResponsiveContainer>
             <div className="mt-2 px-2">
-              <LogWeightForm onLogged={handleWeightLogged} />
+              <button
+                type="button"
+                onClick={() => setWeightSheetOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                <Scale className="h-4 w-4" />
+                Log Weight
+              </button>
             </div>
           </div>
         ) : (
           <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
             <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">No weight logged yet</p>
-            <LogWeightForm onLogged={handleWeightLogged} />
+            <button
+              type="button"
+              onClick={() => setWeightSheetOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            >
+              <Scale className="h-4 w-4" />
+              Log Weight
+            </button>
           </div>
         )}
       </div>
@@ -742,6 +716,14 @@ export default function ProgressClient() {
           />
         )}
       </AnimatePresence>
+
+      <WeightLogSheet
+        isOpen={weightSheetOpen}
+        onClose={() => setWeightSheetOpen(false)}
+        onLogged={handleWeightLogged}
+        lastWeight={data?.weightData?.length ? data.weightData[data.weightData.length - 1].value : undefined}
+        targetWeight={data?.targetWeightLbs}
+      />
     </>
   )
 }
