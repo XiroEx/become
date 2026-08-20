@@ -129,4 +129,9 @@ export const GOAL_NUDGE_END_HOUR = 20
 export const GOAL_NUDGE_KEY_COOLDOWN_DAYS = 3
 export const REENGAGEMENT_START_HOUR = 12
 export const REENGAGEMENT_END_HOUR = 18
+/** Daily check-in (mood + weight) push. Early afternoon only — never at night,
+ *  which is what the in-app modal alone could not guarantee since it only
+ *  fires whenever a member happens to open the app. */
+export const CHECK_IN_REMINDER_START_HOUR = 12
+export const CHECK_IN_REMINDER_END_HOUR = 16
 export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'
