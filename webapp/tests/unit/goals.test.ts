@@ -126,6 +126,15 @@ test('nutrition suggestion order: target → achieved → protein → logging �
   assert.equal(s.key, 'nutrition.behind'); assert.match(s.title, /Behind pace by 2\.2 lbs/)
 })
 
+test('nutrition suggestion congratulates the instant pace crosses into the finish band, not just once officially achieved', () => {
+  const done = { status: 'done' as const, expectedKg: 205 * LB, aheadByKg: 0, behindByKg: 0, etaWeeks: 0, remainingKg: 0 }
+  const s = suggestNutrition({ hasTarget: true, direction: 'lose', pace: done, adherence: null, unit: 'lbs', achieved: false })
+  assert.equal(s.key, 'nutrition.reached')
+  assert.equal(s.severity, 'good')
+  // Not the flat "On pace" fallback a member hitting their number used to see.
+  assert.notEqual(s.key, 'nutrition.on-pace')
+})
+
 test('training suggestion: tight week, lost week, near lift, consistency', () => {
   assert.equal(suggestTraining({ target: 5, thisWeek: 3, remainingThisWeek: 2, chancesLeft: 2, weekLost: false, avgLast4: 4, lifts: [] }).key, 'training.week-tight')
   assert.equal(suggestTraining({ target: 5, thisWeek: 1, remainingThisWeek: 4, chancesLeft: 1, weekLost: true, avgLast4: 4, lifts: [] }).key, 'training.week-lost')

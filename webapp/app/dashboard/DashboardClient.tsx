@@ -9,6 +9,8 @@ import { useTutorialMaybe } from '@redbtn/redtutorial'
 import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
+import GoalAchievedModal from '@/components/GoalAchievedModal'
+import type { GoalReached } from '@/lib/goals/reached'
 import ProgramNudgeModal, {
   NUDGE_KEY,
   type NudgeState,
@@ -95,6 +97,7 @@ export default function DashboardClient() {
     nextMilestone: number | null
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
+  const [goalCelebration, setGoalCelebration] = useState<GoalReached | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
   // No invented default. Until the profile answers, "This Week" shows the count
   // alone rather than a fraction against a target nobody set.
@@ -458,7 +461,7 @@ export default function DashboardClient() {
     }
   }, [checkInDue, tutorialBusy, showNudge, nudgeDue])
 
-  const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
+  const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number; goalReached?: GoalReached }) => {
     setShowCheckInModal(false)
     setCheckInDue(false)
 
@@ -480,6 +483,22 @@ export default function DashboardClient() {
         ...prev,
         weightData: [...prev.weightData, { date: todayFormatted, value: checkInData.weight! }]
       }))
+    }
+
+    if (checkInData.goalReached) {
+      setGoalCelebration(checkInData.goalReached)
+      // goalProgress otherwise stays the pre-check-in read until the next full
+      // load — the Becoming door and dashboard tile that just changed under a
+      // goal reached today would still show yesterday's "3 lbs to go" until a
+      // navigate-away-and-back forced a refetch. Refresh it now so the rest of
+      // the dashboard agrees with the modal that just opened.
+      const token = localStorage.getItem('token')
+      if (token) {
+        fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(res => (res.ok ? res.json() : null))
+          .then(g => { if (g) setGoalProgress(g) })
+          .catch(() => {})
+      }
     }
   }
 
@@ -591,6 +610,11 @@ export default function DashboardClient() {
         milestone={milestoneCelebration}
         streakDays={streakData?.streakDays ?? data.stats.streakDays}
         onClose={() => setMilestoneCelebration(null)}
+      />
+
+      <GoalAchievedModal
+        reached={goalCelebration}
+        onClose={() => setGoalCelebration(null)}
       />
 
       <ProgramNudgeModal
