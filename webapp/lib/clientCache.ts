@@ -18,7 +18,11 @@
  * entries (written under a prior version prefix) become unreadable and are
  * simply treated as a cache miss.
  */
-export const CACHE_VERSION = 'v1'
+// v2: the streaks payload gained the super-streak freeze. A v1 entry has no
+// `freeze` at all, and a page that read it crashed on the missing field —
+// bumping the version is what this mechanism is for, and it drops every stale
+// entry app-wide instead of one page's worth.
+export const CACHE_VERSION = 'v2'
 
 /** Namespace prefix so our keys never collide with other localStorage usage. */
 const KEY_PREFIX = `become.cache.${CACHE_VERSION}.`

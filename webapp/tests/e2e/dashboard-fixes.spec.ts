@@ -105,6 +105,27 @@ test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
   if (superDays >= 3) {
     expect(streakText).toMatch(/Super Streak/)
     expect(await page.locator('[data-testid="streak-super-value"]').innerText()).toBe(String(superDays))
+
+    // The fire has to be alight the moment the app opens. It is CSS, not JS,
+    // precisely so it does not wait for hydration — people on a cold start were
+    // seeing a photograph of a fire. Assert the browser is RUNNING the
+    // keyframes, and that a flame is in a different place a moment later.
+    const fire = await page.evaluate(() => {
+      const host = document.querySelector('[data-testid="fire-number"]')
+      const lick = host?.querySelector('.fire-lick')
+      const digits = host?.querySelector('.fire-digits')
+      const l = lick ? getComputedStyle(lick) : null
+      const d = digits ? getComputedStyle(digits) : null
+      return { flames: host?.querySelectorAll('.fire-lick').length ?? 0, name: l?.animationName, state: l?.animationPlayState, digits: d?.animationName }
+    })
+    console.log('FIRE:', JSON.stringify(fire))
+    expect(fire.flames, 'the number has flames').toBeGreaterThan(2)
+    expect(fire.name, 'the flames run a CSS animation').toBe('fire-lick')
+    expect(fire.state).toBe('running')
+    expect(fire.digits, 'the fire travels through the digits').toBe('fire-through')
+    const flameY = async () => (await page.locator('.fire-lick').first().boundingBox())?.y ?? 0
+    const y1 = await flameY(); await page.waitForTimeout(320); const y2 = await flameY()
+    expect(Math.abs(y2 - y1), 'the flame actually moves').toBeGreaterThan(0.5)
   } else if (streakDays < 3) {
     expect(streakText).toMatch(/Building/); expect(streakText).toMatch(new RegExp(`${streakDays}\\/3`))
   } else {
