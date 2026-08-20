@@ -24,7 +24,6 @@ import {
   utcMidnightDateKey,
   isEntryOnDay,
   daysSinceEntry,
-  dateKey,
 } from '@/lib/dayWindow'
 import { checkInDecision } from '@/lib/checkin/status'
 import { checkInFactsForToday, checkInTzOffset } from '@/lib/checkin/todayFacts'
@@ -93,19 +92,12 @@ export async function GET(request: NextRequest) {
     const { skippedToday } = checkInFactsForToday(progress, todayKey, checkInTz)
 
     const lastShownAt = progress.checkIn?.lastShownAt ?? null
-    // lastShownAt is always a real instant (never a UTC-midnight marker), so
-    // this uses the plain instant->local-day mapping rather than isEntryOnDay's
-    // marker-or-instant OR — that OR would let a raw-UTC-calendar-day
-    // coincidence count as "shown today" even when the member's actual local
-    // clock was still on the previous check-in day.
-    const shownToday = lastShownAt ? dateKey(new Date(lastShownAt), checkInTz) === todayKey : false
 
     const decision = checkInDecision({
       moodLoggedToday: !!todaysMoodEntry,
       weightLoggedToday: !!todaysWeightEntry,
       skippedToday,
       lastShownAt,
-      shownToday,
     })
 
     const newestWeight = weightHistory.length
