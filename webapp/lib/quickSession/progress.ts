@@ -13,6 +13,8 @@ export interface QuickSetProgress {
   weight?: string
   duration?: string
   distance?: string
+  /** mph — cardio work is a speed, not a load. */
+  speed?: string
   completed: boolean
 }
 export interface QuickExerciseProgress {

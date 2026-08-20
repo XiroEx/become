@@ -69,6 +69,10 @@ export async function GET(request: NextRequest) {
             reps: s.reps ?? null,
             weight: s.weight ?? null,
             duration: s.duration ?? null,
+            // Cardio is a distance and a speed, not a load. Leaving these out
+            // meant a resumed treadmill session came back without them.
+            distance: s.distance ?? null,
+            speed: s.speed ?? null,
             completed: !!s.completed,
           })),
           // Grouping and the prescription come back too: this is what
