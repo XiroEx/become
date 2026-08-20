@@ -120,7 +120,10 @@ export function streakPages(s: StreaksLite | null): StreakPage[] {
       label: 'Workout', fullLabel: 'Workout streak',
       value: String(w.current),
       unit: w.current === 1 ? 'day' : 'days',
-      footer: `This week ${w.thisWeek}/${w.target}${w.weekLost ? ' · off track' : ''}`,
+      // Name the unit here on purpose: the headline number is days on track,
+      // not workouts done, and this is the one line on the compact tile that
+      // says so without a tap through to the Streaks page.
+      footer: `${w.thisWeek}/${w.target} workouts this week${w.weekLost ? ' · off track' : ''}`,
       pct: w.target ? Math.min(100, Math.round((w.thisWeek / w.target) * 100)) : 100,
       doneToday: !w.weekLost,
       emphasis: false,
