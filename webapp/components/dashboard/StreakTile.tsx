@@ -100,14 +100,6 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
       onPointerCancel={() => { drag.current = null }}
       onClick={(e: React.MouseEvent) => { if (drag.current?.moved) { e.preventDefault(); e.stopPropagation() } }}
     >
-      {/* Ember glow behind a super streak — the tile itself catches light. */}
-      {p.emphasis && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-6 -left-4 h-24 w-24 rounded-full bg-orange-400/40 blur-2xl dark:bg-orange-500/25"
-        />
-      )}
-
       <AnimatePresence mode="wait" initial={false} custom={dir}>
         <motion.div
           key={p.id}
@@ -122,15 +114,8 @@ export default function StreakTile({ streaks, size = '1x1', loading }: { streaks
             <span
               className={`relative flex shrink-0 items-center justify-center rounded-full ${wide ? 'h-11 w-11' : 'h-9 w-9'} ${INK[p.id].badge} ${p.doneToday || p.emphasis ? '' : 'opacity-60'}`}
             >
-              {/* A steady warm ring. The icon used to pulse, which read as
-                  "loading" and stole attention from the number that is on fire. */}
-              {p.emphasis && (
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0 rounded-full"
-                  style={{ boxShadow: '0 0 10px 1px rgba(234,88,12,0.35)' }}
-                />
-              )}
+              {/* No glow on the badge either: the number is the only thing
+                  burning, and a halo here read as a smudge on a white card. */}
               <Icon className={`relative ${wide ? 'h-5 w-5' : 'h-4 w-4'}`} />
             </span>
 

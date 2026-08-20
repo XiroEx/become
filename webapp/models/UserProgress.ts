@@ -146,6 +146,11 @@ export interface IUserProgress {
   }
   streakDays: number
   longestStreak: number
+  /**
+   * Local day keys covered by a super-streak freeze. One freeze at a time,
+   * earned back a month after it is spent (see lib/streaks/freeze).
+   */
+  superFreezeDays?: string[]
   lastActivityDate?: Date
   streakFreezes: number
   milestonesReached: number[]
@@ -412,6 +417,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     currentWeek: Number
   },
   streakDays: { type: Number, default: 0 },
+  superFreezeDays: { type: [String], default: [] },
   longestStreak: { type: Number, default: 0 },
   lastActivityDate: { type: Date },
   streakFreezes: { type: Number, default: 1 },
