@@ -1,5 +1,6 @@
 "use client"
 
+import type { KeyboardEvent } from 'react'
 import { motion } from 'framer-motion'
 import {
   macroStatus,
@@ -8,6 +9,8 @@ import {
   macroChipClass,
   type MacroKind,
 } from '@/lib/nutrition/macroStatus'
+import { usePlannedTooltip } from '@/hooks/usePlannedTooltip'
+import PlannedTooltip from './PlannedTooltip'
 
 interface MacroBarProps {
   label: string
@@ -58,6 +61,12 @@ export default function MacroBar({ label, current, goal, color, unit = 'g', kind
   const showFiber = fiber != null && fiber > 0 && current > 0
   const fiberShareOfFill = showFiber ? Math.min(fiber / current, 1) * 100 : 0
 
+  // Only when the shadow itself is visible is there anything to explain —
+  // otherwise there's no planned-inclusive number that differs from what's
+  // already on the label.
+  const hasPlanned = plannedPercentage > percentage
+  const { open, containerRef, show, hide } = usePlannedTooltip()
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
@@ -82,39 +91,64 @@ export default function MacroBar({ label, current, goal, color, unit = 'g', kind
           ) : null}
         </div>
       </div>
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-        {plannedPercentage > percentage && (
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${plannedPercentage}%` }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            // Sits under the actual fill, at low opacity — a preview of the
-            // reach if today's remaining plan gets eaten, not a competing bar.
-            // `color` is the macro's own Tailwind bg-* class (not a CSS
-            // colour), so opacity is applied as a class too.
-            className={`absolute inset-y-0 left-0 h-full rounded-full opacity-25 ${color}`}
-            aria-hidden="true"
-          />
-        )}
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-          className={`absolute inset-y-0 left-0 h-full rounded-full ${macroBarClass(status, color)}`}
-        >
-          {showFiber && (
+      <div
+        ref={containerRef}
+        className="relative"
+        {...(hasPlanned
+          ? {
+              role: 'button' as const,
+              tabIndex: 0,
+              'aria-label': `${label} including today's plan: ${Math.round(current + (plannedExtra ?? 0))}${unit} of ${Math.round(goal)}${unit}`,
+              'aria-expanded': open,
+              // Hover/focus is the sole trigger — a click is preceded by its
+              // own mouseenter (real on desktop, synthesized after touchend
+              // on mobile), so a click handler here would toggle the tooltip
+              // straight back shut the instant hover had just opened it.
+              onMouseEnter: show,
+              onMouseLeave: hide,
+              onFocus: show,
+              onBlur: hide,
+              onKeyDown: (e: KeyboardEvent) => {
+                if (e.key === 'Escape') hide()
+              },
+            }
+          : {})}
+      >
+        <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+          {plannedPercentage > percentage && (
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${fiberShareOfFill}%` }}
+              animate={{ width: `${plannedPercentage}%` }}
               transition={{ duration: 0.8, ease: 'easeOut' }}
-              // Sits at the left of the fill, deliberately a muted wash of the
-              // same bar rather than a second colour: it is part of the carbs,
-              // not a competing quantity.
-              className="h-full rounded-full bg-white/35 dark:bg-white/25"
+              // Sits under the actual fill, at low opacity — a preview of the
+              // reach if today's remaining plan gets eaten, not a competing bar.
+              // `color` is the macro's own Tailwind bg-* class (not a CSS
+              // colour), so opacity is applied as a class too.
+              className={`absolute inset-y-0 left-0 h-full rounded-full opacity-25 ${color}`}
               aria-hidden="true"
             />
           )}
-        </motion.div>
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${percentage}%` }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className={`absolute inset-y-0 left-0 h-full rounded-full ${macroBarClass(status, color)}`}
+          >
+            {showFiber && (
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${fiberShareOfFill}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+                // Sits at the left of the fill, deliberately a muted wash of the
+                // same bar rather than a second colour: it is part of the carbs,
+                // not a competing quantity.
+                className="h-full rounded-full bg-white/35 dark:bg-white/25"
+                aria-hidden="true"
+              />
+            )}
+          </motion.div>
+        </div>
+        <PlannedTooltip open={hasPlanned && open} label={label} current={current} planned={plannedExtra ?? 0} goal={goal} unit={unit} />
       </div>
     </div>
   )
