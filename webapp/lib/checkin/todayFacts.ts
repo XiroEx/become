@@ -14,12 +14,10 @@ import { isEntryOnDay } from '@/lib/dayWindow'
  *
  * A member who opens the app at 1am is finishing YESTERDAY's check-in, not
  * starting today's; the day only rolls over once they're plausibly awake. This
- * came from a real report: a member who opened the app repeatedly all day
- * Wednesday never saw the check-in at all, because it had been marked "shown"
- * (partially filled, never completed) shortly before midnight Tuesday, and the
- * 8-hour partial-reask throttle carried that stamp across the midnight
- * boundary into Wednesday morning. See lib/checkin/status.ts for how
- * `shownToday` (computed from this boundary) overrides that throttle.
+ * boundary governs "complete for today" and "skipped for today" — the 8-hour
+ * partial-reask throttle in lib/checkin/status.ts is deliberately independent
+ * of it and runs purely off `lastShownAt`, so the two rules can't fight over
+ * whether a stamp made shortly before 4am counts as "the same day".
  */
 export const CHECK_IN_DAY_START_HOUR = 4
 
