@@ -3,9 +3,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
-import { ArrowLeft, Save, Calculator } from 'lucide-react'
-import { Card } from '@/components/ui'
+import { ArrowLeft, Save, Calculator, Scale } from 'lucide-react'
+import {
+  AreaChart, Area, CartesianGrid, ReferenceLine,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts'
+import { Card, SegmentedControl } from '@/components/ui'
 import PlanCard from '@/components/goals/PlanCard'
+import WeightLogSheet from '@/components/WeightLogSheet'
 import {
   ACTIVITY_LABELS,
   DIRECTION_ADJUSTMENT,
@@ -20,7 +25,7 @@ import {
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
 import type { FitnessGoal } from '@/lib/programMatch'
-import { toKg, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
+import { toKg, kgToLbs, roundWeight, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
 
 /** Same three values as the NutritionGoal schema enum. */
 type GoalType = NutritionDirection
@@ -40,6 +45,7 @@ interface ProgressData {
   bmiData: { date: string; value: number }[]
   currentProgram: { name: string } | null
   stats: { streakDays: number }
+  goal?: { targetWeightKg: number | null }
 }
 
 /** Labels and adjustments come from lib/nutrition/tdee so this page and the
@@ -106,6 +112,14 @@ export default function NutritionGoalsPage() {
   const [manualHeightFt, setManualHeightFt] = useState('')
   const [manualHeightIn, setManualHeightIn] = useState('')
   const [tdee, setTdee] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState<'goals' | 'weight'>('goals')
+  const [weightSheetOpen, setWeightSheetOpen] = useState(false)
+  /** Full logged history — only needed for the Weight tab's chart. */
+  const [weightSeries, setWeightSeries] = useState<{ date: string; value: number }[]>([])
+  const [targetWeightKg, setTargetWeightKg] = useState<number | null>(null)
+  // Bumped after logging weight so PlanCard (which owns its own fetch) remounts
+  // and re-reads /api/goals instead of showing the pre-log current weight.
+  const [planRefreshKey, setPlanRefreshKey] = useState(0)
 
   /** Profile values with the manual fallbacks folded in. */
   const effectiveStats = useMemo(() => {
@@ -139,11 +153,11 @@ export default function NutritionGoalsPage() {
    * 'recommended' defers to the shared computeNutritionTargets(); the
    * percentage presets keep their historical behaviour.
    */
-  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel) => {
+  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel, statsOverride?: typeof effectiveStats) => {
     if (preset === 'custom') return
 
     const targets = computeNutritionTargets({
-      ...effectiveStats,
+      ...(statsOverride ?? effectiveStats),
       goals: userFitnessGoals,
       direction: goalType,
       activityLevel: activity,
@@ -198,6 +212,8 @@ export default function NutritionGoalsPage() {
             const latestWeight = progressData.weightData[progressData.weightData.length - 1].value
             setUserWeight(latestWeight)
           }
+          setWeightSeries(progressData.weightData ?? [])
+          if (progressData.goal?.targetWeightKg) setTargetWeightKg(progressData.goal.targetWeightKg)
         }
 
         if (profileRes.ok) {
@@ -236,15 +252,18 @@ export default function NutritionGoalsPage() {
   }, [effectiveStats, goals.activityLevel])
 
   /** Single path for "recompute calories + macros" so goal, activity and
-   *  preset changes can never diverge from each other. */
-  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel) => {
-    if (!tdee) return
-    const adjustedCals = applyGoalAdjustment(tdee, goalType)
+   *  preset changes can never diverge from each other. Accepts an explicit
+   *  tdee/stats pair for callers (like a fresh weigh-in) that need the
+   *  recompute to use a value that hasn't round-tripped through state yet. */
+  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel, tdeeOverride?: number, statsOverride?: typeof effectiveStats) => {
+    const effectiveTdee = tdeeOverride ?? tdee
+    if (!effectiveTdee) return
+    const adjustedCals = applyGoalAdjustment(effectiveTdee, goalType)
     if (preset === 'custom') {
       setGoals(prev => ({ ...prev, calories: adjustedCals }))
       return
     }
-    applyMacroPreset(preset, adjustedCals, goalType, activity)
+    applyMacroPreset(preset, adjustedCals, goalType, activity, statsOverride)
   }, [tdee, applyGoalAdjustment, applyMacroPreset])
 
   // Auto-apply TDEE on first load if user has never saved goals
@@ -274,6 +293,29 @@ export default function NutritionGoalsPage() {
     if (preset !== 'custom') {
       applyMacroPreset(preset, goals.calories, goals.goalType, goals.activityLevel)
     }
+  }
+
+  /** Logging a weigh-in from the Weight tab has to move every number that
+   *  reads off body weight: the chart point, the TDEE estimate, and — since
+   *  TDEE feeds calories/macros — the daily targets too. effectiveStats/tdee
+   *  are last-render values, so build the post-log stats inline instead of
+   *  setting state and hoping a later render catches up before the member
+   *  looks at the Goals tab. */
+  const handleWeightLogged = (weight: number) => {
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    setWeightSeries(prev => {
+      const filtered = prev.filter(d => d.date !== today)
+      return [...filtered, { date: today, value: weight }]
+    })
+    const kg = toKg(weight, weightUnit)
+    setUserWeight(weight)
+    setProfileWeightKg(kg)
+    setPlanRefreshKey(k => k + 1)
+
+    const nextStats = { ...effectiveStats, currentWeightKg: kg }
+    const nextTdee = calcTdee(nextStats, goals.activityLevel)
+    setTdee(nextTdee)
+    applyTargets(macroPreset, goals.goalType, goals.activityLevel, nextTdee ?? undefined, nextStats)
   }
 
   const getMacroPercentages = () => {
@@ -336,7 +378,10 @@ export default function NutritionGoalsPage() {
     )
   }
 
+  const targetWeightLbs = targetWeightKg ? roundWeight(kgToLbs(targetWeightKg)) : null
+
   return (
+    <>
     <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 flex items-center gap-3 sm:mb-6">
@@ -352,10 +397,105 @@ export default function NutritionGoalsPage() {
         </div>
       </div>
 
-      {/* User Stats */}
-      {/* The weight goal as a plan: target, pace, ETA, on/behind pace. */}
-      <PlanCard className="mb-4 sm:mb-6" />
+      <SegmentedControl
+        className="mb-4 sm:mb-6"
+        segments={[
+          { value: 'goals', label: 'Goals' },
+          { value: 'weight', label: 'Weight' },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
+      {/* The weight goal as a plan: target, pace, ETA, on/behind pace. Shown
+          on both tabs — it's the at-a-glance status either way. Remounted
+          (via key) after a weigh-in so it re-reads /api/goals instead of
+          showing the pre-log current weight. */}
+      <PlanCard key={planRefreshKey} className="mb-4 sm:mb-6" />
+
+      {activeTab === 'weight' ? (
+        <Card className="mb-4 sm:mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Body Weight</h2>
+            {targetWeightLbs && (
+              <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                Goal: {targetWeightLbs} lbs
+              </span>
+            )}
+          </div>
+
+          {weightSeries.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={weightSeries} margin={{ left: -20, right: 8 }}>
+                  <defs>
+                    <linearGradient id="goalsWeightGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#18181b" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#18181b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
+                    tickLine={false} axisLine={false}
+                    interval="preserveStartEnd"
+                    className="text-zinc-400 dark:text-zinc-600"
+                  />
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
+                    tickLine={false} axisLine={false}
+                    className="text-zinc-400 dark:text-zinc-600"
+                  />
+                  <Tooltip
+                    formatter={(v) => [`${v} lbs`, 'Weight']}
+                    contentStyle={{ fontSize: 12, borderRadius: 12 }}
+                  />
+                  {targetWeightLbs && (
+                    <ReferenceLine
+                      y={targetWeightLbs}
+                      stroke="#22c55e"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{ value: `Goal ${targetWeightLbs}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                    />
+                  )}
+                  <Area
+                    type="monotone" dataKey="value"
+                    stroke="#18181b" strokeWidth={2}
+                    fill="url(#goalsWeightGrad)"
+                    dot={false} activeDot={{ r: 4 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setWeightSheetOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                >
+                  <Scale className="h-4 w-4" />
+                  Log Weight
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">No weight logged yet</p>
+              <button
+                type="button"
+                onClick={() => setWeightSheetOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                <Scale className="h-4 w-4" />
+                Log Weight
+              </button>
+            </div>
+          )}
+        </Card>
+      ) : (
+      <>
       <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
         <div className="flex flex-wrap gap-6">
@@ -644,6 +784,17 @@ export default function NutritionGoalsPage() {
           {saveMessage}
         </p>
       )}
+      </>
+      )}
     </PageTransition>
+
+    <WeightLogSheet
+      isOpen={weightSheetOpen}
+      onClose={() => setWeightSheetOpen(false)}
+      onLogged={handleWeightLogged}
+      lastWeight={weightSeries.length ? weightSeries[weightSeries.length - 1].value : undefined}
+      targetWeight={targetWeightLbs ?? undefined}
+    />
+    </>
   )
 }

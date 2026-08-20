@@ -97,6 +97,9 @@ export interface DashboardTileContext {
   todaysMood: MoodLevel | null
   isMoodUpdating: boolean
   onMoodChange: (mood: MoodLevel) => void
+  /** Opens the Log Weight bottom sheet in place — the Weight tile logs here
+   *  instead of navigating to Progress. */
+  onOpenWeightSheet: () => void
   /**
    * True while the backing data for stat tiles is still loading for the first
    * time (no value has arrived yet and there's no cached value to show). When
@@ -423,7 +426,7 @@ function renderWeight(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
     return (
       <StatTile
         size={size}
-        href="/dashboard/progress"
+        onClick={ctx.onOpenWeightSheet}
         accent="zinc"
         icon={weightIcon}
         label="Weight"
@@ -461,7 +464,7 @@ function renderWeight(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress"
+      onClick={ctx.onOpenWeightSheet}
       accent="zinc"
       icon={weightIcon}
       label="Weight"
