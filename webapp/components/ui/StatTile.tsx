@@ -35,8 +35,11 @@ export type StatTileProps = {
   label: string;
   value: React.ReactNode;
   accent?: StatTileAccent;
-  /** When provided, renders the tile as a `next/link`. */
+  /** When provided, renders the tile as a `next/link`. Ignored if `onClick` is also set. */
   href?: string;
+  /** When provided (and `href` is not), renders the tile as a button — for
+   *  tiles that open a modal/sheet in place instead of navigating. */
+  onClick?: () => void;
   /** Optional footer rendered below the icon row (e.g. progress bar). */
   footer?: React.ReactNode;
   /** Optional inline supplemental info (e.g. ❄ freeze count after the label). */
@@ -70,6 +73,7 @@ export function StatTile({
   value,
   accent = "zinc",
   href,
+  onClick,
   footer,
   labelExtra,
   size = "1x1",
@@ -137,6 +141,23 @@ export function StatTile({
         variant="compact"
         className={cn(
           "block h-full transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
+          className,
+        )}
+      >
+        {body}
+      </Card>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <Card
+        as="button"
+        type="button"
+        onClick={onClick}
+        variant="compact"
+        className={cn(
+          "block h-full w-full text-left transition-colors hover:border-zinc-300 dark:hover:border-zinc-700",
           className,
         )}
       >

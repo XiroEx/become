@@ -8,6 +8,7 @@ import ProgressChart from '@/components/ProgressChart'
 import { useTutorialMaybe } from '@redbtn/redtutorial'
 import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
+import WeightLogSheet from '@/components/WeightLogSheet'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import GoalAchievedModal from '@/components/GoalAchievedModal'
 import type { GoalReached } from '@/lib/goals/reached'
@@ -118,6 +119,8 @@ export default function DashboardClient() {
     () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
   )
   const [showCustomize, setShowCustomize] = useState(false)
+  // The Weight tile opens this in place instead of navigating to Progress.
+  const [weightSheetOpen, setWeightSheetOpen] = useState(false)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -558,6 +561,17 @@ export default function DashboardClient() {
     }
   }, [])
 
+  // Weight tile logs here — same pattern as the daily check-in's weight
+  // update (handleCheckInClose above): patch today's point into the chart
+  // data rather than waiting on a full refetch.
+  const handleWeightLogged = useCallback((weight: number) => {
+    const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    setData(prev => {
+      const filtered = prev.weightData.filter(d => d.date !== todayFormatted)
+      return { ...prev, weightData: [...filtered, { date: todayFormatted, value: weight }] }
+    })
+  }, [])
+
   // Build the context object passed to each tile's render fn. Memoized so
   // tiles don't re-render on unrelated state changes.
   const tileCtx = useMemo<DashboardTileContext>(() => ({
@@ -578,6 +592,7 @@ export default function DashboardClient() {
     todaysMood,
     isMoodUpdating,
     onMoodChange: handleMoodCardChange,
+    onOpenWeightSheet: () => setWeightSheetOpen(true),
     // Stat tiles render a shimmer instead of zeros/dashes while the first
     // progress load is in flight. A cache hit clears `loading` synchronously on
     // mount, so reopens never show the skeleton.
@@ -622,7 +637,15 @@ export default function DashboardClient() {
         fitnessGoal={fitnessGoal ?? null}
         onExplore={handleNudgeDismiss}
       />
-      
+
+      <WeightLogSheet
+        isOpen={weightSheetOpen}
+        onClose={() => setWeightSheetOpen(false)}
+        onLogged={handleWeightLogged}
+        lastWeight={data.weightData.length ? data.weightData[data.weightData.length - 1].value : undefined}
+        targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+      />
+
       <PageTransition className="space-y-4 sm:space-y-6">
       {/* Header */}
       <header className="mb-2 sm:mb-4">
