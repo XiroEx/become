@@ -28,6 +28,7 @@ import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 import { invalidateMindSession } from '@/lib/mind/sessionCache'
 import { buildDayOccurrences } from '@/lib/nutrition/dayOrder'
+import { findLogForTag as findLogForTagPure } from '@/lib/nutrition/logTagMatch'
 import { createMealTag } from '@/hooks/useMealSchedule'
 import { defaultTagAt, minutesOfDay, sortMinutesForTag, type TagWindow } from '@/lib/nutrition/mealSchedule'
 import { nutritionGoalLine, type Direction as GoalDirection, type PaceStatus } from '@/lib/nutrition/goalLine'
@@ -505,21 +506,12 @@ function NutritionPageInner() {
 
   const showErrorToast = (msg: string) => showToast(msg, 'error')
 
-  // Find an existing MealLog today whose primary tag === tag.
-  // "Primary tag" = first matching default tag in the log's tags array, else the
-  // first tag, else "snack".
-  const findLogForTag = useCallback((tag: string): MealLogLite | undefined => {
-    const norm = tag.toLowerCase()
-    return logs.find(log => {
-      const tags = (log.tags || []).map(t => String(t).toLowerCase())
-      if (tags.length === 0) return norm === 'snack'
-      // If the chosen tag is in the log's tags, count it as a candidate.
-      if (!tags.includes(norm)) return false
-      // Determine the log's primary tag.
-      const primary = tags.find(t => DEFAULT_TAGS.includes(t)) ?? tags[0]
-      return primary === norm
-    })
-  }, [logs])
+  // Find an existing "loose" MealLog today whose primary tag === tag, skipping
+  // named Meal-template logs (see lib/nutrition/logTagMatch).
+  const findLogForTag = useCallback(
+    (tag: string): MealLogLite | undefined => findLogForTagPure(logs, tag, DEFAULT_TAGS),
+    [logs],
+  )
 
   /**
    * Fold items already logged today into one grouped entry, optionally keeping
