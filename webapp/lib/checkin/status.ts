@@ -23,14 +23,20 @@
  * more later for the other.
  *
  * A fourth complaint surfaced after that: a member who opened the app many
- * times across a day never saw the check-in at all. The eight-hour window was
- * counted in raw elapsed hours, with no idea where the calendar day started —
- * so a partial check-in shown late one day (say 11pm) could hold the throttle
- * open past midnight into the next morning, and every brief re-open re-stamped
- * `lastShownAt`, restarting the eight hours and pushing the lockout further
- * into the new day. `shownToday` (see CheckInFacts) fixes this: the FIRST ask
- * on a given check-in day always fires regardless of the eight-hour math: the
- * throttle can only suppress a SECOND ask on the same day.
+ * times across a day never saw the check-in at all. A day-boundary override
+ * ("the first ask of a new check-in day always fires, even under 8h since the
+ * last one") shipped to fix it — but that traded one bug for another: a
+ * partial check-in stamped shortly before the check-in day's 4am rollover
+ * could then re-fire minutes later once the new day started, which is exactly
+ * the "getting it at night" complaint in a different shape. The rule is
+ * simpler and correct without the override: `lastShownAt` alone gates the
+ * eight-hour throttle, full stop, with no day-boundary exception. Since eight
+ * hours is under a third of a day, a member who has the app installed and
+ * opens it at least once during a normal waking day will still clear the
+ * throttle well before the day is out — the "never saw it all day" case does
+ * not require special-casing the day boundary, only that `lastShownAt` is
+ * stamped exclusively when the modal is actually shown (see the POST handler
+ * in app/api/checkin/route.ts), never on a mere status check.
  */
 
 /** How long a partial check-in buys before we may ask for the missing half. */
@@ -55,13 +61,6 @@ export interface CheckInFacts {
   skippedToday: boolean
   /** When the modal was last put in front of this member, on any device. */
   lastShownAt?: Date | string | null
-  /**
-   * Whether `lastShownAt` falls on the member's CURRENT check-in day (the
-   * 4am-rolling window from lib/checkin/todayFacts) rather than a previous
-   * day's stamp. The caller computes this — it has the day-key/timezone
-   * context this function intentionally stays free of.
-   */
-  shownToday: boolean
 }
 
 export interface CheckInDecision {
@@ -88,14 +87,6 @@ export function checkInDecision(
 
   // "Skip for Today" means today, not eight hours.
   if (facts.skippedToday) return { due: false, reason: 'skipped', complete }
-
-  // The FIRST time we'd show it on a given check-in day always fires. Without
-  // this, a partial check-in stamped near yesterday's boundary (say 11pm) held
-  // the 8-hour throttle open into TODAY, and a member who only opens the app
-  // briefly a few times a day could go the whole day without ever clearing it —
-  // each brief open re-stamped `lastShownAt` and restarted an 8-hour lockout
-  // that outlived the calendar day it was meant to throttle.
-  if (!facts.shownToday) return { due: true, reason: 'due', complete }
 
   const lastShown = toMs(facts.lastShownAt)
   if (lastShown > 0) {
