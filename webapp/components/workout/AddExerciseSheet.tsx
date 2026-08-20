@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, Plus, X, Loader2, Layers, Minus } from 'lucide-react'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
-import { setUnitLabel } from '@/lib/workout/tracking'
+import { setUnitLabel, categoryForTracking } from '@/lib/workout/tracking'
 
 export type Placement = 'end' | 'group'
 
@@ -155,7 +155,7 @@ export default function AddExerciseSheet({
       const res = await fetch('/api/exercises/custom', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: customType, muscleGroup: 'other', category: 'strength' }),
+        body: JSON.stringify({ name, trackingType: customType, muscleGroup: 'other', category: categoryForTracking(customType) }),
       })
       if (!res.ok) return
       const data = (await res.json()) as { exercise?: SearchExercise }

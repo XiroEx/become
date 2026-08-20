@@ -202,6 +202,7 @@ export type Equipment =
   | 'rowing_machine'
   | 'assault_bike'
   | 'elliptical'
+  | 'stair_climber'
   // Misc
   | 'jump_rope'
   | 'backpack'
@@ -470,7 +471,7 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
         'flat_bench', 'incline_bench', 'decline_bench', 'squat_rack',
         'pull_up_bar', 'dip_station', 'resistance_band', 'foam_roller',
         'exercise_mat', 'box', 'chair', 'ab_wheel', 'medicine_ball',
-        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical',
+        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical', 'stair_climber',
         'jump_rope', 'backpack', 'towel', 'bodyweight', 'none',
       ],
     }],
@@ -488,7 +489,7 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
         'flat_bench', 'incline_bench', 'decline_bench', 'squat_rack',
         'pull_up_bar', 'dip_station', 'resistance_band', 'foam_roller',
         'exercise_mat', 'box', 'chair', 'ab_wheel', 'medicine_ball',
-        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical',
+        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical', 'stair_climber',
         'jump_rope', 'backpack', 'towel', 'bodyweight', 'none',
       ],
     }],
