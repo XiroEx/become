@@ -36,6 +36,13 @@ export function suggestNutrition(i: NutritionSuggestInput): Suggestion {
   if (i.achieved) {
     return { key: 'nutrition.achieved', title: 'You reached your target', sub: 'Hold it for a week, then set the next one.', severity: 'good', url: '/dashboard/nutrition/goals' }
   }
+  // The instant read hits the finish band before the multi-day hold confirms
+  // it (see lib/goals/reached.ts) — this is the actual moment to congratulate,
+  // not a week later. Falling through to "On pace" here was the flattest
+  // possible response to a member hitting their number.
+  if (i.pace && i.pace.status === 'done') {
+    return { key: 'nutrition.reached', title: "You're at your goal weight 🎉", sub: 'Keep logging — hold it for a week and it becomes official.', severity: 'good', url: '/dashboard/nutrition/goals' }
+  }
   const a = i.adherence
   // Adherence first when we can judge it — pace is meaningless if the logging isn't there.
   if (a && a.logDays >= 4 && a.proteinJudged && a.proteinOk === false) {

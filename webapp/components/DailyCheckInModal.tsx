@@ -4,12 +4,13 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLockScroll } from '@/lib/useLockScroll'
 import { formatWeight, formatWeightDelta, holdBand } from '@/lib/dashboard/goalTile'
+import type { GoalReached } from '@/lib/goals/reached'
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
 interface DailyCheckInModalProps {
   isOpen: boolean
-  onClose: (data: { mood?: MoodLevel; weight?: number }) => void
+  onClose: (data: { mood?: MoodLevel; weight?: number; goalReached?: GoalReached }) => void
   daysSinceMood?: number
   daysSinceWeight?: number
   lastWeight?: number
@@ -378,17 +379,23 @@ export default function DailyCheckInModal({
       }
 
       // Submit weight if entered
+      let goalReached: GoalReached | undefined
       if (weight && parseFloat(weight) > 0) {
-        await fetch('/api/weight', {
+        const res = await fetch('/api/weight', {
           method: 'POST',
           headers,
           body: JSON.stringify({ weight: parseFloat(weight), tz: new Date().getTimezoneOffset() })
         })
+        if (res.ok) {
+          const resData = await res.json().catch(() => null)
+          goalReached = resData?.goalReached ?? undefined
+        }
       }
 
-      onClose({ 
-        mood: selectedMood || undefined, 
-        weight: weight && parseFloat(weight) > 0 ? parseFloat(weight) : undefined 
+      onClose({
+        mood: selectedMood || undefined,
+        weight: weight && parseFloat(weight) > 0 ? parseFloat(weight) : undefined,
+        goalReached,
       })
     } catch (error) {
       console.error('Failed to save check-in:', error)

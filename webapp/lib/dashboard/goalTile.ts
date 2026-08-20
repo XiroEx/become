@@ -144,7 +144,7 @@ export function describeGoal(input: GoalTileInputs): GoalTileView {
     return {
       kind: 'weight',
       label,
-      value: atTarget ? 'On target' : `${formatWeightDelta(diff, unit)} to go`,
+      value: atTarget ? 'Goal reached 🎉' : `${formatWeightDelta(diff, unit)} to go`,
       footer,
       pct,
       // The plan behind the goal: target weight, pace and ETA live here.

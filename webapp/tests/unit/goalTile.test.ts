@@ -52,9 +52,9 @@ test('drifting the wrong way reads 0%, never negative', () => {
   assert.equal(v.value, '24 lbs to go')
 })
 
-test('within 2 lbs of target is "On target", not "0.6 lbs to go"', () => {
+test('within 2 lbs of target is "Goal reached", not "0.6 lbs to go"', () => {
   const v = describeGoal({ fitnessGoal: 'maintain', targetWeightKg: 205 * KG, latestWeight: 205.6, weightUnit: 'lbs' })
-  assert.equal(v.value, 'On target')
+  assert.equal(v.value, 'Goal reached 🎉')
   assert.equal(v.footer, 'Holding 205 lbs')
   assert.equal(v.pct, 100)
   assert.equal(v.direction, 'hold')

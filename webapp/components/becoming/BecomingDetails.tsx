@@ -326,8 +326,8 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
                   <Glass hue={SUBJECT.fuel.hex} data-testid="weight-plan">
                     <div className="mb-2 flex items-center justify-between">
                       <Eyebrow>Weight plan</Eyebrow>
-                      {n?.pace && n.status === 'active' && <span className={`text-xs font-semibold ${n.pace.status === 'behind' ? 'text-amber-300' : 'text-emerald-400'}`}>{n.pace.status === 'behind' ? `${fmtUnit(n.pace.behindByKg, unit)} behind pace` : n.pace.status === 'ahead' ? `${fmtUnit(n.pace.aheadByKg, unit)} ahead` : n.pace.status === 'on' ? 'On pace' : n.pace.status === 'done' ? 'At target' : ''}</span>}
-                      {n?.status === 'achieved' && <span className="text-xs font-semibold text-emerald-400">Reached ✓</span>}
+                      {n?.pace && n.status === 'active' && n.pace.status !== 'done' && <span className={`text-xs font-semibold ${n.pace.status === 'behind' ? 'text-amber-300' : 'text-emerald-400'}`}>{n.pace.status === 'behind' ? `${fmtUnit(n.pace.behindByKg, unit)} behind pace` : n.pace.status === 'ahead' ? `${fmtUnit(n.pace.aheadByKg, unit)} ahead` : n.pace.status === 'on' ? 'On pace' : ''}</span>}
+                      {(n?.status === 'achieved' || n?.pace?.status === 'done') && <span className="text-xs font-semibold text-emerald-400">Reached ✓</span>}
                     </div>
                     {!goals ? <div className="h-16 animate-pulse rounded-xl bg-white/[0.06]" /> : n && n.target.weight ? (
                       <>

@@ -6,6 +6,7 @@ import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
 import { toKg, type WeightUnit } from '@/lib/bodyUnits'
+import { checkGoalReached } from '@/lib/goals/reached'
 import {
   readTzOffset,
   readTzOffsetFromBody,
@@ -236,6 +237,15 @@ export async function POST(request: NextRequest) {
       streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
     }
 
+    // Did this weigh-in just cross into the goal's finish band for the first
+    // time? Checked here, not on read, so the congratulations screen can fire
+    // the moment it happens rather than whenever the member next opens a page
+    // that computes goal progress.
+    let goalReached = null
+    if (!skip && weight) {
+      goalReached = await checkGoalReached(authResult.userId!, toKg(weight, unit), unit).catch(() => null)
+    }
+
     // Weight history feeds dashboard tiles — invalidate so it shows immediately.
     await bustTilesCache(authResult.userId!)
 
@@ -248,6 +258,7 @@ export async function POST(request: NextRequest) {
           newMilestone: streakResult.newMilestone,
         },
       }),
+      ...(goalReached && { goalReached }),
     })
   } catch (error) {
     console.error('Error saving weight:', error)

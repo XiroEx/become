@@ -44,6 +44,11 @@ export interface IGoal extends Document {
   startedAt: Date
   achievedAt?: Date
   replacedAt?: Date
+  /** First weigh-in that landed inside the finish band — set once, even though
+   *  `status` doesn't flip to 'achieved' until the band holds for a week. This
+   *  is what lets the app congratulate the member the moment they cross the
+   *  line instead of a week later when the official confirmation lands. */
+  reachedTargetAt?: Date
   baseline: {
     weightKg?: number
     date?: Date
@@ -95,6 +100,7 @@ const GoalSchema = new Schema<IGoal>({
   startedAt: { type: Date, required: true },
   achievedAt: { type: Date },
   replacedAt: { type: Date },
+  reachedTargetAt: { type: Date },
   baseline: {
     weightKg: { type: Number },
     date: { type: Date },
