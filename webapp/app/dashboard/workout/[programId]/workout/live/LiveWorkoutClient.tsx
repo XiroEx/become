@@ -17,7 +17,7 @@ import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
-import { normalizeTracking, setUnitLabel } from "@/lib/workout/tracking";
+import { normalizeTracking, tracksTime, setUnitLabel } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -34,6 +34,8 @@ interface SavedSetData {
   reps: number;
   weight: number;
   speed?: number;
+  duration?: number;
+  distance?: number;
   completed: boolean;
 }
 
@@ -504,9 +506,19 @@ export default function LiveWorkoutPage() {
           const restored = savedQP?.exercises?.length
             ? data.map((sets, i) => {
                 const savedEx = savedQP.exercises[i];
+                const timed = tracksTime(exs[i]?.trackingType);
                 return sets.map((s, si) => {
                   const ss = savedEx?.sets?.[si];
-                  return ss ? { ...s, reps: ss.reps ?? s.reps, weight: ss.weight ?? s.weight, completed: ss.completed ?? s.completed } : s;
+                  if (!ss) return s;
+                  return {
+                    ...s,
+                    // Cardio comes back out of duration/distance into the two
+                    // boxes this view types into.
+                    reps: (timed ? ss.duration : ss.reps) ?? s.reps,
+                    weight: (timed ? ss.distance : ss.weight) ?? s.weight,
+                    speed: ss.speed ?? s.speed,
+                    completed: ss.completed ?? s.completed,
+                  };
                 });
               })
             : data;
@@ -642,9 +654,16 @@ export default function LiveWorkoutPage() {
                   savedEx.swappedFromName
                 );
                 if (isMatch && savedEx) {
+                  // Timed work went out as duration/distance; it comes back into
+                  // the two boxes the live view types into.
+                  const timed = tracksTime(ex.trackingType);
                   return savedEx.sets.map(s => ({
-                    reps: s.reps > 0 ? s.reps.toString() : "",
-                    weight: s.weight > 0 ? s.weight.toString() : "",
+                    reps: timed
+                      ? (s.duration && s.duration > 0 ? String(s.duration) : "")
+                      : (s.reps > 0 ? s.reps.toString() : ""),
+                    weight: timed
+                      ? (s.distance && s.distance > 0 ? String(s.distance) : "")
+                      : (s.weight > 0 ? s.weight.toString() : ""),
                     speed: s.speed && s.speed > 0 ? s.speed.toString() : "",
                     completed: s.completed
                   }));
@@ -796,11 +815,25 @@ export default function LiveWorkoutPage() {
     }
     writeQuickProgress(
       quickSessionId,
-      workout.exercises.map((ex, i) => ({
-        name: ex.name,
-        ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
-        sets: (snap[i] ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed })),
-      })),
+      workout.exercises.map((ex, i) => {
+        // Same translation as the save path: the Track view stores cardio in
+        // duration/distance, so hand it over that way or flipping the tab turns
+        // 12 minutes into 12 reps.
+        const timed = tracksTime(ex.trackingType);
+        const isTD = normalizeTracking(ex.trackingType) === 'time_distance';
+        return {
+          name: ex.name,
+          ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
+          sets: (snap[i] ?? []).map((s) => ({
+            reps: timed ? '' : s.reps,
+            weight: timed ? '' : s.weight,
+            ...(timed ? { duration: s.reps } : {}),
+            ...(isTD ? { distance: s.weight } : {}),
+            ...(s.speed ? { speed: s.speed } : {}),
+            completed: s.completed,
+          })),
+        };
+      }),
     );
   }, [isQuick, quickSessionId, workout, exerciseData, workoutFlow, currentStepIndex, currentWeight, currentReps, loading]);
 
@@ -954,13 +987,26 @@ export default function LiveWorkoutPage() {
         return {
           name: exercise.name,
           ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
-          sets: exerciseDataToSave[index]?.map((set, setIndex) => ({
-            setNumber: setIndex + 1,
-            reps: parseInt(set.reps) || 0,
-            weight: parseFloat(set.weight) || 0,
-            ...(set.speed && parseFloat(set.speed) > 0 && { speed: parseFloat(set.speed) }),
-            completed: set.completed
-          })) || [],
+          // Cardio is typed into the same two boxes as reps and weight — the
+          // labels above them say Duration and Distance — so it has to land in
+          // the right FIELDS on the way out. Otherwise a treadmill logged 1600
+          // "lbs" and a plank logged 45 "reps", and history, PRs and the track
+          // view all read the lie.
+          sets: exerciseDataToSave[index]?.map((set, setIndex) => {
+            const t = normalizeTracking(exercise.trackingType);
+            const timed = tracksTime(t);
+            const first = parseFloat(set.reps) || 0;      // duration for timed work
+            const second = parseFloat(set.weight) || 0;   // distance for time_distance
+            return {
+              setNumber: setIndex + 1,
+              reps: timed ? 0 : (parseInt(set.reps) || 0),
+              weight: timed ? 0 : (parseFloat(set.weight) || 0),
+              ...(timed && first > 0 && { duration: first }),
+              ...(t === 'time_distance' && second > 0 && { distance: second }),
+              ...(set.speed && parseFloat(set.speed) > 0 && { speed: parseFloat(set.speed) }),
+              completed: set.completed,
+            };
+          }) || [],
           ...(exercise.groupId && { groupId: exercise.groupId }),
           ...(exercise.groupType && { groupType: exercise.groupType }),
           ...(exercise.groupLabel && { groupLabel: exercise.groupLabel }),
