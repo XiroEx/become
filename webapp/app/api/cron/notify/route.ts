@@ -29,7 +29,10 @@ import {
   GOAL_NUDGE_KEY_COOLDOWN_DAYS,
   slotDateKey,
   MIND_REMINDER_END_HOUR,
+  CHECK_IN_REMINDER_START_HOUR,
+  CHECK_IN_REMINDER_END_HOUR,
 } from '@/lib/notifications/cronNotify'
+import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +110,7 @@ export async function GET(request: NextRequest) {
     scheduleSetup: tally(),
     goalNudge: tally(),
     superStreakAtRisk: tally(),
+    checkInReminder: tally(),
   }
   const results = {
     missedSlotsSynced: 0,
@@ -515,6 +519,61 @@ export async function GET(request: NextRequest) {
     }
   } catch (err) {
     console.error('goal-nudge sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.66 Daily check-in reminder (12pm-4pm LOCAL) ─────────────────────────
+  // The mood + weight check-in used to be reachable ONLY through the in-app
+  // modal, which fires whenever a member happens to open the app — never at a
+  // scheduled time. That is exactly why some members reported never seeing it
+  // (they simply didn't open the app while it was due) and others reported
+  // getting it late at night (whenever they happened to open the app). A
+  // dedicated push, restricted to a daytime window like every other reminder
+  // here, closes both gaps. Uses the SAME "logged today" / "skipped today"
+  // rule as the modal (lib/checkin/todayFacts) so the two channels never
+  // disagree about whether today's check-in is done.
+  try {
+    const checkInCandidates = await UserProgress.find({
+      'notificationPrefs.checkInReminder': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt moodHistory weightHistory checkIn').lean()
+
+    for (const progress of checkInCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < CHECK_IN_REMINDER_START_HOUR || userLocalHour > CHECK_IN_REMINDER_END_HOUR) continue
+
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.checkInReminder
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      const { moodLoggedToday, weightLoggedToday, skippedToday } = checkInFactsForToday(
+        progress,
+        userLocalDateKey,
+        progress?.timezoneOffset ?? 0,
+      )
+      if (skippedToday || (moodLoggedToday && weightLoggedToday)) continue
+
+      const body = !moodLoggedToday && !weightLoggedToday
+        ? 'A quick mood + weight check-in — takes 10 seconds.'
+        : !moodLoggedToday
+          ? "You logged your weight — just your mood left for today."
+          : "You logged your mood — just today's weight left."
+
+      await deliver(t.checkInReminder, String(progress.userId), {
+        title: 'Time for your check-in 📝',
+        body,
+        url: '/dashboard',
+        tag: 'checkin-reminder',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.checkInReminder': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('checkin-reminder sweep failed:', err)
     results.errors++
   }
 

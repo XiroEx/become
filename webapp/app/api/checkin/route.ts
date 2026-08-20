@@ -26,6 +26,7 @@ import {
   daysSinceEntry,
 } from '@/lib/dayWindow'
 import { checkInDecision } from '@/lib/checkin/status'
+import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
 
 /** Sentinel for "no entry has ever been logged", rendered as "First log". */
 const NEVER_LOGGED = 999
@@ -86,8 +87,7 @@ export async function GET(request: NextRequest) {
       | (Entry & { weight: number })
       | undefined
 
-    const skipped = progress.checkIn?.lastSkippedDate
-    const skippedToday = skipped ? isEntryOnDay(skipped, todayKey, tz) : false
+    const { skippedToday } = checkInFactsForToday(progress, todayKey, tz)
 
     const decision = checkInDecision({
       moodLoggedToday: !!todaysMoodEntry,

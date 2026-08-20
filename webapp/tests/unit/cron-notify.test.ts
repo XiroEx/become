@@ -133,3 +133,52 @@ test('the response separates qualified from delivered from unreachable', () => {
   }
   assert.match(CRON_ROUTE, /notifications: t/, 'the per-type tallies must be returned')
 })
+
+// ─── Daily check-in reminder ──────────────────────────────────────────────────
+//
+// Context: the mood + weight check-in only ever appeared in the in-app modal,
+// which fires whenever a member happens to open the app — never on a
+// schedule. That is why some members reported never seeing it (they weren't
+// in the app while it was due) and others reported getting it at night
+// (whenever they happened to open the app then). This gives it a real push,
+// restricted to daytime hours like every other reminder.
+
+import { CHECK_IN_REMINDER_START_HOUR, CHECK_IN_REMINDER_END_HOUR } from '../../lib/notifications/cronNotify'
+
+test('the check-in reminder window is restricted to daytime hours, never night', () => {
+  assert.ok(CHECK_IN_REMINDER_START_HOUR >= 6, 'must not start before 6am local')
+  assert.ok(CHECK_IN_REMINDER_END_HOUR <= 20, 'must not run into the evening/night')
+  assert.ok(CHECK_IN_REMINDER_START_HOUR < CHECK_IN_REMINDER_END_HOUR)
+})
+
+test('a check-in reminder push exists and deep-links to the dashboard', () => {
+  assert.match(CRON_ROUTE, /tag: 'checkin-reminder'/, 'the daily check-in needs its own push')
+  assert.match(CRON_ROUTE, /url: '\/dashboard'/)
+})
+
+test('the check-in reminder is pref-gated and only fires once local timezone is known', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('2.66 Daily check-in reminder'),
+    CRON_ROUTE.indexOf('2.7 Program with no schedule'),
+  )
+  assert.match(block, /notificationPrefs\.checkInReminder.*\$ne: false/)
+  assert.match(block, /timezoneOffset: \{ \$exists: true \}/)
+})
+
+test('the check-in reminder skips members who already completed or skipped today', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('2.66 Daily check-in reminder'),
+    CRON_ROUTE.indexOf('2.7 Program with no schedule'),
+  )
+  assert.match(block, /checkInFactsForToday\(/, 'must reuse the same "logged today" rule as the modal')
+  assert.match(block, /if \(skippedToday \|\| \(moodLoggedToday && weightLoggedToday\)\) continue/)
+})
+
+test('the check-in reminder is rate-limited to once per local day', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('2.66 Daily check-in reminder'),
+    CRON_ROUTE.indexOf('2.7 Program with no schedule'),
+  )
+  assert.match(block, /lastPushSentAt\?\.checkInReminder/)
+  assert.match(block, /lastPushSentAt\.checkInReminder': now/)
+})
