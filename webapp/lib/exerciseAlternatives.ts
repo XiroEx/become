@@ -114,7 +114,7 @@ const EQUIPMENT_CLASSES: Record<string, string[]> = {
   bench: ['flat_bench', 'incline_bench', 'decline_bench'],
   rack: ['squat_rack'],
   band: ['resistance_band'],
-  cardio_machine: ['treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical'],
+  cardio_machine: ['treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical', 'stair_climber'],
 };
 
 function getEquipmentClass(eq: string): string {
