@@ -24,7 +24,10 @@ interface WorkoutPillar {
 }
 interface SuperPillar extends DayPillar {
   today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean; weekOnTrack: boolean }
-  freeze: { available: boolean; returnsOn: string | null; usedDays: string[]; frozenToday: boolean }
+  /** Optional on purpose: this page renders from a cached payload first, and a
+   *  cache written before freezes existed has no `freeze` at all. Reading it
+   *  unguarded is what took the whole page down with "This page couldn't load". */
+  freeze?: { available: boolean; returnsOn: string | null; usedDays: string[]; frozenToday: boolean }
 }
 interface StreaksPayload {
   todayKey: string
@@ -354,6 +357,7 @@ export default function StreaksClient() {
 
                     {/* The one freeze. Strict is the point — this is the single
                         deliberate exception, and it costs a month to earn back. */}
+                    {p.super.freeze && (
                     <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/70 p-3 dark:border-sky-900/50 dark:bg-sky-950/30" data-testid="super-freeze">
                       <div className="flex items-start gap-2">
                         <Snowflake className={`mt-0.5 h-4 w-4 shrink-0 ${p.super.freeze.available ? 'text-sky-500' : 'text-zinc-400 dark:text-zinc-600'}`} />
@@ -389,6 +393,7 @@ export default function StreaksClient() {
                         )}
                       </div>
                     </div>
+                    )}
                   </>
                 ) : (
                   <div className="mt-2 h-8 w-32 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800" />
