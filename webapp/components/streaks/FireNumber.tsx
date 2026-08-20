@@ -18,10 +18,10 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 /** Where each flame sits across the number, and how it moves. */
 const FLAMES = [
-  { left: '2%', w: 9, h: 12, dur: 1.15, delay: 0 },
-  { left: '28%', w: 11, h: 16, dur: 0.95, delay: 0.18 },
-  { left: '54%', w: 8, h: 11, dur: 1.35, delay: 0.36 },
-  { left: '74%', w: 7, h: 9, dur: 1.05, delay: 0.52 },
+  { left: '6%', w: 8, h: 9, dur: 1.15, delay: 0 },
+  { left: '30%', w: 10, h: 12, dur: 0.95, delay: 0.18 },
+  { left: '56%', w: 7, h: 8, dur: 1.35, delay: 0.36 },
+  { left: '76%', w: 6, h: 7, dur: 1.05, delay: 0.52 },
 ]
 
 export default function FireNumber({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -33,11 +33,11 @@ export default function FireNumber({ children, className = '' }: { children: Rea
           number it read as a smudge behind them, not as something burning. */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 rounded-[50%] bg-orange-500/30 blur-md dark:bg-orange-400/35"
+        className="pointer-events-none absolute inset-x-1 bottom-0 h-2/5 rounded-[50%] bg-orange-500/25 blur-[6px] dark:bg-orange-400/30"
       />
 
       {/* Flames licking off the TOP edge, rising and thinning out */}
-      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-1/4 overflow-visible">
+      <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[12%] h-1/4 overflow-visible">
         {FLAMES.map((f, i) => (
           <motion.span
             key={i}
@@ -46,7 +46,7 @@ export default function FireNumber({ children, className = '' }: { children: Rea
             animate={reduced
               ? { opacity: 0.5, scaleY: 1 }
               : {
-                  y: [3, -f.h * 0.55, 3],
+                  y: [2, -f.h * 0.3, 2],
                   scaleY: [0.85, 1.35, 0.85],
                   scaleX: [1, 0.72, 1],
                   opacity: [0.85, 0.15, 0.85],

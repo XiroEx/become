@@ -36,6 +36,7 @@ import {
   dayStreak, weekStreak, workoutOrRestDays, dayRange, intersectDays,
   STREAK_VISIBLE_MIN, shiftDay, lostWeeks, withoutLostWeeks, onTrackDays, weekdayOf,
 } from '@/lib/streaks/pillars'
+import { applyFreezes, freezeAvailable, freezeReturnsOn } from '@/lib/streaks/freeze'
 
 export const LOOKBACK_DAYS = 365
 
@@ -74,6 +75,14 @@ export interface StreaksPayload {
     super: {
       unit: 'days'; current: number; best: number; activeToday: boolean
       today: { nutrition: boolean; mindset: boolean; trained: boolean; restDay: boolean; weekOnTrack: boolean }
+      /** The one freeze: whether it is in hand, and what it has covered. */
+      freeze: {
+        available: boolean
+        /** The day it comes back, when it is spent. */
+        returnsOn: string | null
+        usedDays: string[]
+        frozenToday: boolean
+      }
     }
   }
   /** Credited days per pillar, so a UI can show what is real and what was granted. */
@@ -151,7 +160,10 @@ export async function computeStreaks(userId: string, tz: number, now = new Date(
   const workoutHalf = withoutLostWeeks(trainedOrRest, lost)
   // Workout streak: days whose training week is on track (rest days included).
   const workoutStreak = weeklyTarget ? dayStreak(onTrackDays(allDays, lost), todayKey) : null
-  const superDays = intersectDays(nutritionDays, mindDays, workoutHalf)
+  // A day the member spent their freeze on counts as a super day. Life happens;
+  // the streak survives it once.
+  const freezeDays = ((progress?.superFreezeDays as string[] | undefined) ?? []).filter(Boolean)
+  const superDays = applyFreezes(intersectDays(nutritionDays, mindDays, workoutHalf), freezeDays)
   const superStreak = dayStreak(superDays, todayKey)
   const thisWeekKey = shiftDay(todayKey, -weekdayOf(todayKey))
   const weekOnTrack = !lost.has(thisWeekKey)
@@ -201,6 +213,12 @@ export async function computeStreaks(userId: string, tz: number, now = new Date(
           trained: trainedOrRest.has(todayKey),
           restDay: !!trainingWeekdays && !trainingWeekdays.includes(weekdayOf(todayKey)),
           weekOnTrack,
+        },
+        freeze: {
+          available: freezeAvailable(freezeDays, todayKey),
+          returnsOn: freezeReturnsOn(freezeDays, todayKey),
+          usedDays: [...freezeDays].sort(),
+          frozenToday: freezeDays.includes(todayKey),
         },
       },
     },

@@ -73,3 +73,23 @@ test('super at risk: only in the evening, only when it is real, and it says what
   // Two missing → both named
   assert.equal(superAtRisk(base({ super: { current: 9, best: 9, activeToday: false, today: { nutrition: false, mindset: true, trained: false, restDay: false, weekOnTrack: true } } }), 19).body, 'log food and train today and it survives.')
 })
+
+test('the at-risk push offers the freeze, but only when it is in hand', () => {
+  const today = { nutrition: true, mindset: false, trained: true, restDay: false, weekOnTrack: true }
+  const withFreeze = base({
+    super: { current: 9, best: 9, activeToday: false, today, freeze: { available: true, returnsOn: null, usedDays: [], frozenToday: false } },
+  })
+  assert.equal(
+    superAtRisk(withFreeze, 18).body,
+    'Just check in today and it survives. Or use your one freeze to hold it.',
+  )
+
+  // Spent: the message goes back to naming only what would save it.
+  const spent = base({
+    super: { current: 9, best: 9, activeToday: false, today, freeze: { available: false, returnsOn: '2026-09-17', usedDays: ['2026-08-18'], frozenToday: false } },
+  })
+  assert.equal(superAtRisk(spent, 18).body, 'Just check in today and it survives.')
+
+  // A payload from before freezes existed still works.
+  assert.equal(superAtRisk(base({ super: { current: 9, best: 9, activeToday: false, today } }), 18).body, 'Just check in today and it survives.')
+})
