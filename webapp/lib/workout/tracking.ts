@@ -83,6 +83,15 @@ export function setUnitLabel(value: string | null | undefined, count: number): s
 }
 
 /**
+ * Does this exercise ask for a speed? Treadmills, bikes, stair climbers: the
+ * number on the machine is a speed or a level, not a load.
+ */
+export function tracksSpeed(value?: string | null): boolean {
+  const t = normalizeTracking(value)
+  return t === 'time_distance' || t === 'intervals'
+}
+
+/**
  * Best guess at a tracking type for a log written before the type was stored.
  * A recorded duration means timed work; a recorded load means loaded work;
  * otherwise fall back to the catalog's answer, then to the default.
@@ -96,4 +105,52 @@ export function inferTracking(
   const loaded = sets?.some(s => (s?.weight ?? 0) > 0)
   if (loaded) return 'reps_weight'
   return normalizeTracking(fromCatalog)
+}
+
+/** The values a member can type against one set, as strings from the inputs. */
+export interface TypedSet {
+  reps?: string
+  weight?: string
+  duration?: string
+  distance?: string
+  speed?: string
+}
+
+/**
+ * Is this set filled in enough to tick itself off?
+ *
+ * The Track view auto-checks DONE the moment a set has what its exercise asks
+ * for — which only works if the question matches the exercise. A stair climber
+ * inside a circuit was being shown reps and weight boxes while this function
+ * (correctly) waited for a duration, so the tick never came and the member
+ * concluded the check was broken.
+ *
+ * Unknown types are treated as reps work rather than "never filled": a set that
+ * can never tick is worse than one that ticks a little eagerly.
+ */
+export function isSetFilled(tracking: string | null | undefined, set: TypedSet): boolean {
+  const num = (v?: string) => {
+    const n = parseFloat((v ?? '').trim())
+    return Number.isFinite(n) ? n : 0
+  }
+  const has = (v?: string) => (v ?? '').trim() !== ''
+  switch (normalizeTracking(tracking)) {
+    case 'reps_weight':
+      return has(set.reps) && has(set.weight) && num(set.reps) > 0
+    case 'reps_bodyweight':
+    case 'reps_only':
+      return has(set.reps) && num(set.reps) > 0
+    case 'time':
+      return has(set.duration) && num(set.duration) > 0
+    case 'intervals':
+      // A machine set by speed alone is still a set that happened.
+      return (has(set.duration) && num(set.duration) > 0) || (has(set.speed) && num(set.speed) > 0)
+    case 'time_distance':
+      return (has(set.duration) && num(set.duration) > 0)
+        || (has(set.distance) && num(set.distance) > 0)
+        || (has(set.speed) && num(set.speed) > 0)
+    case 'none':
+      // Nothing to type: the member ticks it themselves.
+      return false
+  }
 }

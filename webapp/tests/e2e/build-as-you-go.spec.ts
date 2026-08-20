@@ -526,3 +526,131 @@ test('an open quick session shows the resume pill on the dashboard, and it goes 
 
   await api.dispose()
 })
+
+/**
+ * Cardio keeps its metrics inside a circuit.
+ *
+ * The rounds layout hardcoded lbs and reps, so a stair climber dropped into a
+ * circuit lost its time, distance and speed — and the DONE tick could never
+ * light up, because the tick asks the exercise what it wants and the exercise
+ * wanted a duration.
+ */
+test('a cardio exercise keeps time, distance and speed inside a circuit', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-cardio-${Date.now()}`
+
+  const api = await request.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+  await context.addCookies([{
+    name: 'auth_token', value: token, domain: new URL(BASE_URL).hostname, path: '/',
+    httpOnly: false, secure: BASE_URL.startsWith('https'), sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+
+  // A circuit of stair climber + curls, exactly the shape that was reported.
+  await page.evaluate(({ id }) => {
+    localStorage.setItem(`quick_session_${id}`, JSON.stringify({
+      sessionId: id,
+      title: 'E2E Cardio Circuit',
+      exercises: [
+        { exerciseSlug: 'stair-climber', name: 'Stair Climber', trackingType: 'time_distance', sets: 2, reps: '', duration: '600', groupId: 'g1', groupType: 'circuit', groupLabel: 'Circuit' },
+        { exerciseSlug: 'dumbbell-curl', name: 'Dumbbell Curl', trackingType: 'reps_weight', sets: 2, reps: '8-12', groupId: 'g1', groupType: 'circuit', groupLabel: 'Circuit' },
+      ],
+    }))
+  }, { id: sessionId })
+
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout?session=${sessionId}`)
+  await expect(page.locator('[data-testid="track-add-exercise"]')).toBeVisible({ timeout: 30_000 })
+
+  // Round 1, the cardio exercise: seconds, metres, mph — not lbs and reps.
+  const sec = page.locator('[data-testid="round-duration-0-0"]')
+  const dist = page.locator('[data-testid="round-distance-0-0"]')
+  const mph = page.locator('[data-testid="round-speed-0-0"]')
+  await expect(sec, 'cardio asks for time inside a circuit').toBeVisible({ timeout: 15_000 })
+  await expect(dist, 'and distance').toBeVisible()
+  await expect(mph, 'and speed').toBeVisible()
+  await expect(page.locator('[data-testid="round-weight-0-0"]'), 'a stair climber has no load').toHaveCount(0)
+  // The weighted exercise beside it still asks for weight and reps.
+  await expect(page.locator('[data-testid="round-weight-1-0"]')).toBeVisible()
+  await expect(page.locator('[data-testid="round-reps-1-0"]')).toBeVisible()
+  console.log('CIRCUIT CARDIO: sec/dist/mph rendered, no weight box')
+
+  // Filling it ticks DONE by itself — the reported "check never comes".
+  await sec.fill('600')
+  await mph.fill('3.5')
+  await expect(page.locator('[data-testid="round-done-0-0"]'), 'the cardio set ticks itself')
+    .toHaveAttribute('data-completed', 'true', { timeout: 10_000 })
+  console.log('CIRCUIT CARDIO: filled → ticked')
+
+  // And the numbers are kept as time and speed, so the live view (and the log)
+  // read a stair climber rather than 600 reps at 3.5 lbs.
+  // The shared draft is written on a debounce; give it a beat.
+  await page.waitForTimeout(1500)
+  const shared = await page.evaluate(({ id }) => JSON.parse(localStorage.getItem(`qs_progress_${id}`) || 'null'), { id: sessionId })
+  const cardioSet = shared?.exercises?.[0]?.sets?.[0]
+  console.log('CIRCUIT CARDIO shared:', JSON.stringify(cardioSet))
+  expect(cardioSet?.duration).toBe('600')
+  expect(cardioSet?.speed).toBe('3.5')
+  expect(cardioSet?.reps || '').toBe('')
+
+  await page.screenshot({ path: 'tests/e2e/screenshots/cardio-circuit.png', fullPage: true })
+  await api.dispose()
+})
+
+/**
+ * The live view types cardio into the same two boxes as reps and weight (the
+ * labels above them say Duration and Distance). It has to LOG them as duration
+ * and distance, or a treadmill posts 1600 lbs and a plank posts 45 reps —
+ * which is what history, the PR engine and the track view then read.
+ */
+test('cardio logged in the live view lands in duration, distance and speed', async ({ page, context }) => {
+  const token = signToken(E2E_USER.id, E2E_USER.email)
+  const sessionId = `e2e-cardio-live-${Date.now()}`
+
+  const api = await request.newContext({
+    baseURL: BASE_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  })
+  await context.addCookies([{
+    name: 'auth_token', value: token, domain: new URL(BASE_URL).hostname, path: '/',
+    httpOnly: false, secure: BASE_URL.startsWith('https'), sameSite: 'Lax',
+  }])
+  await page.goto(`${BASE_URL}/login`)
+  await page.evaluate(t => localStorage.setItem('token', t), token)
+  await page.evaluate(({ id }) => {
+    localStorage.setItem(`quick_session_${id}`, JSON.stringify({
+      sessionId: id,
+      title: 'E2E Cardio Live',
+      exercises: [{ exerciseSlug: 'stair-climber', name: 'Stair Climber', trackingType: 'time_distance', sets: 1, reps: '', duration: '600' }],
+    }))
+  }, { id: sessionId })
+
+  await page.goto(`${BASE_URL}/dashboard/workout/quick/workout/live?session=${sessionId}`)
+  await expect(page.getByText('Stair Climber').first()).toBeVisible({ timeout: 30_000 })
+
+  const live = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+  console.log('LIVE CARDIO asks for:', ['Duration', 'Distance', 'Speed'].filter(l => live.includes(l)).join(', '))
+  expect(live).toContain('Duration (sec)')
+  expect(live).toContain('Distance (m)')
+  expect(live).toContain('Speed (mph)')
+
+  const boxes = page.locator('input[inputmode="numeric"], input[inputmode="decimal"]')
+  await boxes.nth(0).fill('600')   // duration
+  await boxes.nth(1).fill('1600')  // distance
+  await boxes.nth(2).fill('3.5')   // speed
+  await page.locator('[data-tour="live-complete-set"]').click({ force: true })
+
+  await expect.poll(async () => {
+    const res = await api.get(`/api/workouts/session?id=${sessionId}`)
+    if (!res.ok()) return null
+    const s = (await res.json()).session?.exercises?.[0]?.sets?.[0]
+    return s ? { reps: s.reps, weight: s.weight, duration: s.duration, speed: s.speed } : null
+  }, { timeout: 25_000, message: 'cardio is logged as cardio' })
+    .toEqual({ reps: 0, weight: 0, duration: 600, speed: 3.5 })
+  console.log('LIVE CARDIO: logged as duration + speed, no phantom reps or load')
+
+  await api.dispose()
+})

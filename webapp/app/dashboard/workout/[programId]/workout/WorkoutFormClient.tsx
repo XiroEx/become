@@ -22,7 +22,7 @@ import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
-import { normalizeTracking, tracksTime, setUnitLabel } from "@/lib/workout/tracking";
+import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -158,6 +158,9 @@ interface SetData {
   completed: boolean;
   duration: string;
   distance: string;
+  /** mph. Cardio is logged as a speed, and the Track view used to drop it —
+   *  the live view asked for it, so flipping views threw the number away. */
+  speed: string;
 }
 
 interface ExerciseProgress {
@@ -172,6 +175,7 @@ interface SavedSetData {
   completed: boolean;
   duration?: number;
   distance?: number;
+  speed?: number;
 }
 
 interface SavedExercise {
@@ -254,32 +258,6 @@ const fallbackWorkout: WorkoutData = {
 
 // A set "counts as done" once its required inputs (per tracking type) are filled.
 // Drives auto-checking the DONE box so the user doesn't tick every set by hand.
-function isSetFilled(tracking: string | undefined, set: SetData): boolean {
-  const num = (v: string) => {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? n : 0;
-  };
-  const reps = (set.reps ?? "").trim();
-  const weight = (set.weight ?? "").trim();
-  const duration = (set.duration ?? "").trim();
-  const distance = (set.distance ?? "").trim();
-  switch (tracking || "reps_weight") {
-    case "reps_weight":
-      return reps !== "" && weight !== "" && num(reps) > 0;
-    case "reps_bodyweight":
-    case "reps_only":
-      return reps !== "" && num(reps) > 0;
-    case "time":
-    case "intervals":
-      return duration !== "" && num(duration) > 0;
-    case "time_distance":
-      return (duration !== "" && num(duration) > 0) || (distance !== "" && num(distance) > 0);
-    case "none":
-      return false; // no inputs — completed via the manual check only
-    default:
-      return reps !== "" && num(reps) > 0;
-  }
-}
 
 export default function WorkoutFormPage() {
   const router = useRouter();
@@ -434,6 +412,7 @@ export default function WorkoutFormPage() {
                   completed: savedEx?.sets?.[si]?.completed ?? false,
                   duration: savedEx?.sets?.[si]?.duration ?? "",
                   distance: savedEx?.sets?.[si]?.distance ?? "",
+                  speed: savedEx?.sets?.[si]?.speed ?? "",
                 })),
               };
             })
@@ -459,6 +438,7 @@ export default function WorkoutFormPage() {
                 completed: false,
                 duration: "",
                 distance: "",
+                speed: "",
               })),
             }))
           );
@@ -490,6 +470,7 @@ export default function WorkoutFormPage() {
               completed: false,
               duration: "",
               distance: "",
+              speed: "",
             })),
           }));
           setExerciseProgress(initialProgress);
@@ -568,6 +549,7 @@ export default function WorkoutFormPage() {
                         completed: s.completed,
                         duration: s.duration != null && s.duration > 0 ? s.duration.toString() : "",
                         distance: s.distance != null && s.distance > 0 ? s.distance.toString() : "",
+                        speed: s.speed != null && s.speed > 0 ? s.speed.toString() : "",
                       }))
                     : Array.from({ length: ex.sets || 3 }, () => ({
                         reps: "",
@@ -575,6 +557,7 @@ export default function WorkoutFormPage() {
                         completed: false,
                         duration: "",
                         distance: "",
+                        speed: "",
                       }))
                 };
               });
@@ -609,6 +592,7 @@ export default function WorkoutFormPage() {
                 completed: false,
                 duration: "",
                 distance: "",
+                speed: "",
               })),
             }))
           );
@@ -626,6 +610,7 @@ export default function WorkoutFormPage() {
               completed: false,
               duration: "",
               distance: "",
+              speed: "",
             })),
           }))
         );
@@ -652,7 +637,7 @@ export default function WorkoutFormPage() {
           return {
             name: ex.name,
             ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
-            sets: (ep?.sets ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed, duration: s.duration, distance: s.distance })),
+            sets: (ep?.sets ?? []).map((s) => ({ reps: s.reps, weight: s.weight, completed: s.completed, duration: s.duration, distance: s.distance, speed: s.speed })),
           };
         })
       );
@@ -675,6 +660,7 @@ export default function WorkoutFormPage() {
                 completed: set.completed,
                 ...(set.duration && { duration: parseFloat(set.duration) }),
                 ...(set.distance && { distance: parseFloat(set.distance) }),
+                ...(set.speed && { speed: parseFloat(set.speed) }),
               })),
               ...(ex.groupId && { groupId: ex.groupId }),
               ...(ex.groupType && { groupType: ex.groupType }),
@@ -735,6 +721,7 @@ export default function WorkoutFormPage() {
               completed: set.completed,
               ...(set.duration && { duration: parseFloat(set.duration) }),
               ...(set.distance && { distance: parseFloat(set.distance) }),
+              ...(set.speed && { speed: parseFloat(set.speed) }),
             };
           }) || [],
           // Pass through grouping metadata for analytics
@@ -811,7 +798,7 @@ export default function WorkoutFormPage() {
   const applyWorkoutChange = useCallback((next: Exercise[], order: number[]) => {
     const nextProgress = applyOrder(exerciseProgress, order, (i) => ({
       exerciseIndex: i,
-      sets: Array.from({ length: next[i]?.sets || 3 }, () => ({ reps: "", weight: "", completed: false, duration: "", distance: "" })),
+      sets: Array.from({ length: next[i]?.sets || 3 }, () => ({ reps: "", weight: "", completed: false, duration: "", distance: "", speed: "" })),
     })).map((ep, i) => ({ ...ep, exerciseIndex: i }));
 
     setWorkout((w) => (w ? { ...w, exercises: next } : w));
@@ -864,6 +851,7 @@ export default function WorkoutFormPage() {
                 completed: set.completed,
                 ...(set.duration && { duration: parseFloat(set.duration) }),
                 ...(set.distance && { distance: parseFloat(set.distance) }),
+                ...(set.speed && { speed: parseFloat(set.speed) }),
               })),
               ...(ex.groupId && { groupId: ex.groupId }),
               ...(ex.groupType && { groupType: ex.groupType }),
@@ -884,7 +872,7 @@ export default function WorkoutFormPage() {
           return {
             name: ex.name,
             ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
-            sets: (ep?.sets ?? []).map((st) => ({ reps: st.reps, weight: st.weight, completed: st.completed, duration: st.duration, distance: st.distance })),
+            sets: (ep?.sets ?? []).map((st) => ({ reps: st.reps, weight: st.weight, completed: st.completed, duration: st.duration, distance: st.distance, speed: st.speed })),
           };
         }),
       );
@@ -1068,7 +1056,7 @@ export default function WorkoutFormPage() {
               ...ep,
               sets: ep.sets.map((set, si) =>
                 si === setIndex
-                  ? { reps: "0", weight: "0", completed: true, duration: "", distance: "" }
+                  ? { reps: "0", weight: "0", completed: true, duration: "", distance: "", speed: "" }
                   : set
               ),
             }
@@ -1092,6 +1080,7 @@ export default function WorkoutFormPage() {
                 completed: true,
                 duration: "",
                 distance: "",
+                speed: "",
               })),
             }
           : ep
@@ -1183,6 +1172,7 @@ export default function WorkoutFormPage() {
                 completed: false,
                 duration: "",
                 distance: "",
+                speed: "",
               })),
             }
           : ep
@@ -1489,6 +1479,7 @@ export default function WorkoutFormPage() {
                             const tracking = normalizeTracking(exercise.trackingType)
                             const showWeight = tracking === "reps_weight"
                             const isTimeBased = tracksTime(tracking)
+                            const showSpeed = tracksSpeed(tracking)
                             const isNone = tracking === "none"
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
@@ -1546,7 +1537,8 @@ export default function WorkoutFormPage() {
                                     </div>
                                   )}
                                   {tracking === "time_distance" && <div className="col-span-2">Dist (m)</div>}
-                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
+                                  {showSpeed && <div className="col-span-2">mph</div>}
+                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
                                 </div>
                               </div>
                             )
@@ -1557,6 +1549,7 @@ export default function WorkoutFormPage() {
                             const tracking = normalizeTracking(exercise.trackingType)
                             const showWeight = tracking === "reps_weight"
                             const isTimeBased = tracksTime(tracking)
+                            const showSpeed = tracksSpeed(tracking)
                             const isNone = tracking === "none"
                             const repPlaceholder = isTimeBased
                               ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
@@ -1619,8 +1612,25 @@ export default function WorkoutFormPage() {
                                         />
                                       </div>
                                     )}
+                                    {/* Speed — how cardio is actually set on the
+                                        machine. The live view asked for it and
+                                        this one did not, so flipping views threw
+                                        the number away. */}
+                                    {showSpeed && (
+                                      <div className="col-span-2">
+                                        <input
+                                          type="number"
+                                          inputMode="decimal"
+                                          step="any"
+                                          placeholder="0"
+                                          value={set.speed}
+                                          onChange={(e) => updateSet(exerciseIndex, setIndex, "speed", e.target.value)}
+                                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                        />
+                                      </div>
+                                    )}
                                     {/* Actions */}
-                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
+                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
                                       {!set.completed && !set.weight && !set.reps && !isNone && showWeight && (
                                         <button
                                           onClick={() => openSkipModal(exerciseIndex, setIndex)}
@@ -1812,31 +1822,52 @@ export default function WorkoutFormPage() {
                                   </div>
                                 </div>
                                 <div className="grid grid-cols-12 items-center gap-2">
-                                  <div className="col-span-4">
-                                    <input
-                                      type="number"
-                                      inputMode="decimal"
-                                      step="any"
-                                      placeholder="0"
-                                      value={set.weight}
-                                      onChange={(e) => updateSet(originalIndex, roundIndex, "weight", e.target.value)}
-                                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                    />
-                                    <div className="mt-0.5 text-center text-[10px] text-zinc-400">lbs</div>
-                                  </div>
-                                  <div className="col-span-4">
-                                    <input
-                                      type="number"
-                                      inputMode="numeric"
-                                      placeholder={exercise.reps?.split("-")[0] || "0"}
-                                      value={set.reps}
-                                      onChange={(e) => updateSet(originalIndex, roundIndex, "reps", e.target.value)}
-                                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                    />
-                                    <div className="mt-0.5 text-center text-[10px] text-zinc-400">reps</div>
-                                  </div>
+                                  {/* Whatever this exercise actually asks for.
+                                      Rounds used to hardcode lbs and reps, so a
+                                      stair climber dropped into a circuit lost
+                                      its time, distance and speed — and could
+                                      never be filled in, because the tick reads
+                                      the fields the exercise really wants. */}
+                                  {(() => {
+                                    const gTrack = normalizeTracking(exercise.trackingType)
+                                    const gWeight = gTrack === "reps_weight"
+                                    const gTimed = tracksTime(gTrack)
+                                    const gSpeed = tracksSpeed(gTrack)
+                                    const gNone = gTrack === "none"
+                                    if (gNone) {
+                                      return (
+                                        <div className="col-span-8 text-xs text-zinc-500 dark:text-zinc-400">
+                                          No tracking needed — just mark it done.
+                                        </div>
+                                      )
+                                    }
+                                    const fields: Array<{ key: keyof SetData; label: string; placeholder: string; span: string }> = []
+                                    if (gWeight) fields.push({ key: "weight", label: "lbs", placeholder: "0", span: "col-span-4" })
+                                    fields.push(
+                                      gTimed
+                                        ? { key: "duration", label: "sec", placeholder: exercise.duration?.replace(/[^0-9]/g, "") || "30", span: gWeight ? "col-span-4" : gSpeed ? "col-span-3" : "col-span-8" }
+                                        : { key: "reps", label: "reps", placeholder: exercise.reps?.split("-")[0] || "0", span: gWeight ? "col-span-4" : "col-span-8" },
+                                    )
+                                    if (gTrack === "time_distance") fields.push({ key: "distance", label: "m", placeholder: "0", span: "col-span-3" })
+                                    if (gSpeed) fields.push({ key: "speed", label: "mph", placeholder: "0", span: gTrack === "time_distance" ? "col-span-2" : "col-span-5" })
+                                    return fields.map((f) => (
+                                      <div key={f.key} className={f.span}>
+                                        <input
+                                          type="number"
+                                          inputMode="decimal"
+                                          step="any"
+                                          placeholder={f.placeholder}
+                                          value={(set[f.key] as string) ?? ""}
+                                          onChange={(e) => updateSet(originalIndex, roundIndex, f.key, e.target.value)}
+                                          data-testid={`round-${f.key}-${originalIndex}-${roundIndex}`}
+                                          className="w-full rounded-lg border border-zinc-300 bg-white px-2 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                        />
+                                        <div className="mt-0.5 text-center text-[10px] text-zinc-400">{f.label}</div>
+                                      </div>
+                                    ))
+                                  })()}
                                   <div className="col-span-4 flex justify-center gap-1">
-                                    {!set.completed && !set.weight && !set.reps && (
+                                    {!set.completed && !set.weight && !set.reps && !set.duration && !set.distance && !set.speed && (
                                       <button
                                         onClick={() => openSkipModal(originalIndex, roundIndex)}
                                         className="flex h-8 w-8 items-center justify-center rounded-lg border-2 border-zinc-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-600 dark:bg-zinc-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/20 transition-all"
@@ -1849,6 +1880,8 @@ export default function WorkoutFormPage() {
                                     )}
                                     <button
                                       onClick={() => toggleSetComplete(originalIndex, roundIndex)}
+                                      data-testid={`round-done-${originalIndex}-${roundIndex}`}
+                                      data-completed={set.completed ? "true" : "false"}
                                       className={`flex h-8 w-8 items-center justify-center rounded-lg border-2 transition-all ${
                                         set.completed
                                           ? "border-green-500 bg-green-500 text-white"

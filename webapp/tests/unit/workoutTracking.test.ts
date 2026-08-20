@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracking, tracksWeight, tracksTime, inferTracking, DEFAULT_TRACKING } from '@/lib/workout/tracking'
+import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, DEFAULT_TRACKING } from '@/lib/workout/tracking'
 
 test('the vocabulary passes through untouched', () => {
   for (const t of ['reps_weight', 'reps_bodyweight', 'reps_only', 'time', 'time_distance', 'intervals', 'none'] as const) {
@@ -45,4 +45,32 @@ test('a legacy log is read from what it recorded, then the catalog', () => {
   assert.equal(inferTracking(undefined, undefined), DEFAULT_TRACKING)
   // A plank logged with both a duration and reps is not silently timed.
   assert.equal(inferTracking([{ duration: 45, reps: 12, weight: 20 }]), 'reps_weight')
+})
+
+test('a set ticks itself off when it has what its exercise asks for', () => {
+  // Weighted work wants both numbers.
+  assert.equal(isSetFilled('reps_weight', { reps: '10', weight: '110' }), true)
+  assert.equal(isSetFilled('reps_weight', { reps: '10' }), false)
+  assert.equal(isSetFilled('reps_weight', { weight: '110' }), false)
+
+  // Bodyweight work wants reps only.
+  assert.equal(isSetFilled('reps_bodyweight', { reps: '12' }), true)
+  assert.equal(isSetFilled('reps_only', { reps: '0' }), false)
+
+  // Cardio: this is the one that was silently impossible. A stair climber shown
+  // reps and weight boxes could never satisfy a rule that wants time.
+  assert.equal(isSetFilled('time', { duration: '45' }), true)
+  assert.equal(isSetFilled('time', { reps: '45', weight: '20' }), false)
+  assert.equal(isSetFilled('time_distance', { duration: '600' }), true)
+  assert.equal(isSetFilled('time_distance', { distance: '1600' }), true)
+  assert.equal(isSetFilled('time_distance', { speed: '3.5' }), true, 'a speed alone still happened')
+  assert.equal(isSetFilled('intervals', { speed: '8' }), true)
+  assert.equal(isSetFilled('intervals', {}), false)
+
+  // No tracking: only the member can say it is done.
+  assert.equal(isSetFilled('none', { reps: '10', weight: '10' }), false)
+
+  // An unknown or missing type reads as weighted work, not as "never filled".
+  assert.equal(isSetFilled('reps', { reps: '10', weight: '95' }), true)
+  assert.equal(isSetFilled(undefined, { reps: '10', weight: '95' }), true)
 })
