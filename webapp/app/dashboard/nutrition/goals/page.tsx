@@ -20,7 +20,7 @@ import {
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
 import type { FitnessGoal } from '@/lib/programMatch'
-import { toKg, ftInToCm, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
+import { toKg, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
 
 /** Same three values as the NutritionGoal schema enum. */
 type GoalType = NutritionDirection
@@ -371,7 +371,7 @@ export default function NutritionGoalsPage() {
           {userHeightCm && (
             <div>
               <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                {Math.floor(userHeightCm / 30.48)}&apos;{Math.round((userHeightCm % 30.48) / 2.54)}&quot;
+                {cmToFtIn(userHeightCm).ft}&apos;{cmToFtIn(userHeightCm).inches}&quot;
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Height</p>
             </div>

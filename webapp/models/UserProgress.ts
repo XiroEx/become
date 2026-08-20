@@ -166,6 +166,9 @@ export interface IUserProgress {
     mindReminder?: boolean
     goalNudge?: boolean
     superStreakAtRisk?: boolean
+    /** Daily mood + weight check-in — a push so it reaches members who don't
+     *  happen to open the app during the window the in-app modal relies on. */
+    checkInReminder?: boolean
   }
   lastPushSentAt?: {
     streakAtRisk?: Date
@@ -179,6 +182,7 @@ export interface IUserProgress {
     goalNudgeKey?: string
     goalNudgeKeyAt?: Date
     superStreakAtRisk?: Date
+    checkInReminder?: Date
   }
   // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
   // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
@@ -429,6 +433,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     mindReminder: { type: Boolean },
     goalNudge: { type: Boolean },
     superStreakAtRisk: { type: Boolean },
+    checkInReminder: { type: Boolean },
   },
   lastPushSentAt: {
     streakAtRisk: { type: Date },
@@ -441,6 +446,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     goalNudgeKey: { type: String },
     goalNudgeKeyAt: { type: Date },
     superStreakAtRisk: { type: Date },
+    checkInReminder: { type: Date },
   },
   timezoneOffset: { type: Number },
   timezone: { type: String },
