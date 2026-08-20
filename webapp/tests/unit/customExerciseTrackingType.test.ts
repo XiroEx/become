@@ -85,4 +85,24 @@ for (const { label, file, stateVar } of SURFACES) {
     const stateVarRef = new RegExp(`trackingType:\\s*${stateVar}\\b`)
     assert.match(call, stateVarRef, `expected the POST body to send the picked tracking type (${stateVar})`)
   })
+
+  test(`REGRESSION: ${label} no longer hardcodes category to "strength" when creating a custom exercise`, () => {
+    // Half-fixed the first time around: trackingType stopped being hardcoded,
+    // but category still was — so a custom Stairmaster with trackingType
+    // 'time_distance' still landed in the catalog as category 'strength' and
+    // was invisible to anything that filters by category (the Quick Session
+    // cardio finisher, admin exercise browsing).
+    const src = readSource(file)
+    const call = extractCreateCustomCall(src)
+    assert.doesNotMatch(
+      call,
+      /category:\s*['"]strength['"]/,
+      'category is hardcoded to strength regardless of the picked tracking type',
+    )
+    assert.match(
+      call,
+      /category:\s*categoryForTracking\(/,
+      'expected the POST body to derive category from the picked tracking type via categoryForTracking()',
+    )
+  })
 }

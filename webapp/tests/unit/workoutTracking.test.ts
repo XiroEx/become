@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracking, tracksWeight, tracksTime, inferTracking, DEFAULT_TRACKING } from '@/lib/workout/tracking'
+import { normalizeTracking, tracksWeight, tracksTime, inferTracking, categoryForTracking, DEFAULT_TRACKING } from '@/lib/workout/tracking'
 
 test('the vocabulary passes through untouched', () => {
   for (const t of ['reps_weight', 'reps_bodyweight', 'reps_only', 'time', 'time_distance', 'intervals', 'none'] as const) {
@@ -45,4 +45,16 @@ test('a legacy log is read from what it recorded, then the catalog', () => {
   assert.equal(inferTracking(undefined, undefined), DEFAULT_TRACKING)
   // A plank logged with both a duration and reps is not silently timed.
   assert.equal(inferTracking([{ duration: 45, reps: 12, weight: 20 }]), 'reps_weight')
+})
+
+test('a custom cardio machine gets a cardio category, not strength', () => {
+  // The stairmaster bug's other half: the create-exercise sheets only ask for
+  // a tracking type, so whatever picked "Time + Distance" has to land in the
+  // catalog as cardio or it never shows up in a Quick Session's cardio filter.
+  assert.equal(categoryForTracking('time_distance'), 'cardio')
+  assert.equal(categoryForTracking('intervals'), 'conditioning')
+  assert.equal(categoryForTracking('reps_weight'), 'strength')
+  assert.equal(categoryForTracking('reps_bodyweight'), 'strength')
+  assert.equal(categoryForTracking('time'), 'strength')
+  assert.equal(categoryForTracking(undefined), 'strength')
 })

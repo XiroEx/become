@@ -21,6 +21,16 @@
  * the prompt until tomorrow. The eight-hour window still exists, but only for
  * the genuinely partial case — you gave us one of the two and we may ask once
  * more later for the other.
+ *
+ * A fourth complaint surfaced after that: a member who opened the app many
+ * times across a day never saw the check-in at all. The eight-hour window was
+ * counted in raw elapsed hours, with no idea where the calendar day started —
+ * so a partial check-in shown late one day (say 11pm) could hold the throttle
+ * open past midnight into the next morning, and every brief re-open re-stamped
+ * `lastShownAt`, restarting the eight hours and pushing the lockout further
+ * into the new day. `shownToday` (see CheckInFacts) fixes this: the FIRST ask
+ * on a given check-in day always fires regardless of the eight-hour math: the
+ * throttle can only suppress a SECOND ask on the same day.
  */
 
 /** How long a partial check-in buys before we may ask for the missing half. */
@@ -45,6 +55,13 @@ export interface CheckInFacts {
   skippedToday: boolean
   /** When the modal was last put in front of this member, on any device. */
   lastShownAt?: Date | string | null
+  /**
+   * Whether `lastShownAt` falls on the member's CURRENT check-in day (the
+   * 4am-rolling window from lib/checkin/todayFacts) rather than a previous
+   * day's stamp. The caller computes this — it has the day-key/timezone
+   * context this function intentionally stays free of.
+   */
+  shownToday: boolean
 }
 
 export interface CheckInDecision {
@@ -71,6 +88,14 @@ export function checkInDecision(
 
   // "Skip for Today" means today, not eight hours.
   if (facts.skippedToday) return { due: false, reason: 'skipped', complete }
+
+  // The FIRST time we'd show it on a given check-in day always fires. Without
+  // this, a partial check-in stamped near yesterday's boundary (say 11pm) held
+  // the 8-hour throttle open into TODAY, and a member who only opens the app
+  // briefly a few times a day could go the whole day without ever clearing it —
+  // each brief open re-stamped `lastShownAt` and restarted an 8-hour lockout
+  // that outlived the calendar day it was meant to throttle.
+  if (!facts.shownToday) return { due: true, reason: 'due', complete }
 
   const lastShown = toMs(facts.lastShownAt)
   if (lastShown > 0) {

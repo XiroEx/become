@@ -83,6 +83,20 @@ export function setUnitLabel(value: string | null | undefined, count: number): s
 }
 
 /**
+ * The catalog category a freshly created custom exercise should get, based on
+ * how the member said it's tracked. The "Create X" sheets only ask for a
+ * tracking type, not a category, so this is what stands between "picked
+ * Time + Distance" and the exercise silently landing in `category: 'strength'`
+ * — which would then miss the Quick Session cardio filter and finisher.
+ */
+export function categoryForTracking(value?: string | null): 'cardio' | 'conditioning' | 'strength' {
+  const t = normalizeTracking(value)
+  if (t === 'time_distance') return 'cardio'
+  if (t === 'intervals') return 'conditioning'
+  return 'strength'
+}
+
+/**
  * Best guess at a tracking type for a log written before the type was stored.
  * A recorded duration means timed work; a recorded load means loaded work;
  * otherwise fall back to the catalog's answer, then to the default.
