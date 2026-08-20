@@ -26,6 +26,20 @@ test('the super streak leads the tile and is the emphasised page', () => {
   assert.equal(p[2].fullLabel, 'Workout streak')
 })
 
+test('the workout footer names "workouts", so days-on-track never reads as workouts done', () => {
+  // current is a day-on-track count and can run ahead of thisWeek, the actual
+  // completed-workout count — the compact tile is the one place a member sees
+  // the number with no page of explanation around it, so the footer has to
+  // carry the distinction on its own.
+  const onTrack = streakPages(base({ workout: { unit: 'days', current: 3, best: 3, thisWeek: 2, target: 3, weekLost: false } }))
+  const workout = onTrack.find(p => p.id === 'workout')!
+  assert.equal(workout.value, '3')
+  assert.equal(workout.footer, '2/3 workouts this week')
+
+  const lost = streakPages(base({ workout: { unit: 'days', current: 4, best: 4, thisWeek: 1, target: 3, weekLost: true } }))
+  assert.equal(lost.find(p => p.id === 'workout')!.footer, '1/3 workouts this week · off track')
+})
+
 test('no super streak → the day streak leads and nothing is emphasised', () => {
   const p = streakPages(base({ super: { current: 0, best: 1, activeToday: false, today: { nutrition: false, mindset: false, trained: false, restDay: false, weekOnTrack: true } } }))
   assert.equal(p[0].id, 'overall')
