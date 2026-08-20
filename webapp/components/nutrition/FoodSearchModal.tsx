@@ -1390,6 +1390,13 @@ export default function FoodSearchModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
+          // This modal can be nested inside another overlay (e.g. the Schedule
+          // Meals drawer's per-slot picker), whose own backdrop closes ON CLICK.
+          // Without this, every click in here — picking a food, opening the
+          // quantity picker — bubbles past our unhandled backdrop and closes
+          // the ANCESTOR overlay instead, which reads as "nothing happened,
+          // the search just closed."
+          onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-900 sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm sm:p-4 touch-none"
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',

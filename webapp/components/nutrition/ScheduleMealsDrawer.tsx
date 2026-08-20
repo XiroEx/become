@@ -116,6 +116,30 @@ function titleCaseTag(tag: string): string {
     .join('-')
 }
 
+interface ItemNutritionLike {
+  name: string
+  nutrition?: { calories?: number }
+  servings?: number
+}
+
+/**
+ * An individual item's own display name + the calories it actually
+ * contributes (its own nutrition snapshot × however many servings were
+ * planned/logged).
+ *
+ * Never fall back to the plan/log's `mealName` here: that field labels the
+ * GROUP (e.g. a plan built by applying a saved "Turkey Sandwich" meal), not
+ * any one ingredient inside it. Every item in that plan previously inherited
+ * the group's name, so a sandwich, its bun and its condiment all rendered as
+ * three rows all reading "Turkey Sandwich."
+ */
+export function itemDisplay(it: ItemNutritionLike): { name: string; cal: number } {
+  return {
+    name: it.name,
+    cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
+  }
+}
+
 function getHeaders(): HeadersInit {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
   const headers: HeadersInit = { 'Content-Type': 'application/json' }
@@ -662,7 +686,7 @@ function TabButton({
 
 // ── By day tab ────────────────────────────────────────────────────────────────
 
-interface ByDayTabProps {
+export interface ByDayTabProps {
   dateKey: string
   slotTags: string[]
   plansBySlot: Map<string, MealPlan[]>
@@ -672,7 +696,7 @@ interface ByDayTabProps {
   onDeletePlan: (planId: string) => void
 }
 
-function ByDayTab({
+export function ByDayTab({
   dateKey,
   slotTags,
   plansBySlot,
@@ -722,9 +746,8 @@ function ByDayTab({
           for (const it of p.items) {
             items.push({
               planId: p._id,
-              name: p.mealName ?? it.name,
               brand: it.brand,
-              cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
+              ...itemDisplay(it),
             })
           }
         }
@@ -1193,11 +1216,7 @@ function CopyDayTab({ fromKey, toKey, rangeMode, onApplied }: CopyDayTabProps) {
           for (const log of data?.logs ?? []) {
             const tag = (log.tags?.[0] ?? 'snack') as string
             for (const it of (log.items ?? []) as IMealItem[]) {
-              items.push({
-                tag,
-                name: log.mealName ?? it.name,
-                cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
-              })
+              items.push({ tag, ...itemDisplay(it) })
             }
           }
           setPreview(items)
@@ -1213,11 +1232,7 @@ function CopyDayTab({ fromKey, toKey, rangeMode, onApplied }: CopyDayTabProps) {
           for (const p of (data?.plans ?? []) as MealPlan[]) {
             if (p.status !== 'active') continue
             for (const it of p.items) {
-              items.push({
-                tag: p.tag,
-                name: p.mealName ?? it.name,
-                cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
-              })
+              items.push({ tag: p.tag, ...itemDisplay(it) })
             }
           }
           setPreview(items)
