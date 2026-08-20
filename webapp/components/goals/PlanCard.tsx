@@ -56,7 +56,7 @@ export default function PlanCard({ className = '' }: { className?: string }) {
   const unit = n.unit
   const DirIcon = n.direction === 'lose' ? TrendingDown : n.direction === 'gain' ? TrendingUp : Minus
   const p = n.pace
-  const status = n.status === 'achieved' ? 'Reached' : p?.status === 'behind' ? `${fmtUnit(p.behindByKg, unit)} behind` : p?.status === 'ahead' ? `${fmtUnit(p.aheadByKg, unit)} ahead` : p?.status === 'on' ? 'On pace' : p?.status === 'done' ? 'At target' : null
+  const status = n.status === 'achieved' || p?.status === 'done' ? 'Reached' : p?.status === 'behind' ? `${fmtUnit(p.behindByKg, unit)} behind` : p?.status === 'ahead' ? `${fmtUnit(p.aheadByKg, unit)} ahead` : p?.status === 'on' ? 'On pace' : null
 
   return (
     <Card className={className} data-testid="plan-card">

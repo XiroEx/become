@@ -74,11 +74,10 @@ export default function BecomingDoor({ goals, mind }: { goals: GoalProgress | nu
     : { value: '—', sub: undefined }
   const nutritionChip = !n ? { value: '—', sub: undefined }
     : !n.target.weight ? { value: 'Set a target', sub: undefined }
-    : n.status === 'achieved' ? { value: 'Reached ✓', sub: undefined }
+    : n.status === 'achieved' || n.pace?.status === 'done' ? { value: 'Reached ✓', sub: undefined }
     : n.pace?.status === 'behind' ? { value: `${fmtUnit(n.pace.behindByKg, n.unit)} behind`, sub: `→ ${Math.round(n.target.weight)} ${n.unit}` }
     : n.pace?.status === 'ahead' ? { value: 'Ahead', sub: n.pace.eta ? `${n.pace.eta} to ${Math.round(n.target.weight)}` : undefined }
     : n.pace?.status === 'on' ? { value: 'On pace', sub: n.pace.eta ? `${n.pace.eta} to ${Math.round(n.target.weight)}` : undefined }
-    : n.pace?.status === 'done' ? { value: 'At target', sub: undefined }
     : n.direction === 'maintain' ? { value: 'Holding', sub: `${Math.round(n.target.weight)} ${n.unit}` }
     : { value: `→ ${Math.round(n.target.weight)}`, sub: n.unit }
   const trainingChip = !t ? { value: '—', sub: undefined }
