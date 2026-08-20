@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, DEFAULT_TRACKING } from '@/lib/workout/tracking'
+import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, categoryForTracking, DEFAULT_TRACKING } from '@/lib/workout/tracking'
 
 test('the vocabulary passes through untouched', () => {
   for (const t of ['reps_weight', 'reps_bodyweight', 'reps_only', 'time', 'time_distance', 'intervals', 'none'] as const) {
@@ -73,4 +73,16 @@ test('a set ticks itself off when it has what its exercise asks for', () => {
   // An unknown or missing type reads as weighted work, not as "never filled".
   assert.equal(isSetFilled('reps', { reps: '10', weight: '95' }), true)
   assert.equal(isSetFilled(undefined, { reps: '10', weight: '95' }), true)
+})
+
+test('a custom cardio machine gets a cardio category, not strength', () => {
+  // The stairmaster bug's other half: the create-exercise sheets only ask for
+  // a tracking type, so whatever picked "Time + Distance" has to land in the
+  // catalog as cardio or it never shows up in a Quick Session's cardio filter.
+  assert.equal(categoryForTracking('time_distance'), 'cardio')
+  assert.equal(categoryForTracking('intervals'), 'conditioning')
+  assert.equal(categoryForTracking('reps_weight'), 'strength')
+  assert.equal(categoryForTracking('reps_bodyweight'), 'strength')
+  assert.equal(categoryForTracking('time'), 'strength')
+  assert.equal(categoryForTracking(undefined), 'strength')
 })

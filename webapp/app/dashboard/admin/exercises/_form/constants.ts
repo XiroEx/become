@@ -146,6 +146,7 @@ export const EQUIPMENT = [
   'rowing_machine',
   'assault_bike',
   'elliptical',
+  'stair_climber',
   'jump_rope',
   'backpack',
   'towel',

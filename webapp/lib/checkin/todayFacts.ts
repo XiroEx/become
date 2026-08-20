@@ -8,6 +8,28 @@
 
 import { isEntryOnDay } from '@/lib/dayWindow'
 
+/**
+ * The check-in feature's "day" starts at 4am local, not midnight — scoped to
+ * check-in ONLY (mood/weight history elsewhere still key off real midnight).
+ *
+ * A member who opens the app at 1am is finishing YESTERDAY's check-in, not
+ * starting today's; the day only rolls over once they're plausibly awake. This
+ * boundary governs "complete for today" and "skipped for today" — the 8-hour
+ * partial-reask throttle in lib/checkin/status.ts is deliberately independent
+ * of it and runs purely off `lastShownAt`, so the two rules can't fight over
+ * whether a stamp made shortly before 4am counts as "the same day".
+ */
+export const CHECK_IN_DAY_START_HOUR = 4
+
+/**
+ * Shifts a browser tz offset (Date.getTimezoneOffset semantics) so that
+ * feeding the result into localDateKey()/isEntryOnDay() rolls the calendar
+ * day over at CHECK_IN_DAY_START_HOUR local time instead of local midnight.
+ */
+export function checkInTzOffset(tzOffsetMinutes: number): number {
+  return tzOffsetMinutes + CHECK_IN_DAY_START_HOUR * 60
+}
+
 export interface CheckInSourceDoc {
   moodHistory?: Array<{ date: Date | string }>
   weightHistory?: Array<{ date: Date | string }>

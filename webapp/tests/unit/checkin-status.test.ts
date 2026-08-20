@@ -159,3 +159,58 @@ test('at most 3 prompts a day was the old behaviour; complete/skip now cap it at
   }
   assert.equal(prompts, 1, 'a member who skips should be asked once per day')
 })
+
+// ─── the 8-hour floor holds across the check-in day boundary ────────────────
+//
+// George's report on 2026-08-19: he opened the app repeatedly all day and
+// never saw the check-in. The first fix for that shipped a day-boundary
+// override — "the first ask of a new check-in day always fires, even under
+// 8h since the last one" — but George flagged that this can violate "never
+// within 8 hours of the last one" when the last showing landed shortly
+// before the check-in day's 4am rollover. The rule is corrected here:
+// `lastShownAt` alone gates the throttle, with no day-boundary exception, so
+// a stamp minutes before a day rolls over still buys the full 8 hours.
+
+test('a stamp minutes before the check-in day rolls over still buys the full 8 hours', () => {
+  // e.g. shown at 11:55pm — 10 minutes ago from "now", which is just past
+  // the check-in day's 4am rollover. Must NOT fire again yet.
+  const d = checkInDecision(
+    {
+      moodLoggedToday: false,
+      weightLoggedToday: false,
+      skippedToday: false,
+      lastShownAt: new Date(NOW.getTime() - 10 * 60 * 1000),
+    },
+    NOW,
+  )
+  assert.equal(d.due, false)
+  assert.equal(d.reason, 'throttled')
+})
+
+test('once 8 hours have passed, the next ask fires even on the same check-in day', () => {
+  const d = checkInDecision(
+    {
+      moodLoggedToday: false,
+      weightLoggedToday: false,
+      skippedToday: false,
+      lastShownAt: hoursAgo(8),
+    },
+    NOW,
+  )
+  assert.equal(d.due, true)
+  assert.equal(d.reason, 'due')
+})
+
+test('never having been shown before is always due, day boundary or not', () => {
+  const d = checkInDecision(
+    {
+      moodLoggedToday: false,
+      weightLoggedToday: false,
+      skippedToday: false,
+      lastShownAt: null,
+    },
+    NOW,
+  )
+  assert.equal(d.due, true)
+  assert.equal(d.reason, 'due')
+})

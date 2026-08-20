@@ -21,6 +21,22 @@
  * the prompt until tomorrow. The eight-hour window still exists, but only for
  * the genuinely partial case — you gave us one of the two and we may ask once
  * more later for the other.
+ *
+ * A fourth complaint surfaced after that: a member who opened the app many
+ * times across a day never saw the check-in at all. A day-boundary override
+ * ("the first ask of a new check-in day always fires, even under 8h since the
+ * last one") shipped to fix it — but that traded one bug for another: a
+ * partial check-in stamped shortly before the check-in day's 4am rollover
+ * could then re-fire minutes later once the new day started, which is exactly
+ * the "getting it at night" complaint in a different shape. The rule is
+ * simpler and correct without the override: `lastShownAt` alone gates the
+ * eight-hour throttle, full stop, with no day-boundary exception. Since eight
+ * hours is under a third of a day, a member who has the app installed and
+ * opens it at least once during a normal waking day will still clear the
+ * throttle well before the day is out — the "never saw it all day" case does
+ * not require special-casing the day boundary, only that `lastShownAt` is
+ * stamped exclusively when the modal is actually shown (see the POST handler
+ * in app/api/checkin/route.ts), never on a mere status check.
  */
 
 /** How long a partial check-in buys before we may ask for the missing half. */

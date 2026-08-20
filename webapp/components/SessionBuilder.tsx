@@ -14,7 +14,7 @@ import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/qu
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
-import { setUnitLabel } from "@/lib/workout/tracking";
+import { setUnitLabel, categoryForTracking } from "@/lib/workout/tracking";
 
 interface SearchExercise {
   slug: string;
@@ -288,7 +288,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: newTrackingType, muscleGroup: "other", category: "strength" }),
+        body: JSON.stringify({ name, trackingType: newTrackingType, muscleGroup: "other", category: categoryForTracking(newTrackingType) }),
       });
       if (!res.ok) return;
       const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string } };
