@@ -20,7 +20,14 @@ import {
 } from '@/lib/nutrition/mealSchedule'
 import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
-import { displayServingCalories } from '@/lib/nutrition/rowServing'
+import {
+  buildServingChoiceGroups,
+  servingChoiceDisplayLabel,
+  variantForServingChoice,
+  type ServingChoice,
+  type ServingOptionVariant,
+} from '@/lib/nutrition/servingOptions'
+import { nutritionForQuantity } from '@/lib/foodMath'
 import { shouldShowOverview } from '@/lib/nutrition/overviewSections'
 import type { ServingUnit } from '@/models/Food'
 
@@ -178,75 +185,55 @@ function pickDefaultVariantIdx(variants: FoodVariant[] | undefined): number {
   return idx >= 0 ? idx : 0
 }
 
-// Pattern matching a parenthesized weight/volume in a label, e.g. "(28 g)".
-const ROW_PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|milliliters?|oz|ounces?|fl\s*oz)\s*\)/i
-
-// Friendly serving label for the row underline. USDA / OFF foods often store
-// nutrition per 100 g but carry the "real" household serving in displayLabel
-// or alternateServings[0]. Showing raw "100 g" when the food has a 28 g pouch
-// label is misleading — fall through the better signals first. Also append
-// "(28 g)" when the chosen label is just a count ("12 chips") and we know
-// the gram weight via the bridge or a mass-family servingSize.
-// Scale a food's stored nutrition (which for OFF imports is per-100g/ml) down
-// to its "actual" per-serving when gramsPerServing / mlPerServing diverge
-// from servingSize. Mirrors the QuantityPicker primary-chip behavior so the
-// number alongside the search result matches what the picker will preview.
-// Delegates to the shared helper so the row's number always describes the row's
-// label. This used to hand-roll the scale and understood only the gram/ml
-// bridge, which Open Food Facts imports do not have — so every OFF row printed
-// its per-100 g calories beside a label naming a much smaller portion.
-//
-// Defensive rounding stays here: a row arriving without flattened nutrition once
-// threw and unmounted the whole sheet ("This page couldn't load"). A missing
-// number should cost one wrong row, never the page.
-function rowCalories(food: FoodResult): number {
-  return Math.round(displayServingCalories(food))
+// The collapsed row, the expanded picker's unit button, and the editable
+// "friendly name" bubble above it must all show the SAME default serving.
+// They used to be three hand-rolled selectors that "mirrored" each other and
+// drifted — a food with no displayLabel but a real native serving (e.g.
+// "1 serving") and a separate "1 package" alternate fell straight through to
+// the alternate in the old row/label logic, while `buildServingChoiceGroups`
+// (what the inline picker's own default, `choiceGroups.servings[0]`, is built
+// from) correctly kept the native serving as the default. And a food whose
+// displayLabel is just a bare echo of the per-100g/ml storage basis ("100 g")
+// used to win outright in the old logic, arbitrarily preferring that over a
+// real named serving the food also carries — exactly the builder's own
+// suppression rule exists to prevent. Deriving all three surfaces from the
+// one builder makes them agree by construction instead of by three people
+// independently guessing the same priority order.
+export function defaultServingChoice(variant: ServingOptionVariant): ServingChoice {
+  const fallback: ServingChoice = {
+    id: 'serving-primary',
+    group: 'servings',
+    label: prettifyUnitCodes(variant.displayLabel || `${variant.servingSize} ${variant.servingUnit}`),
+    quantity: variant.servingSize,
+    unit: variant.servingUnit as Unit,
+  }
+  try {
+    return buildServingChoiceGroups(variant).servings[0] ?? fallback
+  } catch {
+    return fallback
+  }
 }
 
-function preferredServingLabel(food: FoodResult): string {
-  let base = ''
-  if (food.displayLabel && food.displayLabel.trim()) base = food.displayLabel.trim()
-  else if (food.alternateServings && food.alternateServings.length > 0) {
-    const alt = food.alternateServings[0]
-    if (alt.label && alt.label.trim()) base = alt.label.trim()
-  } else if (food.gramsPerServing != null && food.gramsPerServing > 0
-      && Math.abs(food.gramsPerServing - food.servingSize) > 0.1) {
-    base = `${Math.round(food.gramsPerServing)} g`
-  } else {
-    base = `${food.servingSize} ${food.servingUnit}`
+// Defensive: a row arriving without flattened nutrition once threw and
+// unmounted the whole sheet ("This page couldn't load"). A missing number
+// should cost one wrong row, never the page.
+export function rowCalories(food: FoodResult): number {
+  const choice = defaultServingChoice(food)
+  try {
+    const effective = variantForServingChoice(food, choice)
+    return Math.round(nutritionForQuantity(effective, choice.quantity, choice.unit).calories)
+  } catch {
+    return 0
   }
-  // Normalize raw upstream codes ("GRM"/"ONZ"/etc.) to friendly forms.
-  base = prettifyUnitCodes(base)
+}
 
-  if (ROW_PARENS_WEIGHT_RE.test(base)) return base
-
-  // Append "(N g)" when we have a gram bridge (or the variant is mass-native
-  // with a servingSize that isn't itself "100 g"). Skip the trivial "100 g"
-  // tail when the storage size already says it.
-  let grams: number | null = null
-  if (food.gramsPerServing != null && food.gramsPerServing > 0) grams = food.gramsPerServing
-  else if (food.servingUnit === 'g') grams = food.servingSize
-  else if (food.servingUnit === 'oz') grams = food.servingSize * 28.3495
-
-  if (grams != null && grams > 0
-      && !(Math.abs(grams - food.servingSize) < 0.5 && food.servingUnit === 'g')) {
-    const rounded = Math.abs(grams - Math.round(grams)) < 0.05
-      ? String(Math.round(grams))
-      : (Math.round(grams * 10) / 10).toString()
-    // Don't double up — if the base label already mentions the same gram
-    // value inline (e.g. "38 g"), skip the suffix.
-    const bareMatch = /\b(\d+(?:\.\d+)?)\s*g\b/i.exec(base)
-    if (bareMatch && Math.abs(Number(bareMatch[1]) - grams) < 0.5) return base
-    return `${base} (${rounded} g)`
-  }
-  return base
+export function preferredServingLabel(food: FoodResult): string {
+  return servingChoiceDisplayLabel(defaultServingChoice(food))
 }
 
 function variantFriendlyLabel(variant: FoodVariant | null): string {
   if (!variant) return ''
-  if (variant.displayLabel?.trim()) return prettifyUnitCodes(variant.displayLabel.trim())
-  const alt = variant.alternateServings?.find(s => s.label?.trim())
-  return alt ? prettifyUnitCodes(alt.label.trim()) : ''
+  return servingChoiceDisplayLabel(defaultServingChoice(variant))
 }
 
 /**
