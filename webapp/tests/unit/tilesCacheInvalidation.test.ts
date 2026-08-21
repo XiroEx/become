@@ -33,6 +33,13 @@ const MEAL_LOG_WRITE_ROUTES = [
   'app/api/meal-logs/[id]/items/[itemId]/route.ts',
   'app/api/meal-logs/combine/route.ts',
   'app/api/meal-plans/[id]/promote/route.ts',
+  // "Log this meal" from the saved-meals list (My Stuff) — creates a MealLog
+  // the same as every route above, but was missed when this list was first
+  // written: it lived under app/api/meals/ rather than app/api/meal-logs/,
+  // so a name-based sweep for the fix skipped it. That gap is exactly what
+  // still read as "logged a meal, had to leave and come back" after the
+  // rest of this list shipped.
+  'app/api/meals/[id]/log/route.ts',
 ]
 
 for (const relPath of MEAL_LOG_WRITE_ROUTES) {
