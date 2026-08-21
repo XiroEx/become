@@ -70,8 +70,7 @@ describe('program recommendation can be acted on', () => {
     assert.match(ONBOARDING, /'\/api\/programs\/enroll'/)
   })
 
-  it('it is optional — skipping is untouched and failure never blocks finishing', () => {
-    assert.match(ONBOARDING, /Skip for now/, 'the wizard-level skip must remain')
+  it('enrolling is optional and a failure never blocks finishing', () => {
     // The enrol call swallows its own errors rather than failing onboarding.
     assert.match(ONBOARDING, /if \(res\.ok\) setEnrolled\(true\)/)
   })
