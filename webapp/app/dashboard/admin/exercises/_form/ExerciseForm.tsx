@@ -6,7 +6,11 @@ import PageTransition from '@/components/PageTransition'
 import VideosEditor from './VideosEditor'
 import AdminVideoPreview from './AdminVideoPreview'
 import VideoFramingEditor from '@/components/admin/VideoFramingEditor'
+import VideoTrimEditor from '@/components/admin/VideoTrimEditor'
+import VideoUploadButton from '@/components/admin/VideoUploadButton'
 import type { VideoFramingOverride } from '@/lib/videoFraming'
+import type { VideoTrimOverride } from '@/lib/videoTrim'
+import { invalidateExerciseVideoCache } from '@/lib/data/exerciseVideos'
 import {
   CATEGORIES,
   MECHANICS,
@@ -53,6 +57,7 @@ export interface ExerciseFormValue {
   videoWidth?: number | null
   videoHeight?: number | null
   videoFraming?: VideoFramingOverride | null
+  videoTrim?: VideoTrimOverride | null
   tags: string[]
   bodyRegion: (typeof BODY_REGIONS)[number]
   isActive: boolean
@@ -91,6 +96,7 @@ export const EMPTY_EXERCISE: ExerciseFormValue = {
   videoWidth: null,
   videoHeight: null,
   videoFraming: null,
+  videoTrim: null,
   tags: [],
   bodyRegion: 'full_body',
   isActive: true,
@@ -156,13 +162,23 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
         ? `/api/exercises/${encodeURIComponent(originalSlug ?? value.slug)}`
         : '/api/exercises'
       const method = isEdit ? 'PUT' : 'POST'
+      // `JSON.stringify` drops keys whose value is `undefined`, so an emptied
+      // URL input used to vanish from the payload entirely and the server had
+      // no way to tell "cleared" from "not submitted" — the save succeeded and
+      // the old video stayed. Send an explicit `null` for the nullable media
+      // fields so a clear is always transmitted.
+      const payload = {
+        ...value,
+        videoUrl: value.videoUrl?.trim() ? value.videoUrl.trim() : null,
+        thumbnailUrl: value.thumbnailUrl?.trim() ? value.thumbnailUrl.trim() : null,
+      }
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(value),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string }
@@ -550,14 +566,49 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
 
         {/* Primary media */}
         <Section title="Primary Media (denormalized on the exercise itself)">
+          {/* Upload lives here, next to the field it writes, rather than down
+              in Linked ExerciseVideos — that section's own copy reads as if it
+              only touches the separate collection, when in fact the upload
+              replaces THIS video. */}
+          <Field label="Video file" full>
+            <VideoUploadButton
+              uploadUrl={`/api/exercises/${encodeURIComponent(originalSlug ?? value.slug)}/video`}
+              deleteUrl={`/api/exercises/${encodeURIComponent(originalSlug ?? value.slug)}/video`}
+              hasVideo={Boolean(value.videoUrl)}
+              disabled={!isEdit || !(originalSlug ?? value.slug)}
+              disabledHint="Save the exercise once before uploading a video."
+              onUploaded={({ videoUrl }) => {
+                // The upload route resets dims, framing and trim server-side
+                // (new file, the old numbers describe nothing). Mirror that
+                // locally or the form would push stale values back on save.
+                update('videoUrl', videoUrl)
+                update('videoWidth', null)
+                update('videoHeight', null)
+                update('videoFraming', null)
+                update('videoTrim', null)
+                invalidateExerciseVideoCache()
+              }}
+              onRemoved={() => {
+                update('videoUrl', '')
+                update('videoWidth', null)
+                update('videoHeight', null)
+                update('videoFraming', null)
+                update('videoTrim', null)
+                invalidateExerciseVideoCache()
+              }}
+            />
+          </Field>
           <Field label="Video URL" full>
             <input
               type="text"
               value={value.videoUrl ?? ''}
-              onChange={(e) => update('videoUrl', e.target.value || undefined)}
+              onChange={(e) => update('videoUrl', e.target.value)}
               className={inputCls}
               placeholder="https://… or /videos/bench-press.mp4"
             />
+            <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+              Clear this field and save to take the video off the exercise.
+            </p>
             {value.videoUrl && (
               <div className="mt-2 space-y-2">
                 <AdminVideoPreview
@@ -566,6 +617,7 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
                   videoWidth={value.videoWidth}
                   videoHeight={value.videoHeight}
                   videoFraming={value.videoFraming}
+                  videoTrim={value.videoTrim}
                   onDimensions={(w, h) => {
                     // Mirror locally so the framing editor sees the new dims
                     // immediately; the back-write is fire-and-forget. Skip if
@@ -605,6 +657,18 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
                     }}
                   />
                 )}
+                {/* Trim — same "needs a saved slug" constraint as framing. */}
+                {isEdit && (originalSlug ?? value.slug) && (
+                  <VideoTrimEditor
+                    slug={originalSlug ?? value.slug}
+                    videoUrl={value.videoUrl}
+                    videoWidth={value.videoWidth}
+                    videoHeight={value.videoHeight}
+                    videoFraming={value.videoFraming}
+                    videoTrim={value.videoTrim}
+                    onSaved={(next) => update('videoTrim', next)}
+                  />
+                )}
               </div>
             )}
           </Field>
@@ -612,7 +676,7 @@ export default function ExerciseForm({ mode, originalSlug, initialValue }: Props
             <input
               type="text"
               value={value.thumbnailUrl ?? ''}
-              onChange={(e) => update('thumbnailUrl', e.target.value || undefined)}
+              onChange={(e) => update('thumbnailUrl', e.target.value)}
               className={inputCls}
             />
             {value.thumbnailUrl && (

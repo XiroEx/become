@@ -15,6 +15,7 @@ import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
@@ -47,18 +48,38 @@ function mimeForVideoUrl(u: string): string {
 function VideoPlayer({
   exerciseName,
   exerciseSlug,
+  exerciseVideoUrl,
+  exerciseThumbnailUrl,
   videoWidth,
   videoHeight,
   videoFraming,
+  videoTrim,
 }: {
   exerciseName: string;
   exerciseSlug?: string;
+  /** The video denormalized onto the exercise — authoritative when present. */
+  exerciseVideoUrl?: string | null;
+  exerciseThumbnailUrl?: string | null;
   videoWidth?: number | null;
   videoHeight?: number | null;
   videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
 }) {
-  const videoUrl = getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  // The exercise's own record wins. The name-keyed cache is only consulted for
+  // legacy rows whose video never got denormalized onto the Exercise — going
+  // to it first is what made a video an admin had removed keep playing.
+  const videoUrl = exerciseVideoUrl?.trim() || getExerciseVideoUrl(exerciseName);
+  const thumbnailUrl = exerciseThumbnailUrl?.trim() || getExerciseThumbnail(exerciseName);
+
+  // No video at all — say so rather than playing an unrelated placeholder clip.
+  if (!videoUrl) {
+    return (
+      <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">No demo video yet</p>
+      </div>
+    );
+  }
+
   // Direct = anything that ends in a known video extension, regardless of
   // whether it's a local path or a remote https:// URL.
   const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
@@ -71,6 +92,7 @@ function VideoPlayer({
         videoWidth={videoWidth}
         videoHeight={videoHeight}
         videoFraming={videoFraming}
+        videoTrim={videoTrim}
         showMuteToggle
         showFullscreenToggle
         onDimensions={(w, h) => {
@@ -215,6 +237,7 @@ interface Exercise {
   videoWidth?: number | null;
   videoHeight?: number | null;
   videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
   groupId?: string;
@@ -1468,9 +1491,12 @@ export default function WorkoutFormPage() {
                             <VideoPlayer
                               exerciseName={exercise.name}
                               exerciseSlug={exercise.exerciseSlug}
+                              exerciseVideoUrl={exercise.videoUrl}
+                              exerciseThumbnailUrl={exercise.thumbnailUrl}
                               videoWidth={exercise.videoWidth}
                               videoHeight={exercise.videoHeight}
                               videoFraming={exercise.videoFraming}
+                              videoTrim={exercise.videoTrim}
                             />
                           </div>
 

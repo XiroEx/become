@@ -3,10 +3,16 @@ import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
 import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
+import ExerciseVideo from '@/models/ExerciseVideo';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 
 interface RouteParams {
   params: Promise<{ slug: string }>;
+}
+
+/** A URL field counts as "set" only when it has non-whitespace content. */
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.trim().length > 0;
 }
 
 // GET /api/exercises/[slug] — fetch single exercise (any authed user)
@@ -101,20 +107,61 @@ async function applyUpdate(request: NextRequest, slug: string) {
   ] as const;
 
   const update: Record<string, unknown> = {};
+  const unset: Record<string, ''> = {};
   for (const key of allowed) {
     if (key in body) update[key] = body[key];
+  }
+
+  // Clearing the Video URL field has to actually clear the video. Previously
+  // the form sent `undefined` for an emptied input, `JSON.stringify` dropped
+  // the key, and this loop never saw it — so the save reported success while
+  // the old URL stayed on the document. The form now sends an explicit `null`;
+  // treat null/'' as "remove the primary video" and take the dependent media
+  // fields with it, since dimensions, framing and trim all describe a file
+  // that is no longer attached.
+  const clearingVideo = 'videoUrl' in update && !isNonEmptyString(update.videoUrl);
+  if (clearingVideo) {
+    update.videoUrl = null;
+    update.videoWidth = null;
+    update.videoHeight = null;
+    unset.videoFraming = '';
+    unset.videoTrim = '';
+    // `videoStorageKey` is deliberately kept. The bytes stay in the bucket so
+    // this is undoable by pasting the URL back, and the next upload still
+    // knows which object to reap. Use DELETE /api/exercises/[slug]/video for
+    // the hard delete that also drops the blob.
+  }
+  if ('thumbnailUrl' in update && !isNonEmptyString(update.thumbnailUrl)) {
+    update.thumbnailUrl = null;
   }
 
   // Custom exercises are owner-managed via /api/exercises/custom — admins must
   // NOT mutate them through this admin endpoint.
   const exercise = await Exercise.findOneAndUpdate(
     { slug, isCustom: { $ne: true } },
-    { $set: update },
+    Object.keys(unset).length ? { $set: update, $unset: unset } : { $set: update },
     { new: true, runValidators: true }
   );
 
   if (!exercise) {
     return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+  }
+
+  // Retire the linked ExerciseVideo row too. Without this the name-keyed
+  // fallback in `lib/data/exerciseVideos.ts` resurrects the video the admin
+  // just removed, which reads as "it didn't save".
+  //
+  // `retired` rather than a delete: plenty of exercises got their video from a
+  // seed script that only ever wrote the ExerciseVideo row and never
+  // denormalized onto the Exercise, so a null `Exercise.videoUrl` cannot by
+  // itself mean "no video". The explicit status is what separates "never had a
+  // primary" (keep falling back) from "an admin took this one off" (don't).
+  // The row stays visible + restorable in the Linked ExerciseVideos list.
+  if (clearingVideo) {
+    await ExerciseVideo.updateMany(
+      { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
+      { $set: { status: 'retired' }, $unset: { framing: '', trim: '' } }
+    );
   }
 
   invalidateExerciseCache();

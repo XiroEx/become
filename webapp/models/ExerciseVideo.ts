@@ -1,6 +1,13 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type ExerciseVideoStatus = 'pending' | 'active' | 'failed';
+/**
+ * `retired` means an admin explicitly took this video off the exercise. It is
+ * distinct from `pending` (never had one) because a null `Exercise.videoUrl`
+ * cannot by itself mean "no video" — seed scripts wrote plenty of rows here
+ * without ever denormalizing onto the Exercise, so the name-keyed fallback has
+ * to keep working for those. Retired rows are skipped by that fallback.
+ */
+export type ExerciseVideoStatus = 'pending' | 'active' | 'failed' | 'retired';
 
 /**
  * Mirrors `IVideoFraming` from `models/Exercise.ts`. Duplicated rather than
@@ -13,6 +20,12 @@ export interface IExerciseVideoFraming {
   positionX?: number;
   positionY?: number;
   zoom?: number;
+}
+
+/** Mirrors `IVideoTrim` from `models/Exercise.ts`. Seconds, non-destructive. */
+export interface IExerciseVideoTrim {
+  start?: number;
+  end?: number;
 }
 
 export interface IExerciseVideo extends Document {
@@ -39,6 +52,8 @@ export interface IExerciseVideo extends Document {
   videoHeight?: number | null;
   /** Per-video framing override; mirrors `Exercise.videoFraming`. */
   framing?: IExerciseVideoFraming | null;
+  /** Per-video in/out points in seconds; mirrors `Exercise.videoTrim`. */
+  trim?: IExerciseVideoTrim | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +63,11 @@ const ExerciseVideoFramingSchema = new Schema<IExerciseVideoFraming>({
   positionX: { type: Number, default: undefined, min: 0, max: 100 },
   positionY: { type: Number, default: undefined, min: 0, max: 100 },
   zoom:      { type: Number, default: undefined, min: 50, max: 400 },
+}, { _id: false });
+
+const ExerciseVideoTrimSchema = new Schema<IExerciseVideoTrim>({
+  start: { type: Number, default: undefined, min: 0 },
+  end:   { type: Number, default: undefined, min: 0 },
 }, { _id: false });
 
 const ExerciseVideoSchema = new Schema<IExerciseVideo>(
@@ -85,13 +105,14 @@ const ExerciseVideoSchema = new Schema<IExerciseVideo>(
       default: true,
     },
     storageKey: { type: String, default: null, index: true },
-    status: { type: String, enum: ['pending', 'active', 'failed'], default: 'active' },
+    status: { type: String, enum: ['pending', 'active', 'failed', 'retired'], default: 'active' },
     sizeBytes: { type: Number, default: null },
     mimeType: { type: String, default: null },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     videoWidth: { type: Number, default: null },
     videoHeight: { type: Number, default: null },
     framing: { type: ExerciseVideoFramingSchema, default: undefined },
+    trim: { type: ExerciseVideoTrimSchema, default: undefined },
   },
   {
     timestamps: true,

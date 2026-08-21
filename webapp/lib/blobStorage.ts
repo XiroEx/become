@@ -165,6 +165,19 @@ export function exerciseVideoKey(slug: string, mimeType: string): string {
   return `exercises/${safeSlug}/${id}${ext}`
 }
 
+/**
+ * Same idea for a user's own custom exercise, but namespaced per user so the
+ * bucket stays browsable and a per-user quota / cleanup sweep is a prefix
+ * listing rather than a full scan.
+ */
+export function customExerciseVideoKey(userId: string, slug: string, mimeType: string): string {
+  const ext = extFromMime(mimeType)
+  const id = Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+  const safeUser = userId.replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const safeSlug = slug.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  return `custom-exercises/${safeUser}/${safeSlug}/${id}${ext}`
+}
+
 function extFromMime(mime: string): string {
   switch (mime) {
     case 'video/mp4': return '.mp4'
