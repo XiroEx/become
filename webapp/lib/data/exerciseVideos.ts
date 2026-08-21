@@ -1,16 +1,47 @@
-// Exercise video utilities - fetches from database API
-// Videos are stored in database and fetched via API
+// Exercise video lookup — LEGACY FALLBACK ONLY.
+//
+// The authoritative video for an exercise is `Exercise.videoUrl`, which
+// `lib/hydrateExercises.ts` denormalizes onto every exercise the API returns.
+// Callers must prefer that. This module exists for the rows that predate the
+// denormalization: exercises whose video was only ever written to the
+// `exercise_videos` collection by a seed script, and program entries so old
+// they carry a name but no `exerciseSlug` to resolve against.
+//
+// Two behaviours were deliberately removed here:
+//
+//   1. Substring matching. The old cache lookup fell back to
+//      `lowerName.includes(key) || key.includes(lowerName)`, so "Bench Press"
+//      happily matched the stored video for "Incline Bench Press" and showed
+//      users a demo of a different exercise.
+//   2. Hash-bucketed placeholders. When nothing matched it returned
+//      `/placeholder.mp4` or `/placeholder2.mp4` picked by a hash of the name,
+//      so an exercise with no video still rendered a video. Combined with (1)
+//      this is why removing a video in the admin looked like it "didn't save":
+//      something always played.
+//
+// Both now resolve to `null`, and callers render an explicit empty state.
 
-// Placeholder video URLs (only used when video not in database)
-const PLACEHOLDER_VIDEO_1 = '/placeholder.mp4';
-const PLACEHOLDER_VIDEO_2 = '/placeholder2.mp4';
-const PLACEHOLDER_THUMBNAIL = '/icons/icon-192.png';
+// Videos an admin has explicitly taken off an exercise are excluded from the
+// cache — see the `retired` status on models/ExerciseVideo.ts.
+const RETIRED_STATUS = 'retired';
 
-// Cache for fetched videos from database
-let videoCache: Map<string, { videoUrl: string; thumbnailUrl: string | null; isPlaceholder: boolean }> | null = null;
+interface CachedVideo {
+  videoUrl: string;
+  thumbnailUrl: string | null;
+  isPlaceholder: boolean;
+}
+
+let videoCache: Map<string, CachedVideo> | null = null;
 let cachePromise: Promise<void> | null = null;
 
-// Initialize cache from API (for client-side use)
+interface ApiVideo {
+  exerciseName?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string | null;
+  isPlaceholder?: boolean;
+  status?: string;
+}
+
 async function initializeCache(): Promise<void> {
   if (videoCache) return;
   if (cachePromise) {
@@ -22,93 +53,62 @@ async function initializeCache(): Promise<void> {
     try {
       const response = await fetch('/api/exercise-videos');
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { videos?: ApiVideo[] };
         videoCache = new Map();
         for (const video of data.videos || []) {
+          if (!video.exerciseName || !video.videoUrl) continue;
+          if (video.status === RETIRED_STATUS) continue;
           videoCache.set(video.exerciseName.toLowerCase(), {
             videoUrl: video.videoUrl,
             thumbnailUrl: video.thumbnailUrl || null,
             isPlaceholder: video.isPlaceholder ?? true,
           });
         }
-        console.log('[ExerciseVideos] Cache initialized with', videoCache.size, 'videos');
       }
-    } catch (error) {
-      console.error('Failed to fetch exercise videos:', error);
-      videoCache = new Map(); // Empty cache on error
+    } catch {
+      videoCache = new Map(); // Empty cache on error — callers render the empty state.
     }
   })();
 
   await cachePromise;
 }
 
-// Get video URL for an exercise (synchronous - uses cache or fallback)
-export function getExerciseVideoUrl(exerciseName: string): string {
-  const lowerName = exerciseName.toLowerCase();
-  
-  // If cache is available, try to get from cache
-  if (videoCache) {
-    // Exact match
-    const cached = videoCache.get(lowerName);
-    if (cached) {
-      console.log('[ExerciseVideos] Found exact match for', exerciseName, '->', cached.videoUrl);
-      return cached.videoUrl;
-    }
-    
-    // Try partial match (e.g., "Back Squat" matches "back squat")
-    for (const [key, value] of videoCache.entries()) {
-      if (lowerName.includes(key) || key.includes(lowerName)) {
-        console.log('[ExerciseVideos] Found partial match for', exerciseName, 'via', key, '->', value.videoUrl);
-        return value.videoUrl;
-      }
-    }
-    
-    console.log('[ExerciseVideos] No match found for', exerciseName, '- using placeholder');
-  } else {
-    console.log('[ExerciseVideos] Cache not initialized yet for', exerciseName);
-  }
-  
-  // Fallback to placeholder based on hash
-  const hash = lowerName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return hash % 2 === 0 ? PLACEHOLDER_VIDEO_1 : PLACEHOLDER_VIDEO_2;
+/**
+ * Exact (case-insensitive) name match only. Returns `null` when there is no
+ * video for this exercise — callers must handle that rather than falling back
+ * to a placeholder clip.
+ */
+export function getExerciseVideoUrl(exerciseName: string): string | null {
+  if (!videoCache || !exerciseName) return null;
+  return videoCache.get(exerciseName.toLowerCase())?.videoUrl ?? null;
 }
 
-// Get thumbnail for an exercise
-export function getExerciseThumbnail(exerciseName: string): string {
-  const lowerName = exerciseName.toLowerCase();
-  
-  // If cache is available, try to get from cache
-  if (videoCache) {
-    const cached = videoCache.get(lowerName);
-    if (cached?.thumbnailUrl) {
-      return cached.thumbnailUrl;
-    }
-  }
-  
-  // Fallback to placeholder thumbnail
-  return PLACEHOLDER_THUMBNAIL;
+/** Thumbnail for an exercise, or `null` when we have none. */
+export function getExerciseThumbnail(exerciseName: string): string | null {
+  if (!videoCache || !exerciseName) return null;
+  return videoCache.get(exerciseName.toLowerCase())?.thumbnailUrl ?? null;
 }
 
-// Async version that ensures cache is loaded first
-export async function getExerciseVideoUrlAsync(exerciseName: string): Promise<string> {
+export async function getExerciseVideoUrlAsync(exerciseName: string): Promise<string | null> {
   await initializeCache();
   return getExerciseVideoUrl(exerciseName);
 }
 
-// Async version for thumbnail
-export async function getExerciseThumbnailAsync(exerciseName: string): Promise<string> {
+export async function getExerciseThumbnailAsync(exerciseName: string): Promise<string | null> {
   await initializeCache();
   return getExerciseThumbnail(exerciseName);
 }
 
-// Initialize cache on module load (non-blocking)
+/**
+ * Drop the cache so the next lookup refetches. Called after an admin changes a
+ * video, otherwise the removed clip stays visible for the rest of the session.
+ */
+export function invalidateExerciseVideoCache(): void {
+  videoCache = null;
+  cachePromise = null;
+}
+
+// Warm the cache on module load (non-blocking).
 if (typeof window !== 'undefined') {
   initializeCache().catch(() => {});
 }
-
-// Legacy exports for compatibility
-export function getVideoId(exerciseName: string): string | null {
-  return null;
-}
-
-export const exerciseVideos: Record<string, string> = {};

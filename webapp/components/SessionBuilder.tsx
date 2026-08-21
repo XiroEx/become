@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles, Layers, Unlink } from "lucide-react";
+import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
@@ -322,7 +323,15 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   // Search shows catalog matches + your matching customs (deduped by slug).
   const q = query.trim().toLowerCase();
   const customMatches = q.length >= 2 ? customs.filter((c) => c.name.toLowerCase().includes(q)) : [];
-  const merged = [...results, ...customMatches.filter((c) => !results.some((r) => r.slug === c.slug))];
+  // `isCustom` is attached here, not read off the wire: /api/exercises/search
+  // deliberately excludes customs (they are fetched separately above), so this
+  // merge is the only place that knows which rows are the user's own.
+  const merged = [
+    ...results.map((r) => ({ ...r, isCustom: false })),
+    ...customMatches
+      .filter((c) => !results.some((r) => r.slug === c.slug))
+      .map((c) => ({ ...c, isCustom: true })),
+  ];
 
   return (
     <div className={className}>
@@ -361,7 +370,10 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                   className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 disabled:opacity-40 dark:hover:bg-zinc-700/50"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{r.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{r.name}</p>
+                      {r.isCustom && <CustomExerciseBadge variant="inline" />}
+                    </div>
                     <p className="text-xs text-zinc-400 dark:text-zinc-500">{r.trackingType.replace(/_/g, " ")}</p>
                   </div>
                   <Plus className="ml-2 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />

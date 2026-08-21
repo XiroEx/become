@@ -232,6 +232,22 @@ export interface IVideoFraming {
   zoom?: number;
 }
 
+/**
+ * Non-destructive trim. We never re-encode the file (no ffmpeg in the runtime
+ * image) — instead we store in/out points in seconds and every player seeks to
+ * `start` and loops back once it passes `end`. That keeps the trim reversible:
+ * the original bytes stay in the bucket, so a bad in/out is one edit away from
+ * being fixed rather than a re-upload.
+ *
+ * `undefined` on either field means "no bound on that side".
+ */
+export interface IVideoTrim {
+  /** Seconds from the start of the file where playback begins. */
+  start?: number;
+  /** Seconds from the start of the file where playback loops back to `start`. */
+  end?: number;
+}
+
 // ─── Cardio Metrics Sub-document ─────────────────────────────────────────────
 
 export interface ICardioMetrics {
@@ -301,6 +317,8 @@ export interface IExerciseDefinition extends Document {
   videoHeight?: number | null;
   /** Optional per-video framing overrides. Absence = use auto rules. */
   videoFraming?: IVideoFraming | null;
+  /** Optional in/out points, in seconds. Absence = play the whole file. */
+  videoTrim?: IVideoTrim | null;
 
   // Tags & search
   tags: string[];
@@ -325,6 +343,11 @@ const VideoFramingSchema = new Schema<IVideoFraming>({
   positionX: { type: Number, default: undefined, min: 0, max: 100 },
   positionY: { type: Number, default: undefined, min: 0, max: 100 },
   zoom:      { type: Number, default: undefined, min: 50, max: 400 },
+}, { _id: false });
+
+const VideoTrimSchema = new Schema<IVideoTrim>({
+  start: { type: Number, default: undefined, min: 0 },
+  end:   { type: Number, default: undefined, min: 0 },
 }, { _id: false });
 
 const CardioMetricsSchema = new Schema<ICardioMetrics>({
@@ -530,6 +553,7 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
     videoWidth:      { type: Number, default: null },
     videoHeight:     { type: Number, default: null },
     videoFraming:    { type: VideoFramingSchema, default: undefined },
+    videoTrim:       { type: VideoTrimSchema, default: undefined },
 
     // Tags & search
     tags: [{ type: String, index: true }],

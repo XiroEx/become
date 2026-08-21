@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, Plus, X, Loader2, Layers, Minus } from 'lucide-react'
+import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel, categoryForTracking } from '@/lib/workout/tracking'
@@ -192,7 +193,15 @@ export default function AddExerciseSheet({
 
   const q = query.trim().toLowerCase()
   const customMatches = q.length >= 2 ? customs.filter(c => c.name.toLowerCase().includes(q)) : []
-  const merged = [...results, ...customMatches.filter(c => !results.some(r => r.slug === c.slug))]
+  // Tag the merged rows so the list can mark which ones are yours. The catalog
+  // search endpoint excludes customs by design, so `isCustom` has to be
+  // attached here rather than coming off the wire.
+  const merged = [
+    ...results.map(r => ({ ...r, isCustom: false })),
+    ...customMatches
+      .filter(c => !results.some(r => r.slug === c.slug))
+      .map(c => ({ ...c, isCustom: true })),
+  ]
   const timed = isTimed(picked?.trackingType)
 
   const surface = dark
@@ -238,7 +247,10 @@ export default function AddExerciseSheet({
                   data-testid="add-exercise-result"
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
                 >
-                  <span className="truncate font-medium">{r.name}</span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate font-medium">{r.name}</span>
+                    {r.isCustom && <CustomExerciseBadge variant="inline" />}
+                  </span>
                   <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
                 </button>
               ))}

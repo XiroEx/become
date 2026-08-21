@@ -81,10 +81,20 @@ function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exe
     };
   }, [exerciseName]);
 
-  if (isLoading || !videoUrl) {
+  if (isLoading) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900 flex items-center justify-center">
         <div className="animate-pulse text-zinc-500">Loading video...</div>
+      </div>
+    );
+  }
+
+  // A resolved `null` is a terminal state, not a slow load — showing the
+  // loading shimmer forever was how "no video" used to read.
+  if (!videoUrl) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">No demo video yet</span>
       </div>
     );
   }
