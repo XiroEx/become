@@ -11,9 +11,10 @@ import MindSession from '@/models/MindSession'
 import StateLog from '@/models/StateLog'
 import MindProgress from '@/models/MindProgress'
 import DailyWin from '@/models/DailyWin'
+import StreakCredit, { type CreditPillar } from '@/models/StreakCredit'
 import { localDateKey, dateKey } from '@/lib/dayWindow'
 import { shiftDay } from '@/lib/streaks/pillars'
-import { buildWeeks, emptyDay, type DayEvents, type WeekSnapshot, type MindState } from '@/lib/becoming/weeks'
+import { buildWeeks, emptyDay, applyCredits, type DayEvents, type WeekSnapshot, type MindState } from '@/lib/becoming/weeks'
 import { computeGoalProgress } from '@/lib/goals/progress'
 import { kgToUnit, unitToKg } from '@/lib/goals/pace'
 
@@ -42,7 +43,7 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
   const fromKey = shiftDay(todayKey, -MAX_WEEKS * 7)
   const since = new Date(Date.UTC(Number(fromKey.slice(0, 4)), Number(fromKey.slice(5, 7)) - 1, Number(fromKey.slice(8, 10))) + tz * 60_000)
 
-  const [user, progress, mealLogs, dayRows, ngoal, sessions, states, mind, wins, goals] = await Promise.all([
+  const [user, progress, mealLogs, dayRows, ngoal, sessions, states, mind, wins, goals, creditDocs] = await Promise.all([
     User.findById(userId, 'profile createdAt').lean() as Promise<{ profile?: { weightUnit?: 'lbs' | 'kg'; weeklyAvailability?: number }; createdAt?: Date } | null>,
     UserProgress.findOne({ userId }).select('weightHistory workoutLogs exercisePRs moodHistory').lean() as Promise<Record<string, unknown> | null>,
     MealLog.find({ user: uid, loggedAt: { $gte: since } }, { loggedAt: 1, 'totalNutrition.calories': 1, 'totalNutrition.protein': 1 }).lean() as Promise<Array<{ loggedAt: Date; totalNutrition?: { calories?: number; protein?: number } }>>,
@@ -53,6 +54,7 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
     MindProgress.findOne({ userId }).select('vision chapterHistory xpBank chapter').lean() as Promise<{ vision?: { identityStatement?: string }; chapterHistory?: Array<{ chapter: number; unlockedAt: Date }>; xpBank?: number; chapter?: number } | null>,
     DailyWin.find({ userId: uid, date: { $gte: since } }, { date: 1, win: 1 }).lean() as Promise<Array<{ date: Date; win: string }>>,
     computeGoalProgress(userId, tz, now).catch(() => null),
+    StreakCredit.find({ userId: uid, kind: 'credit', dayKey: { $gte: fromKey } }, { pillar: 1, dayKey: 1 }).lean() as Promise<Array<{ pillar: CreditPillar; dayKey: string }>>,
   ])
   const unit = user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs'
   const proteinGoal = ngoal?.protein && ngoal.protein > 0 ? ngoal.protein : null
@@ -99,6 +101,12 @@ export async function computeJourney(userId: string, tz: number, now = new Date(
     const dt = new Date(e.date); if (dt < since || !(e.weight > 0)) continue
     day(dateKey(dt, 0)).weight = Math.round(kgToUnit(unitToKg(e.weight, e.unit ?? unit), unit) * 10) / 10
   }
+
+  // Admin-granted streak credits, unioned in the same way the Streaks page
+  // does — a credited day counts for its pillar here too.
+  const credits: Record<CreditPillar, string[]> = { workout: [], nutrition: [], mindset: [] }
+  for (const c of creditDocs) if (credits[c.pillar]) credits[c.pillar].push(c.dayKey)
+  applyCredits(days, credits)
 
   // Fill the range so empty weeks exist between the first activity and today.
   const keys = [...days.keys()].sort()
