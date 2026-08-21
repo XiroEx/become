@@ -3,6 +3,9 @@ import { verifyAuth } from "@/lib/auth";
 import { requireFeature } from "@/lib/entitlements";
 import connectDB from "@/lib/mongodb";
 import Exercise, { IExerciseDefinition } from "@/models/Exercise";
+import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
+import { getBlobStore } from "@/lib/blobStorage";
+import { invalidateExerciseCache } from "@/lib/hydrateExercises";
 
 // ─── Muscle group → Exercise model fields ─────────────────────────────────────
 
@@ -14,6 +17,10 @@ const MUSCLE_MAP: Record<string, { primaryMuscles: string[]; bodyRegion: string 
   core:       { primaryMuscles: ["abs", "obliques"],                bodyRegion: "core"       },
   legs:       { primaryMuscles: ["quads", "hamstrings", "glutes"],  bodyRegion: "lower_body" },
   full_body:  { primaryMuscles: ["full_body"],                      bodyRegion: "full_body"  },
+  // AddExerciseSheet creates exercises inline with `muscleGroup: 'other'`.
+  // Unmapped, it produced an exercise with no muscles at all, which then read
+  // as a blank subtitle everywhere the list shows "tracking · muscles".
+  other:      { primaryMuscles: ["full_body"],                      bodyRegion: "full_body"  },
 };
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -25,7 +32,9 @@ const CATEGORY_MAP: Record<string, string> = {
 
 type LeanExercise = Pick<IExerciseDefinition,
   "slug" | "name" | "trackingType" | "primaryMuscles" | "bodyRegion" | "category" |
-  "defaultSets" | "defaultReps" | "defaultDuration" | "equipment" | "role" | "difficulty"
+  "defaultSets" | "defaultReps" | "defaultDuration" | "equipment" | "role" | "difficulty" |
+  "tags" | "videoUrl" | "thumbnailUrl" | "videoWidth" | "videoHeight" | "videoFraming" |
+  "videoTrim"
 >;
 
 // ─── GET /api/exercises/custom ────────────────────────────────────────────────
@@ -36,10 +45,15 @@ export async function GET(req: NextRequest) {
 
   await connectDB();
 
+  // Media fields are returned so a custom exercise's own demo renders
+  // everywhere a catalog one does — the library card, the swap modal, the
+  // workout view. Without them a user could upload a video and never see it.
   const exercises = await Exercise.find(
     { isCustom: true, createdBy: auth.userId },
     { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, bodyRegion: 1, category: 1,
-      defaultSets: 1, defaultReps: 1, defaultDuration: 1, equipment: 1, role: 1, difficulty: 1 }
+      defaultSets: 1, defaultReps: 1, defaultDuration: 1, equipment: 1, role: 1, difficulty: 1,
+      tags: 1, videoUrl: 1, thumbnailUrl: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1,
+      videoTrim: 1 }
   ).lean<LeanExercise[]>();
 
   return NextResponse.json({ exercises });
@@ -94,7 +108,13 @@ export async function POST(req: NextRequest) {
     prerequisites: [],
     variations: [],
     alternatives: [],
-    tags: ["custom"],
+    tags: buildCustomExerciseTags({
+      category,
+      muscleGroup,
+      trackingType,
+      equipment: ["none"],
+      extra: Array.isArray(body.tags) ? body.tags : undefined,
+    }),
     bodyRegion: muscleData.bodyRegion,
     isActive: true,
     isCustom: true,
@@ -103,6 +123,11 @@ export async function POST(req: NextRequest) {
     ...(defaultReps && { defaultReps: String(defaultReps) }),
   });
   await exercise.save();
+
+  // hydrateExercises caches every exercise by slug; without this the new
+  // exercise resolves to its raw slug in any program that references it until
+  // the next cold start.
+  invalidateExerciseCache();
 
   return NextResponse.json({
     exercise: {
@@ -117,6 +142,11 @@ export async function POST(req: NextRequest) {
       difficulty: exercise.difficulty,
       defaultSets: exercise.defaultSets,
       defaultReps: exercise.defaultReps,
+      tags: exercise.tags,
+      // Always null on create — echoed so callers can hold one shape for a
+      // custom exercise whether it came from POST or GET.
+      videoUrl: exercise.videoUrl ?? null,
+      thumbnailUrl: exercise.thumbnailUrl ?? null,
     },
   });
 }
@@ -134,10 +164,28 @@ export async function DELETE(req: NextRequest) {
 
   await connectDB();
 
-  const result = await Exercise.deleteOne({ slug, isCustom: true, createdBy: auth.userId.toString() });
-  if (result.deletedCount === 0) {
+  // Read first so we know which blob to reap — deleteOne gives us nothing back,
+  // and without this every custom exercise that had a video leaves its bytes in
+  // the bucket with no remaining reference to them.
+  const doomed = await Exercise.findOneAndDelete({
+    slug,
+    isCustom: true,
+    createdBy: auth.userId.toString(),
+  });
+  if (!doomed) {
     return NextResponse.json({ error: "Not found or not yours" }, { status: 404 });
   }
 
+  if (doomed.videoStorageKey) {
+    // Non-fatal: the exercise is already gone, and failing the request here
+    // would tell the user the delete didn't work when it did.
+    try {
+      await getBlobStore().delete(doomed.videoStorageKey);
+    } catch (err) {
+      console.warn("Failed to delete custom exercise blob (continuing):", err);
+    }
+  }
+
+  invalidateExerciseCache();
   return NextResponse.json({ ok: true });
 }

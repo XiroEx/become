@@ -7,6 +7,13 @@ import PageTransition from "@/components/PageTransition";
 import { ArrowLeft, Plus, Trash2, Dumbbell } from "lucide-react";
 import { Card } from "@/components/ui";
 import { setUnitLabel } from "@/lib/workout/tracking";
+import AdminVideoPreview from "@/app/dashboard/admin/exercises/_form/AdminVideoPreview";
+import VideoUploadButton from "@/components/admin/VideoUploadButton";
+import VideoTrimEditor from "@/components/admin/VideoTrimEditor";
+import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
+import { CUSTOM_TAG } from "@/lib/customExerciseTags";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +27,13 @@ interface CustomExercise {
   equipment: string[];
   defaultSets?: number;
   defaultReps?: string;
+  tags?: string[];
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
 }
 
 interface CreateForm {
@@ -159,6 +173,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       setForm(p => ({ ...p, submitting: false, error: "Network error" }));
     }
   };
+
+  // Patch a single exercise in place. Uploading a video should not cost a full
+  // reload of the list (and the scroll position that goes with it).
+  const patchExercise = useCallback((slug: string, patch: Partial<CustomExercise>) => {
+    setExercises(prev => prev.map(e => (e.slug === slug ? { ...e, ...patch } : e)));
+  }, []);
 
   const handleDelete = async (slug: string) => {
     setDeletingSlug(slug);
@@ -432,23 +452,39 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="flex items-center gap-3"
+              className="flex flex-col gap-3"
             >
-              {/* Icon */}
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/30">
-                <Dumbbell className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
+              <div className="flex items-center gap-3">
+              {/* Thumbnail — the exercise's own demo when it has one, the
+                  generic icon when it doesn't. */}
+              {ex.videoUrl ? (
+                <AdminVideoPreview
+                  url={ex.videoUrl}
+                  size="sm"
+                  videoWidth={ex.videoWidth}
+                  videoHeight={ex.videoHeight}
+                  videoFraming={ex.videoFraming}
+                  videoTrim={ex.videoTrim}
+                />
+              ) : (
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/30">
+                  <Dumbbell className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+              )}
 
               {/* Info */}
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-zinc-900 dark:text-white">{ex.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate font-semibold text-zinc-900 dark:text-white">{ex.name}</p>
+                  <CustomExerciseBadge variant="inline" />
+                </div>
                 <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {TRACKING_LABELS[ex.trackingType] || ex.trackingType}
                   {ex.primaryMuscles.length > 0 && (
                     <> · {ex.primaryMuscles.slice(0, 2).map(formatMuscle).join(", ")}</>
                   )}
                 </p>
-                <div className="mt-1 flex items-center gap-2">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {ex.defaultSets && (
                     <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                       {ex.defaultSets} {setUnitLabel(ex.trackingType, ex.defaultSets).toLowerCase()}
@@ -459,9 +495,19 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                       {ex.defaultReps}
                     </span>
                   )}
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 capitalize">
-                    {ex.category}
-                  </span>
+                  {/* Same derived tag vocabulary the catalog uses — `custom`
+                      itself is dropped because the badge above already says it. */}
+                  {(ex.tags ?? [])
+                    .filter(t => t !== CUSTOM_TAG)
+                    .slice(0, 3)
+                    .map(tag => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                      >
+                        {tag.replace(/_/g, " ")}
+                      </span>
+                    ))}
                 </div>
               </div>
 
@@ -469,7 +515,8 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               <button
                 onClick={() => handleDelete(ex.slug)}
                 disabled={deletingSlug === ex.slug}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 dark:hover:bg-red-950/20 dark:hover:text-red-400"
+                aria-label={`Delete ${ex.name}`}
+                className="flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-full text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 dark:hover:bg-red-950/20 dark:hover:text-red-400"
               >
                 {deletingSlug === ex.slug ? (
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
@@ -477,6 +524,52 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                   <Trash2 className="h-4 w-4" />
                 )}
               </button>
+              </div>
+
+              {/* Your own demo video. Same upload + trim controls the admin
+                  form uses, pointed at the owner-scoped endpoints. */}
+              <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <VideoUploadButton
+                  uploadUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
+                  deleteUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
+                  hasVideo={Boolean(ex.videoUrl)}
+                  label={ex.videoUrl ? "Replace video" : "Add a video"}
+                  onUploaded={({ videoUrl }) =>
+                    patchExercise(ex.slug, {
+                      videoUrl,
+                      // The upload resets these server-side; mirror it so the
+                      // preview doesn't frame the new clip with the old numbers.
+                      videoWidth: null,
+                      videoHeight: null,
+                      videoFraming: null,
+                      videoTrim: null,
+                    })
+                  }
+                  onRemoved={() =>
+                    patchExercise(ex.slug, {
+                      videoUrl: null,
+                      videoWidth: null,
+                      videoHeight: null,
+                      videoFraming: null,
+                      videoTrim: null,
+                    })
+                  }
+                />
+                {ex.videoUrl && (
+                  <div className="mt-2">
+                    <VideoTrimEditor
+                      slug={ex.slug}
+                      scope="custom"
+                      videoUrl={ex.videoUrl}
+                      videoWidth={ex.videoWidth}
+                      videoHeight={ex.videoHeight}
+                      videoFraming={ex.videoFraming}
+                      videoTrim={ex.videoTrim}
+                      onSaved={next => patchExercise(ex.slug, { videoTrim: next })}
+                    />
+                  </div>
+                )}
+              </div>
             </Card>
           ))}
           {filteredExercises.length > EXERCISES_PAGE && (

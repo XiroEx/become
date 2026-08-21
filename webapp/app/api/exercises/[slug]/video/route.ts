@@ -17,14 +17,11 @@ import Exercise from '@/models/Exercise'
 import ExerciseVideo from '@/models/ExerciseVideo'
 import { getBlobStore, exerciseVideoKey } from '@/lib/blobStorage'
 import { invalidateExerciseCache } from '@/lib/hydrateExercises'
-
-const MAX_BYTES = 100 * 1024 * 1024 // 100 MB — generous for short exercise demos
-const ALLOWED_MIMES = new Set([
-  'video/mp4',
-  'video/quicktime',
-  'video/webm',
-  'video/x-matroska',
-])
+import {
+  MAX_VIDEO_BYTES as MAX_BYTES,
+  isValidationFailure,
+  validateVideoFile,
+} from '@/lib/videoUpload'
 
 // NOTE: Next.js App Router does not honor `export const config = { api: ... }`
 // — that's a Pages Router relic. There is no app-level streaming hook here,
@@ -78,23 +75,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: 'Missing "video" file field' }, { status: 400 })
   }
 
-  if (file.size === 0) {
-    return NextResponse.json({ error: 'Empty file' }, { status: 400 })
+  // Size + type checks, including the extension fallback for pickers that
+  // report an empty or octet-stream MIME (common when choosing straight from
+  // the iOS Photo Library).
+  const validated = validateVideoFile(file)
+  if (isValidationFailure(validated)) {
+    return NextResponse.json({ error: validated.error }, { status: validated.status })
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: `File too large (max ${MAX_BYTES} bytes)` },
-      { status: 413 }
-    )
-  }
-
-  const mimeType = file.type || 'video/mp4'
-  if (!ALLOWED_MIMES.has(mimeType)) {
-    return NextResponse.json(
-      { error: `Unsupported video type: ${mimeType}` },
-      { status: 415 }
-    )
-  }
+  const { mimeType } = validated
 
   try {
     await connectDB()
@@ -135,6 +123,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     exercise.videoWidth = null
     exercise.videoHeight = null
     exercise.videoFraming = undefined
+    exercise.videoTrim = undefined
     await exercise.save()
 
     // Upsert keyed on `slug` — Exercise.name is NOT unique, so keying on it
@@ -159,7 +148,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           videoWidth: null,
           videoHeight: null,
         },
-        $unset: { framing: '' },
+        $unset: { framing: '', trim: '' },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     )
@@ -208,6 +197,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     exercise.videoWidth = null
     exercise.videoHeight = null
     exercise.videoFraming = undefined
+    exercise.videoTrim = undefined
     await exercise.save()
 
     // Key on slug (canonical join). The name fallback used to fail closed
@@ -215,7 +205,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // legacy row that only has `exerciseName`.
     await ExerciseVideo.findOneAndUpdate(
       { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
-      { $set: { slug, exerciseName: exercise.name, videoUrl: '', isPlaceholder: true, storageKey: null, status: 'pending' } }
+      {
+        // `status: 'retired'` rather than `videoUrl: ''`: the field is
+        // `required` on the schema, so blanking it only slipped through
+        // because findOneAndUpdate skips validators by default — and it
+        // destroyed the only record of what the video had been. Retiring keeps
+        // the URL readable in the admin list while excluding the row from the
+        // name-keyed fallback that would otherwise re-surface the video we
+        // just deleted.
+        $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired' },
+        $unset: { framing: '', trim: '' },
+      }
     )
 
     invalidateExerciseCache()

@@ -201,13 +201,16 @@ export default function VideosEditor({ exerciseName, exerciseSlug }: Props) {
           Upload a video file
         </p>
         <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-          MP4 / MOV / WebM, up to 100 MB. Uploads stream to our object store and replace the
-          exercise&apos;s primary video.
+          Pick from your photo library, files, or camera. MP4 / MOV / WebM, up to 100 MB.
+          Uploads stream to our object store and replace the exercise&apos;s primary video.
         </p>
         <input
           ref={fileInputRef}
           type="file"
-          accept="video/mp4,video/quicktime,video/webm,video/x-matroska"
+          // Wildcard so iOS Safari offers "Photo Library"; an explicit mime
+          // list collapses that sheet to "Browse" only. The server still
+          // enforces the real allow-list.
+          accept="video/*"
           onChange={handleFileSelected}
           className="hidden"
         />

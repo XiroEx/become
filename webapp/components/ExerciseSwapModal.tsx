@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
@@ -34,6 +35,11 @@ interface AlternativeExercise {
   role: string;
   trackingType: string;
   isExplicitAlternative: boolean;
+  /** True for the caller's own exercises — drives the badge and the video. */
+  isCustom?: boolean;
+  /** A custom exercise keeps its demo on the Exercise doc, not in
+   *  exercise_videos, so it has to travel with the row. */
+  videoUrl?: string | null;
 }
 
 interface SourceExercise {
@@ -314,13 +320,15 @@ export default function ExerciseSwapModal({
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             if (data?.exercises) {
-              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; }) => ({
+              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; videoUrl?: string | null; }) => ({
                 slug: e.slug, name: e.name, score: 100, reasons: ["Your custom exercise"],
                 equipment: e.equipment || [], primaryMuscles: e.primaryMuscles || [],
                 movementPatterns: [], difficulty: "intermediate",
                 category: e.category, bodyRegion: e.bodyRegion,
                 role: "accessory", trackingType: e.trackingType,
                 isExplicitAlternative: true,
+                isCustom: true,
+                videoUrl: e.videoUrl ?? null,
               })));
             }
           })
@@ -970,7 +978,11 @@ function AlternativeCard({
               <h3 className="font-semibold text-zinc-900 dark:text-white truncate text-sm">
                 {displayName}
               </h3>
-              {alt.isExplicitAlternative && (
+              {alt.isCustom && <CustomExerciseBadge variant="inline" />}
+              {/* "Recommended" is meaningless on your own exercise — every
+                  custom row is flagged as an explicit alternative so it sorts
+                  to the top, which would badge all of them. */}
+              {alt.isExplicitAlternative && !alt.isCustom && (
                 <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
                   Recommended
                 </span>
@@ -1017,7 +1029,7 @@ function AlternativeCard({
           >
             <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
               {/* Exercise video */}
-              <ExerciseVideoPreview exerciseName={displayName} />
+              <ExerciseVideoPreview exerciseName={displayName} exerciseVideoUrl={alt.videoUrl} />
 
               {/* Match reasons */}
               <div className="flex flex-wrap gap-1.5 mb-3">
@@ -1154,14 +1166,24 @@ function AlternativeCard({
 
 // ─── Exercise Video Preview ──────────────────────────────────────────────────
 
-function ExerciseVideoPreview({ exerciseName }: { exerciseName: string }) {
-  const videoUrl = getExerciseVideoUrl(exerciseName);
+function ExerciseVideoPreview({
+  exerciseName,
+  exerciseVideoUrl,
+}: {
+  exerciseName: string;
+  /** The video denormalized onto the exercise — authoritative when present. */
+  exerciseVideoUrl?: string | null;
+}) {
+  const videoUrl = exerciseVideoUrl?.trim() || getExerciseVideoUrl(exerciseName);
   const thumbnailUrl = getExerciseThumbnail(exerciseName);
+
+  // Nothing to show. Previously a hash-picked placeholder clip played here, so
+  // every swap candidate looked like it had a demo.
+  if (!videoUrl) return null;
+
   // Direct = any local or remote URL ending in a known video extension (the
   // old `startsWith('/')` check excluded /api/blob proxy URLs).
-  const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
-
-  if (isDirectVideo) {
+  if (DIRECT_VIDEO_FILE.test(videoUrl)) {
     return (
       <div className="mb-3">
         <FramedVideo src={videoUrl} surface="preview" />
@@ -1179,7 +1201,7 @@ function YouTubePreview({
   exerciseName,
 }: {
   videoUrl: string;
-  thumbnailUrl: string;
+  thumbnailUrl: string | null;
   exerciseName: string;
 }) {
   const [playing, setPlaying] = useState(false);

@@ -11,6 +11,7 @@ import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/I
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { readQuickSession, clearQuickSession, stashQuickSessionWithId, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
@@ -78,6 +79,7 @@ interface Exercise {
   videoWidth?: number | null;
   videoHeight?: number | null;
   videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
   groupId?: string;
@@ -1635,7 +1637,10 @@ export default function LiveWorkoutPage() {
   };
 
   // Get video URL for current exercise
-  const [currentVideo, setCurrentVideo] = useState<string>("/placeholder.mp4");
+  // `null` = this exercise has no demo. It used to default to a placeholder
+  // clip, which meant a video an admin had removed was replaced by an
+  // unrelated one rather than by an honest empty state.
+  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
 
   useEffect(() => {
     if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
@@ -1643,6 +1648,8 @@ export default function LiveWorkoutPage() {
       if (exercise.videoUrl) {
         setCurrentVideo(exercise.videoUrl);
       } else {
+        // Legacy fallback for exercises whose video was never denormalized.
+        setCurrentVideo(null);
         getExerciseVideoUrlAsync(exercise.name).then(setCurrentVideo);
       }
     }
@@ -1690,7 +1697,7 @@ export default function LiveWorkoutPage() {
         className="absolute inset-0 cursor-pointer"
         onClick={handleVideoTap}
       >
-        {currentVideo === '/placeholder.mp4' || currentVideo === '/placeholder2.mp4' ? (
+        {!currentVideo ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-white/5 backdrop-blur-sm">
             <Dumbbell className="h-12 w-12 text-white/30" />
             <span className="text-sm font-medium text-white/40">No video available</span>
@@ -1702,6 +1709,7 @@ export default function LiveWorkoutPage() {
             videoWidth={currentExercise?.videoWidth}
             videoHeight={currentExercise?.videoHeight}
             videoFraming={currentExercise?.videoFraming}
+            videoTrim={currentExercise?.videoTrim}
             onDimensions={(w, h) => {
               // Back-write dims to the server the first time this video is
               // played by anyone. Fire-and-forget — workout flow keeps moving
