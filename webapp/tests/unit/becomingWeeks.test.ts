@@ -2,7 +2,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildWeeks, emptyDay, weekScore, stepFor, subjectFor, STEP_UP, STEP_FLAT, STEP_DOWN, FLOOR_BELOW_PEAK, type DayEvents } from '../../lib/becoming/weeks'
+import { buildWeeks, emptyDay, applyCredits, weekScore, stepFor, subjectFor, STEP_UP, STEP_FLAT, STEP_DOWN, FLOOR_BELOW_PEAK, type DayEvents } from '../../lib/becoming/weeks'
 
 function days(spec: Record<string, Partial<DayEvents>>): Map<string, DayEvents> {
   const m = new Map<string, DayEvents>()
@@ -181,4 +181,37 @@ test('the live week speaks in the present tense until Sunday', () => {
   // Week hit early
   w = buildWeeks({ ...base, weeklyTarget: 2, days: days({ '2026-08-03': { workouts: ['x'] }, '2026-08-16': { workouts: ['a'] }, '2026-08-17': { workouts: ['b'] } }), todayKey: '2026-08-18' })
   assert.match(w[w.length - 1].headline, /Week hit, 4 days left/)
+})
+
+test('applyCredits: a credited day the member did not actually train on counts once for its pillar, same as the Streaks page union', () => {
+  // The reported bug: 2 real workout days this week, Streaks tile said 3/4
+  // because an admin credit added a 3rd day; Becoming read the raw logs only
+  // and stayed at 2/4. Applying the same credit here should bring them back
+  // in sync.
+  const d = days({ '2026-08-17': { workouts: ['Push day'] }, '2026-08-19': { workouts: ['Pull day'] } })
+  applyCredits(d, { workout: ['2026-08-18'] })
+  const w = buildWeeks({ ...base, days: d, todayKey: '2026-08-20' })
+  const live = w[w.length - 1]
+  assert.equal(live.training.workouts, 3)
+})
+
+test('applyCredits: a credited day that already has a real workout is not double-counted', () => {
+  const d = days({ '2026-08-17': { workouts: ['Push day'] } })
+  applyCredits(d, { workout: ['2026-08-17'] })
+  assert.equal(d.get('2026-08-17')!.workouts.length, 1)
+})
+
+test('applyCredits: nutrition and mindset credits mark the day without touching workouts', () => {
+  const d = days({})
+  applyCredits(d, { nutrition: ['2026-08-17'], mindset: ['2026-08-18'] })
+  assert.equal(d.get('2026-08-17')!.foodLogged, true)
+  assert.equal(d.get('2026-08-17')!.workouts.length, 0)
+  assert.equal(d.get('2026-08-18')!.mindSession, true)
+})
+
+test('applyCredits: a credit for a day outside the existing map creates it', () => {
+  const d = days({ '2026-08-17': { workouts: ['a'] } })
+  applyCredits(d, { workout: ['2026-08-05'] })
+  assert.ok(d.has('2026-08-05'))
+  assert.equal(d.get('2026-08-05')!.workouts.length, 1)
 })

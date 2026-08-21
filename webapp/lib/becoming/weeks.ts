@@ -110,6 +110,25 @@ export function emptyDay(): DayEvents {
   return { workouts: [], prs: [], foodLogged: false, proteinHit: null, calories: null, mindSession: false, mood: null, states: [], wins: [], weight: null, chapterUnlocked: null }
 }
 
+/**
+ * Fold admin-granted streak credits (StreakCredit — "the app was down" / "honor
+ * this streak") into the day map before scoring. The Streaks page unions these
+ * into its own day sets (lib/streaks/compute.ts); Becoming was reading the raw
+ * logs only, so a credited member saw a lower "this week" count here than the
+ * Streaks tile showed for the same week. A credited day counts once per
+ * pillar — same union semantics as the Set the Streaks page builds — so a day
+ * that already has a real workout is untouched rather than double-counted.
+ */
+export function applyCredits(
+  days: Map<string, DayEvents>,
+  credits: { workout?: string[]; nutrition?: string[]; mindset?: string[] },
+): void {
+  const day = (k: string) => { let d = days.get(k); if (!d) { d = emptyDay(); days.set(k, d) } return d }
+  for (const k of credits.workout ?? []) { const d = day(k); if (d.workouts.length === 0) d.workouts.push('Credited') }
+  for (const k of credits.nutrition ?? []) { day(k).foodLogged = true }
+  for (const k of credits.mindset ?? []) { day(k).mindSession = true }
+}
+
 /** Every day key in [from, to]. */
 function range(from: string, to: string): string[] {
   const out: string[] = []
