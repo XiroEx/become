@@ -228,8 +228,21 @@ export default function EditFoodModal({
             servings: selection.multiplier,
             // Only present when the member corrected the macros. The route
             // replaces nutrition wholesale, so sending it unconditionally would
-            // rewrite good data with a round-tripped copy of itself.
-            ...(nutritionOverride ? { nutrition: nutritionOverride } : {}),
+            // rewrite good data with a round-tripped copy of itself. Sent as its
+            // own object (not the raw override) so a `servingLabel` alongside it
+            // never lands inside `nutrition`, which the route doesn't expect there.
+            ...(nutritionOverride ? {
+              nutrition: {
+                calories: nutritionOverride.calories,
+                protein: nutritionOverride.protein,
+                carbs: nutritionOverride.carbs,
+                fats: nutritionOverride.fats,
+                fiber: nutritionOverride.fiber,
+              },
+            } : {}),
+            // Only present when the member actually retyped the serving label —
+            // see the `LogCorrection.servingLabel` doc comment.
+            ...(nutritionOverride?.servingLabel !== undefined ? { servingLabel: nutritionOverride.servingLabel } : {}),
             // New shape — picked up by the route updates in this PR.
             loggedQuantity: selection.quantity,
             loggedUnit: selection.unit,
@@ -424,6 +437,7 @@ export default function EditFoodModal({
             protein: nutritionOverride?.protein ?? item.nutrition.protein,
             carbs: nutritionOverride?.carbs ?? item.nutrition.carbs,
             fats: nutritionOverride?.fats ?? item.nutrition.fats,
+            fiber: nutritionOverride?.fiber ?? item.nutrition.fiber ?? 0,
           }}
           // storage basis -> the portion on screen. Prefer the live picker, but
           // fall back to the item's own `servings`, which IS that same factor and
@@ -444,6 +458,10 @@ export default function EditFoodModal({
           // re-add it through search, which is exactly what people did.
           onApplyToLog={setNutritionOverride}
           onClose={() => setFlagOpen(false)}
+          // This is an already-logged entry with no other way to correct the
+          // serving text — unlike the search/add flow, which has its own
+          // free-text serving-name editor before anything is logged.
+          editableServingLabel
         />
       )}
     </AnimatePresence>

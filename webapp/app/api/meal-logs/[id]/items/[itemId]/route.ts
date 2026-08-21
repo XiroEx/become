@@ -10,7 +10,7 @@ function findItemIndex(log: { items: { _id?: mongoose.Types.ObjectId }[] }, item
 }
 
 // PATCH: update servings or replace nutrition for one item.
-// Body: { servings?, nutrition?, servingSize?, servingUnit?, name?, brand?, variantName? }
+// Body: { servings?, nutrition?, servingSize?, servingUnit?, name?, brand?, variantName?, servingLabel? }
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; itemId: string }> }
@@ -56,6 +56,10 @@ export async function PATCH(
     if (typeof body.name === 'string') item.name = body.name
     if (body.brand !== undefined) item.brand = body.brand
     if (body.variantName !== undefined) item.variantName = body.variantName
+    // The "Fix it for this entry" panel's serving-size/label correction. An
+    // empty string is a deliberate reset back to the computed
+    // loggedQuantity+loggedUnit fallback (see EditFoodModal's `portion.label`).
+    if (typeof body.servingLabel === 'string') item.servingLabel = body.servingLabel
 
     // PR 4 provenance: persist the user's actual entered quantity + unit when
     // the client supplies them. Old clients that PATCH only `servings` keep

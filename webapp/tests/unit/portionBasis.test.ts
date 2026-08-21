@@ -79,3 +79,51 @@ test('a portion LARGER than the basis scales up', () => {
   assert.equal(shown.calories, 363.4)
   assert.equal(Math.round(shown.protein), 31)
 })
+
+// Fiber support ("Expand Fix This Entry to include Fiber and serving
+// size/label"). It has to scale the same way calories/protein/carbs/fats
+// already do -- the reported example was 3 tortillas at 19g carbs, 19g fiber
+// per serving -- but it has to stay OPTIONAL, or every object above that
+// never carried a `fiber` key (FITCRUNCH included) gains one on the way
+// through and the exact-shape `deepEqual` assertions at lines 37/56/57 break.
+
+test('fiber scales the same way the other macros do', () => {
+  const shown = toDisplayBasis({ ...FITCRUNCH, fiber: 10 }, BAR)
+  assert.equal(shown.fiber, 4.6) // 10 * 0.46, one decimal
+  const back = toStorageBasis(shown, BAR)
+  assert.ok(back.fiber! > 9.9 && back.fiber! < 10.1, `expected ~10, got ${back.fiber}`)
+})
+
+test('the tortilla case: 19g carbs, 19g fiber for a 3-tortilla serving round-trips', () => {
+  // Per-serving values as reported; the picker is already showing this
+  // portion, so factor is 1 (display basis === storage basis).
+  const shown = toDisplayBasis({ calories: 140, protein: 4, carbs: 19, fats: 3, fiber: 19 }, 1)
+  assert.equal(shown.carbs, 19)
+  assert.equal(shown.fiber, 19)
+  const stored = toStorageBasis(shown, 1)
+  assert.equal(stored.fiber, 19)
+})
+
+test('omitting fiber leaves it out of the result entirely, not as 0 or undefined-on-a-key', () => {
+  const shown = toDisplayBasis(FITCRUNCH, BAR)
+  assert.equal('fiber' in shown, false, 'a fiber-less input must not grow a fiber key')
+  const stored = toStorageBasis(FITCRUNCH, BAR)
+  assert.equal('fiber' in stored, false)
+})
+
+test('REGRESSION: fiber-less callers still round-trip to the exact original shape', () => {
+  // These are the same assertions as the pre-fiber tests above -- pinned again
+  // here so a future change to fiber support cannot quietly reintroduce a key.
+  assert.deepEqual(toDisplayBasis(FITCRUNCH, 1), FITCRUNCH)
+  assert.deepEqual(toStorageBasis(FITCRUNCH, 1), FITCRUNCH)
+  const roundTripped = toDisplayBasis(toStorageBasis({ calories: 200, protein: 17, carbs: 15, fats: 9 }, BAR), BAR)
+  assert.deepEqual(roundTripped, { calories: 200, protein: 17, carbs: 15, fats: 9 })
+})
+
+test('a fiber of exactly 0 is still a real value, not "missing"', () => {
+  // 0 !== undefined: an explicit zero must still come back as a fiber key,
+  // unlike an input that never had one at all.
+  const shown = toDisplayBasis({ ...FITCRUNCH, fiber: 0 }, BAR)
+  assert.equal('fiber' in shown, true)
+  assert.equal(shown.fiber, 0)
+})
