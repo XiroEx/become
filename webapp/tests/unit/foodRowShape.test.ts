@@ -10,7 +10,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { displayServingCalories } from '../../lib/nutrition/rowServing'
+import { rowCalories, preferredServingLabel, defaultServingChoice } from '../../components/nutrition/FoodSearchModal'
+import { servingChoiceDisplayLabel } from '../../lib/nutrition/servingOptions'
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8')
 
@@ -24,31 +25,65 @@ test('the overview flattens every food row it returns', () => {
 })
 
 test('a row without nutrition costs one row, not the page', () => {
-  // Asserted as BEHAVIOUR rather than as a source string. The guard used to be a
-  // literal `food.nutrition?.calories` inside rowCalories; it now lives in the
-  // shared row-serving helper, and a test pinned to the old spelling failed on a
-  // refactor that kept the guarantee perfectly intact.
-  assert.equal(displayServingCalories({}), 0)
-  assert.equal(displayServingCalories({ nutrition: null }), 0)
-  assert.equal(displayServingCalories({ nutrition: { calories: undefined } }), 0)
-  // And the row must actually go through it.
-  const src = read('components/nutrition/FoodSearchModal.tsx')
-  assert.match(src, /displayServingCalories\(food\)/,
-    'rowCalories must delegate to the shared helper')
+  // The guard used to be a literal `food.nutrition?.calories` inside
+  // rowCalories; it now goes through the same builder + math the expanded
+  // picker uses (buildServingChoiceGroups / nutritionForQuantity), which
+  // throws on a malformed variant — rowCalories must swallow that, not the
+  // sheet.
+  assert.equal(rowCalories({} as any), 0)
+  assert.equal(rowCalories({ nutrition: null } as any), 0)
+  assert.equal(rowCalories({ nutrition: { calories: undefined } } as any), 0)
 })
 
 test('the row number describes the row label for an Open Food Facts import', () => {
   // The reported row read "1 portion (46 g)  ·  457 cal". OFF stores per 100 g
   // and never sets gramsPerServing, carrying the real serving in
-  // alternateServings[0].multiplier instead — the one signal the old scaler did
-  // not read.
-  assert.equal(Math.round(displayServingCalories({
+  // alternateServings[0].multiplier instead.
+  const food = {
     servingSize: 100,
     servingUnit: 'g',
     displayLabel: '1 portion (46 g)',
     alternateServings: [{ label: '1 portion (46 g)', multiplier: 0.46 }],
-    nutrition: { calories: 457 },
-  })), 210)
+    nutrition: { calories: 457, protein: 34.8, carbs: 0, fats: 0 },
+  } as any
+  assert.equal(preferredServingLabel(food), '1 portion (46 g)')
+  assert.equal(rowCalories(food), 210)
+})
+
+test('never the arbitrary 100 g when a real serving exists', () => {
+  // Reported bug: a food whose displayLabel is just a bare echo of the
+  // per-100g storage basis ("100 g") used to win outright over a real
+  // alternate serving ("1 package") the food also carries — the row showed
+  // "100 g" next to calories that actually reflected the package. Now the
+  // row must skip the placeholder exactly like the picker's own default does.
+  const food = {
+    servingSize: 100,
+    servingUnit: 'g',
+    displayLabel: '100 g',
+    alternateServings: [{ label: '1 package', multiplier: 2.5 }],
+    nutrition: { calories: 193, protein: 4, carbs: 40, fats: 1 },
+  } as any
+  assert.equal(preferredServingLabel(food), '1 package')
+  assert.equal(rowCalories(food), 483) // 193 * 2.5, rounded
+})
+
+test('the row default and the picker default are the exact same choice', () => {
+  // "Whatever the default shown on the unexpanded card should be the default
+  // selected on the expanded card." The picker's own inline default is
+  // `buildServingChoiceGroups(variant).servings[0]` (see QuantityPicker.tsx);
+  // the row must resolve to that identical choice, not a parallel guess.
+  const food = {
+    servingSize: 100,
+    servingUnit: 'g',
+    alternateServings: [
+      { label: '1 serving', multiplier: 0.5 },
+      { label: '1 package', multiplier: 2.5 },
+    ],
+    nutrition: { calories: 200, protein: 10, carbs: 20, fats: 5 },
+  } as any
+  const pickerDefault = defaultServingChoice(food)
+  assert.equal(preferredServingLabel(food), servingChoiceDisplayLabel(pickerDefault))
+  assert.equal(pickerDefault.label, '1 serving')
 })
 
 test('the empty state knows about the overview', () => {
