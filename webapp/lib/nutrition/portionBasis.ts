@@ -26,6 +26,14 @@ export interface BasisNutrition {
   protein: number
   carbs: number
   fats: number
+  /**
+   * Optional on purpose: callers that never carried fiber (the original
+   * calories/protein/carbs/fats-only fixtures) must round-trip through these
+   * functions without a `fiber` key appearing in the output, or every
+   * `deepEqual` against a 4-key object upstream breaks. A key is only added
+   * to the result when the input actually had one — including `0`.
+   */
+  fiber?: number
 }
 
 /** A factor that cannot scale anything sanely means "already the right basis". */
@@ -40,7 +48,9 @@ export function safeFactor(factor: number | undefined | null): number {
 export function toDisplayBasis(n: BasisNutrition, factor: number): BasisNutrition {
   const f = safeFactor(factor)
   const r = (v: number) => Math.round((Number(v) || 0) * f * 10) / 10
-  return { calories: r(n.calories), protein: r(n.protein), carbs: r(n.carbs), fats: r(n.fats) }
+  const out: BasisNutrition = { calories: r(n.calories), protein: r(n.protein), carbs: r(n.carbs), fats: r(n.fats) }
+  if (n.fiber !== undefined) out.fiber = r(n.fiber)
+  return out
 }
 
 /**
@@ -53,5 +63,7 @@ export function toDisplayBasis(n: BasisNutrition, factor: number): BasisNutritio
 export function toStorageBasis(n: BasisNutrition, factor: number): BasisNutrition {
   const f = safeFactor(factor)
   const v = (x: number) => (Number(x) || 0) / f
-  return { calories: v(n.calories), protein: v(n.protein), carbs: v(n.carbs), fats: v(n.fats) }
+  const out: BasisNutrition = { calories: v(n.calories), protein: v(n.protein), carbs: v(n.carbs), fats: v(n.fats) }
+  if (n.fiber !== undefined) out.fiber = v(n.fiber)
+  return out
 }

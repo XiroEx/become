@@ -1127,6 +1127,11 @@ export default function FoodSearchModal({
         resolvedVariantId = String(activeVariant._id)
       }
 
+      // A correction applies to every macro it was shown with, fiber
+      // included — same "apply the whole batch" rule as calories/protein/
+      // carbs/fats just below, not a selective per-field override.
+      const fiberValue = nutritionOverride?.fiber ?? activeVariant.nutrition.fiber
+
       // Build the legacy IFoodEntry shape, but extend with the new
       // logged{Quantity,Unit,GramsPerServing,MlPerServing} fields the API
       // tolerates. Nutrition stays as a per-serving snapshot; `servings`
@@ -1151,7 +1156,7 @@ export default function FoodSearchModal({
           protein:  Math.round((nutritionOverride?.protein  ?? activeVariant.nutrition.protein)  * 10) / 10,
           carbs:    Math.round((nutritionOverride?.carbs    ?? activeVariant.nutrition.carbs)    * 10) / 10,
           fats:     Math.round((nutritionOverride?.fats     ?? activeVariant.nutrition.fats)     * 10) / 10,
-          fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
+          fiber:  fiberValue != null ? Math.round(fiberValue * 10) / 10 : undefined,
           sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
           sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
         },
@@ -2695,6 +2700,7 @@ export default function FoodSearchModal({
             protein: Math.round(activeVariant.nutrition.protein * 10) / 10,
             carbs: Math.round(activeVariant.nutrition.carbs * 10) / 10,
             fats: Math.round(activeVariant.nutrition.fats * 10) / 10,
+            fiber: Math.round((activeVariant.nutrition.fiber ?? 0) * 10) / 10,
           } : undefined}
           // What the picker is showing right now, so the correction fields match
           // the number on screen rather than the food's storage basis.
