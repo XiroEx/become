@@ -4,6 +4,7 @@ import Meal, { IMealItem } from '@/models/Meal'
 import MealLog from '@/models/MealLog'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 
 // POST: apply this meal as a MealLog for the current user.
 // Body: { loggedAt?, untimed?, tags?, notes?, portion? }
@@ -104,6 +105,13 @@ export async function POST(
     })
 
     await Meal.updateOne({ _id: meal._id }, { $inc: { usageCount: 1 } })
+
+    // This creates a MealLog same as every other logging route — the
+    // nutrition suggestion tiles on the dashboard are served from a 60s
+    // cache keyed off MealLog data, so this write has to bust it too or
+    // "log this meal" is the one path that still reads as "leave the page
+    // and come back before it's reflected."
+    await bustTilesCache(authResult.userId!)
 
     const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
 
