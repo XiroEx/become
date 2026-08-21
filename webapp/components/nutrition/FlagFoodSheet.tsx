@@ -31,6 +31,15 @@ export interface LogCorrection {
   protein: number
   carbs: number
   fats: number
+  fiber: number
+  /**
+   * Set only when `editableServingLabel` is on AND the member actually typed
+   * a new value — never sent just because the field was prefilled and left
+   * alone, or a macro-only fix would freeze the live "loggedQuantity +
+   * loggedUnit" fallback into a stale stored string the next time the amount
+   * changes.
+   */
+  servingLabel?: string
 }
 
 export interface FlagFoodSheetProps {
@@ -79,10 +88,20 @@ export interface FlagFoodSheetProps {
    * the verification agent, never by a user.
    */
   onApplyToLog?: (values: LogCorrection) => void
+  /**
+   * Also lets "Fix it for this entry" edit the serving size/label text (e.g.
+   * "3 tortillas"), not just macros. Off by default: the search/add flow
+   * already has its own dedicated free-text serving-name editor before the
+   * item is ever logged, and turning this on there would give two controls
+   * for the same value. Only the already-logged-entry edit modal, which has
+   * no other way to correct the label, turns this on.
+   */
+  editableServingLabel?: boolean
 }
 
 export default function FlagFoodSheet({
   isOpen, foodId, foodName, onClose, currentNutrition, portion, canReport = true, onApplyToLog,
+  editableServingLabel = false,
 }: FlagFoodSheetProps) {
   // A missing or nonsensical factor means "already on the right basis".
   const factor = safeFactor(portion?.factor)
@@ -104,6 +123,10 @@ export default function FlagFoodSheet({
   const [error, setError] = useState<string | null>(null)
   const [fixing, setFixing] = useState(false)
   const [draft, setDraft] = useState<LogCorrection | null>(null)
+  // What the serving-label field was seeded with, so "Use these values" can
+  // tell an untouched prefill apart from a genuine edit — see the
+  // `LogCorrection.servingLabel` doc comment for why that distinction matters.
+  const initialLabelRef = useRef('')
   // The panel photo: the strongest evidence available, because the reporter is
   // holding the package and a database can only ever report what someone typed.
   // Server side it also overrides the recently-verified cooldown for that
@@ -162,8 +185,25 @@ export default function FlagFoodSheet({
     }
   }
 
+  const seedDraft = (): LogCorrection => {
+    const scaled = toDisplayBasis(
+      currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 },
+      factor,
+    )
+    const seededLabel = editableServingLabel ? basisLabel : undefined
+    initialLabelRef.current = seededLabel ?? ''
+    return {
+      calories: scaled.calories,
+      protein: scaled.protein,
+      carbs: scaled.carbs,
+      fats: scaled.fats,
+      fiber: scaled.fiber ?? 0,
+      servingLabel: seededLabel,
+    }
+  }
+
   const startFixing = () => {
-    setDraft(toDisplayBasis(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 }, factor))
+    setDraft(seedDraft())
     setFixing(true)
   }
 
@@ -171,17 +211,27 @@ export default function FlagFoodSheet({
   // act on, so open directly on the fields that do.
   useEffect(() => {
     if (isOpen && !canReport && !fixing) {
-      setDraft(toDisplayBasis(currentNutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 }, factor))
+      setDraft(seedDraft())
       setFixing(true)
     }
-  }, [isOpen, canReport, fixing, currentNutrition, factor])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, canReport, fixing, currentNutrition, factor, editableServingLabel, basisLabel])
 
   const applyFix = () => {
     if (!draft || !onApplyToLog) return
     // Back to the storage basis. Full precision on the way out: rounding here
     // would drift the number the member just typed once it is scaled again for
     // display (413.04 -> 190 reads fine; 413 -> 189.98 does not).
-    onApplyToLog(toStorageBasis(draft, factor))
+    const stored = toStorageBasis(draft, factor)
+    const labelChanged = editableServingLabel && (draft.servingLabel ?? '').trim() !== initialLabelRef.current.trim()
+    onApplyToLog({
+      calories: stored.calories,
+      protein: stored.protein,
+      carbs: stored.carbs,
+      fats: stored.fats,
+      fiber: stored.fiber ?? 0,
+      ...(labelChanged ? { servingLabel: (draft.servingLabel ?? '').trim() } : {}),
+    })
     close()
   }
 
@@ -225,6 +275,7 @@ export default function FlagFoodSheet({
     setNote('')
     setFixing(false)
     setDraft(null)
+    initialLabelRef.current = ''
     setKinds(['calories'])
     clearPhoto()
     onClose()
@@ -269,6 +320,7 @@ export default function FlagFoodSheet({
                     ['protein', 'Protein (g)'],
                     ['carbs', 'Carbs (g)'],
                     ['fats', 'Fats (g)'],
+                    ['fiber', 'Fiber (g)'],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                       {label}
@@ -286,6 +338,24 @@ export default function FlagFoodSheet({
                     </label>
                   ))}
                 </div>
+                {editableServingLabel && (
+                  <label
+                    htmlFor="fix-entry-serving-label"
+                    className="mb-4 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+                  >
+                    Serving size / label
+                    <input
+                      id="fix-entry-serving-label"
+                      type="text"
+                      value={draft.servingLabel ?? ''}
+                      onChange={(e) => setDraft({ ...draft, servingLabel: e.target.value })}
+                      placeholder='e.g. "3 tortillas"'
+                      maxLength={60}
+                      aria-label="Serving size / label"
+                      className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                    />
+                  </label>
+                )}
                 <div className="flex gap-3">
                   <button
                     type="button"
