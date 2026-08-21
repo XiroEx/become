@@ -413,11 +413,11 @@ export default function OnboardingPage() {
     })
   }, [directionTouched])
 
-  // ── Submit (finish or skip) ──────────────────────────────────────────────
-  async function submit(profileOverride?: ProfileData) {
+  // ── Submit (finish) ───────────────────────────────────────────────────────
+  async function submit() {
     setIsSubmitting(true)
     const token = getToken()
-    const payload = profileOverride ?? profile
+    const payload = profile
     const payloadGoals = payload.fitnessGoals ?? []
     const payloadDirection = payload.nutritionDirection ?? directionForGoal(payloadGoals[0])
 
@@ -640,15 +640,6 @@ export default function OnboardingPage() {
             Back
           </button>
 
-          {/* Skip */}
-          <button
-            onClick={() => submit(profile)}
-            disabled={isSubmitting}
-            className="text-xs font-medium text-zinc-400 underline underline-offset-2 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-          >
-            Skip for now
-          </button>
-
           {/* Next / Finish */}
           {step < TOTAL_STEPS ? (
             <button
@@ -753,9 +744,9 @@ function RecommendationCard({
 
       {/* Offer it — never force it. The card used to be read-only, so the one
           moment a member is most bought in ended with nothing to press and the
-          dashboard afterwards said "No program yet". Skipping stays free: the
-          wizard's own "Skip for now" is untouched, and this button simply is
-          not shown once they've enrolled. */}
+          dashboard afterwards said "No program yet". Enrolling stays optional —
+          this button simply is not shown once they've enrolled — even though
+          finishing the wizard itself is now mandatory. */}
       {onEnroll && (
         enrolled ? (
           <p
