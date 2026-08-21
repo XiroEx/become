@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,11 +14,14 @@ export async function GET(request: NextRequest) {
     await dbConnect()
 
     const progress = await UserProgress.findOne({ userId: authResult.userId })
-      .select('notificationPrefs')
+      .select('notificationPrefs notificationsEnabled')
       .lean()
 
     const defaults = { streakAtRisk: true, workoutReminder: true, mealReminder: true, reEngagement: true, chatMessage: true, mindReminder: true, goalNudge: true, superStreakAtRisk: true, checkInReminder: true }
-    return NextResponse.json({ preferences: { ...defaults, ...progress?.notificationPrefs } })
+    return NextResponse.json({
+      preferences: { ...defaults, ...progress?.notificationPrefs },
+      notificationsEnabled: notificationsAreEnabled(progress?.notificationsEnabled),
+    })
   } catch (error) {
     console.error('Error fetching notification preferences:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
