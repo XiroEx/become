@@ -83,6 +83,7 @@ type NotificationPrefKey = keyof NotificationPrefs
 
 interface PreferencesResponse {
   preferences?: Partial<NotificationPrefs>
+  notificationsEnabled?: boolean
 }
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
@@ -169,6 +170,10 @@ export default function SettingsPage() {
   // once, not that we still hold a working subscription for them.
   const [deviceRegistered, setDeviceRegistered] = useState<boolean | null>(null)
   const [repairing, setRepairing] = useState(false)
+  // Master switch, separate from browser permission — a browser never lets a
+  // site revoke permission it already granted, so "off" has to live here.
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [disablingNotifications, setDisablingNotifications] = useState(false)
 
   const fetchProfile = useCallback(async () => {
     const token = getToken()
@@ -247,6 +252,7 @@ export default function SettingsPage() {
       })
       if (!res.ok) return
       const data: PreferencesResponse = await res.json()
+      setNotificationsEnabled(data.notificationsEnabled !== false)
       const p = data.preferences ?? {}
       setNotifPrefs({
         mindReminder: p.mindReminder ?? true,
@@ -356,6 +362,9 @@ export default function SettingsPage() {
                   p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')!))),
                   auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')!))),
                 },
+                // Explicit user action — the only thing allowed to clear a
+                // prior "turned off" state server-side. See subscribe/route.ts.
+                reenable: true,
               }),
             })
           }
@@ -364,6 +373,7 @@ export default function SettingsPage() {
         }
       }
 
+      setNotificationsEnabled(true)
       // Now that permission is granted, load per-type preferences
       setNotifPrefsLoading(true)
       await fetchNotifPrefs()
@@ -372,6 +382,43 @@ export default function SettingsPage() {
       showToast('Failed to enable notifications', 'error')
     } finally {
       setEnablingNotifications(false)
+    }
+  }
+
+  const disableNotifications = async () => {
+    setDisablingNotifications(true)
+    try {
+      // Drop this device's browser-level push registration so it stops
+      // holding a subscription the server has already forgotten.
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (sub) await sub.unsubscribe()
+        } catch (err) {
+          console.warn('Push unsubscribe failed:', err)
+        }
+      }
+
+      const token = getToken()
+      if (!token) return
+      const res = await fetch('/api/notifications/unsubscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error('unsubscribe failed')
+
+      setNotificationsEnabled(false)
+      setDeviceRegistered(null)
+      showToast('Notifications turned off')
+    } catch {
+      showToast('Failed to turn off notifications', 'error')
+    } finally {
+      setDisablingNotifications(false)
     }
   }
 
@@ -915,18 +962,20 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                      notifPermission === 'granted' && deviceRegistered !== false
+                      notifPermission === 'granted' && notificationsEnabled && deviceRegistered !== false
                         ? 'bg-green-500'
-                        : notifPermission === 'granted' || notifPermission === 'denied'
+                        : (notifPermission === 'granted' && notificationsEnabled) || notifPermission === 'denied'
                           ? 'bg-red-500'
                           : 'bg-zinc-400 dark:bg-zinc-500'
                     }`}
                   />
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">
                     {notifPermission === 'granted'
-                      ? deviceRegistered === false
-                        ? 'Not reaching this device'
-                        : 'Active'
+                      ? !notificationsEnabled
+                        ? 'Off'
+                        : deviceRegistered === false
+                          ? 'Not reaching this device'
+                          : 'Active'
                       : notifPermission === 'denied'
                         ? 'Blocked'
                         : 'Not enabled'}
@@ -934,27 +983,29 @@ export default function SettingsPage() {
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   {notifPermission === 'granted'
-                    ? deviceRegistered === false
-                      ? 'Permission is on, but this device has no working subscription. Tap Repair.'
-                      : "You'll receive push notifications"
+                    ? !notificationsEnabled
+                      ? 'You turned off notifications for Become. Turn them back on anytime.'
+                      : deviceRegistered === false
+                        ? 'Permission is on, but this device has no working subscription. Tap Repair.'
+                        : "You'll receive push notifications"
                     : notifPermission === 'denied'
                       ? 'Enable in your browser settings to receive notifications'
                       : 'Turn on notifications to stay on your streak'}
                 </p>
               </div>
-              {notifPermission === 'default' && (
+              {(notifPermission === 'default' || (notifPermission === 'granted' && !notificationsEnabled)) && (
                 <button
                   type="button"
                   onClick={enableNotifications}
                   disabled={enablingNotifications}
                   className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {enablingNotifications ? 'Enabling…' : 'Enable'}
+                  {enablingNotifications ? 'Enabling…' : notifPermission === 'granted' ? 'Turn on' : 'Enable'}
                 </button>
               )}
               {/* Permission granted but unreachable — previously a dead end,
                   since every subscribe path was gated on permission='default'. */}
-              {notifPermission === 'granted' && deviceRegistered === false && (
+              {notifPermission === 'granted' && notificationsEnabled && deviceRegistered === false && (
                 <button
                   type="button"
                   onClick={repairSubscription}
@@ -965,8 +1016,17 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
-            {notifPermission === 'granted' && (
-              <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+            {notifPermission === 'granted' && notificationsEnabled && (
+              <>
+                <button
+                  type="button"
+                  onClick={disableNotifications}
+                  disabled={disablingNotifications}
+                  className="mt-3 text-xs font-medium text-red-600 hover:underline disabled:opacity-60 dark:text-red-400"
+                >
+                  {disablingNotifications ? 'Turning off…' : 'Turn off notifications'}
+                </button>
+                <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                 {notifPrefsLoading ? (
                   <div className="space-y-4">
                     {[...Array(3)].map((_, i) => (
@@ -1007,7 +1067,8 @@ export default function SettingsPage() {
                     )
                   })
                 )}
-              </div>
+                </div>
+              </>
             )}
           </section>
 

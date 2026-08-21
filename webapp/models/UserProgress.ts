@@ -156,6 +156,10 @@ export interface IUserProgress {
   milestonesReached: number[]
   lastStreakEmailDate?: Date
   totalWorkouts: number
+  /** Master switch. Undefined/missing reads as ON — same opt-out convention as
+   *  notificationPrefs.<category> below. Only an explicit false, set when the
+   *  user turns notifications off in Settings, blocks new subscriptions. */
+  notificationsEnabled?: boolean
   notificationPrefs?: {
     streakAtRisk?: boolean
     workoutReminder?: boolean
@@ -424,6 +428,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
   milestonesReached: { type: [Number], default: [] },
   lastStreakEmailDate: { type: Date },
   totalWorkouts: { type: Number, default: 0 },
+  notificationsEnabled: { type: Boolean },
   notificationPrefs: {
     streakAtRisk: { type: Boolean },
     workoutReminder: { type: Boolean },
