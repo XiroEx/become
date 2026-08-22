@@ -23,6 +23,7 @@ import {
   type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
+import { SESSIONS_HUB_HREF, BUILD_SESSION_HREF } from "@/lib/quickSession/hubLinks";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 import ShareButton from "@/components/share/ShareButton";
@@ -33,9 +34,6 @@ export interface QuickSessionModalProps {
   open: boolean;
   onClose: () => void;
 }
-
-// Where "My Sessions" (see-all / empty CTA) + "build your own" lead.
-const SESSIONS_HUB_HREF = "/dashboard/workout/hub?tab=sessions";
 
 // ─── Fetch response shapes ──────────────────────────────────────────────────────
 
@@ -327,7 +325,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-purple-500 text-white">
                     <Sparkles className="h-4 w-4" />
                   </span>
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Quick Session</h2>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Workout Now</h2>
                 </div>
                 <button
                   onClick={onClose}
@@ -528,9 +526,9 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                 )}
               </section>
 
-              {/* ── 3. Build your own → hub ── */}
+              {/* ── 3. Build your own → hub, builder already open ── */}
               <Link
-                href={SESSIONS_HUB_HREF}
+                href={BUILD_SESSION_HREF}
                 onClick={onClose}
                 className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
