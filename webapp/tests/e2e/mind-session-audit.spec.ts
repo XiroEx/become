@@ -111,6 +111,19 @@ test('walk every scene of the daily session', async ({ page, context }) => {
       await page.waitForTimeout(250)
     }
 
+    // Compose scene ("fill it in the blank"): the current blank's options render
+    // as ordinary buttons — no tap-the-blank step is needed to reach them, since
+    // the first empty blank is selected automatically. Pick one, then loop; once
+    // every blank is filled the scene swaps to a normal "Lock it in" CTA, which
+    // the generic handler below already knows how to click.
+    const composeOption = page.locator('[data-testid="compose-option"]:visible').first()
+    if (await composeOption.isVisible().catch(() => false)) {
+      await composeOption.click()
+      notes.push('  (picked a compose blank)')
+      await page.waitForTimeout(400)
+      continue
+    }
+
     // Voice scenes always offer a written path and a bail-out — the harness must
     // use them, or it reports its own missing gesture as a dead end. Prefer the
     // written path: it exercises more of the scene than "lock it in anyway".
