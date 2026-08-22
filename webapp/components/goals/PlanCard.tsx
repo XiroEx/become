@@ -17,7 +17,15 @@ function authHeaders(): HeadersInit {
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` }
 }
 
-export default function PlanCard({ className = '' }: { className?: string }) {
+export interface PlanCardProps {
+  className?: string
+  /** Fires after a pace change round-trips to the Goal, so a host page (e.g.
+   *  the nutrition goals screen) can re-derive calorie/macro targets — pace
+   *  otherwise lives entirely inside this card and never reaches them. */
+  onPaceChange?: (info: { paceKgPerWeek: number; direction: 'lose' | 'maintain' | 'gain' }) => void
+}
+
+export default function PlanCard({ className = '', onPaceChange }: PlanCardProps) {
   const [data, setData] = useState<GoalProgress | null>(null)
   const [saving, setSaving] = useState(false)
   const tz = new Date().getTimezoneOffset()
@@ -35,7 +43,13 @@ export default function PlanCard({ className = '' }: { className?: string }) {
     setSaving(true)
     try {
       const res = await fetch('/api/goals', { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ pillar: 'nutrition', paceKgPerWeek: kg, tz }) })
-      if (res.ok) setData(await res.json())
+      if (res.ok) {
+        const fresh: GoalProgress = await res.json()
+        setData(fresh)
+        if (fresh.nutrition?.direction) {
+          onPaceChange?.({ paceKgPerWeek: kg, direction: fresh.nutrition.direction })
+        }
+      }
     } finally { setSaving(false) }
   }
 

@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import NutritionGoal from '@/models/NutritionGoal'
 import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
+import Goal from '@/models/Goal'
 import { verifyAuth } from '@/lib/auth'
 import {
   computeNutritionTargets,
@@ -126,15 +127,24 @@ async function refreshStaleTargets(
     if (!broken && !versionStale && !weightDrifted) return null
 
     const preset = (goals.macroPreset as MacroPreset | undefined) ?? 'recommended'
+    const direction = (goals.goalType as 'lose' | 'maintain' | 'gain' | undefined) ?? p.nutritionDirection
+    // The active Goal's chosen pace — pace only means anything for the
+    // direction it was picked under, so a stale row is never handed a pace
+    // from a goal that has since flipped to a different direction.
+    const activeGoal = await Goal.findOne({ userId, pillar: 'nutrition', status: 'active' })
+      .select('target.paceKgPerWeek target.direction')
+      .lean<{ target?: { paceKgPerWeek?: number; direction?: string } } | null>()
+    const paceKgPerWeek = activeGoal?.target?.direction === direction ? activeGoal?.target?.paceKgPerWeek : undefined
     const targets = computeNutritionTargets({
       currentWeightKg: trendKg,
       heightCm: p.heightCm,
       age: p.age,
       biologicalSex: p.biologicalSex,
       goals: (p.fitnessGoals ?? []) as never,
-      direction: (goals.goalType as 'lose' | 'maintain' | 'gain') ?? p.nutritionDirection,
+      direction,
       activityLevel: goals.activityLevel as never,
       macroPreset: preset,
+      paceKgPerWeek,
     })
     if (!targets) return null
 

@@ -103,6 +103,8 @@ export function explainCalories(
   stats: BodyStats,
   activityLevel: ActivityLevel,
   direction: NutritionDirection,
+  /** The member's chosen weekly rate (kg/week), from their active Goal. */
+  paceKgPerWeek?: number,
 ): CalorieExplanation | null {
   const { currentWeightKg, heightCm, age, biologicalSex } = stats
   if (!currentWeightKg || !heightCm || !age || !biologicalSex) return null
@@ -113,9 +115,10 @@ export function explainCalories(
   const multiplier = ACTIVITY_MULTIPLIERS[activityLevel]
   const tdee = Math.round(bmr * multiplier)
   // calorieAdjustment, NOT the raw DIRECTION_ADJUSTMENT constant: those are
-  // ceilings, scaled down to a share of TDEE for smaller members. Reading the
-  // constant would explain a deficit they were never actually given.
-  const adjustment = calorieAdjustment(tdee, direction)
+  // ceilings, scaled down to a share of TDEE for smaller members (or to the
+  // member's own chosen pace when one is passed). Reading the constant would
+  // explain a deficit they were never actually given.
+  const adjustment = calorieAdjustment(tdee, direction, paceKgPerWeek ? lbsFromKg(paceKgPerWeek) : undefined)
   const calories = Math.round(tdee + adjustment)
 
   const steps: CalcStep[] = [

@@ -106,7 +106,9 @@ describe('stale targets are brought up to date on read', () => {
   const GOALS = readFileSync(join(process.cwd(), 'app/api/nutrition/goals/route.ts'), 'utf8')
 
   it('the macro maths carries a version', () => {
-    assert.equal(MACRO_CALC_VERSION, 2)
+    // Bumped to 3 when the calorie adjustment started following the member's
+    // chosen pace instead of the flat -500/+300 default — see tdee.ts.
+    assert.equal(MACRO_CALC_VERSION, 3)
   })
 
   it('a row from an older version is recomputed', () => {
