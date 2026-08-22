@@ -63,15 +63,34 @@ export const DIRECTION_ADJUSTMENT: Record<NutritionDirection, number> = {
 const MAX_DEFICIT_PCT = 0.20
 const MAX_SURPLUS_PCT = 0.15
 
+/** ~3,500 cal per lb of body fat, the standard way to turn a chosen weekly
+ *  pace (lib/goals/pace.ts, 0.5/1/1.5 lb a week) into a daily calorie delta. */
+const CAL_PER_LB = 3500
+
 /**
- * The calorie delta for this member: the smaller of the flat cap and a
- * proportional share of their own TDEE. Large members are unaffected (their
- * percentage exceeds the cap); small members stop being handed a 30% cut.
+ * The calorie delta for this member: the smaller of a cap and either their
+ * chosen pace (converted from lb/week) or, absent one, the flat default. Large
+ * members are unaffected by the cap (their percentage exceeds it); small
+ * members stop being handed a 30% cut.
+ *
+ * `paceLbPerWeek` is what makes this respond to the member's own choice
+ * instead of always landing on the same -500/+300 regardless of whether they
+ * picked 0.5, 1 or 1.5 lb a week — see the Goal's target.paceKgPerWeek. Omit it
+ * (no active weight Goal yet, e.g. mid-onboarding) to get the historical flat
+ * default.
  */
-export function calorieAdjustment(tdee: number, direction: NutritionDirection): number {
+export function calorieAdjustment(
+  tdee: number,
+  direction: NutritionDirection,
+  paceLbPerWeek?: number,
+): number {
   if (direction === 'maintain') return 0
-  if (direction === 'lose') return -Math.min(500, Math.round(tdee * MAX_DEFICIT_PCT))
-  return Math.min(300, Math.round(tdee * MAX_SURPLUS_PCT))
+  const base = paceLbPerWeek && paceLbPerWeek > 0
+    ? Math.round((paceLbPerWeek * CAL_PER_LB) / 7)
+    : Math.abs(DIRECTION_ADJUSTMENT[direction])
+  const capPct = direction === 'lose' ? MAX_DEFICIT_PCT : MAX_SURPLUS_PCT
+  const capped = Math.min(base, Math.round(tdee * capPct))
+  return direction === 'lose' ? -capped : capped
 }
 
 export const DIRECTION_LABELS: Record<NutritionDirection, string> = {
@@ -197,11 +216,15 @@ const RECOMMENDED_CARB_PCT = { min: 25, max: 50 }
  *   1  original — protein from g/lb, carbs absorbed the remainder
  *   2  every macro an explicit share of calories; the hard 250 g protein
  *      ceiling removed; "Recommended" personalised
+ *   3  the calorie adjustment follows the member's chosen pace
+ *      (Goal.target.paceKgPerWeek) instead of always being the flat
+ *      -500/+300 default, so 0.5/1/1.5 lb a week actually produce different
+ *      targets
  *
  * Targets are computed once at onboarding and persisted, so without this a fix
  * only ever reaches new signups.
  */
-export const MACRO_CALC_VERSION = 2
+export const MACRO_CALC_VERSION = 3
 
 export type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
 
@@ -405,6 +428,10 @@ export interface TargetsInput extends BodyStats {
   weeklyAvailability?: number
   /** Which macro split to apply. Defaults to 'recommended'. */
   macroPreset?: MacroPreset
+  /** The member's chosen weekly rate for this direction, from their active
+   *  Goal (target.paceKgPerWeek). When present, the calorie delta scales with
+   *  it instead of the flat default — see calorieAdjustment(). */
+  paceKgPerWeek?: number
 }
 
 export interface NutritionTargets {
@@ -432,8 +459,10 @@ export function computeNutritionTargets(input: TargetsInput): NutritionTargets |
   const tdee = calcTdee(input, activityLevel)
   if (tdee === null || !input.currentWeightKg) return null
 
+  const paceLbPerWeek = input.paceKgPerWeek ? input.paceKgPerWeek * LBS_PER_KG : undefined
+
   // Floor at 1200 — below that the split stops being a sane recommendation.
-  const calories = Math.max(1200, Math.round(tdee + calorieAdjustment(tdee, direction)))
+  const calories = Math.max(1200, Math.round(tdee + calorieAdjustment(tdee, direction, paceLbPerWeek)))
 
   const weightLbs = input.currentWeightKg * LBS_PER_KG
   const target = splitForPreset(input.macroPreset ?? 'recommended', direction, {

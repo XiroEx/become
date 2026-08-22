@@ -11,6 +11,7 @@
 import { test, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  calorieAdjustment,
   computeNutritionTargets,
   splitForPreset,
   recommendedPresetForGoal,
@@ -23,6 +24,7 @@ import {
   type NutritionDirection,
   type TargetsInput,
 } from '../../lib/nutrition/tdee'
+import { KG_PER_LB } from '../../lib/goals/pace'
 
 /** The member from the bug report: 6'5", 175 lb, gaining. */
 const ADRIAN: TargetsInput = {
@@ -209,6 +211,54 @@ test('no direction ever pushes anyone below the calorie floor by design', () => 
       assert.ok(t.calories >= 1200, `${direction}/${activityLevel}: ${t.calories} cal`)
     }
   }
+})
+
+// ── The calorie deficit has to follow the chosen pace ────────────────────────
+//
+// Reported: "1 lb/week is a 500 calorie deficit. If I change to .5 lb/week or
+// 1.5 lb/week, nothing changes. 'Lose Weight' still has TDEE - 500." The
+// Plan's pace picker (0.5/1/1.5 lb a week) used to only drive the ETA text —
+// calorieAdjustment() ignored it and always applied the flat -500/+300.
+
+test('calorieAdjustment scales with the chosen pace, not just direction', () => {
+  const tdee = 4427 // big enough that the 20%/15% safety cap never binds below
+  assert.equal(calorieAdjustment(tdee, 'lose', 0.5), -250)
+  assert.equal(calorieAdjustment(tdee, 'lose', 1), -500)
+  assert.equal(calorieAdjustment(tdee, 'lose', 1.5), -750)
+  assert.equal(calorieAdjustment(tdee, 'gain', 0.5), 250)
+  assert.equal(calorieAdjustment(tdee, 'gain', 1), 500)
+})
+
+test('without a pace, calorieAdjustment keeps its historical flat default', () => {
+  assert.equal(calorieAdjustment(4427, 'lose'), -500)
+  assert.equal(calorieAdjustment(4427, 'gain'), 300)
+  assert.equal(calorieAdjustment(4427, 'maintain', 1.5), 0)
+})
+
+test('the safety cap still binds on an aggressive pace for a small member', () => {
+  const tdee = 1667 // 20% cap = 333, below the 750 a 1.5 lb/week pace implies
+  assert.equal(calorieAdjustment(tdee, 'lose', 1.5), -333)
+})
+
+test('computeNutritionTargets actually moves when the Plan pace changes', () => {
+  // Big enough (TDEE ~4,427) that none of the three paces hit the safety cap.
+  const base = {
+    currentWeightKg: 120, heightCm: 200, age: 25, biologicalSex: 'male' as const,
+    direction: 'lose' as const, activityLevel: 'very_active' as const,
+  }
+  const half = computeNutritionTargets({ ...base, paceKgPerWeek: 0.5 * KG_PER_LB })!
+  const one = computeNutritionTargets({ ...base, paceKgPerWeek: 1 * KG_PER_LB })!
+  const oneHalf = computeNutritionTargets({ ...base, paceKgPerWeek: 1.5 * KG_PER_LB })!
+
+  assert.ok(half.calories > one.calories, 'a slower pace must leave more calories')
+  assert.ok(one.calories > oneHalf.calories, 'a faster pace must leave fewer calories')
+  assert.equal(one.tdee - one.calories, 500, '1 lb/week matches the historical default exactly')
+  assert.equal(one.tdee - half.calories, 250)
+  assert.equal(one.tdee - oneHalf.calories, 750)
+
+  // Macros must follow the new calorie target too, not just the headline number.
+  assert.notEqual(half.protein, oneHalf.protein)
+  assert.notEqual(half.carbs, oneHalf.carbs)
 })
 
 // ── The picker has to actually change the numbers ────────────────────────────

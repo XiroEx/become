@@ -17,6 +17,7 @@ import {
   DIRECTION_LABELS,
   DIRECTION_EXPLANATION,
   calcTdee,
+  calorieAdjustment,
   computeNutritionTargets,
   splitForPreset,
   MACRO_PRESET_LABELS,
@@ -48,20 +49,22 @@ interface ProgressData {
   goal?: { targetWeightKg: number | null }
 }
 
-/** Labels and adjustments come from lib/nutrition/tdee so this page and the
- *  onboarding wizard describe the same choice the same way. They used to be
- *  hardcoded here, which is how "Gain Weight" in onboarding became "Gain Muscle"
- *  on this screen — the same +300 with two different names. */
-const GOAL_CARDS: { type: GoalType; label: string; description: string; adjustment: string }[] =
-  (['lose', 'maintain', 'gain'] as GoalType[]).map((type) => ({
-    type,
-    label: DIRECTION_LABELS[type],
-    description: DIRECTION_EXPLANATION[type],
-    adjustment:
-      DIRECTION_ADJUSTMENT[type] === 0
-        ? 'TDEE'
-        : `TDEE ${DIRECTION_ADJUSTMENT[type] > 0 ? '+' : '−'} ${Math.abs(DIRECTION_ADJUSTMENT[type])} cal`,
-  }))
+/** Labels come from lib/nutrition/tdee so this page and the onboarding wizard
+ *  describe the same choice the same way. They used to be hardcoded here,
+ *  which is how "Gain Weight" in onboarding became "Gain Muscle" on this
+ *  screen — the same +300 with two different names.
+ *
+ * The adjustment text is NOT a static lookup: it used to read the flat
+ * DIRECTION_ADJUSTMENT constant, so "Lose Weight" always said "TDEE - 500"
+ * no matter what pace was chosen on the Plan card above it. It now runs
+ * through calorieAdjustment() with the member's own pace for whichever
+ * direction the Plan is actually set to, so a 0.5 lb/week plan says -250 and a
+ * 1.5 lb/week plan says -750 (subject to the same safety cap either way). */
+function goalCardAdjustment(type: GoalType, tdee: number | null, paceLbPerWeek?: number): string {
+  if (type === 'maintain') return 'TDEE'
+  const applied = tdee != null ? calorieAdjustment(tdee, type, paceLbPerWeek) : DIRECTION_ADJUSTMENT[type]
+  return `TDEE ${applied > 0 ? '+' : '−'} ${Math.abs(applied)} cal`
+}
 
 /** Every preset now runs through the shared computeNutritionTargets(), which
  *  applies the same bodyweight protein floor/cap here as during onboarding. The
@@ -120,6 +123,12 @@ export default function NutritionGoalsPage() {
   // Bumped after logging weight so PlanCard (which owns its own fetch) remounts
   // and re-reads /api/goals instead of showing the pre-log current weight.
   const [planRefreshKey, setPlanRefreshKey] = useState(0)
+  /** The active nutrition Goal's chosen pace (kg/week) and the direction it
+   *  applies to — read once on load, then kept fresh by PlanCard's
+   *  onPaceChange. This is what lets the calorie/macro targets below actually
+   *  move when the Plan's pace chip is tapped, instead of only the ETA text. */
+  const [planPaceKgPerWeek, setPlanPaceKgPerWeek] = useState<number | null>(null)
+  const [planPaceDirection, setPlanPaceDirection] = useState<GoalType | null>(null)
 
   /** Profile values with the manual fallbacks folded in. */
   const effectiveStats = useMemo(() => {
@@ -144,16 +153,27 @@ export default function NutritionGoalsPage() {
     }
   }, [userAge, userSex, userHeightCm, userWeight, weightUnit, profileWeightKg, manualAge, manualSex, manualHeightFt, manualHeightIn])
 
-  const applyGoalAdjustment = useCallback((baseTdee: number, goalType: GoalType): number => {
-    return baseTdee + DIRECTION_ADJUSTMENT[goalType]
-  }, [])
+  /** Pace only applies to the direction it was chosen for — a lose-weight
+   *  pace has no meaning previewed against "Gain Weight". `override` lets a
+   *  caller hand in a just-written pace before it has round-tripped into
+   *  planPaceKgPerWeek state (see handlePlanPaceChange). */
+  const paceForDirection = useCallback((goalType?: GoalType, override?: number): number | undefined => {
+    if (override !== undefined) return override
+    return goalType && goalType === planPaceDirection ? (planPaceKgPerWeek ?? undefined) : undefined
+  }, [planPaceDirection, planPaceKgPerWeek])
+
+  const applyGoalAdjustment = useCallback((baseTdee: number, goalType: GoalType, paceKgPerWeekOverride?: number): number => {
+    const paceKg = paceForDirection(goalType, paceKgPerWeekOverride)
+    const paceLb = paceKg != null ? kgToLbs(paceKg) : undefined
+    return baseTdee + calorieAdjustment(baseTdee, goalType, paceLb)
+  }, [paceForDirection])
 
   /**
    * Writes calories + macros for a preset.
    * 'recommended' defers to the shared computeNutritionTargets(); the
    * percentage presets keep their historical behaviour.
    */
-  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel, statsOverride?: typeof effectiveStats) => {
+  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel, statsOverride?: typeof effectiveStats, paceKgPerWeekOverride?: number) => {
     if (preset === 'custom') return
 
     const targets = computeNutritionTargets({
@@ -162,6 +182,7 @@ export default function NutritionGoalsPage() {
       direction: goalType,
       activityLevel: activity,
       macroPreset: preset,
+      paceKgPerWeek: paceForDirection(goalType, paceKgPerWeekOverride),
     })
     if (!targets) return
     setGoals(prev => ({
@@ -173,7 +194,7 @@ export default function NutritionGoalsPage() {
       carbs: targets.carbs,
       fats: targets.fats,
     }))
-  }, [effectiveStats, userFitnessGoals])
+  }, [effectiveStats, userFitnessGoals, paceForDirection])
 
   useEffect(() => {
     async function fetchData() {
@@ -186,10 +207,11 @@ export default function NutritionGoalsPage() {
 
         const headers: HeadersInit = { 'Authorization': `Bearer ${token}` }
 
-        const [goalsRes, progressRes, profileRes] = await Promise.all([
+        const [goalsRes, progressRes, profileRes, planRes] = await Promise.all([
           fetch('/api/nutrition/goals', { headers }),
           fetch(`/api/progress?tz=${new Date().getTimezoneOffset()}`, { headers }),
           fetch('/api/profile', { headers }),
+          fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers }),
         ])
 
         if (goalsRes.ok) {
@@ -236,6 +258,14 @@ export default function NutritionGoalsPage() {
               : []
           setUserFitnessGoals(goalSet)
         }
+
+        if (planRes.ok) {
+          const plan = await planRes.json()
+          const paceKg = plan?.nutrition?.target?.paceKgPerWeek ?? null
+          const dir = plan?.nutrition?.direction ?? null
+          setPlanPaceKgPerWeek(paceKg)
+          setPlanPaceDirection(dir)
+        }
       } catch (error) {
         console.error('Failed to fetch goals/progress:', error)
       } finally {
@@ -255,15 +285,15 @@ export default function NutritionGoalsPage() {
    *  preset changes can never diverge from each other. Accepts an explicit
    *  tdee/stats pair for callers (like a fresh weigh-in) that need the
    *  recompute to use a value that hasn't round-tripped through state yet. */
-  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel, tdeeOverride?: number, statsOverride?: typeof effectiveStats) => {
+  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel, tdeeOverride?: number, statsOverride?: typeof effectiveStats, paceKgPerWeekOverride?: number) => {
     const effectiveTdee = tdeeOverride ?? tdee
     if (!effectiveTdee) return
-    const adjustedCals = applyGoalAdjustment(effectiveTdee, goalType)
+    const adjustedCals = applyGoalAdjustment(effectiveTdee, goalType, paceKgPerWeekOverride)
     if (preset === 'custom') {
       setGoals(prev => ({ ...prev, calories: adjustedCals }))
       return
     }
-    applyMacroPreset(preset, adjustedCals, goalType, activity, statsOverride)
+    applyMacroPreset(preset, adjustedCals, goalType, activity, statsOverride, paceKgPerWeekOverride)
   }, [tdee, applyGoalAdjustment, applyMacroPreset])
 
   // Auto-apply TDEE on first load if user has never saved goals
@@ -294,6 +324,20 @@ export default function NutritionGoalsPage() {
       applyMacroPreset(preset, goals.calories, goals.goalType, goals.activityLevel)
     }
   }
+
+  /** The Plan card's pace picker writes straight to the Goal and only knew
+   *  about its own ETA text — this is the other half of the connection: when
+   *  the member taps a new pace chip, recompute calories/macros for it right
+   *  away. Takes the pace PlanCard just wrote explicitly (rather than reading
+   *  planPaceKgPerWeek state) because the state set below hasn't landed yet
+   *  when applyTargets runs in this same call. */
+  const handlePlanPaceChange = useCallback((paceKgPerWeek: number, direction: GoalType) => {
+    setPlanPaceKgPerWeek(paceKgPerWeek)
+    setPlanPaceDirection(direction)
+    if (direction === goals.goalType) {
+      applyTargets(macroPreset, goals.goalType, goals.activityLevel, undefined, undefined, paceKgPerWeek)
+    }
+  }, [goals.goalType, goals.activityLevel, macroPreset, applyTargets])
 
   /** Logging a weigh-in from the Weight tab has to move every number that
    *  reads off body weight: the chart point, the TDEE estimate, and — since
@@ -364,6 +408,22 @@ export default function NutritionGoalsPage() {
 
   const percentages = getMacroPercentages()
 
+  // Reactive, unlike the old module-level GOAL_CARDS constant: the "TDEE ± X"
+  // line now recomputes from calorieAdjustment() whenever TDEE or the Plan's
+  // pace changes, instead of always showing the flat DIRECTION_ADJUSTMENT
+  // regardless of which pace chip was tapped above.
+  const goalCards = useMemo(
+    () => (['lose', 'maintain', 'gain'] as GoalType[]).map((type) => ({
+      type,
+      label: DIRECTION_LABELS[type],
+      description: DIRECTION_EXPLANATION[type],
+      adjustment: goalCardAdjustment(
+        type, tdee, type === planPaceDirection && planPaceKgPerWeek != null ? kgToLbs(planPaceKgPerWeek) : undefined,
+      ),
+    })),
+    [tdee, planPaceDirection, planPaceKgPerWeek],
+  )
+
   if (loading) {
     return (
       <PageTransition className="pb-6">
@@ -411,7 +471,7 @@ export default function NutritionGoalsPage() {
           on both tabs — it's the at-a-glance status either way. Remounted
           (via key) after a weigh-in so it re-reads /api/goals instead of
           showing the pre-log current weight. */}
-      <PlanCard key={planRefreshKey} className="mb-4 sm:mb-6" />
+      <PlanCard key={planRefreshKey} className="mb-4 sm:mb-6" onPaceChange={({ paceKgPerWeek, direction }) => handlePlanPaceChange(paceKgPerWeek, direction)} />
 
       {activeTab === 'weight' ? (
         <Card className="mb-4 sm:mb-6">
@@ -597,7 +657,7 @@ export default function NutritionGoalsPage() {
       <div className="mb-4 sm:mb-6" data-tour="goals-type">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Goal</h2>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {GOAL_CARDS.map((card) => (
+          {goalCards.map((card) => (
             <button
               key={card.type}
               onClick={() => handleGoalTypeChange(card.type)}
