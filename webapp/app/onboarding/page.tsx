@@ -302,8 +302,9 @@ export default function OnboardingPage() {
         weeklyAvailability: profile.weeklyAvailability,
         activityLevel: profile.activityLevel,
         macroPreset: profile.macroPreset,
+        paceKgPerWeek: profile.paceKgPerWeek ?? defaultPaceKg(effectiveDirection),
       }),
-    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability, profile.activityLevel, profile.macroPreset]
+    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability, profile.activityLevel, profile.macroPreset, profile.paceKgPerWeek]
   )
 
 
@@ -497,6 +498,7 @@ export default function OnboardingPage() {
         weeklyAvailability: payload.weeklyAvailability,
         activityLevel: payload.activityLevel,
         macroPreset: payload.macroPreset,
+        paceKgPerWeek: payload.paceKgPerWeek ?? defaultPaceKg(payloadDirection),
       })
       if (seedTargets) {
         seeds.push(
@@ -1010,6 +1012,7 @@ function Step3({
         },
         targets.activityLevel,
         targets.direction,
+        profile.paceKgPerWeek ?? defaultPaceKg(targets.direction),
       )
       if (!c) return null
       return {
@@ -1035,7 +1038,7 @@ function Step3({
       steps: m.steps,
       note: m.note,
     }
-  }, [explaining, targets, profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, profile.macroPreset, goals])
+  }, [explaining, targets, profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, profile.macroPreset, profile.paceKgPerWeek, goals])
 
   // Imperial display state
   const initialHeight = profile.heightCm ? cmToFtIn(profile.heightCm) : { ft: '', inches: '' }
