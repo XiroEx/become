@@ -17,6 +17,7 @@ import SessionBuilder from '@/components/SessionBuilder'
 import { BackButton } from '@/components/ui/BackButton'
 import { stashQuickSession, stashQuickSessionWithId, quickSessionOverviewHref } from '@/lib/quickSession/store'
 import { isFocusKey, type DraftExercise } from '@/lib/quickSession/types'
+import { shouldAutoOpenBuilder } from '@/lib/quickSession/hubLinks'
 
 type TabKey = 'exercises' | 'sessions' | 'programs'
 
@@ -84,10 +85,13 @@ function formatDate(iso: string): string {
 
 function SessionsTab() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [sessions, setSessions] = useState<SessionLog[]>([])
   const [planned, setPlanned] = useState<PlannedSession[]>([])
   const [loading, setLoading] = useState(true)
-  const [building, setBuilding] = useState(false)
+  // Deep-linked from "Build a custom session" (?build=1) so it opens straight
+  // into the builder instead of requiring a second tap on "Build".
+  const [building, setBuilding] = useState(() => shouldAutoOpenBuilder(searchParams))
   const [opening, setOpening] = useState<string | null>(null)
 
   // Open a planned session under its OWN sessionId so finishing it consumes the

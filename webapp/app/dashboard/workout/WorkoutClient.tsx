@@ -107,7 +107,7 @@ export default function WorkoutClient() {
       className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
     >
       <Zap className="h-3.5 w-3.5" />
-      Quick Session
+      Workout Now
     </button>
   );
 

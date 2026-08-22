@@ -38,7 +38,7 @@ export const workoutSection: TutorialSection = {
     {
       id: 'workout-quick-session',
       target: '[data-tour="workout-quick-session"]',
-      title: 'Quick Session',
+      title: 'Workout Now',
       body: 'Not on a program? Log a one-off session — no setup required.',
       placement: 'bottom',
     },
