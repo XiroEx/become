@@ -19,7 +19,11 @@ import { verifyAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
 import { generateUniqueFoodSlug } from '@/lib/foodSlug'
 import { baseGroupKey } from '@/lib/foodGrouping'
-import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import {
+  computeAutomaticReviewState,
+  isAutomaticReviewOwned,
+  type FoodForReview,
+} from '@/lib/foodReview'
 
 export async function POST(
   request: NextRequest,
@@ -108,6 +112,11 @@ export async function POST(
       safeExternalId = undefined
     }
 
+    const newAutomaticReview = computeAutomaticReviewState({
+      slug: newSlug,
+      variants: [newVariant],
+    } as FoodForReview, { origin: 'rules' })
+
     const newFood = await Food.create({
       name: newName,
       slug: newSlug,
@@ -125,10 +134,8 @@ export async function POST(
       usageCount: 0,
       createdBy: source.createdBy,
       groupKey: baseGroupKey(newName) || undefined,
-      needsReview: computeReviewIssues({
-        slug: newSlug,
-        variants: [newVariant],
-      } as FoodForReview).length > 0,
+      needsReview: newAutomaticReview.needsReview,
+      reviewFlag: newAutomaticReview.reviewFlag,
     })
 
     // Remove the popped variant from the source.
@@ -137,7 +144,14 @@ export async function POST(
     if (wasDefault && source.variants.length > 0) {
       source.variants[0].isDefault = true
     }
-    source.needsReview = computeReviewIssues(source.toObject() as unknown as FoodForReview).length > 0
+    if (isAutomaticReviewOwned(source.reviewFlag)) {
+      const sourceAutomaticReview = computeAutomaticReviewState(
+        source.toObject() as unknown as FoodForReview,
+        { origin: 'rules' },
+      )
+      source.needsReview = sourceAutomaticReview.needsReview
+      source.reviewFlag = sourceAutomaticReview.reviewFlag
+    }
     await source.save()
 
     const freshSource = await Food.findById(source._id)

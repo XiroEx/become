@@ -1,4 +1,8 @@
 import mongoose, { Schema, Types } from 'mongoose'
+import {
+  REVIEW_ISSUE_CODES,
+  type FoodReviewFlagState,
+} from '@/lib/foodReview'
 
 // ---------------------------------------------------------------------------
 // Food — replaces FoodItem.
@@ -165,13 +169,18 @@ export interface IFood {
   recipeId?: Types.ObjectId
 
   /**
-   * When true, this Food has been auto-flagged (or admin-flagged) for review
-   * — typically because nutrition values are suspect, the slug had to be
-   * collision-suffixed past -2, or the food has no usable nutrition. Surfaced
-   * in the admin Foods section. See `lib/foodReview.ts` for the auto-flag
-   * rules.
+   * Materialized review-queue flag. Keep this indexed boolean in sync with
+   * `reviewFlag`; the latter records who owns the decision and why.
    */
   needsReview?: boolean
+
+  /**
+   * Provenance for `needsReview`. Automatic writers may update only
+   * automatic-owned decisions. An explicit admin choice is manual-owned even
+   * when it clears the flag, so later imports cannot silently undo it.
+   * Missing means legacy/unknown ownership and must be preserved.
+   */
+  reviewFlag?: FoodReviewFlagState
 
   /**
    * Hard-hidden from all user-facing search. Set only on entries whose source
@@ -233,6 +242,19 @@ const VariantSchema = new Schema<IFoodVariant>({
   externalDataType: { type: String },
 }, { _id: true })
 
+const ReviewFlagSchema = new Schema<FoodReviewFlagState>({
+  owner: { type: String, required: true, enum: ['automatic', 'manual'] },
+  issueCodes: { type: [String], enum: REVIEW_ISSUE_CODES, default: [] },
+  ruleVersion: { type: String, required: true },
+  origin: {
+    type: String,
+    required: true,
+    enum: ['import', 'rules', 'admin', 'reconcile', 'legacy-created-flag'],
+  },
+  updatedAt: { type: Date, required: true },
+  updatedBy: { type: String },
+}, { _id: false })
+
 const FoodSchema = new Schema<IFood>({
   name: { type: String, required: true },
   slug: { type: String, required: true },
@@ -291,6 +313,7 @@ const FoodSchema = new Schema<IFood>({
   recipeId: { type: Schema.Types.ObjectId, ref: 'Recipe' },
 
   needsReview: { type: Boolean, default: false },
+  reviewFlag: { type: ReviewFlagSchema },
   hiddenFromSearch: { type: Boolean, default: false },
   groupKey: { type: String },
 }, {
@@ -327,6 +350,9 @@ FoodSchema.index({ category: 1, isFirstClass: -1 })
 FoodSchema.index({ source: 1, externalId: 1 }, { unique: true, sparse: true })
 // Admin reviews: surface flagged foods quickly without a full collection scan.
 FoodSchema.index({ needsReview: 1, updatedAt: -1 })
+// Reconciliation scans automatic-owned rows without touching manual/legacy
+// decisions. Keep the existing needsReview index for the admin list query.
+FoodSchema.index({ 'reviewFlag.owner': 1, needsReview: 1, updatedAt: -1 })
 // Variant-merging passes filter by groupKey; sparse so manual foods
 // without a groupKey don't bloat the index.
 FoodSchema.index({ groupKey: 1 }, { sparse: true })

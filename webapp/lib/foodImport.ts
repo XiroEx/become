@@ -7,7 +7,11 @@ import { parseQuantityString, convert, familyOf } from '@/lib/units'
 import { baseGroupKey } from '@/lib/foodGrouping'
 import { canonicalFoodName } from '@/lib/foodCanonicalName'
 import { canAutoMergeAsVariant, type VariantMergeParent, type VariantMergeCandidate } from '@/lib/foodVariantMerge'
-import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import {
+  computeAutomaticReviewState,
+  isAutomaticReviewOwned,
+  type FoodForReview,
+} from '@/lib/foodReview'
 import { plausibleOffKcal } from '@/lib/offEnergy'
 import { assessFoodImportQuality, foodQualityErrorMessage } from '@/lib/nutrition/foodQuality'
 
@@ -501,10 +505,10 @@ export async function importFromUSDA(
   variant.externalDataType = usda.dataType
 
   // Auto-review flag — set if the import produced anything suspect.
-  const needsReview = computeReviewIssues({
+  const automaticReview = computeAutomaticReviewState({
     slug,
     variants: [variant],
-  } as FoodForReview).length > 0
+  } as FoodForReview, { origin: 'import' })
 
   const food = await Food.create({
     name: finalName,
@@ -522,7 +526,8 @@ export async function importFromUSDA(
     imageUrl: undefined,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
-    needsReview,
+    needsReview: automaticReview.needsReview,
+    reviewFlag: automaticReview.reviewFlag,
     groupKey: baseGroupKey(baseName) || undefined,
   })
 
@@ -653,13 +658,30 @@ async function tryMergeIntoCandidate(opts: {
 
   if (!updated) return null
 
-  // Recompute needsReview against the merged state. Variants are appended
-  // so the *default* variant didn't change — but the slug check might be
-  // affected by a name change. We recompute and write only if it differs.
-  const recomputed = computeReviewIssues(updated.toObject() as unknown as FoodForReview).length > 0
-  if (recomputed !== updated.needsReview) {
-    updated.needsReview = recomputed
-    await updated.save()
+  // Recompute only when automatic rules own the stored decision. Legacy rows
+  // have unknown ownership and explicit admin choices are manual-owned; both
+  // must survive an import. updatedAt makes this a compare-and-swap so a
+  // concurrent nutrition/admin edit wins over this snapshot.
+  if (isAutomaticReviewOwned(updated.reviewFlag)) {
+    const automaticReview = computeAutomaticReviewState(
+      updated.toObject() as unknown as FoodForReview,
+      { origin: 'import' },
+    )
+    const reviewUpdated = await Food.findOneAndUpdate(
+      {
+        _id: updated._id,
+        'reviewFlag.owner': 'automatic',
+        updatedAt: updated.updatedAt,
+      },
+      {
+        $set: {
+          needsReview: automaticReview.needsReview,
+          reviewFlag: automaticReview.reviewFlag,
+        },
+      },
+      { new: true },
+    )
+    if (reviewUpdated) return reviewUpdated
   }
 
   return updated
@@ -911,10 +933,10 @@ export async function importFromOpenFoodFacts(
     ? off.category as FoodCategory
     : 'Other'
 
-  const needsReview = computeReviewIssues({
+  const automaticReview = computeAutomaticReviewState({
     slug,
     variants: [variant],
-  } as FoodForReview).length > 0
+  } as FoodForReview, { origin: 'import' })
 
   const food = await Food.create({
     name: off.product_name,
@@ -932,7 +954,8 @@ export async function importFromOpenFoodFacts(
     imageUrl: off.image_url || undefined,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
-    needsReview,
+    needsReview: automaticReview.needsReview,
+    reviewFlag: automaticReview.reviewFlag,
     groupKey: baseGroupKey(off.product_name) || undefined,
   })
 
@@ -1068,10 +1091,10 @@ export async function importManualFood(
 
   const slug = await generateUniqueFoodSlug(Food, input.name, input.brand)
 
-  const needsReview = computeReviewIssues({
+  const automaticReview = computeAutomaticReviewState({
     slug,
     variants,
-  } as FoodForReview).length > 0
+  } as FoodForReview, { origin: 'rules' })
 
   const food = await Food.create({
     name: input.name,
@@ -1089,7 +1112,8 @@ export async function importManualFood(
     imageUrl: input.imageUrl,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
-    needsReview,
+    needsReview: automaticReview.needsReview,
+    reviewFlag: automaticReview.reviewFlag,
     groupKey: baseGroupKey(input.name) || undefined,
   })
 
@@ -1135,6 +1159,14 @@ export function flattenFoodForResponse(food: IFood & { _id: mongoose.Types.Objec
     aliases: food.aliases,
     createdBy: food.createdBy,
     needsReview: food.needsReview,
+    // Never serialize the internal admin identifier stored in updatedBy.
+    reviewFlag: food.reviewFlag ? {
+      owner: food.reviewFlag.owner,
+      issueCodes: food.reviewFlag.issueCodes,
+      ruleVersion: food.reviewFlag.ruleVersion,
+      origin: food.reviewFlag.origin,
+      updatedAt: food.reviewFlag.updatedAt,
+    } : undefined,
     groupKey: food.groupKey,
     createdAt: food.createdAt,
     updatedAt: food.updatedAt,

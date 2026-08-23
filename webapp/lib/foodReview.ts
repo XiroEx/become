@@ -3,29 +3,47 @@ import { convert, familyOf, type Unit } from './units'
 // ---------------------------------------------------------------------------
 // foodReview — auto-flag rules for the Food collection.
 //
-// Used in two places:
-//   1. Import time (lib/foodImport.ts): if `computeReviewIssues` returns any
-//      issues, the new Food doc is created with `needsReview: true`.
-//   2. Admin detail page (/dashboard/admin/foods/[id]): re-runs at render
-//      time so the admin sees a live list of WHY a food was flagged. We
-//      don't store the reasons separately because the underlying data may
-//      have changed between flag-time and review-time.
+// Import and reconciliation writers persist both the materialized boolean and
+// provenance (ownership, rule version, issue codes). The admin detail page
+// also re-runs these rules so it can distinguish stored evidence from the live
+// result after underlying food data or the rule set changes.
 //
 // Tolerances are deliberately permissive — we only want to flag genuinely
 // suspect entries, not borderline ones. Better to under-flag than over-flag.
 // ---------------------------------------------------------------------------
 
-export type ReviewIssueCode =
-  | 'slug_collision'
-  | 'calories_out_of_range'
-  | 'negative_nutrition'
-  | 'macros_inconsistent'
-  | 'no_nutrition'
-  | 'bridge_conflict'
+export const REVIEW_ISSUE_CODES = [
+  'slug_collision',
+  'calories_out_of_range',
+  'negative_nutrition',
+  'macros_inconsistent',
+  'no_nutrition',
+  'bridge_conflict',
+] as const
+
+export type ReviewIssueCode = (typeof REVIEW_ISSUE_CODES)[number]
 
 export interface ReviewIssue {
   code: ReviewIssueCode
   message: string
+}
+
+/**
+ * Bump whenever the automatic rules change in a way that may change a stored
+ * flag. Reconciliation reports the version that produced its decision.
+ */
+export const FOOD_REVIEW_RULE_VERSION = '2026-08-23.1'
+
+export type FoodReviewOwner = 'automatic' | 'manual'
+export type FoodReviewOrigin = 'import' | 'rules' | 'admin' | 'reconcile' | 'legacy-created-flag'
+
+export interface FoodReviewFlagState {
+  owner: FoodReviewOwner
+  issueCodes: ReviewIssueCode[]
+  ruleVersion: string
+  origin: FoodReviewOrigin
+  updatedAt: Date
+  updatedBy?: string
 }
 
 export interface FoodForReview {
@@ -240,4 +258,51 @@ function runBridgeCheck(
     })
   }
   return issues
+}
+
+function sortedIssueCodes(issues: ReviewIssue[]): ReviewIssueCode[] {
+  return [...new Set(issues.map(issue => issue.code))].sort()
+}
+
+/** The complete pair an automatic writer must persist together. */
+export function computeAutomaticReviewState(
+  food: FoodForReview,
+  options: { at?: Date; origin?: Extract<FoodReviewOrigin, 'import' | 'rules' | 'reconcile' | 'legacy-created-flag'> } = {},
+): { needsReview: boolean; reviewFlag: FoodReviewFlagState; issues: ReviewIssue[] } {
+  const issues = computeReviewIssues(food)
+  return {
+    needsReview: issues.length > 0,
+    reviewFlag: {
+      owner: 'automatic',
+      issueCodes: sortedIssueCodes(issues),
+      ruleVersion: FOOD_REVIEW_RULE_VERSION,
+      origin: options.origin ?? 'rules',
+      updatedAt: options.at ?? new Date(),
+    },
+    issues,
+  }
+}
+
+/** An explicit admin choice owns the flag even when that choice is `false`. */
+export function manualReviewState(
+  needsReview: boolean,
+  options: { at?: Date; updatedBy?: string } = {},
+): { needsReview: boolean; reviewFlag: FoodReviewFlagState } {
+  return {
+    needsReview,
+    reviewFlag: {
+      owner: 'manual',
+      issueCodes: [],
+      ruleVersion: FOOD_REVIEW_RULE_VERSION,
+      origin: 'admin',
+      updatedAt: options.at ?? new Date(),
+      ...(options.updatedBy ? { updatedBy: options.updatedBy } : {}),
+    },
+  }
+}
+
+export function isAutomaticReviewOwned(
+  flag: Pick<FoodReviewFlagState, 'owner'> | null | undefined,
+): boolean {
+  return flag?.owner === 'automatic'
 }
