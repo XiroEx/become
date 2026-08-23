@@ -64,6 +64,7 @@ interface WorkoutLog {
   date: string;
   duration?: number;
   exerciseCount: number;
+  sessionId?: string;
   /** Present when fetched with ?withExercises=true; absent on legacy logs. */
   exercises?: DraftExercise[];
 }
@@ -253,12 +254,15 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
       setError(null);
 
       if (log.exercises?.length) {
-        const id = stashQuickSession({
-          title: log.title,
-          focus,
-          exercises: log.exercises,
-          source: "saved",
-        });
+        const id = stashQuickSession(
+          {
+            title: log.title,
+            focus,
+            exercises: log.exercises,
+            source: "saved",
+          },
+          log.sessionId ? { sourceSessionId: log.sessionId } : undefined,
+        );
         router.push(quickSessionOverviewHref(id));
         onClose();
         return;

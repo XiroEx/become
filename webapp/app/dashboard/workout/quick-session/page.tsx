@@ -21,6 +21,7 @@ import {
 } from '@/lib/quickSession/store'
 import { FOCUS_DEFS, type DraftExercise } from '@/lib/quickSession/types'
 import { buildLoggedExercises } from '@/lib/quickSession/log'
+import { persistSourceQuickSessionRename } from '@/lib/quickSession/rename'
 
 // Local YYYY-MM-DD (not UTC) so the date picker + max match the user's day.
 function localDateStr(d = new Date()): string {
@@ -85,7 +86,6 @@ export default function QuickSessionOverviewPage() {
     if (!session) return
     setSavingEdit(true)
     setEditError(null)
-    const next = updateQuickSession(session.sessionId, { title, exercises })
     try {
       if (isSaved) {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
@@ -105,7 +105,17 @@ export default function QuickSessionOverviewPage() {
           }),
         })
         if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Failed to save changes')
+      } else {
+        // A completed session is reopened under a fresh id so starting it again
+        // cannot overwrite history. Its source id is retained solely so a
+        // rename can update the original log without touching its recorded
+        // exercises, date, or completion state.
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+        await persistSourceQuickSessionRename({ session, title, token })
       }
+      // Commit the local draft only after any required server write succeeds;
+      // a failed request must not look saved after a reload.
+      const next = updateQuickSession(session.sessionId, { title, exercises })
       setSession(next ?? { ...session, title, exercises })
       setEditing(false)
     } catch (e) {

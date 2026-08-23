@@ -13,6 +13,13 @@ const KEY_PREFIX = 'quick_session_'
 
 export interface StoredQuickSession extends DraftSession {
   sessionId: string
+  /** Server log this repeat was copied from. Kept separate from sessionId so
+   *  completing the repeat cannot overwrite the historical workout. */
+  sourceSessionId?: string
+}
+
+interface StashQuickSessionOptions {
+  sourceSessionId?: string
 }
 
 function genId(): string {
@@ -32,9 +39,13 @@ function hashStr(s: string): number {
 }
 
 /** Persist a draft session and return its sessionId (used in the live URL). */
-export function stashQuickSession(session: DraftSession): string {
+export function stashQuickSession(session: DraftSession, options?: StashQuickSessionOptions): string {
   const sessionId = genId()
-  const payload: StoredQuickSession = { ...session, sessionId }
+  const payload: StoredQuickSession = {
+    ...session,
+    sessionId,
+    ...(options?.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}),
+  }
   try {
     // localStorage (not sessionStorage) so a generated session survives closing
     // the live view / tab and can be re-opened from its overview — it used to
