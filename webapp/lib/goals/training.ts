@@ -4,6 +4,13 @@
  */
 
 import { weekKeyOf, shiftDay } from '@/lib/streaks/pillars'
+import {
+  PLAUSIBLE_E1RM_MAX,
+  buildStrengthTarget,
+  isTargetReached,
+  type LiftHistoryPoint,
+  type StrengthTarget,
+} from '@/lib/strength/targets'
 
 export interface PRSnapshot { slug: string; name: string; e1RM: number; weight?: number; reps?: number }
 
@@ -18,6 +25,12 @@ export interface LiftProgress {
   /** 0–100 toward target from baseline; null without a target. */
   toTargetPct: number | null
   remaining?: number
+  /**
+   * True once `now` has caught the target. Previously there was no such flag,
+   * so a beaten target kept rendering as though it were still ahead — a member
+   * whose leg press had gone 547 → 1020 was still shown "→ 575".
+   */
+  reached?: boolean
 }
 
 /** Average completed workouts per week over the last N COMPLETE weeks (this week excluded). */
@@ -31,22 +44,55 @@ export function avgWorkoutsPerWeek(workoutDays: Iterable<string>, todayKey: stri
   return { avg: Math.round(avg * 10) / 10, weeks: out.length, counts: out }
 }
 
-/** Anything above this is a typo (a 1,939 lb leg extension), not a lift. Kept in history, never suggested. */
-export const PLAUSIBLE_E1RM_MAX = 1200
+/**
+ * Re-exported from the strength-target model, which owns it. Kept exported
+ * here because callers across the goal layer already import it from this path.
+ */
+export { PLAUSIBLE_E1RM_MAX }
 
 /** Top N lifts by e1RM from a PR list (implausible entries excluded). */
 export function topLifts(prs: PRSnapshot[], n = 3): PRSnapshot[] {
   return [...prs].filter(p => p.e1RM > 0 && p.e1RM <= PLAUSIBLE_E1RM_MAX).sort((a, b) => b.e1RM - a.e1RM).slice(0, n)
 }
 
-/** Suggested targets: +5% e1RM on the top lifts (rounded to 5). */
-export function suggestLiftTargets(prs: PRSnapshot[], pct = 0.05, n = 3): Array<{ slug: string; name: string; baselineE1RM: number; targetE1RM: number }> {
-  return topLifts(prs, n).map(p => ({
-    slug: p.slug,
-    name: p.name,
-    baselineE1RM: Math.round(p.e1RM),
-    targetE1RM: Math.max(Math.round(p.e1RM) + 5, Math.round((p.e1RM * (1 + pct)) / 5) * 5),
-  }))
+export interface SuggestLiftTargetsOptions {
+  /** Per-lift session history, keyed by slug — drives the per-lift gain rate. */
+  historyBySlug?: Map<string, LiftHistoryPoint[]>
+  unit?: 'lbs' | 'kg'
+  now?: Date
+  n?: number
+}
+
+/**
+ * Suggested strength targets.
+ *
+ * Was a flat +5% on the top three lifts. That treated a four-week-old bench
+ * and a decade-old deadlift as the same problem, and — because it was computed
+ * from a baseline captured when the goal was created and then frozen — it
+ * routinely displayed targets the member had already beaten. Both are fixed in
+ * `lib/strength/targets`: the rate now comes from each lift's own logged
+ * history, and the number is always built from where the member is today.
+ *
+ * Without history this still works; it just assumes the early fast-gain phase
+ * and says so in the explanation.
+ */
+export function suggestLiftTargets(
+  prs: PRSnapshot[],
+  opts: SuggestLiftTargetsOptions = {},
+): StrengthTarget[] {
+  const { historyBySlug, unit = 'lbs', now = new Date(), n = 3 } = opts
+  return topLifts(prs, n)
+    .map(p =>
+      buildStrengthTarget({
+        slug: p.slug,
+        name: p.name,
+        currentE1RM: p.e1RM,
+        history: historyBySlug?.get(p.slug) ?? [],
+        unit,
+        now,
+      })
+    )
+    .filter((t): t is StrengthTarget => t !== null)
 }
 
 /**
@@ -77,7 +123,18 @@ export function liftProgress(
       toTargetPct = span > 0 ? Math.max(0, Math.min(100, Math.round(((now - t.baselineE1RM) / span) * 100))) : 100
       remaining = Math.max(0, Math.round(t.targetE1RM - now))
     }
-    rows.push({ slug, name, then: Math.round(then), now: Math.round(now), delta: Math.round(delta), pct, target: t?.targetE1RM, toTargetPct, remaining })
+    rows.push({
+      slug,
+      name,
+      then: Math.round(then),
+      now: Math.round(now),
+      delta: Math.round(delta),
+      pct,
+      target: t?.targetE1RM,
+      toTargetPct,
+      remaining,
+      reached: t ? isTargetReached(now, t.targetE1RM) : undefined,
+    })
   }
   for (const t of targets) {
     const b = baseline.find(p => p.slug === t.slug) ?? current.find(p => p.slug === t.slug)

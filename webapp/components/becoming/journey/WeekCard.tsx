@@ -184,7 +184,10 @@ function WeekCardImpl({ week: w, unit, width, height, focused, landed, compact, 
         {(wins.length > 0 || w.training.prs.length > 0) && (
           <motion.div className="mt-3 space-y-1.5" {...anim(4)}>
             {w.training.prs.slice(0, wins.length ? 1 : 2).map(p => (
-              <p key={p.name} className="flex items-center gap-1.5 truncate text-[12px] text-white/75"><Trophy className="h-3.5 w-3.5 shrink-0 text-amber-300" />{p.name} · {p.e1RM}</p>
+              // The number is an estimated max, not the weight lifted. Naming
+              // the unit at least stops it reading as a rep count or a bare
+              // score; the full explanation lives on the Training screen.
+              <p key={p.name} className="flex items-center gap-1.5 truncate text-[12px] text-white/75"><Trophy className="h-3.5 w-3.5 shrink-0 text-amber-300" />{p.name} · {p.e1RM} {unit}</p>
             ))}
             {wins.map((win, i) => (
               <p key={i} className="flex items-start gap-1.5 font-serif text-[14px] italic leading-snug text-white/80"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-300" /><span className="line-clamp-2">“{win}”</span></p>
