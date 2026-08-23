@@ -304,6 +304,14 @@ function TimelineClient() {
     item: IMealItem & { _id?: string }
     planItems: (IMealItem & { _id?: string })[]
   } | null>(null)
+  const editCurrentTag = useMemo(() => {
+    if (!editEntry) return 'snack'
+    for (const day of days) {
+      const log = day.logs?.find(candidate => candidate._id === editEntry.logId)
+      if (log) return primaryTag(log.tags) ?? 'snack'
+    }
+    return 'snack'
+  }, [days, editEntry])
   const [confirmDelete, setConfirmDelete] = useState<{ logId: string; mealName?: string } | null>(null)
   const [filterChipsOpen, setFilterChipsOpen] = useState(false)
   // Inline add-food: keeps the user on the timeline page instead of redirecting.
@@ -1324,6 +1332,8 @@ function TimelineClient() {
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
+        currentTag={editCurrentTag}
+        availableTags={tagsResp}
         onClose={() => setEditEntry(null)}
         onSaved={fetchData}
       />

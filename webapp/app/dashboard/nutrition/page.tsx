@@ -165,7 +165,11 @@ function NutritionPageInner() {
     }
   }, [])
   const [quickAddOpen, setQuickAddOpen] = useState(false)
-  const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
+  const [editEntry, setEditEntry] = useState<{
+    logId: string
+    item: IMealItem & { _id?: string }
+    currentTag: string
+  } | null>(null)
   // When set, the food picker appends to THIS specific MealLog (used by "add to
   // this meal" on a logged meal group) rather than the smart tag-append.
   const [addToLogId, setAddToLogId] = useState<string | null>(null)
@@ -1247,7 +1251,7 @@ function NutritionPageInner() {
             untimed={section.untimed}
             onAddFood={(t) => openFoodSearch(t, false)}
             onAddToMeal={(logId, t) => openAddToMeal(logId, t)}
-            onEditEntry={(logId, item) => setEditEntry({ logId, item })}
+            onEditEntry={(logId, item, currentTag) => setEditEntry({ logId, item, currentTag })}
             onRemoveEntry={handleRemoveEntry}
             onRemovePlan={handleRemovePlan}
             onLogPlan={dateParam === todayLocalKey() ? handleLogPlan : undefined}
@@ -1551,8 +1555,10 @@ function NutritionPageInner() {
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
+        currentTag={editEntry?.currentTag}
+        availableTags={tagsResp}
         onClose={() => setEditEntry(null)}
-        onSaved={fetchMealLogs}
+        onSaved={() => { fetchMealLogs(); fetchTags() }}
       />
 
       {/* Schedule-meals drawer — opens from the future-date empty-state CTA

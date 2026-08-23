@@ -3,14 +3,18 @@ import dbConnect from '@/lib/mongodb'
 import MealLog from '@/models/MealLog'
 import { verifyAuth } from '@/lib/auth'
 import { bustTilesCache } from '@/lib/redis'
+import { normalizeMealLogTag, replaceMealLogTag } from '@/lib/nutrition/moveMealLogItem'
 import mongoose from 'mongoose'
 
 function findItemIndex(log: { items: { _id?: mongoose.Types.ObjectId }[] }, itemId: string): number {
   return log.items.findIndex(it => it._id?.toString() === itemId)
 }
 
-// PATCH: update servings or replace nutrition for one item.
-// Body: { servings?, nutrition?, servingSize?, servingUnit?, name?, brand?, variantName?, servingLabel? }
+// PATCH: update one item. A tag change moves only this item: if its source log
+// contains other foods, the updated item is split into a new log so those other
+// foods stay in their existing section.
+// Body: { servings?, nutrition?, servingSize?, servingUnit?, name?, brand?,
+//         variantName?, servingLabel?, tag?, fromTag? }
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; itemId: string }> }
@@ -39,6 +43,28 @@ export async function PATCH(
 
     const body = await request.json()
     const item = log.items[idx]
+
+    let nextTags: string[] | null = null
+    let tagChanged = false
+    if (body.tag !== undefined) {
+      const targetTag = normalizeMealLogTag(body.tag)
+      if (!targetTag) {
+        return NextResponse.json({ error: 'tag must be a non-empty string' }, { status: 400 })
+      }
+      nextTags = replaceMealLogTag(log.tags, body.fromTag, targetTag)
+      if (!nextTags) {
+        return NextResponse.json(
+          { error: 'That meal tag changed. Refresh and try again.' },
+          { status: 409 },
+        )
+      }
+      const currentTags = Array.from(new Set(
+        Array.from(log.tags ?? [], (tag: unknown) => normalizeMealLogTag(tag)).filter(Boolean),
+      ))
+      tagChanged =
+        currentTags.length !== nextTags.length ||
+        currentTags.some((tag: string, index: number) => tag !== nextTags![index])
+    }
 
     if (body.servings !== undefined && typeof body.servings === 'number') {
       if (!Number.isFinite(body.servings) || body.servings < 0) {
@@ -93,13 +119,52 @@ export async function PATCH(
       }
     }
 
-    log.markModified('items')
-    await log.save()
+    // A MealLog can hold a whole meal. Retagging one row must not drag its
+    // siblings to the new section, so split the updated item into a new log.
+    // Write the copy first (avoids data loss), then remove the source row. If
+    // the source save fails, best-effort delete the copy before surfacing the
+    // error, avoiding a duplicate in the ordinary failure case.
+    let responseLog = log
+    let sourceLog
+    if (tagChanged && nextTags && log.items.length > 1) {
+      const movedItem = typeof item.toObject === 'function'
+        ? item.toObject()
+        : { ...item }
+      delete movedItem._id
+
+      const movedLog = await MealLog.create({
+        user: log.user,
+        loggedAt: log.loggedAt,
+        untimed: log.untimed,
+        items: [movedItem],
+        source: log.source,
+        tags: nextTags,
+      })
+
+      log.items.splice(idx, 1)
+      log.markModified('items')
+      try {
+        await log.save()
+      } catch (saveError) {
+        await MealLog.deleteOne({ _id: movedLog._id }).catch(() => null)
+        throw saveError
+      }
+      responseLog = movedLog
+      sourceLog = log
+    } else {
+      if (tagChanged && nextTags) log.tags = nextTags
+      log.markModified('items')
+      await log.save()
+    }
 
     // Meal logs feed dashboard tiles — invalidate so they show immediately.
     await bustTilesCache(authResult.userId!)
 
-    return NextResponse.json({ success: true, log })
+    return NextResponse.json({
+      success: true,
+      log: responseLog,
+      ...(sourceLog ? { sourceLog, moved: true } : {}),
+    })
   } catch (error) {
     console.error('Error updating meal log item:', error)
     return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })

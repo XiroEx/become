@@ -79,7 +79,7 @@ interface TagSectionProps {
   // Append a food into a specific logged meal group (keeps it under the meal's
   // outline). When omitted, meal groups show no add-to affordance.
   onAddToMeal?: (logId: string, tag: string) => void
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onEditEntry: (logId: string, item: IMealItem & { _id?: string }, currentTag: string) => void
   onRemoveEntry: (logId: string, itemId: string) => void
   onRemoveTag?: (tag: string) => void
   removable?: boolean
@@ -623,6 +623,7 @@ export default function TagSection({
                       // a source-colored card (camera / barcode / upload / describe).
                       <CaptureGroupCard
                         key={group.key}
+                        tag={tag}
                         source={group.source as 'photo' | 'barcode' | 'upload' | 'describe'}
                         items={group.items}
                         onEditEntry={onEditEntry}
@@ -639,7 +640,7 @@ export default function TagSection({
                               selectable={selecting && Boolean(fi.item._id)}
                               selected={selected.has(keyOf(fi.logId, fi.item._id))}
                               onToggleSelect={() => toggleSelected(keyOf(fi.logId, fi.item._id))}
-                              onEdit={() => onEditEntry(fi.logId, fi.item)}
+                              onEdit={() => onEditEntry(fi.logId, fi.item, tag)}
                               onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                             />
                           ))}
@@ -738,7 +739,7 @@ interface MealGroupCardProps {
   onToggleSelect?: (logId: string, itemId: unknown) => void
   group: { key: string; mealName?: string; items: { logId: string; item: IMealItem & { _id?: string } }[] }
   tag: string
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onEditEntry: (logId: string, item: IMealItem & { _id?: string }, currentTag: string) => void
   onRemoveEntry: (logId: string, itemId: string) => void
   onAddToMeal?: (logId: string, tag: string) => void
 }
@@ -779,7 +780,7 @@ function MealGroupCard({
                   selectable={Boolean(selecting) && Boolean(fi.item._id)}
                   selected={isSelected?.(fi.logId, fi.item._id) ?? false}
                   onToggleSelect={() => onToggleSelect?.(fi.logId, fi.item._id)}
-                  onEdit={() => onEditEntry(fi.logId, fi.item)}
+                  onEdit={() => onEditEntry(fi.logId, fi.item, tag)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
               ))}
@@ -891,10 +892,11 @@ const captureVisuals: Record<'photo' | 'barcode' | 'upload' | 'describe', {
   describe: { Icon: PencilLine,  label: 'Described',  text: 'text-cyan-600 dark:text-cyan-300',       border: 'border-cyan-200 dark:border-cyan-900/40',      bg: 'bg-cyan-50/40 dark:bg-cyan-900/10',      divide: 'divide-cyan-100 dark:divide-cyan-900/30',      chevron: 'text-cyan-400',    hover: 'hover:bg-cyan-100/50 dark:hover:bg-cyan-900/20' },
 }
 
-function CaptureGroupCard({ source, items, onEditEntry, onRemoveEntry }: {
+function CaptureGroupCard({ tag, source, items, onEditEntry, onRemoveEntry }: {
+  tag: string
   source: 'photo' | 'barcode' | 'upload' | 'describe'
   items: { logId: string; item: IMealItem & { _id?: string } }[]
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onEditEntry: (logId: string, item: IMealItem & { _id?: string }, currentTag: string) => void
   onRemoveEntry: (logId: string, itemId: string) => void
 }) {
   const [open, setOpen] = useState(true)
@@ -921,7 +923,7 @@ function CaptureGroupCard({ source, items, onEditEntry, onRemoveEntry }: {
                   key={`${fi.logId}-${fi.item._id ?? idx}`}
                   logId={fi.logId}
                   item={fi.item}
-                  onEdit={() => onEditEntry(fi.logId, fi.item)}
+                  onEdit={() => onEditEntry(fi.logId, fi.item, tag)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
               ))}
