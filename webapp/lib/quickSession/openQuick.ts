@@ -66,7 +66,9 @@ export async function continueQuickSession(sessionId: string): Promise<string | 
       { title: s.title || 'Quick Session', ...(isFocusKey(s.focus) ? { focus: s.focus } : {}), exercises },
       sessionId,
     )
-    return quickSessionOverviewHref(sessionId)
+    // The draft uses the same id as this in-progress server log, so edits must
+    // write back instead of stopping at localStorage.
+    return quickSessionOverviewHref(sessionId, { saved: true })
   } catch {
     return null
   }

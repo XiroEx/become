@@ -5,6 +5,7 @@
 //   · the hub / modal must reopen a log's OWN exercises, not regenerate,
 //   · the reopened copy must get a NEW sessionId so finishing the repeat can't
 //     overwrite the historical log (a save matches by sessionId in place),
+//   · that copy must retain the historical id solely for rename persistence,
 //   · updateQuickSession must rewrite title/exercises while keeping the id.
 
 import { test } from 'node:test'
@@ -28,6 +29,7 @@ import {
   updateQuickSession,
   quickSessionOverviewHref,
 } from '../../../lib/quickSession/store'
+import { continueQuickSession } from '../../../lib/quickSession/openQuick'
 
 const EXERCISES: DraftExercise[] = [
   { exerciseSlug: 'barbell-row', name: 'Barbell Row', trackingType: 'reps_weight', sets: 4, reps: '8-10' },
@@ -35,12 +37,22 @@ const EXERCISES: DraftExercise[] = [
 ]
 
 test('reopening a saved log keeps its title and exercises', () => {
-  const log = { title: 'Sunday Back & Shoulders', focus: 'back' as const, exercises: EXERCISES }
+  const log = {
+    sessionId: 'historical-sunday-session',
+    title: 'Sunday Back & Shoulders',
+    focus: 'back' as const,
+    exercises: EXERCISES,
+  }
 
-  const id = stashQuickSession({ title: log.title, focus: log.focus, exercises: log.exercises })
+  const id = stashQuickSession(
+    { title: log.title, focus: log.focus, exercises: log.exercises },
+    { sourceSessionId: log.sessionId },
+  )
   const reopened = readQuickSession(id)
 
   assert.ok(reopened)
+  assert.notEqual(reopened.sessionId, log.sessionId)
+  assert.equal(reopened.sourceSessionId, log.sessionId)
   assert.equal(reopened.title, 'Sunday Back & Shoulders')
   assert.deepEqual(
     reopened.exercises.map((e) => e.exerciseSlug),
@@ -56,7 +68,10 @@ test('reopening twice yields distinct ids, so a repeat cannot overwrite history'
 })
 
 test('updateQuickSession rewrites title and exercises in place, keeping the id', () => {
-  const id = stashQuickSession({ title: 'Quick Session', exercises: EXERCISES })
+  const id = stashQuickSession(
+    { title: 'Quick Session', exercises: EXERCISES },
+    { sourceSessionId: 'historical-quick-session' },
+  )
 
   const trimmed = updateQuickSession(id, {
     title: 'Back Day',
@@ -65,6 +80,7 @@ test('updateQuickSession rewrites title and exercises in place, keeping the id',
 
   assert.ok(trimmed)
   assert.equal(trimmed.sessionId, id)
+  assert.equal(trimmed.sourceSessionId, 'historical-quick-session')
   assert.equal(trimmed.title, 'Back Day')
   assert.equal(trimmed.exercises.length, 1)
   assert.equal(trimmed.exercises[0].sets, 5)
@@ -73,6 +89,7 @@ test('updateQuickSession rewrites title and exercises in place, keeping the id',
   const reread = readQuickSession(id)
   assert.equal(reread?.title, 'Back Day')
   assert.equal(reread?.exercises.length, 1)
+  assert.equal(reread?.sourceSessionId, 'historical-quick-session')
 })
 
 test('updateQuickSession leaves untouched fields alone and no-ops on a missing id', () => {
@@ -91,4 +108,33 @@ test('overview href only carries saved=1 when the session exists server-side', (
     quickSessionOverviewHref('abc', { saved: true }),
     '/dashboard/workout/quick-session?session=abc&saved=1',
   )
+})
+
+test('continuing an unfinished server session opens an edit-persisting saved href', async () => {
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    session: {
+      sessionId: 'unfinished-session',
+      title: 'Thursday workout',
+      exercises: [{
+        exerciseSlug: 'barbell-row',
+        name: 'Barbell Row',
+        trackingType: 'reps_weight',
+        sets: [{ reps: 8 }],
+      }],
+    },
+  }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  try {
+    const href = await continueQuickSession('unfinished-session')
+    assert.equal(
+      href,
+      '/dashboard/workout/quick-session?session=unfinished-session&saved=1',
+    )
+  } finally {
+    globalThis.fetch = previousFetch
+  }
 })

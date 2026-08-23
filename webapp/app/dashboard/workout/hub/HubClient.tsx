@@ -129,12 +129,15 @@ function SessionsTab() {
     setOpening(key)
 
     if (log.exercises?.length) {
-      const id = stashQuickSession({
-        title: log.title,
-        ...(isFocusKey(log.focus) ? { focus: log.focus } : {}),
-        exercises: log.exercises,
-        source: 'saved',
-      })
+      const id = stashQuickSession(
+        {
+          title: log.title,
+          ...(isFocusKey(log.focus) ? { focus: log.focus } : {}),
+          exercises: log.exercises,
+          source: 'saved',
+        },
+        log.sessionId ? { sourceSessionId: log.sessionId } : undefined,
+      )
       router.push(quickSessionOverviewHref(id))
       return
     }
