@@ -2,13 +2,19 @@
 // now edited) with. Used by both POST and PATCH /api/exercises/custom[/slug]
 // so create and edit can never drift into accepting different shapes.
 
-import type { BodyRegion, ExerciseCategory, MuscleGroup } from '@/models/Exercise'
+import type { BodyRegion, ExerciseCategory, ExerciseRole, MuscleGroup } from '@/models/Exercise'
 
 export const VALID_CUSTOM_TRACKING_TYPES = [
   'reps_weight', 'reps_bodyweight', 'reps_only', 'time', 'time_distance', 'intervals', 'none',
 ] as const
 
 export type CustomExerciseTrackingType = (typeof VALID_CUSTOM_TRACKING_TYPES)[number]
+
+// Role uses the model's own enum directly — no create-form vocabulary
+// translation needed, unlike muscleGroup/category below.
+export const VALID_CUSTOM_EXERCISE_ROLES = ['compound', 'secondary', 'accessory'] as const
+
+export type CustomExerciseRole = (typeof VALID_CUSTOM_EXERCISE_ROLES)[number]
 
 // Muscle group (create-form vocabulary) → Exercise model fields.
 export const CUSTOM_EXERCISE_MUSCLE_MAP: Record<string, { primaryMuscles: MuscleGroup[]; bodyRegion: BodyRegion }> = {
@@ -35,6 +41,12 @@ export const CUSTOM_EXERCISE_CATEGORY_MAP: Record<string, ExerciseCategory> = {
 
 export function isValidCustomTrackingType(value: unknown): value is CustomExerciseTrackingType {
   return typeof value === 'string' && (VALID_CUSTOM_TRACKING_TYPES as readonly string[]).includes(value)
+}
+
+export function resolveCustomExerciseRole(value: unknown): ExerciseRole {
+  return (VALID_CUSTOM_EXERCISE_ROLES as readonly string[]).includes(value as string)
+    ? (value as ExerciseRole)
+    : 'accessory'
 }
 
 export function resolveCustomExerciseMuscleData(muscleGroup: unknown): { primaryMuscles: MuscleGroup[]; bodyRegion: BodyRegion } {

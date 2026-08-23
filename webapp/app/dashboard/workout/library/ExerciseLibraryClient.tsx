@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
-import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell, Globe2, Clock, ArrowDownAZ } from "lucide-react";
 import { Card } from "@/components/ui";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import AdminVideoPreview from "@/app/dashboard/admin/exercises/_form/AdminVideoPreview";
@@ -19,6 +19,8 @@ import { CUSTOM_TAG } from "@/lib/customExerciseTags";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type ReviewStatus = "none" | "pending" | "approved" | "rejected";
+
 interface CustomExercise {
   slug: string;
   name: string;
@@ -26,6 +28,7 @@ interface CustomExercise {
   primaryMuscles: string[];
   bodyRegion: string;
   category: string;
+  role?: string;
   equipment: string[];
   defaultSets?: number;
   defaultReps?: string;
@@ -36,6 +39,11 @@ interface CustomExercise {
   videoHeight?: number | null;
   videoFraming?: VideoFramingOverride | null;
   videoTrim?: VideoTrimOverride | null;
+  createdAt?: string;
+  isUniversal?: boolean;
+  reviewStatus?: ReviewStatus;
+  submittedAt?: string | null;
+  reviewNote?: string | null;
 }
 
 interface CreateForm extends CustomExerciseValues {
@@ -71,6 +79,34 @@ const EMPTY_FORM: CreateForm = {
   submitting: false, error: null,
 };
 
+// ─── Sort + filter ───────────────────────────────────────────────────────────
+
+type SortMode = "recent" | "alphabetical";
+
+const SORT_OPTIONS: { value: SortMode; label: string; icon: typeof Clock }[] = [
+  { value: "recent", label: "Recent", icon: Clock },
+  { value: "alphabetical", label: "A–Z", icon: ArrowDownAZ },
+];
+
+// Same vocabulary the create/edit form uses for "Primary Muscles" — bucket
+// each exercise's stored primaryMuscles back into that vocabulary so the
+// filter chips match what the owner actually picked.
+const BODY_PART_FILTER_OPTIONS = [
+  { value: "chest", label: "Chest" },
+  { value: "back", label: "Back" },
+  { value: "shoulders", label: "Shoulders" },
+  { value: "arms", label: "Arms" },
+  { value: "core", label: "Core" },
+  { value: "legs", label: "Legs" },
+  { value: "full_body", label: "Full Body" },
+];
+
+const ROLE_FILTER_OPTIONS = [
+  { value: "compound", label: "Compound" },
+  { value: "secondary", label: "Secondary" },
+  { value: "accessory", label: "Accessory" },
+];
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 const EXERCISES_PAGE = 5
@@ -97,6 +133,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
   // must not clobber an in-progress create).
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CreateForm>(EMPTY_FORM);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [bodyPartFilter, setBodyPartFilter] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
+  // Submit-to-universal is a separate async action per row, tracked by slug
+  // so one row's spinner never bleeds into another's.
+  const [submittingSlug, setSubmittingSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +175,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
           trackingType: form.trackingType,
           muscleGroup: form.muscleGroup,
           category: form.category,
+          role: form.role,
           defaultSets: form.defaultSets,
           defaultReps: form.defaultReps,
         }),
@@ -181,6 +224,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       // infer back to the form's own vocabulary so the right chips light up.
       muscleGroup: inferCustomExerciseMuscleGroup(ex.primaryMuscles),
       category: inferCustomExerciseCategory(ex.category),
+      role: ex.role ?? "accessory",
       defaultSets: ex.defaultSets ? String(ex.defaultSets) : "3",
       defaultReps: ex.defaultReps ?? "8-12",
       submitting: false,
@@ -205,6 +249,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
           trackingType: editForm.trackingType,
           muscleGroup: editForm.muscleGroup,
           category: editForm.category,
+          role: editForm.role,
           defaultSets: editForm.defaultSets,
           defaultReps: editForm.defaultReps,
         }),
@@ -221,13 +266,56 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
     }
   };
 
-  const filteredExercises = search.trim()
-    ? exercises.filter(e =>
-        e.name.toLowerCase().includes(search.toLowerCase()) ||
-        e.primaryMuscles.some(m => m.toLowerCase().includes(search.toLowerCase())) ||
-        e.category.toLowerCase().includes(search.toLowerCase())
-      )
-    : exercises;
+  const handleSubmitUniversal = async (slug: string) => {
+    setSubmittingSlug(slug);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/exercises/custom/${encodeURIComponent(slug)}/submit`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        patchExercise(slug, { reviewStatus: data.reviewStatus, submittedAt: data.submittedAt, reviewNote: null });
+      }
+    } finally {
+      setSubmittingSlug(null);
+    }
+  };
+
+  const handleWithdrawUniversal = async (slug: string) => {
+    setSubmittingSlug(slug);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/exercises/custom/${encodeURIComponent(slug)}/submit`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        patchExercise(slug, { reviewStatus: data.reviewStatus, submittedAt: null });
+      }
+    } finally {
+      setSubmittingSlug(null);
+    }
+  };
+
+  const filteredExercises = exercises
+    .filter(e => !search.trim() || (
+      e.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.primaryMuscles.some(m => m.toLowerCase().includes(search.toLowerCase())) ||
+      e.category.toLowerCase().includes(search.toLowerCase())
+    ))
+    .filter(e => !bodyPartFilter || inferCustomExerciseMuscleGroup(e.primaryMuscles) === bodyPartFilter)
+    .filter(e => !roleFilter || (e.role ?? "accessory") === roleFilter)
+    .sort((a, b) => {
+      if (sortMode === "alphabetical") return a.name.localeCompare(b.name);
+      // "Recent" — newest first. Fall back to 0 (equal order) if createdAt
+      // wasn't returned for some reason.
+      const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bt - at;
+    });
 
   const content = (
     <>
@@ -345,6 +433,81 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
         </div>
       )}
 
+      {/* Sort + filter tabs */}
+      {!loading && exercises.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center gap-1.5">
+            {SORT_OPTIONS.map(opt => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => { setSortMode(opt.value); setShown(EXERCISES_PAGE); }}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    sortMode === opt.value
+                      ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                  }`}
+                >
+                  <Icon className="h-3 w-3" />
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => { setBodyPartFilter(null); setShown(EXERCISES_PAGE); }}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                !bodyPartFilter
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+              }`}
+            >
+              All body parts
+            </button>
+            {BODY_PART_FILTER_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { setBodyPartFilter(p => (p === opt.value ? null : opt.value)); setShown(EXERCISES_PAGE); }}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  bodyPartFilter === opt.value
+                    ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
+                    : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => { setRoleFilter(null); setShown(EXERCISES_PAGE); }}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                !roleFilter
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+              }`}
+            >
+              All roles
+            </button>
+            {ROLE_FILTER_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { setRoleFilter(p => (p === opt.value ? null : opt.value)); setShown(EXERCISES_PAGE); }}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  roleFilter === opt.value
+                    ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
+                    : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Exercise List */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -369,8 +532,15 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
         </div>
       ) : filteredExercises.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">No exercises match &ldquo;{search}&rdquo;</p>
-          <button onClick={() => setSearch("")} className="mt-2 text-sm text-green-600 hover:text-green-700 dark:text-green-400">Clear search</button>
+          <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            {search ? <>No exercises match &ldquo;{search}&rdquo;</> : "No exercises match these filters"}
+          </p>
+          <button
+            onClick={() => { setSearch(""); setBodyPartFilter(null); setRoleFilter(null); setShown(EXERCISES_PAGE); }}
+            className="mt-2 text-sm text-green-600 hover:text-green-700 dark:text-green-400"
+          >
+            Clear search &amp; filters
+          </button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -412,6 +582,11 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                 <div className="flex items-center gap-1.5">
                   <p className="truncate font-semibold text-zinc-900 dark:text-white">{ex.name}</p>
                   <CustomExerciseBadge variant="inline" />
+                  {ex.isUniversal ? (
+                    <Globe2 className="h-3.5 w-3.5 shrink-0 text-green-500" aria-label="Universal — visible to everyone" />
+                  ) : ex.reviewStatus === "pending" ? (
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Pending admin review" />
+                  ) : null}
                 </div>
                 <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {TRACKING_LABELS[ex.trackingType] || ex.trackingType}
@@ -511,7 +686,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                           deleteUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
                           hasVideo={Boolean(ex.videoUrl)}
                           label={ex.videoUrl ? "Replace video" : "Add a video"}
-                          onUploaded={({ videoUrl }) =>
+                          onUploaded={({ videoUrl, isUniversal, reviewStatus }) =>
                             patchExercise(ex.slug, {
                               videoUrl,
                               // The upload resets these server-side; mirror it so the
@@ -520,15 +695,21 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                               videoHeight: null,
                               videoFraming: null,
                               videoTrim: null,
+                              // A replaced video invalidates any prior admin
+                              // approval — mirror that reset here too.
+                              isUniversal: isUniversal as boolean | undefined,
+                              reviewStatus: reviewStatus as ReviewStatus | undefined,
                             })
                           }
-                          onRemoved={() =>
+                          onRemoved={(result) =>
                             patchExercise(ex.slug, {
                               videoUrl: null,
                               videoWidth: null,
                               videoHeight: null,
                               videoFraming: null,
                               videoTrim: null,
+                              isUniversal: result?.isUniversal as boolean | undefined,
+                              reviewStatus: result?.reviewStatus as ReviewStatus | undefined,
                             })
                           }
                         />
@@ -544,6 +725,50 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                               videoTrim={ex.videoTrim}
                               onSaved={next => patchExercise(ex.slug, { videoTrim: next })}
                             />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Submit to Universal — send this exercise (and its
+                          video, if any) to admins so they can publish it into
+                          the shared catalog everyone can find and use. */}
+                      <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                        {ex.isUniversal ? (
+                          <div className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-xs font-medium text-green-700 dark:bg-green-950/30 dark:text-green-300">
+                            <Globe2 className="h-3.5 w-3.5 shrink-0" />
+                            Universal — verified and visible to everyone
+                          </div>
+                        ) : ex.reviewStatus === "pending" ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                              <Clock className="h-3.5 w-3.5 shrink-0" />
+                              Submitted — waiting on admin review
+                            </div>
+                            <button
+                              onClick={() => handleWithdrawUniversal(ex.slug)}
+                              disabled={submittingSlug === ex.slug}
+                              className="text-xs font-medium text-zinc-500 underline decoration-dotted hover:text-zinc-700 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
+                            >
+                              Withdraw submission
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {ex.reviewStatus === "rejected" && (
+                              <p className="text-xs text-red-500 dark:text-red-400">
+                                Not approved{ex.reviewNote ? `: ${ex.reviewNote}` : "."} Make changes and resubmit whenever you're ready.
+                              </p>
+                            )}
+                            <button
+                              onClick={() => handleSubmitUniversal(ex.slug)}
+                              disabled={submittingSlug === ex.slug}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-300 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            >
+                              <Globe2 className="h-3.5 w-3.5" />
+                              {submittingSlug === ex.slug
+                                ? "Submitting..."
+                                : ex.reviewStatus === "rejected" ? "Resubmit to Universal" : "Submit to Universal"}
+                            </button>
                           </div>
                         )}
                       </div>

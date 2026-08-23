@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/adminAuth';
 import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
+import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
 
 // GET /api/exercises
 //   ?q=<text>           — text/regex search across name/aliases
@@ -28,16 +29,19 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)));
 
-    const filter: Record<string, unknown> = {
-      isCustom: { $ne: true },
-    };
+    // Catalog exercises + this user's own customs + any custom exercise an
+    // admin has approved as universal — never someone else's unreviewed one.
+    const clauses: Record<string, unknown>[] = [visibleExerciseFilter(auth.userId)];
     if (q) {
-      filter.$or = [
-        { name: { $regex: q, $options: 'i' } },
-        { slug: { $regex: q, $options: 'i' } },
-        { aliases: { $elemMatch: { $regex: q, $options: 'i' } } },
-      ];
+      clauses.push({
+        $or: [
+          { name: { $regex: q, $options: 'i' } },
+          { slug: { $regex: q, $options: 'i' } },
+          { aliases: { $elemMatch: { $regex: q, $options: 'i' } } },
+        ],
+      });
     }
+    const filter: Record<string, unknown> = clauses.length > 1 ? { $and: clauses } : clauses[0];
     if (category) filter.category = category;
     if (movement) filter.movementPatterns = movement;
     if (bodyRegion) filter.bodyRegion = bodyRegion;

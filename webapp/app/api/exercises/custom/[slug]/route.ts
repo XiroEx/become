@@ -19,6 +19,7 @@ import {
   isValidCustomTrackingType,
   resolveCustomExerciseMuscleData,
   resolveCustomExerciseCategory,
+  resolveCustomExerciseRole,
 } from "@/lib/customExerciseFields";
 import { invalidateExerciseCache } from "@/lib/hydrateExercises";
 
@@ -32,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   const { slug } = await params;
   const body = await req.json();
-  const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = body;
+  const { name, trackingType, muscleGroup, category, role, defaultSets, defaultReps } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
@@ -42,6 +43,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   const muscleData = resolveCustomExerciseMuscleData(muscleGroup);
   const resolvedCategory = resolveCustomExerciseCategory(category);
+  const resolvedRole = resolveCustomExerciseRole(role);
 
   await connectDB();
 
@@ -57,6 +59,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   exercise.name = name.trim();
   exercise.trackingType = trackingType;
   exercise.category = resolvedCategory;
+  exercise.role = resolvedRole;
   exercise.primaryMuscles = muscleData.primaryMuscles;
   exercise.bodyRegion = muscleData.bodyRegion;
   exercise.defaultSets = defaultSets ? parseInt(defaultSets) : undefined;
@@ -67,6 +70,17 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     trackingType,
     equipment: exercise.equipment,
   });
+
+  // An admin approved a specific version of this exercise. Editing it after
+  // that must not let stale-but-still-"verified" content keep showing to
+  // everyone else — pull it back to private and require resubmission.
+  if (exercise.isUniversal || exercise.reviewStatus === "pending") {
+    exercise.isUniversal = false;
+    exercise.reviewStatus = "none";
+    exercise.submittedAt = null;
+    exercise.reviewNote = null;
+  }
+
   await exercise.save();
 
   invalidateExerciseCache();
@@ -87,6 +101,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       tags: exercise.tags,
       videoUrl: exercise.videoUrl ?? null,
       thumbnailUrl: exercise.thumbnailUrl ?? null,
+      createdAt: exercise.createdAt,
+      isUniversal: exercise.isUniversal ?? false,
+      reviewStatus: exercise.reviewStatus ?? "none",
+      submittedAt: exercise.submittedAt ?? null,
+      reviewNote: exercise.reviewNote ?? null,
     },
   });
 }

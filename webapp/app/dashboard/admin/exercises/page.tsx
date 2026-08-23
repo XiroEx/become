@@ -81,6 +81,15 @@ export default function AdminExercisesPage() {
   const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [pendingReviewCount, setPendingReviewCount] = useState(0)
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    fetch('/api/admin/exercises/review', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (data) setPendingReviewCount(data.submissions?.length ?? 0) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
@@ -206,13 +215,26 @@ export default function AdminExercisesPage() {
             {total} exercise{total === 1 ? '' : 's'} in the library
           </p>
         </div>
-        <Link
-          href="/dashboard/admin/exercises/new"
-          className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
-        >
-          <Plus className="h-4 w-4" />
-          New Exercise
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/admin/exercises/review"
+            className="relative flex items-center gap-1.5 rounded-xl border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Review submissions
+            {pendingReviewCount > 0 && (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">
+                {pendingReviewCount}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/dashboard/admin/exercises/new"
+            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:opacity-90 dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            <Plus className="h-4 w-4" />
+            New Exercise
+          </Link>
+        </div>
       </div>
 
       <div className="mb-3 grid gap-2 sm:grid-cols-3">

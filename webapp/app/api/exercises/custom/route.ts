@@ -8,6 +8,7 @@ import {
   isValidCustomTrackingType,
   resolveCustomExerciseMuscleData,
   resolveCustomExerciseCategory,
+  resolveCustomExerciseRole,
 } from "@/lib/customExerciseFields";
 import { getBlobStore } from "@/lib/blobStorage";
 import { invalidateExerciseCache } from "@/lib/hydrateExercises";
@@ -16,7 +17,7 @@ type LeanExercise = Pick<IExerciseDefinition,
   "slug" | "name" | "trackingType" | "primaryMuscles" | "bodyRegion" | "category" |
   "defaultSets" | "defaultReps" | "defaultDuration" | "equipment" | "role" | "difficulty" |
   "tags" | "videoUrl" | "thumbnailUrl" | "videoWidth" | "videoHeight" | "videoFraming" |
-  "videoTrim"
+  "videoTrim" | "createdAt" | "isUniversal" | "reviewStatus" | "submittedAt" | "reviewNote"
 >;
 
 // ─── GET /api/exercises/custom ────────────────────────────────────────────────
@@ -30,12 +31,14 @@ export async function GET(req: NextRequest) {
   // Media fields are returned so a custom exercise's own demo renders
   // everywhere a catalog one does — the library card, the swap modal, the
   // workout view. Without them a user could upload a video and never see it.
+  // createdAt/isUniversal/reviewStatus/submittedAt/reviewNote drive the
+  // library's sort/filter tabs and its "Submit to Universal" status.
   const exercises = await Exercise.find(
     { isCustom: true, createdBy: auth.userId },
     { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, bodyRegion: 1, category: 1,
       defaultSets: 1, defaultReps: 1, defaultDuration: 1, equipment: 1, role: 1, difficulty: 1,
       tags: 1, videoUrl: 1, thumbnailUrl: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1,
-      videoTrim: 1 }
+      videoTrim: 1, createdAt: 1, isUniversal: 1, reviewStatus: 1, submittedAt: 1, reviewNote: 1 }
   ).lean<LeanExercise[]>();
 
   return NextResponse.json({ exercises });
@@ -49,7 +52,7 @@ export async function POST(req: NextRequest) {
   const auth = { userId: gate.userId };
 
   const body = await req.json();
-  const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = body;
+  const { name, trackingType, muscleGroup, category, role, defaultSets, defaultReps } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
@@ -59,6 +62,7 @@ export async function POST(req: NextRequest) {
 
   const muscleData = resolveCustomExerciseMuscleData(muscleGroup);
   const resolvedCategory = resolveCustomExerciseCategory(category);
+  const resolvedRole = resolveCustomExerciseRole(role);
 
   await connectDB();
 
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
     description: "",
     category: resolvedCategory,
     mechanics: "n/a",
-    role: "accessory",
+    role: resolvedRole,
     movementPatterns: ["n/a"],
     laterality: "bilateral",
     difficulty: "intermediate",
@@ -100,6 +104,8 @@ export async function POST(req: NextRequest) {
     isActive: true,
     isCustom: true,
     createdBy: auth.userId.toString(),
+    isUniversal: false,
+    reviewStatus: "none",
     ...(defaultSets && { defaultSets: parseInt(defaultSets) }),
     ...(defaultReps && { defaultReps: String(defaultReps) }),
   });
@@ -128,6 +134,11 @@ export async function POST(req: NextRequest) {
       // custom exercise whether it came from POST or GET.
       videoUrl: exercise.videoUrl ?? null,
       thumbnailUrl: exercise.thumbnailUrl ?? null,
+      createdAt: exercise.createdAt,
+      isUniversal: exercise.isUniversal ?? false,
+      reviewStatus: exercise.reviewStatus ?? "none",
+      submittedAt: exercise.submittedAt ?? null,
+      reviewNote: exercise.reviewNote ?? null,
     },
   });
 }
