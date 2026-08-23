@@ -17,6 +17,7 @@ export type FocusKey =
   | 'push'
   | 'pull'
   | 'legs'
+  | 'glutes'
   | 'core'
   | 'arms'
   | 'chest'
@@ -242,6 +243,19 @@ export const FOCUS_DEFS: Record<FocusKey, FocusDef> = {
     movementPatterns: ['squat', 'hinge', 'lunge', 'knee_extension', 'knee_flexion', 'hip_extension', 'ankle_flexion'],
     categories: STRENGTH_CATS,
   },
+  glutes: {
+    key: 'glutes',
+    label: 'Glutes',
+    blurb: 'Glutes, hips & posterior chain',
+    // Keep this focus deliberately narrower than generic lower body. The
+    // movement patterns still admit useful compounds where glutes are a
+    // secondary mover (RDLs, squats, lunges), while quad/calf isolation work
+    // does not qualify just because it shares the lower_body region.
+    bodyRegions: [],
+    muscles: ['glutes', 'abductors'],
+    movementPatterns: ['hip_extension', 'hinge', 'lunge', 'squat'],
+    categories: STRENGTH_CATS,
+  },
   core: {
     key: 'core',
     label: 'Core',
@@ -304,6 +318,7 @@ export const QUICK_FOCUS_ORDER: FocusKey[] = [
   'push',
   'pull',
   'legs',
+  'glutes',
   'upper',
   'lower',
   'core',
