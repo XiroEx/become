@@ -56,6 +56,7 @@ interface QuickSessionSaveRequest {
   kind: 'quick'
   sessionId: string
   title?: string
+  needsName?: boolean
   focus?: string
   exercises: ExerciseData[]
   completed: boolean
@@ -653,7 +654,7 @@ async function handleQuickSessionSave(
   body: QuickSessionSaveRequest,
   payload: { userId: string; email: string },
 ) {
-  const { sessionId, title, focus, exercises, completed, duration, activeSeconds, notes } = body
+  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes } = body
 
   if (!sessionId || !Array.isArray(exercises)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -686,6 +687,7 @@ async function handleQuickSessionSave(
         'workoutLogs.$[elem].completed': completed,
         'workoutLogs.$[elem].duration': duration,
         ...(title !== undefined && { 'workoutLogs.$[elem].title': title }),
+        ...(needsName !== undefined && { 'workoutLogs.$[elem].needsName': needsName }),
         ...(focus !== undefined && { 'workoutLogs.$[elem].focus': focus }),
         ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
         ...(notes !== undefined && { 'workoutLogs.$[elem].notes': notes }),
@@ -725,6 +727,7 @@ async function handleQuickSessionSave(
             kind: 'quick',
             sessionId,
             ...(title && { title }),
+            ...(needsName !== undefined && { needsName }),
             ...(focus && { focus }),
             completed,
             duration,

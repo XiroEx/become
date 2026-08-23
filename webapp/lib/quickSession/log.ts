@@ -52,6 +52,7 @@ export function buildLoggedExercises(exercises: DraftExercise[], done: boolean) 
 export interface QuickLogInput {
   sessionId: string
   title: string
+  needsName?: boolean
   focus?: string
   exercises: DraftExercise[]
   /** YYYY-MM-DD. Past/today → logged done; future → planned. */
@@ -72,6 +73,7 @@ export async function logQuickSession(input: QuickLogInput): Promise<{ done: boo
       kind: 'quick',
       sessionId: input.sessionId,
       title: input.title,
+      ...(input.needsName !== undefined && { needsName: input.needsName }),
       ...(input.focus && { focus: input.focus }),
       exercises,
       completed: done,

@@ -25,6 +25,7 @@ interface RawLog {
   kind?: string
   sessionId?: string
   title?: string
+  needsName?: boolean
   focus?: string
   date: Date | string
   completed: boolean
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
       .map((l) => ({
         sessionId: l.sessionId,
         title: l.title || 'Planned session',
+        needsName: l.needsName,
         focus: l.focus,
         date: new Date(l.date).toISOString(),
         exerciseCount: l.exercises?.length ?? 0,

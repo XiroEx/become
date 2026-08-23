@@ -21,10 +21,12 @@ import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
+import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled } from "@/lib/workout/tracking";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
+import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -255,6 +257,13 @@ interface WorkoutData {
   exercises: Exercise[];
 }
 
+interface AutoSaveOptions {
+  /** Track writes quick progress continuously, but only this explicit action
+   * may turn the server record into a completed workout. */
+  completeQuick?: boolean;
+  quickTitle?: string;
+}
+
 // Color/style config per group type
 const GROUP_STYLES: Record<string, { border: string; bg: string; badge: string; icon: string }> = {
   superset: { border: "border-purple-200 dark:border-purple-900/40", bg: "bg-purple-50/50 dark:bg-purple-950/20", badge: "bg-purple-500", icon: "⇄" },
@@ -315,6 +324,8 @@ export default function WorkoutFormPage() {
 
   // Summary state
   const [showSummary, setShowSummary] = useState(false);
+  const [quickNeedsName, setQuickNeedsName] = useState(false);
+  const [showQuickNamePrompt, setShowQuickNamePrompt] = useState(false);
   const [programCompleted, setProgramCompleted] = useState(false);
   const [workoutNotes, setWorkoutNotes] = useState("");
   const [completedProgramName, setCompletedProgramName] = useState("");
@@ -394,6 +405,7 @@ export default function WorkoutFormPage() {
             ...(d.addedAdHoc && { addedAdHoc: true }),
           }));
           const title = stored?.title || "Quick Session";
+          setQuickNeedsName(shouldPromptForQuickSessionName(stored));
           const wd: WorkoutData = { day: title, title, exercises: exs.length ? exs : fallbackWorkout.exercises };
           setWorkout(wd);
 
@@ -646,8 +658,12 @@ export default function WorkoutFormPage() {
   }, [programId, requestedDay]);
 
   // Auto-save function
-  const autoSave = useCallback(async (progress: ExerciseProgress[], exercisesOverride?: Exercise[]) => {
-    if (!workout) return;
+  const autoSave = useCallback(async (
+    progress: ExerciseProgress[],
+    exercisesOverride?: Exercise[],
+    options?: AutoSaveOptions,
+  ): Promise<boolean> => {
+    if (!workout) return false;
     const exList = exercisesOverride ?? workout.exercises;
 
     // ── Quick-session mode: persist the shared progress draft (so the Live view
@@ -666,9 +682,14 @@ export default function WorkoutFormPage() {
       );
       const total = progress.reduce((a, ep) => a + ep.sets.length, 0);
       const done = progress.reduce((a, ep) => a + ep.sets.filter((s) => s.completed).length, 0);
+      // Reaching 100% exposes the explicit completion button. It must not
+      // silently complete and clear the draft before that button can ask an
+      // unnamed session for its first real name.
+      if (!options?.completeQuick) return true;
       if (total > 0 && done === total) {
         try {
           const token = localStorage.getItem("token");
+          if (!token) return false;
           const stored = quickSessionId ? readQuickSession(quickSessionId) : null;
           const exercisesToSave = exList.map((ex, i) => {
             const ep = progress.find((p) => p.exerciseIndex === i);
@@ -693,13 +714,14 @@ export default function WorkoutFormPage() {
               ...(ex.addedAdHoc && { addedAdHoc: true }),
             };
           });
-          await fetch("/api/workouts", {
+          const res = await fetch("/api/workouts", {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
               kind: "quick",
               sessionId: quickSessionId,
-              title: workout.title,
+              title: options.quickTitle ?? workout.title,
+              needsName: false,
               ...(stored?.focus && { focus: stored.focus }),
               exercises: exercisesToSave,
               completed: true,
@@ -708,19 +730,22 @@ export default function WorkoutFormPage() {
               ...(workoutNotes.trim() && { notes: workoutNotes.trim() }),
             }),
           });
+          if (!res.ok) return false;
           clearQuickProgress(quickSessionId);
           clearQuickSession(quickSessionId);
           invalidateMindSession();
+          return true;
         } catch (e) {
           console.error("Error saving quick session:", e);
+          return false;
         }
       }
-      return;
+      return false;
     }
 
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) return false;
 
       const totalSets = progress.reduce((acc, ep) => acc + ep.sets.length, 0);
       const completedSets = progress.reduce(
@@ -787,10 +812,38 @@ export default function WorkoutFormPage() {
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
+      return res.ok;
     } catch (error) {
       console.error("Error auto-saving:", error);
+      return false;
     }
   }, [programId, workout, currentPhase, swappedExercises, scheduledDate, isQuick, quickSessionId, workoutNotes]);
+
+  const finishWorkout = useCallback(async (quickTitle?: string): Promise<boolean> => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+    setIsCompleting(true);
+    try {
+      const saved = await autoSave(
+        exerciseProgress,
+        undefined,
+        isQuick ? { completeQuick: true, ...(quickTitle ? { quickTitle } : {}) } : undefined,
+      );
+      if (!saved) return false;
+
+      if (quickTitle) {
+        setWorkout((current) => current ? { ...current, day: quickTitle, title: quickTitle } : current);
+      }
+      setQuickNeedsName(false);
+      setShowQuickNamePrompt(false);
+      setShowSummary(true);
+      return true;
+    } finally {
+      setIsCompleting(false);
+    }
+  }, [autoSave, exerciseProgress, isQuick]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -860,6 +913,7 @@ export default function WorkoutFormPage() {
           kind: "quick",
           sessionId: quickSessionId,
           title: workout?.title ?? stored?.title ?? "Quick Session",
+          needsName: shouldPromptForQuickSessionName(stored),
           ...(stored?.focus && { focus: stored.focus }),
           exercises: next.map((ex, i) => {
             const ep = nextProgress.find((p) => p.exerciseIndex === i);
@@ -1993,13 +2047,11 @@ export default function WorkoutFormPage() {
                     setShowThinFinish(true);
                     return;
                   }
-                  setIsCompleting(true);
-                  try {
-                    await autoSave(exerciseProgress);
-                    setShowSummary(true);
-                  } finally {
-                    setIsCompleting(false);
+                  if (isQuick && quickNeedsName) {
+                    setShowQuickNamePrompt(true);
+                    return;
                   }
+                  await finishWorkout();
                 }}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-green-500 to-emerald-600 py-4 font-semibold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-70 disabled:cursor-wait"
               >
@@ -2041,6 +2093,18 @@ export default function WorkoutFormPage() {
           />
         )}
       </AnimatePresence>
+
+      {showQuickNamePrompt && workout && (
+        <QuickSessionNamePrompt
+          initialName={workout.title}
+          confirmLabel="Save name & finish"
+          onConfirm={async (title) => {
+            const saved = await finishWorkout(title);
+            if (!saved) throw new Error("Could not finish the workout. Try again.");
+          }}
+          onCancel={() => setShowQuickNamePrompt(false)}
+        />
+      )}
 
       {/* Skip Confirmation Modal */}
       <AnimatePresence>
@@ -2154,13 +2218,11 @@ export default function WorkoutFormPage() {
         onFinishAnyway={async () => {
           setThinFinishAcked(true);
           setShowThinFinish(false);
-          setIsCompleting(true);
-          try {
-            await autoSave(exerciseProgress);
-            setShowSummary(true);
-          } finally {
-            setIsCompleting(false);
+          if (isQuick && quickNeedsName) {
+            setShowQuickNamePrompt(true);
+            return;
           }
+          await finishWorkout();
         }}
       />
 

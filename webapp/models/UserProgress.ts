@@ -79,6 +79,9 @@ export interface IWorkoutLog {
   kind?: 'program' | 'quick'
   // Display title for quick sessions (e.g. "Push Day", "Quick Legs").
   title?: string
+  // Whether the title is still automatic/default copy. Kept separate from the
+  // text because generated titles can sound like names the member chose.
+  needsName?: boolean
   // Client-generated id used to match-for-update a quick session across
   // incremental saves within the same live session (program logs use
   // programId+day+today instead).
@@ -314,6 +317,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   scheduledDate: { type: Date },
   kind: { type: String, enum: ['program', 'quick'], default: 'program' },
   title: { type: String },
+  needsName: { type: Boolean },
   sessionId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },

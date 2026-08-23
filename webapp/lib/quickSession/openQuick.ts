@@ -23,6 +23,7 @@ interface QuickSessionResponse {
   session?: {
     sessionId?: string
     title?: string
+    needsName?: boolean
     focus?: string
     exercises?: SessionExercise[]
   }
@@ -65,10 +66,11 @@ export async function continueQuickSession(sessionId: string): Promise<string | 
     stashQuickSessionWithId(
       { title: s.title || 'Quick Session', ...(isFocusKey(s.focus) ? { focus: s.focus } : {}), exercises },
       sessionId,
+      { needsName: s.needsName },
     )
     // The draft uses the same id as this in-progress server log, so edits must
     // write back instead of stopping at localStorage.
-    return quickSessionOverviewHref(sessionId, { saved: true })
+    return quickSessionOverviewHref(sessionId, { saved: true, started: true })
   } catch {
     return null
   }

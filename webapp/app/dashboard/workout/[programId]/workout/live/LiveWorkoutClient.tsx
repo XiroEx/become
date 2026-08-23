@@ -16,10 +16,12 @@ import { readQuickSession, clearQuickSession, stashQuickSessionWithId, updateQui
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
+import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime, setUnitLabel } from "@/lib/workout/tracking";
-import { readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
+import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
+import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 
@@ -172,6 +174,10 @@ export default function LiveWorkoutPage() {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  // Newly-created sessions keep their default product copy until the first
+  // completed save. Sessions named during creation never enter this flow.
+  const [quickNeedsName, setQuickNeedsName] = useState(false);
+  const [pendingQuickCompletion, setPendingQuickCompletion] = useState<SetData[][] | null>(null);
   const [programCompleted, setProgramCompleted] = useState(false);
   const [completedProgramName, setCompletedProgramName] = useState("");
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -382,6 +388,7 @@ export default function LiveWorkoutPage() {
       const body = (await res.json()) as {
         session?: {
           title?: string
+          needsName?: boolean
           focus?: string
           exercises?: Array<{
             name: string
@@ -418,7 +425,7 @@ export default function LiveWorkoutPage() {
         };
       });
       const draft = { title: sess.title || "Quick Session", ...(sess.focus ? { focus: sess.focus as never } : {}), exercises };
-      stashQuickSessionWithId(draft, sessionId);
+      stashQuickSessionWithId(draft, sessionId, { needsName: sess.needsName });
       return readQuickSession(sessionId);
     } catch {
       return null;
@@ -461,6 +468,7 @@ export default function LiveWorkoutPage() {
           }));
           const title = stored?.title || "Quick Session";
           setQuickMeta({ title, focus: stored?.focus });
+          setQuickNeedsName(shouldPromptForQuickSessionName(stored));
 
           if (exs.length === 0) {
             // No stashed session (e.g. hard refresh cleared sessionStorage) —
@@ -975,15 +983,20 @@ export default function LiveWorkoutPage() {
   };
 
   // Save workout progress
-  const saveWorkout = useCallback(async (exerciseDataToSave: SetData[][], isComplete: boolean, exercisesOverride?: Exercise[]) => {
-    if (!workout) return;
+  const saveWorkout = useCallback(async (
+    exerciseDataToSave: SetData[][],
+    isComplete: boolean,
+    exercisesOverride?: Exercise[],
+    quickTitleOverride?: string,
+  ): Promise<boolean> => {
+    if (!workout) return false;
     // Re-entrant guard: prevent double-tap / concurrent auto-save from firing two POSTs
-    if (savingRef.current) return;
+    if (savingRef.current) return false;
     savingRef.current = true;
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) return false;
       const exercisesToSave = (exercisesOverride ?? exercises).map((exercise, index) => {
         const swap = swappedExercises[index];
         return {
@@ -1030,7 +1043,8 @@ export default function LiveWorkoutPage() {
         ? {
             kind: "quick" as const,
             sessionId: quickSessionId,
-            title: workout.title,
+            title: quickTitleOverride ?? workout.title,
+            needsName: isComplete ? false : quickNeedsName,
             ...(quickMeta?.focus && { focus: quickMeta.focus }),
             exercises: exercisesToSave,
             completed: isComplete,
@@ -1057,6 +1071,7 @@ export default function LiveWorkoutPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(saveBody),
       });
+      if (!res.ok) return false;
       if (isComplete && res.ok) {
         const data = await res.json();
         if (data.programCompleted) {
@@ -1072,13 +1087,15 @@ export default function LiveWorkoutPage() {
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
+      return true;
     } catch (error) {
       console.error("Error saving workout:", error);
+      return false;
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta, scheduledDate]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta, quickNeedsName, scheduledDate]);
 
   // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
   // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension
@@ -1175,10 +1192,19 @@ export default function LiveWorkoutPage() {
     return parseRestTime(exercise?.rest || getSmartRestDefault(exercise));
   };
 
+  const requestQuickNameBeforeCompletion = useCallback((updatedData: SetData[][]): boolean => {
+    if (!isQuick || !quickSessionId || !quickNeedsName) return false;
+    setPendingQuickCompletion(updatedData);
+    return true;
+  }, [isQuick, quickSessionId, quickNeedsName]);
+
   // Advance to next step with appropriate rest
   const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
     if (isComplete) {
-      if (isQuick && quickSessionId) clearQuickSession(quickSessionId); // done — drop the draft
+      if (isQuick && quickSessionId) {
+        clearQuickProgress(quickSessionId);
+        clearQuickSession(quickSessionId);
+      }
       setShowSummary(true);
       return;
     }
@@ -1197,7 +1223,7 @@ export default function LiveWorkoutPage() {
     }
 
     setCurrentStepIndex(prev => prev + 1);
-  }, [currentStepIndex, workoutFlow, exercises, router]);
+  }, [currentStepIndex, workoutFlow, exercises, isQuick, quickSessionId]);
 
   const completeSet = useCallback(async () => {
     if (!currentStep) return;
@@ -1212,14 +1238,16 @@ export default function LiveWorkoutPage() {
         : sets
     );
 
-    setExerciseData(updatedData);
-
     // Clear auto-save timeout since we're doing an immediate save
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
+    if (isLastStep && requestQuickNameBeforeCompletion(updatedData)) return;
+
+    setExerciseData(updatedData);
+
     saveWorkout(updatedData, isLastStep);
     advanceStep(updatedData, isLastStep);
-  }, [currentStep, currentReps, currentWeight, isLastStep, exerciseData, saveWorkout, advanceStep]);
+  }, [currentStep, currentReps, currentWeight, currentSpeed, isLastStep, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -1239,14 +1267,17 @@ export default function LiveWorkoutPage() {
         : sets
     );
 
-    setExerciseData(updatedData);
     setShowSkipModal(false);
 
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
+    if (isLastStep && requestQuickNameBeforeCompletion(updatedData)) return;
+
+    setExerciseData(updatedData);
+
     saveWorkout(updatedData, isLastStep);
     advanceStep(updatedData, isLastStep);
-  }, [currentStep, isLastStep, exerciseData, saveWorkout, advanceStep]);
+  }, [currentStep, isLastStep, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
 
   const skipExercise = useCallback(async () => {
     if (!currentStep) return;
@@ -1269,7 +1300,6 @@ export default function LiveWorkoutPage() {
         : sets
     );
 
-    setExerciseData(updatedData);
     setShowSkipModal(false);
 
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
@@ -1281,10 +1311,17 @@ export default function LiveWorkoutPage() {
     }
 
     const allDone = nextIdx >= workoutFlow.length;
+
+    if (allDone && requestQuickNameBeforeCompletion(updatedData)) return;
+
+    setExerciseData(updatedData);
     saveWorkout(updatedData, allDone);
 
     if (allDone) {
-      if (isQuick && quickSessionId) clearQuickSession(quickSessionId); // done — drop the draft
+      if (isQuick && quickSessionId) {
+        clearQuickProgress(quickSessionId);
+        clearQuickSession(quickSessionId);
+      }
       setShowSummary(true);
       return;
     }
@@ -1301,7 +1338,28 @@ export default function LiveWorkoutPage() {
     }
 
     setCurrentStepIndex(nextIdx);
-  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, saveWorkout, router, exercises]);
+  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, exercises, isQuick, quickSessionId]);
+
+  const finishNamedQuickSession = useCallback(async (title: string) => {
+    if (!quickSessionId || !pendingQuickCompletion) {
+      throw new Error("This workout is no longer ready to finish");
+    }
+
+    const saved = await saveWorkout(pendingQuickCompletion, true, undefined, title);
+    if (!saved) throw new Error("Could not finish the workout. Try again.");
+
+    // Keep the local model and completion summary in sync with the name that
+    // was persisted on the completed server record.
+    updateQuickSession(quickSessionId, { title });
+    setWorkout((current) => current ? { ...current, day: title, title } : current);
+    setQuickMeta((current) => current ? { ...current, title } : { title });
+    setExerciseData(pendingQuickCompletion);
+    setQuickNeedsName(false);
+    setPendingQuickCompletion(null);
+    clearQuickProgress(quickSessionId);
+    clearQuickSession(quickSessionId);
+    setShowSummary(true);
+  }, [pendingQuickCompletion, quickSessionId, saveWorkout]);
 
   const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }, scope: SwapScope) => {
     const exIdx = currentExerciseIndex;
@@ -1753,7 +1811,9 @@ export default function LiveWorkoutPage() {
                 // REPLACE, not push: otherwise the live entry lingers behind the
                 // overview, and the overview's Back (router.back) returns INTO live
                 // — the two ping-pong and the user can't leave the session (back loop).
-                if (isQuick && quickSessionId) router.replace(quickSessionOverviewHref(quickSessionId));
+                if (isQuick && quickSessionId) {
+                  router.replace(quickSessionOverviewHref(quickSessionId, { saved: true, started: true }));
+                }
                 else router.back();
               }}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm"
@@ -2595,6 +2655,16 @@ export default function LiveWorkoutPage() {
           />
         )}
       </AnimatePresence>
+
+      {pendingQuickCompletion && workout && (
+        <QuickSessionNamePrompt
+          initialName={workout.title}
+          confirmLabel="Save name & finish"
+          tone="dark"
+          onConfirm={finishNamedQuickSession}
+          onCancel={() => setPendingQuickCompletion(null)}
+        />
+      )}
 
       {/* Exercise Swap Modal — always mounted to prevent unmount/remount flashing */}
       <ConfirmModal
