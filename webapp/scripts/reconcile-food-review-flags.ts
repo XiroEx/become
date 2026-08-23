@@ -19,6 +19,7 @@ import path from 'node:path'
 import mongoose from 'mongoose'
 import * as dotenv from 'dotenv'
 import dbConnect from '../lib/mongodb'
+import { closeRuntimeConfigConnections } from '../lib/runtimeConfig'
 import {
   REVIEW_ISSUE_CODES,
   type FoodReviewFlagState,
@@ -93,6 +94,8 @@ interface AuditSummary {
   proposedFlagChanges: number
   proposedEvidenceRefreshes: number
   proposedProvenanceAdoptions: number
+  adoptionCandidatesStillFlaggedByLiveRules: number
+  adoptionCandidatesThatWouldClearOnApply: number
   manualStoredVsLiveDisagreements: number
   legacyStoredVsLiveDisagreements: number
   automaticDataMutations: 0
@@ -202,6 +205,8 @@ async function scan(mutate: Mode = 'dry-run'): Promise<ScanResult> {
     proposedFlagChanges: 0,
     proposedEvidenceRefreshes: 0,
     proposedProvenanceAdoptions: 0,
+    adoptionCandidatesStillFlaggedByLiveRules: 0,
+    adoptionCandidatesThatWouldClearOnApply: 0,
     manualStoredVsLiveDisagreements: 0,
     legacyStoredVsLiveDisagreements: 0,
     automaticDataMutations: 0,
@@ -246,7 +251,14 @@ async function scan(mutate: Mode = 'dry-run'): Promise<ScanResult> {
 
     if (plan.action === 'set' || plan.action === 'clear') summary.proposedFlagChanges += 1
     if (plan.action === 'refresh') summary.proposedEvidenceRefreshes += 1
-    if (plan.action === 'adopt-proven-auto') summary.proposedProvenanceAdoptions += 1
+    if (plan.action === 'adopt-proven-auto') {
+      summary.proposedProvenanceAdoptions += 1
+      if (plan.liveIssueCodes.length > 0) {
+        summary.adoptionCandidatesStillFlaggedByLiveRules += 1
+      } else {
+        summary.adoptionCandidatesThatWouldClearOnApply += 1
+      }
+    }
     if (plan.action !== 'none') proposals.push(proposalAudit(food, plan))
 
     const shouldApply = mutate === 'apply'
@@ -310,11 +322,13 @@ async function main() {
   }
 
   await mongoose.disconnect()
+  await closeRuntimeConfigConnections()
 }
 
 main().catch(async (error: unknown) => {
   const message = error instanceof Error ? error.message : 'Unknown reconciliation error'
   console.error(JSON.stringify({ marker: 'FOOD_REVIEW_RECONCILIATION_ERROR', message }))
   try { await mongoose.disconnect() } catch { /* best effort */ }
+  try { await closeRuntimeConfigConnections() } catch { /* best effort */ }
   process.exit(1)
 })
