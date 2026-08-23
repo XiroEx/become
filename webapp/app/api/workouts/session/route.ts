@@ -116,16 +116,25 @@ export async function DELETE(request: NextRequest) {
 //   { id, date }            → re-date (date = YYYY-MM-DD or ISO): move to another day
 //   { id, skipped: true }   → mark the planned session skipped
 //   { id, skipped: false }  → un-skip (back to planned)
-// Re-date and skip can be sent together or separately.
+//   { id, title }           → rename without altering the recorded workout
+// Fields can be sent together or separately.
 export async function PATCH(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
     if (!auth.success) return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 })
-    const body = await request.json().catch(() => ({})) as { id?: string; date?: string; skipped?: boolean }
+    const body = await request.json().catch(() => ({})) as {
+      id?: string
+      date?: string
+      skipped?: boolean
+      title?: unknown
+    }
     const id = body.id
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    if (body.date === undefined && body.skipped === undefined) {
-      return NextResponse.json({ error: 'date or skipped is required' }, { status: 400 })
+    if (body.date === undefined && body.skipped === undefined && body.title === undefined) {
+      return NextResponse.json({ error: 'date, skipped, or title is required' }, { status: 400 })
+    }
+    if (body.title !== undefined && (typeof body.title !== 'string' || !body.title.trim())) {
+      return NextResponse.json({ error: 'title must not be empty' }, { status: 400 })
     }
 
     const set: Record<string, unknown> = {}
@@ -139,13 +148,20 @@ export async function PATCH(request: NextRequest) {
     if (body.skipped !== undefined) {
       set['workoutLogs.$[elem].skipped'] = !!body.skipped
     }
+    if (typeof body.title === 'string') {
+      set['workoutLogs.$[elem].title'] = body.title.trim()
+    }
+    set.updatedAt = new Date()
 
     await dbConnect()
-    await UserProgress.updateOne(
-      { userId: auth.userId },
+    const result = await UserProgress.updateOne(
+      { userId: auth.userId, workoutLogs: { $elemMatch: { sessionId: id, kind: 'quick' } } },
       { $set: set },
       { arrayFilters: [{ 'elem.sessionId': id, 'elem.kind': 'quick' }] },
     )
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: 'Quick session not found' }, { status: 404 })
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error updating quick session:', error)
