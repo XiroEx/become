@@ -89,11 +89,16 @@ test('an excessive plannedExtra still just renders one shadow layer (clamped int
   assert.match(html, /opacity-25 bg-yellow-400/)
 })
 
-test('a visible planned shadow makes the bar an interactive tap/hover target for the breakdown tooltip', () => {
+test('a visible planned shadow makes the whole macro item the tap/hover target', () => {
   const html = renderToStaticMarkup(
     <MacroBar label="Protein" current={80} goal={GOAL} color="bg-blue-600" kind="floor" plannedExtra={40} />,
   )
-  assert.match(html, /role="button"/)
+  // The semantic trigger is the outer wrapper, so its hit area includes the
+  // title, numbers/chip, and meter rather than only the thin track.
+  assert.match(html, /^<div class="space-y-1\.5 cursor-pointer[^"]*" role="button"/)
+  const triggerStart = html.indexOf('role="button"')
+  assert.ok(triggerStart < html.indexOf('Protein'))
+  assert.ok(triggerStart < html.indexOf('opacity-25 bg-blue-600'))
   // The trigger announces the planned-inclusive total up front, for anyone
   // who can't see (or trigger) the floating tooltip at all.
   assert.match(html, /Protein including today&#x27;s plan: 120g of 200g/)
