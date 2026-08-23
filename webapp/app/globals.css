@@ -90,3 +90,14 @@ body {
   .fire-ember  { animation: none; opacity: 0.7; }
   .fire-digits { animation-duration: 8s; }
 }
+
+/* ── The Becoming doorway: an unread new week pulses to draw the eye ──────── */
+@keyframes becoming-door-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(139, 92, 246, 0); }
+}
+.becoming-door-pulse { animation: becoming-door-pulse 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .becoming-door-pulse { animation: none; }
+}
