@@ -9,29 +9,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles, Layers, Unlink } from "lucide-react";
+import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles, Layers, Unlink, ArrowLeft } from "lucide-react";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
-import { setUnitLabel, categoryForTracking } from "@/lib/workout/tracking";
+import { setUnitLabel } from "@/lib/workout/tracking";
 
 interface SearchExercise {
   slug: string;
   name: string;
   trackingType: string;
 }
-
-const CUSTOM_TRACKING_OPTIONS: { value: string; label: string }[] = [
-  { value: "reps_weight", label: "Sets & Reps" },
-  { value: "reps_bodyweight", label: "Bodyweight" },
-  { value: "reps_only", label: "Reps Only" },
-  { value: "time", label: "Timed" },
-  { value: "time_distance", label: "Time + Distance" },
-  { value: "intervals", label: "Intervals" },
-  { value: "none", label: "No Tracking" },
-];
 
 interface SearchResponse {
   exercises: SearchExercise[];
@@ -69,7 +60,9 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   // Your custom exercises — merged into search results; creatable inline below.
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
   const [creating, setCreating] = useState(false);
-  const [newTrackingType, setNewTrackingType] = useState("reps_weight");
+  const [creatingError, setCreatingError] = useState<string | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES);
   // Log-or-plan (no playthrough): past/today date → logged done, future → planned.
   const [logOpen, setLogOpen] = useState(false);
   const [logDate, setLogDate] = useState(localDateStr());
@@ -99,9 +92,11 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
     return () => { cancelled = true };
   }, []);
 
-  // A fresh search starts from the default tracking type again.
+  // A fresh search starts the create form from scratch again.
   useEffect(() => {
-    setNewTrackingType("reps_weight");
+    setShowCreateForm(false);
+    setCreatingError(null);
+    setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES);
   }, [query]);
 
   // Debounced exercise search.
@@ -279,28 +274,35 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
     router.push(quickSessionLiveHref(id));
   }, [chosen, title, router, onLaunch]);
 
-  // Create a custom exercise inline from the current search text and add it
-  // straight to the session (sensible defaults; refine it later in the library).
+  // Create a custom exercise inline — the same detailed fields the program
+  // editor offers (tracking type, primary muscles, category, default
+  // sets/reps), not just a name and a tracking type — and add it straight to
+  // the session.
   const createCustom = useCallback(async () => {
-    const name = query.trim();
-    if (name.length < 2 || creating) return;
+    if (!customForm.name.trim() || creating) return;
     setCreating(true);
+    setCreatingError(null);
     try {
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: newTrackingType, muscleGroup: "other", category: categoryForTracking(newTrackingType) }),
+        body: JSON.stringify(customForm),
       });
-      if (!res.ok) return;
-      const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string } };
-      if (data.exercise) {
-        setCustoms((prev) => [...prev, { slug: data.exercise!.slug, name: data.exercise!.name, trackingType: data.exercise!.trackingType }]);
-        addExercise({ slug: data.exercise.slug, name: data.exercise.name, trackingType: data.exercise.trackingType });
+      const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string }; error?: string };
+      if (!res.ok || !data.exercise) {
+        setCreatingError(data.error || "Failed to create exercise");
+        return;
       }
-    } catch { /* leave the query for retry */ } finally {
+      setCustoms((prev) => [...prev, { slug: data.exercise!.slug, name: data.exercise!.name, trackingType: data.exercise!.trackingType }]);
+      addExercise({ slug: data.exercise.slug, name: data.exercise.name, trackingType: data.exercise.trackingType });
+      setShowCreateForm(false);
+      setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES);
+    } catch {
+      setCreatingError("Network error");
+    } finally {
       setCreating(false);
     }
-  }, [query, creating, addExercise, newTrackingType]);
+  }, [customForm, creating, addExercise]);
 
   // Log (past/today) or plan (future) the built session without playing it —
   // the backfill path for "I worked out yesterday and never logged it".
@@ -358,7 +360,35 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
           <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-zinc-400" />
         )}
 
-        {(merged.length > 0 || (q.length >= 2 && !searching)) && (
+        {showCreateForm ? (
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[70vh] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateForm(false)}
+                aria-label="Back to search"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <p className="text-sm font-semibold text-zinc-800 dark:text-white">Create Custom Exercise</p>
+            </div>
+            <CustomExerciseFields
+              values={customForm}
+              onChange={setCustomForm}
+              namePlaceholder="e.g. Cable Face Pull"
+            />
+            {creatingError && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{creatingError}</p>}
+            <button
+              onClick={createCustom}
+              disabled={creating || !customForm.name.trim()}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {creating ? "Creating…" : "Create & Add"}
+            </button>
+          </div>
+        ) : (merged.length > 0 || (q.length >= 2 && !searching)) && (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
             {merged.map((r) => {
               const already = chosen.some((e) => e.exerciseSlug === r.slug);
@@ -380,33 +410,21 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                 </button>
               );
             })}
-            {/* No exact match? Create it right here and keep building. */}
+            {/* No exact match? Open the full custom-exercise form, pre-filled
+                with what was typed — the same fields the program editor
+                offers, not just a name and a tracking type. */}
             {q.length >= 2 && !merged.some((r) => r.name.toLowerCase() === q) && (
               <div className="border-t border-zinc-100 px-3 py-2.5 dark:border-zinc-700">
-                <div className="mb-1.5 flex flex-wrap gap-1">
-                  {CUSTOM_TRACKING_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setNewTrackingType(opt.value)}
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
-                        newTrackingType === opt.value
-                          ? "bg-green-600 text-white"
-                          : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-400"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
                 <button
-                  onClick={createCustom}
-                  disabled={creating}
-                  className="flex w-full items-center gap-2 text-left transition-colors disabled:opacity-50"
+                  onClick={() => {
+                    setCustomForm((prev) => ({ ...prev, name: query.trim() }));
+                    setShowCreateForm(true);
+                  }}
+                  className="flex w-full items-center gap-2 text-left transition-colors"
                 >
-                  {creating ? <Loader2 className="h-4 w-4 animate-spin text-green-600" /> : <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />}
+                  <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />
                   <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                    {creating ? "Creating…" : `Create "${query.trim()}" as a new exercise`}
+                    {`Create "${query.trim()}" as a new exercise`}
                   </span>
                 </button>
               </div>

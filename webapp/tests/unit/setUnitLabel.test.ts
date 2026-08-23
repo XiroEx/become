@@ -65,9 +65,11 @@ const SURFACES_WIRED_TO_SET_UNIT_LABEL = [
   'components/SessionBuilder.tsx',
   'components/workout/SessionEditor.tsx',
   'app/dashboard/workout/library/ExerciseLibraryClient.tsx',
-  'components/ExerciseSwapModal.tsx',
   'app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx',
   'app/dashboard/workout/[programId]/workout/WorkoutFormClient.tsx',
+  // ExerciseSwapModal's own "Default Sets" field moved into the shared
+  // create/edit form below — it no longer computes the label itself.
+  'components/workout/CustomExerciseFields.tsx',
 ]
 
 describe('REGRESSION: create/prescribe/log surfaces no longer hardcode a "Sets" label', () => {
@@ -96,10 +98,11 @@ describe('REGRESSION: create/prescribe/log surfaces no longer hardcode a "Sets" 
     )
   })
 
-  it('the exercise-definition forms (library + swap modal) no longer hardcode "Default Sets"', () => {
+  it('the exercise-definition forms (library + swap modal + the shared create/edit fields) no longer hardcode "Default Sets"', () => {
     for (const file of [
       'app/dashboard/workout/library/ExerciseLibraryClient.tsx',
       'components/ExerciseSwapModal.tsx',
+      'components/workout/CustomExerciseFields.tsx',
     ]) {
       const src = readSource(file)
       assert.doesNotMatch(
