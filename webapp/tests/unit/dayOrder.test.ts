@@ -104,6 +104,30 @@ test('a planned Bed meal with no window of its own still sorts BELOW a Dinner lo
   assert.deepEqual(shape(occ), ['dinner:porkloin', 'bed(planned):shake'])
 })
 
+test('an unscheduled planned tag stays after a preceding meal logged past its scheduled window', () => {
+  // The first fix anchored Bed to Dinner's scheduled END (9pm). That still puts
+  // the Bed plan above Dinner when Dinner actually happens later than planned.
+  // Member order is the only timing signal for unscheduled Bed, so the plan must
+  // follow the real occurrence of the preceding Dinner tag.
+  const logs = [log('late-dinner', '22:15', 'dinner')]
+  const plans = [plan('shake', 'bed')]
+  const windows = [win('dinner', at(18), at(21)), { tag: 'bed', startMinutes: null, endMinutes: null }]
+  const occ = buildDayOccurrences(logs, plans, windows)
+
+  assert.deepEqual(shape(occ), ['dinner:late-dinner', 'bed(planned):shake'])
+  assert.equal(occ[1].sortMinutes, at(22, 15), 'the logged Dinner advances the unscheduled Bed anchor')
+})
+
+test('a planned tag with its own window keeps that explicit scheduled time', () => {
+  const logs = [log('late-dinner', '22:15', 'dinner')]
+  const plans = [plan('shake', 'bed')]
+  const windows = [win('dinner', at(18), at(21)), win('bed', at(21, 30), at(23, 30))]
+  const occ = buildDayOccurrences(logs, plans, windows)
+
+  assert.deepEqual(shape(occ), ['bed(planned):shake', 'dinner:late-dinner'])
+  assert.equal(occ[0].sortMinutes, at(21, 30), 'an explicit plan window remains authoritative')
+})
+
 test('with no window configured, a planned tag falls back to the app-wide table', () => {
   const occ = buildDayOccurrences([], [plan('p1', 'breakfast'), plan('p2', 'dinner')], [])
   assert.deepEqual(occ.map(o => o.tag), ['breakfast', 'dinner'])
