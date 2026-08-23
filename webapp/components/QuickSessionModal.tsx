@@ -24,6 +24,7 @@ import {
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
 import { SESSIONS_HUB_HREF, BUILD_SESSION_HREF } from "@/lib/quickSession/hubLinks";
+import { pickRecentQuickSessions } from "@/lib/quickSession/recentSessions";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 import ShareButton from "@/components/share/ShareButton";
@@ -162,7 +163,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         if (!res.ok) return;
         const data = (await res.json()) as WorkoutLogsResponse;
         if (cancelled) return;
-        setRecentQuick((data.logs || []).filter((l) => l.kind === "quick").slice(0, 5));
+        setRecentQuick(pickRecentQuickSessions(data.logs || []));
       } catch {
         /* best-effort */
       } finally {
@@ -402,7 +403,17 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                 )}
               </section>
 
-              {/* ── 2. Quick start by focus (select → preview → start) ── */}
+              {/* ── 2. Build your own → hub, builder already open ── */}
+              <Link
+                href={BUILD_SESSION_HREF}
+                onClick={onClose}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Build a custom session
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+
+              {/* ── 3. Quick start by focus (select → preview → start) ── */}
               <section>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
@@ -525,16 +536,6 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                   </div>
                 )}
               </section>
-
-              {/* ── 3. Build your own → hub, builder already open ── */}
-              <Link
-                href={BUILD_SESSION_HREF}
-                onClick={onClose}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 py-3 text-sm font-semibold text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                Build a custom session
-                <ArrowRight className="h-4 w-4" />
-              </Link>
             </div>
           </motion.div>
         </>
