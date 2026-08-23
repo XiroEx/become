@@ -19,6 +19,7 @@ export interface CustomExerciseValues {
   trackingType: string
   muscleGroup: string
   category: string
+  role: string
   defaultSets: string
   defaultReps: string
 }
@@ -28,6 +29,7 @@ export const DEFAULT_CUSTOM_EXERCISE_VALUES: CustomExerciseValues = {
   trackingType: 'reps_weight',
   muscleGroup: 'chest',
   category: 'strength',
+  role: 'accessory',
   defaultSets: '3',
   defaultReps: '8-12',
 }
@@ -57,6 +59,17 @@ export const CUSTOM_EXERCISE_CATEGORY_OPTIONS = [
   { value: 'cardio', label: 'Cardio' },
   { value: 'bodyweight', label: 'Bodyweight' },
   { value: 'conditioning', label: 'Conditioning' },
+]
+
+// Mirrors Exercise.role — see models/Exercise.ts for the full rationale.
+// Compound = the main lift that drives the session. Secondary = a supporting
+// compound that reinforces the same pattern. Accessory = isolation/detail
+// work. This also feeds the "filter by compound/secondary/accessory" tabs on
+// the custom exercise library.
+export const CUSTOM_EXERCISE_ROLE_OPTIONS = [
+  { value: 'compound', label: 'Compound', hint: 'Main lift' },
+  { value: 'secondary', label: 'Secondary', hint: 'Supporting compound' },
+  { value: 'accessory', label: 'Accessory', hint: 'Isolation / detail' },
 ]
 
 const TIME_BASED_TRACKING_TYPES = new Set(['time', 'time_distance', 'intervals'])
@@ -162,6 +175,26 @@ export default function CustomExerciseFields({
               }`}
             >
               {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Role */}
+      <div>
+        <label className={label}>Role</label>
+        <div className="flex flex-wrap gap-1.5">
+          {CUSTOM_EXERCISE_ROLE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => set('role', opt.value)}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                values.role === opt.value ? chipActive : chipIdle
+              }`}
+            >
+              {opt.label}
+              <span className={dark ? 'text-white/40' : 'text-zinc-400 dark:text-zinc-500'}>{opt.hint}</span>
             </button>
           ))}
         </div>

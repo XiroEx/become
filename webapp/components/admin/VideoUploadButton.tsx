@@ -28,10 +28,15 @@ export interface VideoUploadButtonProps {
   deleteUrl?: string;
   /** True when a video is currently attached — controls the Remove button. */
   hasVideo?: boolean;
-  /** Called with the new public URL after a successful upload. */
-  onUploaded?: (result: { videoUrl: string }) => void;
-  /** Called after a successful delete. */
-  onRemoved?: () => void;
+  /**
+   * Called with the new public URL after a successful upload. Any other
+   * fields the endpoint returned (e.g. a custom exercise's review status
+   * resetting because the approved clip just changed) are passed through
+   * too — most callers ignore them.
+   */
+  onUploaded?: (result: { videoUrl: string } & Record<string, unknown>) => void;
+  /** Called after a successful delete, with any extra fields the endpoint returned. */
+  onRemoved?: (result?: Record<string, unknown>) => void;
   /** Disable both actions (e.g. the exercise has not been saved yet). */
   disabled?: boolean;
   /** Shown under the buttons when disabled, to explain why. */
@@ -108,8 +113,8 @@ export default function VideoUploadButton({
         throw new Error(msg);
       }
 
-      const parsed = JSON.parse(result.body) as { videoUrl?: string };
-      if (parsed.videoUrl) onUploaded?.({ videoUrl: parsed.videoUrl });
+      const parsed = JSON.parse(result.body) as { videoUrl?: string } & Record<string, unknown>;
+      if (parsed.videoUrl) onUploaded?.({ ...parsed, videoUrl: parsed.videoUrl });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -129,11 +134,11 @@ export default function VideoUploadButton({
         method: 'DELETE',
         headers: auth ? { Authorization: auth } : undefined,
       });
+      const data = (await res.json().catch(() => ({}))) as { error?: string } & Record<string, unknown>;
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? 'Failed to remove video');
       }
-      onRemoved?.();
+      onRemoved?.(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove video');
     } finally {

@@ -97,11 +97,26 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     exercise.videoHeight = null
     exercise.videoFraming = undefined
     exercise.videoTrim = undefined
+    // A replaced video is unreviewed content — an admin approved the old
+    // clip, not this one. Pull the exercise back to private until it's
+    // resubmitted and re-approved.
+    if (exercise.isUniversal || exercise.reviewStatus === 'pending') {
+      exercise.isUniversal = false
+      exercise.reviewStatus = 'none'
+      exercise.submittedAt = null
+      exercise.reviewNote = null
+    }
     await exercise.save()
 
     invalidateExerciseCache()
 
-    return NextResponse.json({ videoUrl: publicUrl, storageKey: key, mimeType })
+    return NextResponse.json({
+      videoUrl: publicUrl,
+      storageKey: key,
+      mimeType,
+      isUniversal: exercise.isUniversal ?? false,
+      reviewStatus: exercise.reviewStatus ?? 'none',
+    })
   } catch (error) {
     console.error('Custom exercise video upload failed:', error)
     const message = error instanceof Error ? error.message : 'Upload failed'
@@ -141,10 +156,22 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     exercise.videoHeight = null
     exercise.videoFraming = undefined
     exercise.videoTrim = undefined
+    // Same reasoning as the upload path — the approved video is gone, so the
+    // approval no longer describes what's live.
+    if (exercise.isUniversal || exercise.reviewStatus === 'pending') {
+      exercise.isUniversal = false
+      exercise.reviewStatus = 'none'
+      exercise.submittedAt = null
+      exercise.reviewNote = null
+    }
     await exercise.save()
 
     invalidateExerciseCache()
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({
+      ok: true,
+      isUniversal: exercise.isUniversal ?? false,
+      reviewStatus: exercise.reviewStatus ?? 'none',
+    })
   } catch (error) {
     console.error('Custom exercise video delete failed:', error)
     const message = error instanceof Error ? error.message : 'Delete failed'

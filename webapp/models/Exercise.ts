@@ -1,5 +1,13 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+/**
+ * Where a custom exercise's "Submit to Universal" request sits.
+ * 'none' = never submitted (owner-private, the default for every custom
+ * exercise). 'pending' = awaiting admin review. 'approved'/'rejected' are
+ * terminal until the owner edits and resubmits.
+ */
+export type ExerciseReviewStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 // ─── Classification Enums ────────────────────────────────────────────────────
 
 /**
@@ -331,6 +339,19 @@ export interface IExerciseDefinition extends Document {
   isCustom?: boolean;
   createdBy?: string; // userId
 
+  // Universal submission — a custom exercise the owner has asked admins to
+  // publish into the shared catalog. `isUniversal` is the actual visibility
+  // gate everyone else's queries check; `reviewStatus` just tracks where a
+  // submission sits in the pipeline. Editing the exercise (or its video)
+  // after approval resets both, so a live "verified" exercise can never
+  // silently drift from what an admin actually reviewed.
+  isUniversal?: boolean;
+  reviewStatus?: ExerciseReviewStatus;
+  submittedAt?: Date | null;
+  reviewedBy?: string | null; // admin userId
+  reviewedAt?: Date | null;
+  reviewNote?: string | null; // admin's reason, mainly on rejection
+
   // Timestamps
   createdAt: Date;
   updatedAt: Date;
@@ -574,6 +595,14 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
     // Custom exercise (user-created)
     isCustom: { type: Boolean, default: false, index: true },
     createdBy: { type: String, default: null },
+
+    // Universal submission
+    isUniversal: { type: Boolean, default: false, index: true },
+    reviewStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none', index: true },
+    submittedAt: { type: Date, default: null },
+    reviewedBy: { type: String, default: null },
+    reviewedAt: { type: Date, default: null },
+    reviewNote: { type: String, default: null },
   },
   {
     timestamps: true,

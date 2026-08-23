@@ -29,14 +29,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const exercise = await Exercise.findOne({ slug }).lean<{
       isCustom?: boolean
       createdBy?: string
+      isUniversal?: boolean
     } & Record<string, unknown> | null>();
     if (!exercise) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
     }
 
-    // Custom exercises are owner-private. Hide other users' customs (slugs are
-    // partially guessable: custom-<userIdSuffix>-<name>-<ts>).
-    if (exercise.isCustom && exercise.createdBy?.toString() !== auth.userId) {
+    // Custom exercises are owner-private, unless an admin has approved them
+    // as universal (slugs are partially guessable:
+    // custom-<userIdSuffix>-<name>-<ts>, so this can't rely on obscurity).
+    if (exercise.isCustom && exercise.createdBy?.toString() !== auth.userId && !exercise.isUniversal) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
     }
 
