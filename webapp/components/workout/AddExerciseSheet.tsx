@@ -14,11 +14,12 @@
 // the app theme. Everything else uses the app's own light/dark surfaces.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Search, Plus, X, Loader2, Layers, Minus } from 'lucide-react'
+import { Search, Plus, X, Loader2, Layers, Minus, ArrowLeft } from 'lucide-react'
 import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from '@/components/workout/CustomExerciseFields'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
-import { setUnitLabel, categoryForTracking } from '@/lib/workout/tracking'
+import { setUnitLabel } from '@/lib/workout/tracking'
 
 export type Placement = 'end' | 'group'
 
@@ -54,16 +55,6 @@ function authHeaders(): HeadersInit {
 
 const isTimed = (t?: string) => !!t && (t.startsWith('time') || t === 'intervals')
 
-const CUSTOM_TRACKING_OPTIONS: { value: string; label: string }[] = [
-  { value: 'reps_weight', label: 'Sets & Reps' },
-  { value: 'reps_bodyweight', label: 'Bodyweight' },
-  { value: 'reps_only', label: 'Reps Only' },
-  { value: 'time', label: 'Timed' },
-  { value: 'time_distance', label: 'Time + Distance' },
-  { value: 'intervals', label: 'Intervals' },
-  { value: 'none', label: 'No Tracking' },
-]
-
 export default function AddExerciseSheet({
   open,
   onClose,
@@ -78,13 +69,15 @@ export default function AddExerciseSheet({
   const [customs, setCustoms] = useState<SearchExercise[]>([])
   const [searching, setSearching] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [creatingError, setCreatingError] = useState<string | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES)
   const [picked, setPicked] = useState<SearchExercise | null>(null)
   const [sets, setSets] = useState(3)
   const [reps, setReps] = useState('8-12')
   const [seconds, setSeconds] = useState(45)
   const [placement, setPlacement] = useState<Placement>('end')
   const [groupKind, setGroupKind] = useState<GroupKind>('superset')
-  const [customType, setCustomType] = useState<string>('reps_weight')
   const [adding, setAdding] = useState(false)
   const seq = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -97,7 +90,8 @@ export default function AddExerciseSheet({
     if (!open) return
     setQuery(''); setResults([]); setPicked(null)
     setSets(3); setReps('8-12'); setSeconds(45)
-    setPlacement('end'); setGroupKind('superset'); setCustomType('reps_weight')
+    setPlacement('end'); setGroupKind('superset')
+    setShowCreateForm(false); setCreatingError(null); setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES)
     const t = setTimeout(() => inputRef.current?.focus(), 120)
     return () => clearTimeout(t)
   }, [open])
@@ -118,7 +112,9 @@ export default function AddExerciseSheet({
   }, [open, customs.length])
 
   useEffect(() => {
-    setCustomType('reps_weight')
+    setShowCreateForm(false)
+    setCreatingError(null)
+    setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES)
   }, [query])
 
   useEffect(() => {
@@ -147,27 +143,32 @@ export default function AddExerciseSheet({
     setResults([])
   }, [])
 
-  // The machine in front of you is not always in the catalog.
+  // The machine in front of you is not always in the catalog — same detailed
+  // fields the program editor offers, not just a name and a tracking type.
   const createCustom = useCallback(async () => {
-    const name = query.trim()
-    if (name.length < 2 || creating) return
+    if (!customForm.name.trim() || creating) return
     setCreating(true)
+    setCreatingError(null)
     try {
       const res = await fetch('/api/exercises/custom', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: customType, muscleGroup: 'other', category: categoryForTracking(customType) }),
+        body: JSON.stringify(customForm),
       })
-      if (!res.ok) return
-      const data = (await res.json()) as { exercise?: SearchExercise }
-      if (data.exercise) {
-        setCustoms(prev => [...prev, data.exercise!])
-        choose(data.exercise)
+      const data = (await res.json()) as { exercise?: SearchExercise; error?: string }
+      if (!res.ok || !data.exercise) {
+        setCreatingError(data.error || 'Failed to create exercise')
+        return
       }
-    } catch { /* leave the text for a retry */ } finally {
+      setCustoms(prev => [...prev, data.exercise!])
+      choose(data.exercise)
+      setShowCreateForm(false)
+    } catch {
+      setCreatingError('Network error')
+    } finally {
       setCreating(false)
     }
-  }, [query, creating, choose, customType])
+  }, [customForm, creating, choose])
 
   const submit = useCallback(async () => {
     if (!picked || adding) return
@@ -254,35 +255,49 @@ export default function AddExerciseSheet({
                   <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
                 </button>
               ))}
-              {q.length >= 2 && !searching && merged.length === 0 && (
-                <div className={`rounded-xl px-3 py-2.5 ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}>
-                  <p className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>
-                    Create &ldquo;{query.trim()}&rdquo; as
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CUSTOM_TRACKING_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setCustomType(opt.value)}
-                        data-testid={`add-exercise-create-type-${opt.value}`}
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                          customType === opt.value
-                            ? 'bg-green-500 text-white'
-                            : dark ? 'bg-white/10 text-white/70' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+              {q.length >= 2 && !searching && merged.length === 0 && !showCreateForm && (
+                <button
+                  onClick={() => {
+                    setCustomForm(prev => ({ ...prev, name: query.trim() }))
+                    setShowCreateForm(true)
+                  }}
+                  data-testid="add-exercise-create-open"
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}
+                >
+                  <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                    Create &ldquo;{query.trim()}&rdquo; as a new exercise
+                  </span>
+                </button>
+              )}
+              {showCreateForm && (
+                <div className={`rounded-xl px-3 py-3 ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}>
+                  <div className="mb-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateForm(false)}
+                      aria-label="Back to search"
+                      className={muted}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </button>
+                    <p className="text-sm font-semibold">Create Custom Exercise</p>
                   </div>
+                  <CustomExerciseFields
+                    values={customForm}
+                    onChange={setCustomForm}
+                    namePlaceholder="e.g. Cable Face Pull"
+                    dark={dark}
+                  />
+                  {creatingError && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{creatingError}</p>}
                   <button
                     onClick={createCustom}
-                    disabled={creating}
+                    disabled={creating || !customForm.name.trim()}
                     data-testid="add-exercise-create-confirm"
-                    className={`mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-semibold text-green-600 dark:text-green-400 ${rowIdle}`}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-600 disabled:opacity-60"
                   >
                     {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    Create exercise
+                    Create & Add
                   </button>
                 </div>
               )}
