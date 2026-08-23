@@ -4,13 +4,15 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
-import { ArrowLeft, Plus, Trash2, Dumbbell } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell } from "lucide-react";
 import { Card } from "@/components/ui";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import AdminVideoPreview from "@/app/dashboard/admin/exercises/_form/AdminVideoPreview";
 import VideoUploadButton from "@/components/admin/VideoUploadButton";
 import VideoTrimEditor from "@/components/admin/VideoTrimEditor";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
+import { inferCustomExerciseMuscleGroup, inferCustomExerciseCategory } from "@/lib/customExerciseFields";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { CUSTOM_TAG } from "@/lib/customExerciseTags";
@@ -36,13 +38,7 @@ interface CustomExercise {
   videoTrim?: VideoTrimOverride | null;
 }
 
-interface CreateForm {
-  name: string;
-  trackingType: string;
-  muscleGroup: string;
-  category: string;
-  defaultSets: string;
-  defaultReps: string;
+interface CreateForm extends CustomExerciseValues {
   submitting: boolean;
   error: string | null;
 }
@@ -59,33 +55,6 @@ const TRACKING_LABELS: Record<string, string> = {
   none:            "No Tracking",
 };
 
-const TRACKING_TYPE_OPTIONS = [
-  { value: "reps_weight",     label: "Sets × Reps + Weight",     hint: "e.g. Bench Press"   },
-  { value: "reps_bodyweight", label: "Sets × Reps (bodyweight)",  hint: "e.g. Push-Ups"      },
-  { value: "reps_only",       label: "Reps Only",                 hint: "e.g. Jumps"         },
-  { value: "time",            label: "Time / Duration",           hint: "e.g. Plank"         },
-  { value: "time_distance",   label: "Time + Distance",           hint: "e.g. Run, Row"      },
-  { value: "intervals",       label: "Intervals",                 hint: "e.g. HIIT, EMOM"    },
-  { value: "none",            label: "No Tracking",               hint: "e.g. Rest"          },
-];
-
-const MUSCLE_GROUP_OPTIONS = [
-  { value: "chest",     label: "Chest"     },
-  { value: "back",      label: "Back"      },
-  { value: "shoulders", label: "Shoulders" },
-  { value: "arms",      label: "Arms"      },
-  { value: "core",      label: "Core"      },
-  { value: "legs",      label: "Legs"      },
-  { value: "full_body", label: "Full Body" },
-];
-
-const CATEGORY_OPTIONS = [
-  { value: "strength",     label: "Strength"     },
-  { value: "cardio",       label: "Cardio"       },
-  { value: "bodyweight",   label: "Bodyweight"   },
-  { value: "conditioning", label: "Conditioning" },
-];
-
 const MUSCLE_LABEL_MAP: Record<string, string> = {
   chest: "Chest", lats: "Lats", upper_back: "Upper Back", quads: "Quads",
   hamstrings: "Hamstrings", glutes: "Glutes", abs: "Abs", obliques: "Obliques",
@@ -98,8 +67,7 @@ function formatMuscle(m: string) {
 }
 
 const EMPTY_FORM: CreateForm = {
-  name: "", trackingType: "reps_weight", muscleGroup: "chest",
-  category: "strength", defaultSets: "3", defaultReps: "8-12",
+  ...DEFAULT_CUSTOM_EXERCISE_VALUES,
   submitting: false, error: null,
 };
 
@@ -121,6 +89,14 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(EXERCISES_PAGE);
+  // Which row's dropdown is open — collapsed rows just show name + subtitle;
+  // opening one reveals Edit, Delete, and the video controls.
+  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+  // Which row is mid-edit, and the form driving it (separate from `form`,
+  // which is only ever the create form — editing shares the same fields but
+  // must not clobber an in-progress create).
+  const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<CreateForm>(EMPTY_FORM);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,12 +165,61 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
         headers: { Authorization: `Bearer ${token}` },
       });
       setExercises(prev => prev.filter(e => e.slug !== slug));
+      if (expandedSlug === slug) setExpandedSlug(null);
+      if (editingSlug === slug) setEditingSlug(null);
     } finally {
       setDeletingSlug(null);
     }
   };
 
-  const isTimeBased = ["time", "time_distance", "intervals"].includes(form.trackingType);
+  const startEdit = (ex: CustomExercise) => {
+    setEditingSlug(ex.slug);
+    setEditForm({
+      name: ex.name,
+      trackingType: ex.trackingType,
+      // The stored document only has the resolved primaryMuscles/category —
+      // infer back to the form's own vocabulary so the right chips light up.
+      muscleGroup: inferCustomExerciseMuscleGroup(ex.primaryMuscles),
+      category: inferCustomExerciseCategory(ex.category),
+      defaultSets: ex.defaultSets ? String(ex.defaultSets) : "3",
+      defaultReps: ex.defaultReps ?? "8-12",
+      submitting: false,
+      error: null,
+    });
+  };
+
+  const handleUpdate = async () => {
+    if (!editingSlug) return;
+    if (!editForm.name.trim()) {
+      setEditForm(p => ({ ...p, error: "Name is required" }));
+      return;
+    }
+    setEditForm(p => ({ ...p, submitting: true, error: null }));
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/exercises/custom/${encodeURIComponent(editingSlug)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          name: editForm.name,
+          trackingType: editForm.trackingType,
+          muscleGroup: editForm.muscleGroup,
+          category: editForm.category,
+          defaultSets: editForm.defaultSets,
+          defaultReps: editForm.defaultReps,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditForm(p => ({ ...p, submitting: false, error: data.error || "Failed to save" }));
+        return;
+      }
+      patchExercise(editingSlug, data.exercise);
+      setEditingSlug(null);
+    } catch {
+      setEditForm(p => ({ ...p, submitting: false, error: "Network error" }));
+    }
+  };
 
   const filteredExercises = search.trim()
     ? exercises.filter(e =>
@@ -270,108 +295,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
             </div>
 
             <div className="space-y-4">
-              {/* Name */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Name *</label>
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="e.g. Seated Leg Curl"
-                  value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  onKeyDown={e => e.key === "Enter" && handleCreate()}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-                />
-              </div>
-
-              {/* Tracking Type */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Tracking Type</label>
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                  {TRACKING_TYPE_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setForm(p => ({ ...p, trackingType: opt.value }))}
-                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                        form.trackingType === opt.value
-                          ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                          : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                      }`}
-                    >
-                      <span className="font-medium">{opt.label}</span>
-                      <span className="text-zinc-400 dark:text-zinc-500">{opt.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Muscles + Category row */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Primary Muscles</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {MUSCLE_GROUP_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setForm(p => ({ ...p, muscleGroup: opt.value }))}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          form.muscleGroup === opt.value
-                            ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Category</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CATEGORY_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setForm(p => ({ ...p, category: opt.value }))}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          form.category === opt.value
-                            ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Sets + Reps */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default {setUnitLabel(form.trackingType, 2)}</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min="1"
-                    max="10"
-                    value={form.defaultSets}
-                    onChange={e => setForm(p => ({ ...p, defaultSets: e.target.value }))}
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    {isTimeBased ? "Duration (e.g. 30s)" : "Reps (e.g. 8-12)"}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={isTimeBased ? "30s" : "8-12"}
-                    value={form.defaultReps}
-                    onChange={e => setForm(p => ({ ...p, defaultReps: e.target.value }))}
-                    className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                  />
-                </div>
-              </div>
+              <CustomExerciseFields
+                values={form}
+                onChange={(next) => setForm(p => ({ ...p, ...next }))}
+                nameAutoFocus
+                namePlaceholder="e.g. Seated Leg Curl"
+              />
 
               {form.error && <p className="text-xs text-red-500 dark:text-red-400">{form.error}</p>}
 
@@ -454,7 +383,13 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               transition={{ delay: i * 0.04 }}
               className="flex flex-col gap-3"
             >
-              <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setExpandedSlug(prev => (prev === ex.slug ? null : ex.slug))}
+                aria-expanded={expandedSlug === ex.slug}
+                aria-label={`${expandedSlug === ex.slug ? "Collapse" : "Expand"} ${ex.name}`}
+                className="flex w-full items-center gap-3 text-left"
+              >
               {/* Thumbnail — the exercise's own demo when it has one, the
                   generic icon when it doesn't. */}
               {ex.videoUrl ? (
@@ -511,70 +446,116 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                 </div>
               </div>
 
-              {/* Delete */}
-              <button
-                onClick={() => handleDelete(ex.slug)}
-                disabled={deletingSlug === ex.slug}
-                aria-label={`Delete ${ex.name}`}
-                className="flex h-9 w-9 shrink-0 items-center justify-center self-start rounded-full text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 dark:hover:bg-red-950/20 dark:hover:text-red-400"
-              >
-                {deletingSlug === ex.slug ? (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 self-start text-zinc-400 transition-transform ${expandedSlug === ex.slug ? "rotate-180" : ""}`}
+              />
               </button>
-              </div>
 
-              {/* Your own demo video. Same upload + trim controls the admin
-                  form uses, pointed at the owner-scoped endpoints. */}
-              <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                <VideoUploadButton
-                  uploadUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
-                  deleteUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
-                  hasVideo={Boolean(ex.videoUrl)}
-                  label={ex.videoUrl ? "Replace video" : "Add a video"}
-                  onUploaded={({ videoUrl }) =>
-                    patchExercise(ex.slug, {
-                      videoUrl,
-                      // The upload resets these server-side; mirror it so the
-                      // preview doesn't frame the new clip with the old numbers.
-                      videoWidth: null,
-                      videoHeight: null,
-                      videoFraming: null,
-                      videoTrim: null,
-                    })
-                  }
-                  onRemoved={() =>
-                    patchExercise(ex.slug, {
-                      videoUrl: null,
-                      videoWidth: null,
-                      videoHeight: null,
-                      videoFraming: null,
-                      videoTrim: null,
-                    })
-                  }
-                />
-                {ex.videoUrl && (
-                  <div className="mt-2">
-                    <VideoTrimEditor
-                      slug={ex.slug}
-                      scope="custom"
-                      videoUrl={ex.videoUrl}
-                      videoWidth={ex.videoWidth}
-                      videoHeight={ex.videoHeight}
-                      videoFraming={ex.videoFraming}
-                      videoTrim={ex.videoTrim}
-                      onSaved={next => patchExercise(ex.slug, { videoTrim: next })}
-                    />
-                  </div>
-                )}
-              </div>
+              {/* Dropdown — edit / delete the exercise, and manage its demo
+                  video. Collapsed by default so a library of a dozen
+                  exercises doesn't read as a wall of upload buttons. */}
+              {expandedSlug === ex.slug && (
+                <div className="space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  {editingSlug === ex.slug ? (
+                    <div className="space-y-4">
+                      <CustomExerciseFields
+                        values={editForm}
+                        onChange={(next) => setEditForm(p => ({ ...p, ...next }))}
+                      />
+                      {editForm.error && <p className="text-xs text-red-500 dark:text-red-400">{editForm.error}</p>}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setEditingSlug(null)}
+                          className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleUpdate}
+                          disabled={editForm.submitting || !editForm.name.trim()}
+                          className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
+                        >
+                          {editForm.submitting ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => startEdit(ex)}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-300 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(ex.slug)}
+                          disabled={deletingSlug === ex.slug}
+                          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-40 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/20"
+                        >
+                          {deletingSlug === ex.slug ? (
+                            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-red-300 border-t-red-600" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Delete
+                        </button>
+                      </div>
+
+                      {/* Your own demo video. Same upload + trim controls the
+                          admin form uses, pointed at the owner-scoped endpoints. */}
+                      <div>
+                        <VideoUploadButton
+                          uploadUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
+                          deleteUrl={`/api/exercises/custom/${encodeURIComponent(ex.slug)}/video`}
+                          hasVideo={Boolean(ex.videoUrl)}
+                          label={ex.videoUrl ? "Replace video" : "Add a video"}
+                          onUploaded={({ videoUrl }) =>
+                            patchExercise(ex.slug, {
+                              videoUrl,
+                              // The upload resets these server-side; mirror it so the
+                              // preview doesn't frame the new clip with the old numbers.
+                              videoWidth: null,
+                              videoHeight: null,
+                              videoFraming: null,
+                              videoTrim: null,
+                            })
+                          }
+                          onRemoved={() =>
+                            patchExercise(ex.slug, {
+                              videoUrl: null,
+                              videoWidth: null,
+                              videoHeight: null,
+                              videoFraming: null,
+                              videoTrim: null,
+                            })
+                          }
+                        />
+                        {ex.videoUrl && (
+                          <div className="mt-2">
+                            <VideoTrimEditor
+                              slug={ex.slug}
+                              scope="custom"
+                              videoUrl={ex.videoUrl}
+                              videoWidth={ex.videoWidth}
+                              videoHeight={ex.videoHeight}
+                              videoFraming={ex.videoFraming}
+                              videoTrim={ex.videoTrim}
+                              onSaved={next => patchExercise(ex.slug, { videoTrim: next })}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </Card>
           ))}
           {filteredExercises.length > EXERCISES_PAGE && (
             <button
-              onClick={() => setShown(n => n > EXERCISES_PAGE ? EXERCISES_PAGE : n + EXERCISES_PAGE)}
+              onClick={() => setShown(n => (n >= filteredExercises.length ? EXERCISES_PAGE : Math.min(n + EXERCISES_PAGE, filteredExercises.length)))}
               className="mt-1 w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
               {shown >= filteredExercises.length

@@ -7,7 +7,7 @@ import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
-import { setUnitLabel } from "@/lib/workout/tracking";
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
@@ -162,43 +162,10 @@ interface Filters {
 
 // ─── Custom exercise create form state ──────────────────────────────────────
 
-interface CustomFormState {
-  name: string;
-  trackingType: string;
-  muscleGroup: string;
-  category: string;
-  defaultSets: string;
-  defaultReps: string;
+interface CustomFormState extends CustomExerciseValues {
   submitting: boolean;
   error: string | null;
 }
-
-const TRACKING_TYPE_OPTIONS = [
-  { value: "reps_weight",     label: "Sets × Reps + Weight",    hint: "e.g. Bench Press"       },
-  { value: "reps_bodyweight", label: "Sets × Reps (bodyweight)", hint: "e.g. Push-Ups"          },
-  { value: "reps_only",       label: "Reps Only",                hint: "e.g. Jumps"             },
-  { value: "time",            label: "Time / Duration",          hint: "e.g. Plank"             },
-  { value: "time_distance",   label: "Time + Distance",          hint: "e.g. Run, Row"          },
-  { value: "intervals",       label: "Intervals",                hint: "e.g. HIIT, EMOM"        },
-  { value: "none",            label: "No Tracking",              hint: "e.g. Rest, Cool-down"   },
-];
-
-const MUSCLE_GROUP_OPTIONS = [
-  { value: "chest",     label: "Chest"     },
-  { value: "back",      label: "Back"      },
-  { value: "shoulders", label: "Shoulders" },
-  { value: "arms",      label: "Arms"      },
-  { value: "core",      label: "Core"      },
-  { value: "legs",      label: "Legs"      },
-  { value: "full_body", label: "Full Body" },
-];
-
-const CATEGORY_OPTIONS = [
-  { value: "strength",     label: "Strength"     },
-  { value: "cardio",       label: "Cardio"       },
-  { value: "bodyweight",   label: "Bodyweight"   },
-  { value: "conditioning", label: "Conditioning" },
-];
 
 export default function ExerciseSwapModal({
   isOpen,
@@ -215,8 +182,7 @@ export default function ExerciseSwapModal({
   const [customExercises, setCustomExercises] = useState<AlternativeExercise[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [customForm, setCustomForm] = useState<CustomFormState>({
-    name: "", trackingType: "reps_weight", muscleGroup: "chest",
-    category: "strength", defaultSets: "3", defaultReps: "8-12",
+    ...DEFAULT_CUSTOM_EXERCISE_VALUES,
     submitting: false, error: null,
   });
   const [loading, setLoading] = useState(false);
@@ -311,7 +277,7 @@ export default function ExerciseSwapModal({
       setVariationsCache({});
       setSelectedVariants({});
       setShowCreateForm(false);
-      setCustomForm({ name: "", trackingType: "reps_weight", muscleGroup: "chest", category: "strength", defaultSets: "3", defaultReps: "8-12", submitting: false, error: null });
+      setCustomForm({ ...DEFAULT_CUSTOM_EXERCISE_VALUES, submitting: false, error: null });
 
       // Load user's custom exercises
       const token = localStorage.getItem("token");
@@ -655,106 +621,11 @@ export default function ExerciseSwapModal({
                     <p className="text-sm font-semibold text-zinc-800 dark:text-white">Create Custom Exercise</p>
                   </div>
 
-                  {/* Name */}
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Cable Face Pull"
-                      value={customForm.name}
-                      onChange={e => setCustomForm(p => ({ ...p, name: e.target.value }))}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-                    />
-                  </div>
-
-                  {/* Tracking Type */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Tracking Type</label>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {TRACKING_TYPE_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setCustomForm(p => ({ ...p, trackingType: opt.value }))}
-                          className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                            customForm.trackingType === opt.value
-                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                              : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                          }`}
-                        >
-                          <span className="font-medium">{opt.label}</span>
-                          <span className="text-zinc-400 dark:text-zinc-500">{opt.hint}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Muscle Group */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Primary Muscles</label>
-                    <div className="flex flex-wrap gap-2">
-                      {MUSCLE_GROUP_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setCustomForm(p => ({ ...p, muscleGroup: opt.value }))}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                            customForm.muscleGroup === opt.value
-                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Category */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Category</label>
-                    <div className="flex flex-wrap gap-2">
-                      {CATEGORY_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setCustomForm(p => ({ ...p, category: opt.value }))}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                            customForm.category === opt.value
-                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Sets + Reps/Duration */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default {setUnitLabel(customForm.trackingType, 2)}</label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="1"
-                        max="10"
-                        value={customForm.defaultSets}
-                        onChange={e => setCustomForm(p => ({ ...p, defaultSets: e.target.value }))}
-                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                        {["time", "time_distance", "intervals"].includes(customForm.trackingType) ? "Duration (e.g. 30s)" : "Reps (e.g. 8-12)"}
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={["time", "time_distance", "intervals"].includes(customForm.trackingType) ? "30s" : "8-12"}
-                        value={customForm.defaultReps}
-                        onChange={e => setCustomForm(p => ({ ...p, defaultReps: e.target.value }))}
-                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
+                  <CustomExerciseFields
+                    values={customForm}
+                    onChange={(next) => setCustomForm(p => ({ ...p, ...next }))}
+                    nameAutoFocus
+                  />
 
                   {customForm.error && (
                     <p className="text-xs text-red-500 dark:text-red-400">{customForm.error}</p>

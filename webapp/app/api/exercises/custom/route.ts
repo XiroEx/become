@@ -4,31 +4,13 @@ import { requireFeature } from "@/lib/entitlements";
 import connectDB from "@/lib/mongodb";
 import Exercise, { IExerciseDefinition } from "@/models/Exercise";
 import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
+import {
+  isValidCustomTrackingType,
+  resolveCustomExerciseMuscleData,
+  resolveCustomExerciseCategory,
+} from "@/lib/customExerciseFields";
 import { getBlobStore } from "@/lib/blobStorage";
 import { invalidateExerciseCache } from "@/lib/hydrateExercises";
-
-// ─── Muscle group → Exercise model fields ─────────────────────────────────────
-
-const MUSCLE_MAP: Record<string, { primaryMuscles: string[]; bodyRegion: string }> = {
-  chest:      { primaryMuscles: ["chest"],                          bodyRegion: "upper_body" },
-  back:       { primaryMuscles: ["lats", "upper_back"],             bodyRegion: "upper_body" },
-  shoulders:  { primaryMuscles: ["front_delts", "side_delts"],      bodyRegion: "upper_body" },
-  arms:       { primaryMuscles: ["biceps", "triceps"],              bodyRegion: "upper_body" },
-  core:       { primaryMuscles: ["abs", "obliques"],                bodyRegion: "core"       },
-  legs:       { primaryMuscles: ["quads", "hamstrings", "glutes"],  bodyRegion: "lower_body" },
-  full_body:  { primaryMuscles: ["full_body"],                      bodyRegion: "full_body"  },
-  // AddExerciseSheet creates exercises inline with `muscleGroup: 'other'`.
-  // Unmapped, it produced an exercise with no muscles at all, which then read
-  // as a blank subtitle everywhere the list shows "tracking · muscles".
-  other:      { primaryMuscles: ["full_body"],                      bodyRegion: "full_body"  },
-};
-
-const CATEGORY_MAP: Record<string, string> = {
-  strength:     "strength",
-  cardio:       "cardio",
-  bodyweight:   "calisthenics",
-  conditioning: "conditioning",
-};
 
 type LeanExercise = Pick<IExerciseDefinition,
   "slug" | "name" | "trackingType" | "primaryMuscles" | "bodyRegion" | "category" |
@@ -71,13 +53,12 @@ export async function POST(req: NextRequest) {
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-  const validTrackingTypes = ["reps_weight", "reps_bodyweight", "reps_only", "time", "time_distance", "intervals", "none"];
-  if (!validTrackingTypes.includes(trackingType)) {
+  if (!isValidCustomTrackingType(trackingType)) {
     return NextResponse.json({ error: "Invalid tracking type" }, { status: 400 });
   }
 
-  const muscleData = MUSCLE_MAP[muscleGroup] ?? { primaryMuscles: [], bodyRegion: "full_body" };
-  const resolvedCategory = CATEGORY_MAP[category] ?? "strength";
+  const muscleData = resolveCustomExerciseMuscleData(muscleGroup);
+  const resolvedCategory = resolveCustomExerciseCategory(category);
 
   await connectDB();
 
