@@ -13,7 +13,15 @@ import type { IGoal } from '@/models/Goal'
 import { ensureGoals, weightSeriesKg, prSnapshot } from '@/lib/goals/ensure'
 import { paceRead, formatEta, kgToUnit, HOLD_BAND_KG, type PaceRead, type Direction } from '@/lib/goals/pace'
 import { readAdherence, type AdherenceRead } from '@/lib/goals/adherence'
-import { avgWorkoutsPerWeek, liftProgress, suggestLiftTargets, type LiftProgress, type PRSnapshot } from '@/lib/goals/training'
+import { avgWorkoutsPerWeek, liftProgress, type LiftProgress, type PRSnapshot } from '@/lib/goals/training'
+import {
+  buildStrengthTarget,
+  explainTarget,
+  type StrengthTarget,
+  type TargetExplanation,
+} from '@/lib/strength/targets'
+import { buildLiftHistories, suggestTargetsFromProgress } from '@/lib/strength/fromLogs'
+import { computeWeekTraining, type WeekTrainingMetrics, type WeekWorkoutLog } from '@/lib/becoming/weekTraining'
 import { suggestNutrition, suggestTraining, type Suggestion } from '@/lib/goals/suggestions'
 import { localDateKey, dateKey, localDayWindowForKey } from '@/lib/dayWindow'
 import { shiftDay, weekKeyOf, weekdayOf, lostWeeks } from '@/lib/streaks/pillars'
@@ -46,8 +54,18 @@ export interface TrainingGoalView {
   weeklyCounts: number[]
   baseline: { daysPerWeek: number | null; date: string | null; prs: PRSnapshot[] }
   lifts: LiftProgress[]
-  suggestedLifts: Array<{ slug: string; name: string; baselineE1RM: number; targetE1RM: number }>
+  suggestedLifts: StrengthTarget[]
   hasLiftTargets: boolean
+  /**
+   * Why each lift's target is what it is, keyed by slug. Built for the targets
+   * the member is actually looking at, so tapping one can explain itself
+   * instead of showing a number with no argument behind it.
+   */
+  liftRationales: Record<string, TargetExplanation>
+  /** What the member did in the gym this week — the near view, next to the long arc. */
+  week: WeekTrainingMetrics
+  /** Member's load unit, so the UI can label numbers without refetching the profile. */
+  unit: 'lbs' | 'kg'
   suggestion: Suggestion
 }
 
@@ -152,6 +170,39 @@ export async function computeGoalProgress(userId: string, tz: number, now = new 
   const baselinePRs = (tGoal?.baseline?.prs ?? []) as PRSnapshot[]
   const liftTargets = tGoal?.target?.lifts ?? []
   const lifts = liftProgress(baselinePRs.length ? baselinePRs : currentPRs, currentPRs, liftTargets, 5)
+
+  // ── This week in the gym ───────────────────────────────────────────────
+  const allLogs = (progress?.workoutLogs as WeekWorkoutLog[] | undefined) ?? []
+  const week = computeWeekTraining(allLogs, thisWeekKey, todayKey, d => dateKey(d, tz))
+
+  // ── Per-lift history, for target rates and their explanations ──────────
+  // Same helper the strength chart uses, so a target and the curve behind it
+  // can never disagree about what the best set on a given day was.
+  const historyBySlug = buildLiftHistories(allLogs, lifts.map(l => l.slug))
+
+  // Explain every target on screen. For a lift the member has already set a
+  // target on we explain that stored number against their current strength;
+  // for the suggestions we explain the one we are proposing.
+  const suggestedLifts = liftTargets.length
+    ? []
+    : suggestTargetsFromProgress({ prs: currentPRs, logs: allLogs, unit, now, n: 3 })
+  const liftRationales: Record<string, TargetExplanation> = {}
+  for (const t of suggestedLifts) liftRationales[t.slug] = explainTarget(t, unit)
+  for (const l of lifts) {
+    if (l.target == null || liftRationales[l.slug]) continue
+    // A stored target is the member's commitment, so the explanation describes
+    // THAT number rather than recomputing a different one — but the tier and
+    // reasoning still come from the lift's real history.
+    const rebuilt = buildStrengthTarget({
+      slug: l.slug,
+      name: l.name,
+      currentE1RM: l.now,
+      history: historyBySlug.get(l.slug) ?? [],
+      unit,
+      now,
+    })
+    if (rebuilt) liftRationales[l.slug] = explainTarget({ ...rebuilt, targetE1RM: l.target }, unit)
+  }
   const trainingView: TrainingGoalView = {
     status: tGoal ? 'active' : 'none',
     startedAt: iso(tGoal?.startedAt),
@@ -161,8 +212,11 @@ export async function computeGoalProgress(userId: string, tz: number, now = new 
     weeklyCounts: avg.counts,
     baseline: { daysPerWeek: tGoal?.baseline?.daysPerWeek ?? null, date: iso(tGoal?.baseline?.date), prs: baselinePRs },
     lifts,
-    suggestedLifts: liftTargets.length ? [] : suggestLiftTargets(currentPRs),
+    suggestedLifts,
     hasLiftTargets: liftTargets.length > 0,
+    liftRationales,
+    week,
+    unit,
     suggestion: suggestTraining({
       target, thisWeek: done, remainingThisWeek: target ? Math.max(0, target - done) : 0, chancesLeft,
       weekLost: lost.has(thisWeekKey), avgLast4: avg.weeks ? avg.avg : null, lifts,

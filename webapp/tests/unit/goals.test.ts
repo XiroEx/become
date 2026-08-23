@@ -99,9 +99,21 @@ test('average per week over the last 4 complete weeks, this week excluded', () =
   assert.equal(r.avg, 1.8)
 })
 
-test('suggested lift targets are +5% on the top lifts, rounded to 5', () => {
-  const s = suggestLiftTargets([{ slug: 'bench', name: 'Bench', e1RM: 200 }, { slug: 'squat', name: 'Squat', e1RM: 300 }, { slug: 'curl', name: 'Curl', e1RM: 60 }, { slug: 'dl', name: 'Deadlift', e1RM: 350 }])
-  assert.deepEqual(s.map(x => [x.slug, x.targetE1RM]), [['dl', 370], ['squat', 315], ['bench', 210]])
+test('suggested lift targets cover the top lifts and sit above where you are now', () => {
+  // With no logged history every lift is treated as early-stage, which is the
+  // fastest rate we ever assume. Even then the target must clear the current
+  // number — the old flat +5% could round back onto it for a light lift.
+  const s = suggestLiftTargets([
+    { slug: 'bench', name: 'Bench', e1RM: 200 },
+    { slug: 'squat', name: 'Squat', e1RM: 300 },
+    { slug: 'curl', name: 'Curl', e1RM: 60 },
+    { slug: 'dl', name: 'Deadlift', e1RM: 350 },
+  ])
+  assert.deepEqual(s.map(x => x.slug), ['dl', 'squat', 'bench'], 'top 3 by e1RM')
+  for (const t of s) {
+    assert.ok(t.targetE1RM > t.baselineE1RM, `${t.slug}: target must be ahead of now`)
+    assert.equal(t.targetE1RM % 5, 0, `${t.slug}: target lands on the plate grid`)
+  }
 })
 
 test('lift progress: targets first, then → now → target with % toward it', () => {
