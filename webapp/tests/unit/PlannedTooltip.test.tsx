@@ -23,6 +23,7 @@ test('open shows the logged + planned = total breakdown against goal', () => {
   assert.match(html, /role="tooltip"/)
   assert.match(html, /Calories with today&#x27;s plan/)
   assert.match(html, /1530 logged \+ 320 planned = 1850 \/ 2200/)
+  assert.match(html, /350 left after plan/)
 })
 
 test('applies the unit suffix to every number for gram-based macros', () => {
@@ -37,4 +38,12 @@ test('rounds fractional totals rather than showing raw decimals', () => {
     <PlannedTooltip open={true} label="Fats" current={45.6} planned={12.2} goal={70} unit="g" />,
   )
   assert.match(html, /46g logged \+ 12g planned = 58g \/ 70g/)
+  assert.match(html, /12g left after plan/)
+})
+
+test('says exactly how far the plan goes over instead of making the member subtract', () => {
+  const html = renderToStaticMarkup(
+    <PlannedTooltip open={true} label="Carbs" current={180} planned={45} goal={200} unit="g" />,
+  )
+  assert.match(html, /25g over after plan/)
 })

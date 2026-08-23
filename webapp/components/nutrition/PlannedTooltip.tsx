@@ -23,6 +23,8 @@ interface PlannedTooltipProps {
  */
 export default function PlannedTooltip({ open, label, current, planned, goal, unit = '' }: PlannedTooltipProps) {
   const total = current + planned
+  const afterPlan = goal - total
+  const afterPlanLabel = afterPlan < 0 ? 'over after plan' : 'left after plan'
 
   return (
     <AnimatePresence>
@@ -38,6 +40,9 @@ export default function PlannedTooltip({ open, label, current, planned, goal, un
           <p className="font-semibold text-white dark:text-zinc-900">{label} with today&apos;s plan</p>
           <p className="mt-0.5 tabular-nums text-zinc-300 dark:text-zinc-600">
             {Math.round(current)}{unit} logged + {Math.round(planned)}{unit} planned = {Math.round(total)}{unit} / {Math.round(goal)}{unit}
+          </p>
+          <p className="mt-1 font-semibold tabular-nums text-emerald-300 dark:text-emerald-700">
+            {Math.abs(Math.round(afterPlan))}{unit} {afterPlanLabel}
           </p>
         </motion.div>
       )}
