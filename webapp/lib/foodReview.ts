@@ -1,3 +1,5 @@
+import { convert, familyOf, type Unit } from './units'
+
 // ---------------------------------------------------------------------------
 // foodReview — auto-flag rules for the Food collection.
 //
@@ -29,6 +31,7 @@ export interface ReviewIssue {
 export interface FoodForReview {
   slug?: string
   variants: Array<{
+    isDefault?: boolean
     servingSize?: number
     servingUnit?: string
     gramsPerServing?: number
@@ -52,6 +55,59 @@ export interface FoodForReview {
  */
 const CALORIE_UPPER = 1000 // per 100g; oils ~900, butter ~717 — anything above 1000 is suspect
 const MACRO_TOLERANCE = 0.30 // |4P + 4C + 9F - cal| / cal must be <= 30%
+
+type CalorieDensityBasis = {
+  amount: number
+  unit: 'g' | 'ml'
+}
+
+/**
+ * Resolve the mass/volume amount that the stored nutrition describes.
+ *
+ * Native mass and volume units use servingSize converted to g/ml. A discrete
+ * serving (each/slice/scoop/serving) has no density unless its bridge declares
+ * the weight or volume of that serving. gramsPerServing/mlPerServing are NOT
+ * used for a native mass/volume food because there they may describe a handy
+ * household portion rather than the storage basis (the normal per-100 import
+ * shape).
+ */
+function calorieDensityBasis(
+  variant: FoodForReview['variants'][number],
+): CalorieDensityBasis | null {
+  const servingSize = variant.servingSize
+  const servingUnit = (variant.servingUnit ?? '').toLowerCase() as Unit
+
+  if (servingSize != null && Number.isFinite(servingSize) && servingSize > 0) {
+    const family = familyOf(servingUnit)
+    try {
+      if (family === 'mass') {
+        return { amount: convert(servingSize, servingUnit, 'g'), unit: 'g' }
+      }
+      if (family === 'volume') {
+        return { amount: convert(servingSize, servingUnit, 'ml'), unit: 'ml' }
+      }
+    } catch {
+      // Invalid/legacy unit: fall through to an explicit bridge if one exists.
+    }
+  }
+
+  if (
+    variant.gramsPerServing != null
+    && Number.isFinite(variant.gramsPerServing)
+    && variant.gramsPerServing > 0
+  ) {
+    return { amount: variant.gramsPerServing, unit: 'g' }
+  }
+  if (
+    variant.mlPerServing != null
+    && Number.isFinite(variant.mlPerServing)
+    && variant.mlPerServing > 0
+  ) {
+    return { amount: variant.mlPerServing, unit: 'ml' }
+  }
+
+  return null
+}
 
 /**
  * Return all auto-flag issues for a Food. Empty array means the food is
@@ -80,7 +136,7 @@ export function computeReviewIssues(food: FoodForReview): ReviewIssue[] {
     }
   }
 
-  const variant = food.variants?.[0]
+  const variant = food.variants?.find(v => v.isDefault) ?? food.variants?.[0]
   if (!variant) return issues
   const n = variant.nutrition
 
@@ -107,16 +163,18 @@ export function computeReviewIssues(food: FoodForReview): ReviewIssue[] {
     })
   }
 
-  // 4. Calories out of range. Computed PER 100g/100ml — i.e. on a normalized
-  // basis so package-size differences don't trip the check. We use the
-  // variant's servingSize as the denominator: a Branded "1 cookie 30g" food
-  // with 200 cal would normalize to 666 per 100g, well within range.
-  const servingSize = variant.servingSize && variant.servingSize > 0 ? variant.servingSize : 100
-  const per100Cals = ((n.calories ?? 0) / servingSize) * 100
-  if (per100Cals > CALORIE_UPPER) {
+  // 4. Calories out of range. Computed per 100g/100ml so package size and
+  // native unit do not change the result. For discrete foods, only run this
+  // check when a grams/ml bridge makes density knowable. Treating "1 serving"
+  // as one gram used to flag essentially every saved recipe above 10 calories.
+  const densityBasis = calorieDensityBasis(variant)
+  const per100Cals = densityBasis
+    ? ((n.calories ?? 0) / densityBasis.amount) * 100
+    : null
+  if (densityBasis && per100Cals != null && per100Cals > CALORIE_UPPER) {
     issues.push({
       code: 'calories_out_of_range',
-      message: `Calories per 100${(variant.servingUnit ?? 'g').toLowerCase()} = ${Math.round(per100Cals)}, above ${CALORIE_UPPER} threshold`,
+      message: `Calories per 100${densityBasis.unit} = ${Math.round(per100Cals)}, above ${CALORIE_UPPER} threshold`,
     })
   }
 

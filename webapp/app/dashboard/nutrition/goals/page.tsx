@@ -217,6 +217,13 @@ export default function NutritionGoalsPage() {
         if (goalsRes.ok) {
           const goalsData = await goalsRes.json()
           setGoalsAreDefault(!!goalsData._isDefault)
+          // The selected split is persisted alongside the gram targets. This
+          // page used to ignore it on read and always start at `recommended`,
+          // so a saved 40/30/30 split was relabelled "Custom (from your
+          // stats)" after every reload even though its numbers were unchanged.
+          if (MACRO_PRESET_KEYS.includes(goalsData.macroPreset as MacroPreset)) {
+            setMacroPreset(goalsData.macroPreset as MacroPreset)
+          }
           setGoals({
             calories: goalsData.calories || 2000,
             protein: goalsData.protein || 150,
@@ -389,7 +396,10 @@ export default function NutritionGoalsPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(goals)
+        // Keep the label and the numbers as one persisted choice. Omitting
+        // macroPreset here left the old onboarding preset in Mongo even after
+        // the member explicitly picked Balanced / High Protein / Lower Carb.
+        body: JSON.stringify({ ...goals, macroPreset })
       })
 
       if (res.ok) {
