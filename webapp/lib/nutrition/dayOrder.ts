@@ -29,7 +29,7 @@
  */
 
 import type { TagWindow } from '@/lib/nutrition/mealSchedule'
-import { minutesOfDay, anchorMinutesForTag, orderIndexForTag } from '@/lib/nutrition/mealSchedule'
+import { minutesOfDay, anchorMinutesForTag, orderIndexForTag, windowForTag } from '@/lib/nutrition/mealSchedule'
 
 /** Minimal shape this module needs from a meal log. */
 export interface OrderableLog {
@@ -145,22 +145,41 @@ export function buildDayOccurrences<L extends OrderableLog, P extends OrderableP
 
   // ── Planned occurrences ───────────────────────────────────────────────────
   // Each active plan is its own section. A plan carries a date but never a
-  // moment, so it is positioned the same way an untimed LOG is: its own
-  // scheduled window if it has one, else anchored to the end of the nearest
-  // scheduled tag above it in the member's order (see mealSchedule.ts). Using
-  // sortMinutesForTag here instead used to skip that anchor and fall straight
-  // to the flat app-wide table — a "Bed" plan with no window of its own landed
-  // at that table's noon default and rendered above meals actually eaten that
-  // evening. Plans never merge into a logged occurrence: eaten and not-yet-eaten
-  // are different states and pooling them would hide which is which.
+  // moment, so it starts at the same anchor as an untimed LOG: its own scheduled
+  // window if it has one, else the end of the nearest scheduled tag above it in
+  // the member's order (see mealSchedule.ts). An order-only plan is then kept
+  // after real occurrences of tags above it; those may run past their windows.
+  // Using sortMinutesForTag here instead used to skip that anchor and fall
+  // straight to the flat app-wide table — a "Bed" plan with no window of its
+  // own landed at that table's noon default and rendered above meals actually
+  // eaten that evening. Plans never merge into a logged occurrence: eaten and
+  // not-yet-eaten are different states and pooling them would hide which is which.
   if (opts.includePlans !== false) {
     for (const plan of plans) {
       if (plan.status && plan.status !== 'active') continue
       const tag = String(plan.tag).toLowerCase()
+      let sortMinutes = anchorMinutesForTag(windows, tag)
+
+      // An order-only tag has no clock of its own. Its scheduled anchor is a
+      // useful starting point, but a preceding meal may actually happen after
+      // that window ends. Keep the plan after those real occurrences instead
+      // of putting (for example) Bed above a late Dinner. A tag with its own
+      // window keeps that explicit time; only order-only tags need this floor.
+      const tagOrder = orderIndexForTag(windows, tag)
+      if (tagOrder >= 0 && !windowForTag(windows, tag)) {
+        for (const occurrence of occurrences) {
+          if (occurrence.planned) continue
+          const occurrenceOrder = orderIndexForTag(windows, occurrence.tag)
+          if (occurrenceOrder >= 0 && occurrenceOrder < tagOrder) {
+            sortMinutes = Math.max(sortMinutes, occurrence.sortMinutes)
+          }
+        }
+      }
+
       occurrences.push({
         key: `plan:${plan._id}`,
         tag,
-        sortMinutes: anchorMinutesForTag(windows, tag),
+        sortMinutes,
         logs: [],
         plans: [plan],
         planned: true,
