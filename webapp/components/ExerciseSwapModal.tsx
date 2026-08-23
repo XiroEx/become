@@ -412,7 +412,7 @@ export default function ExerciseSwapModal({
 
 
   const handleCreateCustom = async () => {
-    const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = customForm;
+    const { name, trackingType, muscleGroup, category, role, defaultSets, defaultReps } = customForm;
     if (!name.trim()) {
       setCustomForm(p => ({ ...p, error: "Name is required" }));
       return;
@@ -423,7 +423,7 @@ export default function ExerciseSwapModal({
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name, trackingType, muscleGroup, category, defaultSets, defaultReps }),
+        body: JSON.stringify({ name, trackingType, muscleGroup, category, role, defaultSets, defaultReps }),
       });
       const data = await res.json();
       if (!res.ok) {
