@@ -245,7 +245,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
 
   const startSession = useCallback(() => {
     if (!session) return;
-    const id = stashQuickSession(session);
+    const id = stashQuickSession(session, { needsName: true });
     router.push(quickSessionLiveHref(id));
     onClose();
   }, [session, router, onClose]);

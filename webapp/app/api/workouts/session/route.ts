@@ -24,6 +24,7 @@ interface RawLog {
   kind?: string
   sessionId?: string
   title?: string
+  needsName?: boolean
   focus?: string
   date: Date | string
   completed: boolean
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
       session: {
         sessionId: log.sessionId,
         title: log.title || 'Quick Session',
+        needsName: log.needsName,
         focus: log.focus,
         date: new Date(log.date).toISOString(),
         completed: log.completed,

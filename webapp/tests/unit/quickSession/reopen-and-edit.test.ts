@@ -70,7 +70,7 @@ test('reopening twice yields distinct ids, so a repeat cannot overwrite history'
 test('updateQuickSession rewrites title and exercises in place, keeping the id', () => {
   const id = stashQuickSession(
     { title: 'Quick Session', exercises: EXERCISES },
-    { sourceSessionId: 'historical-quick-session' },
+    { sourceSessionId: 'historical-quick-session', needsName: true },
   )
 
   const trimmed = updateQuickSession(id, {
@@ -82,6 +82,7 @@ test('updateQuickSession rewrites title and exercises in place, keeping the id',
   assert.equal(trimmed.sessionId, id)
   assert.equal(trimmed.sourceSessionId, 'historical-quick-session')
   assert.equal(trimmed.title, 'Back Day')
+  assert.equal(trimmed.needsName, false)
   assert.equal(trimmed.exercises.length, 1)
   assert.equal(trimmed.exercises[0].sets, 5)
 
@@ -90,6 +91,7 @@ test('updateQuickSession rewrites title and exercises in place, keeping the id',
   assert.equal(reread?.title, 'Back Day')
   assert.equal(reread?.exercises.length, 1)
   assert.equal(reread?.sourceSessionId, 'historical-quick-session')
+  assert.equal(reread?.needsName, false)
 })
 
 test('updateQuickSession leaves untouched fields alone and no-ops on a missing id', () => {
@@ -102,11 +104,19 @@ test('updateQuickSession leaves untouched fields alone and no-ops on a missing i
   assert.equal(updateQuickSession('qs_does_not_exist', { title: 'x' }), null)
 })
 
-test('overview href only carries saved=1 when the session exists server-side', () => {
+test('overview href carries saved and started state independently', () => {
   assert.equal(quickSessionOverviewHref('abc'), '/dashboard/workout/quick-session?session=abc')
   assert.equal(
     quickSessionOverviewHref('abc', { saved: true }),
     '/dashboard/workout/quick-session?session=abc&saved=1',
+  )
+  assert.equal(
+    quickSessionOverviewHref('abc', { started: true }),
+    '/dashboard/workout/quick-session?session=abc&started=1',
+  )
+  assert.equal(
+    quickSessionOverviewHref('abc', { saved: true, started: true }),
+    '/dashboard/workout/quick-session?session=abc&saved=1&started=1',
   )
 })
 
@@ -132,7 +142,7 @@ test('continuing an unfinished server session opens an edit-persisting saved hre
     const href = await continueQuickSession('unfinished-session')
     assert.equal(
       href,
-      '/dashboard/workout/quick-session?session=unfinished-session&saved=1',
+      '/dashboard/workout/quick-session?session=unfinished-session&saved=1&started=1',
     )
   } finally {
     globalThis.fetch = previousFetch

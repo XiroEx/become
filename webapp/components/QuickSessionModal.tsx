@@ -239,7 +239,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
   // ── Start the previewed session ──
   const startPreview = useCallback(() => {
     if (!preview) return;
-    const id = stashQuickSession(preview);
+    const id = stashQuickSession(preview, { needsName: true });
     router.push(quickSessionOverviewHref(id));
     onClose();
   }, [preview, router, onClose]);
@@ -261,7 +261,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
             exercises: log.exercises,
             source: "saved",
           },
-          log.sessionId ? { sourceSessionId: log.sessionId } : undefined,
+          { needsName: false, ...(log.sessionId ? { sourceSessionId: log.sessionId } : {}) },
         );
         router.push(quickSessionOverviewHref(id));
         onClose();
@@ -283,7 +283,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
           return;
         }
         const data = (await res.json()) as GenerateSessionResponse;
-        const id = stashQuickSession(data.session);
+        const id = stashQuickSession(data.session, { needsName: true });
         router.push(quickSessionOverviewHref(id));
         onClose();
       } catch {

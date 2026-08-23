@@ -13,15 +13,19 @@ import ExerciseAccordion from '@/components/ExerciseAccordion'
 import ShareButton from '@/components/share/ShareButton'
 import PageTransition from '@/components/PageTransition'
 import SessionEditor from '@/components/workout/SessionEditor'
+import QuickSessionNamePrompt from '@/components/workout/QuickSessionNamePrompt'
 import {
+  clearQuickSession,
   readQuickSession,
   updateQuickSession,
   quickSessionLiveHref,
   type StoredQuickSession,
 } from '@/lib/quickSession/store'
+import { clearQuickProgress, readQuickProgress } from '@/lib/quickSession/progress'
 import { FOCUS_DEFS, type DraftExercise } from '@/lib/quickSession/types'
 import { buildLoggedExercises } from '@/lib/quickSession/log'
 import { persistSourceQuickSessionRename } from '@/lib/quickSession/rename'
+import { shouldPromptForQuickSessionName } from '@/lib/quickSession/naming'
 
 // Local YYYY-MM-DD (not UTC) so the date picker + max match the user's day.
 function localDateStr(d = new Date()): string {
@@ -36,7 +40,11 @@ export default function QuickSessionOverviewPage() {
   // session opened from the hub), so edits write back to that log. For a plain
   // draft they must not, or saving would insert a log nobody asked for.
   const isSaved = params.get('saved') === '1'
+  // `started` is a fallback for browsers where localStorage is unavailable;
+  // normal resumes are detected from their shared Track/Live progress draft.
+  const startedFromHref = params.get('started') === '1'
   const [session, setSession] = useState<StoredQuickSession | null | undefined>(undefined)
+  const [hasStarted, setHasStarted] = useState(startedFromHref)
   const [editing, setEditing] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
@@ -44,10 +52,11 @@ export default function QuickSessionOverviewPage() {
   const [logDate, setLogDate] = useState(localDateStr())
   const [logging, setLogging] = useState(false)
   const [logError, setLogError] = useState<string | null>(null)
+  const [showNamePrompt, setShowNamePrompt] = useState(false)
   // Future date = planning ahead (saved incomplete); past/today = logging done.
   const isFutureDate = logDate > localDateStr()
 
-  const logAsDone = async () => {
+  const saveLog = async (title: string) => {
     if (!session) return
     setLogging(true)
     setLogError(null)
@@ -62,7 +71,8 @@ export default function QuickSessionOverviewPage() {
         body: JSON.stringify({
           kind: 'quick',
           sessionId: session.sessionId,
-          title: session.title,
+          title,
+          needsName: done ? false : shouldPromptForQuickSessionName(session),
           ...(session.focus && { focus: session.focus }),
           exercises,
           completed: done,
@@ -72,11 +82,27 @@ export default function QuickSessionOverviewPage() {
         }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Failed to save session')
+      if (done) {
+        clearQuickProgress(session.sessionId)
+        clearQuickSession(session.sessionId)
+      }
       router.push(done ? '/dashboard/history' : '/dashboard/workout/hub?tab=sessions')
     } catch (e) {
-      setLogError(e instanceof Error ? e.message : 'Failed to save session')
+      const message = e instanceof Error ? e.message : 'Failed to save session'
+      setLogError(message)
+      throw new Error(message)
+    } finally {
       setLogging(false)
     }
+  }
+
+  const logAsDone = () => {
+    if (!session) return
+    if (!isFutureDate && shouldPromptForQuickSessionName(session)) {
+      setShowNamePrompt(true)
+      return
+    }
+    void saveLog(session.title).catch(() => {})
   }
 
   // Apply an edit: always update the local stash (that is what Start workout and
@@ -96,6 +122,7 @@ export default function QuickSessionOverviewPage() {
             kind: 'quick',
             sessionId: session.sessionId,
             title,
+            needsName: false,
             ...(session.focus && { focus: session.focus }),
             // Still a plan, not a performed workout — no performedAt, so the
             // route leaves the scheduled date exactly where it was.
@@ -129,7 +156,8 @@ export default function QuickSessionOverviewPage() {
   // SSR). Legitimate sync-to-param effect.
   useEffect(() => {
     setSession(sessionId ? readQuickSession(sessionId) : null)
-  }, [sessionId])
+    setHasStarted(startedFromHref || !!(sessionId && readQuickProgress(sessionId)))
+  }, [sessionId, startedFromHref])
 
   if (session === undefined) {
     return <div className="flex min-h-[60vh] items-center justify-center text-sm text-zinc-400">Loading…</div>
@@ -271,16 +299,25 @@ export default function QuickSessionOverviewPage() {
         )}
       </div>
 
-      {/* Start CTA — pinned above the floating BottomNav (bottom-28 contract).
+      {/* Start/continue CTA — pinned above the floating BottomNav (bottom-28 contract).
           Hidden while editing so it can't sit on top of the editor's Save row. */}
       <div className={`fixed bottom-28 left-0 right-0 z-30 px-4 ${editing ? 'hidden' : ''}`}>
         <button
           onClick={() => router.push(quickSessionLiveHref(session.sessionId))}
           className="mx-auto flex w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-green-500 py-3 text-sm font-semibold text-white shadow-lg shadow-green-600/25 transition-all hover:from-green-700 hover:to-green-600"
         >
-          <Play className="h-4 w-4 fill-current" /> Start workout
+          <Play className="h-4 w-4 fill-current" /> {hasStarted ? 'Continue workout' : 'Start workout'}
         </button>
       </div>
+
+      {showNamePrompt && (
+        <QuickSessionNamePrompt
+          initialName={session.title}
+          confirmLabel="Save name & log"
+          onConfirm={(title) => saveLog(title)}
+          onCancel={() => setShowNamePrompt(false)}
+        />
+      )}
     </PageTransition>
   )
 }
