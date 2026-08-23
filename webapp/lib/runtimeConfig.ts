@@ -265,6 +265,14 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
   return inFlight
 }
 
+/** Close the redsecrets bootstrap connection for short-lived CLI processes. */
+export async function closeRuntimeConfigConnections(): Promise<void> {
+  const client = secretsMongoClient
+  secretsClient = null
+  secretsMongoClient = null
+  if (client) await client.close()
+}
+
 export function requireRuntimeSecret(value: string | undefined, name: string): string {
   return required(name, value)
 }
