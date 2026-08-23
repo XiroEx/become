@@ -68,7 +68,36 @@ export default function MacroBar({ label, current, goal, color, unit = 'g', kind
   const { open, containerRef, show, hide } = usePlannedTooltip()
 
   return (
-    <div className="space-y-1.5">
+    <div
+      ref={containerRef}
+      className={`space-y-1.5 ${hasPlanned
+        ? 'cursor-pointer touch-manipulation rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900'
+        : ''}`}
+      {...(hasPlanned
+        ? {
+            role: 'button' as const,
+            tabIndex: 0,
+            'aria-label': `${label} including today's plan: ${Math.round(current + (plannedExtra ?? 0))}${unit} of ${Math.round(goal)}${unit}`,
+            'aria-expanded': open,
+            // The whole macro row is the trigger: label, values, chips, and
+            // meter. Click explicitly opens so touch does not depend on a
+            // browser synthesizing mouseenter after touchend; outside press,
+            // pointer leave, blur, or Escape still dismisses it.
+            onClick: show,
+            onMouseEnter: show,
+            onMouseLeave: hide,
+            onFocus: show,
+            onBlur: hide,
+            onKeyDown: (e: KeyboardEvent) => {
+              if (e.key === 'Escape') hide()
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                show()
+              }
+            },
+          }
+        : {})}
+    >
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
         <div className="flex items-center gap-2 tabular-nums">
@@ -91,29 +120,7 @@ export default function MacroBar({ label, current, goal, color, unit = 'g', kind
           ) : null}
         </div>
       </div>
-      <div
-        ref={containerRef}
-        className="relative"
-        {...(hasPlanned
-          ? {
-              role: 'button' as const,
-              tabIndex: 0,
-              'aria-label': `${label} including today's plan: ${Math.round(current + (plannedExtra ?? 0))}${unit} of ${Math.round(goal)}${unit}`,
-              'aria-expanded': open,
-              // Hover/focus is the sole trigger — a click is preceded by its
-              // own mouseenter (real on desktop, synthesized after touchend
-              // on mobile), so a click handler here would toggle the tooltip
-              // straight back shut the instant hover had just opened it.
-              onMouseEnter: show,
-              onMouseLeave: hide,
-              onFocus: show,
-              onBlur: hide,
-              onKeyDown: (e: KeyboardEvent) => {
-                if (e.key === 'Escape') hide()
-              },
-            }
-          : {})}
-      >
+      <div className="relative">
         <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
           {plannedPercentage > percentage && (
             <motion.div
