@@ -15,7 +15,7 @@ import UserProgress from '@/models/UserProgress'
 import { computeGoalProgress } from '@/lib/goals/progress'
 import { ensureGoals, prSnapshot } from '@/lib/goals/ensure'
 import { clampPaceKg } from '@/lib/goals/pace'
-import { suggestLiftTargets } from '@/lib/goals/training'
+import { suggestTargetsFromProgress, toStoredLift } from '@/lib/strength/fromLogs'
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,8 +66,15 @@ export async function PUT(request: NextRequest) {
         if (!training) return NextResponse.json({ error: 'Set your training days first' }, { status: 400 })
         let lifts: Array<{ slug: string; name: string; baselineE1RM: number; targetE1RM: number }> = []
         if (body.lifts === 'suggested') {
-          const up = await UserProgress.findOne({ userId }).select('exercisePRs').lean() as Record<string, unknown> | null
-          lifts = suggestLiftTargets(prSnapshot(up?.exercisePRs as Parameters<typeof prSnapshot>[0]))
+          // workoutLogs comes along because the suggested rate is derived from
+          // each lift's own history, not a flat percentage.
+          const up = await UserProgress.findOne({ userId }).select('exercisePRs workoutLogs').lean() as Record<string, unknown> | null
+          const profile = await User.findById(uid, 'profile.weightUnit').lean() as { profile?: { weightUnit?: 'lbs' | 'kg' } } | null
+          lifts = suggestTargetsFromProgress({
+            prs: prSnapshot(up?.exercisePRs as Parameters<typeof prSnapshot>[0]),
+            logs: up?.workoutLogs as Parameters<typeof suggestTargetsFromProgress>[0]['logs'],
+            unit: profile?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs',
+          }).map(toStoredLift)
         } else if (Array.isArray(body.lifts)) {
           lifts = (body.lifts as unknown[]).flatMap(l => {
             const o = l as Record<string, unknown>

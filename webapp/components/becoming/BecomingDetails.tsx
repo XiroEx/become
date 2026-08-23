@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Brain, UtensilsCrossed, Dumbbell, BookOpen, Trophy, Sparkles, Lock, ArrowRight, TrendingUp, Check, Minus, Flame } from 'lucide-react'
+import { X, Brain, UtensilsCrossed, Dumbbell, BookOpen, Trophy, Sparkles, Lock, ArrowRight, TrendingUp, Check, Minus, Flame, HelpCircle, Info } from 'lucide-react'
 import { CHAPTERS, SYSTEM_INFO, getXpToNextChapter } from '@/lib/mindXP'
 import type { MindState } from '@/lib/mindContent'
 import type { GoalProgress } from '@/lib/goals/progress'
@@ -24,9 +24,24 @@ import type { WeekSnapshot } from '@/lib/becoming/weeks'
 import { fmtUnit } from '@/lib/goals/pace'
 import { PILLAR as SUBJECT, pillarColor as weekColor, STREAK_INK } from '@/lib/pillarColors'
 import WeightChart from '@/components/becoming/WeightChart'
+import StrengthTargetSheet from '@/components/becoming/StrengthTargetSheet'
+import { EST_MAX_LABEL, EST_MAX_LABEL_SHORT } from '@/lib/strength/language'
+import { formatVolume, formatWorkTime } from '@/lib/becoming/weekTraining'
 
 
 type Tab = 'mind' | 'fuel' | 'training' | 'story'
+
+/** The two halves of Training: this week's work, and long-run strength. */
+type TrainView = 'week' | 'strength'
+
+/**
+ * What the explainer sheet is currently explaining. `kind: 'metric'` is the
+ * bare "what is an estimated max" definition; `kind: 'target'` justifies one
+ * lift's number.
+ */
+type SheetState =
+  | { kind: 'metric' }
+  | { kind: 'target'; slug: string; name: string; current: number; target: number; reached: boolean }
 const TABS: Array<{ id: Tab; label: string; Icon: typeof Brain; hue: string }> = [
   { id: 'mind', label: 'Mind', Icon: Brain, hue: SUBJECT.mind.hex },
   { id: 'fuel', label: 'Fuel', Icon: UtensilsCrossed, hue: SUBJECT.fuel.hex },
@@ -88,6 +103,40 @@ function Cell({ label, value, sub, hue }: { label: string; value: string; sub?: 
     </div>
   )
 }
+/**
+ * Segmented control for splitting a pillar screen into two readings of the
+ * same subject. Training uses it for "this week" vs "strength" — near view and
+ * long arc, which are different numbers and were previously crammed into one
+ * scroll where the long arc won and nobody could find the week.
+ */
+function SubSwitch<T extends string>({ value, onChange, options, hue }: {
+  value: T
+  onChange: (v: T) => void
+  options: Array<{ id: T; label: string }>
+  hue: string
+}) {
+  return (
+    <div className="flex gap-1 rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10" role="tablist" data-testid="training-subswitch">
+      {options.map(o => {
+        const active = o.id === value
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(o.id)}
+            data-testid={`training-subswitch-${o.id}`}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${active ? 'text-white' : 'text-white/50 hover:text-white/75'}`}
+            style={active ? { background: `color-mix(in srgb, ${hue} 26%, transparent)` } : undefined}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 function Next({ title, sub, url, hue, onClose }: { title: string; sub: string; url: string; hue: string; onClose: () => void }) {
   return (
     <Link href={url} onClick={onClose} className="mt-3 flex items-start gap-2.5 rounded-2xl p-3 ring-1 ring-white/10 transition-colors hover:bg-white/[0.06]" style={{ background: `linear-gradient(120deg, ${hue}22, transparent 70%)` }}>
@@ -120,6 +169,12 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
   const [goals, setGoals] = useState<GoalProgress | null>(null)
   const [program, setProgram] = useState<ProgramLite | null>(null)
   const [settingLifts, setSettingLifts] = useState(false)
+  // Training splits into two questions that want different numbers: "did this
+  // week count" (sessions, sets, load moved) and "am I getting stronger"
+  // (estimated maxes and targets). The week is what someone opens the app to
+  // check, so it leads.
+  const [trainView, setTrainView] = useState<TrainView>('week')
+  const [sheet, setSheet] = useState<SheetState | null>(null)
   const tz = new Date().getTimezoneOffset()
 
   useEffect(() => {
@@ -189,6 +244,12 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
 
   // ── Pillars ────────────────────────────────────────────────────────────
   const n = goals?.nutrition, t = goals?.training
+  const tWeek = t?.week ?? null
+  // The load unit the training numbers are in. Falls back to the prop, which
+  // is the same profile value, so this is only ever a timing difference while
+  // /api/goals is still in flight.
+  const tUnit: 'lbs' | 'kg' = t?.unit ?? (unit === 'kg' ? 'kg' : 'lbs')
+  const sheetExplanation = sheet?.kind === 'target' ? t?.liftRationales?.[sheet.slug] ?? null : null
   const progPct = program && program.totalWorkouts && program.completedWorkouts != null ? Math.round((program.completedWorkouts / program.totalWorkouts) * 100) : program ? Math.round((program.currentWeek / (program.totalWeeks || 1)) * 100) : null
   const setSuggestedLifts = async () => {
     setSettingLifts(true)
@@ -355,52 +416,135 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
 
               {tab === 'training' && (
                 <>
-                  <Glass hue={SUBJECT.training.hex}>
-                    <div className="mb-2 flex items-center justify-between">
-                      <Eyebrow>The week</Eyebrow>
-                      {t?.target.daysPerWeek && <span className={`text-xs font-semibold ${t.thisWeek.weekLost ? 'text-amber-300' : 'text-emerald-400'}`}>This week {t.thisWeek.done}/{t.target.daysPerWeek}{t.thisWeek.weekLost ? ' · off track' : t.thisWeek.remaining === 0 ? ' · done' : ''}</span>}
-                    </div>
-                    {!goals ? <div className="h-16 animate-pulse rounded-xl bg-white/[0.06]" /> : t && t.target.daysPerWeek ? (
-                      <>
-                        <div className="grid grid-cols-3 gap-2">
-                          <Cell label="Then" value={t.baseline.prs.length ? `${t.baseline.prs.length} lifts` : t.startedAt ? fmtDate(t.startedAt) : '—'} sub={t.baseline.date ? `PRs on ${fmtDate(t.baseline.date)}` : 'baseline'} />
-                          <Cell label="Now" value={t.avgLast4 != null ? `${t.avgLast4}/wk` : '—'} sub="avg, last 4 weeks" hue={SUBJECT.training.hex} />
-                          <Cell label="Next" value={`${t.target.daysPerWeek}/wk`} sub={program && progPct != null ? `${program.name} · ${progPct}%` : 'your target'} />
-                        </div>
-                        {t.lifts.length > 0 && (
-                          <div className="mt-3 space-y-1.5">
-                            {t.lifts.slice(0, 5).map(l => (
-                              <div key={l.slug} className="flex items-center justify-between gap-2 text-xs">
-                                <span className="min-w-0 truncate text-white/80">{l.name}</span>
-                                <span className="shrink-0 tabular-nums text-white/55">{l.then} → <span className="font-semibold text-white">{l.now}</span>{l.target ? <> → <span style={{ color: SUBJECT.training.hex }}>{l.target}</span></> : null}{l.delta !== 0 && <span className={`ml-1.5 ${l.delta > 0 ? 'text-emerald-400' : 'text-white/40'}`}>{l.delta > 0 ? '+' : ''}{l.delta}</span>}</span>
-                              </div>
-                            ))}
-                            <p className="text-[10px] text-white/40">e1RM, then → now{t.hasLiftTargets ? ' → target' : ''}.</p>
-                          </div>
-                        )}
-                        {!t.hasLiftTargets && t.suggestedLifts.length > 0 && (
-                          <button type="button" onClick={setSuggestedLifts} disabled={settingLifts} data-testid="details-set-lifts" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/15 disabled:opacity-50">
-                            <TrendingUp className="h-3.5 w-3.5" /> Set strength targets: +5% on {t.suggestedLifts.map(s => s.name).join(', ')}
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-sm text-white/60">Set how many days a week you train in <Link href="/dashboard/settings" onClick={onClose} className="font-medium text-orange-300">Settings</Link> — the week, the streak and this screen are measured against it.</p>
-                    )}
-                  </Glass>
-                  {t && <Next title={t.suggestion.title} sub={t.suggestion.sub} url={t.suggestion.url} hue={SUBJECT.training.hex} onClose={onClose} />}
-                  {prTimeline.length > 0 && (
-                    <Glass hue="#ffd37a">
-                      <Eyebrow>Records</Eyebrow>
-                      <div className="space-y-1.5">
-                        {prTimeline.slice(0, 6).map((p, i) => (
-                          <button key={i} type="button" onClick={() => onJumpToWeek?.(p.week.index)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-xs hover:bg-white/[0.06]">
-                            <span className="flex min-w-0 items-center gap-1.5 text-white/85"><Trophy className="h-3.5 w-3.5 shrink-0 text-amber-300" /><span className="truncate">{p.name}</span></span>
-                            <span className="shrink-0 tabular-nums text-white/55">{p.e1RM} · <span className="text-white/40">{p.week.label}</span></span>
-                          </button>
-                        ))}
+                  <SubSwitch
+                    value={trainView}
+                    onChange={setTrainView}
+                    hue={SUBJECT.training.hex}
+                    options={[
+                      { id: 'week', label: 'This week' },
+                      { id: 'strength', label: 'Strength' },
+                    ]}
+                  />
+
+                  {trainView === 'week' ? (
+                  <>
+                    <Glass hue={SUBJECT.training.hex}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <Eyebrow>The week</Eyebrow>
+                        {t?.target.daysPerWeek && <span className={`text-xs font-semibold ${t.thisWeek.weekLost ? 'text-amber-300' : 'text-emerald-400'}`}>This week {t.thisWeek.done}/{t.target.daysPerWeek}{t.thisWeek.weekLost ? ' · off track' : t.thisWeek.remaining === 0 ? ' · done' : ''}</span>}
                       </div>
+                      {!goals ? <div className="h-16 animate-pulse rounded-xl bg-white/[0.06]" /> : t && t.target.daysPerWeek ? (
+                        <>
+                          <div className="grid grid-cols-3 gap-2">
+                            <Cell label="Then" value={t.baseline.prs.length ? `${t.baseline.prs.length} lifts` : t.startedAt ? fmtDate(t.startedAt) : '—'} sub={t.baseline.date ? `PRs on ${fmtDate(t.baseline.date)}` : 'baseline'} />
+                            <Cell label="Now" value={t.avgLast4 != null ? `${t.avgLast4}/wk` : '—'} sub="avg, last 4 weeks" hue={SUBJECT.training.hex} />
+                            <Cell label="Next" value={`${t.target.daysPerWeek}/wk`} sub={program && progPct != null ? `${program.name} · ${progPct}%` : 'your target'} />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-white/60">Set how many days a week you train in <Link href="/dashboard/settings" onClick={onClose} className="font-medium text-orange-300">Settings</Link> — the week, the streak and this screen are measured against it.</p>
+                      )}
                     </Glass>
+
+                    {/* What actually got moved this week. These numbers change
+                        every session, unlike an estimated max, which can sit
+                        still for weeks while real work is happening. */}
+                    {tWeek && tWeek.sessions > 0 && (
+                      <Glass hue={SUBJECT.training.hex}>
+                        <Eyebrow>What you moved</Eyebrow>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Cell label="Sessions" value={String(tWeek.sessions)} sub={tWeek.exercises ? `${tWeek.exercises} exercise${tWeek.exercises === 1 ? '' : 's'}` : undefined} hue={SUBJECT.training.hex} />
+                          <Cell label="Sets" value={String(tWeek.sets)} sub={tWeek.reps ? `${tWeek.reps.toLocaleString()} reps` : undefined} />
+                          <Cell
+                            label="Load moved"
+                            value={tWeek.hasWeightedWork ? formatVolume(tWeek.volume, tUnit) : formatWorkTime(tWeek.workSeconds)}
+                            sub={tWeek.hasWeightedWork ? 'weight × reps' : 'time under load'}
+                          />
+                        </div>
+                        {tWeek.topSet && (
+                          <p className="mt-2.5 text-[11px] text-white/50">
+                            Best set: <span className="text-white/80">{tWeek.topSet.name}</span> {tWeek.topSet.weight} {tUnit} × {tWeek.topSet.reps}
+                          </p>
+                        )}
+                      </Glass>
+                    )}
+                    {t && <Next title={t.suggestion.title} sub={t.suggestion.sub} url={t.suggestion.url} hue={SUBJECT.training.hex} onClose={onClose} />}
+                  </>
+                ) : (
+                  <>
+                    <Glass hue={SUBJECT.training.hex}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <Eyebrow>Your lifts</Eyebrow>
+                        <button type="button" onClick={() => setSheet({ kind: 'metric' })} data-testid="details-what-is-est-max" className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-white/70 hover:bg-white/15">
+                          <HelpCircle className="h-3 w-3" /> {EST_MAX_LABEL_SHORT}?
+                        </button>
+                      </div>
+                      {!goals ? <div className="h-16 animate-pulse rounded-xl bg-white/[0.06]" /> : t && t.lifts.length > 0 ? (
+                        <>
+                          <div className="space-y-1">
+                            {t.lifts.slice(0, 5).map(l => {
+                              const hasTarget = l.target != null
+                              // Only a target is worth tapping — without one
+                              // there is nothing to justify.
+                              const Row = hasTarget ? 'button' : 'div'
+                              return (
+                                <Row
+                                  key={l.slug}
+                                  {...(hasTarget
+                                    ? {
+                                        type: 'button' as const,
+                                        onClick: () => setSheet({ kind: 'target', slug: l.slug, name: l.name, current: l.now, target: l.target as number, reached: !!l.reached }),
+                                        'data-testid': 'details-lift-target',
+                                      }
+                                    : {})}
+                                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-1.5 py-1.5 text-left text-xs ${hasTarget ? 'hover:bg-white/[0.06]' : ''}`}
+                                >
+                                  <span className="min-w-0 truncate text-white/80">{l.name}</span>
+                                  <span className="flex shrink-0 items-center gap-1.5 tabular-nums text-white/55">
+                                    <span>
+                                      {l.then} → <span className="font-semibold text-white">{l.now}</span>
+                                      {hasTarget && (
+                                        l.reached
+                                          ? <span className="ml-1.5 text-emerald-400">reached ✓</span>
+                                          : <> → <span style={{ color: SUBJECT.training.hex }}>{l.target}</span></>
+                                      )}
+                                      {l.delta !== 0 && <span className={`ml-1.5 ${l.delta > 0 ? 'text-emerald-400' : 'text-white/40'}`}>{l.delta > 0 ? '+' : ''}{l.delta}</span>}
+                                    </span>
+                                    {hasTarget && <Info className="h-3 w-3 shrink-0 text-white/30" />}
+                                  </span>
+                                </Row>
+                              )
+                            })}
+                          </div>
+                          <p className="mt-2 text-[10px] text-white/40">
+                            {EST_MAX_LABEL}, in {tUnit} — where you started → where you are{t.hasLiftTargets ? ' → what you are working toward' : ''}.
+                            {t.hasLiftTargets ? ' Tap a lift to see why that target.' : ''}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-white/60">Log a few weighted sets and your lifts show up here, with an {EST_MAX_LABEL.toLowerCase()} for each.</p>
+                      )}
+                      {t && !t.hasLiftTargets && t.suggestedLifts.length > 0 && (
+                        <button type="button" onClick={setSuggestedLifts} disabled={settingLifts} data-testid="details-set-lifts" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/15 disabled:opacity-50">
+                          <TrendingUp className="h-3.5 w-3.5" /> Set targets for {t.suggestedLifts.map(s => s.name).join(', ')}
+                        </button>
+                      )}
+                    </Glass>
+                    {prTimeline.length > 0 && (
+                      <Glass hue="#ffd37a">
+                        <Eyebrow>Records</Eyebrow>
+                        <div className="space-y-1.5">
+                          {prTimeline.slice(0, 6).map((p, i) => (
+                            <button key={i} type="button" onClick={() => onJumpToWeek?.(p.week.index)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-xs hover:bg-white/[0.06]">
+                              <span className="flex min-w-0 items-center gap-1.5 text-white/85"><Trophy className="h-3.5 w-3.5 shrink-0 text-amber-300" /><span className="truncate">{p.name}</span></span>
+                              <span className="shrink-0 tabular-nums text-white/55">{p.e1RM} <span className="text-white/40">{tUnit} · {p.week.label}</span></span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-2 text-[10px] text-white/40">Best {EST_MAX_LABEL.toLowerCase()} for each lift, and the week you hit it.</p>
+                      </Glass>
+                    )}
+                  </>
                   )}
                 </>
               )}
@@ -446,6 +590,18 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
         </AnimatePresence>
       </div>
       <p className="pointer-events-none absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+6px)] text-center text-[10px] text-white/35">swipe between screens</p>
+
+      <StrengthTargetSheet
+        open={!!sheet}
+        onClose={() => setSheet(null)}
+        hue={SUBJECT.training.hex}
+        unit={tUnit}
+        liftName={sheet?.kind === 'target' ? sheet.name : undefined}
+        current={sheet?.kind === 'target' ? sheet.current : undefined}
+        target={sheet?.kind === 'target' ? sheet.target : undefined}
+        reached={sheet?.kind === 'target' ? sheet.reached : undefined}
+        explanation={sheetExplanation}
+      />
     </motion.div>
   )
 }
