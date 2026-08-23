@@ -16,7 +16,12 @@ import dbConnect from '@/lib/mongodb'
 import Food, { IFoodVariant } from '@/models/Food'
 import { verifyAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
-import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import {
+  computeAutomaticReviewState,
+  computeReviewIssues,
+  isAutomaticReviewOwned,
+  type FoodForReview,
+} from '@/lib/foodReview'
 import { redirectFoodRefs } from '@/lib/foodMergeRefs'
 
 const MAX_VARIANTS_PER_FOOD = 12
@@ -137,8 +142,16 @@ export async function POST(
     for (const a of source.aliases) pushAlias(a)
     while (target.aliases.length > MAX_ALIASES) target.aliases.shift()
 
-    // Re-evaluate needsReview against the merged target.
-    target.needsReview = computeReviewIssues(target.toObject() as unknown as FoodForReview).length > 0
+    // Re-evaluate only an automatic-owned target. A manual admin decision or
+    // unknown legacy ownership must survive an otherwise unrelated merge.
+    if (isAutomaticReviewOwned(target.reviewFlag)) {
+      const automaticReview = computeAutomaticReviewState(
+        target.toObject() as unknown as FoodForReview,
+        { origin: 'rules' },
+      )
+      target.needsReview = automaticReview.needsReview
+      target.reviewFlag = automaticReview.reviewFlag
+    }
 
     await target.save()
 
