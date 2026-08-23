@@ -53,6 +53,7 @@ interface PlannedSession {
   date: string
   exerciseCount: number
   exercises: DraftExercise[]
+  needsName?: boolean
 }
 
 function formatPlannedDate(iso: string): string {
@@ -107,6 +108,7 @@ function SessionsTab() {
         source: 'saved',
       },
       p.sessionId,
+      { needsName: p.needsName },
     )
     // saved: it already exists server-side under this id, so edits write back.
     router.push(quickSessionOverviewHref(p.sessionId, { saved: true }))
@@ -136,7 +138,7 @@ function SessionsTab() {
           exercises: log.exercises,
           source: 'saved',
         },
-        log.sessionId ? { sourceSessionId: log.sessionId } : undefined,
+        { needsName: false, ...(log.sessionId ? { sourceSessionId: log.sessionId } : {}) },
       )
       router.push(quickSessionOverviewHref(id))
       return
@@ -154,7 +156,7 @@ function SessionsTab() {
       if (!res.ok) throw new Error('generate failed')
       const data = (await res.json()) as { session?: import('@/lib/quickSession/types').DraftSession }
       if (!data.session) throw new Error('no session')
-      const id = stashQuickSession(data.session)
+      const id = stashQuickSession(data.session, { needsName: true })
       router.push(quickSessionOverviewHref(id))
     } catch {
       setOpening(null)

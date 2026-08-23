@@ -13,6 +13,9 @@ const KEY_PREFIX = 'quick_session_'
 
 export interface StoredQuickSession extends DraftSession {
   sessionId: string
+  /** Explicit lifecycle state. Automatic titles can sound meaningful, so the
+   * title text alone cannot tell whether the member chose a name. */
+  needsName?: boolean
   /** Server log this repeat was copied from. Kept separate from sessionId so
    *  completing the repeat cannot overwrite the historical workout. */
   sourceSessionId?: string
@@ -20,6 +23,7 @@ export interface StoredQuickSession extends DraftSession {
 
 interface StashQuickSessionOptions {
   sourceSessionId?: string
+  needsName?: boolean
 }
 
 function genId(): string {
@@ -44,6 +48,7 @@ export function stashQuickSession(session: DraftSession, options?: StashQuickSes
   const payload: StoredQuickSession = {
     ...session,
     sessionId,
+    ...(options?.needsName !== undefined ? { needsName: options.needsName } : {}),
     ...(options?.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}),
   }
   try {
@@ -62,8 +67,16 @@ export function stashQuickSession(session: DraftSession, options?: StashQuickSes
  * its existing sessionId, so completing it updates the same log — consuming the
  * plan — rather than creating a new one).
  */
-export function stashQuickSessionWithId(session: DraftSession, sessionId: string): string {
-  const payload: StoredQuickSession = { ...session, sessionId }
+export function stashQuickSessionWithId(
+  session: DraftSession,
+  sessionId: string,
+  options?: Pick<StashQuickSessionOptions, 'needsName'>,
+): string {
+  const payload: StoredQuickSession = {
+    ...session,
+    sessionId,
+    ...(options?.needsName !== undefined ? { needsName: options.needsName } : {}),
+  }
   try {
     localStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(payload))
   } catch {
@@ -124,6 +137,8 @@ export function updateQuickSession(
   const next: StoredQuickSession = {
     ...current,
     ...(patch.title !== undefined ? { title: patch.title } : {}),
+    // Saving a non-empty title in the editor is an explicit naming action.
+    ...(patch.title !== undefined ? { needsName: !patch.title.trim() } : {}),
     ...(patch.exercises !== undefined ? { exercises: patch.exercises } : {}),
   }
   try {
@@ -148,8 +163,15 @@ export function clearQuickSession(sessionId: string): void {
  * should write back to that log — for an unsaved draft it must not, or the edit
  * would insert a stray log nobody asked for.
  */
-export function quickSessionOverviewHref(sessionId: string, opts?: { saved?: boolean }): string {
-  const q = `session=${encodeURIComponent(sessionId)}${opts?.saved ? '&saved=1' : ''}`
+export function quickSessionOverviewHref(
+  sessionId: string,
+  opts?: { saved?: boolean; started?: boolean },
+): string {
+  const q = [
+    `session=${encodeURIComponent(sessionId)}`,
+    ...(opts?.saved ? ['saved=1'] : []),
+    ...(opts?.started ? ['started=1'] : []),
+  ].join('&')
   return `/dashboard/workout/quick-session?${q}`
 }
 

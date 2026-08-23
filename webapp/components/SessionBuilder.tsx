@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles, Layers, Unlink, ArrowLeft } from "lucide-react";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
+import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
@@ -53,6 +54,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   const router = useRouter();
 
   const [title, setTitle] = useState("Quick Session");
+  const [titleWasEdited, setTitleWasEdited] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchExercise[]>([]);
   const [searching, setSearching] = useState(false);
@@ -68,11 +70,13 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   const [logDate, setLogDate] = useState(localDateStr());
   const [logging, setLogging] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<ComplementSuggestion[]>([]);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const isFutureDate = logDate > localDateStr();
+  const hasChosenName = titleWasEdited && !!title.trim();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestionRequestRef = useRef<AbortController | null>(null);
@@ -269,10 +273,10 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   const start = useCallback(() => {
     if (chosen.length === 0) return;
     const session: DraftSession = { title: title.trim() || "Quick Session", exercises: chosen };
-    const id = stashQuickSession(session);
+    const id = stashQuickSession(session, { needsName: !hasChosenName });
     onLaunch?.();
     router.push(quickSessionLiveHref(id));
-  }, [chosen, title, router, onLaunch]);
+  }, [chosen, title, hasChosenName, router, onLaunch]);
 
   // Create a custom exercise inline — the same detailed fields the program
   // editor offers (tracking type, primary muscles, category, default
@@ -306,21 +310,41 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
 
   // Log (past/today) or plan (future) the built session without playing it —
   // the backfill path for "I worked out yesterday and never logged it".
-  const logOrPlan = useCallback(async () => {
+  const saveLogOrPlan = useCallback(async (sessionTitle: string) => {
     if (chosen.length === 0 || logging) return;
     setLogging(true);
     setLogError(null);
     try {
-      const session: DraftSession = { title: title.trim() || "Quick Session", exercises: chosen };
-      const id = stashQuickSession(session);
-      const { done } = await logQuickSession({ sessionId: id, title: session.title, exercises: chosen, date: logDate });
+      const session: DraftSession = { title: sessionTitle, exercises: chosen };
+      // A future plan can still need its first-completion name. A past/today
+      // log reaches that completion now, after the prompt if one was needed.
+      const needsName = isFutureDate && !hasChosenName;
+      const id = stashQuickSession(session, { needsName });
+      const { done } = await logQuickSession({
+        sessionId: id,
+        title: session.title,
+        needsName,
+        exercises: chosen,
+        date: logDate,
+      });
       onLaunch?.();
       router.push(done ? "/dashboard/history" : "/dashboard/workout/hub?tab=sessions");
     } catch (e) {
-      setLogError(e instanceof Error ? e.message : "Failed to save session");
+      const message = e instanceof Error ? e.message : "Failed to save session";
+      setLogError(message);
+      throw new Error(message);
+    } finally {
       setLogging(false);
     }
-  }, [chosen, title, logDate, logging, router, onLaunch]);
+  }, [chosen, logDate, logging, isFutureDate, hasChosenName, router, onLaunch]);
+
+  const logOrPlan = useCallback(() => {
+    if (!isFutureDate && !hasChosenName) {
+      setShowNamePrompt(true);
+      return;
+    }
+    void saveLogOrPlan(title.trim() || "Quick Session").catch(() => {});
+  }, [hasChosenName, isFutureDate, saveLogOrPlan, title]);
 
   // Search shows catalog matches + your matching customs (deduped by slug).
   const q = query.trim().toLowerCase();
@@ -341,7 +365,10 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       <input
         type="text"
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => {
+          setTitle(e.target.value);
+          setTitleWasEdited(true);
+        }}
         placeholder="Session title"
         className="mb-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
       />
@@ -582,6 +609,15 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
           </div>
           {logError && <p className="mt-1.5 text-xs text-red-500">{logError}</p>}
         </div>
+      )}
+
+      {showNamePrompt && (
+        <QuickSessionNamePrompt
+          initialName={title}
+          confirmLabel="Save name & log"
+          onConfirm={saveLogOrPlan}
+          onCancel={() => setShowNamePrompt(false)}
+        />
       )}
     </div>
   );
