@@ -18,6 +18,14 @@ import { fmtUnit } from '@/lib/goals/pace'
 
 const RANK: Record<Suggestion['severity'], number> = { warn: 0, nudge: 1, info: 2, good: 3 }
 
+/** The card's own classes: purple + pulsing while a new week sits unread, calm once opened. */
+export function doorClassName(loud: boolean): string {
+  const tone = loud
+    ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/20 becoming-door-pulse'
+    : 'border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-violet-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:border-violet-700'
+  return `block overflow-hidden rounded-2xl p-3.5 transition-transform active:scale-[0.99] ${tone}`
+}
+
 export function topSuggestion(goals: GoalProgress | null): Suggestion | null {
   if (!goals) return null
   return [goals.nutrition.suggestion, goals.training.suggestion]
@@ -89,11 +97,7 @@ export default function BecomingDoor({ goals, mind }: { goals: GoalProgress | nu
       href="/dashboard/mind/becoming"
       data-testid="becoming-door"
       data-unread={loud ? 'true' : 'false'}
-      className={`block overflow-hidden rounded-2xl p-3.5 transition-transform active:scale-[0.99] ${
-        loud
-          ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/20'
-          : 'border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-violet-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:border-violet-700'
-      }`}
+      className={doorClassName(loud)}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
