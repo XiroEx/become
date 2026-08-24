@@ -31,9 +31,18 @@ const MUSCLE_GROUP_TAGS: Record<string, string[]> = {
 /** Category (create-form vocabulary) → catalog tags. */
 const CATEGORY_TAGS: Record<string, string[]> = {
   strength: ['strength'],
+  power: ['power'],
   cardio: ['cardio', 'conditioning'],
   bodyweight: ['bodyweight', 'calisthenics'],
+  plyometric: ['plyometric', 'power'],
+  olympic: ['olympic', 'power'],
+  strongman: ['strongman', 'strength'],
+  flexibility: ['flexibility'],
+  mobility: ['mobility'],
+  warmup: ['warmup'],
+  cooldown: ['cooldown'],
   conditioning: ['conditioning'],
+  protocol: ['protocol', 'conditioning'],
 }
 
 /** Tracking type → the tags that describe how it is measured. */

@@ -3,6 +3,10 @@ import { verifyAuth } from '@/lib/auth'
 import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import type { IWorkoutLog } from '@/models/UserProgress'
+import { computeExercisePRsFromLogs } from '@/lib/exercisePRs'
+import { normalizeWorkoutLogCorrection } from '@/lib/workoutLogCorrections'
+import { bustTilesCache } from '@/lib/redis'
 
 // GET /api/workouts/logs
 //   ?programId=xxx  — all logs for ONE program (builds the completedDays set on
@@ -30,7 +34,7 @@ type RawLog = {
   exercises?: Array<{
     exerciseSlug?: string
     name?: string
-    sets?: Array<{ completed?: boolean; reps?: number; duration?: number }>
+    sets?: Array<{ completed?: boolean; reps?: number; weight?: number; duration?: number; distance?: number; speed?: number }>
     groupId?: string
     groupType?: string
     groupLabel?: string
@@ -38,6 +42,125 @@ type RawLog = {
     addedAdHoc?: boolean
     prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
   }>
+}
+
+// PATCH /api/workouts/logs — correct measurements in one completed log.
+// The locator is ownership-scoped by the authenticated UserProgress document:
+// quick logs use their stable sessionId; program logs use their immutable
+// program/day/date tuple. Exercise identity and count stay fixed so this path
+// cannot silently turn a correction into a different workout.
+export async function PATCH(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success) {
+      return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json().catch(() => null) as {
+      locator?: { kind?: unknown; sessionId?: unknown; programId?: unknown; day?: unknown; date?: unknown }
+      correction?: unknown
+    } | null
+    const locator = body?.locator
+    if (!locator || (locator.kind !== 'quick' && locator.kind !== 'program')) {
+      return NextResponse.json({ error: 'A valid workout locator is required' }, { status: 400 })
+    }
+
+    let locatorDate = Number.NaN
+    if (locator.kind === 'quick') {
+      if (typeof locator.sessionId !== 'string' || !locator.sessionId.trim()) {
+        if (typeof locator.date !== 'string') {
+          return NextResponse.json({ error: 'sessionId or date is required for a quick session' }, { status: 400 })
+        }
+        locatorDate = new Date(locator.date).getTime()
+        if (!Number.isFinite(locatorDate)) {
+          return NextResponse.json({ error: 'Workout date is invalid' }, { status: 400 })
+        }
+      }
+    } else {
+      if (
+        typeof locator.programId !== 'string' || !locator.programId.trim() ||
+        typeof locator.day !== 'string' || !locator.day.trim() ||
+        typeof locator.date !== 'string'
+      ) {
+        return NextResponse.json({ error: 'programId, day, and date are required for a program workout' }, { status: 400 })
+      }
+      locatorDate = new Date(locator.date).getTime()
+      if (!Number.isFinite(locatorDate)) {
+        return NextResponse.json({ error: 'Workout date is invalid' }, { status: 400 })
+      }
+    }
+
+    const normalized = normalizeWorkoutLogCorrection(body?.correction)
+    if (!normalized.ok) return NextResponse.json({ error: normalized.error }, { status: 400 })
+
+    await dbConnect()
+    const progress = await UserProgress.findOne({ userId: auth.userId })
+    if (!progress) return NextResponse.json({ error: 'Workout log not found' }, { status: 404 })
+
+    const logIndex = progress.workoutLogs.findIndex((log: IWorkoutLog) => {
+      if (locator.kind === 'quick') {
+        return (log.kind === 'quick' || !log.programId) && (
+          typeof locator.sessionId === 'string' && locator.sessionId.trim()
+            ? log.sessionId === locator.sessionId
+            : new Date(log.date).getTime() === locatorDate
+        )
+      }
+      return (
+        log.kind !== 'quick' &&
+        log.programId === locator.programId &&
+        log.day === locator.day &&
+        new Date(log.date).getTime() === locatorDate
+      )
+    })
+    if (logIndex < 0) return NextResponse.json({ error: 'Workout log not found' }, { status: 404 })
+
+    const log = progress.workoutLogs[logIndex]
+    if (!log.completed) {
+      return NextResponse.json({ error: 'Only completed workout logs can be corrected here' }, { status: 409 })
+    }
+    if (log.exercises.length !== normalized.value.exercises.length) {
+      return NextResponse.json({ error: 'Exercise count cannot be changed from the correction editor' }, { status: 400 })
+    }
+
+    for (let index = 0; index < log.exercises.length; index += 1) {
+      const existing = log.exercises[index]
+      const correction = normalized.value.exercises[index]
+      if (
+        existing.exerciseSlug && correction.exerciseSlug &&
+        existing.exerciseSlug !== correction.exerciseSlug
+      ) {
+        return NextResponse.json({ error: `Exercise ${index + 1} does not match the saved workout` }, { status: 400 })
+      }
+      if (!existing.exerciseSlug && existing.name.trim() !== correction.name) {
+        return NextResponse.json({ error: `Exercise ${index + 1} does not match the saved workout` }, { status: 400 })
+      }
+      existing.sets = correction.sets
+    }
+
+    if (normalized.value.duration !== undefined) log.duration = normalized.value.duration
+    if (normalized.value.notes !== undefined) log.notes = normalized.value.notes || undefined
+    if (normalized.value.title !== undefined) {
+      if (locator.kind !== 'quick') {
+        return NextResponse.json({ error: 'Only quick-session titles can be changed' }, { status: 400 })
+      }
+      log.title = normalized.value.title
+      log.needsName = false
+    }
+
+    // A correction may lower the set that used to be a record. Incremental PR
+    // updates cannot remove stale maxima, so replay every completed log before
+    // saving this one UserProgress document.
+    progress.exercisePRs = computeExercisePRsFromLogs(progress.workoutLogs)
+    progress.markModified('workoutLogs')
+    progress.markModified('exercisePRs')
+    await progress.save()
+    await bustTilesCache(auth.userId!.toString())
+
+    return NextResponse.json({ success: true, recalculatedPRs: progress.exercisePRs.length })
+  } catch (error) {
+    console.error('Error correcting workout log:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
 export async function GET(request: NextRequest) {
