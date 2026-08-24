@@ -184,10 +184,12 @@
   display: block;
   margin-top: 0.13em;
   color: #c8b8f8;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.96em;
-  font-weight: 400;
-  letter-spacing: -0.055em;
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-size: 0.83em;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: -0.065em;
+  text-transform: uppercase;
 }
 
 .heroLead {
@@ -394,9 +396,11 @@
 .arcCard blockquote {
   margin: 22px 0 0;
   color: rgba(255, 255, 255, 0.68);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--font-geist-sans), Arial, sans-serif;
   font-size: 14px;
-  font-style: italic;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -0.012em;
   line-height: 1.45;
 }
 
@@ -407,9 +411,11 @@
   gap: 14px;
   margin-top: 22px;
   color: rgba(255, 255, 255, 0.34);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 11px;
-  font-style: italic;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: 0.015em;
 }
 
 .weekFooter span:last-child {
@@ -526,9 +532,12 @@
 
 .manifestoInner > span {
   color: rgba(255, 255, 255, 0.42);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 16px;
-  font-style: italic;
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .manifestoInner h2 {
@@ -923,10 +932,11 @@
 }
 
 .arcSummary strong {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 18px;
-  font-style: italic;
-  font-weight: 400;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 .arcSummary span {
@@ -1041,8 +1051,9 @@
 
 .closing h2 em {
   color: #c8b8f8;
-  font-family: Georgia, "Times New Roman", serif;
-  font-weight: 400;
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .closing p {
@@ -1081,9 +1092,11 @@
 .footer p {
   margin: 0;
   color: rgba(255, 255, 255, 0.3);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 12px;
-  font-style: italic;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .footer > div {
