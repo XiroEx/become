@@ -695,11 +695,11 @@ export default function WorkoutClient() {
 
                 {/* Content */}
                 <Link href={`/dashboard/workout/${program.program_id}`} className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
+                  <div>
+                    <h3 className="line-clamp-2 text-base font-semibold leading-snug text-zinc-900 dark:text-white sm:truncate">
                       {program.name}
                     </h3>
-                    <div className="flex shrink-0 gap-2">
+                    <div className="mt-1 flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                         {program.duration_weeks}w
                       </span>

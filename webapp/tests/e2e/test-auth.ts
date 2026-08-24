@@ -1,7 +1,7 @@
 /**
  * Shared test auth helpers for Playwright e2e tests.
  *
- * Generates a permanent JWT (no expiry) from JWT_SECRET at runtime.
+ * Generates short-lived JWTs from JWT_SECRET at runtime.
  * Never hardcode tokens in test files — import from here instead.
  *
  * Requires: webapp/.env.local with JWT_SECRET set.
@@ -42,11 +42,13 @@ export const TEST_USER = {
   role: 'user' as const,
 }
 
-// Permanent token — no expiresIn means it never expires
+// Match production token shape. AuthGuard intentionally rejects tokens without
+// an expiry claim, so an "evergreen" test token only produces a login-page
+// screenshot while making the harness look authenticated.
 export const AUTH_TOKEN: string = jwt.sign(
   { userId: TEST_USER.id, email: TEST_USER.email, role: TEST_USER.role },
-  JWT_SECRET
-  // deliberately no expiresIn
+  JWT_SECRET,
+  { expiresIn: '7d' },
 )
 
 /**
@@ -58,6 +60,14 @@ export const E2E_USER = {
   email: 'e2etest@become.io',
   role: 'user' as const,
 }
+
+/** Safe default for screenshot and exploratory runs that must not touch a
+ * human member's account. */
+export const E2E_AUTH_TOKEN: string = jwt.sign(
+  { userId: E2E_USER.id, email: E2E_USER.email, role: E2E_USER.role },
+  JWT_SECRET,
+  { expiresIn: '7d' },
+)
 
 /** Defaults to production. Point at a local server with
  *  PLAYWRIGHT_BASE_URL=http://localhost:3000 to verify a change BEFORE it
@@ -108,14 +118,53 @@ export async function resetOnboarding(userId: string): Promise<void> {
 
 import type { Page, BrowserContext } from '@playwright/test'
 
+/** Wait for route content rather than accepting a shell, compile overlay, or
+ * full-screen loader as a successful screenshot. The threshold is deliberately
+ * generic because this helper walks unrelated areas of the app. */
+export async function waitForAppScreen(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => (document.body?.innerText.trim().length || 0) >= 120,
+    undefined,
+    { timeout: 30_000 },
+  )
+  await page.waitForTimeout(400)
+}
+
+/** Clear first-run coach marks through their real, labelled control. Routes
+ * can mount a new segment after navigation, so screenshot walks call this
+ * after every page change rather than mutating tutorial storage directly. */
+export async function dismissTutorials(page: Page): Promise<void> {
+  let clearChecks = 0
+  for (let i = 0; i < 12; i++) {
+    const shield = page.locator('.rtut-shield')
+    if (await shield.count() === 0) {
+      clearChecks += 1
+      if (clearChecks >= 2) return
+      await page.waitForTimeout(350)
+      continue
+    }
+
+    clearChecks = 0
+    const skip = page.locator('button[aria-label="Skip tour"]:visible').first()
+    if (await skip.isVisible({ timeout: 800 }).catch(() => false)) {
+      await skip.click({ force: true }).catch(() => {})
+    }
+    await page.waitForTimeout(350)
+  }
+}
+
 /**
  * Injects auth token into cookies + localStorage and navigates to /dashboard.
  * Handles onboarding redirect and daily check-in modal automatically.
  */
-export async function authenticate(page: Page, context: BrowserContext): Promise<void> {
+export async function authenticate(
+  page: Page,
+  context: BrowserContext,
+  authToken: string = AUTH_TOKEN,
+): Promise<void> {
   await context.addCookies([{
     name: 'auth_token',
-    value: AUTH_TOKEN,
+    value: authToken,
     domain: new URL(BASE_URL).hostname,
     path: '/',
     httpOnly: false,
@@ -124,7 +173,7 @@ export async function authenticate(page: Page, context: BrowserContext): Promise
   }])
 
   await page.goto(`${BASE_URL}/login`)
-  await page.evaluate((t) => localStorage.setItem('token', t), AUTH_TOKEN)
+  await page.evaluate((t) => localStorage.setItem('token', t), authToken)
   await page.goto(`${BASE_URL}/dashboard`)
   await page.waitForLoadState('domcontentloaded')
 
@@ -148,7 +197,7 @@ export async function authenticate(page: Page, context: BrowserContext): Promise
           },
         }),
       })
-    }, { token: AUTH_TOKEN, baseUrl: BASE_URL })
+    }, { token: authToken, baseUrl: BASE_URL })
     await page.goto(`${BASE_URL}/dashboard`)
     await page.waitForLoadState('domcontentloaded')
     await page.waitForTimeout(500)
@@ -165,4 +214,6 @@ export async function authenticate(page: Page, context: BrowserContext): Promise
       await page.waitForTimeout(300)
     }
   }
+
+  await dismissTutorials(page)
 }
