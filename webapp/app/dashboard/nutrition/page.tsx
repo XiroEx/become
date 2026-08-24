@@ -169,6 +169,8 @@ function NutritionPageInner() {
     logId: string
     item: IMealItem & { _id?: string }
     currentTag: string
+    loggedAt: string
+    untimed?: boolean
   } | null>(null)
   // When set, the food picker appends to THIS specific MealLog (used by "add to
   // this meal" on a logged meal group) rather than the smart tag-append.
@@ -744,14 +746,15 @@ function NutritionPageInner() {
     }
   }
 
-  // Log it — promote a plan into a real log (today only). Mirrors the meal-plan
-  // page's "Log it". Refetches so the planned row becomes a logged row.
+  // Log it — promote a plan into a real, explicitly untimed log (today only).
+  // The plan names the meal/day but not the moment it was eaten, so stamping
+  // the button-press time would invent information the member never supplied.
   const handleLogPlan = async (planId: string) => {
     try {
       const res = await fetch(`/api/meal-plans/${planId}/promote`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+        body: JSON.stringify({ untimed: true }),
       })
       if (!res.ok) throw new Error('promote_failed')
       await Promise.all([fetchMealLogs(), fetchPlans()])
@@ -1251,7 +1254,9 @@ function NutritionPageInner() {
             untimed={section.untimed}
             onAddFood={(t) => openFoodSearch(t, false)}
             onAddToMeal={(logId, t) => openAddToMeal(logId, t)}
-            onEditEntry={(logId, item, currentTag) => setEditEntry({ logId, item, currentTag })}
+            onEditEntry={(logId, item, currentTag, loggedAt, untimed) => {
+              setEditEntry({ logId, item, currentTag, loggedAt, untimed })
+            }}
             onRemoveEntry={handleRemoveEntry}
             onRemovePlan={handleRemovePlan}
             onLogPlan={dateParam === todayLocalKey() ? handleLogPlan : undefined}
@@ -1555,6 +1560,8 @@ function NutritionPageInner() {
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
+        loggedAt={editEntry?.loggedAt}
+        untimed={editEntry?.untimed}
         currentTag={editEntry?.currentTag}
         availableTags={tagsResp}
         onClose={() => setEditEntry(null)}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Pencil, AlertTriangle, Tag as TagIcon } from 'lucide-react'
+import { X, Pencil, AlertTriangle, Clock, Tag as TagIcon } from 'lucide-react'
 import FlagFoodSheet, { type LogCorrection } from '@/components/nutrition/FlagFoodSheet'
 import { useLockScroll } from '@/lib/useLockScroll'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
@@ -14,6 +14,7 @@ import QuantityPicker, {
   type QuantityPickerVariant,
 } from './QuantityPicker'
 import BridgeFieldGroup, { type BridgeValues } from './BridgeFieldGroup'
+import { mealLogTimeInputValue, mealLogTimePatch } from '@/lib/nutrition/logTime'
 
 interface EditFoodModalProps {
   isOpen: boolean
@@ -21,6 +22,10 @@ interface EditFoodModalProps {
   item: (IMealItem & { _id?: string }) | null
   // The MealLog id this item belongs to. Required in log mode (mode='log' or unset).
   logId: string
+  // Log mode only: MealLog time metadata. A blank time means the entry was
+  // logged for the day without inventing a clock time.
+  loggedAt?: string
+  untimed?: boolean
   // 'log' (default) — PATCH /api/meal-logs/[logId]/items/[itemId]
   // 'plan' — PATCH /api/meal-plans/[planId] with the full items[] array, with
   //   this item replaced by the picker's new values. Requires planId + planItems.
@@ -99,7 +104,7 @@ function deriveVariantAndInitial(item: IMealItem): {
 
 export default function EditFoodModal({
   isOpen, item, logId, mode = 'log', planId, planItems,
-  currentTag = 'snack', availableTags, onClose, onSaved,
+  loggedAt, untimed = false, currentTag = 'snack', availableTags, onClose, onSaved,
 }: EditFoodModalProps) {
   const isPlanMode = mode === 'plan'
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(null)
@@ -112,6 +117,7 @@ export default function EditFoodModal({
   const [error, setError] = useState('')
   const normalizedCurrentTag = currentTag.trim().toLowerCase().replace(/\s+/g, '-') || 'snack'
   const [selectedTag, setSelectedTag] = useState(normalizedCurrentTag)
+  const [logTime, setLogTime] = useState(() => mealLogTimeInputValue(loggedAt, untimed))
 
   const tagOptions = useMemo(() => {
     const tags = [
@@ -146,6 +152,7 @@ export default function EditFoodModal({
       setSelection(null)
       setError('')
       setSelectedTag(normalizedCurrentTag)
+      setLogTime(mealLogTimeInputValue(loggedAt, untimed))
       // A pending correction belongs to the entry it was typed for. Leaving it
       // set would silently apply one row's macros to the next row opened.
       setNutritionOverride(null)
@@ -154,7 +161,7 @@ export default function EditFoodModal({
         mlPerServing: item.loggedMlPerServing,
       })
     }
-  }, [item, normalizedCurrentTag])
+  }, [item, normalizedCurrentTag, loggedAt, untimed])
 
   // Apply the live bridge values to the picker variant so the unit dropdown
   // reflects them immediately (e.g. typing 100 g unlocks gram options on a
@@ -282,6 +289,7 @@ export default function EditFoodModal({
             ...(selectedTag !== normalizedCurrentTag
               ? { tag: selectedTag, fromTag: normalizedCurrentTag }
               : {}),
+            ...mealLogTimePatch(loggedAt, logTime),
           }),
         })
       }
@@ -365,25 +373,60 @@ export default function EditFoodModal({
               </div>
 
               {!isPlanMode && (
-                <div>
-                  <label
-                    htmlFor="edit-food-tag"
-                    className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
-                  >
-                    Meal tag
-                  </label>
-                  <div className="relative">
-                    <TagIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                    <select
-                      id="edit-food-tag"
-                      value={selectedTag}
-                      onChange={(event) => setSelectedTag(event.target.value)}
-                      className="w-full appearance-none rounded-xl border border-zinc-200 bg-white py-2.5 pl-9 pr-8 text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:focus:border-zinc-500"
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="edit-food-tag"
+                      className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
                     >
-                      {tagOptions.map(tag => (
-                        <option key={tag} value={tag}>{tagLabel(tag)}</option>
-                      ))}
-                    </select>
+                      Meal tag
+                    </label>
+                    <div className="relative">
+                      <TagIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                      <select
+                        id="edit-food-tag"
+                        value={selectedTag}
+                        onChange={(event) => setSelectedTag(event.target.value)}
+                        className="w-full appearance-none rounded-xl border border-zinc-200 bg-white py-2.5 pl-9 pr-8 text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:focus:border-zinc-500"
+                      >
+                        {tagOptions.map(tag => (
+                          <option key={tag} value={tag}>{tagLabel(tag)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <label
+                        htmlFor="edit-food-time"
+                        className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+                      >
+                        Time
+                      </label>
+                      {logTime && (
+                        <button
+                          type="button"
+                          onClick={() => setLogTime('')}
+                          className="text-xs font-medium text-zinc-500 underline-offset-2 hover:underline dark:text-zinc-400"
+                        >
+                          Clear time
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        id="edit-food-time"
+                        type="time"
+                        value={logTime}
+                        onChange={(event) => setLogTime(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 pl-9 pr-3 text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:focus:border-zinc-500"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      {logTime ? 'Change when this was logged.' : 'No time set — it stays anchored to this meal tag.'}
+                    </p>
                   </div>
                 </div>
               )}

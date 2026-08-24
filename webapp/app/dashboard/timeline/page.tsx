@@ -47,6 +47,7 @@ import { CopyDayForwardSheet, ApplyMealToDaysSheet } from './PlanToolsSheets'
 interface MealLog {
   _id: string
   loggedAt: string
+  untimed?: boolean
   items: (IMealItem & { _id?: string })[]
   tags: string[]
   totalNutrition?: IMealNutrition
@@ -311,6 +312,14 @@ function TimelineClient() {
     }
     return 'snack'
   }, [days, editEntry])
+  const editLogTime = useMemo(() => {
+    if (!editEntry) return null
+    for (const day of days) {
+      const log = day.logs?.find(candidate => candidate._id === editEntry.logId)
+      if (log) return { loggedAt: log.loggedAt, untimed: log.untimed }
+    }
+    return null
+  }, [days, editEntry])
   const [confirmDelete, setConfirmDelete] = useState<{ logId: string; mealName?: string } | null>(null)
   const [filterChipsOpen, setFilterChipsOpen] = useState(false)
   // Inline add-food: keeps the user on the timeline page instead of redirecting.
@@ -502,7 +511,7 @@ function TimelineClient() {
         return fetch(`/api/meal-plans/${p._id}/promote`, {
           method: 'POST',
           headers: getHeaders(),
-          body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+          body: JSON.stringify({ untimed: true }),
         }).then(async r => {
           if (!r.ok) throw new Error('promote_failed')
           const data = await r.json().catch(() => ({}))
@@ -874,17 +883,15 @@ function TimelineClient() {
     }
   }, [getHeaders])
 
-  // Plan promote — POST /api/meal-plans/[id]/promote. Per §6.4 manual mode,
-  // the client passes loggedAt=now (the user is acting now); for back-promote
-  // the server constructs a default loggedAt from the plannedDate + the
-  // tag's default time when body.loggedAt is omitted. We pass it here so the
-  // resulting log is unambiguous in the user's local TZ.
+  // Plan promote — the member confirmed WHAT was eaten, but did not supply a
+  // clock time. Keep it explicitly untimed instead of presenting the moment
+  // they pressed the button as the meal time.
   const handlePromotePlan = useCallback(async (planId: string) => {
     try {
       const res = await fetch(`/api/meal-plans/${planId}/promote`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+        body: JSON.stringify({ untimed: true }),
       })
       if (!res.ok) throw new Error('promote_failed')
       setPlans(prev => prev.filter(p => p._id !== planId))
@@ -1327,6 +1334,8 @@ function TimelineClient() {
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
+        loggedAt={editLogTime?.loggedAt}
+        untimed={editLogTime?.untimed}
         currentTag={editCurrentTag}
         availableTags={tagsResp}
         onClose={() => setEditEntry(null)}
@@ -2071,17 +2080,15 @@ function WeekDayGroup({
 // ── Unified timeline log card (used in both Day and Week views) ──────────────
 //
 // The card carries:
-//   • Header row — clock + time pill (left, read-only), tag chips (left, after
+//   • Header row — clock + time pill (left), tag chips (left, after
 //     time), and the day-total calorie chip (right). Time and cal never
 //     truncate; tags truncate first if there's no horizontal room.
 //   • Optional "From: <mealName>" badge below the header row.
 //   • Expandable item list. The first card in each list defaults expanded so
 //     users see items without an extra tap; subsequent cards stay collapsed.
 //   • Footer with macros + Delete.
-//   • Time is read-only — the platform no longer surfaces a time picker. The
-//     logged time-of-day is preserved and displayed so users can see at a
-//     glance when an item landed, but cannot be edited inline. (Date editing
-//     happens through re-logging or via the date-only picker on add.)
+//   • Planned promotions say "No time" rather than displaying the moment the
+//     button was pressed. Opening an item exposes the time editor.
 //   • Tag chips are buttons; tapping toggles them in the parent's filter set.
 
 interface TimelineLogCardProps {
@@ -2106,7 +2113,7 @@ function TimelineLogCard({
   activeFilters,
 }: TimelineLogCardProps) {
   const totals = logTotals(log)
-  const time = formatTime(log.loggedAt)
+  const time = log.untimed ? 'No time' : formatTime(log.loggedAt)
   const accent = primaryTag(log.tags)
 
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -2128,10 +2135,10 @@ function TimelineLogCard({
         aria-expanded={expanded}
         aria-label={expanded ? 'Collapse entry' : 'Expand entry'}
       >
-        {/* Time pill — first child, never truncates. Tap to edit. */}
+        {/* Time pill — first child, never truncates. */}
         <span
           className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-          aria-label={`Logged at ${time}`}
+          aria-label={log.untimed ? 'Logged with no time' : `Logged at ${time}`}
         >
           <Clock className="h-3 w-3" />
           {time}

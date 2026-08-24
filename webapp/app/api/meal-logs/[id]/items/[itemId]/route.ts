@@ -14,7 +14,7 @@ function findItemIndex(log: { items: { _id?: mongoose.Types.ObjectId }[] }, item
 // contains other foods, the updated item is split into a new log so those other
 // foods stay in their existing section.
 // Body: { servings?, nutrition?, servingSize?, servingUnit?, name?, brand?,
-//         variantName?, servingLabel?, tag?, fromTag? }
+//         variantName?, servingLabel?, tag?, fromTag?, loggedAt?, untimed? }
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; itemId: string }> }
@@ -43,6 +43,22 @@ export async function PATCH(
 
     const body = await request.json()
     const item = log.items[idx]
+
+    let nextLoggedAt = log.loggedAt
+    if (body.loggedAt !== undefined) {
+      if (typeof body.loggedAt !== 'string') {
+        return NextResponse.json({ error: 'loggedAt must be an ISO date string' }, { status: 400 })
+      }
+      const parsed = new Date(body.loggedAt)
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: 'Invalid loggedAt' }, { status: 400 })
+      }
+      nextLoggedAt = parsed
+    }
+    if (body.untimed !== undefined && typeof body.untimed !== 'boolean') {
+      return NextResponse.json({ error: 'untimed must be a boolean' }, { status: 400 })
+    }
+    const nextUntimed = typeof body.untimed === 'boolean' ? body.untimed : log.untimed
 
     let nextTags: string[] | null = null
     let tagChanged = false
@@ -134,8 +150,8 @@ export async function PATCH(
 
       const movedLog = await MealLog.create({
         user: log.user,
-        loggedAt: log.loggedAt,
-        untimed: log.untimed,
+        loggedAt: nextLoggedAt,
+        untimed: nextUntimed,
         items: [movedItem],
         source: log.source,
         tags: nextTags,
@@ -153,6 +169,8 @@ export async function PATCH(
       sourceLog = log
     } else {
       if (tagChanged && nextTags) log.tags = nextTags
+      log.loggedAt = nextLoggedAt
+      log.untimed = nextUntimed
       log.markModified('items')
       await log.save()
     }
