@@ -72,9 +72,10 @@ test('PATCH /api/exercises/custom/[slug] resolves and persists role the same way
 
 test('ExerciseSwapModal forwards role when creating a custom exercise, not just the older field set', () => {
   const src = readSource('components/ExerciseSwapModal.tsx')
+  assert.match(src, /JSON\.stringify\(customForm\)/)
   assert.match(
-    src,
-    /const \{ name, trackingType, muscleGroup, category, role, defaultSets, defaultReps \} = customForm/,
+    readSource('components/workout/CustomExerciseFields.tsx'),
+    /role:\s*'accessory'/,
+    'the shared form state sent by the swap modal includes role',
   )
-  assert.match(src, /JSON\.stringify\(\{ name, trackingType, muscleGroup, category, role, defaultSets, defaultReps \}\)/)
 })

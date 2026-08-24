@@ -286,12 +286,12 @@ export default function ExerciseSwapModal({
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             if (data?.exercises) {
-              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; videoUrl?: string | null; }) => ({
+              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; movementPatterns?: string[]; difficulty?: string; role?: string; videoUrl?: string | null; }) => ({
                 slug: e.slug, name: e.name, score: 100, reasons: ["Your custom exercise"],
                 equipment: e.equipment || [], primaryMuscles: e.primaryMuscles || [],
-                movementPatterns: [], difficulty: "intermediate",
+                movementPatterns: e.movementPatterns || [], difficulty: e.difficulty || "intermediate",
                 category: e.category, bodyRegion: e.bodyRegion,
-                role: "accessory", trackingType: e.trackingType,
+                role: e.role || "accessory", trackingType: e.trackingType,
                 isExplicitAlternative: true,
                 isCustom: true,
                 videoUrl: e.videoUrl ?? null,
@@ -412,7 +412,7 @@ export default function ExerciseSwapModal({
 
 
   const handleCreateCustom = async () => {
-    const { name, trackingType, muscleGroup, category, role, defaultSets, defaultReps } = customForm;
+    const { name } = customForm;
     if (!name.trim()) {
       setCustomForm(p => ({ ...p, error: "Name is required" }));
       return;
@@ -423,7 +423,7 @@ export default function ExerciseSwapModal({
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name, trackingType, muscleGroup, category, role, defaultSets, defaultReps }),
+        body: JSON.stringify(customForm),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -434,7 +434,7 @@ export default function ExerciseSwapModal({
       onSwap({
         slug: ex.slug, name: ex.name, score: 100, reasons: ["Custom exercise"],
         equipment: ex.equipment || [], primaryMuscles: ex.primaryMuscles || [],
-        movementPatterns: [], difficulty: ex.difficulty,
+        movementPatterns: ex.movementPatterns || [], difficulty: ex.difficulty,
         category: ex.category, bodyRegion: ex.bodyRegion,
         role: ex.role, trackingType: ex.trackingType,
         isExplicitAlternative: true,

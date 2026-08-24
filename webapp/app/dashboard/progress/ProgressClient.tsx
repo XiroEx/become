@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, X } from 'lucide-react'
+import { AlertTriangle, Check, Dumbbell, TrendingUp, Trophy, Clock, Star, ChevronDown, BarChart2, Pencil, Trash2, X } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import Link from 'next/link'
@@ -13,10 +13,11 @@ import {
   LineChart, Line,
 } from 'recharts'
 import { motion, AnimatePresence } from 'framer-motion'
+import TrainingLogCorrectionModal, { type EditableWorkout, type EditableWorkoutExercise } from '@/components/workout/TrainingLogCorrectionModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface ExerciseDetail {
+interface ExerciseDetail extends EditableWorkoutExercise {
   name: string
   slug?: string
   bestSet: { weight: number; reps: number } | null
@@ -24,13 +25,7 @@ interface ExerciseDetail {
   isPR: boolean
 }
 
-interface DetailedWorkout {
-  date: string
-  rawDate: string
-  programId: string
-  day: string
-  duration?: number
-  notes?: string
+interface DetailedWorkout extends Omit<EditableWorkout, 'exercises'> {
   totalVolume: number
   exercises: ExerciseDetail[]
 }
@@ -42,6 +37,7 @@ interface WeekVolume {
 }
 
 interface PB {
+  slug: string
   name: string
   weight: number
   reps: number
@@ -94,10 +90,11 @@ function VolumeTooltip({ active, payload, label }: { active?: boolean; payload?:
 
 // ── Workout Row (expandable) ───────────────────────────────────────────────────
 
-function WorkoutRow({ workout, isExpanded, onToggle }: {
+function WorkoutRow({ workout, isExpanded, onToggle, onEdit }: {
   workout: DetailedWorkout
   isExpanded: boolean
   onToggle: () => void
+  onEdit: () => void
 }) {
   const hasPR = workout.exercises.some((e) => e.isPR)
 
@@ -112,7 +109,7 @@ function WorkoutRow({ workout, isExpanded, onToggle }: {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{workout.day}</p>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{workout.title || workout.day}</p>
             {hasPR && (
               <span className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-bold text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
                 <Star className="h-2.5 w-2.5" /> PR
@@ -174,6 +171,15 @@ function WorkoutRow({ workout, isExpanded, onToggle }: {
               )) : (
                 <p className="px-4 py-3 text-xs text-zinc-400">No tracked sets recorded</p>
               )}
+              <div className="border-t border-zinc-100 p-3 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-200 text-sm font-semibold text-zinc-700 transition-colors hover:border-green-300 hover:bg-green-50 hover:text-green-700 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-green-800 dark:hover:bg-green-950/30 dark:hover:text-green-300"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Correct this workout
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
@@ -184,18 +190,65 @@ function WorkoutRow({ workout, isExpanded, onToggle }: {
 
 // ── PR Chart Modal ─────────────────────────────────────────────────────────────
 
-function PRChartModal({ name, points, onClose }: {
-  name: string
+function PRChartModal({ pr, points, onClose, onChanged }: {
+  pr: PB
   points: { date: string; weight: number; reps: number }[]
   onClose: () => void
+  onChanged: () => void | Promise<void>
 }) {
+  const [mode, setMode] = useState<'chart' | 'edit' | 'delete'>('chart')
+  const [weight, setWeight] = useState(String(pr.weight))
+  const [reps, setReps] = useState(String(pr.reps))
+  const [reviewing, setReviewing] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const nextWeight = Number(weight)
+  const nextReps = Number(reps)
+  const validEdit = Number.isFinite(nextWeight) && nextWeight > 0 && Number.isInteger(nextReps) && nextReps > 0 && (nextWeight !== pr.weight || nextReps !== pr.reps)
+
+  const save = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const token = getToken()
+      const response = await fetch('/api/progress/prs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ exerciseSlug: pr.slug, weight: nextWeight, reps: nextReps }),
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) { setError(data.error ?? 'Could not correct this record'); setReviewing(false); return }
+      await onChanged()
+    } catch {
+      setError('Network error — your record is unchanged')
+      setReviewing(false)
+    } finally { setSubmitting(false) }
+  }
+
+  const remove = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const token = getToken()
+      const response = await fetch(`/api/progress/prs?exerciseSlug=${encodeURIComponent(pr.slug)}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) { setError(data.error ?? 'Could not remove this record'); return }
+      await onChanged()
+    } catch {
+      setError('Network error — your record is unchanged')
+    } finally { setSubmitting(false) }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={onClose}
+      onClick={() => !submitting && onClose()}
     >
       <motion.div
         initial={{ y: 60, opacity: 0 }}
@@ -207,42 +260,57 @@ function PRChartModal({ name, points, onClose }: {
       >
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-zinc-900 dark:text-white truncate">{name}</h3>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">{points.length} logged sessions</p>
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white truncate">{pr.name}</h3>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">{mode === 'chart' ? `${points.length} logged sessions` : mode === 'edit' ? 'Correct personal record' : 'Remove personal record'}</p>
           </div>
           <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
             <X className="h-4 w-4" />
           </button>
         </div>
-        {points.length < 2 ? (
-          <p className="py-8 text-center text-sm text-zinc-400">Need at least 2 sessions to show a trend.</p>
+        {mode === 'chart' ? (
+          <>
+            {points.length < 2 ? (
+              <p className="py-8 text-center text-sm text-zinc-400">Need at least 2 sessions to show a trend.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={points} margin={{ left: -20, right: 8 }}>
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
+                  <YAxis tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} className="text-zinc-400 dark:text-zinc-600" />
+                  <Tooltip formatter={(v) => [`${v} lbs`, 'Best weight']} contentStyle={{ fontSize: 11, borderRadius: 10 }} />
+                  <Line type="monotone" dataKey="weight" stroke="#18181b" strokeWidth={2} dot={{ r: 3, fill: '#18181b' }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+            <div className="mt-3 flex justify-between rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
+              <div className="text-center"><p className="text-xs text-zinc-400">Record</p><p className="text-sm font-bold text-green-600 dark:text-green-400">{pr.weight} lbs</p></div>
+              <div className="text-center"><p className="text-xs text-zinc-400">Reps</p><p className="text-sm font-bold text-zinc-900 dark:text-white">{pr.reps}</p></div>
+              <div className="text-center"><p className="text-xs text-zinc-400">Sessions</p><p className="text-sm font-bold text-zinc-900 dark:text-white">{points.length}</p></div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setMode('edit')} className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-zinc-300 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"><Pencil className="h-3.5 w-3.5" /> Correct</button>
+              <button type="button" onClick={() => setMode('delete')} className="flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-red-200 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/30"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
+            </div>
+          </>
+        ) : mode === 'edit' ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Weight (lb)<input type="number" inputMode="decimal" min="0" value={weight} onChange={(event) => { setWeight(event.target.value); setReviewing(false) }} className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
+              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Reps<input type="number" inputMode="numeric" min="1" step="1" value={reps} onChange={(event) => { setReps(event.target.value); setReviewing(false) }} className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
+            </div>
+            {reviewing && validEdit && (
+              <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                <div className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" /><div><p className="text-sm font-bold text-amber-900 dark:text-amber-100">Confirm record correction</p><p className="mt-1 text-sm tabular-nums text-amber-900 dark:text-amber-100"><span className="line-through opacity-60">{pr.weight} lb × {pr.reps}</span> <span aria-hidden="true">→</span> <strong>{nextWeight} lb × {nextReps}</strong></p></div></div>
+              </div>
+            )}
+            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">This corrects the displayed record. Correcting a historical workout later rebuilds records from the saved log history.</p>
+            {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
+            <div className="flex gap-3"><button type="button" disabled={submitting} onClick={() => reviewing ? setReviewing(false) : setMode('chart')} className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">{reviewing ? 'Keep editing' : 'Back'}</button><button type="button" disabled={submitting || !validEdit} onClick={reviewing ? save : () => setReviewing(true)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-40 ${reviewing ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}`}>{submitting ? 'Saving…' : reviewing ? <><Check className="h-4 w-4" /> Confirm & save</> : 'Review correction'}</button></div>
+          </div>
         ) : (
-          <ResponsiveContainer width="100%" height={160}>
-            <LineChart data={points} margin={{ left: -20, right: 8 }}>
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
-              <YAxis tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} className="text-zinc-400 dark:text-zinc-600" />
-              <Tooltip
-                formatter={(v, n) => [`${v} lbs`, 'Best weight']}
-                contentStyle={{ fontSize: 11, borderRadius: 10 }}
-              />
-              <Line type="monotone" dataKey="weight" stroke="#18181b" strokeWidth={2} dot={{ r: 3, fill: '#18181b' }} activeDot={{ r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-        {points.length > 0 && (
-          <div className="mt-3 flex justify-between rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
-            <div className="text-center">
-              <p className="text-xs text-zinc-400">First</p>
-              <p className="text-sm font-bold text-zinc-900 dark:text-white">{points[0].weight} lbs</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-zinc-400">Best</p>
-              <p className="text-sm font-bold text-green-600 dark:text-green-400">{Math.max(...points.map(p => p.weight))} lbs</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-zinc-400">Sessions</p>
-              <p className="text-sm font-bold text-zinc-900 dark:text-white">{points.length}</p>
-            </div>
+          <div className="space-y-4">
+            <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30"><div className="flex gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" /><div><p className="text-sm font-bold text-red-900 dark:text-red-100">Remove {pr.name} record?</p><p className="mt-1 text-xs leading-relaxed text-red-800 dark:text-red-200">The displayed {pr.weight} lb × {pr.reps} record will be removed. A future completed set can establish a new record.</p></div></div></div>
+            {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
+            <div className="flex gap-3"><button type="button" disabled={submitting} onClick={() => setMode('chart')} className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">Cancel</button><button type="button" disabled={submitting} onClick={remove} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40"><Trash2 className="h-4 w-4" />{submitting ? 'Removing…' : 'Yes, remove'}</button></div>
           </div>
         )}
       </motion.div>
@@ -385,7 +453,8 @@ export default function ProgressClient() {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
-  const [selectedPR, setSelectedPR] = useState<string | null>(null)
+  const [selectedPR, setSelectedPR] = useState<PB | null>(null)
+  const [editingWorkout, setEditingWorkout] = useState<DetailedWorkout | null>(null)
   const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE)
   const [pbsShown, setPbsShown] = useState(PRS_PAGE)
 
@@ -425,11 +494,11 @@ export default function ProgressClient() {
   const weeklyGoal = data?.weeklyAvailability ?? 4
 
   // Build per-exercise history from detailedWorkouts for PR chart
-  function getPRHistory(exerciseName: string) {
+  function getPRHistory(exerciseSlug: string) {
     if (!data?.detailedWorkouts) return []
     return data.detailedWorkouts
       .flatMap(w => {
-        const ex = w.exercises.find(e => e.name === exerciseName)
+        const ex = w.exercises.find(e => e.slug === exerciseSlug)
         if (!ex?.bestSet) return []
         return [{ date: w.date.slice(0, 6), weight: ex.bestSet.weight, reps: ex.bestSet.reps }]
       })
@@ -515,6 +584,7 @@ export default function ProgressClient() {
                 workout={w}
                 isExpanded={expandedIdx === i}
                 onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
+                onEdit={() => setEditingWorkout(w)}
               />
             ))}
             {(data?.detailedWorkouts?.length ?? 0) > WORKOUTS_PAGE && (
@@ -554,13 +624,13 @@ export default function ProgressClient() {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(data?.pbs ?? []).slice(0, pbsShown).map((pb) => (
               <button
-                key={pb.name}
-                onClick={() => setSelectedPR(pb.name)}
+                key={pb.slug}
+                onClick={() => setSelectedPR(pb)}
                 className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{pb.name}</p>
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{pb.date} · tap for history</p>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">{pb.date} · history &amp; corrections</p>
                 </div>
                 <div className="ml-3 shrink-0 text-right">
                   <p className="text-sm font-bold text-zinc-900 dark:text-white">{pb.weight} lbs</p>
@@ -612,12 +682,20 @@ export default function ProgressClient() {
       <AnimatePresence>
         {selectedPR && (
           <PRChartModal
-            name={selectedPR}
-            points={getPRHistory(selectedPR)}
+            pr={selectedPR}
+            points={getPRHistory(selectedPR.slug)}
             onClose={() => setSelectedPR(null)}
+            onChanged={async () => { await fetchData(); setSelectedPR(null) }}
           />
         )}
       </AnimatePresence>
+      {editingWorkout && (
+        <TrainingLogCorrectionModal
+          workout={editingWorkout}
+          onClose={() => setEditingWorkout(null)}
+          onSaved={async () => { await fetchData(); setEditingWorkout(null) }}
+        />
+      )}
     </>
   )
 }

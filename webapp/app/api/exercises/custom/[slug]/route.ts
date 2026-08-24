@@ -17,9 +17,15 @@ import Exercise from "@/models/Exercise";
 import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
 import {
   isValidCustomTrackingType,
-  resolveCustomExerciseMuscleData,
+  resolveCustomExerciseMuscles,
   resolveCustomExerciseCategory,
   resolveCustomExerciseRole,
+  resolveCustomDifficulty,
+  resolveCustomEquipment,
+  resolveCustomLaterality,
+  resolveCustomMechanics,
+  resolveCustomMovementPatterns,
+  resolveCustomMuscleList,
 } from "@/lib/customExerciseFields";
 import { invalidateExerciseCache } from "@/lib/hydrateExercises";
 
@@ -33,7 +39,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   const { slug } = await params;
   const body = await req.json();
-  const { name, trackingType, muscleGroup, category, role, defaultSets, defaultReps } = body;
+  const {
+    name, trackingType, muscleGroup, category, role, defaultSets, defaultReps,
+    primaryMuscles: exactPrimaryMuscles, secondaryMuscles, stabilizers, equipment,
+    mechanics, movementPatterns, laterality, difficulty,
+  } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
@@ -41,7 +51,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid tracking type" }, { status: 400 });
   }
 
-  const muscleData = resolveCustomExerciseMuscleData(muscleGroup);
+  const muscleData = resolveCustomExerciseMuscles(exactPrimaryMuscles, muscleGroup);
+  const resolvedSecondaryMuscles = resolveCustomMuscleList(secondaryMuscles);
+  const resolvedStabilizers = resolveCustomMuscleList(stabilizers);
+  const resolvedEquipment = resolveCustomEquipment(equipment);
+  const resolvedMechanics = resolveCustomMechanics(mechanics);
+  const resolvedMovementPatterns = resolveCustomMovementPatterns(movementPatterns);
+  const resolvedLaterality = resolveCustomLaterality(laterality);
+  const resolvedDifficulty = resolveCustomDifficulty(difficulty);
   const resolvedCategory = resolveCustomExerciseCategory(category);
   const resolvedRole = resolveCustomExerciseRole(role);
 
@@ -61,6 +78,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   exercise.category = resolvedCategory;
   exercise.role = resolvedRole;
   exercise.primaryMuscles = muscleData.primaryMuscles;
+  exercise.secondaryMuscles = resolvedSecondaryMuscles;
+  exercise.stabilizers = resolvedStabilizers;
+  exercise.equipment = resolvedEquipment;
+  exercise.mechanics = resolvedMechanics;
+  exercise.movementPatterns = resolvedMovementPatterns;
+  exercise.laterality = resolvedLaterality;
+  exercise.difficulty = resolvedDifficulty;
   exercise.bodyRegion = muscleData.bodyRegion;
   exercise.defaultSets = defaultSets ? parseInt(defaultSets) : undefined;
   exercise.defaultReps = defaultReps ? String(defaultReps) : undefined;
@@ -68,7 +92,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     category,
     muscleGroup,
     trackingType,
-    equipment: exercise.equipment,
+    equipment: resolvedEquipment,
+    extra: [
+      ...muscleData.primaryMuscles,
+      ...resolvedMovementPatterns.filter((pattern) => pattern !== "n/a"),
+    ],
   });
 
   // An admin approved a specific version of this exercise. Editing it after
@@ -91,9 +119,14 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       name: exercise.name,
       trackingType: exercise.trackingType,
       primaryMuscles: exercise.primaryMuscles,
+      secondaryMuscles: exercise.secondaryMuscles,
+      stabilizers: exercise.stabilizers,
       bodyRegion: exercise.bodyRegion,
       category: exercise.category,
       equipment: exercise.equipment,
+      mechanics: exercise.mechanics,
+      movementPatterns: exercise.movementPatterns,
+      laterality: exercise.laterality,
       role: exercise.role,
       difficulty: exercise.difficulty,
       defaultSets: exercise.defaultSets,

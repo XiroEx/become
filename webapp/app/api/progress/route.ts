@@ -279,9 +279,10 @@ export async function GET(request: NextRequest) {
     // Personal bests — read from the persisted `exercisePRs` subdoc populated
     // by the POST /api/workouts save path. No on-the-fly recomputation.
     const pbsRaw = formatPRsForProgressDetail((progress as { exercisePRs?: IExercisePR[] }).exercisePRs)
-    const pbs: Record<string, { name: string; weight: number; reps: number; date: string }> = {}
+    const pbs: Record<string, { slug: string; name: string; weight: number; reps: number; date: string }> = {}
     for (const [key, rec] of Object.entries(pbsRaw)) {
       pbs[key] = {
+        slug: key,
         name: rec.name,
         weight: rec.weight,
         reps: rec.reps,
@@ -291,8 +292,16 @@ export async function GET(request: NextRequest) {
 
     // Typed workout log for detailed processing
     type RawLogDetailed = {
-      completed: boolean; date: Date; programId: string; day: string; duration?: number; notes?: string
-      exercises?: Array<{ name: string; exerciseSlug?: string; sets?: Array<{ completed: boolean; weight?: number; reps?: number }> }>
+      completed: boolean; date: Date; programId?: string; day?: string; kind?: 'program' | 'quick'
+      sessionId?: string; title?: string; duration?: number; notes?: string
+      exercises?: Array<{
+        name: string
+        exerciseSlug?: string
+        sets?: Array<{
+          setNumber?: number; completed: boolean; weight?: number; reps?: number
+          duration?: number; distance?: number; speed?: number
+        }>
+      }>
     }
     const allLogs = (progress.workoutLogs || []) as RawLogDetailed[]
 
@@ -304,7 +313,7 @@ export async function GET(request: NextRequest) {
       .map((l) => ({
         date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
         programId: l.programId,
-        day: l.day,
+        day: l.day || l.title || (l.kind === 'quick' || !l.programId ? 'Quick Session' : 'Workout'),
         duration: l.duration,
         exerciseCount: l.exercises?.length ?? 0,
       }))
@@ -330,13 +339,32 @@ export async function GET(request: NextRequest) {
           const key = ex.exerciseSlug || ex.name
           const pb = pbs[key]
           const isPR = !!(pb && bestSet && (bestSet as { weight: number; reps: number }).weight >= pb.weight)
-          return { name: ex.name, slug: ex.exerciseSlug, bestSet, volume: Math.round(exVol), isPR }
-        }).filter((ex) => ex.volume > 0 || ex.bestSet !== null)
+          return {
+            name: ex.name,
+            slug: ex.exerciseSlug,
+            bestSet,
+            volume: Math.round(exVol),
+            isPR,
+            sets: (ex.sets || []).map((set, index) => ({
+              setNumber: set.setNumber ?? index + 1,
+              reps: set.reps ?? null,
+              weight: set.weight ?? null,
+              duration: set.duration ?? null,
+              distance: set.distance ?? null,
+              speed: set.speed ?? null,
+              completed: !!set.completed,
+            })),
+          }
+        })
+        const kind: 'program' | 'quick' = l.kind === 'quick' || !l.programId ? 'quick' : 'program'
         return {
           date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-          rawDate: (l.date as Date).toISOString(),
+          rawDate: new Date(l.date).toISOString(),
+          kind,
+          sessionId: l.sessionId,
+          title: l.title,
           programId: l.programId,
-          day: l.day,
+          day: l.day || l.title || (kind === 'quick' ? 'Quick Session' : 'Workout'),
           duration: l.duration,
           notes: l.notes,
           totalVolume: Math.round(totalVol),
