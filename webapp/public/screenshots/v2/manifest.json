@@ -1,0 +1,114 @@
+{
+  "capturedAt": "2026-08-24T21:40:00-04:00",
+  "origin": "https://become.redbtn.io",
+  "viewport": { "width": 390, "height": 844, "deviceScaleFactor": 2 },
+  "shots": [
+    {
+      "file": "dashboard-light.webp",
+      "page": "/dashboard",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Populated tiles: Day Streak (Building 1/3), Today's Mood (Pretty Good), This Week 1/4, Goal 7.4 lbs to go, Calories 1737/2000, The Becoming summary row, Up Next 'Tomorrow: Day 2 Lower A'. Streak is only 1 day because the account's activity had to be seeded today; weight/mood history cannot be backdated through any app API."
+    },
+    {
+      "file": "dashboard-dark.webp",
+      "page": "/dashboard",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Same state as dashboard-light, captured with prefers-color-scheme: dark. App auto-switches theme."
+    },
+    {
+      "file": "workout-hub-light.webp",
+      "page": "/dashboard/workout",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Training hub: Workouts/Programs/Generate tabs, This Week strip with Mon 24 completed (green check), Continue Training card 'Strength & Size 2.0 — Phase 1 Day 2, 50%, 8/16 sessions', Recommended-for-you programs. /dashboard/workout/hub is a different (My Workout / custom exercises) screen and is empty for this account, so it was not used."
+    },
+    {
+      "file": "workout-log-dark.webp",
+      "page": "/dashboard/workout/strength-size-20/workout/live?day=Day%201",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Live logging screen, Exercise 4/8 Set 3/3, 46% complete, 3 green exercise dots. Exercise name 'Lat Pulldown' matches the demo clip (/exercises/lat-pulldown.mov shows a seated cable lat pulldown) - verified frame-by-frame. Sets 1-2 of this exercise already logged ('Last set: 155 lbs x 10 reps'), PR badge 160 lbs shown. NOTE: the demo had to be attached to the <video> element directly during capture - see 'knownIssues'."
+    },
+    {
+      "file": "generate-light.webp",
+      "page": "/dashboard/workout -> Generate sheet",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Purple AI Generate sheet, filled out but NOT submitted (no AI generation was burned). Session tab, Focus=Pull, Difficulty=Intermediate, Equipment=Barbell+Dumbbell+Cable, 5 exercises, 'Generate session' CTA."
+    },
+    {
+      "file": "nutrition-day-light.webp",
+      "page": "/dashboard/nutrition",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Day view with populated calorie ring (263 remaining of 2000) and macro bars (protein 156/150 over target, carbs 145/200, fats 61/65). Meals for the day were seeded through the app's own food-search + /api/nutrition/log."
+    },
+    {
+      "file": "nutrition-meal-light.webp",
+      "page": "/dashboard/nutrition (scrolled to meal list)",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Logged meals expanded with itemized foods and per-item calories: Breakfast (Eggs 216 / Oatmeal 166 / Blueberries 84, P26 C51 F18, 466 cal), Lunch (Chicken Breast / White Rice / Broccoli, 516 cal), Snack. The app header is off-screen here because the meal list sits below the fold."
+    },
+    {
+      "file": "mind-light.webp",
+      "page": "/dashboard/mind",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Mindset hub after a completed session: Lv 1 with XP bar, 1-day flame streak, 'Suggested Next' card (Self-Image - Kill the Old Version), Training Grounds with State Shift / Self-Image / Mission unlocked. The '. tuning...' loading hint was waited out. Chapter-2+ modules render as locked dashed cards at the bottom fold - that is real progressive disclosure, not an empty state. Chapter cannot be advanced further: main sessions are gated to one per 20 hours."
+    },
+    {
+      "file": "progress-light.webp",
+      "page": "/dashboard/progress",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "light",
+      "width": 780,
+      "height": 1688,
+      "notes": "Real charts: 'Training Log - 11 workouts, 221.6K lbs lifted all-time', Weekly Volume bar chart across 6 weeks, Workout History list with a PR badge, Personal Records below the fold. DEVIATION: /dashboard/progress is the Training Log and contains NO weight-trend chart. The weight/BMI/mood trend chart lives on /dashboard and is below the fold there; it currently holds a single data point, so it was deliberately kept out of frame."
+    }
+  ],
+  "skipped": [],
+  "accounts": {
+    "playwright-test-mobile1@become.test": "Alex Rivera - used for every shot. 11 workout logs on Strength & Size 2.0 (50% through phase 1), a full nutrition day, mood + weight logged today, one mind session.",
+    "demo@jondonfit.com": "Jordan Blake - NOT used. Its workout/weight/mood history is ~615-620 days old, so /api/progress returns empty arrays and every screen renders as a day-one account."
+  },
+  "seeding": {
+    "scope": "Only the two dummy capture accounts were written to; all writes went through the app's own HTTP APIs.",
+    "writes": [
+      "pw1: 10 backdated program workouts via POST /api/progress {type:'workout'} + one completed session via POST /api/workouts",
+      "pw1: POST /api/weight, POST /api/mood, POST /api/nutrition/log (11 foods across 4 meals), POST /api/nutrition/water",
+      "pw1: PUT /api/mind/identity, POST /api/mind/state, POST /api/mind/session, POST /api/schedule (training days Mon/Tue/Thu/Fri)",
+      "pw1: tutorial overlays disabled via PUT /api/tutorial-progress; unused 0% program enrolments dropped via POST /api/programs/abandon",
+      "demo: PUT /api/tutorial-progress, POST /api/mood, POST /api/weight, POST /api/programs/enroll (account ultimately unused)"
+    ]
+  },
+  "knownIssues": [
+    {
+      "where": "webapp/components/FramedVideo.tsx:39 mimeForVideoUrl",
+      "issue": "A .mov src is emitted as <source type=\"video/quicktime\">, which Chromium and Firefox refuse (canPlayType('video/quicktime') === ''). The same files are served with Content-Type: video/mp4 and play fine when the type attribute is omitted or set to video/mp4. Exercise demos therefore render as a black panel on Android/desktop Chrome while working on iOS/Safari.",
+      "impactOnCapture": "For workout-log-dark the <source> URL was assigned to video.src directly so the demo renders as it does on iOS. Nothing else about the screen was altered."
+    },
+    {
+      "where": "weight / mood history",
+      "issue": "POST /api/weight and POST /api/mood always stamp 'today' and the tz offset is clamped to +/-14h, so no app API can write a backdated weight or mood row. Trend charts on this account are single-point until real days accumulate."
+    }
+  ]
+}
