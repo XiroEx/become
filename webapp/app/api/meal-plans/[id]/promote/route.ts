@@ -15,7 +15,8 @@ function isObjectId(id: string): boolean {
 
 // POST /api/meal-plans/[id]/promote
 // Body (optional):
-//   loggedAt?: string — ISO. Defaults to "now" when not provided.
+//   loggedAt?: string — ISO. Supplying one makes the log timed by default.
+//   untimed?: boolean — defaults true when loggedAt is omitted.
 //   tags?: string[]   — defaults to [plan.tag].
 //
 // Atomic flip: findOneAndUpdate(status=active → promoted) gates against
@@ -40,6 +41,9 @@ export async function POST(
     const tagsInput: string[] = Array.isArray(body.tags)
       ? body.tags.filter((t: unknown): t is string => typeof t === 'string')
       : []
+    const untimed = typeof body.untimed === 'boolean'
+      ? body.untimed
+      : typeof body.loggedAt !== 'string'
 
     // Resolve loggedAt:
     // 1. body.loggedAt wins
@@ -95,6 +99,7 @@ export async function POST(
     const log = await MealLog.create({
       user: authResult.userId,
       loggedAt,
+      untimed,
       items: cloneItemsForSnapshot(planBefore.items),
       mealId: planBefore.mealId,
       mealName: planBefore.mealName,
