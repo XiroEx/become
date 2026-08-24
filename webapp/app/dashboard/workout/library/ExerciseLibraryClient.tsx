@@ -26,10 +26,16 @@ interface CustomExercise {
   name: string;
   trackingType: string;
   primaryMuscles: string[];
+  secondaryMuscles?: string[];
+  stabilizers?: string[];
   bodyRegion: string;
   category: string;
   role?: string;
   equipment: string[];
+  mechanics?: string;
+  movementPatterns?: string[];
+  laterality?: string;
+  difficulty?: string;
   defaultSets?: number;
   defaultReps?: string;
   tags?: string[];
@@ -178,6 +184,14 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
           role: form.role,
           defaultSets: form.defaultSets,
           defaultReps: form.defaultReps,
+          primaryMuscles: form.primaryMuscles,
+          secondaryMuscles: form.secondaryMuscles,
+          stabilizers: form.stabilizers,
+          equipment: form.equipment,
+          mechanics: form.mechanics,
+          movementPatterns: form.movementPatterns,
+          laterality: form.laterality,
+          difficulty: form.difficulty,
         }),
       });
       const data = await res.json();
@@ -227,6 +241,14 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       role: ex.role ?? "accessory",
       defaultSets: ex.defaultSets ? String(ex.defaultSets) : "3",
       defaultReps: ex.defaultReps ?? "8-12",
+      primaryMuscles: ex.primaryMuscles ?? [],
+      secondaryMuscles: ex.secondaryMuscles ?? [],
+      stabilizers: ex.stabilizers ?? [],
+      equipment: (ex.equipment ?? []).filter(item => item !== "none"),
+      mechanics: ex.mechanics ?? "n/a",
+      movementPatterns: (ex.movementPatterns ?? []).filter(item => item !== "n/a"),
+      laterality: ex.laterality ?? "bilateral",
+      difficulty: ex.difficulty ?? "intermediate",
       submitting: false,
       error: null,
     });
@@ -252,6 +274,14 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
           role: editForm.role,
           defaultSets: editForm.defaultSets,
           defaultReps: editForm.defaultReps,
+          primaryMuscles: editForm.primaryMuscles,
+          secondaryMuscles: editForm.secondaryMuscles,
+          stabilizers: editForm.stabilizers,
+          equipment: editForm.equipment,
+          mechanics: editForm.mechanics,
+          movementPatterns: editForm.movementPatterns,
+          laterality: editForm.laterality,
+          difficulty: editForm.difficulty,
         }),
       });
       const data = await res.json();

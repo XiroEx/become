@@ -6,15 +6,22 @@ import Exercise, { IExerciseDefinition } from "@/models/Exercise";
 import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
 import {
   isValidCustomTrackingType,
-  resolveCustomExerciseMuscleData,
+  resolveCustomExerciseMuscles,
   resolveCustomExerciseCategory,
   resolveCustomExerciseRole,
+  resolveCustomDifficulty,
+  resolveCustomEquipment,
+  resolveCustomLaterality,
+  resolveCustomMechanics,
+  resolveCustomMovementPatterns,
+  resolveCustomMuscleList,
 } from "@/lib/customExerciseFields";
 import { getBlobStore } from "@/lib/blobStorage";
 import { invalidateExerciseCache } from "@/lib/hydrateExercises";
 
 type LeanExercise = Pick<IExerciseDefinition,
   "slug" | "name" | "trackingType" | "primaryMuscles" | "bodyRegion" | "category" |
+  "secondaryMuscles" | "stabilizers" | "mechanics" | "movementPatterns" | "laterality" |
   "defaultSets" | "defaultReps" | "defaultDuration" | "equipment" | "role" | "difficulty" |
   "tags" | "videoUrl" | "thumbnailUrl" | "videoWidth" | "videoHeight" | "videoFraming" |
   "videoTrim" | "createdAt" | "isUniversal" | "reviewStatus" | "submittedAt" | "reviewNote"
@@ -35,7 +42,8 @@ export async function GET(req: NextRequest) {
   // library's sort/filter tabs and its "Submit to Universal" status.
   const exercises = await Exercise.find(
     { isCustom: true, createdBy: auth.userId },
-    { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, bodyRegion: 1, category: 1,
+    { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, secondaryMuscles: 1,
+      stabilizers: 1, mechanics: 1, movementPatterns: 1, laterality: 1, bodyRegion: 1, category: 1,
       defaultSets: 1, defaultReps: 1, defaultDuration: 1, equipment: 1, role: 1, difficulty: 1,
       tags: 1, videoUrl: 1, thumbnailUrl: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1,
       videoTrim: 1, createdAt: 1, isUniversal: 1, reviewStatus: 1, submittedAt: 1, reviewNote: 1 }
@@ -52,7 +60,11 @@ export async function POST(req: NextRequest) {
   const auth = { userId: gate.userId };
 
   const body = await req.json();
-  const { name, trackingType, muscleGroup, category, role, defaultSets, defaultReps } = body;
+  const {
+    name, trackingType, muscleGroup, category, role, defaultSets, defaultReps,
+    primaryMuscles: exactPrimaryMuscles, secondaryMuscles, stabilizers, equipment,
+    mechanics, movementPatterns, laterality, difficulty,
+  } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
@@ -60,7 +72,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid tracking type" }, { status: 400 });
   }
 
-  const muscleData = resolveCustomExerciseMuscleData(muscleGroup);
+  const muscleData = resolveCustomExerciseMuscles(exactPrimaryMuscles, muscleGroup);
+  const resolvedSecondaryMuscles = resolveCustomMuscleList(secondaryMuscles);
+  const resolvedStabilizers = resolveCustomMuscleList(stabilizers);
+  const resolvedEquipment = resolveCustomEquipment(equipment);
+  const resolvedMechanics = resolveCustomMechanics(mechanics);
+  const resolvedMovementPatterns = resolveCustomMovementPatterns(movementPatterns);
+  const resolvedLaterality = resolveCustomLaterality(laterality);
+  const resolvedDifficulty = resolveCustomDifficulty(difficulty);
   const resolvedCategory = resolveCustomExerciseCategory(category);
   const resolvedRole = resolveCustomExerciseRole(role);
 
@@ -76,15 +95,15 @@ export async function POST(req: NextRequest) {
     aliases: [],
     description: "",
     category: resolvedCategory,
-    mechanics: "n/a",
+    mechanics: resolvedMechanics,
     role: resolvedRole,
-    movementPatterns: ["n/a"],
-    laterality: "bilateral",
-    difficulty: "intermediate",
+    movementPatterns: resolvedMovementPatterns,
+    laterality: resolvedLaterality,
+    difficulty: resolvedDifficulty,
     primaryMuscles: muscleData.primaryMuscles,
-    secondaryMuscles: [],
-    stabilizers: [],
-    equipment: ["none"],
+    secondaryMuscles: resolvedSecondaryMuscles,
+    stabilizers: resolvedStabilizers,
+    equipment: resolvedEquipment,
     optionalEquipment: [],
     trackingType,
     instructions: [],
@@ -97,8 +116,12 @@ export async function POST(req: NextRequest) {
       category,
       muscleGroup,
       trackingType,
-      equipment: ["none"],
-      extra: Array.isArray(body.tags) ? body.tags : undefined,
+      equipment: resolvedEquipment,
+      extra: [
+        ...muscleData.primaryMuscles,
+        ...resolvedMovementPatterns.filter((pattern) => pattern !== "n/a"),
+        ...(Array.isArray(body.tags) ? body.tags.filter((tag: unknown): tag is string => typeof tag === "string") : []),
+      ],
     }),
     bodyRegion: muscleData.bodyRegion,
     isActive: true,
@@ -122,9 +145,14 @@ export async function POST(req: NextRequest) {
       name: exercise.name,
       trackingType: exercise.trackingType,
       primaryMuscles: exercise.primaryMuscles,
+      secondaryMuscles: exercise.secondaryMuscles,
+      stabilizers: exercise.stabilizers,
       bodyRegion: exercise.bodyRegion,
       category: exercise.category,
       equipment: exercise.equipment,
+      mechanics: exercise.mechanics,
+      movementPatterns: exercise.movementPatterns,
+      laterality: exercise.laterality,
       role: exercise.role,
       difficulty: exercise.difficulty,
       defaultSets: exercise.defaultSets,
