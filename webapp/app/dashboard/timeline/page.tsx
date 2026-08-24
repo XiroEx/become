@@ -32,7 +32,6 @@ import DateOnlyPicker from '@/components/ui/DateOnlyPicker'
 import { BackButton } from '@/components/ui/BackButton'
 import { Toast, SegmentedControl, HeaderPillLink } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
-import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import { formatQuantity, type Unit } from '@/lib/units'
@@ -946,11 +945,7 @@ function TimelineClient() {
   }
 
   return (
-    <FeatureGuard
-      feature="Nutrition"
-      description="Precision nutrition tracking and meal planning, built around your goals. Launching soon."
-      icon={<UtensilsCrossed className="h-10 w-10" />}
-    >
+    <>
       <PageTransition className="pb-6">
        <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
@@ -1470,7 +1465,7 @@ function TimelineClient() {
           }}
         />
       )}
-    </FeatureGuard>
+    </>
   )
 }
 

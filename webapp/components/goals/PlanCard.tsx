@@ -27,6 +27,8 @@ export interface PlanCardProps {
 
 export default function PlanCard({ className = '', onPaceChange }: PlanCardProps) {
   const [data, setData] = useState<GoalProgress | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [saving, setSaving] = useState(false)
   const tz = new Date().getTimezoneOffset()
 
@@ -34,10 +36,11 @@ export default function PlanCard({ className = '', onPaceChange }: PlanCardProps
     let cancelled = false
     fetch(`/api/goals?tz=${tz}`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : null))
-      .then((g: GoalProgress | null) => { if (!cancelled && g) setData(g) })
+      .then((g: GoalProgress | null) => { if (!cancelled) setData(g) })
       .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [tz])
+  }, [tz, loadAttempt])
 
   const setPace = async (kg: number) => {
     setSaving(true)
@@ -54,8 +57,26 @@ export default function PlanCard({ className = '', onPaceChange }: PlanCardProps
   }
 
   const n = data?.nutrition
-  if (!data) {
+  if (loading) {
     return <Card className={className}><div className="h-16 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" /></Card>
+  }
+  if (!data) {
+    return (
+      <Card className={className} data-testid="plan-card">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your plan</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">Plan details are temporarily unavailable. Your saved goals are unchanged.</p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoading(true)
+            setLoadAttempt(attempt => attempt + 1)
+          }}
+          className="mt-3 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          Try again
+        </button>
+      </Card>
+    )
   }
   if (!n || n.status === 'none' || !n.target.weight) {
     return (
