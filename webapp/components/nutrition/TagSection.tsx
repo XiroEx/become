@@ -67,6 +67,8 @@ export interface MealLogLite {
 
 interface FlattenedItem {
   logId: string
+  loggedAt: string
+  untimed?: boolean
   mealName?: string
   source?: MealLogLite['source']
   item: IMealItem & { _id?: string }
@@ -79,7 +81,13 @@ interface TagSectionProps {
   // Append a food into a specific logged meal group (keeps it under the meal's
   // outline). When omitted, meal groups show no add-to affordance.
   onAddToMeal?: (logId: string, tag: string) => void
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }, currentTag: string) => void
+  onEditEntry: (
+    logId: string,
+    item: IMealItem & { _id?: string },
+    currentTag: string,
+    loggedAt: string,
+    untimed?: boolean,
+  ) => void
   onRemoveEntry: (logId: string, itemId: string) => void
   onRemoveTag?: (tag: string) => void
   removable?: boolean
@@ -236,7 +244,14 @@ export default function TagSection({
   const flat: FlattenedItem[] = []
   for (const log of logs) {
     for (const item of log.items) {
-      flat.push({ logId: log._id, mealName: log.mealName, source: log.source, item })
+      flat.push({
+        logId: log._id,
+        loggedAt: log.loggedAt,
+        untimed: log.untimed,
+        mealName: log.mealName,
+        source: log.source,
+        item,
+      })
     }
   }
 
@@ -640,7 +655,7 @@ export default function TagSection({
                               selectable={selecting && Boolean(fi.item._id)}
                               selected={selected.has(keyOf(fi.logId, fi.item._id))}
                               onToggleSelect={() => toggleSelected(keyOf(fi.logId, fi.item._id))}
-                              onEdit={() => onEditEntry(fi.logId, fi.item, tag)}
+                              onEdit={() => onEditEntry(fi.logId, fi.item, tag, fi.loggedAt, fi.untimed)}
                               onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                             />
                           ))}
@@ -737,9 +752,9 @@ interface MealGroupCardProps {
   selecting?: boolean
   isSelected?: (logId: string, itemId: unknown) => boolean
   onToggleSelect?: (logId: string, itemId: unknown) => void
-  group: { key: string; mealName?: string; items: { logId: string; item: IMealItem & { _id?: string } }[] }
+  group: { key: string; mealName?: string; items: FlattenedItem[] }
   tag: string
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }, currentTag: string) => void
+  onEditEntry: TagSectionProps['onEditEntry']
   onRemoveEntry: (logId: string, itemId: string) => void
   onAddToMeal?: (logId: string, tag: string) => void
 }
@@ -780,7 +795,7 @@ function MealGroupCard({
                   selectable={Boolean(selecting) && Boolean(fi.item._id)}
                   selected={isSelected?.(fi.logId, fi.item._id) ?? false}
                   onToggleSelect={() => onToggleSelect?.(fi.logId, fi.item._id)}
-                  onEdit={() => onEditEntry(fi.logId, fi.item, tag)}
+                  onEdit={() => onEditEntry(fi.logId, fi.item, tag, fi.loggedAt, fi.untimed)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
               ))}
@@ -895,8 +910,8 @@ const captureVisuals: Record<'photo' | 'barcode' | 'upload' | 'describe', {
 function CaptureGroupCard({ tag, source, items, onEditEntry, onRemoveEntry }: {
   tag: string
   source: 'photo' | 'barcode' | 'upload' | 'describe'
-  items: { logId: string; item: IMealItem & { _id?: string } }[]
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }, currentTag: string) => void
+  items: FlattenedItem[]
+  onEditEntry: TagSectionProps['onEditEntry']
   onRemoveEntry: (logId: string, itemId: string) => void
 }) {
   const [open, setOpen] = useState(true)
@@ -923,7 +938,7 @@ function CaptureGroupCard({ tag, source, items, onEditEntry, onRemoveEntry }: {
                   key={`${fi.logId}-${fi.item._id ?? idx}`}
                   logId={fi.logId}
                   item={fi.item}
-                  onEdit={() => onEditEntry(fi.logId, fi.item, tag)}
+                  onEdit={() => onEditEntry(fi.logId, fi.item, tag, fi.loggedAt, fi.untimed)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
               ))}
