@@ -1,5 +1,5 @@
 import { test } from '@playwright/test'
-import { authenticate, BASE_URL } from './test-auth'
+import { authenticate, BASE_URL, dismissTutorials, E2E_AUTH_TOKEN, waitForAppScreen } from './test-auth'
 
 test.use({ viewport: { width: 390, height: 844 } })
 test.setTimeout(120_000)
@@ -13,11 +13,11 @@ const shots: Array<[string, string]> = [
 ]
 
 test('nutrition UI screenshots', async ({ page, context }) => {
-  await authenticate(page, context)
+  await authenticate(page, context, E2E_AUTH_TOKEN)
   for (const [path, name] of shots) {
-    await page.goto(`${BASE_URL}${path}`)
-    await page.waitForLoadState('networkidle').catch(() => {})
-    await page.waitForTimeout(1500)
+    await page.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded' })
+    await waitForAppScreen(page)
+    await dismissTutorials(page)
     await page.screenshot({ path: `/tmp/nutri-shots/${name}.png`, fullPage: true })
   }
 })

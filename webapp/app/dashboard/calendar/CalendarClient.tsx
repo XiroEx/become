@@ -741,6 +741,27 @@ export default function CalendarClient() {
                 const isSelected = selectedDate && isSameDay(day, selectedDate)
                 const dayWorkouts = workoutsByDate.get(key) || []
                 const dayQuick = quickByDate.get(key) || []
+                // Long-lived and test-heavy accounts can have dozens of sessions
+                // on one date. Rendering every marker turns a calendar cell into
+                // a wall of dots and stretches the month; summarize the overflow.
+                const dayMarkers = [
+                  ...dayWorkouts.map((w, i) => {
+                    const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
+                    const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
+                      isMakeupWorkout(w.date, w.completedAt)
+                    const statusColor = isMakeupDot ? 'bg-green-300' :
+                      w.status === 'completed' ? 'bg-green-700' :
+                      w.status === 'missed' ? 'bg-red-600' :
+                      w.status === 'skipped' ? 'bg-amber-400' :
+                      colors.dot
+                    return { key: `w${i}`, className: statusColor }
+                  }),
+                  ...dayQuick.map((q, i) => ({
+                    key: `q${i}`,
+                    className: `ring-1 ring-purple-400 ${q.status === 'completed' ? 'bg-green-700' : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'}`,
+                  })),
+                ]
+                const markerLimit = viewMode === 'week' ? 10 : 6
 
                 return (
                   <button
@@ -766,32 +787,23 @@ export default function CalendarClient() {
                     </span>
 
                     {/* Workout dots (program + quick sessions) */}
-                    {(dayWorkouts.length > 0 || dayQuick.length > 0) && (
-                      <div className="mt-0.5 flex flex-wrap justify-center gap-0.5">
-                        {dayWorkouts.map((w, i) => {
-                          const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
-                          const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
-                            isMakeupWorkout(w.date, w.completedAt)
-                          const statusColor = isMakeupDot ? 'bg-green-300' :
-                            w.status === 'completed' ? 'bg-green-700' :
-                            w.status === 'missed' ? 'bg-red-600' :
-                            w.status === 'skipped' ? 'bg-amber-400' :
-                            colors.dot
-                          return <div key={i} className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-                        })}
-                        {dayQuick.map((q, i) => {
-                          // Quick sessions use a ring to distinguish them from program dots.
-                          const c = q.status === 'completed' ? 'bg-green-700' :
-                            q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
-                          return <div key={`q${i}`} className={`h-1.5 w-1.5 rounded-full ring-1 ring-purple-400 ${c}`} />
-                        })}
+                    {dayMarkers.length > 0 && (
+                      <div className="mt-0.5 flex max-w-full flex-wrap items-center justify-center gap-0.5">
+                        {dayMarkers.slice(0, markerLimit).map((marker) => (
+                          <div key={marker.key} className={`h-1.5 w-1.5 rounded-full ${marker.className}`} />
+                        ))}
+                        {dayMarkers.length > markerLimit && (
+                          <span className="ml-0.5 text-[8px] font-bold leading-none text-zinc-500 dark:text-zinc-400">
+                            +{dayMarkers.length - markerLimit}
+                          </span>
+                        )}
                       </div>
                     )}
 
                     {/* Workout label in week view */}
                     {viewMode === 'week' && dayWorkouts.length > 0 && (
                       <div className="mt-1 w-full space-y-0.5">
-                        {dayWorkouts.map((w, i) => {
+                        {dayWorkouts.slice(0, 3).map((w, i) => {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
                           return (
                             <div key={i} className={`rounded px-1 py-0.5 text-[8px] font-medium leading-tight sm:text-[10px] ${colors.bg} ${colors.text}`}>
@@ -799,6 +811,11 @@ export default function CalendarClient() {
                             </div>
                           )
                         })}
+                        {dayWorkouts.length > 3 && (
+                          <div className="px-1 text-[8px] font-semibold text-zinc-500 dark:text-zinc-400 sm:text-[9px]">
+                            +{dayWorkouts.length - 3} more
+                          </div>
+                        )}
                       </div>
                     )}
                   </button>

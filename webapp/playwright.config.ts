@@ -159,6 +159,18 @@ export default defineConfig({
       use: { ...devices['Pixel 5'], video: 'off' },
     },
     {
+      name: 'landing',
+      testMatch: '**/landing.spec.ts',
+      timeout: 120_000,
+      retries: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'nutri-shots',
       testMatch: '**/nutri-shots.spec.ts',
       use: { ...devices['Pixel 5'], video: 'off' },
