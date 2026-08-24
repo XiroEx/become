@@ -1,339 +1,241 @@
 "use client"
 
-import type { CSSProperties, ReactNode } from "react"
 import { useState, useSyncExternalStore } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 import {
   ArrowRight,
   Brain,
+  Calendar,
+  Camera,
   Check,
-  ChevronRight,
+  ClipboardList,
   Dumbbell,
   Flame,
-  Sparkles,
+  LayoutGrid,
+  LineChart,
+  Moon,
+  Play,
+  Sun,
+  Target,
   Utensils,
+  Video,
+  Wand2,
 } from "lucide-react"
 import styles from "./landing.module.css"
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME"
 const logo = process.env.NEXT_PUBLIC_LOGO || "/logo.png"
+const coachImage = "/coach-jon.webp"
 
-const SYSTEMS = [
+// Real product captures (coach's account, shared for the site). All cropped to
+// the same frame, so every phone shell can assume this ratio.
+const SHOT_RATIO = "640 / 1301"
+
+const WHY = [
   {
-    id: "mind",
-    number: "01",
-    label: "Mind",
-    title: "Train the part that wants to quit.",
-    body: "A short daily practice turns mood, reflection, and honest wins into a mindset you can actually build on.",
-    details: ["Daily guided sessions", "Identity and chapter work", "Wins, streaks, and patterns"],
-    image: "/screenshots/ss-mind.png",
-    alt: "Become Mind practice",
-    color: "#A78BFA",
-    Icon: Brain,
+    Icon: LayoutGrid,
+    title: "Everything in one place",
+    body: "Your program, meals, mindset, and progress live together. No more juggling a workout app, a calorie app, and a notes app that never talk to each other.",
   },
   {
-    id: "fuel",
-    number: "02",
-    label: "Fuel",
-    title: "Eat with context, not guilt.",
-    body: "Targets shaped around your body and goal. Fast logging when you need it. A clear read on the week when you do not.",
-    details: ["Personal calorie and macro targets", "Food, barcode, and meal tools", "Daily and weekly context"],
-    image: "/screenshots/ss-nutrition.png",
-    alt: "Become nutrition tracking",
-    color: "#F87171",
-    Icon: Utensils,
+    Icon: Target,
+    title: "A plan, not just a tracker",
+    body: "Become tells you what today looks like — the workout on deck, the calories left, the next step. You open it and go.",
   },
   {
-    id: "training",
-    number: "03",
-    label: "Training",
-    title: "Make every session answer the last.",
-    body: "Follow a real program or build the session you need. Become remembers the sets, swaps, and records that move the next workout forward.",
-    details: ["Progressive programs", "Live sets, reps, and swaps", "PR and training history"],
-    image: "/screenshots/ss-programming.png",
-    alt: "Become training programs",
-    color: "#4ADE80",
-    Icon: Dumbbell,
+    Icon: Flame,
+    title: "Built by a real coach",
+    body: "Programs and habits from coach Jon Don — the same system he runs with his own clients, not content-mill filler.",
   },
 ] as const
 
-const WEEKS = [
+const TRAINING_TABS = [
   {
-    label: "Week 01",
-    dates: "Jan 5–11",
-    headline: "You began before you felt ready.",
-    note: "Two workouts. Two honest check-ins. The line exists now.",
-    identity: "I am someone who comes back.",
-    mind: 2,
-    fuel: 0,
-    training: 2,
-    color: "#A78BFA",
+    id: "programs",
+    label: "Programs",
+    Icon: ClipboardList,
+    image: "/screenshots/become-training-hub.webp",
+    alt: "Become training hub with weekly schedule and coach programs",
+    title: "A program that plans your week for you.",
+    body: "Pick a coach-built program and your week fills itself in — training days, rest days, and exactly what's on deck today.",
+    points: ["Multi-phase progressive programs", "Weekly schedule with today queued up", "Recommended by goal and level"],
   },
   {
-    label: "Week 04",
-    dates: "Jan 26–Feb 1",
-    headline: "The routine stopped needing a speech.",
-    note: "You trained four times and fueled the work on five days.",
-    identity: "I keep the next promise.",
-    mind: 4,
-    fuel: 5,
-    training: 4,
-    color: "#4ADE80",
+    id: "log",
+    label: "In the workout",
+    Icon: Video,
+    image: "/screenshots/become-training-log.webp",
+    alt: "Logging bench press sets with a demo video and last-session numbers",
+    title: "Every exercise shows you how — and remembers.",
+    body: "Demo videos on every movement, your last session's numbers right where you need them, and set-by-set logging with PRs tracked automatically.",
+    points: ["Exercise demo videos built in", "Last session + PR history per lift", "Tap-to-complete sets with rest timers"],
   },
   {
-    label: "This week",
-    dates: "Feb 16–22",
-    headline: "All three are moving together.",
-    note: "The strongest week is not perfect. It is legible—and still alive.",
-    identity: "I do the work that makes tomorrow easier.",
-    mind: 5,
-    fuel: 6,
-    training: 4,
-    color: "#FBBF24",
+    id: "live",
+    label: "Live mode",
+    Icon: Camera,
+    image: "/screenshots/become-training-live.webp",
+    alt: "Live mode counting cable curl reps through the phone camera",
+    title: "Point your camera. It counts your reps.",
+    body: "Live mode watches your set through the camera, tracks your reps in real time, and records the work — so you can stay in the set, not in the app.",
+    points: ["Real-time rep counting", "Hands-free set logging", "Session recording as you train"],
+  },
+  {
+    id: "generate",
+    label: "Generate",
+    Icon: Wand2,
+    image: "/screenshots/become-training-generate.webp",
+    alt: "Generating a custom session by focus, difficulty, and equipment",
+    title: "No program? Build a session in seconds.",
+    body: "Choose a focus, your level, and the equipment in front of you — or just describe the session you want and let AI write it.",
+    points: ["Session or full program", "Filters for focus, level, equipment", "Describe it in plain words, get a plan"],
+  },
+] as const
+
+const STEPS = [
+  {
+    number: "1",
+    title: "Tell Become your goal",
+    body: "Build muscle, lose fat, or just get consistent — your goal shapes everything that follows.",
+  },
+  {
+    number: "2",
+    title: "Get your plan",
+    body: "A training program plus calorie and macro targets, matched to you. Not generic numbers.",
+  },
+  {
+    number: "3",
+    title: "Show up daily",
+    body: "The app keeps every piece organized so the only thing left to do is the work.",
   },
 ] as const
 
 const subscribeToNothing = () => () => {}
 
-function Reveal({
-  children,
-  className,
-}: {
-  children: ReactNode
-  className?: string
-  delay?: number
-}) {
-  // Keep narrative content in the document's visible state. Framer's reduced-
-  // motion preference is resolved after hydration, so an opacity-zero initial
-  // state can otherwise strand whole sections offscreen for those visitors.
-  return <div className={className}>{children}</div>
-}
-
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <span className={styles.brand}>
       <span className={styles.brandMark}>
-        <Image src={logo} alt="" width={compact ? 26 : 32} height={compact ? 26 : 32} priority />
+        <Image src={logo} alt="" width={compact ? 26 : 30} height={compact ? 26 : 30} priority={!compact} />
       </span>
       <span>{appName}</span>
     </span>
   )
 }
 
-function ProofRow({
-  icon,
-  label,
-  filled,
-  total,
-  color,
+function Phone({
+  src,
+  alt,
+  className,
+  priority = false,
+  sizes = "(max-width: 800px) 68vw, 300px",
 }: {
-  icon: ReactNode
-  label: string
-  filled: number
-  total: number
-  color: string
+  src: string
+  alt: string
+  className?: string
+  priority?: boolean
+  sizes?: string
 }) {
   return (
-    <div className={styles.proofRow}>
-      <span className={styles.proofLabel}>
-        <span style={{ color }}>{icon}</span>
-        {label}
-      </span>
-      <span className={styles.proofDots} aria-label={label + ": " + filled + " of " + total}>
-        {Array.from({ length: total }).map((_, index) => (
-          <span
-            key={index}
-            className={styles.proofDot}
-            style={index < filled ? { background: color, borderColor: color } : undefined}
-          />
-        ))}
-      </span>
-      <strong>{filled}/{total}</strong>
+    <div className={className ? `${styles.phone} ${className}` : styles.phone}>
+      <div className={styles.phoneScreen} style={{ aspectRatio: SHOT_RATIO }}>
+        <Image src={src} alt={alt} fill priority={priority} sizes={sizes} />
+      </div>
     </div>
   )
 }
 
-function HeroWorld() {
-  const reduced = useReducedMotion()
+function SectionHeading({
+  kicker,
+  title,
+  lead,
+  dark = false,
+}: {
+  kicker: string
+  title: string
+  lead?: string
+  dark?: boolean
+}) {
   return (
-    <div className={styles.heroWorld} aria-label="A visual week in Become">
-      <div className={styles.worldGlow} />
-      <svg className={styles.heroLine} viewBox="0 0 660 650" aria-hidden="true">
-        <defs>
-          <linearGradient id="hero-path" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stopColor="#A78BFA" />
-            <stop offset=".48" stopColor="#4ADE80" />
-            <stop offset="1" stopColor="#FBBF24" />
-          </linearGradient>
-        </defs>
-        <motion.path
-          d="M18 544 C 120 565, 150 474, 236 488 S 366 390, 438 418 S 527 286, 646 303"
-          fill="none"
-          stroke="url(#hero-path)"
-          strokeWidth="4"
-          strokeLinecap="round"
-          initial={false}
-          animate={{ pathLength: 1, opacity: 0.9 }}
-          transition={{ duration: reduced ? 0 : 1.8, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        />
-        {[{ x: 41, y: 545, c: "#A78BFA" }, { x: 234, y: 488, c: "#4ADE80" }, { x: 438, y: 418, c: "#FBBF24" }, { x: 632, y: 304, c: "#A78BFA" }].map((node, index) => (
-          <motion.circle
-            key={node.x}
-            cx={node.x}
-            cy={node.y}
-            r={index === 2 ? 9 : 6}
-            fill={node.c}
-            stroke="#07060D"
-            strokeWidth="4"
-            initial={false}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.8 + index * 0.16, type: "spring", stiffness: 260, damping: 18 }}
-          />
-        ))}
-      </svg>
-
-      <motion.div
-        className={styles.echoCard}
-        initial={false}
-        animate={{ opacity: 0.58, x: 0, y: 0 }}
-        transition={{ duration: 0.8, delay: 0.8 }}
-      >
-        <span>Week 07</span>
-        <strong>You came back.</strong>
-        <small>That counts.</small>
-      </motion.div>
-
-      <motion.article
-        className={styles.heroWeekCard}
-        initial={false}
-        animate={{ opacity: 1, scale: 1, y: 0, rotate: -1.5 }}
-        transition={{ duration: 0.9, delay: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <header className={styles.weekHeader}>
-          <div>
-            <span className={styles.weekEyebrow}>This week · day 5 of 7</span>
-            <strong>Feb 16–22</strong>
-          </div>
-          <span className={styles.liveBadge}><span />live</span>
-        </header>
-        <h2>Three promises are moving together.</h2>
-        <p>Not a perfect week. A week you can read—and still change.</p>
-        <div className={styles.proofPanel}>
-          <ProofRow icon={<Brain size={15} />} label="Mind" filled={5} total={7} color="#A78BFA" />
-          <ProofRow icon={<Utensils size={15} />} label="Fuel" filled={4} total={7} color="#F87171" />
-          <ProofRow icon={<Dumbbell size={15} />} label="Training" filled={3} total={4} color="#4ADE80" />
-        </div>
-        <blockquote>“I do the work that makes tomorrow easier.”</blockquote>
-        <div className={styles.weekFooter}>
-          <span>Becoming: consistent</span>
-          <span>Details <ChevronRight size={16} /></span>
-        </div>
-      </motion.article>
-
-      <motion.div
-        className={styles.horizonCard}
-        initial={false}
-        animate={{ opacity: 0.8, x: 0 }}
-        transition={{ duration: 0.8, delay: 1.1 }}
-      >
-        <Sparkles size={16} />
-        <span>Horizon</span>
-        <strong>The next week is still unwritten.</strong>
-      </motion.div>
-    </div>
+    <header className={dark ? styles.sectionHeadDark : styles.sectionHead}>
+      <span className={styles.kicker}>{kicker}</span>
+      <h2>{title}</h2>
+      {lead ? <p>{lead}</p> : null}
+    </header>
   )
 }
 
-function SystemStage() {
-  const [activeId, setActiveId] = useState<(typeof SYSTEMS)[number]["id"]>("mind")
-  const reduced = useReducedMotion()
-  const active = SYSTEMS.find((system) => system.id === activeId) || SYSTEMS[0]
-  const systemStyle = { "--system-accent": active.color } as CSSProperties
-
+function FeatureList({ items, dark = false }: { items: readonly string[]; dark?: boolean }) {
   return (
-    <section className={styles.systemSection} id="system">
-      <div className={styles.sectionShell}>
-        <Reveal className={styles.sectionIntro}>
-          <span className={styles.darkEyebrow}>One person. Three practices.</span>
-          <h2>Your body does not live in separate apps.</h2>
-          <p>Training changes appetite. Fuel changes performance. Your mind decides whether either one survives a hard day. Become keeps the whole loop together.</p>
-        </Reveal>
+    <ul className={dark ? styles.featureListDark : styles.featureList}>
+      {items.map((item) => (
+        <li key={item}>
+          <span className={styles.featureCheck}>
+            <Check size={13} strokeWidth={3} />
+          </span>
+          {item}
+        </li>
+      ))}
+    </ul>
+  )
+}
 
-        <div className={styles.systemGrid} style={systemStyle}>
-          <div className={styles.systemTabs} role="tablist" aria-label="Explore the three Become practices">
-            {SYSTEMS.map((system) => {
-              const selected = system.id === active.id
-              return (
-                <button
-                  key={system.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-controls="system-panel"
-                  className={selected ? styles.systemTabActive : styles.systemTab}
-                  onClick={() => setActiveId(system.id)}
-                  style={{ "--tab-accent": system.color } as CSSProperties}
-                >
-                  <span className={styles.systemNumber}>{system.number}</span>
-                  <span className={styles.systemTabLabel}>
-                    <system.Icon size={19} />
-                    {system.label}
-                  </span>
-                  <ArrowRight size={18} />
-                </button>
-              )
-            })}
-
-            <div className={styles.systemCopy} id="system-panel" role="tabpanel">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={active.id}
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reduced ? undefined : { opacity: 0, y: -8 }}
-                  transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <span className={styles.systemKicker}>{active.label}</span>
-                  <h3>{active.title}</h3>
-                  <p>{active.body}</p>
-                  <ul>
-                    {active.details.map((detail) => (
-                      <li key={detail}><Check size={15} />{detail}</li>
-                    ))}
-                  </ul>
-                </motion.div>
-              </AnimatePresence>
+function DashboardSection() {
+  const [mode, setMode] = useState<"light" | "dark">("light")
+  return (
+    <section className={styles.section} id="dashboard">
+      <div className={styles.shell}>
+        <div className={styles.split}>
+          <div className={styles.splitCopy}>
+            <SectionHeading
+              kicker="The Dashboard"
+              title="Open the app. Know your day."
+              lead="Today's workout, calories remaining, streak, mood, weight, water — one screen you can rearrange to fit how you train. That disorganized feeling ends here."
+            />
+            <FeatureList
+              items={[
+                "Today's session queued and one tap away",
+                "Streaks, weekly targets, and goal progress",
+                "Weight, mood, and water at a glance",
+                "Customizable tiles — your dashboard, your order",
+              ]}
+            />
+            <div className={styles.modeToggle} role="group" aria-label="Preview dashboard in light or dark mode">
+              <button
+                type="button"
+                className={mode === "light" ? styles.modeBtnActive : styles.modeBtn}
+                onClick={() => setMode("light")}
+                aria-pressed={mode === "light"}
+              >
+                <Sun size={15} /> Light
+              </button>
+              <button
+                type="button"
+                className={mode === "dark" ? styles.modeBtnActive : styles.modeBtn}
+                onClick={() => setMode("dark")}
+                aria-pressed={mode === "dark"}
+              >
+                <Moon size={15} /> Dark
+              </button>
+              <span className={styles.modeHint}>Goes as dark as your gym playlist.</span>
             </div>
           </div>
-
-          <div className={styles.productVisual}>
-            <div className={styles.productOrbit} />
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={active.id}
-                className={styles.phone}
-                initial={false}
-                animate={{ opacity: 1, x: 0, rotate: -1.4, scale: 1 }}
-                exit={reduced ? undefined : { opacity: 0, x: -20, rotate: -2, scale: 0.98 }}
-                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className={styles.phoneSpeaker} />
-                <div className={styles.phoneScreen}>
-                  <Image
-                    src={active.image}
-                    alt={active.alt}
-                    fill
-                    loading="eager"
-                    sizes="(max-width: 800px) 72vw, 320px"
-                  />
-                </div>
-              </motion.div>
-            </AnimatePresence>
-            <div className={styles.productCaption}>
-              <span style={{ background: active.color }} />
-              The real product, not a moodboard
+          <div className={styles.splitVisual}>
+            <div className={styles.phoneStack}>
+              <div className={styles.phoneFader} data-active={mode === "light"}>
+                <Phone
+                  src="/screenshots/become-dashboard-light.webp"
+                  alt="Become dashboard in light mode showing streak, mood, goal, and today's workout"
+                />
+              </div>
+              <div className={styles.phoneFader} data-active={mode === "dark"}>
+                <Phone
+                  src="/screenshots/become-dashboard-dark.webp"
+                  alt="Become dashboard in dark mode showing streak, mood, water, and today's workout"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -342,91 +244,151 @@ function SystemStage() {
   )
 }
 
-function BecomingArc() {
-  const [activeWeek, setActiveWeek] = useState(2)
-  const reduced = useReducedMotion()
-  const week = WEEKS[activeWeek]
-
+function TrainingSection() {
+  const [activeId, setActiveId] = useState<(typeof TRAINING_TABS)[number]["id"]>("programs")
+  const active = TRAINING_TABS.find((tab) => tab.id === activeId) || TRAINING_TABS[0]
   return (
-    <section className={styles.becomingSection} id="becoming">
-      <div className={styles.sectionShell}>
-        <div className={styles.becomingIntro}>
-          <Reveal>
-            <span className={styles.lightEyebrow}>The Becoming</span>
-            <h2>Your weeks become evidence.</h2>
-          </Reveal>
-          <Reveal delay={0.08}>
-            <p>Every Sunday, Become writes the week back to you: what held, what slipped, what got stronger, and what the next week is asking for.</p>
-          </Reveal>
-        </div>
-
-        <div className={styles.arcGrid}>
-          <div className={styles.arcStage}>
-            <svg className={styles.arcLine} viewBox="0 0 720 270" aria-hidden="true">
-              <motion.path
-                d="M42 218 C 154 224, 188 168, 286 180 S 430 94, 520 119 S 621 62, 692 48"
-                fill="none"
-                stroke="rgba(255,255,255,.14)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                initial={false}
-                whileInView={{ pathLength: 1 }}
-                viewport={{ once: true, amount: 0.4 }}
-                transition={{ duration: reduced ? 0 : 1.35, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </svg>
-            <div className={styles.arcNodes}>
-              {WEEKS.map((item, index) => (
+    <section className={styles.sectionDark} id="training">
+      <div className={styles.shell}>
+        <SectionHeading
+          dark
+          kicker="Training"
+          title="Every set planned. Every rep counted."
+          lead="Follow coach-built programs like The Jon Don Split — or build the exact session you need. Then log it with demo videos, PR history, and a Live mode that counts reps through your camera."
+        />
+        <div className={styles.trainingPanel}>
+          <div className={styles.trainingCopy}>
+            <div className={styles.tabRow} role="tablist" aria-label="Explore training features">
+              {TRAINING_TABS.map((tab) => (
                 <button
-                  key={item.label}
+                  key={tab.id}
                   type="button"
-                  className={index === activeWeek ? styles.arcNodeActive : styles.arcNode}
-                  onClick={() => setActiveWeek(index)}
-                  aria-label={"Open " + item.label}
-                  aria-pressed={index === activeWeek}
-                  style={{ "--node-color": item.color } as CSSProperties}
+                  role="tab"
+                  aria-selected={tab.id === active.id}
+                  aria-controls="training-panel"
+                  className={tab.id === active.id ? styles.tabActive : styles.tab}
+                  onClick={() => setActiveId(tab.id)}
                 >
-                  <span />
-                  <small>{item.label}</small>
+                  <tab.Icon size={16} />
+                  {tab.label}
                 </button>
               ))}
-              <div className={styles.arcHorizon}>
-                <span />
-                <small>Horizon</small>
+            </div>
+            <div id="training-panel" role="tabpanel">
+              <h3>{active.title}</h3>
+              <p>{active.body}</p>
+              <FeatureList dark items={active.points} />
+            </div>
+          </div>
+          <div className={styles.trainingVisual}>
+            {TRAINING_TABS.map((tab) => (
+              <div key={tab.id} className={styles.phoneFader} data-active={tab.id === active.id}>
+                <Phone src={tab.image} alt={tab.alt} className={styles.phoneDark} />
               </div>
-            </div>
-            <div className={styles.arcSummary}>
-              <strong>12 weeks</strong>
-              <span>· 36 workouts · 48 mind sessions · a line you can see</span>
-            </div>
+            ))}
           </div>
+        </div>
+      </div>
+    </section>
+  )
+}
 
-          <div className={styles.arcCardWrap}>
-            <AnimatePresence mode="wait">
-              <motion.article
-                key={week.label}
-                className={styles.arcCard}
-                style={{ "--week-color": week.color } as CSSProperties}
-                initial={false}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={reduced ? undefined : { opacity: 0, y: -14, scale: 0.98 }}
-                transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <header>
-                  <span>{week.label}</span>
-                  <strong>{week.dates}</strong>
-                </header>
-                <h3>{week.headline}</h3>
-                <p>{week.note}</p>
-                <div className={styles.arcProof}>
-                  <ProofRow icon={<Brain size={15} />} label="Mind" filled={week.mind} total={7} color="#A78BFA" />
-                  <ProofRow icon={<Utensils size={15} />} label="Fuel" filled={week.fuel} total={7} color="#F87171" />
-                  <ProofRow icon={<Dumbbell size={15} />} label="Training" filled={week.training} total={4} color="#4ADE80" />
-                </div>
-                <blockquote>“{week.identity}”</blockquote>
-              </motion.article>
-            </AnimatePresence>
+function NutritionSection() {
+  return (
+    <section className={styles.section} id="nutrition">
+      <div className={styles.shell}>
+        <div className={styles.splitReverse}>
+          <div className={styles.splitCopy}>
+            <SectionHeading
+              kicker="Nutrition"
+              title="Point your camera at lunch. Done."
+              lead="Snap a photo and Become itemizes the whole plate — every food, portion, and calorie — against targets built for your goal."
+            />
+            <FeatureList
+              items={[
+                "Photo logging with a full itemized breakdown",
+                "Personal calorie and macro targets, not generic numbers",
+                "Barcode scan and fast food search",
+                "Protein, carbs, and fats tracked through the day",
+              ]}
+            />
+            <p className={styles.aside}>
+              <Camera size={15} /> One photo logged an eight-item breakfast. Try that in a spreadsheet.
+            </p>
           </div>
+          <div className={styles.splitVisual}>
+            <div className={styles.phonePair}>
+              <Phone
+                src="/screenshots/become-nutrition-day.webp"
+                alt="Daily calories ring with macro targets in Become"
+                className={styles.phoneBack}
+                sizes="(max-width: 800px) 58vw, 260px"
+              />
+              <Phone
+                src="/screenshots/become-nutrition-meal.webp"
+                alt="A photo-logged breakfast itemized into eight foods with calories"
+                className={styles.phoneFront}
+                sizes="(max-width: 800px) 58vw, 260px"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MindProgressSection() {
+  return (
+    <section className={styles.section} id="mind">
+      <div className={styles.shell}>
+        <div className={styles.duoGrid}>
+          <article className={styles.duoCard}>
+            <div className={styles.duoHead}>
+              <span className={styles.duoIcon} data-tone="violet">
+                <Brain size={18} />
+              </span>
+              <h3>Mind</h3>
+            </div>
+            <p>
+              Consistency is a mental game, so the strongest muscle gets its own tab: short guided sessions, mood
+              tracking, and identity work for the days motivation doesn&apos;t show up.
+            </p>
+            <FeatureList
+              items={["Daily guided mental sessions", "Mood check-ins and 7-day trends", "Identity and habit work that sticks"]}
+            />
+            <div className={styles.duoShot} style={{ aspectRatio: "720 / 860" }}>
+              <Image
+                src="/screenshots/become-mind-card.webp"
+                alt="Become Mindset hub: you are not your current circumstances"
+                fill
+                sizes="(max-width: 800px) 86vw, 380px"
+              />
+            </div>
+          </article>
+          <article className={styles.duoCard}>
+            <div className={styles.duoHead}>
+              <span className={styles.duoIcon} data-tone="gold">
+                <LineChart size={18} />
+              </span>
+              <h3>Progress &amp; The Becoming</h3>
+            </div>
+            <p>
+              Weight trends, PRs, and streaks show the line moving. And every week, The Becoming writes the week back to
+              you — what held, what slipped, what&apos;s next. Evidence, not vibes.
+            </p>
+            <FeatureList
+              items={["Weight, strength, and streak trends", "A weekly recap across training, food, and mind", "Milestones when goals are reached"]}
+            />
+            <div className={styles.duoShot} style={{ aspectRatio: "720 / 826" }}>
+              <Image
+                src="/screenshots/become-progress-card.webp"
+                alt="The Becoming weekly summary with streak, mood, goal reached, and weight tiles"
+                fill
+                sizes="(max-width: 800px) 86vw, 380px"
+              />
+            </div>
+          </article>
         </div>
       </div>
     </section>
@@ -434,132 +396,205 @@ function BecomingArc() {
 }
 
 export default function BecomeLanding() {
+  const reduced = useReducedMotion()
   const isLoggedIn = useSyncExternalStore(
     subscribeToNothing,
     () => Boolean(localStorage.getItem("token")),
     () => false,
   )
 
+  const rise = (delay: number) =>
+    reduced
+      ? {}
+      : ({
+          initial: { opacity: 0, y: 18 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] },
+        } as const)
+
   return (
     <main className={styles.root}>
       <nav className={styles.nav} aria-label="Main navigation">
         <div className={styles.navShell}>
-          <Link href="/" aria-label={appName + " home"}><BrandMark /></Link>
+          <Link href="/" aria-label={appName + " home"}>
+            <BrandMark />
+          </Link>
           <div className={styles.navLinks}>
-            <a href="#system">The system</a>
-            <a href="#becoming">The Becoming</a>
+            <a href="#dashboard">Dashboard</a>
+            <a href="#training">Training</a>
+            <a href="#nutrition">Nutrition</a>
+            <a href="#mind">Mind</a>
+            <a href="#coach">Coach</a>
           </div>
           <div className={styles.navActions}>
             <Link className={styles.signIn} href={isLoggedIn ? "/dashboard" : "/login"}>
               {isLoggedIn ? "Open app" : "Sign in"}
             </Link>
             <Link className={styles.navCta} href="/register">
-              Begin <ArrowRight size={15} />
+              Get started <ArrowRight size={15} />
             </Link>
           </div>
         </div>
       </nav>
 
       <section className={styles.hero}>
-        <div className={styles.heroNoise} />
         <div className={styles.heroShell}>
           <div className={styles.heroCopy}>
-            <motion.div
-              className={styles.heroEyebrow}
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55 }}
-            >
-              <span style={{ background: "#A78BFA" }} />
-              Mind
-              <span style={{ background: "#F87171" }} />
-              Fuel
-              <span style={{ background: "#4ADE80" }} />
-              Training
-            </motion.div>
-            <motion.h1
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.75, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-            >
-              Who are you
-              <em>becoming?</em>
-            </motion.h1>
-            <motion.p
-              className={styles.heroLead}
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.65, delay: 0.2 }}
-            >
-              Become turns the work no one sees—one workout, one meal, one honest check-in—into a path you can actually follow.
+            <motion.p className={styles.heroEyebrow} {...rise(0)}>
+              <Dumbbell size={14} /> Training <span aria-hidden="true">·</span> <Utensils size={14} /> Nutrition{" "}
+              <span aria-hidden="true">·</span> <Brain size={14} /> Mind
             </motion.p>
-            <motion.div
-              className={styles.heroActions}
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-            >
+            <motion.h1 {...rise(0.06)}>
+              The only fitness app your goal actually needs.
+            </motion.h1>
+            <motion.p className={styles.heroLead} {...rise(0.14)}>
+              Coach-built programs, photo-powered nutrition tracking, live workout logging, and daily mindset work —
+              organized into one clear plan, so you always know exactly what to do next.
+            </motion.p>
+            <motion.div className={styles.heroActions} {...rise(0.22)}>
               <Link className={styles.primaryCta} href="/register">
-                Start your line <ArrowRight size={18} />
+                Get started <ArrowRight size={18} />
               </Link>
-              <a className={styles.secondaryCta} href="#system">
-                See the whole system
+              <a className={styles.secondaryCta} href="#why">
+                See what&apos;s inside
               </a>
             </motion.div>
-            <motion.div
-              className={styles.heroFootnote}
-              initial={false}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.5 }}
-            >
-              <Flame size={16} />
-              Built for the week you are really having.
-            </motion.div>
+            <motion.p className={styles.heroFootnote} {...rise(0.3)}>
+              Built by coach Jon Don · Sign up with just your email
+            </motion.p>
           </div>
-          <HeroWorld />
+          <motion.div
+            className={styles.heroVisual}
+            initial={reduced ? false : { opacity: 0, y: 26 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className={styles.heroGlow} aria-hidden="true" />
+            <Phone
+              src="/screenshots/become-dashboard-light.webp"
+              alt="Become dashboard showing today's workout, streak, mood, and goal progress"
+              className={styles.heroPhoneBack}
+              priority
+              sizes="(max-width: 800px) 60vw, 280px"
+            />
+            <Phone
+              src="/screenshots/become-training-live.webp"
+              alt="Become Live mode counting reps through the camera during a workout"
+              className={styles.heroPhoneFront}
+              priority
+              sizes="(max-width: 800px) 60vw, 280px"
+            />
+            <div className={styles.heroBadge}>
+              <span className={styles.heroBadgeDot} aria-hidden="true" />
+              Live rep counting
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      <section className={styles.manifesto}>
-        <div className={styles.manifestoLine} aria-hidden="true">
-          <span className={styles.lineNodeViolet} />
-          <span className={styles.lineNodeRed} />
-          <span className={styles.lineNodeGreen} />
-          <span className={styles.lineNodeGold} />
+      <section className={styles.why} id="why">
+        <div className={styles.shell}>
+          <SectionHeading
+            kicker="Why Become"
+            title="You don't need more apps. You need one that has everything."
+            lead="Most people quit because their plan is scattered across four apps and a notes file. Become puts the whole system on one screen."
+          />
+          <div className={styles.whyGrid}>
+            {WHY.map((item) => (
+              <article key={item.title} className={styles.whyCard}>
+                <span className={styles.whyIcon}>
+                  <item.Icon size={19} />
+                </span>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
         </div>
-        <Reveal className={styles.manifestoInner}>
-          <span>Most apps tell you what you did.</span>
-          <h2>Become shows you what it is making of you.</h2>
-          <p>Then <ArrowRight size={15} /> now <ArrowRight size={15} /> next, across all three.</p>
-        </Reveal>
       </section>
 
-      <SystemStage />
-      <BecomingArc />
+      <DashboardSection />
+      <TrainingSection />
+      <NutritionSection />
+      <MindProgressSection />
+
+      <section className={styles.steps} id="how">
+        <div className={styles.shell}>
+          <SectionHeading
+            kicker="How it works"
+            title="Three steps to day one."
+          />
+          <ol className={styles.stepsGrid}>
+            {STEPS.map((step) => (
+              <li key={step.number} className={styles.stepCard}>
+                <span className={styles.stepNumber}>{step.number}</span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className={styles.coach} id="coach">
+        <div className={styles.shell}>
+          <div className={styles.coachCard}>
+            <div className={styles.coachPhoto}>
+              <Image src={coachImage} alt="Coach Jon Don" fill sizes="(max-width: 800px) 40vw, 220px" />
+            </div>
+            <div className={styles.coachCopy}>
+              <span className={styles.kicker}>The coach</span>
+              <h2>Real programming, from a real coach.</h2>
+              <p>
+                Become is the system coach Jon Don uses with his own clients — the programs, the nutrition targets, the
+                mindset work. You&apos;re not following an algorithm&apos;s guess. You&apos;re following a coach&apos;s
+                system, with the tools to run it yourself.
+              </p>
+              <div className={styles.coachMeta}>
+                <span>
+                  <Play size={14} /> Demo videos on every exercise
+                </span>
+                <span>
+                  <Calendar size={14} /> Programs that plan your week
+                </span>
+                <span>
+                  <Utensils size={14} /> Nutrition targets set to your goal
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className={styles.closing}>
-        <div className={styles.closingGlow} />
-        <Reveal className={styles.closingInner}>
-          <BrandMark compact />
-          <h2>Start with today.<br /><em>Let the line prove the rest.</em></h2>
-          <p>No heroic reset. No perfect Monday. Just the next honest action, held in context.</p>
-          <div className={styles.closingActions}>
-            <Link className={styles.primaryCta} href="/register">
-              Begin becoming <ArrowRight size={18} />
-            </Link>
-            <Link className={styles.closingSignIn} href={isLoggedIn ? "/dashboard" : "/login"}>
-              {isLoggedIn ? "Return to your week" : "Already a member? Sign in"}
-            </Link>
+        <div className={styles.shell}>
+          <div className={styles.closingInner}>
+            <BrandMark compact />
+            <h2>Ready to become?</h2>
+            <p>Your first workout is minutes away. Sign up with your email — no credit card, no fuss.</p>
+            <div className={styles.closingActions}>
+              <Link className={styles.primaryCta} href="/register">
+                Start today <ArrowRight size={18} />
+              </Link>
+              <Link className={styles.closingSignIn} href={isLoggedIn ? "/dashboard" : "/login"}>
+                {isLoggedIn ? "Open the app" : "Already a member? Sign in"}
+              </Link>
+            </div>
           </div>
-        </Reveal>
+        </div>
       </section>
 
       <footer className={styles.footer}>
-        <BrandMark compact />
-        <p>Mind · Fuel · Training · one becoming.</p>
-        <div>
-          <Link href="/login">Sign in</Link>
-          <Link href="/register">Register</Link>
+        <div className={styles.shell}>
+          <div className={styles.footerRow}>
+            <BrandMark compact />
+            <p>Training · Nutrition · Mind — one app.</p>
+            <div className={styles.footerLinks}>
+              <Link href="/login">Sign in</Link>
+              <Link href="/register">Register</Link>
+              <Link href="/information">Info</Link>
+            </div>
+          </div>
         </div>
       </footer>
     </main>
