@@ -4,9 +4,11 @@
  * VideoTrimEditor — admin-only in/out points for a single exercise video.
  *
  * Sits under VideoFramingEditor in the exercise form. Default state is "full
- * length"; opening the panel reveals a start/end pair of sliders over a live
- * preview that loops the selected window, so you can see the trim before you
- * save it.
+ * length"; opening the panel reveals a filmstrip of real frame thumbnails
+ * with drag handles on either side (VideoFilmstripTrimmer) plus a preview
+ * that can be switched to the same surfaces the workout UI uses, so admins
+ * can see both what they're cutting and how the result actually looks mid-
+ * workout before saving.
  *
  * The trim is non-destructive — we store seconds and the player seeks, we
  * never re-encode. That means a bad in/out is one edit away from fixed rather
@@ -16,13 +18,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, RotateCcw, Save, Scissors } from 'lucide-react';
 import FramedVideo from '@/components/FramedVideo';
-import type { VideoFramingOverride } from '@/lib/videoFraming';
+import VideoFilmstripTrimmer from '@/components/admin/VideoFilmstripTrimmer';
+import type { VideoFramingOverride, VideoSurface } from '@/lib/videoFraming';
 import {
   MIN_TRIM_DURATION,
   formatTimecode,
   resolveTrim,
   type VideoTrimOverride,
 } from '@/lib/videoTrim';
+
+const PREVIEW_SURFACES: VideoSurface[] = ['live', 'form', 'preview'];
+const SURFACE_LABEL: Record<VideoSurface, string> = {
+  live: 'In the workout',
+  form: 'In the form card',
+  preview: 'Plain preview',
+};
 
 export interface VideoTrimEditorProps {
   /** Exercise slug used to build the PATCH URL. */
@@ -43,9 +53,6 @@ export interface VideoTrimEditorProps {
   onSaved?: (next: VideoTrimOverride | null) => void;
 }
 
-/** Slider granularity. Matches the tenth-of-a-second the API stores. */
-const STEP = 0.1;
-
 export default function VideoTrimEditor({
   slug,
   videoUrl,
@@ -60,6 +67,10 @@ export default function VideoTrimEditor({
   const [duration, setDuration] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which surface the preview mirrors — defaults to "live" because the
+  // whole point of this control is seeing the trim the way a member sees it
+  // mid-workout, not a generic card.
+  const [surface, setSurface] = useState<VideoSurface>('live');
 
   const saved = resolveTrim({ videoTrim }, duration);
 
@@ -174,76 +185,89 @@ export default function VideoTrimEditor({
 
       {open && (
         <div className="space-y-3 border-t border-zinc-200 p-3 dark:border-zinc-800">
-          {/* Live preview of the drafted window, not the saved one. */}
-          <FramedVideo
-            src={videoUrl}
-            surface="preview"
-            videoWidth={videoWidth}
-            videoHeight={videoHeight}
-            videoFraming={videoFraming}
-            videoTrim={{ start: draft.start, end: draft.end }}
-            onDuration={(d) => setDuration((prev) => (prev === null ? d : prev))}
-            className="max-w-sm"
-          />
+          {/* Surface switcher — "In the workout" is the default because that's
+              the actual ask: see the demo of the trim the way it plays live,
+              not a generic card. */}
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-zinc-500 dark:text-zinc-400">Preview</span>
+            {PREVIEW_SURFACES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSurface(s)}
+                className={`rounded-full px-2 py-0.5 ${
+                  surface === s
+                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {SURFACE_LABEL[s]}
+              </button>
+            ))}
+          </div>
+
+          {/* Live preview of the drafted window, not the saved one. The
+              "live" surface has no intrinsic aspect ratio (it's built to
+              fill a fullscreen phone), so it gets a phone-shaped frame here
+              instead of the flat 16:9 card the other surfaces use. */}
+          {surface === 'live' ? (
+            <div
+              className="relative mx-auto w-40 overflow-hidden rounded-2xl bg-black ring-1 ring-zinc-800"
+              style={{ aspectRatio: '9 / 16' }}
+            >
+              <FramedVideo
+                src={videoUrl}
+                surface="live"
+                videoWidth={videoWidth}
+                videoHeight={videoHeight}
+                videoFraming={videoFraming}
+                videoTrim={{ start: draft.start, end: draft.end }}
+                onDuration={(d) => setDuration((prev) => (prev === null ? d : prev))}
+                wrapperOverride="absolute inset-0 h-full w-full overflow-hidden bg-black"
+              />
+            </div>
+          ) : (
+            <FramedVideo
+              src={videoUrl}
+              surface={surface}
+              videoWidth={videoWidth}
+              videoHeight={videoHeight}
+              videoFraming={videoFraming}
+              videoTrim={{ start: draft.start, end: draft.end }}
+              onDuration={(d) => setDuration((prev) => (prev === null ? d : prev))}
+              className="max-w-sm"
+            />
+          )}
 
           {duration === null ? (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Reading video length…</p>
           ) : (
             <>
-              <div>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <label className="font-medium text-zinc-600 dark:text-zinc-300">Start</label>
-                  <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Drag the handles on either side of the strip to trim.
+              </p>
+              <VideoFilmstripTrimmer
+                videoUrl={videoUrl}
+                duration={duration}
+                start={draft.start}
+                end={draft.end}
+                minDuration={MIN_TRIM_DURATION}
+                onChange={(next) => setDraft(next)}
+              />
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  Start{' '}
+                  <span className="font-medium tabular-nums text-zinc-700 dark:text-zinc-200">
                     {formatTimecode(draft.start)}
                   </span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={max}
-                  step={STEP}
-                  value={draft.start}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    setDraft((d) => ({
-                      // Dragging start past end would invert the window; push
-                      // end along instead of letting it go negative.
-                      start: next,
-                      end:
-                        d.end !== null && next > d.end - MIN_TRIM_DURATION
-                          ? Math.min(max, next + MIN_TRIM_DURATION)
-                          : d.end,
-                    }));
-                  }}
-                  className="w-full accent-green-600"
-                />
-              </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <label className="font-medium text-zinc-600 dark:text-zinc-300">End</label>
-                  <span className="tabular-nums text-zinc-500 dark:text-zinc-400">
+                </span>
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  End{' '}
+                  <span className="font-medium tabular-nums text-zinc-700 dark:text-zinc-200">
                     {draft.end === null ? formatTimecode(max) : formatTimecode(draft.end)}
                   </span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={max}
-                  step={STEP}
-                  value={draft.end ?? max}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    setDraft((d) => ({
-                      start:
-                        next < d.start + MIN_TRIM_DURATION
-                          ? Math.max(0, next - MIN_TRIM_DURATION)
-                          : d.start,
-                      end: next,
-                    }));
-                  }}
-                  className="w-full accent-green-600"
-                />
+                </span>
               </div>
 
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
