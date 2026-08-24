@@ -17,8 +17,8 @@ Two git-sourced RedRun workspaces, same MongoDB and same env:
 | Beta | become-beta.redbtn.io | `beta` | `6a77a584e2c526617ae198f1` |
 
 Both autoDeploy, so **merging to a branch IS the deploy for that channel**. The
-normal flow is unchanged: `agent/<host>` → `beta` (beta channel picks it up) →
-`main` (production picks it up).
+normal flow is unchanged: `agent/<host>-<feature>` → `beta` (beta channel picks it
+up) → `main` (production picks it up).
 
 They share a database on purpose, so beta is a code-level preview and not an
 isolated sandbox — data written on beta is production data. Only two env values
@@ -243,7 +243,7 @@ Rules:
 
 - **`main`** — production, protected
 - **`beta`** — integration branch, PRs merge here first
-- **`agent/<hostname>`** — working branches, PR to `beta`
+- **`agent/<hostname>-<feature>`** — one isolated feature branch per task (e.g. `agent/alphaSystem-landing-rework`), PR to `beta`, delete after merge. Never a shared long-lived `agent/<hostname>` branch — concurrent agents collide on it.
 - Never commit directly to `main` or `beta`
 - You have **explicit standing permission** to merge feature branch → `beta` → `main` as part of the normal deploy flow. Do not pause to re-ask each time; the user has already authorized this pipeline.
 
