@@ -19,7 +19,7 @@ import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
-import { normalizeTracking, tracksTime, setUnitLabel } from "@/lib/workout/tracking";
+import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
 import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
@@ -297,10 +297,11 @@ export default function LiveWorkoutPage() {
     }
   };
 
-  // Initialize exercises and build flow helper. Optional `prefill` map seeds
-  // reps/weight/speed from the user's last completed set per exercise slug —
-  // so opening a fresh workout starts with last-time's numbers ready to
-  // confirm, NOT marked complete.
+  // Initialize exercises and build flow helper. Sets always start blank —
+  // last-time's numbers are shown separately as a "Last: X lbs × Y reps"
+  // reference (see exerciseHistory below), never written into the editable
+  // fields. Writing them in silently logged weight/reps the member never
+  // actually entered if they tapped Done without looking closely.
   type PerformanceEntry = {
     reps?: number;
     weight?: number;
@@ -309,36 +310,15 @@ export default function LiveWorkoutPage() {
     distance?: number;
     date?: string;
   };
-  const initializeExercises = (
-    exList: Exercise[],
-    prefill?: Record<string, PerformanceEntry | null>,
-  ) => {
-    const data = exList.map((ex) => {
-      // Match either by direct slug or by name-normalized slug — same logic
-      // the endpoint uses on its side.
-      const directSlug = ex.exerciseSlug?.toLowerCase();
-      const nameSlug = ex.name
-        ?.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      const prior =
-        (directSlug && prefill?.[directSlug]) ||
-        (nameSlug && prefill?.[nameSlug]) ||
-        null;
-      return Array.from({ length: ex.sets || 3 }, () => ({
-        reps: prior?.reps != null ? String(prior.reps) : '',
-        weight: prior?.weight != null ? String(prior.weight) : '',
-        speed: prior?.speed != null ? String(prior.speed) : '',
-        completed: false,
-      }));
-    });
+  const initializeExercises = (exList: Exercise[]) => {
+    const data = exList.map((ex) => Array.from({ length: ex.sets || 3 }, () => blankSet()));
     const flow = buildWorkoutFlow(exList);
     return { data, flow };
   };
 
-  // Fetch the user's last-completed-set per exercise so the live workout can
-  // prefill inputs. Best-effort — failure returns an empty map and we fall
-  // back to empty inputs.
+  // Fetch the user's last-completed-set per exercise, for the "Last: X lbs ×
+  // Y reps" reference and PR display. Best-effort — failure returns an empty
+  // map and the reference simply doesn't show.
   const fetchLastPerformance = async (
     token: string,
     exList: Exercise[],
@@ -509,7 +489,7 @@ export default function LiveWorkoutPage() {
             }
           }
           setExerciseHistory(quickHistory);
-          const { data, flow } = initializeExercises(exs, lastPerformance);
+          const { data, flow } = initializeExercises(exs);
           // Restore shared progress from the Track view (reps/weight/completed) so
           // flipping the Track|Live tab never loses entered sets.
           const savedQP = quickSessionId ? readQuickProgress(quickSessionId) : null;
@@ -579,14 +559,15 @@ export default function LiveWorkoutPage() {
           setExercises(workoutData.exercises);
           setCurrentPhase(data.phase || 1);
 
-          // Prefill from last completed set per exercise — kicked off in
-          // parallel with the resume-progress lookup below so we don't add
-          // latency in the resume path. Results are used only on fresh
-          // start (resume / draft override entirely).
+          // Kicked off in parallel with the resume-progress lookup below so we
+          // don't add latency in the resume path. Sets in exerciseHistory
+          // (from the resume lookup) still show a "Last: X lbs × Y reps"
+          // hint; this call's only remaining job is populating exercisePRs
+          // as a side effect (see fetchLastPerformance).
           const prefillPromise = fetchLastPerformance(token, workoutData.exercises);
-          const lastPerformance = await prefillPromise;
+          await prefillPromise;
 
-          let { data: initialData, flow } = initializeExercises(workoutData.exercises, lastPerformance);
+          let { data: initialData, flow } = initializeExercises(workoutData.exercises);
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
