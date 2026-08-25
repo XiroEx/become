@@ -200,7 +200,7 @@ export default function NewProgramClient() {
             <div>
               <p className="text-base font-semibold text-zinc-900 dark:text-white">Import a program</p>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Paste text, or upload a photo or file
+                Paste text, or upload a file
               </p>
             </div>
           </button>

@@ -43,7 +43,10 @@ export type BecomeTask =
   // structured text → EXTRACT (not generate) a program from pasted/typed notes.
   // Dotless — new task registered after the registry started rejecting dotted keys.
   | 'workoutImportText'
-  // vision → EXTRACT a program from a photo of handwritten/typed notes.
+  // vision → EXTRACT a program from a photo of handwritten/typed notes. Registered
+  // but NOT called by any route: the shared vision runner node hardcodes the
+  // nutrition plate-estimate schema, so this always comes back empty. See the
+  // comment in app/api/ai/workout/import/route.ts before wiring this back up.
   | 'workoutImportPhoto'
 
 export interface BecomeResponse {
