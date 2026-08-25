@@ -127,11 +127,12 @@ One launch, three messages. Do not copy-paste.
 
 | Tier | Audience state | Message shape | Example |
 |---|---|---|---|
-| Owned | Already uses Become | "This is new in your app" | `The camera counts your reps now. Open LIVE mode on your next set.` |
-| Rented | Knows the category, not us | "Here is the mechanism" | `Prop the phone, train, and it logs the set. No wearable, no tapping between sets.` |
+| Owned | Already uses Become | "This is new in your app" | `Photograph the plate now instead of typing it. Open Nutrition on your next meal.` |
+| Rented | Knows the category, not us | "Here is the mechanism" | `One photo of the plate comes back as separate items with their own calories. No searching, no per-item entry.` |
 | Borrowed | Knows the creator, not us | Their words, our truth | Brief the mechanism and the limits. Let them phrase it. |
 
 ```
 ❌ We're excited to announce a revolutionary new feature that will transform your training!
-✅ The camera counts your reps now. Prop the phone, train, and the set is logged.
+✅ Photograph the plate. Chicken, rice and the sauce come back as three lines with their own
+   calories.
 ```

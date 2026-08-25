@@ -35,7 +35,8 @@ Status values: `not started` / `in progress` / `blocked` / `done`.
 
 **Capture and render at T-10, never at T-1.** A full render is long, and the capture pipeline has
 real traps: single-point trend charts because weight and mood cannot be backdated, a hardcoded
-dark bar fill that vanishes on the dark card, `.mov` demos failing in Chromium, carousels
+dark bar fill that vanishes on the dark card, exercise demos rendering as a black panel in Chromium
+(a `type="video/quicktime"` bug in `FramedVideo.tsx`, so capture on iOS or Safari), carousels
 auto-rotating out of sync with their twin.
 
 ---

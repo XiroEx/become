@@ -94,16 +94,20 @@ fabricable.
 
 | Proof | Where it lives |
 |---|---|
-| The camera counting reps in LIVE mode | Needs a filmed demo. No capture exists yet. Commission via `reels-scripts` |
-| A photo of a plate resolving into items | `webapp/public/screenshots/v2/nutrition-meal-light.webp` |
+| A photo of a plate resolving into items | **No capture exists yet.** Commission via `screenshot-capture` |
+| A barcode scan landing a packaged food | **No capture exists yet.** Commission via `screenshot-capture` |
+| A day of meals, itemized, against calorie and macro targets | `nutrition-meal-light.webp` and `nutrition-day-light.webp` |
 | A session being generated from focus, level, and equipment | `generate-light.webp` and `generate-dark.webp` |
 | Every hub on one dashboard | `dashboard-light.webp` and `dashboard-dark.webp` |
 | Last-session numbers and a PR badge during a set | `workout-log-dark.webp` |
-| A week written back to you | `progress-light.webp` and `progress-dark.webp` |
+| Volume, workout history, and PRs over six weeks | `progress-light.webp` and `progress-dark.webp` |
 
-Clear every shot against `webapp/public/screenshots/v2/manifest.json` before use. The manifest
-records known issues, and some shots have state caveats (weight and mood cannot be backdated
-through any app API, so trend charts are single-point).
+Clear every shot against `webapp/public/screenshots/v2/manifest.json` before use, and note two
+traps it records. The meals in `nutrition-meal-*.webp` were **typed through food search**, not
+photographed, so that shot proves itemized meals and never photo logging. And `/dashboard/progress`
+is the **Training Log** — volume, history, PRs — with no weight-trend chart on it at all; body-weight
+trend lives on the dashboard, and it is single-point on every dummy account because weight and mood
+cannot be backdated through any app API.
 
 ### Tier 2: coach credibility
 
@@ -124,7 +128,7 @@ Concrete numbers about the product itself are honest and read as evidence. Numbe
 are not.
 
 ```
-✅ 42 movements, each with a demo clip.
+✅ 39 movements with a demo clip, covering the main lifts.
 ✅ Twelve-week programs, built in phases.
 ✅ Filters for focus, level, and the equipment in front of you.
 ❌ 10,000 workouts logged.

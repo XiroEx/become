@@ -278,7 +278,8 @@ There is no discount to give. Options and their honesty tests in
   one as a Become results claim in public copy.
 - **Beta and production share one database.** A share created on beta is a real, public,
   live link. Treat every write as production.
-- **Voice:** second person, present tense, active. Near-zero em dashes. No "journey," "unlock
+- **Voice:** second person, present tense, active. Near-zero em dashes in deliverable
+  copy. No "journey," "unlock
   your potential," "crush it," "no excuses," "just," "simply." At most one emoji in a share
   caption, and only if it carries meaning.
 

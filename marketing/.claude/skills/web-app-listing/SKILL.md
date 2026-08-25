@@ -130,7 +130,7 @@ drift, and drift across directories is what makes a small product look unserious
 
 ```
 ❌ The ultimate all-in-one fitness companion for your wellness journey.
-✅ A coach builds the phases. Your phone counts the reps and reads the plate.
+✅ A coach builds the phases. Your phone reads the plate and remembers the weights.
 ```
 
 ### 2. Directory tiers for a free PWA
@@ -215,9 +215,13 @@ shows and what its limitations are.
 - *Leading with a feature nobody understands.* Opening on the generate sheet before the dashboard
   gives the viewer no frame.
 - *Theme whiplash.* Light, dark, light, dark with no logic reads as inconsistency, not range.
-- *A shot whose caption overclaims.* Weight and mood history cannot be backdated through any app API,
-  so trend charts in the v2 set are single-point. A "months of progress" caption on that shot is a
-  lie the screenshot itself disproves.
+- *A shot whose caption overclaims.* Three live examples, all recorded in the manifest.
+  `/dashboard/progress` is the **Training Log** (volume, history, PRs) and holds no weight-trend
+  chart, so "watch your weight come down" is disproved by the shot it sits under. The meals in
+  `nutrition-meal-*.webp` were **typed through food search**, not photographed, so that shot cannot
+  caption photo logging. And weight and mood cannot be backdated through any app API, so the trend
+  charts that do exist are single-point and a "months of progress" caption is a lie the screenshot
+  itself disproves.
 
 **Strong patterns:** default order, and the reason for each position.
 
@@ -225,9 +229,9 @@ shows and what its limitations are.
 |---|---|---|---|
 | 1 | `dashboard-light.webp` | light | The whole day on one screen |
 | 2 | `workout-log-dark.webp` | dark | Logging a set, with the demo playing |
-| 3 | `nutrition-meal-light.webp` | light | One photo, the plate itemized |
-| 4 | `generate-light.webp` | light | Tell it your equipment, it builds the session |
-| 5 | `progress-light.webp` | light | Trends and the weekly recap |
+| 3 | `nutrition-meal-light.webp` | light | A day of meals, itemized |
+| 4 | `generate-light.webp` | light | Tell it your equipment and your time (the sheet, not the output) |
+| 5 | `progress-light.webp` | light | Your training log: volume, history, PRs |
 | 6 | `mind-light.webp` | light | Short guided sessions |
 
 Position 2 is dark by necessity, and that is fine: it reads as the in-gym screen. State the reason in
@@ -274,7 +278,7 @@ the manifest so nobody "fixes" it later.
       or before/after framing anywhere in the kit.
 - [ ] "(beta)" appears nowhere, and every link points at `become.redbtn.io`.
 - [ ] No credential, token, or dummy-account password appears in the output.
-- [ ] Banned words absent. Near-zero em dashes. No emoji in the listing body.
+- [ ] Banned words absent. Near-zero em dashes in deliverable copy. No emoji in the listing body.
 - [ ] Submission rules for the surface are restated in the checklist, one line each.
 - [ ] Three tagline alternatives at the exact limit, each with a rationale.
 

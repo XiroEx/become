@@ -137,16 +137,34 @@ Do not contradict this. Do not extend it. If a capability is not listed, it does
 | Hub | What it does |
 |---|---|
 | **Dashboard** | Day at a glance, streaks, mood, weight, water, customizable tiles |
-| **Training** | Coach-built multi-phase programs, AI session and program generator, exercise demo videos, set logging with PR history, LIVE mode that counts reps through the camera |
+| **Training** | Coach-built multi-phase programs, an equipment- and time-aware AI session and program generator, demo clips on the big lifts, set logging with PR history, LIVE mode: one set on screen, last session's numbers, PR badge, rest timer |
 | **Nutrition** | Photo logging that itemizes a whole plate, barcode scan, personal calorie and macro targets |
 | **Mind** | Short guided sessions, mood tracking, identity work |
 | **Progress & The Becoming** | Weight and strength trends, plus a weekly recap that writes your week back to you |
 
-Signup is an **email magic link**. No credit card. **Free today**, and no pricing exists. **Web push
-notifications exist.** There is no native app; Become is a PWA, so there is no App Store listing, no
-rating, and no download count.
+Two things sit outside the five hubs and are easy to get wrong in both directions. **Sleep logging
+ships** (`webapp/app/api/sleep`), and so do **community, groups, and events surfaces**
+(`webapp/app/api/groups`, `webapp/app/api/events`, and their dashboard routes) — small and early,
+not absent. Do not write them off as unavailable. **Human coach chat is the one that genuinely is
+not available:** the surface exists but is admin-gated behind a "Coming Soon" `FeatureGuard`, so
+nothing may promise a reply from Jon inside the app.
+
+**The camera is real, but it is not in the gym.** It itemizes a whole plate in Nutrition and it
+scans a barcode. It does not watch a set. LIVE mode is manual entry, and that is the honest,
+still-good story: the numbers you need are already on the screen.
+
+Signup is an **email magic link**, with **Google sign-in and passkeys** alongside it. No credit
+card. **Free today**, and no pricing exists. **Web push notifications exist.** There is no native
+app; Become is a PWA, so there is no App Store listing, no rating, and no download count.
+
+Only **39 of the 132 canonical exercises** ship a demo clip. The big lifts are covered. Never write
+"a demo video for every exercise."
 
 Audience: everyday people who feel scattered across fitness apps. Coach-led credibility matters.
+
+**When the app outgrows this list, update this section and `marketing/.agents/become-context.md`
+first, then write the claim.** The doc trailing the product is how a fabrication gets in: someone
+sees a shipped surface, cannot find it here, and writes around the gap instead of closing it.
 
 ---
 
@@ -221,11 +239,11 @@ Operational rules:
 | Area | State |
 |---|---|
 | Landing page | v2 shipped 2026-08-24: alive and thematic, real dummy-account captures, journey-line motif, light and dark. The one conversion surface |
-| Product captures | 15 v2 shots across 8 screens, manifested. LIVE rep counting has no capture yet |
+| Product captures | 15 v2 shots across 8 screens, manifested. LIVE mode has a dark shot only (`workout-log-dark.webp`) and no light twin |
 | Campaign assets | 46 stills and 19 video storyboards defined in the Remotion project, rendered as two 19-video collections. `out/` is gitignored, so renders are local |
 | Inspo | Two brands analysed. Digest committed |
 | Skills | 28 skills, this library |
-| SEO and GEO | Greenfield. No `robots.txt`, no `sitemap.ts`, no `llms.txt`, no JSON-LD |
+| SEO and GEO | Greenfield in the repo — no `robots.ts`, no `sitemap.ts`, no `llms.txt`, no JSON-LD — and blocked upstream: the domain is a subdomain of an unrelated tech brand, and production serves a Cloudflare-managed `robots.txt` that disallows GPTBot, ClaudeBot, CCBot, and Google-Extended |
 | Analytics | No defined event scheme or funnel instrumentation |
 | Social | No standing cadence |
 | Email and push | Transactional magic link exists. No lifecycle program |
@@ -242,11 +260,21 @@ Operational rules:
    later decision an opinion.
 4. **Fix the funnel we already have.** `landing-cro` then `signup-activation`. Traffic sent at an
    unconverting page is wasted, and activation decides whether a signup becomes a user.
-5. **Capture LIVE rep counting.** `screenshot-capture`. It is the most differentiated mechanism in
-   the product and it has no asset.
-6. **Pick one channel and commit.** `marketing-plan`. Jon's audience is the highest-leverage owned
+5. **Shoot the mechanism we lead with.** `screenshot-capture`. Whole-plate photo logging is the most
+   differentiated thing the product does and has no capture at all — the `nutrition-meal-*` shots
+   were seeded by typing, so they cannot stand in for it. LIVE mode has a dark shot and no light
+   twin.
+6. **Build the member-proof pipeline.** Jon DMs five to ten warm clients for written consent and
+   verbatim quotes (`ugc-creator-briefs`). There is no permissioned member content today, which
+   closes off proof-led creative entirely, and it is slow to start, so start it early.
+7. **Pick one channel and commit.** `marketing-plan`. Jon's audience is the highest-leverage owned
    asset, and the team is one person plus agents, so the plan has to be executable at that size.
-7. **Claim the greenfield.** `seo-geo` technical basics are cheap and permanent.
+8. **Settle the domain, then claim the greenfield.** `seo-geo`. The technical basics are cheap,
+   permanent, and portable, so ship them now. Ranked content is not portable: `become.redbtn.io`
+   is a subdomain of an unrelated tech brand, and every T1 and T2 page written before a first-party
+   domain is decided builds equity we would have to move. Settle the domain first. The
+   Cloudflare-managed `robots.txt` blocking GPTBot, ClaudeBot, CCBot, and Google-Extended is a
+   zone-level change George owns, and no amount of repo work routes around it.
 
 ### Known open items
 
@@ -256,7 +284,9 @@ Operational rules:
   single-point. Marketing must not fake a trend.
 - Three live rendering defects are recorded in the capture manifest `knownIssues`: the Weekly
   Volume bars are invisible in dark mode (`ProgressClient.tsx:560`, patched in the DOM at capture
-  time), `.mov` exercise demos fail in Chromium (`FramedVideo.tsx:39`, patched at capture time),
+  time), exercise demo panels go black in Chromium because `FramedVideo.tsx:39` labels them
+  `video/quicktime` when the server is already serving them as `video/mp4` (patched at capture
+  time; the fix is the type attribute, not re-encoding),
   and the Generate sheet's range-slider track stays light in dark mode (cosmetic, captured as-is).
   All three are still open.
 - No permissioned member content, so social-proof-as-screenshot creative is closed to us today.

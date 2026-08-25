@@ -58,7 +58,7 @@ Worked examples at plausible Become volumes:
 | Landing hero | 350 visitors | 4% | +20% | about 54 |
 | Landing hero | 350 visitors | 4% | +50% | about 9 |
 | Landing hero | 2,000 visitors (post-launch) | 4% | +50% | about 2 |
-| Magic-link email subject | 120 sends | 60% click | +10% | about 15 |
+| Magic-link email subject | 120 sends | 60% click | +10% | about 18 |
 | Ad creative on Meta | 40,000 impressions | 1.2% CTR | +30% | about 1 |
 
 Two things fall out of this table immediately:
@@ -98,7 +98,9 @@ Two legitimate ways to look continuously:
 
 **Always-valid p-values / mSPRT.** Designed for continuous monitoring. You may stop any time the
 boundary is crossed. Costs perhaps 20 to 40% more sample than a fixed-horizon test for the same
-power, which is a bargain against the cost of being wrong.
+power, which is a bargain against the cost of being wrong. **Tier C** on that overhead figure: it
+is the range quoted in experimentation-platform vendor write-ups, and the true cost depends on the
+mixture variance you choose. Treat it as "meaningfully more, not double."
 
 **Bayesian posterior with a pre-declared threshold.** Stop when `P(B > A) > 0.95` **and** the
 expected loss from choosing wrong is below a stated threshold. The second condition is the one
@@ -109,8 +111,11 @@ chosen after seeing the data is not a method.
 
 ## Checks before you read any result
 
-1. **Sample ratio mismatch.** Intended 50/50, observed within about 1 point at these sizes. A
-   larger gap means the assignment or logging is broken and the result is void.
+1. **Sample ratio mismatch.** Test it, do not eyeball it. Run a chi-square goodness-of-fit test
+   on the observed counts against the intended split and investigate if p < 0.001. "Within about a
+   point" is not a rule: at 1,240 per arm, one percentage point is roughly one standard deviation
+   of the split, so a 51/49 result is unremarkable while at 40,000 per arm it would be alarming.
+   A real SRM means the assignment or logging is broken and the result is void, not adjustable.
 2. **Whole weeks.** Weekday composition differs. A 10-day test overweights one weekend.
 3. **Exclusions applied.** Test accounts (`@become.test`), staff, and bots out of both arms.
 4. **Guardrails first.** Read the guardrails before the primary metric so a regression is not
@@ -122,8 +127,8 @@ chosen after seeing the data is not a method.
 Say it plainly, with the arithmetic:
 
 > At 350 landing visitors a week and a 4% baseline, detecting a 10% relative lift needs about
-> 30,400 per arm, which is 3.3 years. This is not testable. Ship the better-reasoned version and
-> measure a 4-week pre/post window.
+> 38,400 per arm — 76,800 exposures, or roughly 4.2 years at our volume. This is not testable.
+> Ship the better-reasoned version and measure a 4-week pre/post window.
 
 That sentence is a complete and correct deliverable. Producing a beautiful test design for an
 experiment that cannot resolve is the failure mode this document exists to prevent.

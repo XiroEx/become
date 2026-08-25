@@ -53,7 +53,8 @@ first-person wording (`coach-brand-voice`); a creator's deliverable spec (`ugc-c
    be on camera weekly or monthly. Cadence is a function of this, never of a benchmark.
 4. **What assets already exist.** Check `webapp/public/screenshots/v2/` (15 captures, 8 screens,
    light/dark pairs), `marketing/src/campaigns.json` (46 campaign rows), `marketing/out/` renders,
-   `webapp/public/exercises/` (42 demo clips). A pillar with no available asset and no capture
+   `webapp/public/exercises/` (42 files covering 39 of the 132 exercises). A pillar with no
+   available asset and no capture
    plan is not a pillar.
 5. **What the product is doing this month.** A pillar that showcases an unshipped feature is a
    trap.
@@ -108,7 +109,9 @@ public copy.**
 - The share test, applied to every idea before it is filmed: name the sender and the recipient.
   "Send this to your gym partner who never logs sets" beats "tag a friend."
 - Reels for reach, carousels for authority and saves, statics only when they carry information a
-  still can hold.
+  still can hold. The slide-by-slide carousel spec, the lockup, and three worked decks live in
+  `reels-scripts/references/carousel-spec.md`; commission a deck from `reels-scripts`, not from
+  here.
 - Loop-close: the last frame rhymes with the first, so replays add watch time.
 
 Full mechanics, tiering, and the format economics table live in `references/platform-mechanics.md`
@@ -130,8 +133,8 @@ and `references/benchmarks.md`.
 
 **Strong patterns:**
 - A realistic monthly shape for a small team: roughly 8 Reels, 4-5 carousels, and statics only
-  when they hold real information (Socialinsider 35M-post benchmark, Tier A, used as an internal
-  planning target only).
+  when they hold real information (Socialinsider 35M-post study, Jan-Dec 2025, Tier B, used as an
+  internal planning target only).
 - One filming session and one capture session per month feed the whole month. See
   `content-calendar`.
 - Cadence stated as slots, not counts, so a missed week is visible.
@@ -142,14 +145,14 @@ Five pillars. Each proves one mechanism the product actually has.
 
 | Pillar | Hub | Mechanism it proves | Format it wants |
 |---|---|---|---|
-| Watch it work | Training, Nutrition | The camera counts reps in LIVE mode. One photo itemizes a whole plate. | Reel, 15-30s |
+| Watch it work | Training, Nutrition | One photo itemizes a whole plate. A set is logged and the rest timer starts before the bar is racked. | Reel, 15-30s |
 | One tap at a time | Any hub | A specific task done in the app, one tap per beat | Carousel, 4-6 slides |
 | Coach answer | Training, Mind | Jon answers a real question with a reason, not a rule | Reel, 30-45s, Jon on camera |
 | Plan the week | Training, Dashboard | Coach-built phases, the AI generator, the week strip | Carousel or Reel |
 | Read your week | Progress, Mind | The weekly recap writes your week back to you | Reel or carousel, one slot only |
 
 ❌ Pillar: "Motivation Monday."
-✅ Pillar: "Watch It Work. The camera counts the set while the phone sits on the floor."
+✅ Pillar: "Watch It Work. One photo of lunch comes back as three lines with calories."
 
 **Check for:** every pillar names a mechanism, not a mood. **Common issues:** a "motivation"
 pillar with no product in it; two pillars that are the same idea; a pillar nobody can film.
@@ -169,7 +172,9 @@ Use in this order. Bio link is last, not first.
 
 1. **Send CTA**, best for reach. "Send this to the person who keeps restarting Monday."
 2. **Comment keyword to DM** — best for conversion. Keywords: `BECOME`, `LIVE`, `PLATE`, `WEEK1`.
-   The DM reply must match the post topic or the click dies.
+   The DM reply must match the post topic or the click dies, and every reply is sent by hand: we
+   run no DM-automation tool. Write the four replies once and keep them somewhere you can paste
+   from.
 3. **Save CTA**, for carousels. "Save this for your next push day."
 4. **Bio link** — only on posts already earning reach.
 
@@ -193,8 +198,8 @@ line of the caption contain the query; is the query said on screen at 0:00. **Co
 display name is just "Become"; the caption opens with an emoji; keywords stuffed in hashtags where
 nobody searches. **Strong patterns:** display name reads "Become | Train, Eat, Track"; the first
 125 caption characters carry the phrase because that is what gets indexed; target intent phrases
-Become genuinely satisfies, such as "workout app that counts reps," "app that logs food from a
-photo," "free workout tracker," "beginner gym program," "how to log a superset."
+Become genuinely satisfies, such as "app that logs food from a photo," "free workout tracker,"
+"workout app that remembers your last weight," "beginner gym program," "how to log a superset."
 
 ### 6. Account architecture: brand handle vs Jon's handle
 
@@ -209,7 +214,7 @@ talking; does the brand account ever speak in first person about coaching.
   automated.
 
 ❌ Brand account: "I have coached people through this for years, trust me."
-✅ Brand account: "LIVE mode counts the set through the camera." Jon's account carries the years.
+✅ Brand account: "LIVE mode keeps last session's numbers under the set you are about to do." Jon's account carries the years.
 
 ❌ Display name: "Become".
 ✅ Display name: "Become | Train, Eat, Track".
@@ -255,7 +260,8 @@ consecutive weeks gets rebuilt or dropped. Signup attribution rules and UTM gram
 - **Light and dark both ship.** Never build a slot that only works with dark captures.
 - Voice: second person, present tense, concrete nouns. Banned: "journey," "unlock your potential,"
   "game-changer," "seamless," "effortless," "crush it," "no excuses," "beast mode," "just,"
-  "simply." Near-zero em dashes. At most one emoji in a caption, and only when it carries meaning.
+  "simply." Near-zero em dashes in deliverable copy. At most one emoji in a caption, and only
+  when it carries meaning.
 
 ## Quality bar
 
@@ -272,7 +278,7 @@ Run this against the output before returning it.
 - [ ] The Becoming appears in at most one slot.
 - [ ] Three measurement numbers named, with a review date and a kill rule.
 - [ ] Every asset path cited resolves in the repo.
-- [ ] No banned words, near-zero em dashes, at most one emoji per caption example.
+- [ ] No banned words, near-zero em dashes in deliverable copy, at most one emoji per caption example.
 
 ## Related skills
 

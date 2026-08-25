@@ -97,7 +97,7 @@ for the low-traffic playbook rather than declaring a winner from a good week.
 | **Artifact loop** | The product makes something worth sending | **Best fit.** Recap, PR, session snapshot |
 | **Collaboration loop** | You need someone else to use the product with you | Weak today. No multi-member training surface exists |
 | **Incentive loop** | Both sides get something of value | **Unavailable.** No currency exists and none may be invented |
-| **Word-of-mouth loop** | People talk because the product is unusual | Real. Camera rep counting and whole-plate photo logging are genuinely surprising mechanics |
+| **Word-of-mouth loop** | People talk because the product is unusual | Real. Whole-plate photo logging and a session generator that takes your actual equipment are genuinely surprising mechanics |
 | **Content loop** | Public pages rank and attract strangers | Adjacent. `/share/<shareId>` pages are public and indexable. See `seo-geo` |
 
 **The two to build are the artifact loop and the word-of-mouth loop.** Both are honest for a free

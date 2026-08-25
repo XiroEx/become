@@ -47,8 +47,8 @@ Every finding points at a real file in `webapp/components/landing/` or `webapp/a
    Jon's followers arrive with different beliefs. Assume mobile until told otherwise: this is a
    mobile-first PWA and the page is built for 390px first.
 2. **What does the visitor already believe when they land?** Write it as a sentence. "They just saw
-   a phone counting reps and want to know if it is real." Everything above the fold answers that
-   sentence or wastes it.
+   a phone itemize a plate of food from one photo and want to know if it is real." Everything above
+   the fold answers that sentence or wastes it.
 3. **What is the current page actually doing?** Read `webapp/components/landing/BecomeLanding.tsx`.
    Do not audit from memory or from a screenshot alone. The section spine today is: `Hero` →
    `WhySection` (`#why`) → `DashboardSection` → `TrainingSection` → `NutritionSection` →
@@ -119,8 +119,9 @@ finding.
 **Common issues:**
 - *Category vagueness.* "Your fitness journey, reimagined" tells a visitor nothing and describes
   forty other apps.
-- *Mechanism buried.* The two mechanics that stop a scroll, camera rep counting and whole-plate
-  photo logging, sit five sections down while the hero speaks in abstractions.
+- *Mechanism buried.* The two mechanics that stop a scroll, whole-plate photo logging and a session
+  generator that takes your real equipment, sit five sections down while the hero speaks in
+  abstractions.
 - *Lead that lists.* A hero lead naming every hub in one sentence reads as a spec sheet. The reader
   retains none of them.
 
@@ -199,7 +200,9 @@ finding.
 **Strong patterns:**
 - Proof we can legitimately show: real product captures from `webapp/public/screenshots/v2/`, Jon's
   role as the coach who built the programs, the mechanic itself demonstrated, exercise demo clips
-  from `webapp/public/exercises/` (use the `.mp4`, the `.mov` fails in Chromium).
+  from `webapp/public/exercises/` (39 of the 132 exercises, so the big lifts — never claim every
+  exercise has one; the black panel in Chromium is a `type="video/quicktime"` bug in
+  `webapp/components/FramedVideo.tsx`, not a missing file).
 - Coach credibility moved earlier, as a compact line in or near the hero rather than a full card
   nine sections down. The hero footnote already does a small version of this.
 - Specificity as proof: a capture showing "Set 3 of 3, last set 155 by 10, PR 160" is more
@@ -249,9 +252,16 @@ thousands," logo walls of press we have not appeared in.
 
 **Strong patterns:** the magic-link objection set, answered inline.
 
+Magic link is the primary door, not the only one. `webapp/components/AuthForm.tsx` also offers
+**Google sign-in and a passkey**, both shipped (`webapp/app/api/auth/google` and
+`webapp/app/api/auth/passkey`), and both skip the inbox entirely. Copy that says "the only way in is an emailed link" is wrong, and it
+concedes an objection we do not actually have. Lead with the email field because it works
+everywhere, and name the other two as the answer to "I do not want to wait for an email."
+
 | Objection | Answer on the page |
 |---|---|
 | "I do not want another password." | "There is no password. We email you a link." |
+| "I do not want to wait for an email." | "Or use Google, or a passkey. Both sign you in on the spot." |
 | "Will the email actually arrive?" | "The link arrives in under a minute. Check spam if it does not." |
 | "What if I close the tab?" | "Open the link on any device. It signs you in there." |
 | "Is this going to start charging me?" | "Nothing is gated today. No credit card." |
@@ -325,7 +335,7 @@ Full objection inventory and the wording of each answer: `references/friction-au
       sizing rather than assumed runnable.
 - [ ] Any needed capture names an existing file in `webapp/public/screenshots/v2/` or the
       `screenshot-capture` run required.
-- [ ] Banned words absent from all proposed copy. Near-zero em dashes.
+- [ ] Banned words absent from all proposed copy. Near-zero em dashes in deliverable copy.
 - [ ] The output uses the four named buckets plus the shipping note.
 
 ## Related skills

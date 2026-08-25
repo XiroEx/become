@@ -53,8 +53,8 @@ screens (`screenshot-capture`).
 4. **What already exists.** Inventory before you plan: `marketing/out/` renders (gitignored, so
    check the working tree), `marketing/src/campaigns.json` (46 campaign rows),
    `webapp/public/screenshots/v2/` (15 captures across 8 screens, light and dark pairs except
-   `workout-log` which is dark-only), `webapp/public/exercises/` (42 demo clips),
-   `marketing/public/` render inputs.
+   `workout-log` which is dark-only), `webapp/public/exercises/` (42 files covering 39 of the 132
+   canonical exercises), `marketing/public/` render inputs.
 5. **What ships in the product this month.** A pillar or slot can absorb a launch; a launch cannot
    be invented to fill a slot.
 6. **Where posts get published from.** Native, a scheduler, or manual. This decides whether the
@@ -127,7 +127,9 @@ the film session slips by a week.
   different shirt for two of them.
 - One `screenshot-capture` run produces every screen state the month needs, light and dark
   together.
-- One `remotion-assets` render pass covers the month's static and carousel frames.
+- One `remotion-assets` render pass covers the month's static and carousel frames. Carousel decks
+  are specified in `reels-scripts/references/carousel-spec.md` before they are rendered, so the
+  slide count and the lockup are decided once for the whole month.
 - Keep two evergreen posts finished and unpublished at all times. That is the buffer.
 
 ### 3. Asset sourcing, in strict preference order
@@ -236,7 +238,7 @@ file, not in three tools; roll unshipped rows forward once, then kill them.
   planning. None of it is a Become claim.
 - Voice on every hook cell: second person, present tense, concrete nouns. Banned: "journey,"
   "unlock your potential," "game-changer," "seamless," "effortless," "crush it," "no excuses,"
-  "just," "simply." Near-zero em dashes.
+  "just," "simply." Near-zero em dashes in deliverable copy.
 
 ## Quality bar
 
@@ -251,7 +253,7 @@ file, not in three tools; roll unshipped rows forward once, then kill them.
 - [ ] Zero pricing, zero results claims, zero counts, zero before/after, zero shaming.
 - [ ] The batch plan names a capture session, a film session, and a render pass with dates.
 - [ ] A two-post evergreen buffer exists or is flagged as missing.
-- [ ] No banned words, near-zero em dashes, at most one emoji per caption example.
+- [ ] No banned words, near-zero em dashes in deliverable copy, at most one emoji per caption example.
 
 ## Related skills
 

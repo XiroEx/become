@@ -24,10 +24,13 @@ number gets treated as Tier C by the next reader, which is usually the correct d
 | Reels | ~0.48% | Buys unconnected reach |
 | Static image | ~0.33% | The weakest slot |
 
-Source: Socialinsider benchmark across roughly 35 million posts. **Tier A.**
+Source: Socialinsider's Instagram benchmark study, roughly 35 million posts, study period
+January-December 2025. **Tier B** — the sample is large, but it is a vendor study whose method and
+account mix are not independently reproducible, so it steers rather than sets targets. Note the
+period: it is the study's window, not ours, and it is not a current-quarter reading.
 
 Median observed cadence in the same dataset: about 8 Reels, 5 carousels, and 7 images per month.
-**Tier A.**
+**Tier B**, same study, same caveat.
 
 **How to plan against it.** Reels are the reach instrument, carousels are the trust instrument,
 statics are filler. Engagement rate is not the goal metric for us; signups are. Use these to
@@ -35,12 +38,16 @@ allocate production effort, not to set targets. Full treatment in `social-strate
 
 ## Search click economics
 
-| Fact | Number | Tier |
-|---|---|---|
-| US Google queries ending without a click | ~68% | A |
-| Searches showing an AI Overview | 20%+ | A |
-| CTR reduction when an AI Overview is present | roughly 60% | A |
-| AI Mode queries ending without a click | ~93% | A |
+| Fact | Number | Source | Tier |
+|---|---|---|---|
+| US Google queries ending without a click | ~68% | SparkToro / Datos clickstream analysis, Rand Fishkin, 2024 | B |
+| Searches showing an AI Overview | 20%+ | Third-party SERP-tracking samples; no Google-published figure exists, and the share moves month to month | C |
+| CTR reduction when an AI Overview is present | roughly 60% | Reported by SEO vendors from their own client sets; Google disputes the framing | C |
+| AI Mode queries ending without a click | ~93% | Single vendor sample, no method published | C |
+
+Only the first row has a named, reproducible source. The other three circulate widely without one,
+so they are Tier C: use them to argue a direction, never to size an outcome. If a plan line depends
+on one of these being true, the plan line is wrong.
 
 **How to plan against it.** Optimize to be the cited answer, not the blue link. This is why
 directories and structured answer content rank above a conventional blog in the channel bets, and

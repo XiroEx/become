@@ -6,6 +6,14 @@ that own it, and the failure signature that identifies it as the leak.
 Metric names here are descriptive. The canonical event names and property schema belong to
 `analytics-tracking`; agree them there before building a dashboard on this.
 
+**There are three doors, not one.** `webapp/components/AuthForm.tsx` offers the emailed magic link,
+**Google sign-in** (`webapp/app/api/auth/google`), and a **passkey** (`webapp/app/api/auth/passkey`). Google and
+passkey both go straight from Stage 2 to Stage 5: no email is sent, so Stages 3 and 4 do not exist
+for them and their entire deliverability risk is zero. The email link stays the primary path here
+because it works on every device and needs no prior account, and because it is the path with leaks
+worth mapping. But segment the funnel by door before drawing a conclusion: a Stage 3 or 4 collapse
+that turns out to be 80% Google users is not a deliverability problem, it is a measurement error.
+
 ---
 
 ## Stage 1: CTA clicked
@@ -24,9 +32,10 @@ is a `landing-cro` problem, not an activation problem.
 
 ## Stage 2: Email submitted
 
-**Definition.** The user enters an email in `AuthForm` and the send-link request succeeds.
+**Definition.** The user commits to a door: an email in `AuthForm` and a successful send-link
+request, or a completed Google or passkey handoff.
 
-**Metric.** Send-link requests per `/register` view.
+**Metric.** Auth attempts per `/register` view, split by door.
 
 **Owns it.** `webapp/components/AuthForm.tsx`, `webapp/app/register/page.tsx`,
 `webapp/app/login/page.tsx`, `POST /api/auth/send-link`.
@@ -37,11 +46,16 @@ the register form asks for a name as well as an email, and the extra field costs
 returns; three sign-in paths (link, Google, passkey) present a choice the user did not want to make.
 
 **Cheapest fix.** One line under the field explaining what happens next: "We email you a link that
-signs you in. No password."
+signs you in. No password." Keep Google and the passkey visually quieter than the email field
+rather than removing them: they are the answer for the user who does not want to leave the tab, and
+they skip the two riskiest stages in this whole map.
+
+**Branch.** Google and passkey resume at **Stage 5**. Stages 3, 4, and their fixes apply only to the
+emailed link.
 
 ---
 
-## Stage 3: Link delivered
+## Stage 3: Link delivered *(email door only)*
 
 **Definition.** The magic-link email lands in the primary inbox within a minute.
 
@@ -57,7 +71,7 @@ alignment. Deliverability rules live in `email-lifecycle`.
 
 ---
 
-## Stage 4: Link clicked
+## Stage 4: Link clicked *(email door only)*
 
 **Definition.** The user opens the link and lands on `/verify?token=...&mode=login|register`.
 
@@ -77,10 +91,11 @@ the expiry stated in plain words.
 
 ## Stage 5: Account created and session established
 
-**Definition.** `POST /api/auth/verify-link` validates the token, the user record exists, and a JWT
-is issued.
+**Definition.** A session exists: `POST /api/auth/verify-link` validates the token, or the Google or
+passkey handoff completes, and a JWT is issued.
 
-**Metric.** Successful verifications per link click.
+**Metric.** Successful verifications per link click, plus completed handoffs per Google or passkey
+attempt. The email door and the direct doors converge here.
 
 **Owns it.** `webapp/app/verify/page.tsx`, `POST /api/auth/verify-link`, `webapp/lib/auth.ts`.
 
@@ -103,8 +118,10 @@ second click on an already-consumed link.
 polling tab).
 
 **Failure signature.** Verification succeeds and no dashboard view follows. This is the tab-handoff
-problem. The verify page attempts `window.close()`, which only works on script-opened tabs, and it
-detects standalone display mode for the PWA case. In the common real path, a user opens the link in
+problem, and it is close to email-door-specific: Google and passkey users never leave the tab, so a
+handoff loss concentrated in one door is the clearest possible confirmation of the diagnosis. The
+verify page attempts `window.close()`, which only works on script-opened tabs, and it detects
+standalone display mode for the PWA case. In the common real path, a user opens the link in
 their mail client's in-app browser and ends on a success screen inside a browser they will close.
 
 **Cheapest fix.** Always render an explicit primary action on the success screen. Never depend on

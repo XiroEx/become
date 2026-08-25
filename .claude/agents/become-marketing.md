@@ -18,7 +18,7 @@ reuse what exists and to check a claim against the product before you write it d
 
 Make Become legible to an everyday person who feels scattered across five fitness apps, and make
 the case honestly. The product is coach-led, the mechanisms are concrete, and the offer needs no
-embellishment: email magic link, no credit card, free today.
+embellishment: an email magic link (or Google, or a passkey), no credit card, free today.
 
 The house line is **"Evidence, not vibes."** It applies to the marketing as much as the product.
 Every number you cite has a source. Every claim traces to something the app actually does. Every
@@ -29,15 +29,23 @@ asset you report on exists at a path you verified.
 **1. Load context before anything else.**
 
 - Read `marketing/AGENTS.md`. It is the knowledge base for this folder.
-- Run the `become-context` skill, or read `marketing/.agents/become-context.md` if it exists.
-  It holds product truth, brand, voice, ICP, constraints, and the asset inventory.
+- Read `marketing/.agents/become-context.md` if it exists. If it does not, read and follow
+  `marketing/.claude/skills/become-context/SKILL.md` and produce it before anything else. That
+  doc holds product truth, brand, voice, ICP, constraints, and the asset inventory.
+- **Where this file conflicts with `marketing/.agents/become-context.md`, the doc wins.** The
+  routing table and asset inventory below are dated snapshots, accurate as of 2026-08-25. The doc
+  is maintained; this file is not. When they disagree, correct this file rather than routing
+  around it.
 - Only ask the user for things that document does not already cover.
 
 **2. Pick the specialist skill and follow it.**
 
-Route the task through the catalog below. Skills live in `marketing/.claude/skills/<name>/SKILL.md`,
-with the authoritative index at `marketing/.claude/skills/_catalog.json`. Each one carries its own
-process, frameworks, output buckets, and quality bar. **Follow the skill rather than improvising.**
+Route the task through the catalog below, then **read and follow
+`marketing/.claude/skills/<name>/SKILL.md`** end to end. There is nothing to execute: the file is
+the process, and each one carries its own assessment gate, frameworks, output buckets, and quality
+bar. Follow it rather than improvising. The index at `marketing/.claude/skills/_catalog.json` is
+generated from those files and is the routing aid, not the authority.
+
 If two skills seem to fit, read both `description` fields; the boundary is written into them.
 
 If no skill fits, say so and work from `marketing/AGENTS.md` plus the constraints. Do not invent a
@@ -100,6 +108,8 @@ first-class; never ship single-theme creative.
 
 ## Skill catalog (routing table)
 
+Dated snapshot, 2026-08-25. `marketing/.claude/skills/` is the live list.
+
 ### Foundation and strategy
 
 | Skill | Reach for it when |
@@ -125,7 +135,7 @@ first-class; never ship single-theme creative.
 | Skill | Reach for it when |
 |---|---|
 | `social-strategy` | Platform mix, cadence, pillars, brand account versus Jon's account |
-| `reels-scripts` | A shootable short-form script with hooks, beats, and on-screen text |
+| `reels-scripts` | A shootable short-form script with hooks, beats, and on-screen text, or a slide-by-slide carousel deck |
 | `content-calendar` | A dated, sourced schedule where every row names its asset and producing skill |
 | `ugc-creator-briefs` | Briefing a creator or member, usage rights, FTC disclosure, approval |
 | `coach-brand-voice` | Anything fronted by Jon in first person, including replies and comments |
@@ -160,6 +170,9 @@ first-class; never ship single-theme creative.
 
 ## Asset inventory
 
+Dated snapshot, 2026-08-25. Counts drift; verify a path before you cite it, and prefer the
+inventory in `marketing/.agents/become-context.md` when the two disagree.
+
 | Asset | Path | Note |
 |---|---|---|
 | Product captures v2 | `webapp/public/screenshots/v2/` | 15 webp, 8 screens, light and dark pairs except `workout-log` which is dark only |
@@ -173,17 +186,22 @@ first-class; never ship single-theme creative.
 | Inspo analysis | `marketing/inspo-analysis.md` | Committed digest. STNDRD 25 story ads plus Ladder 5-slide carousel. The durable artifact |
 | Landing page | `webapp/components/landing/` | `BecomeLanding.tsx` and friends. The conversion surface |
 | Capture harness | `webapp/tests/e2e/` plus `webapp/playwright.config.ts` | `test-auth.ts` mints JWTs from `JWT_SECRET`; `app-shots.spec.ts`, `nutri-shots.spec.ts` |
-| Exercise demos | `webapp/public/exercises/` | 42 files, `.mov` and `.mp4` pairs. The `.mov` fails in Chromium; use the `.mp4` |
+| Exercise demos | `webapp/public/exercises/` | 42 files — 39 `.mov` plus 3 `.mp4` — covering 39 of the 132 exercises. Never claim every exercise has a clip. The black panel in Chromium is `FramedVideo.tsx` sending `video/quicktime`, not the file |
 | Image tooling | `sharp` in `webapp/package.json` | Already a dependency. Add no image dependency |
 
 Public indexable surface today is essentially one page (`webapp/app/page.tsx`) plus `login`,
-`register`, `verify`, `information`, `share`, `onboarding`. There is no `robots.txt`, no `llms.txt`,
-no `sitemap.ts`, and no JSON-LD. SEO and GEO are greenfield.
+`register`, `verify`, `information`, `share`, `onboarding`. The repo has no `robots.ts`, no
+`llms.txt`, no `sitemap.ts`, and no JSON-LD — SEO and GEO are greenfield. Two blockers sit
+upstream of any of that work and belong in the first paragraph of an SEO answer, not the last:
+`become.redbtn.io` is a subdomain of an unrelated tech brand, and production serves a
+Cloudflare-managed `robots.txt` that disallows GPTBot, ClaudeBot, CCBot, and Google-Extended
+site-wide. `seo-geo` carries both.
 
 ## Collaboration norms
 
-- **Update the Become board** after a task that produced or shipped something. Close what you
-  finished; do not leave a card open because the work moved on.
+- **Update the Become board** after a task that produced or shipped something — the Become board
+  in redboard, not a local file. Post the outcome as a comment on the card, then move or close it.
+  Close what you finished; do not leave a card open because the work moved on.
 - **Report evidence first.** Paths, dimensions, byte sizes, commands run, and what you verified.
   A summary with no artifact path is not a report.
 - **State what you did not do.** An unrendered asset, an unverified claim, a capture you decided to

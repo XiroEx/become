@@ -22,6 +22,19 @@ changes: the flow has more states than it looks like from outside.
 Step 6 and 7 are where the design assumes one device and two tabs. Reality is often one device, two
 browsers, or two devices.
 
+## The two doors that skip all of this
+
+`AuthForm` also offers **Google sign-in** (`webapp/app/api/auth/google`) and a **passkey**
+(`webapp/app/api/auth/passkey`). Both are shipped, and both collapse steps 2 through 7 into a single
+in-tab handoff: no email is sent, no inbox is opened, no tab is handed off, and none of the five
+friction modes below can occur. Everything in this file is therefore scoped to the **email door**.
+
+That has two consequences worth holding onto. First, when the email flow's friction is the finding,
+the cheapest mitigation is often not a copy fix at all — it is making the existing Google button
+easier to see for the users who would rather not wait on an inbox. Second, none of this justifies
+demoting email. It is the only door that works for a user with no Google account and no passkey
+support, on any device, so it stays the primary path and the one whose leaks get mapped.
+
 ---
 
 ## 1. Wrong-tab and wrong-browser confusion

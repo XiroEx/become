@@ -193,10 +193,15 @@ second, and prefer none in any new nudge.
 - *Marketing pushes on top of product pushes.* The tray does not know the difference.
 
 **Strong patterns:**
-- **Quiet hours 21:00 to 07:00 local. No exceptions for marketing.**
+- **Quiet hours 21:00 to 07:00 local. No exceptions for marketing.** Write this as the target,
+  because it is not what ships: the streak-at-risk sweep in `webapp/app/api/cron/notify/route.ts`
+  is deliberately ungated ("any hour — urgent") and can fire at 03:00 local. Fix the gate before
+  promising quiet hours to a user in copy.
 - Global cap: 1 per local day standard, 2 absolute ceiling, and never 2 within 4 hours.
-- Decay ladder: 3 consecutive ignores drops that nudge to every other occurrence, 6 drops it to
-  weekly, 10 stops it and surfaces an in-app "still want these?" prompt instead.
+- Decay ladder **to build**: 3 consecutive ignores drops that nudge to every other occurrence, 6
+  drops it to weekly, 10 stops it and surfaces an in-app "still want these?" prompt instead.
+  Nothing tracks ignores today — `lastPushSentAt` records sends only — so specify the ladder and
+  name the dependency rather than describing it as live.
 - **Marketing pushes are guests on a product channel.** A launch or campaign push consumes that
   day's slot for that user and must be suppressed for anyone who already received a product
   nudge that day. Coordinate with the cron job's `lastPushSentAt` record, do not send in
@@ -231,8 +236,9 @@ sent it.** See `marketing-psychology` for the full test.
 ✅ Push A is queued whenever you want it.
 ```
 
-Streak repair exists as a concept for a reason: a missed day is a missed day, not a verdict.
-Never expose one user's streak loss to another user.
+Streak freeze is shipped (`webapp/app/api/streaks/freeze`), and it exists for a reason: a missed
+day is a missed day, not a verdict. Copy may reference it as a real thing the user has. Never
+expose one user's streak loss to another user.
 
 ## Become-specific rules
 
@@ -262,7 +268,8 @@ Never expose one user's streak loss to another user.
   pound counts, no body-shaming, no before/after framing that implies a guaranteed outcome.
 - **Statistics are tiered.** Label any benchmark Tier A, B, or C where cited, and never restate
   one as a Become results claim.
-- **Voice:** second person, present tense, active. Near-zero em dashes. No "journey," "unlock
+- **Voice:** second person, present tense, active. Near-zero em dashes in deliverable
+  copy. No "journey," "unlock
   your potential," "crush it," "no excuses," "beast mode," "just," "simply."
 
 ## Quality bar
@@ -272,12 +279,13 @@ Never expose one user's streak loss to another user.
 - [ ] The copy is true for that specific user at the moment it fires.
 - [ ] Title around 30 characters, body around 70, one action, no second ask.
 - [ ] Zero shaming, zero guilt, zero manufactured stakes. Streak copy checked twice.
-- [ ] Quiet hours 21:00-07:00 local respected; global cap of 1 per day honoured, 2 absolute.
-- [ ] A decay rule exists for users who ignore it.
+- [ ] Quiet hours 21:00-07:00 local respected (and any nudge that cannot respect them is flagged,
+      as the shipped streak-at-risk sweep must be); global cap of 1 per day honoured, 2 absolute.
+- [ ] A decay rule is specified, with its ignore-tracking dependency named as to-build.
 - [ ] Marketing pushes yield to product nudges on the same day and are suppressed accordingly.
 - [ ] Permission is requested after an earned win, never on first load, never mid-task.
 - [ ] No number in any push that the user did not generate. No pricing, no results claims.
-- [ ] At most one emoji, and only where it carries meaning. No banned words, near-zero em dashes.
+- [ ] At most one emoji, and only where it carries meaning. No banned words, near-zero em dashes in deliverable copy.
 
 ## Related skills
 

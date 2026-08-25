@@ -96,7 +96,8 @@ Six frameworks, **in the order you should apply them**. Sizing comes before desi
 **Strong patterns:**
 - ❌ "Test a new hero." ✅ "Because 62% of mobile visitors never scroll past the hero, we believe
   naming the mechanism in the H1 will raise signup_started per visitor for mobile traffic,
-  measured by `signup_started`. We are wrong if bounce rises."
+  measured by `signup_started`. We are wrong if bounce rises." [ILLUSTRATIVE — no analytics
+  exists yet; replace with measured numbers.]
 - Name the segment explicitly. Mobile and desktop behave differently on a 390px-first page.
 - Write the guardrail into the hypothesis, not into a footnote.
 
@@ -213,8 +214,10 @@ Write-up template: `references/hypothesis-templates.md`.
 - Report as: effect size with an interval, the N, the guardrails, and the decision. Never a bare
   "significant."
 - ❌ "The new hero won, +18%." ✅ "Variant B: 4.6% vs 3.9%, N = 1,240 per arm, interval spans
-  −4% to +40% relative. Not resolvable. We are shipping B on reasoning, not on this data, and
-  watching the pre/post window."
+  roughly −23% to +59% relative. Not resolvable. We are shipping B on reasoning, not on this
+  data, and watching the pre/post window." [ILLUSTRATIVE — no analytics exists yet; replace with
+  measured numbers.] Note how wide the interval is at that N: a +18% point estimate is
+  compatible with a meaningful loss.
 - Ship the loser's insight: what did we learn about the visitor, regardless of which arm won?
 
 ### 6. The test backlog

@@ -46,12 +46,13 @@ or loses the visitor there.
 | Objection | Forms at | Honest answer to place there |
 |---|---|---|
 | "Another fitness app." | Hero, first second | The reframe: your plan is in four apps, not that you lack discipline |
-| "Does the camera thing actually work?" | Hero or Training | Show the LIVE screen, not an adjective |
+| "Does the photo thing actually work?" | Hero or Nutrition | Show the itemized result, not an adjective |
 | "Is this real coaching or an AI toy?" | Training | "A coach built the phases. The AI fills the gaps." |
 | "I hate logging food." | Nutrition | "One photo. The whole plate, itemized." |
 | "How much is it?" | Anywhere | "Nothing is gated today. No credit card." Never a future price. |
 | "So what is the catch?" | After the free line | Name what we get: nothing, today. Do not fabricate a business model. |
 | "I do not want another password." | At the CTA | "There is no password. We email you a link." |
+| "I do not want to wait for an email." | At the CTA | "Or use Google, or a passkey. Both are on the form and neither touches your inbox." |
 | "Will the email arrive?" | At the CTA | "It arrives in under a minute. Check spam if it does not." |
 | "What if I close the tab?" | At the CTA | "Open the link on any device. It signs you in there." |
 | "How long is setup?" | At the CTA | "Five questions, then your first session." |
@@ -104,7 +105,7 @@ wasted finding.
 
 | # | Check | Fail looks like |
 |---|---|---|
-| H1 | The ad or Reel hook and the hero make the same promise | A camera-rep-counting ad landing on a generic hero |
+| H1 | The ad or Reel hook and the hero make the same promise | A photo-logging ad landing on a generic hero |
 | H2 | `/register` continues the language of the CTA that sent them | "Start today" leading to a bare "Create account" |
 | H3 | OG image and description match what the page says | Thin metadata, no OG image at all |
 | H4 | `/share/[shareId]` does not behave like a cold homepage | An invited visitor sees the same generic hero |

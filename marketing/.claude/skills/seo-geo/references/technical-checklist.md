@@ -9,6 +9,14 @@ repo-relative. Next.js 16 App Router conventions.
 
 Next generates `/robots.txt` from this file. Explicit allow list, explicit AI crawlers.
 
+**Shipping this file alone changes nothing.** Production currently serves a Cloudflare-managed
+`robots.txt` that disallows `GPTBot`, `ClaudeBot`, `CCBot`, and `Google-Extended` across the whole
+zone. `OAI-SearchBot`, `ChatGPT-User`, and `PerplexityBot` are not blocked. The zone response is
+returned at the edge and never reaches the app, so a repo `robots.ts` cannot override it — the
+allow list below would be written and then ignored. The zone rule is George's to change. Check
+`curl -s https://become.redbtn.io/robots.txt` before promising any GEO outcome that depends on
+those four crawlers.
+
 ```ts
 import type { MetadataRoute } from "next";
 
@@ -87,9 +95,10 @@ coach Jon Don. It runs in the browser and installs as a PWA. There is no native 
 Sign-in is an email magic link. No credit card. Free today.
 
 ## What it does
-- Training: coach-built multi-phase programs, an AI session and program generator,
-  exercise demo videos, set logging with personal-record history, and a LIVE mode that
-  counts reps through the phone camera.
+- Training: coach-built multi-phase programs, an AI session and program generator
+  filtered to the equipment you have, demo clips on the big lifts, and a LIVE mode that
+  logs each set as you train, with rest timers, last session's numbers, and personal
+  records on screen.
 - Nutrition: photo logging that itemizes a whole plate, barcode scanning, and personal
   calorie and macro targets.
 - Mind: short guided sessions, mood tracking, identity work.
@@ -108,8 +117,9 @@ the most confidently wrong description of Become on the internet.
 
 ## 4. Root metadata in `webapp/app/layout.tsx`
 
-Today: `title: appName`, `description: appTagline`, `manifest: "/manifest.json"`, a minimal
-`openGraph`, and `appleWebApp`. There is no `metadataBase`, no canonical, no Twitter card.
+Today: `title: appName`, `description: appTagline`, `manifest: "/manifest.json"`, and
+`appleWebApp`. There is no `openGraph` block at all, no `metadataBase`, no canonical, and no
+Twitter card. Link previews are whatever the scraper guesses.
 
 Add:
 

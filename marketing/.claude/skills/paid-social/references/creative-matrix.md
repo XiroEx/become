@@ -11,9 +11,9 @@ Only real, demonstrable capabilities. Anything not on this list is not an ad con
 
 | Mechanism | What is literally shown on screen | Source asset |
 |---|---|---|
-| **M1 Camera counts reps** | LIVE mode running during a set, the count advancing without a tap | Film it. Reference capture: `webapp/public/screenshots/v2/workout-log-dark.webp` |
-| **M2 Photo itemizes a plate** | One photo becoming separate line items with macros | `webapp/public/screenshots/v2/nutrition-meal-light.webp`, `nutrition-day-light.webp` |
-| **M3 The week written back** | The recap and the progress trend, one screen | `webapp/public/screenshots/v2/progress-light.webp`, `dashboard-light.webp` |
+| **M1 Photo itemizes a plate** | One photo of a real plate resolving into separate line items with macros | Film the capture-to-result moment. Stills: `webapp/public/screenshots/v2/nutrition-meal-light.webp`, `nutrition-day-light.webp`. Note the seeded meals in those shots were typed through food search, so they show the result, not the photo path |
+| **M2 LIVE mode logs the set** | The live logger during a set: last session's weight and reps on screen, the rest timer running, a PR badge | `webapp/public/screenshots/v2/workout-log-dark.webp` (dark only, by design) |
+| **M3 The week written back** | The recap and the progress trend, one screen | `webapp/public/screenshots/v2/progress-light.webp` (Training Log: volume, history, PRs), `dashboard-light.webp` (streak, mood, weight, calories) |
 
 Supporting, secondary: coach-built multi-phase programs (`workout-hub-light.webp`), the AI
 generator (`generate-light.webp`), mind sessions (`mind-light.webp`). Use these as the second
@@ -23,11 +23,11 @@ beat, rarely as the hook.
 
 | # | Shape | Pattern | Example against M1 |
 |---|---|---|---|
-| H1 | Problem statement | Name the friction in the viewer's words | "Counting reps in your head and losing count at seven." |
-| H2 | Mechanism reveal | State the surprising capability flatly | "Your phone can count the reps." |
-| H3 | Misconception flip | "You think X. Actually Y." | "You do not need to tap between sets." |
-| H4 | Demonstration cold open | No words. The thing happening, immediately | Frame one: the counter ticking up mid-set |
-| H5 | Coach answer | Jon answering a real question, first person | "People ask how I log a set without stopping. Here." |
+| H1 | Problem statement | Name the friction in the viewer's words | "Six searches to log one plate of food. That is why you stopped." |
+| H2 | Mechanism reveal | State the surprising capability flatly | "One photo. Every item on the plate." |
+| H3 | Misconception flip | "You think X. Actually Y." | "You are not bad at tracking. Tracking is badly built." |
+| H4 | Demonstration cold open | No words. The thing happening, immediately | Frame one: a phone over a real plate, shutter, rows filling in |
+| H5 | Coach answer | Jon answering a real question, first person | "Every client asks me how to log a meal they did not cook. Here." |
 
 H4 is usually the strongest on TikTok. H5 is usually the strongest for a coach-led brand and
 belongs to `coach-brand-voice`. H1 is the safest and the most generic.
@@ -45,7 +45,8 @@ feed and stories. Run one of each on the winning message in round three.
 ## Round structure
 
 **Round 1: find the hook shape.**
-Three ads. One mechanism (start with M1, it is the most differentiated). H1, H2, H4.
+Three ads. One mechanism (start with M1: it is the most differentiated and the easiest to film
+convincingly, because the payoff is visible in one frame). H1, H2, H4.
 Same footage, different first 1.5 seconds. Read hook rate (3-second views over impressions).
 
 **Round 2: find the message.**
@@ -60,20 +61,21 @@ is the smallest honest paid test Become can run.
 ## Worked cells
 
 **H2 × M1 × F1**
-- Frame 1 (0.0s): hand holding the phone, LIVE mode already running, counter at 4.
-- VO: "Your phone can count the reps."
-- On-screen text (different from the VO): "no tapping between sets"
-- 1.5s: cut to the set continuing, counter advancing.
-- 4s: the set ends, the log row fills in by itself.
-- 7s: cut to the week view, one green check appearing.
-- CTA: "Get this week's workout. Free, no card."
+- Frame 1 (0.0s): a real plate on a real table, a hand bringing the phone over it.
+- VO: "One photo. Every item on the plate."
+- On-screen text (different from the VO): "chicken, rice, broccoli. it knew"
+- 1.5s: the shutter, then the rows arriving one at a time with their calories.
+- 4s: the macro bars filling underneath.
+- 7s: the day's calorie ring settling at what is left.
+- CTA: "Log your lunch in Become. Free today, no card."
 
 **H4 × M2 × F2**
-- Frame 1 (0.0s): a plate photo, no text, no logo.
-- 0.6s: the photo resolving into itemized rows with macros.
-- 2s: on-screen text "one photo, every item"
-- 4s: the day's calorie ring updating.
-- CTA: "Log a plate in Become. Free today."
+- Frame 1 (0.0s): the live logger mid-set, no text, no logo. "Last: 155 lbs × 10 reps" legible.
+- 0.6s: the set number ticking to 3 of 3, the reps field taking a value.
+- 2s: on-screen text "it remembers what you lifted last time"
+- 4s: the PR badge landing.
+- 6s: the rest timer starting on its own.
+- CTA: "Log your next set in Become. Free today."
 
 **H5 × M3 × F1**
 - Frame 1: Jon, mid-sentence, no intro. "The reason people quit is not effort."
@@ -97,18 +99,17 @@ person. Do not mix them in one block.
 
 Copy rules: second person, present tense, concrete noun first. Banned: "journey," "unlock your
 potential," "game-changer," "seamless," "effortless," "crush it," "no excuses," "beast mode,"
-"just," "simply." Near-zero em dashes. At most one emoji, only if it carries meaning. No pricing
-beyond "free today." No results claims. No fabricated proof.
+"just," "simply." Near-zero em dashes in deliverable copy. At most one emoji, only if it carries
+meaning. No pricing beyond "free today." No results claims. No fabricated proof.
 
 ## Variant set for one ad
 
 Always ship three primary-text variants with one rationale line each:
 
-- **A, mechanism-led:** "Your phone counts the reps while you lift. The set logs itself. Free
-  today, no card." *Leads with the differentiator; the most likely to earn attention from cold
-  traffic.*
-- **B, stack-fatigue-led:** "Five apps for one workout. Become logs the set, scans the plate, and
-  shows you the week." *Leads with the pain the ICP already names out loud.*
+- **A, mechanism-led:** "Photograph the plate. Become itemizes it, macros and all. Free today, no
+  card." *Leads with the differentiator; the most likely to earn attention from cold traffic.*
+- **B, stack-fatigue-led:** "Five apps for one workout. Become logs the set, itemizes the plate,
+  and shows you the week." *Leads with the pain the ICP already names out loud.*
 - **C, coach-led:** "Coach-built programs, phase by phase. Not a random workout generator." *Leads
   with credibility; likely strongest with an older segment.*
 
@@ -134,5 +135,6 @@ Always ship three primary-text variants with one rationale line each:
 | Price, discount, trial, "limited time free" | No pricing exists |
 | Body-focused second person ("your belly fat") | Personal-attribute policy violation and shaming |
 | A capture showing a bug or an empty state | Constraint. Fix the bug or recapture |
+| Any claim that the camera tallies repetitions, or that a set logs itself | It does not. You log the set; LIVE mode makes it one tap |
 | Camera-roll photos of Jon | Constraint |
 | The Becoming as the headline concept | It is at most one beat |

@@ -18,9 +18,9 @@ The strongest proof available to us, and the pattern the strongest competitor cr
 
 | Mechanism | The proof | Asset |
 |---|---|---|
-| Camera counts reps | Footage of a set with the counter advancing untouched | Film it; reference `webapp/public/screenshots/v2/workout-log-dark.webp` |
-| Photo itemizes a plate | One photo becoming separate line items with macros | `nutrition-meal-light.webp`, `nutrition-day-light.webp` |
-| The week written back | The recap and the trend on one screen | `progress-light.webp`, `dashboard-light.webp` |
+| Photo itemizes a plate | One photo of a real plate becoming separate line items with macros, in one unbroken shot | Film the capture-to-result moment. Stills: `nutrition-meal-light.webp`, `nutrition-day-light.webp`. Both show an itemized day, but those meals were typed through food search, so neither is proof of the photo path on its own |
+| LIVE mode logs the set | The live logger mid-set: last session's "155 lbs × 10 reps" on screen, the rest timer running, the PR badge landing | `webapp/public/screenshots/v2/workout-log-dark.webp` (dark only, by design) |
+| The week written back | The recap and the trend on one screen | `progress-light.webp` (Training Log: volume, workout history, PRs), `dashboard-light.webp` (streak, mood, weight, calories) |
 | Coach-built phases | The actual phase structure with days named | `workout-hub-light.webp` |
 | AI generator | The sheet filled in, before submission | `generate-light.webp` |
 

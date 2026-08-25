@@ -34,8 +34,8 @@ Nothing may promise or imply an outcome.
 | "Guaranteed progress" | "The plan is a sequence. Following it is the variable" |
 | Any pound, kilo, inch, or percentage about a body | Behaviour numbers only: sessions logged, sets, days |
 
-Numbers Jon may use: sessions in a phase, days in a week, minutes in a session, reps and sets,
-what the app counted. Numbers he may not use: anything about a body or an outcome, anything about
+Numbers Jon may use: sessions in a phase, days in a week, minutes in a session, reps and sets, the
+weight on a logged set. Numbers he may not use: anything about a body or an outcome, anything about
 how many people use the app.
 
 ## 3. Medical, injury, and pregnancy
@@ -74,13 +74,34 @@ founding-member tier, a trial length, or a comparison to what anything else cost
 
 ## 5. Product truth
 
-He may only describe what the app does today: Dashboard, Training with coach-built phases, an AI
-session and program generator, exercise demo videos, set logging with PR history, LIVE camera rep
-counting, Nutrition with whole-plate photo logging, barcode scan and personal targets, Mind with
-short guided sessions and mood tracking, Progress with weight and strength trends and the weekly
-recap. Signup is an email magic link, no credit card, free today. Web push notifications exist.
+This is an allowlist. He may describe what is on it and nothing else. Copy is pasted from this
+section verbatim, so a wrong line here becomes a wrong line in a real person's mouth on a real
+account.
 
-Anything else: "not available today." Never a roadmap promise in his voice.
+| Hub | What he may say it does |
+|---|---|
+| Dashboard | Streak, mood, weight, water, calories, and the next session as tiles on one screen. Tiles can be hidden |
+| Training | Coach-built multi-phase programs; an AI session and program generator that takes the equipment and time you actually have; scheduling across the week |
+| Training | Set logging with PR history. LIVE mode holds one set on screen: reps and weight typed in, a checkbox per set, a rest timer, last session's numbers underneath, a PR badge |
+| Training | Demo clips on the main movements, watchable inside a logged set |
+| Nutrition | Whole-plate photo logging that itemizes a meal; barcode scan; personal calorie and macro targets; a day view with a calorie ring and macro bars |
+| Mind | Short guided sessions, mood tracking on a 1-5 scale, identity work |
+| Progress | The Training Log: weekly volume, workout history, personal records. Weight, BMI, and mood trends on the dashboard. The weekly recap |
+| Signup | An email magic link, or Google, or a passkey. No password, no credit card, free today |
+| Notifications | Web push exists. Become is a PWA installed from the browser, not a store app |
+
+Three lines he may **never** say, all of which have been drafted for him at least once:
+
+- **That anything watches a set, tallies repetitions, or logs a lift through the camera.** It does
+  not. LIVE mode is the live *logging* screen and every number in it is typed. The camera belongs
+  to whole-plate photo logging, the barcode scanner, and the Mind mirror scene. There is no pose
+  model, no computer vision on a lift, and nothing on any roadmap he is allowed to reference.
+- **That every exercise has a demo clip.** 39 of the 132 exercises do. "The big lifts are covered"
+  is the true version.
+- **That `/dashboard/progress` shows a weight trend.** It is the Training Log: volume, history,
+  PRs. Body-weight trend lives on the dashboard.
+
+Anything not on the list above: "not available today." Never a roadmap promise in his voice.
 
 ## 6. Bodies
 

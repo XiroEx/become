@@ -99,7 +99,8 @@ Diagnosis and fixes belong to `signup-activation`. This document only defines th
 - **Channel:** production and beta write to the same database. Either include the `channel`
   property or state in the header that the cohort mixes both.
 
-Example header, copy this shape:
+Example header, copy this shape. The numbers in it are
+[ILLUSTRATIVE — no analytics exists yet; replace with measured numbers]:
 
 > Cohort: accounts created week of 2026-08-04, N = 48, production and beta combined (not
 > separable before the `channel` property shipped). Activation = first logged workout, meal, or

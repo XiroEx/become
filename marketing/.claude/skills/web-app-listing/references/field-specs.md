@@ -53,13 +53,24 @@ Structure: two mechanics, the scope, the cost, the first step. No adjectives.
 
 ```
 Become is a coach-built fitness app that runs the whole plan in one place. Multi-phase
-programs from coach Jon Don, an AI session generator, set logging with demo videos, food
-logged from a photo of the plate, and mind sessions. Free today, no credit card.
+programs from coach Jon Don, an AI session generator, set logging that recalls your last
+weight, food logged from a photo of the plate, and mind sessions. Free today, no card.
 ```
-(258)
+(262)
 
-The extra 100 characters buy the coach's name, the AI generator, and the demo videos. If the extended
-version says nothing the standard one did not, cut it back.
+The extra 100 characters buy the coach's name, the AI generator, and the set-logging mechanic. If
+the extended version says nothing the standard one did not, cut it back.
+
+**Three things a listing must never say**, because all three have been drafted at least once and a
+directory listing is the hardest place to quietly correct a claim:
+
+- That the camera watches a set or tallies repetitions. LIVE mode is the live *logging* screen and
+  every number in it is typed. The camera is for whole-plate photo logging, the barcode scanner,
+  and the Mind mirror scene.
+- That every exercise has a demo clip. 39 of the 132 do. "The big lifts have a clip" is the true
+  version.
+- That the app is in an app store, or that there is a price, a tier, a trial, or a discount. It is a
+  PWA, it is free today, and no pricing exists.
 
 ### Long description, 120 to 250 words
 
@@ -77,19 +88,21 @@ Worked version:
 > Become is a fitness app built around a coach. Jon Don writes the multi-phase programs, and the app
 > runs them for you.
 >
-> **Training.** Coach-built programs plus an AI generator for the days the plan does not fit. Every
-> exercise has a demo clip. Log your sets and it keeps your PR history. LIVE mode counts your reps
-> through the camera, so you are not tapping a screen between sets.
+> **Training.** Coach-built programs plus an AI generator for the days the plan does not fit: tell
+> it the equipment in front of you and the time you have. The big lifts carry a demo clip you can
+> watch mid-set. LIVE mode holds one set on the screen with what you lifted last time sitting right
+> underneath it, and starts your rest timer when you tick it off.
 > **Nutrition.** Photograph the plate and it comes back itemized with calories and macros. Scan a
 > barcode when the food came out of a box. Targets are set from your own numbers.
 > **Mind.** Short guided sessions and a daily mood check-in.
-> **Progress.** Weight and strength trends, and a weekly recap that writes your week back to you.
+> **Progress.** A training log with your volume, your history and your PRs, weight and mood trends,
+> and a weekly recap that writes your week back to you.
 >
 > It is for people who already train, or want to, and are tired of running a plan across three apps
 > and a notes file.
 >
-> Become runs in your browser and installs to your home screen. Sign up with your email, and a link
-> signs you in. No password, no credit card, nothing gated today.
+> Become runs in your browser and installs to your home screen. Sign in with an email link, with
+> Google, or with a passkey. No password, no credit card, nothing gated today.
 
 (around 200 words)
 

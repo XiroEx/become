@@ -147,7 +147,7 @@ Same post, two accounts. These are the captions, not the scripts.
 
 | Post | Brand account (product voice) | Jon's account (coach voice) |
 |---|---|---|
-| LIVE rep counting demo | "LIVE mode counts the set through the camera. Phone on the floor, set logged before you rack the bar. Free today, email link, no card." | "I have counted a lot of reps for a lot of people. This does it while I actually watch your form instead of your bar." |
+| LIVE mode set logging demo | "LIVE mode holds one set on screen with last session's numbers underneath. Two taps and the rest timer starts itself. Free today, email link, no card." | "I used to write your last weight on an index card so you would stop guessing. This is the card, and it never gets lost." |
 | Plate photo logging | "One photo. Every item on the plate, itemized against your calorie and macro targets." | "The reason you stopped tracking is not discipline. It is that typing four foods into a search bar at 9pm is miserable. Take a picture." |
 | Missed two sessions | "The plan holds where you left off. Open the app and take the next session." | "Do not restart the week. I have never seen anyone lose progress over two missed sessions. I have watched plenty quit over them." |
 | Weekly recap | "Your week, written back to you: sessions logged, volume, mood, and what is next." | "Sunday is for reading what happened, not for judging how it felt. Those are different things." |
@@ -259,7 +259,7 @@ has obviously been there.
 - [ ] Could Jon read this aloud unchanged? If any line would make him pause, it is rewritten.
 - [ ] Anything needing his personal verification is listed in the sign-off bucket.
 - [ ] The Becoming appears at most once.
-- [ ] No banned words, near-zero em dashes, at most one meaningful emoji.
+- [ ] No banned words, near-zero em dashes in deliverable copy, at most one meaningful emoji.
 - [ ] Every product behaviour referenced exists today.
 
 ## Related skills

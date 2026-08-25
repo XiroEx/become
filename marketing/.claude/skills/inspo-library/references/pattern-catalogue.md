@@ -34,8 +34,9 @@ Source captures exist for all five hubs in `webapp/public/screenshots/v2/`.
 **Shape:** one claim, big type, one hero visual. Two-tone stacked headline (white line over accent
 line). Highest production value, lowest information density.
 
-**Become translation:** the mechanism claims that need no explanation. "The camera counts the reps."
-"One photo. The whole plate, itemized." Green accent line under a white line, Geist, all caps.
+**Become translation:** the mechanism claims that need no explanation. "One photo. The whole plate,
+itemized." "Last session's numbers, on screen, mid-set." Green accent line under a white line,
+Geist, all caps.
 
 ### C. App Tip how-to sequence
 
@@ -52,7 +53,7 @@ CTA already having learned something, so the CTA is structural rather than verba
 |---|---|---|
 | How to log a set with PR history | 4 | `workout-log-dark` plus two crops |
 | How to shoot one photo and itemize a plate | 4 | `nutrition-day-*`, `nutrition-meal-*` |
-| How to start LIVE rep counting | 4 | new capture required |
+| How to start a session in LIVE mode and log the first set | 4 | `workout-log-dark` plus a workout-hub crop |
 | How to build a session with the AI generator | 4 | `generate-light`, `generate-dark` |
 | How to read your weekly recap | 3 | `progress-*` plus a dashboard crop |
 

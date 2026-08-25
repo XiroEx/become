@@ -130,7 +130,8 @@ we have no counts, ratings, or testimonials and may not invent any.
 `references/honest-proof.md`.
 
 **Honest version:**
-✅ "Watch the camera count the reps." (a claim the reader can verify in 30 seconds)
+✅ "Watch one photo of a plate become five itemized rows." (a claim the reader can verify in 30
+seconds)
 ❌ "Join thousands of members." (we have no such figure and would not publish it)
 
 **Failure mode:** substituting vagueness for the missing number. "Loved by many" is worse than

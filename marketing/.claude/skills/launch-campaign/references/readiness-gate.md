@@ -40,9 +40,10 @@ only.
 
 New captures go through `screenshot-capture`. Known traps recorded there include: weight and
 mood cannot be backdated through any API so trend charts are single-point; the progress Weekly
-Volume bar uses a hardcoded dark fill that is invisible on the dark card; `.mov` exercise demos
-fail in Chromium so use the `.mp4`; auto-rotating carousels must be clicked back to match the
-light or dark twin.
+Volume bar uses a hardcoded dark fill that is invisible on the dark card; exercise demos render as
+a black panel in Chromium because `webapp/components/FramedVideo.tsx` emits
+`type="video/quicktime"` on the `.mov` sources, so capture on iOS or Safari where they play;
+auto-rotating carousels must be clicked back to match the light or dark twin.
 
 ---
 
@@ -80,15 +81,15 @@ and it is the one that makes the T+7 review meaningless.
 | # | Check | Red means |
 |---|---|---|
 | 5.1 | Someone owns replies on launch day, by name, with hours blocked | The best hour of the campaign is dropped |
-| 5.2 | The sceptical FAQ is written: how does the rep counting actually work, what does it get wrong, is my food photo private, is this really free | Improvised answers on the day, and improvised answers invent things |
+| 5.2 | The sceptical FAQ is written: how does the photo logging actually work, what does it get wrong, where does my food photo go, is this really free, is my data sold | Improvised answers on the day, and improvised answers invent things |
 | 5.3 | Jon knows the date and what he is posting | The single highest-leverage borrowed channel goes quiet |
 | 5.4 | Support has a path for "it did not work for me" | A bad first impression with no recovery |
 | 5.5 | Every claim in every asset has been checked against product truth | A fabricated claim on launch day |
 
-**5.2 in detail.** Write the honest answer, including limits. "It miscounts if you rack early or
-your phone can't see your full range of motion" outperforms "it's incredibly accurate." Honesty
-about limits is the strongest credibility move available to a product with no user counts to
-show.
+**5.2 in detail.** Write the honest answer, including limits. "It estimates portions, so it reads
+a chicken breast better than a mixed curry, and you correct anything it missed" outperforms "it's
+incredibly accurate." Honesty about limits is the strongest credibility move available to a product
+with no user counts to show.
 
 ---
 

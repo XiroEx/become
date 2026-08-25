@@ -13,7 +13,7 @@ replacement. Put the relevant lines in the brief in bold; do not link to this fi
 | "You'll see results in 30 days" | Promised timeline | "The program runs in phases, and each phase has a plan" |
 | "This got me my best physique" | Implied guaranteed outcome | "This kept my training in one place" |
 | "Guaranteed gains" | Guarantee | "Every set is logged with what you did last time" |
-| "It transformed my body" | Outcome claim plus body framing | "It counted the set while my phone was on the floor" |
+| "It transformed my body" | Outcome claim plus body framing | "It had my last three sets on screen before I picked the bar up" |
 
 **Rule:** describe behaviour and mechanism, never outcome. What the app did, what you did, not
 what your body became.
@@ -23,7 +23,7 @@ what your body became.
 | Do not say | Why | Say instead |
 |---|---|---|
 | "It fixed my back pain" | Medical claim | Nothing. Do not mention conditions |
-| "Great for injury recovery" | Medical claim | "There is a demo video with the cue on every exercise" |
+| "Great for injury recovery" | Medical claim | "The big lifts have a demo clip with the cue on it" |
 | "It helped my anxiety" | Medical claim | "There is a short guided session and a mood check-in" |
 | "Boosts your metabolism" | Physiological claim | "You set your own calorie and macro targets" |
 | "Safe if you're pregnant" | Medical advice | Nothing. Refer to a clinician |
@@ -73,6 +73,8 @@ comparisons ("instead of four separate apps") are fine because they name no one.
 | Do not say | Why |
 |---|---|
 | Any feature not in the brief | It may not exist. Product truth is fixed |
+| Any claim that the camera watches a set or tallies repetitions | It does not. LIVE mode is the live logging screen and every number in it is typed. The camera is for plate photos and barcodes |
+| "Every exercise has a demo video" | 39 of 132 do. "The big lifts have a clip" is the true version |
 | "It syncs with [wearable]" | Not in product truth |
 | "It has a coach in your pocket 24/7" | Overstates what the app does |
 | "AI knows exactly what you need" | Overstates the generator |

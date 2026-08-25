@@ -29,12 +29,17 @@ Question: can one channel produce signups at all?
 | 2 | Fix the top activation blocker | | day 10 | `signup-activation` | |
 | 3 | Landing audit and the two highest-impact fixes | | day 12 | `landing-cro` | |
 | 4 | Pillars and cadence for the primary channel | | day 7 | `social-strategy` | |
-| 5 | Batch film session one: 8-12 pieces | | day 14 | `reels-scripts` | |
+| 5 | Batch film session one: 8-12 pieces — **Phase 1b, only if the capacity check passes** | | day 14 | `reels-scripts` | |
 | 6 | Dated calendar for days 15-45 | | day 14 | `content-calendar` | |
-| 7 | Listing kit written once, reused everywhere | | day 20 | `web-app-listing` | |
-| 8 | First two directory submissions | | day 25 | `web-app-listing` | |
+| 7 | Listing kit written once, reused everywhere — **Phase 1b, only if the capacity check passes** | | day 20 | `web-app-listing` | |
+| 8 | First two directory submissions — **Phase 1b, only if the capacity check passes** | | day 25 | `web-app-listing` | |
 | 9 | SEO technical basics: robots, sitemap, metadata, JSON-LD | | day 28 | `seo-geo` | |
 | 10 | Jon activation: launch post plus story sequence | | day 5 | `coach-brand-voice` | |
+| 11 | Member-proof pipeline: Jon DMs 5-10 warm clients, gets written consent and verbatim quotes | | day 20 | `ugc-creator-briefs` | |
+
+**Phase 1b.** Rows 5, 7, and 8 are the first things to cut. They each consume a filming day or a
+writing block that the instrumentation and activation lines above them need more. Run the capacity
+check at the bottom of this file before committing to any of them, and cut rather than compress.
 
 **Phase 1 review (day 30).** Write, do not discuss:
 - What moved against baseline?
@@ -49,15 +54,15 @@ Question: can we do it repeatedly without heroics?
 
 | # | Line | Owner | Due | Producing skill | Status |
 |---|---|---|---|---|---|
-| 11 | Batch film session two, from what phase 1 taught | | day 40 | `reels-scripts` | |
-| 12 | Weekly template locked, with named recurring slots | | day 35 | `content-calendar` | |
-| 13 | Capture run for the screens the calendar needs | | day 38 | `screenshot-capture` | |
-| 14 | Render the campaign assets the calendar needs | | day 42 | `remotion-assets` | |
-| 15 | Activation email sequence live | | day 45 | `email-lifecycle` | |
-| 16 | Push nudge set live, with permission timing fixed | | day 50 | `push-notifications` | |
-| 17 | Second directory wave | | day 52 | `web-app-listing` | |
-| 18 | First tier-1 and tier-2 query pages | | day 58 | `seo-geo` | |
-| 19 | Mid-point bet health check against the kill rule | | day 45 | this skill | |
+| 12 | Batch film session two, from what phase 1 taught | | day 40 | `reels-scripts` | |
+| 13 | Weekly template locked, with named recurring slots | | day 35 | `content-calendar` | |
+| 14 | Capture run for the screens the calendar needs | | day 38 | `screenshot-capture` | |
+| 15 | Render the campaign assets the calendar needs | | day 42 | `remotion-assets` | |
+| 16 | Activation email sequence live | | day 45 | `email-lifecycle` | |
+| 17 | Push nudge set live, with permission timing fixed | | day 50 | `push-notifications` | |
+| 18 | Second directory wave | | day 52 | `web-app-listing` | |
+| 19 | First tier-1 and tier-2 query pages | | day 58 | `seo-geo` | |
+| 20 | Mid-point bet health check against the kill rule | | day 45 | this skill | |
 
 **Phase 2 review (day 60).** Is production running on a cadence rather than on adrenaline? If
 every post still requires a scramble, the batch step failed and phase 3 must fix that first.
@@ -70,12 +75,12 @@ Question: where does adding resource multiply?
 
 | # | Line | Owner | Due | Producing skill | Status |
 |---|---|---|---|---|---|
-| 20 | Bet decision against the pre-registered kill rule | | day 62 | this skill | |
-| 21 | Double the working channel, or reallocate | | day 65 | varies | |
-| 22 | One launch moment, with a full run of show | | day 75 | `launch-campaign` | |
-| 23 | Referral loop, if the base now justifies it | | day 80 | `referral-program` | |
-| 24 | Small honest paid test, only if preconditions are met | | day 82 | `paid-social` | |
-| 25 | Quarter review and next plan | | day 90 | this skill | |
+| 21 | Bet decision against the pre-registered kill rule | | day 62 | this skill | |
+| 22 | Double the working channel, or reallocate | | day 65 | varies | |
+| 23 | One launch moment, with a full run of show | | day 75 | `launch-campaign` | |
+| 24 | Referral loop, if the base now justifies it | | day 80 | `referral-program` | |
+| 25 | Small honest paid test, only if preconditions are met | | day 82 | `paid-social` | |
+| 26 | Quarter review and next plan | | day 90 | this skill | |
 
 ---
 

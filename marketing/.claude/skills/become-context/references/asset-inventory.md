@@ -14,9 +14,11 @@ every path when you refresh the doc. The gotcha column is the valuable one.
 
 **Known capture traps recorded in the manifest:** weight and mood cannot be backdated through any
 app API, so trend charts are single-point; the progress Weekly Volume bar uses a hardcoded dark
-fill that is invisible on the dark card; `.mov` exercise demos are served as `video/quicktime` and
-fail in Chromium, so use the `.mp4`; auto-rotating carousels must be clicked back to match their
-light/dark twin. Any DOM patching done at capture time is disclosed in `knownIssues`.
+fill that is invisible on the dark card; `.mov` exercise demos are served correctly as `video/mp4`
+but `FramedVideo.tsx` emits `type="video/quicktime"`, which Chromium refuses, so the panel goes
+black (the fix is the type attribute, not swapping to an `.mp4` — only three movements have one);
+auto-rotating carousels must be clicked back to match their light/dark twin. Any DOM patching done
+at capture time is disclosed in `knownIssues`.
 
 ## Motion and design
 
@@ -40,7 +42,7 @@ light/dark twin. Any DOM patching done at capture time is disclosed in `knownIss
 | Asset | Path | Notes |
 |---|---|---|
 | Landing page | `webapp/components/landing/` | `BecomeLanding.tsx`, `HeroLine.tsx`, `Marquee.tsx`, `Phone.tsx`, `Spine.tsx`, `hooks.ts`, `landing.module.css`. The conversion surface. Section ids: `why`, `dashboard`, `training`, `nutrition`, `mind`, `progress`, `coach`, `how`. |
-| Exercise demos | `webapp/public/exercises/` | 42 files, `.mov` and `.mp4` pairs. Use the `.mp4`. |
+| Exercise demos | `webapp/public/exercises/` | 39 of the 132 exercises ship a demo clip — the big lifts are covered. Never claim every exercise has one. 42 files: 39 `.mov` plus `.mp4` duplicates for `back-squat`, `bench-press`, `cable-row` only. |
 | Image tooling | `sharp`, already in `webapp/package.json` | No new image dependency should be added. |
 
 **Indexable surface today:** essentially one page (`webapp/app/page.tsx`) plus `login`,

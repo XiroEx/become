@@ -88,13 +88,13 @@ When someone comments a keyword (`BECOME`, `LIVE`, `PLATE`, `WEEK1`), the DM mus
 promised thing before anything else. A DM that opens with a pitch is why keyword flows die.
 
 **`LIVE`**
-> "Here is the LIVE setup: prop the phone so the whole rep is in frame, start the set from the exercise screen, and it counts while you lift. Link when you want it: [link]"
+> "Here is the LIVE setup: open the session, tap the exercise, and the set is already waiting with what you lifted last time underneath it. Type the two numbers, tick it, rest timer runs itself. Link when you want it: [link]"
 
 **`PLATE`**
 > "Photo logging: one picture of the whole plate, not each item. It itemizes what is there and you correct anything it missed, then it lands against your targets. Link: [link]"
 
 **`WEEK1`**
-> "Week one is three sessions, each with a demo clip on every exercise, and you log the sets as you go. Nothing to set up beyond your training days. Link: [link]"
+> "Week one is three sessions. The big lifts carry a demo clip you can watch mid-set, and you log the sets as you go. Nothing to set up beyond your training days. Link: [link]"
 
 **`BECOME`**
 > "Training, food, mood and progress in one app. Free today, email link, no card. [link]"
