@@ -29,10 +29,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Custom programs are owner-private. Deny enumeration by other users.
+    // Custom programs are owner-private, unless a trainer/admin shared this
+    // one with the requesting user. Deny enumeration by everyone else.
     if (program.isCustom) {
       const ownerId = program.createdBy?.toString();
-      if (ownerId !== authResult.userId) {
+      const isSharedWithUser = (program.sharedWith ?? []).some((id) => id.toString() === authResult.userId);
+      if (ownerId !== authResult.userId && !isSharedWithUser) {
         return NextResponse.json(
           { error: 'Program not found' },
           { status: 404 }

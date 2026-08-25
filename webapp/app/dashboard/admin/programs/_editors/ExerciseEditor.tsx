@@ -64,6 +64,24 @@ const EXERCISE_SUGGESTIONS: Partial<Record<ExerciseType, string[]>> = {
   ],
 };
 
+const IMPORT_FLAG_CONFIG: Record<string, { label: string; className: string; title: string }> = {
+  new: {
+    label: "New exercise",
+    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    title: "Not in the exercise library — saving will create it as a new exercise.",
+  },
+  broken: {
+    label: "Needs review",
+    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    title: "Couldn't tell sets/reps/rest for this one — check it before saving.",
+  },
+  grouped: {
+    label: "Possible group",
+    className: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    title: "Looks like it's meant to be linked with another exercise (a superset/circuit) — use the group controls if so.",
+  },
+};
+
 const GROUP_TYPE_COLORS: Record<string, string> = {
   superset: "bg-purple-500",
   circuit: "bg-orange-500",
@@ -162,6 +180,21 @@ export default function ExerciseEditor({
             {exercise.groupLabel || exercise.groupType || 'Group'}
           </span>
         )}
+
+        {/* Import review flags (see lib/workout/importProgram.ts) */}
+        {exercise.importFlags?.map((flag) => {
+          const config = IMPORT_FLAG_CONFIG[flag];
+          if (!config) return null;
+          return (
+            <span
+              key={flag}
+              title={config.title}
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${config.className}`}
+            >
+              {config.label}
+            </span>
+          );
+        })}
 
         {/* Exercise Name Preview */}
         <span className="flex-1 truncate text-sm font-medium text-zinc-900 dark:text-white">

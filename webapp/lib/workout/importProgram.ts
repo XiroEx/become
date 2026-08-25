@@ -4,7 +4,7 @@
 // ProgramCreator.tsx). The model is small and best-effort, so this defensively
 // coerces every field and drops anything that doesn't parse into a usable
 // exercise/workout/phase rather than letting a malformed value reach the editor.
-import type { TargetUserLevel, Phase, Workout, Exercise } from '@/lib/data/programs'
+import type { TargetUserLevel, Phase, Workout, Exercise, ImportFlag } from '@/lib/data/programs'
 
 export interface ImportedProgram {
   name: string
@@ -100,5 +100,62 @@ export function normalizeImportedProgram(raw: unknown): ImportedProgram | null {
     training_days_per_week: daysPerWeek,
     target_user,
     phases,
+  }
+}
+
+// A leading label like "A1.", "1a)", "B2:" — the shorthand programs commonly use
+// to mark exercises that alternate together (a superset/circuit), e.g.
+// "A1. Bench Press" / "A2. Bent-Over Row".
+const GROUP_LABEL_RE = /^\s*(?:[A-Za-z]\d{1,2}[a-z]?|\d{1,2}[a-zA-Z])\s*[.):\-]/
+const GROUP_WORD_RE = /\b(superset|circuit|tri-?set|giant\s?set)\b/i
+
+function looksGrouped(exercise: Exercise): boolean {
+  const name = exercise.name || ''
+  const details = exercise.details || ''
+  return (
+    GROUP_LABEL_RE.test(name) ||
+    GROUP_WORD_RE.test(name) ||
+    GROUP_WORD_RE.test(details)
+  )
+}
+
+function looksBroken(exercise: Exercise): boolean {
+  const name = (exercise.name || '').trim()
+  if (name.length < 3) return true
+  return exercise.sets == null && !exercise.reps && !exercise.rest && !exercise.details
+}
+
+/**
+ * Annotates each exercise in an already-normalized imported program with
+ * review flags, so the editor can surface them before the user saves:
+ *   - 'new'     the name doesn't match anything in the exercise library —
+ *               saving will create a brand-new custom exercise.
+ *   - 'broken'  the AI extracted a name but nothing else usable (no
+ *               sets/reps/rest/details) — likely a parsing miss.
+ *   - 'grouped' the name/details carry a superset/circuit marker (e.g.
+ *               "A1. Bench Press") — likely meant to be linked with a
+ *               neighboring exercise via the group controls.
+ * Pure — returns a new object, does not mutate `program`. `knownExerciseNames`
+ * must already be lowercased/trimmed (see /api/exercises/match).
+ */
+export function flagImportedProgram(
+  program: ImportedProgram,
+  knownExerciseNames: Set<string>,
+): ImportedProgram {
+  return {
+    ...program,
+    phases: program.phases.map((phase) => ({
+      ...phase,
+      workouts: phase.workouts.map((workout) => ({
+        ...workout,
+        exercises: workout.exercises.map((exercise) => {
+          const flags: ImportFlag[] = []
+          if (!knownExerciseNames.has(exercise.name.trim().toLowerCase())) flags.push('new')
+          if (looksBroken(exercise)) flags.push('broken')
+          if (looksGrouped(exercise)) flags.push('grouped')
+          return flags.length ? { ...exercise, importFlags: flags } : exercise
+        }),
+      })),
+    })),
   }
 }

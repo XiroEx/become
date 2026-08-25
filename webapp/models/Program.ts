@@ -75,6 +75,10 @@ export interface IProgram extends Document {
   phases: IPhase[];
   isCustom?: boolean;
   createdBy?: mongoose.Types.ObjectId | string;
+  // Trainers/admins can share a custom program with specific members (see
+  // POST /api/programs/[programId]/share). Members it's shared with see it
+  // alongside their own custom programs.
+  sharedWith?: mongoose.Types.ObjectId[];
   coverImage?: string;
   coverParallax?: boolean;
   coverZoom?: number;       // 1.0 = no zoom, 2.0 = 2x in
@@ -146,6 +150,7 @@ const ProgramSchema = new Schema<IProgram>({
   phases: [PhaseSchema],
   isCustom: { type: Boolean, default: false, index: true },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', sparse: true, index: true },
+  sharedWith: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
   coverImage: { type: String },
   coverParallax: { type: Boolean, default: false },
   coverZoom: { type: Number, default: 1, min: 1, max: 3 },
