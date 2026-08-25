@@ -21,6 +21,7 @@ const STATUS_TINT = { light: "#fefefe", dark: "#151517" } as const
 
 export function Phone({
   src,
+  srcDark,
   alt,
   className,
   style,
@@ -29,9 +30,18 @@ export function Phone({
   tone = "light",
   island = true,
   statusTint,
+  statusTintDark,
   children,
 }: {
   src: string
+  /**
+   * The dark-theme twin of `src`. When set, BOTH images render and CSS shows
+   * one (`html.dark` hides `.lightOnly`, everything else hides `.darkOnly`) —
+   * no JS, so no hydration mismatch and the swap is live when the OS theme
+   * changes. `display: none` never intersects, so next/image's lazy loader
+   * never fetches the hidden variant.
+   */
+  srcDark?: string
   alt: string
   className?: string
   style?: CSSProperties
@@ -48,8 +58,12 @@ export function Phone({
   island?: boolean
   /** Override the strip colour when the capture's top row is not white/near-black. */
   statusTint?: string
+  /** Same, for the dark-theme twin — its top row is a different colour. */
+  statusTintDark?: string
   children?: ReactNode
 }) {
+  const themed = Boolean(srcDark)
+
   return (
     <div className={styles.phoneFrame}>
       <div
@@ -59,14 +73,35 @@ export function Phone({
       >
         <div className={styles.phoneScreen}>
           {island ? (
-            <span
-              className={styles.phoneStatus}
-              aria-hidden="true"
-              style={{ background: statusTint ?? STATUS_TINT[tone] }}
-            />
+            <>
+              <span
+                className={themed ? `${styles.phoneStatus} ${styles.lightOnly}` : styles.phoneStatus}
+                aria-hidden="true"
+                style={{ background: statusTint ?? STATUS_TINT[tone] }}
+              />
+              {themed ? (
+                <span
+                  className={`${styles.phoneStatus} ${styles.darkOnly}`}
+                  aria-hidden="true"
+                  style={{ background: statusTintDark ?? STATUS_TINT.dark }}
+                />
+              ) : null}
+            </>
           ) : null}
           <div className={styles.phoneShot} data-inset={island ? "true" : "false"}>
-            <Image src={src} alt={alt} fill priority={priority} sizes={sizes} />
+            <Image
+              className={themed ? styles.lightOnly : undefined}
+              src={src}
+              alt={alt}
+              fill
+              priority={priority}
+              sizes={sizes}
+            />
+            {/* Lazy on purpose even when the light twin is `priority`: one
+                preload per slot, and the hidden one is never fetched at all. */}
+            {srcDark ? (
+              <Image className={styles.darkOnly} src={srcDark} alt={alt} fill sizes={sizes} />
+            ) : null}
           </div>
           {island ? <span className={styles.phoneIsland} aria-hidden="true" /> : null}
         </div>
