@@ -7,11 +7,12 @@ import { Play } from 'lucide-react'
 import ConfirmModal from '@/components/workout/ConfirmModal'
 import { clearQuickSession } from '@/lib/quickSession/store'
 
-// Shows ONLY when the user has an in-progress workout log for today
-// (started but not yet completed). Disappears the moment the workout is
-// marked complete. Sits between the dashboard tile grid and the
-// "Up Next" card — and, rendered a second time, at the top of the workout
-// section, so it's reachable from wherever a member actually is.
+// Shows ONLY when the user has an in-progress workout log started within the
+// last 24h (rolling, not the calendar day — see IN_PROGRESS_WINDOW_MS) and
+// not yet completed. Disappears the moment the workout is marked complete.
+// Sits between the dashboard tile grid and the "Up Next" card — and,
+// rendered a second time, at the top of the workout section, so it's
+// reachable from wherever a member actually is.
 //
 // Wiring: GET /api/workouts/in-progress → the open log itself.
 //

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
-import { readTzOffset, localDateKey, localDayWindowForKey } from '@/lib/dayWindow'
+import { IN_PROGRESS_WINDOW_MS } from '@/lib/dayWindow'
 
 /**
  * The workout the member is in the middle of RIGHT NOW, if any.
@@ -22,8 +22,11 @@ import { readTzOffset, localDateKey, localDayWindowForKey } from '@/lib/dayWindo
  *      for any other day was invisible even with a healthy enrolment.
  *
  * The open LOG is the source of truth for "you are mid-workout", so this asks it
- * directly. Scoped to the member's local day, because a log left open from last
- * week is stale, not resumable.
+ * directly. Scoped to a rolling 24h window (not the member's local calendar
+ * day) so a workout started shortly before midnight is still "in progress"
+ * a few minutes later, once the day has technically rolled over. A log left
+ * open from last week remains genuinely stale — that's handled separately,
+ * further out, by the 30-day auto-cleanup in GET /api/workouts.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -40,16 +43,15 @@ export async function GET(request: NextRequest) {
     const logs = progress?.workoutLogs ?? []
     if (logs.length === 0) return NextResponse.json({ workout: null })
 
-    const tz = readTzOffset(request.nextUrl.searchParams)
-    const { start, end } = localDayWindowForKey(localDateKey(null, tz), tz)
+    const cutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
 
-    // Newest first: if a member somehow has two open logs today, the one they
-    // are actually in is the one they started last.
+    // Newest first: if a member somehow has two open logs, the one they are
+    // actually in is the one they started last.
     const open = logs
       .filter((w) => {
         if (w.completed) return false
         const at = new Date(w.date as string)
-        return at >= start && at < end
+        return at >= cutoff
       })
       .sort((a, b) => new Date(b.date as string).getTime() - new Date(a.date as string).getTime())[0]
 

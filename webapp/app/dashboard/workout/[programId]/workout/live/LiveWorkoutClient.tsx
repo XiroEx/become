@@ -24,6 +24,8 @@ import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib
 import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
+import DayChoiceModal from "@/components/workout/DayChoiceModal";
+import { dateKey } from "@/lib/dayWindow";
 
 interface SetData {
   reps: string;
@@ -60,6 +62,7 @@ interface SavedWorkout {
   exercises: SavedExercise[];
   completed: boolean;
   activeSeconds?: number;
+  date?: string;
   startedAt?: string;
 }
 
@@ -178,6 +181,23 @@ export default function LiveWorkoutPage() {
   // completed save. Sessions named during creation never enter this flow.
   const [quickNeedsName, setQuickNeedsName] = useState(false);
   const [pendingQuickCompletion, setPendingQuickCompletion] = useState<SetData[][] | null>(null);
+  // Which local calendar day this workout's log is currently attributed to.
+  // Defaults to today (a fresh session has nothing to cross); a resumed
+  // session overwrites it with the server-confirmed date once loaded. Used
+  // only to detect a midnight crossing at finish time — see
+  // requestDayChoiceIfNeeded below.
+  const [workoutOriginKey, setWorkoutOriginKey] = useState<string>(
+    () => dateKey(new Date(), new Date().getTimezoneOffset()),
+  );
+  const [pendingDayChoice, setPendingDayChoice] = useState<{
+    data: SetData[][];
+    originalKey: string;
+    todayKey: string;
+  } | null>(null);
+  // Set by resolveDayChoice, read once by saveWorkout on the completing save,
+  // then cleared — a ref (not state) so saveWorkout's already-large dependency
+  // list doesn't need to grow to pick it up.
+  const logDateOverrideRef = useRef<string | null>(null);
   const [programCompleted, setProgramCompleted] = useState(false);
   const [completedProgramName, setCompletedProgramName] = useState("");
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -530,6 +550,25 @@ export default function LiveWorkoutPage() {
             setCurrentSpeed(startSet.speed ?? "");
           }
           setLoading(false);
+
+          // The stashed draft carries no timestamp, so a resumed quick
+          // session's true start day can only come from its server log — ask
+          // for it in the background (best-effort; a brand-new session with
+          // no log yet just 404s and workoutOriginKey keeps its "today"
+          // default, which is already correct). Not awaited: this only
+          // matters at finish time, well after the workout is usable.
+          if (quickSessionId && token) {
+            fetch(`/api/workouts/session?id=${encodeURIComponent(quickSessionId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((b: { session?: { date?: string } } | null) => {
+                if (b?.session?.date) {
+                  setWorkoutOriginKey(dateKey(new Date(b.session.date), new Date().getTimezoneOffset()));
+                }
+              })
+              .catch(() => { /* best-effort — day-choice just won't offer if this fails */ });
+          }
           return;
         }
 
@@ -592,6 +631,14 @@ export default function LiveWorkoutPage() {
             }
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
+
+              // The server-confirmed day this log actually started on — a
+              // resumed workout can be picking up after midnight, so "today"
+              // (the default above) would be wrong for detecting that at
+              // finish time.
+              if (savedWorkout.date) {
+                setWorkoutOriginKey(dateKey(new Date(savedWorkout.date), new Date().getTimezoneOffset()));
+              }
 
               // Restore swapped exercises from saved workout, and bring back
               // anything added mid-session: a program workout rebuilds its
@@ -1018,6 +1065,11 @@ export default function LiveWorkoutPage() {
       // Snapshot active seconds now so the server stores the time at the
       // moment of save, not the time the request lands.
       const activeSecondsAtSave = activeSecondsBaseline + Math.floor((Date.now() - sessionStartTime) / 1000);
+      // Which day the member picked for a workout that crossed midnight (set
+      // by resolveDayChoice). Only ever sent on the completing save — read
+      // once, then cleared, so it can never leak into a later, unrelated save.
+      const logDateOverride = isComplete ? logDateOverrideRef.current : null;
+      if (isComplete) logDateOverrideRef.current = null;
       // Quick sessions post a kind:'quick' body (matched server-side by
       // sessionId); program sessions post the program/phase/day body.
       const saveBody = isQuick && quickSessionId
@@ -1031,6 +1083,7 @@ export default function LiveWorkoutPage() {
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+            ...(logDateOverride && { performedAt: logDateOverride }),
             tz: new Date().getTimezoneOffset(),
             // The zone name, not just the offset: an offset is wrong for half
             // the year the moment daylight saving moves.
@@ -1045,6 +1098,7 @@ export default function LiveWorkoutPage() {
             activeSeconds: activeSecondsAtSave,
             ...(scheduledDate && { scheduledDate }),
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+            ...(logDateOverride && { performedAt: logDateOverride }),
             tz: new Date().getTimezoneOffset(),
           };
       const res = await fetch("/api/workouts", {
@@ -1173,6 +1227,20 @@ export default function LiveWorkoutPage() {
     return parseRestTime(exercise?.rest || getSmartRestDefault(exercise));
   };
 
+  // A workout that started on one local calendar day and is finishing on
+  // another (crossed midnight) needs an explicit choice of which day it
+  // counts toward — silently picking one, either way, is what the member
+  // reported as "lost" data actually being real but mis-dated. Purely
+  // client-side: workoutOriginKey is already resolved (server-confirmed for
+  // a resume, "today" for a fresh start), so no network round-trip needed
+  // here.
+  const requestDayChoiceIfNeeded = useCallback((updatedData: SetData[][]): boolean => {
+    const todayKeyNow = dateKey(new Date(), new Date().getTimezoneOffset());
+    if (workoutOriginKey === todayKeyNow) return false;
+    setPendingDayChoice({ data: updatedData, originalKey: workoutOriginKey, todayKey: todayKeyNow });
+    return true;
+  }, [workoutOriginKey]);
+
   const requestQuickNameBeforeCompletion = useCallback((updatedData: SetData[][]): boolean => {
     if (!isQuick || !quickSessionId || !quickNeedsName) return false;
     setPendingQuickCompletion(updatedData);
@@ -1206,6 +1274,20 @@ export default function LiveWorkoutPage() {
     setCurrentStepIndex(prev => prev + 1);
   }, [currentStepIndex, workoutFlow, exercises, isQuick, quickSessionId]);
 
+  // Resolves the day-choice modal: stash which day the member picked (read
+  // once by saveWorkout, then cleared), then fall through to the same
+  // naming-gate + finalize sequence completeSet/skipSet/skipExercise use.
+  const resolveDayChoice = useCallback((chosenKey: string) => {
+    if (!pendingDayChoice) return;
+    const { data, originalKey } = pendingDayChoice;
+    logDateOverrideRef.current = chosenKey === originalKey ? null : chosenKey;
+    setPendingDayChoice(null);
+    if (requestQuickNameBeforeCompletion(data)) return;
+    setExerciseData(data);
+    saveWorkout(data, true);
+    advanceStep(data, true);
+  }, [pendingDayChoice, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
+
   const completeSet = useCallback(async () => {
     if (!currentStep) return;
 
@@ -1222,13 +1304,16 @@ export default function LiveWorkoutPage() {
     // Clear auto-save timeout since we're doing an immediate save
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
-    if (isLastStep && requestQuickNameBeforeCompletion(updatedData)) return;
+    if (isLastStep) {
+      if (requestDayChoiceIfNeeded(updatedData)) return;
+      if (requestQuickNameBeforeCompletion(updatedData)) return;
+    }
 
     setExerciseData(updatedData);
 
     saveWorkout(updatedData, isLastStep);
     advanceStep(updatedData, isLastStep);
-  }, [currentStep, currentReps, currentWeight, currentSpeed, isLastStep, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
+  }, [currentStep, currentReps, currentWeight, currentSpeed, isLastStep, exerciseData, requestDayChoiceIfNeeded, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -1252,13 +1337,16 @@ export default function LiveWorkoutPage() {
 
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
-    if (isLastStep && requestQuickNameBeforeCompletion(updatedData)) return;
+    if (isLastStep) {
+      if (requestDayChoiceIfNeeded(updatedData)) return;
+      if (requestQuickNameBeforeCompletion(updatedData)) return;
+    }
 
     setExerciseData(updatedData);
 
     saveWorkout(updatedData, isLastStep);
     advanceStep(updatedData, isLastStep);
-  }, [currentStep, isLastStep, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
+  }, [currentStep, isLastStep, exerciseData, requestDayChoiceIfNeeded, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
 
   const skipExercise = useCallback(async () => {
     if (!currentStep) return;
@@ -1293,7 +1381,10 @@ export default function LiveWorkoutPage() {
 
     const allDone = nextIdx >= workoutFlow.length;
 
-    if (allDone && requestQuickNameBeforeCompletion(updatedData)) return;
+    if (allDone) {
+      if (requestDayChoiceIfNeeded(updatedData)) return;
+      if (requestQuickNameBeforeCompletion(updatedData)) return;
+    }
 
     setExerciseData(updatedData);
     saveWorkout(updatedData, allDone);
@@ -1319,7 +1410,7 @@ export default function LiveWorkoutPage() {
     }
 
     setCurrentStepIndex(nextIdx);
-  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, exercises, isQuick, quickSessionId]);
+  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, requestDayChoiceIfNeeded, requestQuickNameBeforeCompletion, saveWorkout, exercises, isQuick, quickSessionId]);
 
   const finishNamedQuickSession = useCallback(async (title: string) => {
     if (!quickSessionId || !pendingQuickCompletion) {
@@ -2636,6 +2727,14 @@ export default function LiveWorkoutPage() {
           />
         )}
       </AnimatePresence>
+
+      {pendingDayChoice && (
+        <DayChoiceModal
+          originalKey={pendingDayChoice.originalKey}
+          todayKey={pendingDayChoice.todayKey}
+          onChoose={resolveDayChoice}
+        />
+      )}
 
       {pendingQuickCompletion && workout && (
         <QuickSessionNamePrompt
