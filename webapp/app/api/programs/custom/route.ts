@@ -15,14 +15,26 @@ export async function GET(request: NextRequest) {
     }
 
     await dbConnect()
+    // Own programs, plus anything a trainer/admin shared with this user.
     const programs = await ProgramModel.find({
       isCustom: true,
-      createdBy: auth.userId,
+      $or: [{ createdBy: auth.userId }, { sharedWith: auth.userId }],
     })
       .sort({ updatedAt: -1 })
+      .populate('createdBy', 'name')
       .lean()
     const hydrated = await hydratePrograms(programs)
-    return NextResponse.json({ programs: hydrated })
+    const withOwnership = hydrated.map((p) => {
+      const owner = p.createdBy as unknown as { _id?: { toString(): string }; name?: string } | null
+      const isOwner = owner?._id?.toString() === auth.userId
+      return {
+        ...p,
+        createdBy: owner?._id ?? p.createdBy,
+        isOwner,
+        ...(isOwner ? {} : { sharedByName: owner?.name }),
+      }
+    })
+    return NextResponse.json({ programs: withOwnership })
   } catch (error) {
     console.error('Error listing custom programs:', error)
     return NextResponse.json(

@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Play, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Play, ArrowLeft, Share2 } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import { Card, EmptyState } from "@/components/ui";
 import NewProgramClient from "@/app/dashboard/programs/new/NewProgramClient";
+import ShareProgramModal from "./ShareProgramModal";
 
 interface CustomProgramSummary {
   program_id: string;
@@ -17,6 +18,10 @@ interface CustomProgramSummary {
   goal: string;
   target_user: string;
   tags?: string[];
+  // Set server-side (see GET /api/programs/custom): false when this program
+  // was shared with the viewer by a trainer/admin rather than owned by them.
+  isOwner?: boolean;
+  sharedByName?: string;
 }
 
 interface MyProgramsClientProps {
@@ -32,6 +37,29 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
   // Embedded (hub) only: reveal the program creator inline instead of navigating.
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canShare, setCanShare] = useState(false);
+  const [shareTarget, setShareTarget] = useState<CustomProgramSummary | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return;
+        const res = await fetch("/api/me/entitlements", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setCanShare(data.role === "trainer" || data.role === "admin");
+      } catch {
+        // Sharing UI just stays hidden — not fatal.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -199,9 +227,15 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
                     <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                       {p.training_days_per_week}x/wk
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                      Custom
-                    </span>
+                    {p.isOwner === false ? (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        Shared{p.sharedByName ? ` by ${p.sharedByName}` : ''}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                        Custom
+                      </span>
+                    )}
                   </div>
                 </Link>
               </div>
@@ -215,26 +249,47 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
                   <Play className="h-3.5 w-3.5" />
                   {enrollingId === p.program_id ? 'Enrolling…' : 'Enroll'}
                 </button>
-                <Link
-                  href={`/dashboard/programs/${p.program_id}/edit`}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Link>
-                <button
-                  onClick={() => handleDelete(p.program_id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
+                {p.isOwner !== false && (
+                  <>
+                    <Link
+                      href={`/dashboard/programs/${p.program_id}/edit`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Link>
+                    {canShare && (
+                      <button
+                        onClick={() => setShareTarget(p)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        Share
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(p.program_id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             </Card>
           ))}
         </div>
       )}
       </div>
+
+      {shareTarget && (
+        <ShareProgramModal
+          programId={shareTarget.program_id}
+          programName={shareTarget.name}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
     </>
   );
 

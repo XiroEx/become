@@ -8,7 +8,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeImportedProgram } from '../../lib/workout/importProgram'
+import { normalizeImportedProgram, flagImportedProgram, type ImportedProgram } from '../../lib/workout/importProgram'
 
 test('a well-formed program passes through with its own values', () => {
   const result = normalizeImportedProgram({
@@ -182,4 +182,111 @@ test('exercise fields of the wrong type are dropped rather than coerced', () => 
   assert.equal(ex?.sets, undefined) // 'sets' must be a number — string is dropped
   assert.equal(ex?.reps, undefined) // 'reps' must be a string — number is dropped
   assert.equal(ex?.rest, undefined) // 'rest' must be a string — number is dropped
+})
+
+// flagImportedProgram — review flags shown in the import UI before saving.
+
+function programWithExercises(
+  exercises: Array<{ name: string; sets?: number; reps?: string; rest?: string; details?: string }>,
+): ImportedProgram {
+  return {
+    name: 'Test',
+    description: '',
+    goal: 'Follow my own program',
+    duration_weeks: 4,
+    training_days_per_week: 1,
+    target_user: 'Intermediate',
+    phases: [
+      {
+        phase: 'Phase 1',
+        weeks: '1',
+        focus: 'General',
+        workouts: [{ day: 'Day 1', title: 'Full Body', exercises }],
+      },
+    ],
+  }
+}
+
+function flagsFor(program: ImportedProgram, known: Set<string> = new Set()) {
+  const flagged = flagImportedProgram(program, known)
+  return flagged.phases[0].workouts[0].exercises.map((e) => e.importFlags ?? [])
+}
+
+test('a fully-specified, library-known exercise gets no flags', () => {
+  const program = programWithExercises([{ name: 'Bench Press', sets: 4, reps: '8', rest: '90s' }])
+  const [flags] = flagsFor(program, new Set(['bench press']))
+  assert.deepEqual(flags, [])
+})
+
+test('a name absent from the known-exercise set is flagged new', () => {
+  const program = programWithExercises([{ name: 'Zercher Squat', sets: 3, reps: '5', rest: '2min' }])
+  const [flags] = flagsFor(program, new Set(['bench press']))
+  assert.deepEqual(flags, ['new'])
+})
+
+test('matching is case/whitespace-insensitive against the known set', () => {
+  const program = programWithExercises([{ name: '  Bench Press  ', sets: 4, reps: '8' }])
+  const [flags] = flagsFor(program, new Set(['bench press']))
+  assert.deepEqual(flags, [])
+})
+
+test('an exercise with no sets/reps/rest/details is flagged broken', () => {
+  const program = programWithExercises([{ name: 'Bench Press' }])
+  const [flags] = flagsFor(program, new Set(['bench press']))
+  assert.deepEqual(flags, ['broken'])
+})
+
+test('an exercise with details but no sets/reps counts as specified, not broken', () => {
+  const program = programWithExercises([{ name: 'Plank', details: '3 rounds, 45s hold' }])
+  const [flags] = flagsFor(program, new Set(['plank']))
+  assert.deepEqual(flags, [])
+})
+
+test('a too-short name is flagged broken regardless of other fields', () => {
+  const program = programWithExercises([{ name: 'X', sets: 3, reps: '10' }])
+  const [flags] = flagsFor(program, new Set())
+  assert.ok(flags.includes('broken'))
+})
+
+test('a leading superset-style label flags grouped', () => {
+  const program = programWithExercises([
+    { name: 'A1. Bench Press', sets: 4, reps: '8' },
+    { name: '1b) Bent-Over Row', sets: 4, reps: '8' },
+    { name: 'B2: Lat Pulldown', sets: 3, reps: '12' },
+  ])
+  const flags = flagsFor(program, new Set(['bench press', 'bent-over row', 'lat pulldown']))
+  assert.ok(flags[0].includes('grouped'), 'A1. prefix should flag grouped')
+  assert.ok(flags[1].includes('grouped'), '1b) prefix should flag grouped')
+  assert.ok(flags[2].includes('grouped'), 'B2: prefix should flag grouped')
+})
+
+test('the word "superset" in details flags grouped even without a label prefix', () => {
+  const program = programWithExercises([
+    { name: 'Bench Press', sets: 4, reps: '8', details: 'Superset with Row' },
+  ])
+  const [flags] = flagsFor(program, new Set(['bench press']))
+  assert.ok(flags.includes('grouped'))
+})
+
+test('an ordinary exercise name is not mistaken for a group label', () => {
+  const program = programWithExercises([
+    { name: 'Bench Press', sets: 4, reps: '8' },
+    { name: '5k Run', sets: undefined, reps: undefined, details: 'easy pace' },
+  ])
+  const flags = flagsFor(program, new Set(['bench press', '5k run']))
+  assert.deepEqual(flags[0], [])
+  assert.ok(!flags[1].includes('grouped'), '"5k Run" should not trigger the group heuristic')
+})
+
+test('a clean exercise can still carry multiple flags at once', () => {
+  const program = programWithExercises([{ name: 'A1. Zercher Squat' }])
+  const [flags] = flagsFor(program, new Set())
+  assert.deepEqual(new Set(flags), new Set(['new', 'broken', 'grouped']))
+})
+
+test('flagImportedProgram does not mutate its input', () => {
+  const program = programWithExercises([{ name: 'Bench Press', sets: 4, reps: '8' }])
+  const snapshotBefore = JSON.stringify(program)
+  flagImportedProgram(program, new Set())
+  assert.equal(JSON.stringify(program), snapshotBefore)
 })

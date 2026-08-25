@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { ArrowLeft, FileText, Loader2, PencilLine, Upload } from "lucide-react";
 import { runAiTask } from "@/lib/ai/runClient";
-import { normalizeImportedProgram, type ImportedProgram } from "@/lib/workout/importProgram";
+import { normalizeImportedProgram, flagImportedProgram, type ImportedProgram } from "@/lib/workout/importProgram";
 
 export interface ImportProgramFlowProps {
   onImported: (program: ImportedProgram) => void;
@@ -17,6 +17,37 @@ type FlowState =
   | { step: "error"; message: string };
 
 const MAX_TEXT_FILE_BYTES = 200_000;
+
+// Flags each exercise as new/broken/possibly-grouped for the review step
+// (see lib/workout/importProgram.ts). Best-effort: if the lookup fails, the
+// import still proceeds unflagged rather than blocking on it.
+async function flagAgainstLibrary(program: ImportedProgram): Promise<ImportedProgram> {
+  const names = Array.from(
+    new Set(
+      program.phases.flatMap((p) =>
+        p.workouts.flatMap((w) => w.exercises.map((e) => e.name))
+      )
+    )
+  );
+  if (names.length === 0) return program;
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const res = await fetch("/api/exercises/match", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ names }),
+    });
+    if (!res.ok) return program;
+    const data = await res.json();
+    const known = new Set<string>(Array.isArray(data.known) ? data.known : []);
+    return flagImportedProgram(program, known);
+  } catch {
+    return program;
+  }
+}
 
 export default function ImportProgramFlow({ onImported, onCancel }: ImportProgramFlowProps) {
   const [state, setState] = useState<FlowState>({ step: "choose" });
@@ -34,7 +65,7 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
         });
         return;
       }
-      onImported(normalized);
+      onImported(await flagAgainstLibrary(normalized));
     } catch {
       setState({ step: "error", message: "Couldn't reach the import AI. Try again in a minute." });
     }

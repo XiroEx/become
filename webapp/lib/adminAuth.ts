@@ -63,3 +63,52 @@ export async function requireAdmin(request: NextRequest): Promise<RequireAdminRe
   }
   return { ok: true, userId: result.userId, email: result.email }
 }
+
+/**
+ * Same shape as verifyAdmin, but allows role 'trainer' as well as 'admin'.
+ * Used to gate program-sharing: trainers share their own programs, admins can
+ * share any program.
+ */
+export async function verifyTrainerOrAdmin(request: NextRequest): Promise<AdminAuthResult & { role?: string }> {
+  const authResult = await verifyAuth(request)
+
+  if (!authResult.success || !authResult.userId) {
+    return { success: false, error: 'Unauthorized', status: 401 }
+  }
+
+  try {
+    await connectDB()
+    const user = await User.findById(authResult.userId).select('role').lean<{ role?: string } | null>()
+
+    if (!user) {
+      return { success: false, error: 'User not found', status: 401 }
+    }
+
+    if (user.role !== 'admin' && user.role !== 'trainer') {
+      return { success: false, error: 'Forbidden: trainer or admin access required', status: 403 }
+    }
+
+    return { success: true, userId: authResult.userId, email: authResult.email, role: user.role }
+  } catch (error) {
+    console.error('verifyTrainerOrAdmin error:', error)
+    return { success: false, error: 'Internal server error', status: 500 }
+  }
+}
+
+export type RequireTrainerOrAdminResult =
+  | { ok: true; userId: string; email?: string; role: 'trainer' | 'admin' }
+  | { ok: false; response: NextResponse }
+
+export async function requireTrainerOrAdmin(request: NextRequest): Promise<RequireTrainerOrAdminResult> {
+  const result = await verifyTrainerOrAdmin(request)
+  if (!result.success || !result.userId) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: result.error ?? 'Unauthorized' },
+        { status: result.status ?? 401 }
+      ),
+    }
+  }
+  return { ok: true, userId: result.userId, email: result.email, role: result.role as 'trainer' | 'admin' }
+}
