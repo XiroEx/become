@@ -55,8 +55,10 @@ demo panel renders black on desktop Chrome and Android while working on iOS Safa
 are served with `Content-Type: video/mp4` and play fine when the type attribute is omitted.
 
 **Handling used:** the source URL was assigned to `video.src` directly for `workout-log-dark`, so
-the demo renders as it does on iOS. **Better handling:** use the `.mp4` twin. `webapp/public/exercises/`
-holds `.mov` and `.mp4` pairs for all 42 demos.
+the demo renders as it does on iOS. **Do not reach for an `.mp4` twin:** `webapp/public/exercises/`
+holds 42 files covering 39 of the 132 exercises, and only `back-squat`, `bench-press`, and
+`cable-row` have an `.mp4`. The real fix is the type attribute in `FramedVideo.tsx`, which is an
+app bug and not a capture problem.
 
 ### Generate sheet range slider stays white in dark mode
 

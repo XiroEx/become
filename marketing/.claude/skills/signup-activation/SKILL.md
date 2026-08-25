@@ -237,10 +237,11 @@ so install rate is not a copy problem yet, it is a missing surface.
 
 - **Cite real routes and components.** `/register`, `/login`, `/verify`, `/onboarding`, `/dashboard`,
   `/share/[shareId]`, and the files behind them. A recommendation without a file is not actionable.
-- **Signup is a magic link.** No password to reset, no credit card, free today. The form at
-  `webapp/components/AuthForm.tsx` also renders Google and passkey options. Before writing marketing
-  copy that names those paths, verify they are live in production, because the documented product
-  truth is the email link.
+- **Signup has three doors, and all three are live.** An emailed magic link, Google sign-in
+  (`webapp/app/api/auth/google`), and a passkey (`webapp/app/api/auth/passkey`), all rendered by
+  `webapp/components/AuthForm.tsx`. No password to reset, no credit card, free today. Treat the
+  email link as the primary path because it works on any device, but never write copy claiming it is
+  the only way in.
 - **No fabricated testimonials, user counts, results claims, or pricing.** Become is free today and
   no pricing exists. Never invent a price, a tier, a trial length, or a discount, including inside
   onboarding copy.
@@ -275,7 +276,7 @@ so install rate is not a copy problem yet, it is a missing surface.
 - [ ] No pricing, tier, trial, discount, count, testimonial, result claim, or promised timeline.
 - [ ] Every hypothesis has a metric and a guardrail, and unmeasurable ones are listed under
       instrumentation instead.
-- [ ] Copy alternatives supplied for every rewritten string, banned words absent, near-zero em dashes.
+- [ ] Copy alternatives supplied for every rewritten string, banned words absent, near-zero em dashes in deliverable copy.
 
 ## Related skills
 

@@ -2,6 +2,10 @@
 
 ## Length specs
 
+Character targets here are **Tier C**: observed truncation across common clients, not a documented
+limit from any mail provider, and they vary by device, orientation, and font size. Use them as
+budgets, not as specs, and never cite them as a finding.
+
 | Field | Target | Hard ceiling | Why |
 |---|---|---|---|
 | Subject | 28-45 characters | 60 | A phone inbox truncates around 40. Front-load the noun. |
@@ -59,7 +63,7 @@ Used for feature announcements. Sells the thing the app does, not a feeling.
 
 ```
 ❌ Introducing an exciting new way to train
-✅ The camera counts your reps now
+✅ Your last weight is on screen now
 ❌ Nutrition tracking, reimagined
 ✅ Photograph the plate, get the whole breakdown
 ```
@@ -119,8 +123,8 @@ Each subject gets a preview that adds a **second fact**, never a restatement.
 - Preview: `Drop to two training days and the plan reshapes around it.`
 
 **Feature launch**
-- Subject: `The camera counts your reps now`
-- Preview: `Open LIVE mode, prop the phone, train. It logs the set.`
+- Subject: `One photo, the whole plate`
+- Preview: `Shoot the plate in Nutrition. It comes back itemized, per item.`
 
 ---
 

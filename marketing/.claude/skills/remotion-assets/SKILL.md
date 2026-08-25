@@ -63,7 +63,7 @@ Run everything from `marketing/`. Node dependencies are not installed in a fresh
 timeout 600 npm install                 # first time only
 timeout 120 npm run typecheck           # tsc --noEmit. Cheap, run before every render
 timeout 120 npm run assets:sync         # refresh marketing/public/ from webapp/public/
-timeout 900 npm run render:collection   # 46 stills -> out/collection/<format>/<slug>.jpg
+timeout 1800 npm run render:collection  # 46 stills -> out/collection/<format>/<slug>.jpg
 ```
 
 Every npm script, what it emits, and how long it runs is in `references/render-recipes.md`. Read it
@@ -196,7 +196,13 @@ Project structure, composition registry, and which file to edit for what are in
   `nutrition.png`, `mindset.png`, `calendar.png`, `chat.png`, `logo.png`. Renaming breaks every row.
 - **Three formats only:** 1080x1080, 1080x1920, 1200x628, plus the 1200x630 OG still and the
   1080x1920 reel.
-- **Type is Geist**, headline and body. Two weights per frame at most.
+- **Brand type is Geist, and the render project does not use it.** `src/compositions.tsx:25` and
+  `src/campaignCollection.tsx:35` both hardcode `'Arial, Helvetica, sans-serif'`. Every asset
+  rendered from this project today is off-brand type, and no amount of render configuration
+  changes that — it needs a font loader (`@remotion/google-fonts` or a `loadFont` call against a
+  local Geist file) plus a change at those two constants. Treat it as a real brand gap, flag it in
+  any deliverable, and do not describe a render as on-brand until it is fixed. Two weights per
+  frame at most.
 - **No fabricated testimonials, user counts, results claims, or pricing.** Become is free today and
   no pricing exists. Never render a price, a tier, a trial length, or a discount into an asset.
 - **Product screenshots come only from dummy accounts via the documented capture pipeline**
@@ -215,7 +221,8 @@ Project structure, composition registry, and which file to edit for what are in
 - [ ] Every new or edited row has a unique `id` and `slug`, a valid `format`, and an `image` that
       exists in `marketing/public/`.
 - [ ] `headline` is an array whose lines each fit the frame at the target aspect.
-- [ ] Copy contains no banned word, no em dash, no invented price, no results claim, no shame framing.
+- [ ] Rendered copy contains no banned word, no em dash, no invented price, no results claim, no
+      shame framing.
 - [ ] One accent per frame, taken from the pillar map, reconciled with the brand tokens.
 - [ ] Rendered dimensions verified against the format, not assumed.
 - [ ] Source screenshot is current, or the staleness is called out in the report.

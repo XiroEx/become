@@ -20,7 +20,7 @@ whole surface. That makes the timing question sharper for Become than for a nati
 
 ## The prompt ladder
 
-Four rungs. Never skip a rung.
+Four rungs, plus an iOS-only half-rung between 1 and 2. Never skip a rung.
 
 ### Rung 0 — Do not ask
 
@@ -43,6 +43,35 @@ Ask only after a **first earned win**. Any of these qualifies:
 - A first generated session or program enrollment.
 
 The win is what makes the nudge legible: the user now knows what a reminder would be about.
+
+### Rung 0.5 — On iOS, get installed first
+
+**iOS 16.4 and later only grant web push to a site running from the Home Screen.** In Safari,
+`Notification.requestPermission()` is not merely denied, it is unavailable: there is no dialog to
+show and no permission to win. Asking on iOS before the install is not a low-conversion ask, it is
+a no-op that burns the earned-win moment for nothing.
+
+So on iOS the earned win triggers the **install** pre-prompt, not the notification pre-prompt. The
+notification ladder resumes on the next standalone session, when the user is already inside the
+installed app and has a second earned win to hang the ask on.
+
+```
+iOS:      earned win → install pre-prompt → (Add to Home Screen) → next standalone
+                       session → earned win → Rung 2 → Rung 3
+Android / desktop:  earned win → Rung 2 → Rung 3
+```
+
+The app already reasons about standalone context, so this is a branch in existing logic rather
+than new plumbing: `webapp/lib/checkin/status.ts` and `webapp/lib/push/ensureSubscription.ts` both
+check it. Detect iOS and non-standalone together, and route to the install prompt when both are
+true.
+
+**Check for:** does the flow ask iOS Safari users to install before it ever mentions
+notifications; does it avoid calling `requestPermission()` in a context where it cannot resolve;
+does the copy explain why the install comes first without making the install sound like a
+prerequisite chore. **Common issues:** one ladder for all platforms, which silently loses every
+iOS user; an install prompt that sells the install instead of what the install unlocks; asking
+again in the same session after the install, before the user has done anything inside it.
 
 ### Rung 2 — Our own pre-prompt, in our own UI
 

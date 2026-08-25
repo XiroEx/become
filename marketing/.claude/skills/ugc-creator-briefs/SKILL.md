@@ -104,7 +104,7 @@ video becomes a feature dump. **Strong patterns:** two or three must-show moment
 finalized before any filming.
 
 ❌ "Say: Become is the all-in-one fitness app that finally makes tracking effortless."
-✅ "Open on the mechanism already happening. Use your own words. The one idea is that the camera counts the set while your phone sits on the floor."
+✅ "Open on the mechanism already happening. Use your own words. The one idea is that one photo of the plate comes back itemized, so you never type a food into a search bar again."
 
 ### 2. FTC disclosure
 
@@ -143,8 +143,8 @@ price; does it name a competitor negatively; does it show another person's data.
 - *Invented pricing.* "It's cheaper than my gym app" implies a price. There is none.
 
 **Strong patterns:**
-- Describe the mechanism, not the outcome: "it counted the set" instead of "it transformed my
-  training."
+- Describe the mechanism, not the outcome: "it itemized the plate from one photo" instead of "it
+  transformed my training."
 - Describe their own experience in behaviour terms: "I actually logged every session for three
   weeks."
 - State the offer exactly as it is: free today, email magic link, no credit card.
@@ -153,7 +153,7 @@ price; does it name a competitor negatively; does it show another person's data.
 ✅ "Four sessions a week, logged, without a spreadsheet."
 
 ❌ "It basically replaced my physio."
-✅ "The demo video shows me the cue before every set."
+✅ "The demo clip on this lift shows me the cue before I start the set."
 
 ❌ "Way cheaper than what I was paying for my old app."
 ✅ "Free today. Email link, no card."

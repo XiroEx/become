@@ -12,7 +12,7 @@ The visitor arrived from a Reel or a search and knows nothing.
 | Line | Copy |
 |---|---|
 | Promise | Your program, your meals, your mind, your numbers. One app. |
-| First step | Enter your email. We send a link. |
+| First step | Enter your email and we send a link. Google and passkeys work too. |
 | Time cost | Under a minute to your first plan. |
 | Proof | Real screens: the dashboard, a session being generated, a plate itemized. |
 | Reversal | No password, no card. |
@@ -32,12 +32,12 @@ The visitor arrived from a Reel or a search and knows nothing.
 
 ## Warm, from a mechanic Reel
 
-They watched the camera count reps or a plate get itemized. Sell the thing they just saw.
+They watched a plate get itemized or a session get generated. Sell the thing they just saw.
 
 | Line | Copy |
 |---|---|
-| Promise | The thing you just watched, on your next set. |
-| First step | Enter your email. The link lands in about a minute. |
+| Promise | The thing you just watched, on your next meal. |
+| First step | Enter your email and the link lands in about a minute. Or use Google. |
 | Time cost | Set it up tonight, use it tomorrow. |
 | Proof | They already saw it work. Do not re-explain it, show the next screen. |
 | Reversal | No password, no card. |
@@ -75,7 +75,7 @@ Product Hunt, AlternativeTo, a PWA directory. The reader is comparison shopping 
 | First step | Open it in a browser. Installs to your home screen. |
 | Time cost | No download, no store. |
 | Proof | Gallery of real captures, in the order that tells the story. |
-| Reversal | Email link signup, no password, no card. |
+| Reversal | Email link, Google, or a passkey. No password, no card. |
 
 **Rules.** No ratings, no download counts, no pricing tier, and never the string "(beta)". Gallery
 shots come from `webapp/public/screenshots/v2/` only. `web-app-listing` owns the field specs.
@@ -152,4 +152,6 @@ anything. `referral-program` owns the loop.
 2. Is the ask the smallest true next step? If not, shrink it.
 3. Can the reader picture the next sixty seconds? If not, add the time cost line.
 4. Does the surface answer "no password, is that safe?" If not, add one clause.
+5. Does it treat the emailed link as the only door? All three are live (`AuthForm.tsx`). Lead with
+   email, mention the other two, never claim exclusivity.
 5. Is any word aspirational rather than true today? Rewrite it as the true version.

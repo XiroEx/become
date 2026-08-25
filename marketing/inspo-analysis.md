@@ -2,7 +2,7 @@
 
 **Source:** `marketing/inspo/2026-08-24-marketing-inspo/` (30 images)
 **Captured:** 2026-08-24 · **Analyzed:** 2026-08-25
-**Companion folders:** `2026-08-24-jon/` (8 in-app Become captures), `2026-08-24-george/` (1 site screenshot) — not covered here.
+**Companion folders:** `2026-08-24-jon/` (8 captures of the **coach's real account** — real health data; **NOT usable as creative** under the dummy-account constraint, reference only), `2026-08-24-george/` (1 site screenshot) — neither is covered here.
 
 ## What's actually in the library
 
@@ -14,7 +14,7 @@ ad system plus one competitor's carousel ad.
 | **STNDRD** (Chris Bumstead / CBUM fitness app) | 25 (IMG_7982–IMG_8008) | Instagram Story ads, captured mid-playback | A full year-ish of story campaigns: feature tours, "App Tip" how-to sequences, gamification/leaderboard pushes, community pushes |
 | **Ladder** (`@joinladder`) | 5 (IMG_8010–IMG_8014) | One 5-slide Instagram carousel/video post | "How to log your meals" — five logging modalities, one slide each |
 
-Every capture is a screen-record of the viewer's own phone, so each frame carries iOS chrome
+Every capture is a PNG still of the viewer's own phone screen, so each frame carries iOS chrome
 (status bar, story progress bar, "Send message…" reply bar) and Instagram chrome (username row,
 like/comment counts). That framing is noise, not signal — ignore it when reading layout.
 
@@ -99,7 +99,7 @@ Notably absent: memes, talking-head UGC, before/after transformations, testimoni
 
 ### 6. Fit / clash with Become
 
-**Aligned:** dark-first single-accent gradient (our green maps 1:1 onto their blue); mechanism-over-promise selling, which is exactly "Evidence, not vibes"; teaching sequences, which suit a coach-led product; honest capability labeling (Ladder's accuracy chip); real-world photography for AI features that happen in the physical world (camera, plate, barcode).
+**Aligned:** dark-first single-accent gradient (our green maps 1:1 onto their blue); mechanism-over-promise selling, which is exactly "Evidence, not vibes"; teaching sequences, which suit a coach-led product; honest capability labeling (Ladder's accuracy chip); real-world photography for AI features that happen in the physical world (plate photo, barcode).
 
 **Clashes:** the gamification/XP/leaderboard vein (7999, 8006–8008) is competitive-ranking energy that pulls against "empowering, not preachy" — Become's streaks and The Becoming are self-referential, not a ladder you climb over other people; "DON'T BE A BUM" is shame-based and violates our no-body-shaming line; the six-bullet feature dump contradicts "simple · sleek"; STNDRD leans on athlete-celebrity aesthetics we cannot and should not fake.
 
@@ -107,14 +107,14 @@ Notably absent: memes, talking-head UGC, before/after transformations, testimoni
 
 ## Steal this
 
-1. **The "App Tip" sequence as a repeatable unit.** Badge → 3–4 one-tap-per-frame teaching steps → payoff frame → CTA frame. Become equivalents that write themselves: how to log a set with PR history, how to shoot one photo and itemize a plate, how to start LIVE rep counting, how to build a session with the AI generator, how to read your weekly recap.
+1. **The "App Tip" sequence as a repeatable unit.** Badge → 3–4 one-tap-per-frame teaching steps → payoff frame → CTA frame. Become equivalents that write themselves: how to log a set with PR history, how to shoot one photo and itemize a plate, how to start a session in LIVE mode, how to build a session with the AI generator, how to read your weekly recap.
 2. **Hand-drawn annotation over product screenshots.** One white marker ellipse or arrow per frame, pointing at the exact control. Warm, unmistakable, and it makes a static capture feel guided. Pairs perfectly with our dummy-account capture pipeline.
-3. **Cut-out floating UI chips.** Lift one control out of a `webapp/public/screenshots/v2/` capture, float it with a soft shadow. Ideal for the water tile, the streak ring, the mood selector, the rep counter — small elements that deserve hero treatment.
+3. **Cut-out floating UI chips.** Lift one control out of a `webapp/public/screenshots/v2/` capture, float it with a soft shadow. Ideal for the water tile, the streak ring, the mood selector, the rest timer, a PR badge — small elements that deserve hero treatment.
 4. **Phone bleeding off the frame edge.** Text on one side, device running off the other. Implies depth, cheap to compose, and safe on story/square/landscape alike.
 5. **The modality carousel** (Ladder's exact structure). Become's version: "FIVE WAYS BECOME LOGS YOUR DAY" → photo plate · barcode · set logging · weight · mood. Identical lower-third lockup on every slide. Slots directly into the Remotion compositions.
 6. **A single accent carried across every asset**, matched to the in-app primary. Green #16a34a / #22c55e as the gradient, violet reserved strictly for AI/Mind frames, gold reserved for streaks/Becoming. Never three accents in one frame.
 7. **A quantified-honesty chip.** Ladder's "Est. Accuracy" is the most trustworthy element in the whole library. Become can label AI outputs as estimates in-creative — it says "evidence, not vibes" without making a claim we'd have to defend.
-8. **Real hands, real food, real rooms** for photo/barcode/LIVE features. The physical-world shot plus a screen overlay beats a floating device render.
+8. **Real hands, real food, real rooms** for the features that happen in the physical world: photo plate logging, barcode scan, logging a set between rounds. The physical-world shot plus a screen overlay beats a floating device render.
 9. **Two-tone headline stacks** (white line over accent line) to give an all-caps stack rhythm without a second typeface. Geist handles this well.
 10. **A named recurring slot.** Not "Milestone Wednesday" — something Become-native and non-competitive, e.g. a weekly recap teaser tied to The Becoming (kept to one section/mention, never the headline theme).
 11. **Structural CTA placement.** End every sequence on the same low-friction frame: email magic link, no credit card, free today. That is a genuinely strong offer and needs no invented pricing.

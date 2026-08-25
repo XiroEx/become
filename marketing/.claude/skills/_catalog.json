@@ -37,7 +37,7 @@
       "Frameworks > The ten-step process in order, with the failure mode of skipping each",
       "Frameworks > Choosing the frame of reference: candidate frames scored on where our strengths look obvious",
       "Frameworks > From canvas to messaging: value theme becomes headline, attribute becomes proof",
-      "Become-specific rules: the draft canvas (alternatives = Notes app plus YouTube, a stitched app stack, an in-person trainer, an AI chatbot; attributes = coach-built phases plus AI generator, camera rep counting, whole-plate photo logging, every hub in one dashboard, weekly recap; themes = one app instead of five, a coach's structure without a coach's price, evidence about yourself not vibes) is DRAFT and must be validated, not quoted as settled",
+      "Become-specific rules: the draft canvas (alternatives = Notes app plus YouTube, a stitched app stack, an in-person trainer, an AI chatbot; attributes = coach-built phases plus AI generator, LIVE mode that logs the set as you train, whole-plate photo logging, every hub in one dashboard, weekly recap; themes = one app instead of five, a coach's structure without the standing appointment, evidence about yourself not vibes) is DRAFT and must be validated, not quoted as settled",
       "Become-specific rules: do not frame as \"workout tracker\" (loses on depth to Hevy/Strong)",
       "Quality bar: every attribute has proof in the product, no attribute is a benefit in disguise"
     ],
@@ -109,7 +109,7 @@
   {
     "name": "competitor-analysis",
     "batch": "foundation-strategy",
-    "description": "Runs a structured teardown of a named fitness, nutrition, or mindset competitor — MyFitnessPal, Hevy, Strong, Fitbod, Ladder, STNDRD, Whoop, Strava, Cal AI, Headspace, or a local coach-led alternative — covering positioning and category claim, feature surface versus ours, pricing and monetization, acquisition channels, creative and content system, review-mined weaknesses, and the specific gap Become can own. Use when the user says \"how does X compare,\" \"what is Ladder doing,\" \"who else does photo food logging,\" \"competitor research,\" \"why would someone pick us over Hevy,\" \"is anyone else doing camera rep counting,\" or drops a competitor URL with no instruction. For our own category decision see positioning; for their visual ad patterns specifically see inspo-library.",
+    "description": "Runs a structured teardown of a named fitness, nutrition, or mindset competitor — MyFitnessPal, Hevy, Strong, Fitbod, Ladder, STNDRD, Whoop, Strava, Cal AI, Headspace, or a local coach-led alternative — covering positioning and category claim, feature surface versus ours, pricing and monetization, acquisition channels, creative and content system, review-mined weaknesses, and the specific gap Become can own. Use when the user says \"how does X compare,\" \"what is Ladder doing,\" \"who else does photo food logging,\" \"competitor research,\" \"why would someone pick us over Hevy,\" \"is anyone else itemizing a whole plate from one photo,\" or drops a competitor URL with no instruction. For our own category decision see positioning; for their visual ad patterns specifically see inspo-library.",
     "sections_hint": [
       "Process assessment gate: which competitor, which question we are answering, is this a one-off or a refresh",
       "Process: research method — site, pricing page, app listings, review mining, ad libraries, social accounts — with the note that WebSearch and WebFetch are the tools and every claim gets a source line",
@@ -141,7 +141,7 @@
       "Process assessment gate: which surface and its length limits, which audience state, which single idea, what proof is available, what the next action is",
       "Frameworks > Message hierarchy: one idea per block, benefit then mechanism then proof",
       "Frameworks > Headline formulas with weak-vs-strong pairs (outcome without the pain, the concrete noun, the specific moment, the honest contrast)",
-      "Frameworks > Feature-to-value translation table for each hub, using the real mechanic (camera counts the reps, the photo itemizes the plate, the recap writes your week back to you)",
+      "Frameworks > Feature-to-value translation table for each hub, using the real mechanic (LIVE mode logs the set as you train, the photo itemizes the plate, the recap writes your week back to you)",
       "Frameworks > CTA writing: verb plus object plus payoff; weak-vs-strong table",
       "Frameworks > Length specs per surface (hero, subhead, section, card, button, subject line, push title and body, OG description)",
       "Output buckets: Page copy / Annotations / Alternatives A-B-C with rationale / Meta content",
@@ -298,7 +298,7 @@
   {
     "name": "reels-scripts",
     "batch": "social-content",
-    "description": "Writes shootable short-form video scripts for Reels, TikTok, and Shorts — a hook that lands inside the first 1.5 seconds, a beat-by-beat shot list with cut timings, on-screen text that says something different from the spoken line, a loop-close, and a CTA that is not \"link in bio\" — built around real Become mechanics like LIVE rep counting, whole-plate photo logging, and the weekly recap. Use when the user says \"write a reel,\" \"script a TikTok,\" \"we need a hook,\" \"make a video about the camera counting reps,\" \"30 second video idea,\" \"turn this feature into a video,\" or \"this reel flopped, fix it.\" For the cadence and pillar decisions behind it see social-strategy; for a creator filming it see ugc-creator-briefs; for rendering a motion asset instead of filming see remotion-assets.",
+    "description": "Writes shootable short-form video scripts for Reels, TikTok, and Shorts — a hook that lands inside the first 1.5 seconds, a beat-by-beat shot list with cut timings, on-screen text that says something different from the spoken line, a loop-close, and a CTA that is not \"link in bio\" — plus slide-by-slide carousel decks when the idea reads better as stills, all built around real Become mechanics like whole-plate photo logging, the equipment-aware session generator, and the weekly recap. Use when the user says \"write a reel,\" \"script a TikTok,\" \"we need a hook,\" \"make a video about the photo food logging,\" \"write a carousel,\" \"30 second video idea,\" \"turn this feature into a video,\" or \"this reel flopped, fix it.\" For the cadence and pillar decisions behind it see social-strategy; for a creator filming it see ugc-creator-briefs; for rendering a motion asset instead of filming see remotion-assets.",
     "sections_hint": [
       "Process assessment gate: which mechanism is the payoff, who films it, what footage or capture already exists, target length",
       "Frameworks > Length bands: 15-30s highest completion, 21-34s most shares, 11-18s skews viral, 45-60s+ for teaching, 30-45s the most repurposable cut for paid",
@@ -319,7 +319,8 @@
     "referenceFiles": [
       "references/hook-library.md",
       "references/script-archetypes.md",
-      "references/shot-list-spec.md"
+      "references/shot-list-spec.md",
+      "references/carousel-spec.md"
     ]
   },
   {
@@ -460,7 +461,7 @@
   {
     "name": "launch-campaign",
     "batch": "lifecycle-launch",
-    "description": "Plans and runs a single Become launch moment — a feature launch like LIVE rep counting or whole-plate photo logging, a program drop, a directory submission, or a relaunch — using an owned, rented, and borrowed channel split, a readiness gate that stops a premature launch, a day-by-day run of show, the asset manifest, and the post-launch review. Use when the user says \"we're launching X,\" \"launch plan,\" \"how do we announce this,\" \"Product Hunt launch,\" \"big feature drop next week,\" \"nobody noticed our last launch,\" or \"we shipped something, now what.\" For the standing plan this fits inside see marketing-plan; for the directory listings themselves see web-app-listing; for the dated posts see content-calendar; for the announcement email see email-lifecycle.",
+    "description": "Plans and runs a single Become launch moment — a feature launch like whole-plate photo logging or the AI session generator, a program drop, a directory submission, or a relaunch — using an owned, rented, and borrowed channel split, a readiness gate that stops a premature launch, a day-by-day run of show, the asset manifest, and the post-launch review. Use when the user says \"we're launching X,\" \"launch plan,\" \"how do we announce this,\" \"Product Hunt launch,\" \"big feature drop next week,\" \"nobody noticed our last launch,\" or \"we shipped something, now what.\" For the standing plan this fits inside see marketing-plan; for the directory listings themselves see web-app-listing; for the dated posts see content-calendar; for the announcement email see email-lifecycle.",
     "sections_hint": [
       "Process assessment gate: what actually shipped and is it stable on production, who is the launch for, what does success mean, what is the single date",
       "Frameworks > The readiness gate: feature works on mobile in light and dark, captures exist and show no bug or empty state, the landing page mentions it, tracking is in place, support answer written. No gate, no launch",
@@ -516,13 +517,13 @@
     "batch": "measure-growth",
     "description": "Builds Become's search and AI-answer visibility from an effectively greenfield state — the technical basics the repo is missing (robots.txt, sitemap, llms.txt, JSON-LD, metadataBase, canonical, per-route metadata, Open Graph and Twitter cards), a three-tier query map from decision to comparison to informational, the exercise library as a programmatic content asset, and generative-engine optimization for AI Overviews and assistant citations. Use when the user says \"SEO,\" \"we don't rank for anything,\" \"get us into ChatGPT answers,\" \"AI search,\" \"add schema markup,\" \"we have no sitemap,\" \"we need a blog,\" or \"best fitness app queries.\" Plan for citations, not clicks. For the words on the page see copywriting; for measuring any of it see analytics-tracking; for competitor query gaps see competitor-analysis.",
     "sections_hint": [
-      "Process assessment gate: which tier of query, does the page exist at all, what is the repo missing, who maintains it",
+      "Process assessment gate: step 0 is the domain decision gate (become.redbtn.io is a subdomain of an unrelated tech brand; settle a first-party domain before T1/T2 content ships), then which tier of query, does the page exist at all, what is the repo missing, who maintains it",
       "Frameworks > Click economics 2026, cited: zero-click is 68% of US Google queries; AI Overviews appear on 20%+ of searches and cut CTR roughly 60% when present; AI Mode is ~93% zero-click. Conclusion: optimize to be the cited answer, not the blue link",
       "Frameworks > The three-tier query map: T1 decision (\"best X app,\" \"X vs Y,\" \"X alternatives\"), T2 comparison and evaluation, T3 informational (exercise and nutrition how-to). Become's play and a realistic goal per tier",
       "Frameworks > Technical greenfield checklist with the exact files to create in webapp/ (app/robots.ts, app/sitemap.ts, public/llms.txt, JSON-LD via a Script component, metadataBase and per-route generateMetadata)",
       "Frameworks > Entity and schema set: Organization, WebApplication, Person for Jon, FAQPage, HowTo, VideoObject for exercise demos, BreadcrumbList",
       "Frameworks > GEO tactics from the Princeton GEO study (cite sources, add statistics, add quotations, authoritative tone) with the exact caveat that lifts are study-measured on other content and are not Become claims. 40-60 word answer passages. Named crawlers: GPTBot, PerplexityBot, ClaudeBot, Google-Extended, Bingbot",
-      "Frameworks > The exercise library as programmatic content: 42 demo videos and the Exercise model make a defensible T3 corpus",
+      "Frameworks > The exercise library as programmatic content: 39 of the 132 exercises ship a demo clip, and the Exercise model makes a defensible T3 corpus",
       "Output buckets: Quick wins / High-impact changes / Content roadmap by tier / Test ideas",
       "Become-specific rules: only the landing and public routes are indexable; dashboard is behind auth and must be disallowed"
     ],

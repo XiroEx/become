@@ -10,15 +10,20 @@ Tiers: **A** platform-published or large-sample study. **B** named case study wi
 
 ## Engagement baselines
 
-| Metric | Reference value | Tier | Use it for |
+All seven rows come from one source: Socialinsider, 35M posts across 447k accounts, **Jan-Dec
+2025**. That is a large sample published by the vendor who sells the analytics, with no independent
+reproduction, so the whole block is **Tier B** and the period is 2025 rather than the current
+quarter. Label it that way in any report.
+
+| Metric | Reference value (Jan-Dec 2025) | Tier | Use it for |
 |---|---|---|---|
-| Instagram engagement rate, all formats | ~0.48% average, Q2 2026 | A | Sanity-checking whether a post underperformed or the whole platform did |
-| Carousel engagement rate | ~0.50% | A | Justifying the carousel slot |
-| Reel engagement rate | ~0.48% | A | Reach expectations |
-| Static image engagement rate | ~0.33% | A | Deprioritising statics |
-| Year-over-year change | roughly -24% | A | Do not read a flat month as failure |
-| Follower growth, 1-5K accounts | ~22% in 2025, down from ~38% | A | Setting an honest growth expectation |
-| Median monthly cadence | 8 Reels, 5 carousels, 7 images | A | Capacity planning ceiling |
+| Instagram engagement rate, all formats | ~0.48% average | B | Sanity-checking whether a post underperformed or the whole platform did |
+| Carousel engagement rate | ~0.50% | B | Justifying the carousel slot |
+| Reel engagement rate | ~0.48% | B | Reach expectations |
+| Static image engagement rate | ~0.33% | B | Deprioritising statics |
+| Year-over-year change | roughly -24% | B | Do not read a flat month as failure |
+| Follower growth, 1-5K accounts | ~22% in 2025, down from ~38% | B | Setting an honest growth expectation |
+| Median monthly cadence | 8 Reels, 5 carousels, 7 images | B | Capacity planning ceiling |
 
 ## The numbers we actually review
 

@@ -120,7 +120,7 @@ work. Patterns and worked examples in `references/offer-patterns.md`.
 ✅ Tell us your goal. Get a program, calorie targets, and today's session.
 
 ❌ Create your free account to unlock all features.
-✅ One email field. The link lands in about a minute.
+✅ An email field. The link lands in about a minute. Google and passkeys work too.
 ```
 
 ### 2. Value equation without a price
@@ -132,7 +132,7 @@ Four terms. With no price to reduce, the only levers are the numerator and the e
 | Dream outcome | What they actually want | Consistency and evidence, not a body claim we cannot make |
 | Perceived likelihood | Why it will work for *them* | Coach-built progression, and the app deciding the session |
 | Time to first result | How fast the first win lands | A generated session or a logged plate in the first visit |
-| Effort and sacrifice | What it costs them | One email field, no password, no card, no setup wizard |
+| Effort and sacrifice | What it costs them | An email field, or Google, or a passkey. No password, no card, no setup wizard |
 
 **Check for:**
 - Is the dream outcome stated in their language and inside our claims limits?
@@ -160,7 +160,7 @@ say nothing about anxiety, which is where a free product actually loses.
 | Force | What it is | Become handle |
 |---|---|---|
 | **Push** | The frustration with their current setup | Name the stitched stack and the notes file, without mocking it |
-| **Pull** | The attraction of the new thing | The mechanic: camera counts reps, photo itemizes the plate, the week is planned |
+| **Pull** | The attraction of the new thing | The mechanic: one photo itemizes the plate, the generator builds around your equipment, the week is planned |
 | **Anxiety** | Fear about the new thing | No password, magic link explained, "not in the App Store" pre-answered |
 | **Habit** | Attachment to the current thing | Do not ask them to abandon their logger on day one. Ask for one week |
 
@@ -226,12 +226,15 @@ copy), fake stock counters, fabricated cohort sizes.
 
 ### 5. First-step design
 
-The magic link is a genuine competitive advantage on the offer, and it is usually undersold. One
+The magic link is a genuine competitive advantage on the offer, and it is usually undersold. An
 email field, no password to invent, nothing to remember, nothing stored that a user would regret.
+Google sign-in and a passkey sit on the same form (`webapp/components/AuthForm.tsx`) and are also
+live, so "one field" describes the primary path rather than the whole door. Sell the email field,
+keep the other two quieter, never claim the emailed link is the only way in.
 
 **Check for:**
-- Is it one field and one button on a 390px screen, with the field focused and the keyboard type
-  set to email?
+- Is the primary path one field and one button on a 390px screen, with the field focused and the
+  keyboard type set to email, and are Google and passkey present but visually secondary?
 - Does the surface pre-answer the three magic-link questions: no password, will it arrive, what if
   I close the tab?
 - Is the wait time stated honestly, and is there a resend path?
@@ -291,7 +294,7 @@ for everyone, with no asterisk?**
 - [ ] No promised timeline or pound count; no medical claim.
 - [ ] First step is one field, and the stated wait time is honest.
 - [ ] Three CTA alternatives, each with a rationale and a target audience state.
-- [ ] No banned words, near-zero em dashes, no "(beta)" in any customer-facing string.
+- [ ] No banned words, near-zero em dashes in deliverable copy, no "(beta)" in any customer-facing string.
 
 ## Related skills
 

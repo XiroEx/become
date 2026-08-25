@@ -21,6 +21,11 @@ the positioning rests on, so using it is also proof of the positioning.
 the app, a DM to warm clients, and a standing weekly slot where he answers one training question
 using a real product screen.
 
+**Member-proof pipeline.** Jon DMs 5-10 warm clients, gets written consent and verbatim quotes.
+This is the only path we have to a testimonial that is not fabricated, and it runs on his
+relationships, not on volume. Producing skill: `ugc-creator-briefs`. Until it produces something,
+section 11 of the context doc is the ceiling on what proof any campaign may use.
+
 **Failure modes.** Treating his account as a billboard for brand posts. His register is first
 person and experience-first; brand copy pasted onto his handle reads as an ad and burns trust.
 See `coach-brand-voice`.
@@ -38,9 +43,9 @@ genuine attempts, the problem is the offer or the landing page, not the channel.
 **What it is.** Unconnected reach from short vertical video, on the Become handle and Jon's.
 
 **Why it ranks second.** It is the only realistic path to reaching people who have never heard of
-us, at zero media cost. Our differentiating mechanics are inherently visual: a phone counting reps
-through the camera, a photo of a plate resolving into items, a week being written back to you.
-Those are demonstrations, and demonstrations travel.
+us, at zero media cost. Our differentiating mechanics are inherently visual: a photo of a plate
+resolving into items, a set logging against last session's numbers, a week being written back to
+you. Those are demonstrations, and demonstrations travel.
 
 **What good looks like.** A batch: one filming session producing eight to twelve pieces, each
 built on one real mechanic, each designed so a specific person would send it to a specific friend.
@@ -98,8 +103,9 @@ to six months before anything is readable. The plan should start the technical g
 precisely because it is slow, while the fast bet runs alongside.
 
 **What good looks like.** Technical basics first (they are cheap and one-time), then a three-tier
-query map, then the exercise library as a programmatic corpus. 42 demo videos plus the Exercise
-model is a real content asset most competitors at our size do not have.
+query map, then the exercise library as a programmatic corpus. 132 canonical exercises, 39 of them
+with a demo clip, plus the Exercise model, is a real content asset most competitors at our size do
+not have.
 
 **Failure modes.** Writing a blog before the technical basics exist. Chasing head terms like "best
 fitness app" where incumbents with domain authority and budget live. Optimizing for clicks in a

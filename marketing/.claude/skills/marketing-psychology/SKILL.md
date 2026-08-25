@@ -211,8 +211,8 @@ them. Full inventory: `references/honest-proof.md`.
 - *Quantity substituting for specificity.* Six vague trust badges beat by one real screenshot.
 
 **Strong patterns:**
-- ❌ "Trusted by thousands of users." ✅ "Here is the set logging as the camera counts. That is the
-  actual screen."
+- ❌ "Trusted by thousands of users." ✅ "Here is one photo of a plate becoming five itemized rows
+  with macros. That is the actual screen."
 - Coach credibility is proof: the programs Jon built, their structure, their phases. Concrete and
   checkable.
 - Mechanism demonstration is the highest-converting honest proof available to us, and it is what
@@ -272,11 +272,12 @@ them. Full inventory: `references/honest-proof.md`.
   an academic effect size is never quoted as something Become produces.
 - **Voice:** second person, present tense, concrete noun first, short sentences. Banned: "journey,"
   "unlock your potential," "game-changer," "seamless," "effortless," "crush it," "no excuses,"
-  "beast mode," "just," "simply." Near-zero em dashes.
+  "beast mode," "just," "simply." Near-zero em dashes in deliverable copy.
 - Weak vs strong nudge: ❌ "Don't break your streak!" ✅ "Day 2 Lower A is ready when you are."
 - Weak vs strong recap line: ❌ "Amazing work this week!" ✅ "Three sessions, 14 sets more than last
   week."
-- Weak vs strong proof: ❌ "Loved by thousands." ✅ "Watch the camera count the reps."
+- Weak vs strong proof: ❌ "Loved by thousands." ✅ "Watch one photo of lunch become five itemized
+  rows."
 - Weak vs strong urgency: ❌ "Only 24 hours left." ✅ "Phase 1 starts Monday. Set your days now."
 
 ## Quality bar

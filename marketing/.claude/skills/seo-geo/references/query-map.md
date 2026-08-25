@@ -19,7 +19,7 @@ presence in other people's roundups.
 | Alternatives | MyFitnessPal alternative free, Hevy alternative, Fitbod alternative, Ladder alternative | `/alternatives/<competitor>` set | listicle and AI citation |
 | Versus | Become vs Hevy, Become vs MyFitnessPal | `/compare/<competitor>` | branded defense, later |
 | Coaching without the price | online personal trainer alternative, workout program without a trainer, coach-built workout plan free | `/coach-built-programs` | AI citation |
-| Mechanism-led | app that counts reps with camera, app that logs food from a photo, photo calorie tracker | feature pages on the landing route or standalone | citation plus curiosity clicks |
+| Mechanism-led | app that logs food from a photo, photo calorie tracker, workout generator for the equipment I have | feature pages on the landing route or standalone | citation plus curiosity clicks |
 
 Rules for T1 pages:
 - Every competitor claim carries a checked date. See `competitor-analysis` for the sourcing rule.
@@ -68,7 +68,8 @@ What each exercise page must carry to be worth publishing, all from `webapp/mode
 - `commonMistakes` (at least two: this is the field competitors do not have)
 - `primaryMuscles`, `secondaryMuscles`, `equipment`, `difficulty`
 - `alternatives` and `variations`, rendered as internal links
-- the demo clip from `webapp/public/exercises/`, referenced as the `.mp4`, never the `.mov`
+- the demo clip from `webapp/public/exercises/`, where one exists. 39 of the 132 exercises have
+  one, and 36 of those are `.mov` only, so reference whichever file is actually there
 
 If a document is missing instructions or cues, it does not get a page. A thin page is worse than
 no page.

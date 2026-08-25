@@ -27,8 +27,8 @@ Not: [who this is not for].
 
 ### 3. The one idea
 
-[One sentence. One mechanism, one payoff. Example: "The camera counts your reps while the phone
-sits on the floor, so the set is logged before you stand up."]
+[One sentence. One mechanism, one payoff. Example: "One photo of the whole plate comes back as
+separate items with their own calories, so you never type a food into a search bar again."]
 
 ### 4. Hook direction
 
@@ -47,8 +47,8 @@ Rules for the first 1.5 seconds: open mid-action or on a face. No logo, no title
 
 Two or three, no more. These are product behaviours, not shots to copy.
 
-1. [e.g. the rep counter incrementing on screen during a real set]
-2. [e.g. the set row saving with the previous set visible underneath]
+1. [e.g. the plate photo returning as itemized rows, one line at a time]
+2. [e.g. the set row saving with last session's weight visible underneath]
 3. [optional]
 
 ### 6. Shot list (suggestions, not mandates)

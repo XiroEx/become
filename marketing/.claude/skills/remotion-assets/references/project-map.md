@@ -117,9 +117,19 @@ offering.
 
 ## Fonts
 
-The compositions set `fontFamily` from local constants (a sans for body, a display face for
-headlines, a mono for chips). Brand type is **Geist**. If a render comes back in a fallback face, the
-font is not resolving on the render host; fix the font source rather than accepting the fallback.
+**Known gap: the project does not render in the brand typeface.** Both font constants are
+hardcoded to a system stack:
+
+| File | Line | Value |
+|---|---|---|
+| `src/compositions.tsx` | 25 | `const sans = 'Arial, Helvetica, sans-serif'` |
+| `src/campaignCollection.tsx` | 35 | `const font = 'Arial, Helvetica, sans-serif'` |
+
+Brand type is **Geist**. Nothing in the project loads it, so this is not a resolution failure on
+the render host and no render setting fixes it. Closing the gap means adding a font loader
+(`@remotion/google-fonts`, or `loadFont` against a local Geist file registered before the
+compositions mount) and pointing both constants at the loaded family. Until then, every asset out
+of this project is off-brand type. Say so when you hand one over.
 
 ## Where things land
 

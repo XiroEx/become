@@ -67,9 +67,8 @@ Base: `https://become.redbtn.io`.
   "featureList": [
     "Coach-built multi-phase training programs",
     "AI session and program generator",
-    "Exercise demo videos",
-    "Set logging with personal-record history",
-    "LIVE mode that counts reps through the camera",
+    "Demo clips on the main lifts",
+    "LIVE mode that logs each set as you train, with rest timers, last-session numbers, and personal records on screen",
     "Photo meal logging that itemizes a plate",
     "Barcode scanning",
     "Calorie and macro targets",
@@ -148,10 +147,10 @@ not match visible content is a structured-data violation.
     },
     {
       "@type": "Question",
-      "name": "How does the camera count reps?",
+      "name": "Does Become log my sets for me?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "LIVE mode uses your phone camera during a set and counts the reps as you do them, so you are not tapping the screen between reps."
+        "text": "You log each set yourself, and LIVE mode makes it one tap. Last session's weight and reps sit on the screen while you train, along with a rest timer and your personal record for that lift, so you are deciding what to do next instead of remembering what you did last time."
       }
     },
     {
@@ -196,7 +195,7 @@ pregnancy, it gets the referral line from `coach-brand-voice` and no schema clai
   "@type": "VideoObject",
   "name": "Lat pulldown demonstration",
   "description": "A full repetition of the lat pulldown, shown from the side.",
-  "contentUrl": "https://become.redbtn.io/exercises/lat-pulldown.mp4",
+  "contentUrl": "https://become.redbtn.io/exercises/lat-pulldown.mov",
   "thumbnailUrl": "https://become.redbtn.io/og/exercises/lat-pulldown.png",
   "uploadDate": "2026-01-01",
   "duration": "PT6S",
@@ -205,7 +204,14 @@ pregnancy, it gets the referral line from `coach-brand-voice` and no schema clai
 ```
 
 Traps:
-- Reference the **`.mp4`**. The `.mov` twin is served as `video/quicktime` and fails in Chromium.
+- **Only 39 of the 132 exercises have a clip.** Emit `VideoObject` on those pages and omit it
+  everywhere else. A `VideoObject` pointing at a file that does not exist is a structured-data
+  error on every page that carries it.
+- **There is usually no `.mp4` twin.** Only `back-squat`, `bench-press`, and `cable-row` have one;
+  the other 36 clips are `.mov` only, so `contentUrl` points at the `.mov`. The files are served
+  with `Content-Type: video/mp4` and play fine. The Chromium black panel is a separate bug in
+  `webapp/components/FramedVideo.tsx:39`, which emits `type="video/quicktime"` on the `<source>`;
+  the fix is omitting or correcting that attribute, not swapping the file.
 - `uploadDate` and `duration` must be real values read from the file, not placeholders.
 - `thumbnailUrl` must resolve to a real image. Generate it with `image-production`.
 

@@ -99,17 +99,20 @@ Verb plus object. Something the product actually does.
 - No results claim, no timeline, no pound count.
 - No fabricated testimonial, user count, star rating, or download number.
 - No shame framing, no before/after construction.
-- No em dashes. Use a period, a comma, or a colon.
+- Near-zero em dashes in deliverable copy, and a rendered asset is deliverable copy. Use a
+  period, a comma, or a colon.
 - Banned: journey, unlock your potential, game-changer, revolutionary, seamless, effortless, 10x,
   crush it, no excuses, beast mode, just, simply.
 - The Becoming appears at most once across a campaign set, and never as the headline theme.
 
 ## Validating the file
 
+**Run from `marketing/`,** like every other command in this skill. Paths below are relative to it.
+
 ```bash
 timeout 60 node -e "
-const c=require('./marketing/src/campaigns.json'), fs=require('fs');
-const pub=fs.readdirSync('marketing/public');
+const c=require('./src/campaigns.json'), fs=require('fs');
+const pub=fs.readdirSync('public');
 const fmt=new Set(['square','story','landscape']);
 const ids=new Set(), slugs=new Set(); let bad=0;
 for(const r of c){
@@ -127,3 +130,5 @@ console.log(bad?bad+' bad rows':'all '+c.length+' rows ok');
 ```
 
 Run it after every edit, before the render.
+
+`npm run skills:check` is a different check: it validates the skill library itself, not this file.

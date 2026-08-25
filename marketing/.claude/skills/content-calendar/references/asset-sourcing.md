@@ -38,7 +38,10 @@ Known issues that change what you can schedule:
   the capture.
 - The progress Weekly Volume bar uses a hardcoded dark fill that is invisible on the dark card.
   The dark capture was DOM-patched at capture time and that is disclosed in the manifest.
-- Exercise demo `.mov` files are served as `video/quicktime` and fail in Chromium. Use the `.mp4`.
+- Exercise demo clips exist for **39 of the 132 exercises**, so never schedule a row whose copy
+  claims every exercise has one. The clips play: they are served as `video/mp4`. The black panel in
+  Chromium comes from `webapp/components/FramedVideo.tsx` emitting `type="video/quicktime"` on the
+  `.mov` sources, a bug tracked separately. Screen-record on iOS or Safari.
 - The Generate sheet range-slider track stays light in dark mode. Cosmetic, captured as-is.
 
 **Legacy captures.** `webapp/public/screenshots/ss-*.png`. Pre-v2. Prefer v2.
@@ -55,7 +58,8 @@ Known issues that change what you can schedule:
 **Render outputs.** `marketing/out/`, gitignored: `marketing/out/collection/square|story|landscape`,
 `marketing/out/videos/`, `marketing/out/videos-reviewed/`.
 
-**Exercise demos.** `webapp/public/exercises/`, 42 files, `.mov` and `.mp4` pairs.
+**Exercise demos.** `webapp/public/exercises/`, 42 files covering 39 exercises: 39 `.mov` plus 3
+`.mp4` (back-squat, bench-press, cable-row). Roughly 30% of the seeded library has a clip.
 
 **Creative reference.** `marketing/inspo-analysis.md`, the committed digest. `marketing/inspo/`
 is gitignored and may be absent in a fresh worktree; the analysis is not.

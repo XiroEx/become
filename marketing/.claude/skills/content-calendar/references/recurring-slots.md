@@ -15,8 +15,9 @@ Keep the names stable. Rotate the content inside them, never the names.
 
 **Promise:** you will see the mechanism happen, on screen, in under 30 seconds.
 **Pillar:** Mechanism. **Format:** Reel 15-30s. **CTA:** send.
-**Rotation:** LIVE rep counting → plate photo → barcode scan → PR history on the set row → demo
-video inside a logged set → back to the top with a new hook.
+**Rotation:** plate photo → barcode scan → a set logged in LIVE mode with last session's numbers
+underneath → PR badge landing on the set row → demo clip watched inside a logged set → back to the
+top with a new hook.
 **Asset source:** film session. Reference stills: `workout-log-dark.webp`, `nutrition-meal-light.webp`.
 **Fails when:** the mechanism is described instead of shown.
 
@@ -24,6 +25,8 @@ video inside a logged set → back to the top with a new hook.
 
 **Promise:** by the last slide you can do the thing yourself.
 **Pillar:** Teaching. **Format:** carousel, 4-6 slides. **CTA:** save.
+**Deck spec:** `reels-scripts/references/carousel-spec.md` — slide shape, lockup, canvas, and three
+worked decks. Commission the deck from `reels-scripts`.
 **Rotation:** log a set with PR history → generate a session for today's equipment → swap an
 exercise → shoot a clean plate photo → read the week strip → set your training days.
 **Asset source:** `webapp/public/screenshots/v2/` captures with one annotation per slide.

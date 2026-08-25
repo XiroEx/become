@@ -7,7 +7,7 @@ How to add captures to the library without making `marketing/inspo-analysis.md` 
 ```
 marketing/inspo/                         # gitignored, local only
 ├── 2026-08-24-marketing-inspo/          # 30 images: STNDRD + Ladder
-├── 2026-08-24-jon/                      # 8 in-app Become captures (not analysed)
+├── 2026-08-24-jon/                      # 8 captures of the COACH'S REAL ACCOUNT (see below)
 ├── 2026-08-24-george/                   # 1 site screenshot (not analysed)
 └── YYYY-MM-DD-<slug>/                   # your new folder
 marketing/inspo-analysis.md              # committed. THE artifact
@@ -19,6 +19,13 @@ source or the theme. Examples: `2026-09-02-hevy-story-ads`, `2026-09-14-fitbod-c
 **`marketing/inspo/` is in `marketing/.gitignore`.** The images never leave the machine. That is
 deliberate: competitor creative is a reference, and republishing it is not something we do. The
 analysis file is the deliverable and is committed.
+
+**`2026-08-24-jon/` is not creative material.** Those eight frames are captures of the coach's
+real account, carrying his real health data. They are reference only: they show what a populated
+account looks like and nothing more. They may never be cropped, composited, or shipped in an
+asset, because every product screenshot we publish comes from the named dummy accounts in
+`webapp/public/screenshots/v2/manifest.json`. If a shot of a populated screen is needed, run
+`screenshot-capture`; do not reach into this folder.
 
 ## Filing procedure
 

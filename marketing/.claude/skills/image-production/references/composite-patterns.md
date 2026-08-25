@@ -46,7 +46,7 @@ control to hero size without a zoom.
 4. Add a soft shadow (see `references/sharp-recipes.md`) and composite over the frame, overlapping
    the device edge so it reads as lifted off the screen.
 
-**Become candidates:** the water tile, the streak ring, the mood selector, the rep counter, the
+**Become candidates:** the water tile, the streak ring, the mood selector, the rest timer, the
 calorie ring, a PR badge, a macro bar. All present in the v2 captures.
 
 **Rules:** one chip per frame, two at most. It must overlap something, or it reads as a stray crop.
@@ -63,8 +63,9 @@ no invented pricing. Never a store badge; Become is a PWA and there is no App St
 
 ## 5. Real-world photo with a screen overlay
 
-For the features that happen in the physical world: photo plate logging, barcode scan, LIVE rep
-counting. A real hand, real food, a real room, with the app screen overlaid or held in frame.
+For the features that happen in the physical world: photo plate logging, barcode scan, logging a
+set between rounds. A real hand, real food, a real room, with the app screen overlaid or held in
+frame.
 
 **Build:** photo as the ground at `fit: 'cover'`, the rounded screen composited at 35 to 45% of frame
 width, a soft shadow under it, and a slight darkening gradient behind the type area.

@@ -34,12 +34,29 @@ Run every item before any send that reaches more than one address.
 ### Links
 - [ ] All links point at one domain: the app domain for this channel. No URL shorteners, no
       mixed tracking domains.
-- [ ] URLs built from the channel's own `NEXT_PUBLIC_APP_URL`. Production and beta differ on
-      purpose. A beta send built from the production value lands testers on production.
+- [ ] Request-triggered emails derive their host from the request origin (`getRequestOrigin`), so
+      a beta signup gets a beta link with nothing configured. Cron-triggered sends have no request
+      to derive from and fall back to `NEXT_PUBLIC_APP_URL`, so set it deliberately per channel.
 - [ ] No more than four distinct links in a marketing email. One in a transactional one.
 
 ### Consent and compliance
-- [ ] Non-transactional email carries a working one-click unsubscribe that actually suppresses.
+
+**Blocking today.** None of this exists in the codebase yet: no unsubscribe route, no suppression
+model, no `List-Unsubscribe` header. Until it does, **transactional email only.** Every box below
+is a build requirement, not a review item.
+
+- [ ] An unsubscribe route that works without a login, in one click, and writes to a suppression
+      store that every non-transactional send checks.
+- [ ] `List-Unsubscribe` header present, plus `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+      (RFC 8058), so the inbox's own unsubscribe button works without opening the email.
+- [ ] Unsubscribes honoured within **2 days**. CAN-SPAM permits 10; Gmail and Yahoo's bulk-sender
+      rules require 2, and 2 is the number to hold.
+- [ ] Spam-complaint rate under **0.3%**, target **0.1%**. Above 0.3% and the sending domain
+      degrades for transactional mail too, which is how a campaign takes the magic links down.
+- [ ] **DMARC alignment**, not merely a DMARC pass. The visible From domain must align with the
+      authenticated domain, or the bulk-sender rules count it as a fail.
+- [ ] Volume watched against the **5,000 messages per day to Gmail** threshold, which is where the
+      full bulk-sender requirement set switches on.
 - [ ] Physical mailing address in the footer of marketing sends.
 - [ ] Transactional emails carry no marketing content, so they legitimately omit unsubscribe.
 - [ ] Suppression honoured across the whole program, not per-sequence.

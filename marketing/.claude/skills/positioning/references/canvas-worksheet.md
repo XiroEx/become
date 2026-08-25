@@ -126,16 +126,15 @@ workout logger, a calorie app, and a meditation app. An in-person trainer. A gen
 |---|---|
 | Coach-built multi-phase programs with progression | `webapp/models/Program.ts`, `workout-hub-light.webp` |
 | AI generator for a single session or a full program, filtered by focus, level, and available equipment | `generate-light.webp` |
-| LIVE mode counts reps through the camera | `webapp/app/dashboard/workout/[programId]/workout/live/` |
-| Demo clip on every movement, 42 of them | `webapp/public/exercises/` |
-| Set logging with last-session numbers and PR history | `workout-log-dark.webp` |
-| Photo logging itemizes a whole plate | `nutrition-meal-light.webp` |
+| LIVE mode logs the set as you train, with rest timers, last session's numbers, and your PR on screen | `webapp/app/dashboard/workout/[programId]/workout/live/`, `workout-log-dark.webp` |
+| Demo clips on the big lifts, 39 of the 132 exercises | `webapp/public/exercises/` |
+| Photo logging itemizes a whole plate | `webapp/app/api/ai/nutrition/plate/`. No capture of the photo path exists yet: the meals in `nutrition-meal-light.webp` were typed through food search |
 | Training, nutrition, mind, and progress on one dashboard | `dashboard-light.webp` |
-| Weekly recap writes your week back to you | `progress-light.webp` |
+| Weekly recap writes your week back to you | `progress-light.webp` is the Training Log (volume, history, PRs); the weight and mood trends sit on `/dashboard` |
 
 **Value themes.**
 1. One app instead of five. (Beats: the stitched stack, the Notes app.)
-2. A coach's structure without a coach's price or schedule. (Beats: the trainer, YouTube.)
+2. A coach's structure without the standing appointment. (Beats: the trainer, YouTube.)
 3. Evidence about yourself, not vibes. (Beats: nothing, the chatbot.)
 
 **Who cares.** People running three or more apps and keeping none of them. Repeat restarters who

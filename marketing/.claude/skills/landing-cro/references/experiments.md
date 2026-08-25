@@ -32,13 +32,14 @@ yet, it can read as a mailing-list capture.
 ### E2. Mechanism-first hero versus possession-claim hero
 
 Because the current H1 makes a claim about the app's completeness while our two most distinctive
-mechanics are camera rep counting and whole-plate photo logging, we believe a mechanism-first H1
+mechanics are whole-plate photo logging and an equipment-aware session generator, we believe a
+mechanism-first H1
 will cause the landing to `/register` rate to rise for cold social traffic, measured by CTA clicks,
 and we are wrong if scroll depth past the why section falls.
 
 Variants to draft through `copywriting`:
 - A (control): "The only fitness app your goal actually needs."
-- B (mechanism): "Put the phone down. It still counts."
+- B (mechanism): "Point your camera at lunch. It comes back itemized."
 - C (contrast): "A coach builds the phases. Your phone runs them."
 - D (reframe): "You did not lack discipline. Your plan was in four apps."
 
@@ -121,8 +122,10 @@ recipient meets after the click.
 
 - **E11.** Meta description and OG card copy: currently thin, no OG image. Owned by `seo-geo` for the
   fields, `copywriting` for the words. Measure click-through from shared links first.
-- **E12.** Demo clip in the hero instead of static phones. Uses `webapp/public/exercises/` `.mp4`
-  files; the `.mov` variants fail in Chromium. Weigh against E9.
+- **E12.** Demo clip in the hero instead of static phones. Uses `webapp/public/exercises/`, which
+  covers 39 exercises, so pick from the big lifts. The Chromium black panel is a
+  `type="video/quicktime"` attribute bug in `webapp/components/FramedVideo.tsx`, not a bad file;
+  fixing the attribute makes every clip usable. Weigh against E9.
 - **E13.** Nav simplification. Low expected value until the primary path is settled.
 - **E14.** Light versus dark default framing in captures. Neither theme is optional, so this is a
   question about which twin leads, not which one exists.

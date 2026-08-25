@@ -24,7 +24,7 @@ word. "Empowering" means the reader ends the line more capable, not more guilty.
 |---|---|---|
 | Person | Second person, present tense | First person |
 | Leads with | The mechanic | The experience |
-| Example | "Point the camera at your set. Become counts the reps." | "I stopped counting reps out loud years ago. Half my clients lose the count on set three." |
+| Example | "Point your camera at lunch. Become itemizes the plate." | "I stopped asking clients to weigh their food years ago. Nobody keeps that up past week two." |
 | Owned by | `copywriting` | `coach-brand-voice` |
 
 A landing section, a push, a button, an email body: product voice. A talking-head script, a
@@ -36,10 +36,12 @@ caption fronted by Jon, a reply to a member: coach voice.
 - Short sentences. Vary the length so it does not read like a list.
 - Lead with the concrete noun.
 - Verbs the product actually does: log, scan, plan, count, recap, generate, show, queue, track.
-- **Near-zero em dashes.** Use a period, a comma, or a colon.
+- **Near-zero em dashes in deliverable copy** — headlines, body, captions, subject lines, buttons.
+  Use a period, a comma, or a colon. Internal notes and skill documentation are not deliverable
+  copy and are not bound by this.
 - No emoji in product-voice copy. A social caption may use at most one, and only when it carries
   meaning.
-- Numbers only when they are the product's own numbers (12-week programs, 42 demo clips) and
+- Numbers only when they are the product's own numbers (12-week programs, 39 demo clips) and
   never as an outcome claim.
 
 ## Banned list, with the replacement

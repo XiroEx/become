@@ -12,7 +12,8 @@ retention figure.
 
 *Why it bites here:* a free pre-revenue product has nothing to anchor value against, so the
 temptation to reach for social proof is constant. The honest substitute is mechanism proof.
-Show the camera counting reps. That is more persuasive than "5,000 users" and it is true.
+Show one photo of a plate coming back itemized. That is more persuasive than "5,000 users" and it
+is true.
 
 *Edge cases:* "free today" is the only permitted price statement. Do not write "free forever,"
 because we cannot promise it. Do not write "free while in beta," because it implies a future

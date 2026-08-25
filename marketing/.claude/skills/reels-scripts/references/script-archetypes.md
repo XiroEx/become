@@ -20,8 +20,8 @@ Skeleton:
 
 **Fails when:** the demo is explained before it is shown; the screen recording is too small to
 read at 390px; the mechanism is claimed rather than filmed.
-**Become fits:** LIVE rep counting, plate photo itemization, barcode scan, PR history surfacing
-on the set row.
+**Become fits:** plate photo itemization, barcode scan, a set logged in LIVE mode with last
+session's numbers underneath, PR history surfacing on the set row.
 
 ## 2. App Tip sequence
 

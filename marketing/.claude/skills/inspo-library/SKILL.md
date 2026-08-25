@@ -126,8 +126,8 @@ backing each, is in `references/pattern-catalogue.md`.
 - *Borrowing the palette.* STNDRD's electric blue and Ladder's green are theirs. Ours is
   `#16a34a` / `#22c55e`, with violet reserved for AI and Mind and gold for streaks.
 - *Three accents in one frame.* Neither reference brand ever does this.
-- *Reading the chrome as design.* Every capture is a screen recording carrying iOS status bars,
-  story progress bars, and Instagram username rows. That is noise. Ignore it.
+- *Reading the chrome as design.* Every capture is a PNG still of a phone screen, carrying iOS
+  status bars, story progress bars, and Instagram username rows. That is noise. Ignore it.
 
 **Strong patterns:**
 - Text-left with the phone bleeding off the right edge is the workhorse. It implies more app than
@@ -180,7 +180,7 @@ pricing creative. **Both sell the mechanism, not a promise.**
 
 **Strong patterns:**
 - Mechanism over promise is exactly "Evidence, not vibes". The alignment is already there.
-- ✅ "The camera counts the reps." ❌ "Get stronger in 30 days."
+- ✅ "One photo. Every item on the plate." ❌ "Get stronger in 30 days."
 - Structural CTA placement: end every sequence on the same low-friction frame. Email magic link, no
   credit card, free today. That is a genuinely strong offer needing no invented pricing.
 

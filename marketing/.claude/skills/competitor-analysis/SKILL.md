@@ -1,6 +1,6 @@
 ---
 name: competitor-analysis
-description: Runs a structured teardown of a named fitness, nutrition, or mindset competitor — MyFitnessPal, Hevy, Strong, Fitbod, Ladder, STNDRD, Whoop, Strava, Cal AI, Headspace, or a local coach-led alternative — covering positioning and category claim, feature surface versus ours, pricing and monetization, acquisition channels, creative and content system, review-mined weaknesses, and the specific gap Become can own. Use when the user says "how does X compare," "what is Ladder doing," "who else does photo food logging," "competitor research," "why would someone pick us over Hevy," "is anyone else doing camera rep counting," or drops a competitor URL with no instruction. For our own category decision see positioning; for their visual ad patterns specifically see inspo-library.
+description: Runs a structured teardown of a named fitness, nutrition, or mindset competitor — MyFitnessPal, Hevy, Strong, Fitbod, Ladder, STNDRD, Whoop, Strava, Cal AI, Headspace, or a local coach-led alternative — covering positioning and category claim, feature surface versus ours, pricing and monetization, acquisition channels, creative and content system, review-mined weaknesses, and the specific gap Become can own. Use when the user says "how does X compare," "what is Ladder doing," "who else does photo food logging," "competitor research," "why would someone pick us over Hevy," "is anyone else itemizing a whole plate from one photo," or drops a competitor URL with no instruction. For our own category decision see positioning; for their visual ad patterns specifically see inspo-library.
 metadata:
   version: 1.0.0
   batch: foundation-strategy
@@ -29,8 +29,8 @@ output ends with something `copywriting` or `positioning` can actually use.
 
 - A competitor is named and someone wants to know how we compare.
 - A competitor URL is dropped with no instruction. Treat it as a full teardown request.
-- We need to know whether a capability of ours is genuinely rare (camera rep counting, whole-plate
-  photo logging) before building messaging on it.
+- We need to know whether a capability of ours is genuinely rare (whole-plate photo logging, an
+  equipment-aware session generator) before building messaging on it.
 - The alternatives row of the positioning canvas needs evidence rather than assumption.
 - We need real customer language, which competitor reviews are the cheapest source of.
 
@@ -255,7 +255,8 @@ The third pair matters: we have no price, so a price comparison is not available
 - [ ] No unverifiable superlative, no sneering, no fabricated number about them or us.
 - [ ] Competitor imagery is marked internal only.
 - [ ] The dossier in `references/competitor-dossiers.md` is updated with today's date.
-- [ ] No banned words, near-zero em dashes in example copy.
+- [ ] No banned words, near-zero em dashes in the example copy (the deliverable), whatever the
+      analysis prose does.
 
 ## Related skills
 

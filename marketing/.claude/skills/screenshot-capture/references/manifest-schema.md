@@ -58,6 +58,30 @@ Map of email to a one line state summary, plus a verdict where relevant. The exi
 record both the account that was used and the one that was rejected, with the reason. Keep that
 pattern: the rejection is as useful as the selection.
 
+**Known gap: `playwright-test-mobile1@become.test` has no recorded `userId`.** It is the account
+behind all fifteen v2 shots, and it is not one of the two ids hardcoded in
+`webapp/tests/e2e/test-auth.ts` (`TEST_USER`, `E2E_USER`). Nothing in the repo carries its id, so a
+re-capture cannot call `signToken(userId, email)` for it.
+
+**The current path is the server-mint fallback** in `capture-recipe.md` §5: insert a `MagicLink`
+row for the address, `POST /api/auth/verify-link`, and use the JWT that comes back. That is the
+documented procedure until the id is recorded, and it works without anyone knowing the id.
+
+When the id is next observed during a capture run, add it to the manifest as a `userId` alongside
+the state summary:
+
+```jsonc
+"accounts": {
+  "playwright-test-mobile1@become.test": {
+    "userId": "TODO — not recorded; use the server-mint fallback in capture-recipe.md §5",
+    "state": "Alex Rivera - used for every shot. 11 workout logs on ..."
+  }
+}
+```
+
+Recording it turns a multi-step database round trip into one `signToken` call. Do not go query
+production for it as a task of its own; pick it up from a run that was already happening.
+
 ## `seeding`
 
 ```jsonc
