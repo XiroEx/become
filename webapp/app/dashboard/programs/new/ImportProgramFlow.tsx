@@ -1,10 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ArrowLeft, Camera, FileText, ImagePlus, Loader2, PencilLine } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, PencilLine, Upload } from "lucide-react";
 import { runAiTask } from "@/lib/ai/runClient";
-import { resizeImageToBlob } from "@/lib/imageResize";
-import { blobToDataUrl } from "@/lib/blobToBase64";
 import { normalizeImportedProgram, type ImportedProgram } from "@/lib/workout/importProgram";
 
 export interface ImportProgramFlowProps {
@@ -22,35 +20,23 @@ const MAX_TEXT_FILE_BYTES = 200_000;
 
 export default function ImportProgramFlow({ onImported, onCancel }: ImportProgramFlowProps) {
   const [state, setState] = useState<FlowState>({ step: "choose" });
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const runImport = async (body: { text: string } | { image: string }, loadingLabel: string) => {
-    setState({ step: "loading", label: loadingLabel });
+  const runImport = async (text: string) => {
+    setState({ step: "loading", label: "Reading your program…" });
     try {
-      const r = await runAiTask("/api/ai/workout/import", body);
+      const r = await runAiTask("/api/ai/workout/import", { text });
       const normalized = r.ok ? normalizeImportedProgram(r.result) : null;
       if (!normalized) {
         setState({
           step: "error",
-          message: "Couldn't find a program in that. Try pasting the full text, or a clearer photo.",
+          message: "Couldn't find a program in that. Try pasting the full text instead.",
         });
         return;
       }
       onImported(normalized);
     } catch {
       setState({ step: "error", message: "Couldn't reach the import AI. Try again in a minute." });
-    }
-  };
-
-  const handleImageFile = async (file: File) => {
-    setState({ step: "loading", label: "Preparing photo…" });
-    try {
-      const resized = await resizeImageToBlob(file, { maxDim: 1600, quality: 0.82 });
-      const dataUrl = await blobToDataUrl(resized);
-      await runImport({ image: dataUrl }, "Reading the photo…");
-    } catch {
-      setState({ step: "error", message: "Could not load that image. Please try again." });
     }
   };
 
@@ -65,7 +51,7 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
         setState({ step: "error", message: "That file looks empty." });
         return;
       }
-      await runImport({ text }, "Reading your program…");
+      await runImport(text);
     } catch {
       setState({ step: "error", message: "Could not read that file. Please try again." });
     }
@@ -75,32 +61,22 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (file.type.startsWith("image/")) void handleImageFile(file);
-    else void handleTextFile(file);
+    void handleTextFile(file);
   };
 
   const handlePasteSubmit = () => {
     if (state.step !== "paste") return;
     const t = state.text.trim();
     if (!t) return;
-    void runImport({ text: t }, "Reading your program…");
+    void runImport(t);
   };
 
   return (
     <div className="mx-auto max-w-2xl px-0 py-8 sm:px-6">
       <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={handleFileChange}
-        aria-hidden="true"
-      />
-      <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.txt,.md,text/plain,text/markdown"
+        accept=".txt,.md,text/plain,text/markdown"
         className="sr-only"
         onChange={handleFileChange}
         aria-hidden="true"
@@ -121,13 +97,13 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
               Import your program
             </h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Already wrote your program somewhere else — Notes, a screenshot, a photo of a
-              whiteboard? Paste it in or upload it and we&apos;ll turn it into a program you can
-              actually run in the app. You&apos;ll get a chance to review and edit before saving.
+              Already wrote your program somewhere else — Notes, a text file? Paste it in or
+              upload it and we&apos;ll turn it into a program you can actually run in the app.
+              You&apos;ll get a chance to review and edit before saving.
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <button
               onClick={() => setState({ step: "paste", text: "" })}
               className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-6 text-center transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
@@ -144,31 +120,16 @@ export default function ImportProgramFlow({ onImported, onCancel }: ImportProgra
             </button>
 
             <button
-              onClick={() => cameraInputRef.current?.click()}
-              className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-6 text-center transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
-                <Camera className="h-6 w-6" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-white">Take a photo</p>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Snap handwritten or printed notes
-                </p>
-              </div>
-            </button>
-
-            <button
               onClick={() => fileInputRef.current?.click()}
               className="flex flex-col items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-6 text-center transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
-                <ImagePlus className="h-6 w-6" />
+                <Upload className="h-6 w-6" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-zinc-900 dark:text-white">Upload a file</p>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  A photo, screenshot, or .txt file
+                  A .txt or .md file
                 </p>
               </div>
             </button>
