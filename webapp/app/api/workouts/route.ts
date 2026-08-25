@@ -7,7 +7,7 @@ import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/app/api/programs/current-workout/route'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
-import { readTzOffset, readTzOffsetFromBody, readOptionalTzOffsetFromBody, readZoneFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
+import { readTzOffset, readTzOffsetFromBody, readOptionalTzOffsetFromBody, readZoneFromBody, localDateKey, localDayWindowForKey, dateKey, IN_PROGRESS_WINDOW_MS } from '@/lib/dayWindow'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
@@ -50,6 +50,14 @@ interface WorkoutSaveRequest {
   tz?: number
   /** ISO date of the exact Schedule slot this log fulfills (gap 3). */
   scheduledDate?: string
+  /**
+   * Optional explicit day to log this workout under — ISO string / YYYY-MM-DD.
+   * Lets a member who crossed midnight mid-workout choose which calendar day
+   * it counts as, instead of it silently landing on whichever day the first
+   * autosave happened to fire on. Autosaves omit it, so they never disturb
+   * the log's date.
+   */
+  performedAt?: string
 }
 
 interface QuickSessionSaveRequest {
@@ -175,14 +183,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Find today's workout for this program/day
+    // Find today's workout for this program/day. An INCOMPLETE log gets a
+    // rolling window (IN_PROGRESS_WINDOW_MS), not today's exact calendar
+    // window — a workout opened right before midnight is still "the one
+    // you're resuming" a few minutes later, not a stale log from "yesterday"
+    // that pops the separate unfinished-workout prompt below. A COMPLETED
+    // log still matches only within today's calendar day, unchanged: that's
+    // what tells the rest of this route "today's attempt is already done."
+    const inProgressCutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
     const todayWorkout = userProgress.workoutLogs.find(
       (log: { programId: string; day: string; date: Date; completed: boolean }) => {
+        if (log.programId !== programId || (day && log.day !== day)) return false
         const logDate = new Date(log.date)
-        return log.programId === programId &&
-               (!day || log.day === day) &&
-               logDate >= today &&
-               logDate <= tomorrow
+        return log.completed ? (logDate >= today && logDate <= tomorrow) : logDate >= inProgressCutoff
       }
     )
 
@@ -202,7 +215,12 @@ export async function GET(request: NextRequest) {
       ).catch(() => {})
     }
 
-    // Find most recent incomplete workout from a previous day (stale, within cutoff window)
+    // Find most recent incomplete workout old enough to need a decision
+    // (older than the in-progress rolling window above, but within the
+    // 30-day cutoff). Bounded by inProgressCutoff rather than `today` so a
+    // log the in-progress window above already claims for silent resume is
+    // never also flagged here — otherwise it would surface both as "today's
+    // workout" AND as a stale prompt in the same response.
     type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; kind?: string; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
     let staleLog: WorkoutLog | null = (userProgress.workoutLogs as WorkoutLog[])
       .filter(log =>
@@ -211,7 +229,7 @@ export async function GET(request: NextRequest) {
         log.kind !== 'quick' &&
         log.programId === programId &&
         !log.completed &&
-        new Date(log.date) < today &&
+        new Date(log.date) < inProgressCutoff &&
         new Date(log.date) >= staleCutoff
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
@@ -271,10 +289,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// DELETE /api/workouts?programId=&day=&tz= — hard-delete TODAY's open
-// (incomplete) log for a program+day. This is what the Resume pill's
-// hold-to-delete uses — the counterpart to DELETE /api/workouts/session for
-// quick sessions, scoped to today the same way GET/in-progress finds it.
+// DELETE /api/workouts?programId=&day= — hard-delete the open (incomplete)
+// log for a program+day. This is what the Resume pill's hold-to-delete uses —
+// the counterpart to DELETE /api/workouts/session for quick sessions, scoped
+// to the same rolling window GET/in-progress uses to find it (see
+// IN_PROGRESS_WINDOW_MS) rather than the caller's local calendar day — a log
+// opened right before midnight must still be deletable a few minutes later,
+// not 404 because "today" moved on without it.
 //
 // Schedule is deliberately left untouched: an in-progress program day has no
 // distinct schedule status to begin with (only 'scheduled'), so removing the
@@ -297,9 +318,7 @@ export async function DELETE(request: NextRequest) {
 
     await dbConnect()
 
-    const tzOffset = readTzOffset(searchParams)
-    const todayKey = localDateKey(null, tzOffset)
-    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
+    const cutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
 
     // `modifiedCount` is NOT a reliable "did the pull match anything" signal
     // here — the schema's `timestamps: true` writes `updatedAt` on every call,
@@ -311,7 +330,7 @@ export async function DELETE(request: NextRequest) {
       { userId: authResult.userId },
       {
         $pull: {
-          workoutLogs: { programId, day, completed: false, date: { $gte: today, $lte: tomorrow } },
+          workoutLogs: { programId, day, completed: false, date: { $gte: cutoff } },
         },
       },
       { returnDocument: 'before', lean: true }
@@ -322,12 +341,11 @@ export async function DELETE(request: NextRequest) {
         log.programId === programId &&
         log.day === day &&
         !log.completed &&
-        new Date(log.date) >= today &&
-        new Date(log.date) <= tomorrow
+        new Date(log.date) >= cutoff
     )
 
     if (!existed) {
-      return NextResponse.json({ error: 'No in-progress workout found for today' }, { status: 404 })
+      return NextResponse.json({ error: 'No in-progress workout found' }, { status: 404 })
     }
 
     return NextResponse.json({ success: true })
@@ -366,9 +384,24 @@ export async function POST(request: NextRequest) {
     let programCompleted = false
     let programName = ''
 
+    // Find today's date range in the user's local timezone
+    const tzOffset = readTzOffsetFromBody(body)
+    // Only persist a genuinely-reported offset — a MISSING `tz` must not be
+    // stored as UTC (that poisons the cron into sending the morning reminder
+    // at ~3am the user's real local time).
+    const reportedTz = readOptionalTzOffsetFromBody(body)
+    if (reportedTz !== null) captureUserTimezone(payload.userId, reportedTz, readZoneFromBody(body))
+    const todayKey = localDateKey(null, tzOffset)
+    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
+
+    // Explicit day override (a member choosing which calendar day a
+    // midnight-crossing workout counts as). Undefined unless the client sent
+    // one — autosaves never do, so they never disturb the log's date.
+    const explicitLogDate = body.performedAt ? resolvePerformedAt(body.performedAt, tzOffset) : null
+
     // Create workout log entry
     const workoutLog = {
-      date: new Date(),
+      date: explicitLogDate ?? new Date(),
       programId,
       phase,
       day,
@@ -381,23 +414,24 @@ export async function POST(request: NextRequest) {
       exercises
     }
 
-    // Find today's date range in the user's local timezone
-    const tzOffset = readTzOffsetFromBody(body)
-    // Only persist a genuinely-reported offset — a MISSING `tz` must not be
-    // stored as UTC (that poisons the cron into sending the morning reminder
-    // at ~3am the user's real local time).
-    const reportedTz = readOptionalTzOffsetFromBody(body)
-    if (reportedTz !== null) captureUserTimezone(payload.userId, reportedTz, readZoneFromBody(body))
-    const todayKey = localDateKey(null, tzOffset)
-    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
-
-    // Atomic update-if-exists: returns the document state BEFORE this update
-    // so we can read wasAlreadyComplete without a separate findOne round-trip.
+    // Prefer the OPEN log for this exact program/day within the same rolling
+    // in-progress window GET/in-progress uses (IN_PROGRESS_WINDOW_MS) —
+    // regardless of which calendar day it carries. A log opened right before
+    // midnight must still be the one a later save (even one after midnight)
+    // continues, or the session silently forks into an orphaned original plus
+    // an empty "new" entry for today (reported as "my workout was gone").
+    // Matching by calendar-day window here is exactly the bug: "today" moves
+    // on at midnight even though the open log did not. Bounded rather than
+    // unbounded so this can never reach back and silently absorb a genuinely
+    // abandoned attempt from days ago — that log is surfaced instead via the
+    // separate stale-workout prompt (staleIncomplete, further below in GET),
+    // which asks the member to explicitly resolve it first.
+    const openLogCutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
     type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean }> }
     const docBefore = await UserProgress.findOneAndUpdate(
       {
         userId: payload.userId,
-        workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } }
+        workoutLogs: { $elemMatch: { programId, day, completed: false, date: { $gte: openLogCutoff } } }
       },
       {
         $set: {
@@ -405,11 +439,12 @@ export async function POST(request: NextRequest) {
           'workoutLogs.$[elem].completed': completed,
           'workoutLogs.$[elem].duration': duration,
           ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
+          ...(explicitLogDate && { 'workoutLogs.$[elem].date': explicitLogDate }),
           updatedAt: new Date()
         }
       },
       {
-        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.date': { $gte: today, $lte: tomorrow } }],
+        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.completed': false, 'elem.date': { $gte: openLogCutoff } }],
         returnDocument: 'before',
         lean: true
       }
@@ -417,24 +452,38 @@ export async function POST(request: NextRequest) {
 
     let wasAlreadyComplete = false
 
-    if (docBefore) {
-      const oldLog = docBefore.workoutLogs?.find(
-        (log) => log.programId === programId && log.day === day && log.date >= today && log.date <= tomorrow
-      )
-      wasAlreadyComplete = oldLog?.completed === true
-    } else {
-      // No entry for today — insert only if still absent (guards against concurrent double-tap)
-      await UserProgress.updateOne(
+    if (!docBefore) {
+      // No recent OPEN log for this program/day. Either today already has a
+      // COMPLETED entry (a retried save — don't double the completion side
+      // effects below) or there is truly nothing yet (a fresh start).
+      const existing = await UserProgress.findOne(
         {
           userId: payload.userId,
-          workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } }
+          workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } }
         },
-        {
-          $push: { workoutLogs: workoutLog },
-          $set: { updatedAt: new Date() }
-        },
-        { upsert: true }
+        { workoutLogs: 1 }
+      ).lean<ProgressDoc | null>()
+
+      const todayLog = existing?.workoutLogs?.find(
+        (log) => log.programId === programId && log.day === day && log.date >= today && log.date <= tomorrow
       )
+
+      if (todayLog) {
+        wasAlreadyComplete = todayLog.completed === true
+      } else {
+        // Insert only if still absent (guards against concurrent double-tap)
+        await UserProgress.updateOne(
+          {
+            userId: payload.userId,
+            workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } }
+          },
+          {
+            $push: { workoutLogs: workoutLog },
+            $set: { updatedAt: new Date() }
+          },
+          { upsert: true }
+        )
+      }
     }
 
     // Handle completion logic once (shared between both branches)
