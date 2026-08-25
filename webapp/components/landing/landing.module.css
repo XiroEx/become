@@ -1,14 +1,25 @@
 /* Become landing v2 — product-first, alive, and threaded by "the line".
    Near-white canvas, hairline phone shells, one dark full-bleed Training
-   section, green primary, violet reserved for AI/Mind, gold for the Becoming. */
+   section, green primary, violet reserved for AI/Mind, gold for the Becoming.
+
+   Dark mode follows the DEVICE theme. The root layout's blocking script puts
+   `.light` / `.dark` on <html>, and every dark value in this file is a token
+   override under `:global(html.dark) .root` at the bottom — one mechanism, no
+   `prefers-color-scheme` fork, and it restyles live when the OS theme flips.
+   Anything hardcoded that had to change per theme was promoted to a token. */
 
 .root {
   --bg: #fafafa;
   --surface: #ffffff;
   --ink: #0a0a0a;
+  /* text that sits ON --ink (dark pill, numbered step) */
+  --on-ink: #ffffff;
+  --ink-hover: #26262b;
   --ink-soft: #52525b;
   --ink-faint: #a1a1aa;
   --line: #e4e4e7;
+  --line-ghost: #dedee2;
+  --hairline: color-mix(in srgb, var(--line) 80%, transparent);
   --green: #16a34a;
   --green-bright: #22c55e;
   --green-soft: #dcfce7;
@@ -19,8 +30,54 @@
   --gold: #d97706;
   --gold-soft: #fef3c7;
   --dark-bg: #0a0a0a;
+  --dark-bg-image: none;
   --dark-surface: #161618;
   --dark-line: #27272a;
+  /* hairline that only exists on dark, where near-black panels sit on a
+     near-black page — drawn as an inset shadow so light keeps its exact box */
+  --dark-edge: transparent;
+  --coach-a: #0e0e10;
+  --coach-b: #1b1b1f;
+
+  /* primary CTA — white on mid-green reads on paper, but on a dark page the
+     pill wants the brighter green with near-black type */
+  --cta-bg: var(--green);
+  --cta-bg-hover: #15803d;
+  --cta-ink: #ffffff;
+
+  /* glass nav */
+  --nav-glass: color-mix(in srgb, #fafafa 74%, transparent);
+  --nav-glass-lifted: color-mix(in srgb, #fafafa 86%, transparent);
+
+  /* ambience */
+  --blob-a: color-mix(in srgb, var(--green-bright) 20%, transparent);
+  --blob-b: color-mix(in srgb, var(--violet) 15%, transparent);
+  --hero-glow: color-mix(in srgb, var(--green-bright) 14%, transparent);
+
+  /* shadows — on dark these stop being black drops and become glows */
+  --shadow-chip: 0 14px 30px -18px rgb(9 9 11 / 0.45);
+  --shadow-chip-lg: 0 16px 34px -20px rgb(9 9 11 / 0.45);
+  --shadow-soft: 0 12px 26px -18px rgb(9 9 11 / 0.4);
+  --shadow-card-hover: 0 26px 44px -30px rgb(9 9 11 / 0.4);
+  --card-hover-line: color-mix(in srgb, var(--line) 40%, transparent);
+  --nav-cta-shadow: 0 10px 22px -12px rgb(9 9 11 / 0.5);
+
+  /* phone shells */
+  --phone-shell: #0b0b0d;
+  --phone-edge: rgb(0 0 0 / 0.35);
+  --phone-inner: rgb(255 255 255 / 0.06);
+  --phone-inner-dark: rgb(255 255 255 / 0.14);
+  --phone-drop: 0 30px 60px -30px rgb(9 9 11 / 0.4);
+  --phone-drop-dark: 0 30px 60px -28px rgb(0 0 0 / 0.75);
+  --phone-ambient-geom: 0 10px 26px -20px;
+  --phone-ambient-fallback: rgb(34 197 94 / 0.55);
+  --screen-bed: #f4f4f5;
+
+  /* the line: gutter rail + milestone dots */
+  --rail-track: rgb(128 128 132 / 0.22);
+  --rail-dot-edge: rgb(128 128 132 / 0.35);
+  --rail-opacity: 0.35;
+
   --radius-lg: 28px;
   --radius-md: 20px;
   --nav-h: 66px;
@@ -65,7 +122,7 @@
   position: sticky;
   top: 0;
   z-index: 60;
-  background: color-mix(in srgb, #fafafa 74%, transparent);
+  background: var(--nav-glass);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   border-bottom: 1px solid transparent;
@@ -74,8 +131,8 @@
 }
 
 .nav[data-lifted="true"] {
-  border-bottom-color: color-mix(in srgb, var(--line) 80%, transparent);
-  background: color-mix(in srgb, #fafafa 86%, transparent);
+  border-bottom-color: var(--hairline);
+  background: var(--nav-glass-lifted);
 }
 
 .navShell {
@@ -169,7 +226,7 @@
   white-space: nowrap;
   gap: 7px;
   background: var(--ink);
-  color: #fff !important;
+  color: var(--on-ink) !important;
   font-size: 14.5px;
   font-weight: 650;
   padding: 9px 18px;
@@ -178,9 +235,9 @@
 }
 
 .navCta:hover {
-  background: #26262b;
+  background: var(--ink-hover);
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px -12px rgb(9 9 11 / 0.5);
+  box-shadow: var(--nav-cta-shadow);
 }
 
 @media (max-width: 430px) {
@@ -214,8 +271,8 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  background: var(--green);
-  color: #fff;
+  background: var(--cta-bg);
+  color: var(--cta-ink);
   text-decoration: none;
   font-size: 16.5px;
   font-weight: 700;
@@ -226,7 +283,7 @@
 }
 
 .primaryCta:hover {
-  background: #15803d;
+  background: var(--cta-bg-hover);
   transform: translateY(-2px);
   box-shadow: 0 20px 40px -16px color-mix(in srgb, var(--green) 78%, transparent);
 }
@@ -254,7 +311,7 @@
 .secondaryCta:hover {
   border-color: var(--ink-faint);
   transform: translateY(-2px);
-  box-shadow: 0 12px 26px -18px rgb(9 9 11 / 0.4);
+  box-shadow: var(--shadow-soft);
 }
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
@@ -285,7 +342,7 @@
   aspect-ratio: 1.3;
   right: -8%;
   top: 4%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--green-bright) 20%, transparent), transparent 72%);
+  background: radial-gradient(closest-side, var(--blob-a), transparent 72%);
   animation: blob-a 22s ease-in-out infinite;
 }
 
@@ -295,7 +352,7 @@
   aspect-ratio: 1.15;
   left: -14%;
   top: 26%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--violet) 15%, transparent), transparent 72%);
+  background: radial-gradient(closest-side, var(--blob-b), transparent 72%);
   animation: blob-b 19s ease-in-out infinite;
 }
 
@@ -429,7 +486,7 @@
 
 .heroLineGhost {
   fill: none;
-  stroke: #dedee2;
+  stroke: var(--line-ghost);
   stroke-width: 2.5;
   stroke-linecap: round;
 }
@@ -450,7 +507,7 @@
   position: absolute;
   inset: 12% 10% 16%;
   z-index: 0;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--green-bright) 14%, transparent), transparent 70%);
+  background: radial-gradient(closest-side, var(--hero-glow), transparent 70%);
   filter: blur(14px);
   pointer-events: none;
 }
@@ -495,7 +552,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 7px 13px 7px 7px;
-  box-shadow: 0 14px 30px -18px rgb(9 9 11 / 0.45);
+  box-shadow: var(--shadow-chip);
   backdrop-filter: blur(8px);
 }
 
@@ -591,22 +648,23 @@
 
 .phone {
   position: relative;
-  background: #0b0b0d;
-  border: 1px solid rgb(0 0 0 / 0.35);
+  background: var(--phone-shell);
+  border: 1px solid var(--phone-edge);
   /* screen radius + the 5px pad + the 1px border */
   border-radius: calc(13.3cqw + 6px);
   padding: 5px;
+  /* the ambient colour is set per section on an ancestor, so it stays a bare
+     var() here rather than being folded into a composite shadow token */
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.06),
-    0 30px 60px -30px rgb(9 9 11 / 0.4),
-    0 10px 26px -20px var(--phone-ambient, rgb(34 197 94 / 0.55));
+    inset 0 0 0 1px var(--phone-inner),
+    var(--phone-drop),
+    var(--phone-ambient-geom) var(--phone-ambient, var(--phone-ambient-fallback));
 }
 
 .phone[data-tone="dark"] {
-  box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / 0.14),
-    0 30px 60px -28px rgb(0 0 0 / 0.75),
-    0 10px 26px -20px var(--phone-ambient, rgb(34 197 94 / 0.4));
+  --phone-inner: var(--phone-inner-dark);
+  --phone-drop: var(--phone-drop-dark);
+  --phone-ambient-fallback: rgb(34 197 94 / 0.4);
 }
 
 .phone::after {
@@ -624,7 +682,7 @@
   aspect-ratio: 390 / 864;
   border-radius: 13.3cqw;
   overflow: hidden;
-  background: #f4f4f5;
+  background: var(--screen-bed);
 }
 
 /* The strip the island lives in. Tinted to the capture's own top row so it
@@ -660,7 +718,7 @@
   width: 25%;
   aspect-ratio: 122 / 35;
   border-radius: 999px;
-  background: #0b0b0d;
+  background: var(--phone-shell);
   opacity: 0.92;
   z-index: 2;
   pointer-events: none;
@@ -702,14 +760,20 @@
   position: absolute;
   inset: 0;
   border-radius: 2px;
-  background: rgb(128 128 132 / 0.22);
+  background: var(--rail-track);
 }
 
 .spineFill {
   position: absolute;
   inset: 0;
   border-radius: 2px;
-  background: linear-gradient(180deg, #7c3aed 0%, #ef4444 34%, #22c55e 68%, #d97706 100%);
+  background: linear-gradient(
+    180deg,
+    var(--violet) 0%,
+    var(--red) 34%,
+    var(--green-bright) 68%,
+    var(--gold) 100%
+  );
 }
 
 .spineDot {
@@ -721,7 +785,7 @@
   margin-left: -6.5px;
   border-radius: 999px;
   background: var(--bg);
-  border: 2px solid rgb(128 128 132 / 0.35);
+  border: 2px solid var(--rail-dot-edge);
   z-index: 4;
   transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), background 0.45s ease, border-color 0.45s ease,
     box-shadow 0.45s ease;
@@ -847,7 +911,11 @@
 
 .sectionDark {
   padding: 100px 0;
-  background: var(--dark-bg);
+  background-color: var(--dark-bg);
+  /* none in light; on dark a faint green wash + hairlines top and bottom keep
+     the light→dark→light section rhythm from collapsing into one void */
+  background-image: var(--dark-bg-image);
+  box-shadow: inset 0 1px 0 var(--dark-edge), inset 0 -1px 0 var(--dark-edge);
   color: #fafafa;
 }
 
@@ -945,8 +1013,8 @@
 
 .whyCard:hover {
   transform: translateY(-4px);
-  border-color: color-mix(in srgb, var(--line) 40%, transparent);
-  box-shadow: 0 26px 44px -30px rgb(9 9 11 / 0.4);
+  border-color: var(--card-hover-line);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .whyIcon {
@@ -1134,7 +1202,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 14px;
-  box-shadow: 0 16px 34px -20px rgb(9 9 11 / 0.45);
+  box-shadow: var(--shadow-chip-lg);
   backdrop-filter: blur(8px);
   white-space: nowrap;
 }
@@ -1236,7 +1304,7 @@
 .modeBtnActive {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 
 .modeHint {
@@ -1400,7 +1468,7 @@
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 14px;
-  box-shadow: 0 14px 30px -18px rgb(9 9 11 / 0.4);
+  box-shadow: var(--shadow-chip);
   backdrop-filter: blur(8px);
 }
 
@@ -1428,6 +1496,7 @@
     radial-gradient(34rem 22rem at 88% 8%, color-mix(in srgb, var(--violet) 46%, transparent), transparent 70%),
     radial-gradient(28rem 20rem at 4% 96%, rgb(56 189 248 / 0.14), transparent 68%),
     linear-gradient(140deg, #120f1c 0%, #1c1430 58%, #241a3d 100%);
+  box-shadow: inset 0 0 0 1px var(--dark-edge);
   padding: 46px 26px 0;
   display: grid;
   gap: 28px;
@@ -1621,7 +1690,7 @@
   width: 2px;
   border-radius: 2px;
   background: linear-gradient(180deg, var(--violet), var(--red) 40%, var(--green-bright) 72%, var(--gold));
-  opacity: 0.35;
+  opacity: var(--rail-opacity);
 }
 
 .stepsGrid {
@@ -1647,7 +1716,7 @@
   height: 40px;
   border-radius: 999px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 16px;
   font-weight: 750;
   box-shadow: 0 0 0 6px var(--bg);
@@ -1706,7 +1775,8 @@
   overflow: hidden;
   background:
     radial-gradient(38rem 20rem at 84% -20%, color-mix(in srgb, var(--green-bright) 14%, transparent), transparent 70%),
-    linear-gradient(135deg, #0e0e10 0%, #1b1b1f 100%);
+    linear-gradient(135deg, var(--coach-a) 0%, var(--coach-b) 100%);
+  box-shadow: inset 0 0 0 1px var(--dark-edge);
   color: #fafafa;
   border-radius: var(--radius-lg);
   padding: 46px 32px 40px;
@@ -2019,4 +2089,117 @@
   .heroBlobs span {
     animation: none !important;
   }
+}
+
+/* ── Themed captures ─────────────────────────────────────────────────────────
+   Both variants render; CSS shows one. No JS, so no hydration mismatch, and it
+   swaps live with the OS theme. `display: none` never intersects, so
+   next/image's lazy loader never fetches the hidden twin. Default is the light
+   twin, which is also the no-JS fallback (html carries neither class). */
+
+.darkOnly {
+  display: none;
+}
+
+:global(html.dark) .darkOnly {
+  display: block;
+}
+
+:global(html.dark) .lightOnly {
+  display: none;
+}
+
+/* the hero line's gradient stops, as tokens (see HeroLine.tsx) */
+
+.heroLineStopViolet {
+  stop-color: var(--violet);
+}
+
+.heroLineStopRed {
+  stop-color: var(--red);
+}
+
+.heroLineStopGreen {
+  stop-color: var(--green-bright);
+}
+
+.heroLineStopGold {
+  stop-color: var(--gold);
+}
+
+/* ── Dark theme ──────────────────────────────────────────────────────────────
+   Device-driven, via the `.dark` class the root layout script puts on <html>.
+   Tokens only — there is deliberately not a single per-component dark fork
+   below this line. */
+
+:global(html.dark) .root {
+  --bg: #0d0d0f;
+  --surface: #17171a;
+  --ink: #fafafa;
+  --on-ink: #0d0d0f;
+  --ink-hover: #e4e4e7;
+  --ink-soft: #a6a6ad;
+  /* the spec's #5d5d66 measures 3.0:1 on --bg, and this token carries real
+     copy (footnotes, stat labels, footer), so it is lifted to clear AA */
+  --ink-faint: #8a8a93;
+  --line: #26262a;
+  --line-ghost: rgb(255 255 255 / 0.08);
+  --hairline: rgb(255 255 255 / 0.09);
+
+  /* accents: the brighter end of each ramp, so they read on near-black */
+  --green: #22c55e;
+  --green-bright: #22c55e;
+  --green-soft: rgb(34 197 94 / 0.18);
+  --red: #f87171;
+  --red-soft: rgb(248 113 113 / 0.18);
+  --violet: #a78bfa;
+  --violet-soft: rgb(167 139 250 / 0.2);
+  --gold: #fbbf24;
+  --gold-soft: rgb(251 191 36 / 0.18);
+
+  /* Training: elevated ABOVE the page instead of below it, plus hairlines and
+     a green wash, so light→dark→light rhythm survives on a dark canvas */
+  --dark-bg: #131317;
+  --dark-bg-image: radial-gradient(58rem 26rem at 10% 0%, rgb(34 197 94 / 0.07), transparent 68%);
+  --dark-surface: #1c1c21;
+  --dark-line: #33333a;
+  --dark-edge: rgb(255 255 255 / 0.07);
+  --coach-a: #141419;
+  --coach-b: #232329;
+
+  /* bright pill, near-black type: 6.4:1, where white on #16a34a is 3.3:1 */
+  --cta-bg: #22c55e;
+  --cta-bg-hover: #4ade80;
+  --cta-ink: #052e16;
+
+  --nav-glass: color-mix(in srgb, #0d0d0f 78%, transparent);
+  --nav-glass-lifted: color-mix(in srgb, #0d0d0f 90%, transparent);
+
+  /* same hues, lower alpha — they glow instead of tinting */
+  --blob-a: rgb(34 197 94 / 0.13);
+  --blob-b: rgb(139 92 246 / 0.15);
+  --hero-glow: rgb(34 197 94 / 0.1);
+
+  /* a black drop is invisible on black: chips keep a deeper drop for lift,
+     card hover becomes a green glow */
+  --shadow-chip: 0 14px 30px -18px rgb(0 0 0 / 0.85);
+  --shadow-chip-lg: 0 16px 34px -20px rgb(0 0 0 / 0.85);
+  --shadow-soft: 0 12px 26px -18px rgb(0 0 0 / 0.8);
+  --shadow-card-hover: 0 24px 48px -32px rgb(34 197 94 / 0.3);
+  --card-hover-line: rgb(255 255 255 / 0.16);
+  --nav-cta-shadow: 0 10px 22px -12px rgb(0 0 0 / 0.8);
+
+  /* the shells stay near-black, so they need a brighter edge and a wider
+     ambient wash to separate from the page */
+  --phone-edge: rgb(255 255 255 / 0.1);
+  --phone-inner: rgb(255 255 255 / 0.12);
+  --phone-inner-dark: rgb(255 255 255 / 0.16);
+  --phone-drop: 0 34px 68px -30px rgb(0 0 0 / 0.9);
+  --phone-drop-dark: 0 34px 68px -30px rgb(0 0 0 / 0.9);
+  --phone-ambient-geom: 0 16px 46px -20px;
+  --screen-bed: #17171a;
+
+  --rail-track: rgb(255 255 255 / 0.1);
+  --rail-dot-edge: rgb(255 255 255 / 0.22);
+  --rail-opacity: 0.55;
 }

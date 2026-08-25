@@ -39,7 +39,7 @@ import HeroLine from "./HeroLine"
 import Marquee from "./Marquee"
 import Phone from "./Phone"
 import { SpineDot, SpineRail } from "./Spine"
-import { useCountUp, useReducedMotionSafe } from "./hooks"
+import { useCountUp, useReducedMotionSafe, useSiteTheme } from "./hooks"
 import styles from "./landing.module.css"
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || "BECOME"
@@ -77,9 +77,11 @@ const TRAINING_TABS = [
     label: "Programs",
     Icon: ClipboardList,
     image: shot("workout-hub-light"),
+    imageDark: shot("workout-hub-dark") as string | undefined,
     alt: "Become training hub showing this week's schedule and a program at 50% complete",
-    /* a light capture inside a dark shell — the strip follows the capture */
+    /* the strip follows the capture's own top row, per theme */
     statusTint: "#fefefe" as string | undefined,
+    statusTintDark: undefined as string | undefined,
     title: "A program that plans your week for you.",
     body: "Pick a coach-built program and the week fills itself in — training days, rest days, and exactly what's on deck today.",
     points: [
@@ -93,8 +95,11 @@ const TRAINING_TABS = [
     label: "In the workout",
     Icon: Video,
     image: shot("workout-log-dark"),
+    /* the live logger is dark in both app themes — one capture, no swap */
+    imageDark: undefined as string | undefined,
     alt: "Logging a lat pulldown set with the demo video playing full screen behind the controls",
     statusTint: undefined as string | undefined,
+    statusTintDark: undefined as string | undefined,
     title: "Every exercise shows you how — and remembers.",
     body: "The demo plays full screen behind your set, your last session's numbers sit right where you need them, and PRs are tracked as you go.",
     points: [
@@ -108,9 +113,12 @@ const TRAINING_TABS = [
     label: "Generate",
     Icon: Wand2,
     image: shot("generate-light"),
+    imageDark: shot("generate-dark") as string | undefined,
     alt: "Generating a pull session filtered by difficulty and available equipment",
-    /* this capture opens over a dimmed hub, so the status strip matches that grey */
+    /* this capture opens over a dimmed hub, so the status strip matches that
+       grey — and its dark twin dims to near-black instead */
     statusTint: "#7f7f7f",
+    statusTintDark: "#0d0b0d" as string | undefined,
     title: "No program? Build a session in seconds.",
     body: "Choose a focus, your level, and the equipment actually in front of you — or describe the session you want and let it write the plan.",
     points: ["Single session or a full program", "Filters for focus, level, equipment", "Tuned to what your gym has today"],
@@ -394,6 +402,7 @@ function Hero() {
             <motion.div {...float(6.5, -0.6)}>
               <Phone
                 src={shot("dashboard-light")}
+                srcDark={shot("dashboard-dark")}
                 alt="Become dashboard showing today's streak, mood, goal progress, and calories"
                 className={styles.tiltLeft}
                 priority
@@ -460,27 +469,34 @@ function WhySection() {
 
 function DashboardSection() {
   const reduced = useReducedMotionSafe()
+  const siteTheme = useSiteTheme()
+  const otherTheme = siteTheme === "dark" ? "light" : "dark"
   const stageRef = useRef<HTMLDivElement>(null)
   const inView = useInView(stageRef, { once: true, amount: 0.4 })
-  const [mode, setMode] = useState<"light" | "dark">("light")
+  /* The demo rests on the variant the visitor is already looking at — the app
+     matching their device — and only departs from it to show the other one off
+     (or when they pick). `null` means "follow the site", so a live OS theme
+     change is picked up here too. */
+  const [override, setOverride] = useState<"light" | "dark" | null>(null)
   const [autoDone, setAutoDone] = useState(false)
+  const mode = override ?? siteTheme
 
   useEffect(() => {
     if (!inView || autoDone || reduced) return
-    const toDark = window.setTimeout(() => setMode("dark"), 650)
-    const toLight = window.setTimeout(() => {
-      setMode("light")
+    const away = window.setTimeout(() => setOverride(otherTheme), 650)
+    const back = window.setTimeout(() => {
+      setOverride(null)
       setAutoDone(true)
     }, 1850)
     return () => {
-      window.clearTimeout(toDark)
-      window.clearTimeout(toLight)
+      window.clearTimeout(away)
+      window.clearTimeout(back)
     }
-  }, [inView, autoDone, reduced])
+  }, [inView, autoDone, reduced, otherTheme])
 
   const pick = (next: "light" | "dark") => {
     setAutoDone(true)
-    setMode(next)
+    setOverride(next)
   }
 
   return (
@@ -669,10 +685,12 @@ function TrainingSection() {
                 <div key={tab.id} className={styles.phoneSlide} data-active={tabIndex === index}>
                   <Phone
                     src={tab.image}
+                    srcDark={tab.imageDark}
                     alt={tab.alt}
                     tone="dark"
                     island={tab.id !== "log"}
                     statusTint={tab.statusTint}
+                    statusTintDark={tab.statusTintDark}
                   />
                 </div>
               ))}
@@ -723,6 +741,7 @@ function NutritionSection() {
               <motion.div className={styles.phoneBack} style={reduced ? { y: 0 } : { y: yBack }}>
                 <Phone
                   src={shot("nutrition-day-light")}
+                  srcDark={shot("nutrition-day-dark")}
                   alt="Daily calorie ring with protein, carb, and fat targets in Become"
                   className={styles.tiltLeft}
                   sizes="(max-width: 800px) 46vw, 230px"
@@ -731,6 +750,7 @@ function NutritionSection() {
               <motion.div className={styles.phoneFront} style={reduced ? { y: 0 } : { y: yFront }}>
                 <Phone
                   src={shot("nutrition-meal-light")}
+                  srcDark={shot("nutrition-meal-dark")}
                   alt="A logged breakfast broken out into eggs, oatmeal, and blueberries with calories per item"
                   className={styles.tiltRight}
                   island={false}
@@ -788,6 +808,7 @@ function MindSection() {
             <div className={styles.mindVisual}>
               <Phone
                 src={shot("mind-light")}
+                srcDark={shot("mind-dark")}
                 alt="Become Mindset hub with a suggested session and unlocked training grounds"
                 tone="dark"
                 statusTint="#fefefe"
@@ -845,6 +866,7 @@ function ProgressSection() {
             <Reveal delay={0.1} amount={0.2} className={styles.progressPhone}>
               <Phone
                 src={shot("progress-light")}
+                srcDark={shot("progress-dark")}
                 alt="Become training log with a weekly volume chart, workout history, and a PR badge"
                 sizes="(max-width: 800px) 72vw, 300px"
               />
