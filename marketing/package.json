@@ -1,0 +1,32 @@
+{
+  "name": "become-marketing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "assets:sync": "node scripts/sync-assets.mjs",
+    "studio": "remotion studio src/index.ts",
+    "render:reel": "remotion render src/index.ts BecomeReel out/become-reel.mp4 --codec=h264 --crf=18",
+    "render:videos": "node scripts/render-videos.mjs",
+    "render:reviewed": "node scripts/render-reviewed.mjs",
+    "review:pass": "node scripts/render-review-pass.mjs",
+    "render:square": "remotion still src/index.ts SocialSquare out/become-social-square.png",
+    "render:story": "remotion still src/index.ts StoryPoster out/become-story-poster.png",
+    "render:og": "remotion still src/index.ts OpenGraph out/become-open-graph.png",
+    "render:collection": "node scripts/render-collection.mjs",
+    "render": "npm run assets:sync && npm run render:square && npm run render:story && npm run render:og && npm run render:reel && npm run render:collection && npm run render:videos && npm run render:reviewed",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.343",
+    "@remotion/bundler": "^4.0.343",
+    "@remotion/renderer": "^4.0.343",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "remotion": "^4.0.343"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.3"
+  }
+}
