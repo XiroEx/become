@@ -26,6 +26,7 @@ const ENDPOINT_LABELS: Array<[RegExp, string]> = [
   [/\/mind\/flow$/, 'Building your flow'],
   [/\/workout\/session$/, 'Generating your session'],
   [/\/workout\/program$/, 'Generating your program'],
+  [/\/workout\/import$/, 'Reading your program'],
   [/\/nutrition\/consultant$/, 'Consultant is replying'],
   [/\/nutrition\/plate$/, 'Reading your plate'],
   [/\/nutrition\/product$/, 'Looking that up'],

@@ -347,22 +347,74 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       return bt - at;
     });
 
-  const content = (
-    <>
-      {/* Header */}
-      {embedded ? (
-        !showForm && (
-          <div className="mb-4 flex justify-end">
+  const addButton = !showForm && (
+    <button
+      onClick={() => setShowForm(true)}
+      className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+    >
+      <Plus className="h-4 w-4" />
+      Add
+    </button>
+  );
+
+  const createForm = (
+    <AnimatePresence>
+      {showForm && (
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.18 }}
+          className="mb-6 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">New Custom Exercise</h2>
             <button
-              onClick={() => setShowForm(true)}
-              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+              onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
-              <Plus className="h-4 w-4" />
-              Add
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
-        )
-      ) : (
+
+          <div className="space-y-4">
+            <CustomExerciseFields
+              values={form}
+              onChange={(next) => setForm(p => ({ ...p, ...next }))}
+              nameAutoFocus
+              namePlaceholder="e.g. Seated Leg Curl"
+            />
+
+            {form.error && <p className="text-xs text-red-500 dark:text-red-400">{form.error}</p>}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+                className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={form.submitting || !form.name.trim()}
+                className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
+              >
+                {form.submitting ? "Creating..." : "Create Exercise"}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const content = (
+    <>
+      {/* Header — embedded (Hub tab) skips the Add button here; it renders
+          below the search bar instead so this row doesn't sit empty. */}
+      {embedded ? null : (
         <div className="mb-6 flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -378,69 +430,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               Your custom exercises — use them in any workout or program.
             </p>
           </div>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </button>
-          )}
+          {addButton}
         </div>
       )}
 
-      {/* Create Form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.18 }}
-            className="mb-6 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">New Custom Exercise</h2>
-              <button
-                onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <CustomExerciseFields
-                values={form}
-                onChange={(next) => setForm(p => ({ ...p, ...next }))}
-                nameAutoFocus
-                namePlaceholder="e.g. Seated Leg Curl"
-              />
-
-              {form.error && <p className="text-xs text-red-500 dark:text-red-400">{form.error}</p>}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-                  className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={form.submitting || !form.name.trim()}
-                  className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
-                >
-                  {form.submitting ? "Creating..." : "Create Exercise"}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Create Form (non-embedded: right under the header, next to the button that opens it) */}
+      {!embedded && createForm}
 
       {/* Search */}
       {!loading && exercises.length > 0 && (
@@ -462,6 +457,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
           )}
         </div>
       )}
+
+      {/* Add button (embedded: below the search bar, reclaiming the empty header row above it) */}
+      {embedded && (
+        <div className="mb-4 flex justify-end">{addButton}</div>
+      )}
+      {embedded && createForm}
 
       {/* Sort + filter tabs */}
       {!loading && exercises.length > 0 && (

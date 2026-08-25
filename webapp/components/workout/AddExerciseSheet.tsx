@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, Plus, X, Loader2, Layers, Minus, ArrowLeft } from 'lucide-react'
 import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from '@/components/workout/CustomExerciseFields'
+import ExerciseVariationPicker, { type ExerciseVariation } from '@/components/ExerciseVariationPicker'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
@@ -141,6 +142,18 @@ export default function AddExerciseSheet({
     setReps(isTimed(r.trackingType) ? '' : '8-12')
     setQuery('')
     setResults([])
+  }, [])
+
+  // Switching to a sibling variation (e.g. Machine Chest Press → Dumbbell
+  // Chest Press) keeps the prescription, only resetting reps/seconds when
+  // the tracking type actually changes category.
+  const selectVariation = useCallback((v: ExerciseVariation) => {
+    setPicked(prev => {
+      if (isTimed(v.trackingType) !== isTimed(prev?.trackingType)) {
+        setReps(isTimed(v.trackingType) ? '' : '8-12')
+      }
+      return { slug: v.slug, name: v.name, trackingType: v.trackingType }
+    })
   }, [])
 
   // The machine in front of you is not always in the catalog — same detailed
@@ -310,6 +323,14 @@ export default function AddExerciseSheet({
               <p className="text-sm font-semibold">{picked.name}</p>
               <button onClick={() => setPicked(null)} className={`mt-0.5 text-xs underline ${muted}`}>pick a different one</button>
             </div>
+
+            <ExerciseVariationPicker
+              slug={picked.slug}
+              selectedSlug={picked.slug}
+              onSelect={selectVariation}
+              dark={dark}
+              className="mb-4"
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <Stepper label={setUnitLabel(picked?.trackingType, sets)} value={sets} onChange={v => setSets(Math.max(1, Math.min(10, v)))} dark={dark} testid="add-exercise-sets" />

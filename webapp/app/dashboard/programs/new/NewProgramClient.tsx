@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Sparkles, Lock } from "lucide-react";
+import { Sparkles, Lock, PencilLine, Upload } from "lucide-react";
 import ProgramCreator from "@/app/dashboard/admin/programs/_editors/ProgramCreator";
 import PageTransition from "@/components/PageTransition";
+import ImportProgramFlow from "./ImportProgramFlow";
+import type { ImportedProgram } from "@/lib/workout/importProgram";
+
+const USER_CREATE_DRAFT_KEY = "become_user_program_creator_draft";
 
 interface EntitlementResponse {
   role: string;
@@ -12,10 +16,14 @@ interface EntitlementResponse {
   features: Record<string, { allowed: boolean; requiresTier: string }>;
 }
 
+type EntryMode = "choose" | "scratch" | "import";
+
 export default function NewProgramClient() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [requiresTier, setRequiresTier] = useState<string>('premium');
+  const [entryMode, setEntryMode] = useState<EntryMode>("choose");
+  const [imported, setImported] = useState<ImportedProgram | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,5 +139,73 @@ export default function NewProgramClient() {
     );
   }
 
-  return <ProgramCreator mode="user-create" />;
+  if (entryMode === "import" && !imported) {
+    return (
+      <PageTransition className="pb-6">
+        <ImportProgramFlow
+          onImported={(program) => {
+            // A stale scratch draft in localStorage would otherwise overwrite
+            // this imported program the moment ProgramCreator mounts (its
+            // create-mode effect restores any saved draft on mount).
+            try {
+              localStorage.removeItem(USER_CREATE_DRAFT_KEY);
+            } catch {
+              // ignore storage errors (e.g. private browsing)
+            }
+            setImported(program);
+          }}
+          onCancel={() => setEntryMode("choose")}
+        />
+      </PageTransition>
+    );
+  }
+
+  if (entryMode === "scratch" || (entryMode === "import" && imported)) {
+    return <ProgramCreator mode="user-create" initialProgram={imported ?? undefined} />;
+  }
+
+  return (
+    <PageTransition className="pb-6">
+      <div className="mx-auto max-w-2xl px-0 py-12 sm:px-6">
+        <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">
+          Create a program
+        </h1>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          Start from a blank program, or import one you already wrote.
+        </p>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <button
+            onClick={() => setEntryMode("scratch")}
+            className="flex flex-col items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-6 text-left transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              <PencilLine className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-900 dark:text-white">Start from scratch</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Build it step by step in the editor
+              </p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => setEntryMode("import")}
+            className="flex flex-col items-start gap-3 rounded-2xl border border-zinc-200 bg-white p-6 text-left transition-colors hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
+              <Upload className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-900 dark:text-white">Import a program</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Paste text, or upload a file
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
+    </PageTransition>
+  );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Exercise, ExerciseType } from "@/lib/data/programs";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
+import ExerciseVariationPicker, { type ExerciseVariation } from "@/components/ExerciseVariationPicker";
 
 interface DbExerciseSuggestion {
   slug: string;
@@ -283,6 +284,15 @@ export default function ExerciseEditor({
               </div>
             </div>
           </div>
+
+          {/* Pick a variation — same "N variations" picker as Swap Exercise,
+              surfaced whenever the matched catalog exercise (e.g. Machine
+              Chest Press) has sibling equipment/style variants. */}
+          <ExerciseVariationPicker
+            slug={exercise.exerciseSlug}
+            selectedSlug={exercise.exerciseSlug}
+            onSelect={(v: ExerciseVariation) => onUpdate({ ...exercise, name: v.name, exerciseSlug: v.slug })}
+          />
 
           {/* Row 2: Sets, Reps, Rest (for strength/abs) */}
           {showSetsReps && (
