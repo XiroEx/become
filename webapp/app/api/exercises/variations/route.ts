@@ -8,6 +8,7 @@ export interface ExerciseVariation {
   equipment: string[]
   laterality: string
   difficulty: string
+  trackingType: string
 }
 
 // GET /api/exercises/variations?slug=xxx
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   await dbConnect()
 
   const source = await Exercise.findOne({ slug, isActive: true })
-    .select('slug name equipment laterality difficulty variations movementPatterns primaryMuscles bodyRegion')
+    .select('slug name equipment laterality difficulty trackingType variations movementPatterns primaryMuscles bodyRegion')
     .lean()
 
   if (!source) {
@@ -42,14 +43,14 @@ export async function GET(request: NextRequest) {
         movementPatterns: { $size: source.movementPatterns.length, $all: source.movementPatterns },
         primaryMuscles: { $all: source.primaryMuscles },
       })
-        .select('slug name equipment laterality difficulty')
+        .select('slug name equipment laterality difficulty trackingType')
         .lean()
     : []
 
   // Explicitly linked variations
   const explicitVariants = source.variations?.length
     ? await Exercise.find({ slug: { $in: source.variations }, isActive: true })
-        .select('slug name equipment laterality difficulty')
+        .select('slug name equipment laterality difficulty trackingType')
         .lean()
     : []
 
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
       equipment: source.equipment as string[],
       laterality: source.laterality as string,
       difficulty: source.difficulty as string,
+      trackingType: source.trackingType as string,
     },
   ]
 
@@ -74,6 +76,7 @@ export async function GET(request: NextRequest) {
       equipment: ex.equipment as string[],
       laterality: ex.laterality as string,
       difficulty: ex.difficulty as string,
+      trackingType: ex.trackingType as string,
     })
   }
 
