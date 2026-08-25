@@ -216,9 +216,10 @@ const RailLayout: React.FC<CampaignProps> = ({campaign}) => {
       <div style={{position: 'absolute', left: 128, top: story ? 260 : landscape ? 180 : 225, width: landscape ? 650 : 830, zIndex: 2}}>
         <Kicker campaign={campaign} color={accent} />
         <div style={{marginTop: 24}}><Headline campaign={campaign} maxWidth={landscape ? 650 : 820} baseSize={story ? 128 : landscape ? 84 : 104} /></div>
-        <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 600 : 680} size={landscape ? 23 : 27} /></div>
+        <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 600 : story ? 680 : 560} size={landscape ? 23 : 27} /></div>
         {!story && <div style={{marginTop: 30}}><Cta campaign={campaign} color={accent} /></div>}
       </div>
+      {!landscape && <Footer />}
       <ProductFrame
         image={campaign.image}
         width={phoneWidth}
@@ -226,7 +227,6 @@ const RailLayout: React.FC<CampaignProps> = ({campaign}) => {
         style={landscape ? {right: 45, top: 62} : story ? {right: 60, top: 860} : {right: -30, bottom: -210}}
       />
       {story && <div style={{position: 'absolute', left: 132, bottom: 116, zIndex: 4}}><Cta campaign={campaign} color={accent} /></div>}
-      {!landscape && <Footer />}
       <Grain />
     </AbsoluteFill>
   );
@@ -284,13 +284,13 @@ const LightLayout: React.FC<CampaignProps> = ({campaign}) => {
         <div style={{marginTop: 30}}><Cta campaign={campaign} light color={accent} /></div>
       </div>
       <div style={{position: 'absolute', background: accent, left: 0, bottom: 0, width: story ? 22 : 16, height: '72%'}} />
+      <Footer dark={false} />
       <ProductFrame
         image={campaign.image}
         width={story ? 500 : landscape ? 290 : 390}
         rotate={story ? -4 : landscape ? 4 : -5}
         style={landscape ? {right: 60, top: 65} : story ? {left: 315, top: 900} : {right: -15, bottom: -225}}
       />
-      <Footer dark={false} />
       <Grain />
     </AbsoluteFill>
   );

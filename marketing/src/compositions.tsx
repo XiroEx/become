@@ -180,7 +180,7 @@ export const SocialSquare: React.FC = () => (
     </div>
     <ArrowRail left={74} top={234} height={620} color={C.green} />
     <div style={{position: 'absolute', left: 142, top: 245, width: 600, zIndex: 2}}>
-      <Eyebrow color={C.green}>Coaching, connected</Eyebrow>
+      <Eyebrow color={C.green}>Coach-built</Eyebrow>
       <div style={{fontSize: 102, lineHeight: 0.88, fontWeight: 950, letterSpacing: -7, marginTop: 26}}>
         BUILD
         <br />
@@ -189,7 +189,7 @@ export const SocialSquare: React.FC = () => (
         YOU.
       </div>
       <div style={{marginTop: 34, fontSize: 28, lineHeight: 1.35, color: C.muted, width: 440}}>
-        Training, nutrition, and mindset—one system built for real progress.
+        Training, nutrition, and mindset. One system built for real progress.
       </div>
     </div>
     <Phone
