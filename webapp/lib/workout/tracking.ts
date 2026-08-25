@@ -130,6 +130,28 @@ export interface TypedSet {
   speed?: string
 }
 
+/** A freshly opened set: nothing typed, nothing done. */
+export interface BlankSet {
+  reps: string
+  weight: string
+  speed: string
+  completed: boolean
+}
+
+/**
+ * A set with nothing in it, for seeding a workout's inputs when it opens.
+ *
+ * Sets used to be seeded from the member's last-completed performance for
+ * that exercise, so "confirm" was one tap away — but a set the member never
+ * touched then carried the previous session's weight/reps into today's log
+ * if they tapped Done without double-checking the numbers. Last time's
+ * performance is only ever shown as a "Last: X lbs × Y reps" reference now;
+ * it is never written into an editable field.
+ */
+export function blankSet(): BlankSet {
+  return { reps: '', weight: '', speed: '', completed: false }
+}
+
 /**
  * Is this set filled in enough to tick itself off?
  *

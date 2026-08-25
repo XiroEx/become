@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, categoryForTracking, DEFAULT_TRACKING } from '@/lib/workout/tracking'
+import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, categoryForTracking, blankSet, DEFAULT_TRACKING } from '@/lib/workout/tracking'
 
 test('the vocabulary passes through untouched', () => {
   for (const t of ['reps_weight', 'reps_bodyweight', 'reps_only', 'time', 'time_distance', 'intervals', 'none'] as const) {
@@ -85,4 +85,15 @@ test('a custom cardio machine gets a cardio category, not strength', () => {
   assert.equal(categoryForTracking('reps_bodyweight'), 'strength')
   assert.equal(categoryForTracking('time'), 'strength')
   assert.equal(categoryForTracking(undefined), 'strength')
+})
+
+test('REGRESSION: a fresh set never carries last time\'s weight or reps', () => {
+  // The live workout used to seed every set of an exercise from the member's
+  // last-completed performance, so a set they never touched still had real
+  // numbers in it and could be marked done without them ever typing anything.
+  // blankSet() is what a fresh set must always be, regardless of history.
+  assert.deepEqual(blankSet(), { reps: '', weight: '', speed: '', completed: false })
+  // Calling it twice must not hand back the same object — each set gets its
+  // own, or editing one set's weight would edit every set's.
+  assert.notEqual(blankSet(), blankSet())
 })
