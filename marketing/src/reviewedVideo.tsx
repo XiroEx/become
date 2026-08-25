@@ -117,7 +117,7 @@ const openingMarks: Record<ReviewedCampaign['motif'], {mark: string; detail: str
   'mood-wave': {mark: '●╱●╲●╱●', detail: 'BODY SIGNAL / READ IT'},
   'macro-gauge': {mark: 'P  C  F', detail: 'FUEL MIX / TODAY'},
   'protein-meter': {mark: '██████░░', detail: '42G REMAINING'},
-  'coach-thread': {mark: '•••', detail: 'COACH IS TYPING'},
+  'coach-cues': {mark: '01 · 02 · 03', detail: 'CUES ON THE LIFT'},
   trendline: {mark: '▁▂▃▅▆↗', detail: '8 WEEK VIEW'},
   'pocket-card': {mark: '▰', detail: 'TODAY / ONE CARD'},
   countdown: {mark: '30', detail: 'DAYS / START NOW', rotate: 4},
@@ -479,17 +479,16 @@ const Instrument: React.FC<{campaign: ReviewedCampaign; frame: number; accent: s
       </div>
     );
   }
-  if (campaign.motif === 'coach-thread') {
-    const bubbles = [
-      {text:'Last set felt too easy.',mine:true},
-      {text:'I can see it. Add 5 lb next session—keep the same tempo.',mine:false},
-      {text:'Done.',mine:true},
-    ];
+  if (campaign.motif === 'coach-cues') {
+    const cues = ['Brace before you unrack.', 'Knees track over the toes.', 'Drive the floor away.'];
     return (
       <div style={common}>
         <div style={{position:'absolute',left:62,right:62,top:365,bottom:230,borderRadius:50,background:card,border:'2px solid ' + soft,padding:'70px 45px'}}>
-          {bubbles.map((b,i) => <div key={b.text} style={{maxWidth:b.mine?630:760,marginLeft:b.mine?'auto':0,marginTop:i?42:0,padding:'30px 34px',borderRadius:b.mine?'34px 34px 8px 34px':'34px 34px 34px 8px',background:b.mine?accent:(campaign.light?'#FFFFFF':'#2A2A30'),color:b.mine?ink:foreground,fontFamily:body,fontSize:34,lineHeight:1.2,opacity:enterAt(frame,70+i*18,fps,150),transform:'translateY(' + interpolate(enterAt(frame,70+i*18,fps,150),[0,1],[60,0]) + 'px)'}}>{b.text}</div>)}
-          <div style={{position:'absolute',left:46,bottom:38,fontFamily:mono,fontSize:21,letterSpacing:2,opacity:.52}}>COACH IS TYPING<span style={{color:accent}}>•••</span></div>
+          {cues.map((text,i) => <div key={text} style={{display:'flex',alignItems:'baseline',gap:26,marginTop:i?46:0,opacity:enterAt(frame,70+i*18,fps,150),transform:'translateY(' + interpolate(enterAt(frame,70+i*18,fps,150),[0,1],[60,0]) + 'px)'}}>
+            <span style={{fontFamily:mono,fontSize:26,letterSpacing:2,color:accent}}>{'0' + (i + 1)}</span>
+            <span style={{fontFamily:body,fontSize:38,lineHeight:1.2,color:foreground,fontWeight:700}}>{text}</span>
+          </div>)}
+          <div style={{position:'absolute',left:46,bottom:38,fontFamily:mono,fontSize:21,letterSpacing:2,opacity:.52}}>BACK SQUAT / COACHING CUES<span style={{color:accent}}> •</span></div>
         </div>
       </div>
     );

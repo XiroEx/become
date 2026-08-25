@@ -10,7 +10,7 @@ export type Motif =
   | 'mood-wave'
   | 'macro-gauge'
   | 'protein-meter'
-  | 'coach-thread'
+  | 'coach-cues'
   | 'trendline'
   | 'pocket-card'
   | 'countdown'
@@ -47,7 +47,7 @@ export const reviewedCampaigns: ReviewedCampaign[] = [
   {id:'Reviewed07',slug:'07-feeling-changes-training',pillar:'mindset',motif:'mood-wave',hook:['HOW YOU FEEL','CHANGES HOW','YOU TRAIN.'],proof:'A 60-second check-in turns a feeling into useful context.',cta:'Name the signal',image:'dashboard.png',light:true,label:'Daily state',metric:'3 / 5',layout:'poster',tempo:'steady'},
   {id:'Reviewed08',slug:'08-fuel-todays-work',pillar:'nutrition',motif:'macro-gauge',hook:['FUEL','TODAY’S','WORK.'],proof:'See the target before the day decides for you.',cta:'Set today’s targets',image:'nutrition.png',light:false,label:'Daily nutrition',metric:'2,000',layout:'split',tempo:'snap'},
   {id:'Reviewed09',slug:'09-dinner-has-a-job',pillar:'nutrition',motif:'protein-meter',hook:['42G LEFT.','DINNER HAS','A JOB.'],proof:'Know what remains while there is still time to use the number.',cta:'Finish the day clear',image:'nutrition.png',light:true,label:'Protein target',metric:'42G',layout:'left',tempo:'build'},
-  {id:'Reviewed10',slug:'10-ask-while-its-fresh',pillar:'coaching',motif:'coach-thread',hook:['ASK WHILE','IT’S FRESH.'],proof:'Your coach can answer with the plan and the work in view.',cta:'Keep context close',image:'chat.png',light:true,label:'Direct coaching',metric:'NOW',layout:'split',tempo:'steady'},
+  {id:'Reviewed10',slug:'10-cues-on-the-lift',pillar:'coaching',motif:'coach-cues',hook:['KNOW THE','FIRST CUE.'],proof:'Coaching cues sit on the big lifts, inside the session you are doing.',cta:'Open a program',image:'programs.png',light:true,label:'Coach-built',metric:'CUES',layout:'split',tempo:'steady'},
   {id:'Reviewed11',slug:'11-zoom-out-youre-moving',pillar:'progress',motif:'trendline',hook:['ZOOM OUT.','YOU’RE','MOVING.'],proof:'One day is noise. The trend shows what your practice is doing.',cta:'See the direction',image:'progress.png',light:false,label:'Long-view progress',metric:'+8.4%',layout:'poster',tempo:'build'},
   {id:'Reviewed12',slug:'12-open-know-move',pillar:'system',motif:'pocket-card',hook:['OPEN.','KNOW.','MOVE.'],proof:'Your plan should answer the next question before you ask it.',cta:'Carry the plan',image:'dashboard.png',light:true,label:'Always with you',metric:'NEXT',layout:'center',tempo:'snap'},
   {id:'Reviewed13',slug:'13-thirty-days-no-drift',pillar:'training',motif:'countdown',hook:['30 DAYS.','NO DRIFT.'],proof:'A focused block gives every hard day the same direction.',cta:'Enter the block',image:'programs.png',light:false,label:'30-Day Shred',metric:'30',layout:'poster',tempo:'snap'},
@@ -56,5 +56,5 @@ export const reviewedCampaigns: ReviewedCampaign[] = [
   {id:'Reviewed16',slug:'16-become-is-a-verb',pillar:'system',motif:'word-morph',hook:['BECOME','IS A VERB.'],proof:'The strongest version of you is built in the doing.',cta:'Start becoming',image:'dashboard.png',light:true,label:'Identity in motion',metric:'BE →',layout:'poster',tempo:'build'},
   {id:'Reviewed17',slug:'17-four-sessions-one-direction',pillar:'training',motif:'week-grid',hook:['4 SESSIONS.','1 DIRECTION.'],proof:'Every workout has a job inside the week.',cta:'Open your week',image:'calendar.png',light:false,label:'Weekly rhythm',metric:'4 / 4',layout:'split',tempo:'steady'},
   {id:'Reviewed18',slug:'18-week-without-surprises',pillar:'training',motif:'calendar-sweep',hook:['YOUR WEEK','SHOULDN’T','SURPRISE YOU.'],proof:'Schedule the work once. Spend the week doing it.',cta:'Set the rhythm',image:'calendar.png',light:true,label:'Plan ahead',metric:'7 DAYS',layout:'left',tempo:'snap'},
-  {id:'Reviewed19',slug:'19-change-move-keep-intent',pillar:'training',motif:'movement-swap',hook:['CHANGE','THE MOVE.'],proof:'Missing equipment changes the exercise—not the training intent.',cta:'Keep the session alive',image:'programs.png',light:false,label:'Smart substitutions',metric:'SWAP',layout:'split',tempo:'snap'},
+  {id:'Reviewed19',slug:'19-change-move-keep-intent',pillar:'training',motif:'movement-swap',hook:['CHANGE','THE MOVE.'],proof:'Missing equipment changes the exercise, not the training intent.',cta:'Keep the session alive',image:'programs.png',light:false,label:'Smart substitutions',metric:'SWAP',layout:'split',tempo:'snap'},
 ];

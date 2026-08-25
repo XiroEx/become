@@ -137,7 +137,7 @@ Do not contradict this. Do not extend it. If a capability is not listed, it does
 | Hub | What it does |
 |---|---|
 | **Dashboard** | Day at a glance, streaks, mood, weight, water, customizable tiles |
-| **Training** | Coach-built multi-phase programs, an equipment- and time-aware AI session and program generator, demo clips on the big lifts, set logging with PR history, LIVE mode: one set on screen, last session's numbers, PR badge, rest timer |
+| **Training** | Coach-built multi-phase programs, an equipment-aware AI session and program generator (focus, level, equipment, exercise count; no minutes input — never claim "time-aware"), demo clips on the big lifts, set logging with PR history, LIVE mode: one set on screen, last session's numbers, PR badge, rest timer |
 | **Nutrition** | Photo logging that itemizes a whole plate, barcode scan, personal calorie and macro targets |
 | **Mind** | Short guided sessions, mood tracking, identity work |
 | **Progress & The Becoming** | Weight and strength trends, plus a weekly recap that writes your week back to you |
