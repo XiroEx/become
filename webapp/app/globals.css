@@ -45,6 +45,12 @@
   to   { transform: rotate(-360deg); }
 }
 
+/* UA widgets (scrollbars, form controls) and the pre-paint canvas follow the
+   active theme class set by the layout's colorScheme script. Without this, dark
+   mode renders a light scrollbar and flashes a white canvas before first paint. */
+html.light { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
 body {
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
