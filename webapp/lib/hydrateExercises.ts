@@ -232,6 +232,21 @@ async function getReverseMap(): Promise<Map<string, string>> {
 }
 
 /**
+ * Given a list of free-text exercise names, returns the lowercased/trimmed
+ * subset that matches a real Exercise document by name or alias. Used to flag
+ * "new" exercises in an imported program before the user saves it.
+ */
+export async function matchExerciseNames(names: string[]): Promise<Set<string>> {
+  const map = await getReverseMap()
+  const known = new Set<string>()
+  for (const raw of names) {
+    const name = raw.trim().toLowerCase()
+    if (name && map.has(name)) known.add(name)
+  }
+  return known
+}
+
+/**
  * Slugify a string (fallback for exercises not found in the DB).
  */
 function slugify(name: string): string {

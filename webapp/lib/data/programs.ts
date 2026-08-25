@@ -6,6 +6,10 @@ export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'coo
 // Exercise Grouping Types (supersets, circuits, etc.)
 export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' | 'emom' | 'amrap';
 
+// Review flags attached to a freshly-imported exercise (see lib/workout/importProgram.ts).
+// Client-only annotation — never persisted (dehydrateProgram only copies known fields).
+export type ImportFlag = 'new' | 'broken' | 'grouped';
+
 // Target User Levels
 export type TargetUserLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Beginner to Intermediate' | 'Intermediate to Advanced';
 
@@ -25,6 +29,8 @@ export interface Exercise {
   groupLabel?: string;           // Display label: "Superset A", "Circuit 1", "EMOM 12 min"
   groupRest?: string;            // Rest between full rounds of the group
   groupRounds?: number;          // Number of rounds through the group
+  // Set only on a just-imported program, before the user reviews it.
+  importFlags?: ImportFlag[];
 }
 
 export interface Workout {
