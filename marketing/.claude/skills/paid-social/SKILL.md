@@ -113,8 +113,8 @@ The test is a grid, not a pile. **5 hooks × 3 mechanisms × 2 formats**, sample
 Full matrix with worked cells: `references/creative-matrix.md`.
 
 Mechanisms (real, demonstrable, from product truth):
-- The camera counts your reps in LIVE mode.
 - One photo itemizes a whole plate.
+- LIVE mode logs the set as you train, with last session's numbers and your PR on screen.
 - The week gets written back to you in a recap.
 
 Hook shapes: the problem statement, the mechanism reveal, the misconception flip, the
@@ -137,7 +137,7 @@ demonstration cold open, the coach answer.
 - Round two: winning hook shape × 3 mechanisms. Find the message.
 - Round three: winning message × 2 formats (creator-shot vs product-motion from
   `remotion-assets`). Find the execution.
-- ❌ Hook: "Become is the all-in-one fitness app." ✅ Hook: "Your phone can count the reps. Watch."
+- ❌ Hook: "Become is the all-in-one fitness app." ✅ Hook: "One photo. Every item on the plate."
 
 ### 3. Budget floors and the learning phase
 
@@ -215,8 +215,8 @@ performing format for a coach-led product because it does not look like an ad.
 - The page loads fast on mobile and works in light and dark.
 
 **Common issues:**
-- *Mechanism ad to generic page.* An ad about the camera counting reps landing on a page whose
-  hero never mentions it. The visitor thinks they clicked the wrong link.
+- *Mechanism ad to generic page.* An ad about photographing a plate landing on a page whose hero
+  never mentions it. The visitor thinks they clicked the wrong link.
 - *Invented offer pages.* Never build a landing page with a price, a trial, or a discount that
   does not exist. There is no pricing.
 - *Slow mobile page.* Paid traffic is the least patient traffic there is.
@@ -245,8 +245,8 @@ Getting an account restricted costs more than any test wins. Full list with rewr
 - *Health claims.* Anything implying diagnosis, treatment, or a medical outcome.
 
 **Strong patterns:**
-- ❌ "Lose the belly fat with the app that counts your reps." ✅ "Your phone counts the reps. Log
-  the set without touching the screen."
+- ❌ "Lose the belly fat with the app that tracks your meals." ✅ "Photograph the plate. Become
+  itemizes it, macros and all."
 - ❌ "Tired of being out of shape?" ✅ "Tired of five apps that do not talk to each other?"
 - Sell the mechanism, not the body. Every compliant ad Become can run is a mechanism ad, which is
   also what our inspo library shows the strongest competitors do.
@@ -279,11 +279,11 @@ Getting an account restricted costs more than any test wins. Full list with rewr
   type. Light and dark are both first-class; do not ship a dark-only creative set.
 - **Voice in ad copy:** second person, present tense, concrete noun first, short sentences. Banned:
   "journey," "unlock your potential," "game-changer," "seamless," "effortless," "crush it," "no
-  excuses," "beast mode," "just," "simply." Near-zero em dashes. At most one emoji, only if it
-  carries meaning.
+  excuses," "beast mode," "just," "simply." Near-zero em dashes in
+  deliverable copy. At most one emoji, and only if it carries meaning.
 - Weak vs strong primary text: ❌ "Transform your fitness journey with the all-in-one app." ✅
-  "Five apps for one workout. Become logs the set, scans the plate, and shows you the week."
-- Weak vs strong headline: ❌ "The Ultimate Fitness App" ✅ "The camera counts the reps".
+  "Five apps for one workout. Become logs the set, itemizes the plate, and shows you the week."
+- Weak vs strong headline: ❌ "The Ultimate Fitness App" ✅ "One photo, every item".
 - Weak vs strong CTA: ❌ "Learn More" ✅ "Get this week's workout".
 
 ## Quality bar

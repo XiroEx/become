@@ -58,8 +58,8 @@ to ship it. Never a list of unlabelled options.
 
 ### Production steps
 
-6. Write the **idea sentence** in plain speech first, no styling. "The camera counts your reps so
-   you do not have to tap between sets."
+6. Write the **idea sentence** in plain speech first, no styling. "One photo of the plate comes back
+   as chicken, rice, and sauce, each with its own calories."
 7. Compress it into the surface's limit using a formula from `references/headline-formulas.md`.
 8. Attach the **mechanism** in the next line. Become's differentiation is mechanical, so the second
    line names how it works, not how it feels.
@@ -116,13 +116,13 @@ Ordered by impact on the finished copy. Apply 1 through 3 on every job; 4 and 5 
 
 **Strong patterns:**
 - Idea → mechanism → proof, in three lines that shrink: 7 words, 15 words, one capture.
-- Mechanism as the headline when the mechanism is strange enough to be interesting. Camera rep
-  counting and whole-plate photo logging both qualify.
+- Mechanism as the headline when the mechanism is strange enough to be interesting. Whole-plate photo
+  logging and the equipment-aware session generator both qualify.
 - Proof by specificity: "Lat pulldown, set 3 of 3, 155 lbs by 10" beats "track your sets."
 
 ```
 ❌ Transform how you train, eat, and think with an all-in-one platform built for real results.
-✅ Point the camera at yourself. Become counts the reps.
+✅ Point your camera at lunch. It comes back itemized.
 ```
 
 ### 2. Headline formulas
@@ -185,12 +185,12 @@ exact wording of each mechanic, is in `references/feature-value-map.md`. The sho
 |---|---|---|
 | Dashboard | Streak, mood, weight, water, next session on one screen | "The whole day on one screen." |
 | Training | Coach-built multi-phase programs plus an AI session generator | "A coach's structure, without the scheduling." |
-| Training | LIVE mode counts reps through the camera | "Put the phone down. It still counts." |
-| Training | Set logging with PR history and demo videos | "It remembers what you lifted last Tuesday." |
+| Training | LIVE mode: one set on screen, last session's numbers, rest timer | "Log the set before you rack the bar." |
+| Training | Set logging with PR history; demo clips on the big lifts | "It remembers what you lifted last Tuesday." |
 | Nutrition | Photo logging itemizes a whole plate; barcode scan | "One photo. The whole plate, itemized." |
 | Nutrition | Personal calorie and macro targets | "Targets set to your goal, not a generic 2000." |
 | Mind | Short guided sessions, mood tracking, identity work | "Five minutes that belong to the plan." |
-| Progress | Weight and strength trends, weekly recap | "Evidence, not vibes." |
+| Progress | Training Log: volume, history, PRs; weekly recap | "Evidence, not vibes." |
 
 ### 5. Length specs per surface
 
@@ -234,7 +234,7 @@ Run this against your own output before returning it.
 
 - [ ] Every block contains exactly one idea and names one mechanic.
 - [ ] Every character-limited field has its count printed next to it and is under the limit.
-- [ ] Zero banned words. Near-zero em dashes. No emoji in product-voice copy.
+- [ ] Zero banned words. Near-zero em dashes in deliverable copy. No emoji in product-voice copy.
 - [ ] Second person, present tense, active voice throughout the product-voice blocks.
 - [ ] No pricing, no tier, no trial, no discount, no user count, no testimonial, no result claim,
       no promised timeline, no before/after framing.

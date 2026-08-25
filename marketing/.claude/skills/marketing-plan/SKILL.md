@@ -94,7 +94,7 @@ resource. Detail, tactics, and failure modes in `references/channel-bets.md`.
 | Rank | Channel | Cost | Time to signal | Ceiling | Why it fits or does not |
 |---|---|---|---|---|---|
 | 1 | Jon's owned audience | Time only | Days | Medium | The only distribution we already have. Coach-led credibility is the differentiator, and it is free to activate. Highest return per hour available to us. |
-| 2 | Organic short-form (Reels, TikTok, Shorts) | Filming time | 4-8 weeks | High | Unconnected reach is the only realistic path to scale without budget. Our mechanics are visual: the camera counting reps, a plate itemizing. Gated by filming capacity. |
+| 2 | Organic short-form (Reels, TikTok, Shorts) | Filming time | 4-8 weeks | High | Unconnected reach is the only realistic path to scale without budget. Our mechanics are visual: a photo of a plate itemizing, a session generating around the equipment in front of you. Gated by filming capacity. |
 | 3 | Directories and launch surfaces | A few days each | Days per submission | Low but durable | Product Hunt, AlternativeTo, PWA and web-app directories. Small referral traffic, but they become the citations AI answers pull from. One-time cost, long tail. |
 | 4 | SEO and GEO | High effort, slow | 3-6 months | Medium-high | Greenfield: no robots.txt, no sitemap, no schema. Optimize to be the cited answer rather than the blue link. The exercise library is a real programmatic asset. |
 | 5 | Referral and share loops | Build time | Weeks | Medium | We have shareable artifacts (recap, PR, streak) and no incentive budget. Cheap to try, but it multiplies an existing base rather than creating one. |

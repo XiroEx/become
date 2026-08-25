@@ -4,7 +4,14 @@ Five stages. Every email belongs to exactly one. Triggers reference real fields 
 data model, so an engineer can implement a row without a second conversation.
 
 Existing implementation lives in `webapp/lib/email.ts`: `sendEmail`, `sendVerificationEmail`,
-`sendStreakMilestoneEmail`, `sendStreakAtRiskEmail`. Extend that pattern.
+`sendStreakMilestoneEmail`, `sendStreakAtRiskEmail`. Extend that pattern — the transport, not the
+markup, which carries emoji and a heavier layout than the voice rules allow. Note that
+`sendStreakAtRiskEmail` has **no callers**: streak-at-risk ships as a web push only, so treat that
+function as dead code rather than as an email that exists.
+
+**Nothing below Stage 1 can send yet.** There is no unsubscribe route, no suppression store, and no
+`List-Unsubscribe` header anywhere in the codebase. Stages 2 to 5 are designs waiting on that
+infrastructure. See the compliance gate in `SKILL.md`.
 
 ---
 
@@ -21,8 +28,10 @@ Consent basis: the user asked for it. No unsubscribe. No marketing content, ever
 **Rules for this stage**
 - One button, one plain-URL fallback under it.
 - State the 15-minute expiry in the magic-link body.
-- Build the URL from the channel's own `NEXT_PUBLIC_APP_URL`. Production and beta differ on
-  purpose; a beta email built from the production value strands the tester on production.
+- The magic-link URL comes from the **request origin** (`getRequestOrigin(req)` in
+  `webapp/app/api/auth/send-link/route.ts`), so a link requested on beta already points at beta.
+  `NEXT_PUBLIC_APP_URL` is the fallback, and it is the only thing a cron-triggered send has to work
+  from, so set the host deliberately for anything we originate ourselves.
 - Never add a "while you're here" block. It converts almost nothing and risks the sender.
 
 ---

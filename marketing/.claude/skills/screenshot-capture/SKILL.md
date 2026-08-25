@@ -226,6 +226,10 @@ Run this list against the files before reporting, and state the result of each.
 - [ ] A manifest entry exists for every new file, with `page`, `account`, `theme`, `width`,
       `height`, and a `notes` line describing the state.
 - [ ] `seeding.writes` lists every API call made, and every one is an app HTTP endpoint.
+- [ ] **No seeding write ran outside the named dummy accounts.** Production and beta share one
+      database, so a seeding call pointed at the wrong account writes real member data, and
+      nothing about the capture will look wrong afterwards. Name the account on every write
+      before running it, not after.
 - [ ] Nothing was written to a real member's account.
 
 ## Related skills

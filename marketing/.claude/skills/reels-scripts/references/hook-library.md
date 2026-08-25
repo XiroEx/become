@@ -4,9 +4,10 @@ Ten hook shapes crossed with Become's hubs, grouped into four families (Training
 Mind, Progress and Dashboard). Every hook below is constraint-safe: no results
 claim, no count, no pricing, no shaming, no before/after.
 
-**Ranked by reported 3-second hold in fitness and lifestyle short-form** (directional, internal
-only): specific outcome > POV realism > unpopular opinion > direct question > generic product
-reveal. Negative framing tends to out-hook positive framing on TikTok, which is exactly why the
+**Ranked by reported 3-second hold in fitness and lifestyle short-form** (**Tier C**: agency
+teardowns and creator round-ups, no published sample, internal and directional only): specific
+outcome > POV realism > unpopular opinion > direct question > generic product reveal. Treat the
+ordering as a starting bet, not a finding, and let our own trial-Reel results overwrite it. Negative framing tends to out-hook positive framing on TikTok, which is exactly why the
 no-shaming line matters: negative about the *situation*, never about the *person*.
 
 ---
@@ -33,19 +34,19 @@ outcome number.
 
 ## The grid: 40 written hooks
 
-### Training (LIVE rep counting, set logging, programs, generator)
+### Training (set logging in LIVE mode, PR history, programs, generator)
 
 | Shape | Hook |
 |---|---|
-| Specific outcome | "Ten reps counted with my phone on the floor." |
+| Specific outcome | "Last Tuesday's weight was on the screen before I loaded the bar." |
 | POV realism | "POV: you are three sets in and you cannot remember what you lifted last week." |
-| Unpopular opinion | "You do not need a rep tracker on your wrist. You need one that watches the bar." |
+| Unpopular opinion | "You do not need a tracker on your wrist. You need the last number in front of you." |
 | Direct question | "What did you lift on this exact machine last Tuesday?" |
-| Mid-action open | Barbell already moving, overlay "I never touched my phone." |
-| Number on screen | "Set 3 of 3. PR 160. Logged before I stood up." |
-| Objection first | "It cannot really count reps through a camera. It can, watch." |
+| Mid-action open | Thumb typing 160 into an empty field, "Last: 155 x 10" underneath it. |
+| Number on screen | "Set 3 of 3. PR 160. Logged before the plates came off." |
+| Objection first | "Logging mid-session breaks your focus. Two numbers and a checkbox, watch." |
 | Result then rewind | Session complete screen, then "thirty five minutes ago I had two dumbbells." |
-| Two-option contrast | "Type in every set, or prop the phone up." |
+| Two-option contrast | "Guess what you lifted last week, or read it off the screen." |
 | Named recipient | "If you log sets in your Notes app, this is for you." |
 
 ### Nutrition (photo plate logging, barcode, targets)
@@ -104,10 +105,10 @@ outcome number.
 ✅ "The plan did not fail. Your week changed and the plan did not."
 
 ❌ "Transform your body in 12 weeks."
-✅ "Twelve weeks of sessions, in order, with the demo on every exercise."
+✅ "Twelve weeks of sessions, in order, with a demo clip on the big lifts."
 
 ❌ "This app changed my life."
-✅ "This app counted the set while my phone sat on the floor."
+✅ "This app had my last three sets on screen before I picked the bar up."
 
 ❌ "You will not believe what this app does."
 ✅ "One photo, four items, macros against my targets."

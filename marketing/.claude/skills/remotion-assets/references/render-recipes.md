@@ -81,6 +81,19 @@ workers rendering `renderStill` at `jpeg` quality 90 into `out/collection/<forma
 logs `[n/46] <path>` per asset and throws `Missing composition <id>` if a row has no registered
 composition.
 
+**A re-render is owed (as of 2026-08-25).** Seven rows in `src/campaigns.json` were rewritten in
+the truth pass and anything already sitting in `out/` for them is stale:
+
+| Row | What changed |
+|---|---|
+| `Campaign10`, `Campaign26`, `Campaign27`, `Campaign40`, `Campaign41` | Sold coaching over chat with a human, which is admin-gated and not available. Recast onto coach-built programs and the shared dashboard. Four of them also changed `image` and `slug`, so their old output filenames are orphans |
+| `Campaign16`, `Campaign31` | CTA was "Start your transformation". "Transform" is on the banned list. Now "Start today". `Campaign31` also changed slug |
+
+The re-render was not run in that pass because `marketing/node_modules` is absent in the worktree.
+Run `npm install` then `npm run render:collection`, and delete the orphaned
+`out/collection/<format>/{10-one-coach-one-system,26-coaching-after-the-gym,27-ask-your-coach,31-start-transformation,40-direct-coaching,41-questions-answered}.jpg`
+if they are present locally.
+
 ## Videos
 
 ```bash
@@ -146,5 +159,5 @@ asset being good.
 | `Rendered file is unexpectedly small` | Video render produced a near-empty file | Real failure. Check the composition renders in studio |
 | Headline overflows the frame | `headline` written as one long string | Split into array lines |
 | ffmpeg not found | `review:pass` needs ffmpeg | Install it or skip the contact sheet |
-| Wrong typeface in output | Geist not resolving on the render host | Fix the font source. Do not accept the fallback |
+| Output is in Arial, not Geist | Expected: both font constants are hardcoded to a system stack (`compositions.tsx:25`, `campaignCollection.tsx:35`) and nothing loads Geist | Not a render bug. Needs a font loader plus a change at those two lines. See `project-map.md` |
 | Render takes forever | A full `npm run render` was started for one asset | Render the single composition instead |

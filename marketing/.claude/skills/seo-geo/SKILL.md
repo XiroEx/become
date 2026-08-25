@@ -40,7 +40,23 @@ per-competitor teardown (`competitor-analysis`); directory and Product Hunt list
 
 ## Process
 
-### Assessment gate (establish all five before producing anything)
+### Assessment gate (establish all six before producing anything)
+
+0. **Domain decision gate.** Become lives at `become.redbtn.io`, a subdomain of an unrelated tech
+   brand. Every ranking signal, every citation, and every backlink T1 and T2 content earns accrues
+   to that domain, and none of it moves if Become later gets a first-party domain. Technical
+   basics are portable; content equity is not. **Settle the domain before any T1 or T2 content
+   ships.** Technical work (robots, sitemap, metadata, schema) can proceed regardless, because it
+   is a few files that follow the app. If the domain is unsettled, say so in the output and scope
+   the recommendation to technical plus off-site citations only.
+
+   There is a second live blocker on the same surface. Production serves a Cloudflare-managed
+   `robots.txt` that disallows `GPTBot`, `ClaudeBot`, `CCBot`, and `Google-Extended` site-wide.
+   `OAI-SearchBot`, `ChatGPT-User`, and `PerplexityBot` are not blocked, so some assistant traffic
+   still gets through, but the training and Overview crawlers do not. This is a zone-level rule; a
+   `webapp/app/robots.ts` in the repo cannot override it, because the zone response never reaches
+   the app. Fixing it is George's call at the Cloudflare zone. Until it is fixed, GEO work aimed at
+   those four crawlers cannot land, and saying so is part of the deliverable.
 
 1. **Which tier of query** is in play: T1 decision, T2 comparison, T3 informational. Different
    tiers get different pages and different realistic goals.
@@ -84,13 +100,18 @@ to content on a site with no sitemap and no schema wastes the content.
 Numbers below steer **our** decisions. Source tiers are labelled. **None of them may ever be
 restated as a Become claim in public copy.**
 
-| Fact | Value | Tier |
-|---|---|---|
-| US Google queries ending with zero clicks | 68% (early 2026, up from 60.45% two years earlier) | A, large clickstream study |
-| Searches showing an AI Overview | 20%+ | B, aggregator |
-| Organic CTR when an AI Overview is present | roughly 60% lower; 1.3% at the Dec 2025 floor, 2.4% by Feb 2026, vs about 3.3% without one | B |
-| Zero-click rate on AI Overview queries | 80-83% | B |
-| AI Mode | about 93% zero-click; refers on 1.6-2.5% of queries vs 17-19% for classic search | B |
+| Fact | Value | Source | Tier |
+|---|---|---|---|
+| US Google queries ending with zero clicks | 68% (early 2026, up from 60.45% two years earlier) | SparkToro / Datos clickstream analysis, Rand Fishkin | B, named vendor study, method published, not independently reproduced |
+| Searches showing an AI Overview | 20%+ | Third-party SERP trackers; Google publishes no figure and the share moves month to month | C |
+| Organic CTR when an AI Overview is present | roughly 60% lower; 1.3% at the Dec 2025 floor, 2.4% by Feb 2026, vs about 3.3% without one | SEO vendor client sets; Google disputes the framing | C |
+| Zero-click rate on AI Overview queries | 80-83% | Vendor sample, no method published | C |
+| AI Mode | about 93% zero-click; refers on 1.6-2.5% of queries vs 17-19% for classic search | Single vendor sample, no method published | C |
+
+Only the first row has a named, reproducible source. The rest circulate widely without one. They
+are good enough to justify a direction — optimize for citation, not clicks — and not good enough
+to size a forecast. If a plan line only works because one of these numbers is exact, rewrite the
+plan line.
 
 **Check for:**
 - Is the goal stated as "rank #1" or as "be the cited answer"? Only the second one is winnable.
@@ -223,12 +244,12 @@ result claim**. Tactics detail: `references/geo-tactics.md`.
 
 `webapp/models/Exercise.ts` already carries slug, aliases, instructions, cues, commonMistakes,
 primary and secondary muscles, equipment, difficulty, variations, alternatives, prerequisites.
-`webapp/public/exercises/` holds 42 demo clips. That is a defensible T3 corpus nobody has to
-invent.
+`webapp/public/exercises/` holds demo clips for 39 of the 132 canonical exercises — the big lifts
+are covered. That is a defensible T3 corpus nobody has to invent.
 
 **Check for:**
 - Does each generated page carry something no other page has: our cues, our common mistakes, our
-  demo clip, our alternatives list?
+  demo clip where one exists, our alternatives list?
 - Is there an index page and internal linking (muscle group, equipment, pattern) so the corpus is
   crawlable, not orphaned?
 - Is the page useful with JavaScript off, that is, server-rendered?
@@ -236,8 +257,12 @@ invent.
 **Common issues:**
 - *Thin doorway pages.* Slug plus a stock sentence times 400 is a spam signal. Publish only
   exercises with real instructions, cues, and mistakes populated.
-- *Demo video format trap.* `.mov` files are served as `video/quicktime` and fail in Chromium.
-  Reference the `.mp4` twin on any public page.
+- *Assuming every exercise has a clip.* 39 of 132 do. The other 93 pages need to earn their place
+  on text, or wait for a clip.
+- *Demo video MIME trap.* `webapp/components/FramedVideo.tsx:39` emits `type="video/quicktime"`
+  for a `.mov` src, which Chromium refuses, so the panel renders black. The files themselves are
+  served as `video/mp4` and play fine. Fix the type attribute; do not reach for an `.mp4` twin,
+  because only `back-squat`, `bench-press`, and `cable-row` have one.
 - *No `VideoObject`.* A demo clip without schema is invisible as video.
 
 **Strong patterns:**
@@ -294,7 +319,7 @@ Run this against your own output before returning it.
       other than 0.
 - [ ] No invented pricing, no results claims, no fabricated proof anywhere in draft copy.
 - [ ] Meta and OG copy passes the voice rules: second person, concrete noun first, no banned
-      words, near-zero em dashes.
+      words, near-zero em dashes in deliverable copy.
 - [ ] Programmatic pages are gated behind a populated-content check and a pilot with a decision
       date.
 - [ ] Any command you tell someone to run is bounded with `timeout`.

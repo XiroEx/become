@@ -133,8 +133,8 @@ Four frameworks, in order of how often they decide whether an export is usable.
   reads wrong when placed side by side.
 - *Cropping into content.* Trimming a status bar is fine. Trimming the app header because it looked
   like chrome is not.
-- *Keeping competitor chrome.* Captures in `marketing/inspo/` are screen recordings and carry iOS
-  and Instagram chrome. That is noise. It is never a source asset anyway.
+- *Keeping competitor chrome.* Captures in `marketing/inspo/` are PNG stills of a phone screen and
+  carry iOS and Instagram chrome. That is noise. It is never a source asset anyway.
 
 **Strong patterns:**
 - ❌ Two hand-picked `extract` boxes, one per theme.

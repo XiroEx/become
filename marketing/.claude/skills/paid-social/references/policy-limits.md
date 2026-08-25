@@ -18,8 +18,8 @@ The tell is second person plus a body noun.
 |---|---|
 | "Struggling with your belly fat?" | "Five apps for one workout. Become does all of it." |
 | "Are you overweight and out of options?" | "A coach-built plan, phase by phase." |
-| "You know you need to lose weight." | "Log the set. Scan the plate. See the week." |
-| "Your body is holding you back." | "Your phone counts the reps." |
+| "You know you need to lose weight." | "Log the set. Photograph the plate. See the week." |
+| "Your body is holding you back." | "One photo. Every item on the plate." |
 | "Tired of being out of shape?" | "Tired of five apps that do not talk to each other?" |
 
 Rule of thumb: describe the **product** and the **friction with tools**, never the viewer's body.
@@ -48,7 +48,7 @@ authority.
 | "Fix your metabolism." | "Set your calorie and macro targets." |
 | "Heal your relationship with food." | "See what is actually on the plate." |
 | "Clinically proven approach." | "Programs built by coach Jon Don." |
-| "Reduce your risk of injury." | "Form cues and a demo clip on every exercise." |
+| "Reduce your risk of injury." | "Form cues on every exercise, and a demo clip on the big lifts." |
 
 Anything touching injury, pain, pregnancy, or a medical condition gets the referral response, not
 an ad. See `coach-brand-voice`.

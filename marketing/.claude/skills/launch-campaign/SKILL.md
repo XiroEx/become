@@ -1,6 +1,6 @@
 ---
 name: launch-campaign
-description: Plans and runs a single Become launch moment — a feature launch like LIVE rep counting or whole-plate photo logging, a program drop, a directory submission, or a relaunch — using an owned, rented, and borrowed channel split, a readiness gate that stops a premature launch, a day-by-day run of show, the asset manifest, and the post-launch review. Use when the user says "we're launching X," "launch plan," "how do we announce this," "Product Hunt launch," "big feature drop next week," "nobody noticed our last launch," or "we shipped something, now what." For the standing plan this fits inside see marketing-plan; for the directory listings themselves see web-app-listing; for the dated posts see content-calendar; for the announcement email see email-lifecycle.
+description: Plans and runs a single Become launch moment — a feature launch like whole-plate photo logging or the AI session generator, a program drop, a directory submission, or a relaunch — using an owned, rented, and borrowed channel split, a readiness gate that stops a premature launch, a day-by-day run of show, the asset manifest, and the post-launch review. Use when the user says "we're launching X," "launch plan," "how do we announce this," "Product Hunt launch," "big feature drop next week," "nobody noticed our last launch," or "we shipped something, now what." For the standing plan this fits inside see marketing-plan; for the directory listings themselves see web-app-listing; for the dated posts see content-calendar; for the announcement email see email-lifecycle.
 metadata:
   version: 1.0.0
   batch: lifecycle-launch
@@ -28,8 +28,8 @@ channels on a single date, so a thing that shipped quietly gets noticed once, lo
 
 ## When to use
 
-- A feature is live on `become.redbtn.io` and needs a moment: LIVE rep counting, whole-plate
-  photo logging, the weekly recap, a dashboard change.
+- A feature is live on `become.redbtn.io` and needs a moment: whole-plate photo logging, the AI
+  session generator, the weekly recap, a dashboard change.
 - A coach-built program is dropping.
 - A directory submission is going out: Product Hunt, AlternativeTo, a PWA index.
 - A relaunch, or the post-mortem on a launch nobody noticed.
@@ -114,9 +114,9 @@ No gate, no launch. Full checklist in `references/readiness-gate.md`.
 - Write the sceptical FAQ answer before launch day, not during it. Answer the limit honestly.
 
 ```
-❌ Our rep counting is incredibly accurate.
-✅ It counts through the phone camera. It miscounts if you rack early or it cannot see your
-   full range of motion.
+❌ Our photo logging is incredibly accurate.
+✅ One photo itemizes the plate. It estimates portions, so it reads a chicken breast better than
+   a mixed curry, and you correct anything it missed.
 ```
 
 ### 2. Owned, rented, borrowed
@@ -154,7 +154,8 @@ Every channel we have, sorted by how much control we hold. Detail and sequencing
 
 ```
 ❌ Owned announcement: "We're excited to share what we've been working on."
-✅ Owned announcement: "The camera counts your reps now. Open LIVE mode on your next set."
+✅ Owned announcement: "Photograph the plate. It comes back itemized. Open Nutrition and try it on
+   dinner."
 ```
 
 ### 3. Run of show, T-14 to T+7
@@ -208,15 +209,15 @@ The rules that get you removed, ordered by how fast they bite.
 
 **Strong patterns:**
 - Participate in a community for weeks before launching in it, or do not launch in it.
-- Lead with the mechanism, not the pitch: how camera rep counting works is interesting, "check
-  out our app" is not.
+- Lead with the mechanism, not the pitch: how one photo becomes four itemized rows is interesting,
+  "check out our app" is not.
 - On Product Hunt, the first comment is a maker's note explaining why the thing exists and what
   it does not do yet. Honesty about limits outperforms polish. Field specs in `web-app-listing`.
 
 ```
 ❌ We just launched the best fitness app ever. Check it out!
-✅ We built rep counting that runs through the phone camera. Here is how it handles a set
-   where you rack early, and where it still gets confused.
+✅ We built whole-plate photo logging: one shot of the plate comes back as separate items with
+   their own calories. Here is how it handles a stir-fry, and where it still guesses badly.
 ```
 
 ## Become-specific rules
@@ -243,7 +244,8 @@ The rules that get you removed, ordered by how fast they bite.
 - **We are a PWA, not an app-store app.** No download counts, no star ratings, no "available on
   the App Store." The install surface is the browser. See `web-app-listing`.
 - **One launch push, maximum**, and it yields to any product nudge already sent that day.
-- **Voice:** second person, present tense, active. Near-zero em dashes. No "journey," "unlock
+- **Voice:** second person, present tense, active. Near-zero em dashes in deliverable
+  copy. No "journey," "unlock
   your potential," "game-changer," "revolutionary," "seamless," "crush it," "just," "simply."
 
 ## Quality bar

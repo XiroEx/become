@@ -12,8 +12,8 @@ Every script ships this exact table. Columns are fixed:
 |---|---|---|---|---|
 
 - **Time** is a range in seconds with one decimal, `0.0-1.5`. Not "intro" or "middle."
-- **Shot** names framing, subject, and what is moving. "Close on phone screen, rep counter
-  incrementing" is a shot. "App demo" is not.
+- **Shot** names framing, subject, and what is moving. "Close on phone screen, thumb typing 160
+  into the weight field" is a shot. "App demo" is not.
 - **On-screen text** is the literal text, in the case it will be set. Say nothing here if the
   frame carries no text.
 - **VO or dialogue** is the literal line. Write "(none, gym ambience)" when there is no line.
@@ -46,7 +46,7 @@ under the caption bar in the app is a wasted line.
 | Need | Look here first |
 |---|---|
 | A product screen still | `webapp/public/screenshots/v2/` plus its `manifest.json` |
-| An exercise demo clip | `webapp/public/exercises/` (42 clips). Use the `.mp4`; the `.mov` fails in Chromium |
+| An exercise demo clip | `webapp/public/exercises/` — 42 files covering 39 of the 132 exercises, so the big lifts only. They are served as `video/mp4` and play; the black panel in Chromium is a `type="video/quicktime"` attribute bug in `webapp/components/FramedVideo.tsx`, tracked separately. Screen-record on iOS or Safari |
 | A rendered brand asset | `marketing/out/` and `marketing/src/campaigns.json` |
 | Source images for renders | `marketing/public/` (`dashboard.png`, `programs.png`, `progress.png`, `nutrition.png`, `mindset.png`, `calendar.png`, `chat.png`, `logo.png`) |
 | A layout reference | `marketing/inspo-analysis.md` |
@@ -61,8 +61,8 @@ Taken from the strongest pattern in the inspo library, translated into Become's 
 - One annotation per frame. A white marker ellipse or a single arrow, hand-drawn feel.
 - It points at the exact control being described. Never a general area.
 - Cut-out floating UI chips: lift one control out of the capture and float it with a soft shadow
-  so a 40px target reads as a hero element. Ideal for the rep counter, the water tile, the mood
-  selector, the streak ring.
+  so a 40px target reads as a hero element. Ideal for the "Last: 155 lbs x 10" reference line, the
+  PR badge, the water tile, the mood selector, the streak ring.
 - Never annotate over a face, a number, or the CTA.
 
 ## Type and colour on screen
@@ -77,7 +77,7 @@ Taken from the strongest pattern in the inspo library, translated into Become's 
 ## Audio
 
 - Real ambience beats a trend sound when the mechanism makes a sound worth hearing: a bar racking,
-  a shutter, a rep counter tick.
+  a camera shutter, the click of a set checkbox.
 - A trend sound is fine when it does not fight the hook. It is never a reason to make the video.
 - Voiceover recorded separately, close mic, no room echo. Match the cut to the sentence, not the
   other way around.

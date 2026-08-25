@@ -47,7 +47,7 @@ front door, and a deliverability failure is an authentication outage.
 
 ## Process
 
-### Assessment gate (do all five before writing a word)
+### Assessment gate (do all six before writing a word)
 
 1. **Which lifecycle stage?** Transactional, activation, habit, reactivation, or broadcast. The
    stage sets the tone ceiling, the length, and whether an unsubscribe link is required.
@@ -60,20 +60,48 @@ front door, and a deliverability failure is an authentication outage.
 4. **What is the single action?** One link, one verb. If you cannot name it, the email is a
    newsletter and probably should not send.
 5. **What already exists?** Read `webapp/lib/email.ts` first. `sendEmail`, `sendVerificationEmail`,
-   `sendStreakMilestoneEmail`, and `sendStreakAtRiskEmail` are already implemented. Extend the
-   pattern, do not invent a second one.
+   `sendStreakMilestoneEmail`, and `sendStreakAtRiskEmail` are implemented. Extend the pattern, do
+   not invent a second one. Two caveats worth knowing: `sendStreakAtRiskEmail` has **zero callers**
+   — streak-at-risk goes out as a web push, never as an email, so the function is dead code and not
+   evidence that the email ships. And match the **plumbing**, not the styling: those templates carry
+   emoji and a heavier layout than the voice rules here allow, so reuse the transport and rewrite
+   the markup.
+
+6. **THE COMPLIANCE GATE. This one blocks.** Become has **no unsubscribe infrastructure of any
+   kind**: no unsubscribe route, no suppression model, no `List-Unsubscribe` header, nothing.
+   (`/api/notifications/unsubscribe` is web push, not email.) Until that is built, **only
+   transactional email may send.** Stage 1 is transactional. Stages 2 through 5 are not, and
+   shipping one of them today would be a CAN-SPAM violation on the first send and a deliverability
+   fire on the second.
+
+   Before any Stage 2-5 send, all of this exists:
+
+   | Requirement | What it means concretely |
+   |---|---|
+   | Unsubscribe route | A real endpoint that works without a login, in one click, and cannot be undone by a later send |
+   | Suppression store | A model checked on **every** non-transactional send, not a flag on `User` that a query might miss |
+   | `List-Unsubscribe` header | Plus `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058), so the inbox's own unsubscribe button works |
+   | Honoured within 2 days | Gmail and Yahoo's bulk-sender rules require it, and CAN-SPAM allows 10; hold ourselves to 2 |
+   | Complaint rate | Stay under 0.3%, target 0.1%. Above 0.3% and delivery degrades for transactional mail too |
+   | DMARC **alignment** | Not just "DMARC passes". The visible From domain must align with the authenticated domain |
+   | 5,000/day threshold | Crossing 5,000 messages to Gmail in a day triggers the full bulk-sender requirement set |
+
+   The failure mode this gate prevents is specific and expensive: a win-back campaign with no
+   unsubscribe generates spam complaints, complaints poison the sending domain, and the domain that
+   gets poisoned is the one that also sends the **magic links**. Losing the marketing channel is
+   recoverable. Losing the login channel is not.
 
 ### Production steps
 
-6. Write the trigger and suppression logic before the copy. Suppression is the harder half.
-7. Draft the body to a single action, then delete the paragraph you liked most.
-8. Write three subject lines and one preview text per subject. The preview text extends the
+7. Write the trigger and suppression logic before the copy. Suppression is the harder half.
+8. Draft the body to a single action, then delete the paragraph you liked most.
+9. Write three subject lines and one preview text per subject. The preview text extends the
    subject, it never repeats it.
-9. Write the HTML in the house style: inline styles, one table-free centered column, max width
+10. Write the HTML in the house style: inline styles, one table-free centered column, max width
    600px, a single button, a text fallback link under it. Match the structure already in
    `webapp/lib/email.ts`.
-10. Run the deliverability checklist in `references/deliverability.md`.
-11. Run the Quality bar below.
+11. Run the deliverability checklist in `references/deliverability.md`.
+12. Run the Quality bar below.
 
 ### Output buckets (always these five, in this order)
 
@@ -100,8 +128,12 @@ Everything else in this skill is optional by comparison.
 - Is there exactly one button plus a copyable plain URL fallback, for mail apps that strip
   buttons?
 - Does it say what to do if they did not request it, without alarming language?
-- Does the link point at the right host? `NEXT_PUBLIC_APP_URL` differs between production and
-  beta on purpose. A beta send built from the production value strands the tester.
+- Does the link point at the right host? The magic-link URL is derived from the **request origin**
+  (`webapp/app/api/auth/send-link/route.ts` calls `getRequestOrigin(req)`), so a link requested on
+  beta comes back pointing at beta without anything being configured. `NEXT_PUBLIC_APP_URL` is only
+  the fallback for sends with no request behind them, such as a cron job. Any email we trigger
+  ourselves has to set the host deliberately, because there is no incoming request to derive it
+  from.
 
 **Common issues:**
 - *Marketing dressing on a transactional email.* A hero image, a tagline, and three feature
@@ -260,7 +292,8 @@ structure the whole strategy. Full checklist in `references/deliverability.md`.
 - **Statistics are tiered.** Any benchmark used to steer a decision is labelled Tier A
   (platform-published or large-sample), Tier B (named case study), or Tier C (vendor blog).
   No tier may ever be restated as a Become results claim in public copy.
-- **Voice:** second person, present tense, active. Near-zero em dashes. No "journey," "unlock
+- **Voice:** second person, present tense, active. Near-zero em dashes in deliverable
+  copy. No "journey," "unlock
   your potential," "seamless," "effortless," "crush it," "no excuses," "just," "simply." Jon
   speaks in first person only when the email is signed by him, and then `coach-brand-voice`
   owns the register.
@@ -274,10 +307,13 @@ Run this against your own output before returning. Every line must be a yes.
 - [ ] No number appears that the user did not generate; empty blocks are suppressed, not zeroed.
 - [ ] Subject under ~45 characters, preview text adds a new fact.
 - [ ] Zero guilt, shame, or fake-urgency framing anywhere in the set.
+- [ ] **Nothing outside Stage 1 is marked shippable until the unsubscribe route, the suppression
+      store, and the `List-Unsubscribe` / one-click headers exist.** Design them, label them
+      blocked, do not send them.
 - [ ] Non-transactional emails carry a working unsubscribe; transactional ones do not carry
       marketing.
-- [ ] Magic-link email states the 15-minute expiry, has one button plus a plain URL, and is
-      built from the channel's own `NEXT_PUBLIC_APP_URL`.
+- [ ] Magic-link email states the 15-minute expiry, has one button plus a plain URL, and resolves
+      its host from the request origin, with `NEXT_PUBLIC_APP_URL` named only as the fallback.
 - [ ] HTML is a single inline-styled column, image-light, one link domain.
 - [ ] No invented pricing, results, testimonials, or counts. No medical claims.
 - [ ] Near-zero em dashes, no banned words, no emoji in product-voice body copy.

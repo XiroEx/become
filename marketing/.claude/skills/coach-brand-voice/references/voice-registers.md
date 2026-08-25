@@ -29,14 +29,14 @@ Same idea, both registers.
 |---|---|---|
 | 1 | "Log the set as you do it." | "Log it as you go. You will not remember at the rack, nobody does." |
 | 2 | "Become shows what you lifted last time." | "I do not want you guessing at the weight. Last week is right there." |
-| 3 | "LIVE mode counts reps through the camera." | "It counts while I watch your form instead of your bar." |
+| 3 | "LIVE mode starts the rest timer when you tap done." | "Rest is part of the programme. Stop guessing at it between sets." |
 | 4 | "One photo itemizes the whole plate." | "Take a picture of the plate. That is the whole job." |
 | 5 | "Scan the barcode for packaged food." | "Anything with a label, scan it. Do not type it." |
 | 6 | "Set your own calorie and macro targets." | "Your targets should come from your life, not from a default." |
 | 7 | "The generator builds a session from your time and equipment." | "Half of coaching is adjusting to the room you are in. This does the boring half." |
 | 8 | "Programs run in coach-built phases." | "I wrote the phases. Week three is deliberately lighter because week three is where people quit." |
 | 9 | "Swap an exercise you cannot do today." | "If the rack is taken, swap it. Do not skip the session over a queue." |
-| 10 | "Every exercise has a demo video." | "If you have not done it before, watch the clip once. Then do it badly and fix it next set." |
+| 10 | "The main movements have a demo clip." | "If you have not done it before, watch the clip once. Then do it badly and fix it next set." |
 | 11 | "Track weight and mood in one place." | "How you felt is data. Most people throw it away." |
 | 12 | "The weekly recap writes your week back to you." | "Sunday is for reading what happened, not for judging how it felt." |
 | 13 | "Streaks show consecutive days logged." | "A streak is a record that you showed up. It is not a reason to train." |
@@ -56,7 +56,7 @@ Same idea, both registers.
 ✅ "I built the thing I kept asking clients to do by hand."
 
 ❌ "We're excited to announce our new LIVE mode!"
-✅ Brand: "LIVE mode counts the set through the camera." / Jon: "I have counted a lot of reps for a lot of people. Now the phone does it while I watch your form."
+✅ Brand: "LIVE mode keeps last session's numbers under the set you are about to do." / Jon: "I have written a lot of weights on a lot of index cards. This is better than the cards."
 
 ❌ Jon: "Log your set and see your PR history."
 ✅ Jon: "You will not remember what you did last Tuesday. It will."
@@ -87,7 +87,7 @@ a CTA it did not earn.
 
 **Emoji.** At most one, only if it carries meaning. Never as punctuation, never as a bullet.
 
-**Em dashes.** Near zero. Use a period, a comma, or a colon.
+**Em dashes.** Near zero in deliverable copy. Use a period, a comma, or a colon.
 
 ---
 

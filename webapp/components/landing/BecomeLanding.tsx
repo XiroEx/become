@@ -100,10 +100,10 @@ const TRAINING_TABS = [
     alt: "Logging a lat pulldown set with the demo video playing full screen behind the controls",
     statusTint: undefined as string | undefined,
     statusTintDark: undefined as string | undefined,
-    title: "Every exercise shows you how — and remembers.",
+    title: "The big lifts show you how — and it remembers.",
     body: "The demo plays full screen behind your set, your last session's numbers sit right where you need them, and PRs are tracked as you go.",
     points: [
-      "Demo video on every movement",
+      "Demo videos on the big lifts",
       "Last session and PR history per lift",
       "Set-by-set logging with rest timers",
     ],
@@ -949,7 +949,7 @@ function CoachSection() {
             </figcaption>
             <div className={styles.coachMeta}>
               <span>
-                <Play size={14} /> Demo videos on every exercise
+                <Play size={14} /> Demo videos on the big lifts
               </span>
               <span>
                 <Calendar size={14} /> Programs that plan your week

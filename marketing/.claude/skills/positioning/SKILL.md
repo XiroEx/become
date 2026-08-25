@@ -35,8 +35,8 @@ tagged.
 - Before writing headlines, naming a category, or planning a launch. Positioning is the input.
 - Copy across surfaces sounds interchangeable with every other fitness app.
 - Someone asks "why us over MyFitnessPal / Hevy / a trainer" and there is no crisp answer.
-- A new capability shipped (camera rep counting, whole-plate photo logging) and it may change the
-  frame.
+- A new capability shipped (whole-plate photo logging, the AI session generator) and it may change
+  the frame.
 - The team keeps arguing about what Become "is." That argument is a positioning gap, not a copy gap.
 
 **Not this skill:**
@@ -54,7 +54,7 @@ tagged.
    hypothesis to validate, not a decision to publish.
 2. **What baggage are we shedding?** Write down how the team currently describes Become in one
    sentence, then set it aside. That sentence is the thing most likely to be wrong, because it
-   was written before the product had a camera rep counter or a plate itemizer.
+   was written before the product had a plate itemizer or an equipment-aware session generator.
 3. **Which alternatives are real?** From the customer's point of view, including doing nothing and
    the Notes app. Not the competitor list we find flattering. See `references/alternatives-map.md`.
 4. **What is the scope of this run?** A full canvas rebuild, a frame decision only, or a check of
@@ -124,8 +124,9 @@ Worksheet with prompts in `references/canvas-worksheet.md`.
 - *Demographic targeting* — "men 25-40." Nothing in the plan changes based on that line.
 
 **Strong patterns:**
-- Attribute row written as `<capability>` + `proof: <path or route>`. Example: "LIVE mode counts
-  reps through the camera. proof: `webapp/app/dashboard/workout/[programId]/workout/live/`."
+- Attribute row written as `<capability>` + `proof: <path or route>`. Example: "LIVE mode logs the
+  set as you train, with last session's numbers and your PR on screen. proof:
+  `webapp/app/dashboard/workout/[programId]/workout/live/`."
 - Value theme written as the sentence a user would say: "One app instead of five."
 - Target trait written as an observable behaviour: "Has two or more fitness apps installed and
   uses none consistently."
@@ -225,7 +226,7 @@ the product-storytelling order: setup first, product last.
 | Alternatives, named honestly | Alternatives row | Trackers are excellent at logging. They will not tell you what to do Tuesday. |
 | Perfect-world criteria | Value themes, phrased as the reader's checklist | You want one place, a plan you did not have to design, and proof it is working. |
 | Differentiated value | Attributes, mapped one to one to each criterion | The dashboard is one place. The programs are the plan. The recap is the proof. |
-| Proof | Attribute proof pointers | Real captures, the filmed camera-counting demo, Jon's programs |
+| Proof | Attribute proof pointers | Real captures, a filmed plate-photo demo, Jon's programs |
 | Objections | Anti-persona and objection rows in context | Free today. No password. Filters to your equipment. |
 
 Buyers answer "why you over the alternatives," never "why you."
@@ -265,8 +266,8 @@ For a compact model of what makes someone actually switch (push, pull, anxiety, 
   | Row | Draft content |
   |---|---|
   | Alternatives | Notes app plus free YouTube; a stitched stack of a logger plus a calorie app plus a meditation app; an in-person trainer; a general AI chatbot; nothing |
-  | Attributes | Coach-built multi-phase programs plus an AI generator; LIVE mode counting reps through the camera; photo logging that itemizes a whole plate; every hub on one dashboard; a weekly recap that writes your week back |
-  | Value themes | One app instead of five; a coach's structure without a coach's price or schedule; evidence about yourself, not vibes |
+  | Attributes | Coach-built multi-phase programs plus an AI generator; LIVE mode that logs the set as you train, with last session's numbers and your PR on screen; photo logging that itemizes a whole plate; every hub on one dashboard; a weekly recap that writes your week back |
+  | Value themes | One app instead of five; a coach's structure without the standing appointment; evidence about yourself, not vibes |
   | Who cares | People scattered across three or more apps; repeat restarters who blame willpower; people who want structure handed to them but will not keep a standing appointment |
   | Frame | Coach-led all-in-one training system. Candidate, not locked. |
 
@@ -302,7 +303,7 @@ For a compact model of what makes someone actually switch (push, pull, anxiety, 
 - [ ] No invented pricing, counts, testimonials, or results claims anywhere in the artifact.
 - [ ] The Becoming appears at most once and never as the category.
 - [ ] Every unvalidated claim is tagged and repeated under Open questions.
-- [ ] Example copy contains no banned words and near-zero em dashes.
+- [ ] Example copy contains no banned words and near-zero em dashes in deliverable copy.
 
 ## Related skills
 

@@ -243,15 +243,17 @@ Become (`become.redbtn.io`) is a mobile-first PWA fitness coaching app built aro
 **Jon Don**. Hubs:
 
 - **Dashboard** — day at a glance, streaks, mood, weight, water, customizable tiles.
-- **Training** — coach-built multi-phase programs, AI session/program generator, exercise demo
-  videos, set logging with PR history, LIVE mode that counts reps through the camera.
+- **Training** — coach-built multi-phase programs, AI session/program generator, demo clips on
+  the big lifts (39 of the 132 exercises, never "every exercise"), set logging with PR history,
+  LIVE mode that logs the set as you train, with last session's numbers and your PR on screen.
 - **Nutrition** — photo logging that itemizes a whole plate, barcode scan, personal
   calorie/macro targets.
 - **Mind** — short guided sessions, mood tracking, identity work.
 - **Progress & The Becoming** — weight/strength trends plus a weekly recap that writes your week
   back to you.
 
-Signup is an **email magic link**. No credit card. Free today. **Web push notifications exist.**
+Signup is an **email magic link**, with **Google sign-in and passkeys** as the other two doors.
+No credit card. Free today. **Web push notifications exist.**
 Audience: everyday people who feel scattered across fitness apps; coach-led credibility matters.
 
 If a skill needs a capability not on this list, it does not exist. Say "not available today"
@@ -321,7 +323,7 @@ Tone rules every skill enforces on its own output:
 | Inspo analysis | `marketing/inspo-analysis.md` | Committed digest of the library. STNDRD (25 story ads) + Ladder (5-slide carousel). The durable artifact — read this instead of the images. |
 | Landing page | `webapp/components/landing/` | `BecomeLanding.tsx`, `HeroLine.tsx`, `Marquee.tsx`, `Phone.tsx`, `Spine.tsx`, `hooks.ts`, `landing.module.css`. The conversion surface. |
 | Capture harness | `webapp/tests/e2e/` + `playwright.config.ts` | `test-auth.ts` mints short-lived JWTs from `JWT_SECRET`; `app-shots.spec.ts`, `nutri-shots.spec.ts` are the shot specs. Mobile projects use iPhone 14. |
-| Exercise demos | `webapp/public/exercises/` | 42 files, `.mov` + `.mp4` pairs. Known bug: `.mov` served as `video/quicktime` fails in Chromium — use the `.mp4`. |
+| Exercise demos | `webapp/public/exercises/` | 42 files — 39 `.mov` plus 3 `.mp4` (back-squat, bench-press, cable-row), covering 39 of the 132 canonical exercises. Never claim every exercise has a clip. Known bug: the files are served as `video/mp4` and play fine, but `webapp/components/FramedVideo.tsx:39` emits `type="video/quicktime"`, which Chromium refuses — the fix is the type attribute, not swapping to an `.mp4` that mostly does not exist. |
 | Image tooling | `sharp` in `webapp/package.json` | Already a dependency. No new image dependency should be added. |
 
 Public surface today is essentially one indexable page (`webapp/app/page.tsx`) plus

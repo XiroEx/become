@@ -5,6 +5,9 @@
 The payload shape is fixed by `webapp/lib/pushNotification.ts`: `title`, `body`, `icon`, `badge`,
 `url`, `tag`.
 
+Character targets below are **Tier C**: observed rendering across devices, not a documented
+platform limit, and they shift with OS versions. Treat them as safe budgets rather than specs.
+
 | Field | Target | Truncation reality |
 |---|---|---|
 | `title` | 25-35 characters | Android collapses around 40. Desktop Chrome shows more, mobile shows less. Write for 30. |
@@ -74,8 +77,8 @@ States a fact about a live thing without threatening.
 ### The mechanism pattern (for a feature launch)
 
 ```
-✅ Title: The camera counts your reps
-   Body:  Open LIVE mode, prop the phone, train. It logs the set.
+✅ Title: One photo, the whole plate
+   Body:  Shoot the plate in Nutrition. It comes back itemized.
 ```
 
 ---
@@ -147,7 +150,8 @@ Alternate
 ## Localization and length safety
 
 - Titles and bodies are written for English today. Any future translation will run 20-30% longer
-  in several languages, so leaving headroom against the ceiling is cheap insurance.
+  in several languages (Tier C: a localization rule of thumb, not a measured figure), so leaving
+  headroom against the ceiling is cheap insurance.
 - Never rely on a line break. Notification rendering collapses whitespace.
 - Never rely on the icon to carry meaning. Some surfaces show it small or not at all.
 
@@ -161,8 +165,9 @@ Alternate
 - [ ] `tag` is stable so repeats replace rather than stack.
 - [ ] Every fact in the copy is resolved from live data at fire time.
 - [ ] Preference key exists and has a visible toggle.
-- [ ] Fires inside its local-hour window and outside quiet hours (21:00-07:00 local).
+- [ ] Fires inside its local-hour window and outside quiet hours (21:00-07:00 local — the target;
+      note that the shipped streak-at-risk sweep has no hour gate, see `nudge-inventory.md`).
 - [ ] Respects the global per-user daily cap.
 - [ ] Zero blame, zero fabricated numbers, zero pricing, zero health claims.
-- [ ] At most one emoji, no banned words, near-zero em dashes.
+- [ ] At most one emoji, no banned words, near-zero em dashes in deliverable copy.
 - [ ] One alternate written, with a rationale that names a different strategy.

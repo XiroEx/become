@@ -57,6 +57,8 @@ AI-citation measurement specifically (`seo-geo`); ad-platform reporting (`paid-s
 5. Define the funnel stages, each with a timestamp and a denominator. Framework 1.
 6. Answer as much as possible from the database before proposing tooling. Framework 2.
 7. Pick the North Star and its supporting set and guardrails. Framework 3.
+   Only once the questions are written, choose the tool: criteria, the two real options, and the
+   default recommendation are in `references/tooling.md`. The pick is George's call.
 8. Write the event table against the naming grammar. Framework 4.
 9. Write the UTM convention and the link register. Framework 5.
 10. Set the reporting cadence, and say plainly what is not readable at current volume.
@@ -203,7 +205,8 @@ Fixed property set on every event: `user_id` (or `anon_id` pre-auth), `timestamp
 - *Event explosion.* 200 events nobody queries costs money and hides the ten that matter. Start
   with 12.
 - *PII in properties.* Never send an email address, a weight, a mood value, or any health data
-  into a third-party analytics tool. Send `user_id`.
+  into a third-party analytics tool. Send `user_id`. This constraint is what narrows the tool
+  shortlist to two options: see `references/tooling.md`.
 
 **Strong patterns:**
 - One `track()` wrapper with a typed union of event names, so a typo fails the build.
@@ -218,7 +221,7 @@ Full table: `references/utm-conventions.md`.
 `utm_source` = the specific property (`instagram`, `tiktok`, `producthunt`, `newsletter`).
 `utm_medium` = the mechanism (`social_organic`, `social_paid`, `email`, `referral`, `directory`).
 `utm_campaign` = `yyyymm_theme_variant`, lowercase, underscores only.
-`utm_content` = the creative or placement (`reel_repcount_hookA`).
+`utm_content` = the creative or placement (`reel_plateshot_hookA`).
 
 **Check for:**
 - Every external link built from the convention, including Jon's link in bio and every directory.
@@ -290,7 +293,9 @@ Full table: `references/utm-conventions.md`.
 - Weak vs strong metric name: ❌ "engagement" ✅ "weekly logged sessions per active user".
 - Weak vs strong event name: ❌ `Workout Complete!` ✅ `workout_logged`.
 - Weak vs strong report line: ❌ "Retention looks solid." ✅ "Week-4 retention is 31% on the
-  cohort of 48 accounts created the week of Aug 4."
+  cohort of 48 accounts created the week of Aug 4." [ILLUSTRATIVE — no analytics exists yet;
+  replace with measured numbers.] The shape is the point: a rate, a denominator, and a dated
+  cohort.
 - Weak vs strong campaign tag: ❌ `utm_campaign=Launch` ✅ `utm_campaign=202609_livemode_launch`.
 
 ## Quality bar

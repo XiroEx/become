@@ -17,7 +17,8 @@ Become (`become.redbtn.io`) is a mobile-first PWA fitness coaching app built aro
 programs and an AI generator behind them. `[verified in repo]`
 
 - Delivery: installable PWA. No native app, no App Store or Play listing. `[verified in repo]`
-- Signup: email magic link. No password, no credit card. `[verified in repo]`
+- Signup: email magic link, with Google sign-in and passkeys alongside. No password, no credit
+  card. `[verified in repo]`
 - Price: free today. No pricing, tiers, trials, or discounts exist. `[verified in repo]`
 - Notifications: web push exists. `[verified in repo]`
 - Stage: pre-revenue, small audience, coach-led credibility is the main asset.
@@ -35,7 +36,7 @@ One row per hub. The mechanic column is what marketing sells, because it is what
 | Hub | Route | What you do | The mechanic |
 |---|---|---|---|
 | Dashboard | `/dashboard` | See the day at a glance | Streaks, mood, weight, water, customizable tiles |
-| Training | `/dashboard/workout` | Follow or build a plan | Coach-built multi-phase programs; AI session and program generator; demo video on every movement; set logging with last-session and PR history; LIVE mode that counts reps through the camera |
+| Training | `/dashboard/workout` | Follow or build a plan | Coach-built multi-phase programs; AI session and program generator; demo clips on the big lifts; LIVE mode that logs the set as you train, with rest timers, last-session numbers, and PR history on screen |
 | Nutrition | `/dashboard/nutrition` | Log what you ate | Photo logging that itemizes a whole plate; barcode scan; personal calorie and macro targets |
 | Mind | `/dashboard/mind` | Do a short practice | Guided sessions, mood tracking, identity work |
 | Progress and The Becoming | `/dashboard/progress` | See the trend | Weight and strength trends, plus a weekly recap that writes your week back to you |
@@ -48,10 +49,20 @@ All `[verified in repo]`.
 - Exercise grouping supports supersets, circuits, trisets, giant sets, EMOM, AMRAP.
 - The generator produces either a single session or a full program, filtered by focus, level, and
   the equipment actually available.
-- 42 exercise demo clips ship with the app.
+- 39 of the 132 exercises ship a demo clip — the big lifts are covered. Never claim every exercise
+  has one. (`webapp/public/exercises/` holds 42 files: 39 `.mov` plus 3 `.mp4` duplicates.)
 
 **Not available today.** Do not imply any of these: a native app, a wearable integration, heart
-rate, sleep tracking, a social feed, a marketplace, coaching over chat with a human, a paid tier.
+rate, a marketplace, a paid tier, or coaching over chat with a human (the chat route ships behind
+an admin-gated "Coming Soon").
+
+**Small and early, not absent.** Community, groups, and events surfaces exist in-app
+(`webapp/app/api/{groups,events}`, `webapp/app/dashboard/{community,groups,events}`), as does a
+sleep endpoint (`webapp/app/api/sleep`). Do not list them as missing and do not build a campaign
+on them either; describe them as early if they come up at all.
+
+**Drift rule.** When the app exceeds this hub list, update this doc first, then the claim. A
+shipped feature that is not written down here is not marketable yet.
 
 ## 3. ICP
 
@@ -121,10 +132,10 @@ Never write a value with no attribute behind it.
 | Attribute | Value | Proof |
 |---|---|---|
 | Coach-built multi-phase programs plus an AI generator | Structure when you want it, a session in seconds when you do not | `webapp/public/screenshots/v2/workout-hub-light.webp`, `generate-light.webp` |
-| LIVE mode counts reps through the camera | The phone watches the set so you do not have to tap between reps | Filmed demo required. No capture exists yet |
-| Photo logging itemizes a whole plate | Logging a meal is one photo, not six searches | `nutrition-meal-light.webp` |
+| LIVE mode logs the set while you train | Last session's numbers and your PR sit on screen mid-set | `workout-log-dark.webp` |
+| Photo logging itemizes a whole plate | Logging a meal is one photo, not six searches | Filmed or captured demo required. `nutrition-meal-light.webp` shows an itemized day, but those meals were typed through food search, not photographed |
 | Five hubs on one dashboard | One app instead of a stack of them | `dashboard-light.webp` |
-| Weekly recap writes your week back to you | Evidence about yourself instead of a wall of numbers | `progress-light.webp` |
+| Weekly recap writes your week back to you | Evidence about yourself instead of a wall of numbers | `progress-light.webp` is the Training Log (volume chart, workout history, PRs). The weight and mood trends live on `/dashboard` |
 
 ## 8. Objections and anti-persona
 
@@ -133,7 +144,7 @@ Never write a value with no attribute behind it.
 | "Is it actually free?" | Free today. Do not imply a future price either way. |
 | "No password? Is that safe?" | A one-time link to your email, expires in fifteen minutes. |
 | "Do I need equipment?" | The generator filters to the equipment in front of you. |
-| "Does the camera rep counting really work?" | Show it. A filmed demo answers this; adjectives do not. |
+| "Does it log my sets for me?" | No. You log the set; LIVE mode keeps last session's numbers and your PR on screen so it is one tap, not a memory test. |
 | "It's not in the App Store." | Installs from the browser in one tap. Web push works. |
 | "I already have MyFitnessPal." | Not a rip-and-replace pitch. The pitch is the stack, not the app. |
 
@@ -165,10 +176,10 @@ Full detail in the `become-context` skill's `references/voice-guide.md`. Summary
 
 **Can say today:**
 - Programs are built by a real coach, Jon Don, and are multi-phase with progression.
-- Every movement has a demo clip. There are 42 of them.
-- The camera counts reps in LIVE mode.
+- The big lifts have a demo clip. 39 of the 132 exercises ship one; never say every exercise does.
+- LIVE mode logs the set as you train, with rest timers, last-session numbers, and PRs on screen.
 - A photo of a plate returns its items.
-- Signup is one email field, no password, no card.
+- Signup is one email field — or Google, or a passkey — with no password and no card either way.
 - It installs to the home screen and can send push notifications.
 - All four practices live on one dashboard.
 

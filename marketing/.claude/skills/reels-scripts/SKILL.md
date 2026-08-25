@@ -1,6 +1,6 @@
 ---
 name: reels-scripts
-description: Writes shootable short-form video scripts for Reels, TikTok, and Shorts — a hook that lands inside the first 1.5 seconds, a beat-by-beat shot list with cut timings, on-screen text that says something different from the spoken line, a loop-close, and a CTA that is not "link in bio" — built around real Become mechanics like LIVE rep counting, whole-plate photo logging, and the weekly recap. Use when the user says "write a reel," "script a TikTok," "we need a hook," "make a video about the camera counting reps," "30 second video idea," "turn this feature into a video," or "this reel flopped, fix it." For the cadence and pillar decisions behind it see social-strategy; for a creator filming it see ugc-creator-briefs; for rendering a motion asset instead of filming see remotion-assets.
+description: Writes shootable short-form video scripts for Reels, TikTok, and Shorts — a hook that lands inside the first 1.5 seconds, a beat-by-beat shot list with cut timings, on-screen text that says something different from the spoken line, a loop-close, and a CTA that is not "link in bio" — plus slide-by-slide carousel decks when the idea reads better as stills, all built around real Become mechanics like whole-plate photo logging, the equipment-aware session generator, and the weekly recap. Use when the user says "write a reel," "script a TikTok," "we need a hook," "make a video about the photo food logging," "write a carousel," "30 second video idea," "turn this feature into a video," or "this reel flopped, fix it." For the cadence and pillar decisions behind it see social-strategy; for a creator filming it see ugc-creator-briefs; for rendering a motion asset instead of filming see remotion-assets.
 metadata:
   version: 1.0.0
   batch: social-content
@@ -30,6 +30,8 @@ question. One script per run unless the user asks for a set.
 - A hook is needed for footage that already exists.
 - A published video underperformed and the hook or structure needs a rebuild.
 - A carousel idea has to become a video, or a long explainer has to become 30 seconds.
+- The idea reads better as stills than as motion, and needs a 4-6 slide deck instead of a script.
+  Use `references/carousel-spec.md` and return a slide table rather than a beat table.
 - Footage was filmed and there is no script tying it together.
 
 **Not this skill:** cadence, pillars, and which slot this fills (`social-strategy`); dates and
@@ -41,14 +43,16 @@ Jon's first-person wording (`coach-brand-voice`).
 
 ### Assessment gate (answer all five, then write)
 
-1. **Which mechanism is the payoff.** Name the exact product behaviour: the camera counts the
-   reps, one photo itemizes the plate, the generator builds a session against today's equipment,
-   the recap writes the week back. A script with no mechanism is a mood board.
+1. **Which mechanism is the payoff.** Name the exact product behaviour: one photo itemizes the
+   plate, the generator builds a session against today's equipment, LIVE mode puts last session's
+   numbers under the set you are about to do, the recap writes the week back. A script with no
+   mechanism is a mood board. If you cannot point at the screen where it happens, it is not a
+   mechanism, and inventing one is the single fastest way to make a script unshippable.
 2. **Who is on camera.** Jon (first person, coach register), a team member's hands only, a
    creator, or no person at all (screen plus hands). This decides the voice before it decides the
    shots.
 3. **What footage or captures already exist.** Check `webapp/public/screenshots/v2/` and its
-   `manifest.json`, `marketing/out/`, `webapp/public/exercises/` (42 demo clips),
+   `manifest.json`, `marketing/out/`, `webapp/public/exercises/` (42 files covering 39 exercises),
    `marketing/src/campaigns.json`. Reuse before you commission.
 4. **Target length and platform.** Pick a band in Framework 1. If the video will be reused in
    paid, write it at 30-45s.
@@ -81,13 +85,17 @@ Ordered by impact on whether the video works at all.
 
 ### 1. Length bands
 
-| Band | Use |
-|---|---|
-| 11-18s | Skews viral. One mechanism, no explanation. |
-| 15-30s | Highest completion. The default for a mechanism demo. |
-| 21-34s | Most shares and likes. The default for anything with a send CTA. |
-| 30-45s | Most repurposable, including into paid. Write here when in doubt. |
-| 45-60s+ | Teaching only, and only when the payoff justifies the ask. |
+| Band | Use | Tier |
+|---|---|---|
+| 11-18s | Skews viral. One mechanism, no explanation. | C |
+| 15-30s | Highest completion. The default for a mechanism demo. | C |
+| 21-34s | Most shares and likes. The default for anything with a send CTA. | C |
+| 30-45s | Most repurposable, including into paid. Write here when in doubt. | C |
+| 45-60s+ | Teaching only, and only when the payoff justifies the ask. | C |
+
+Every band is **Tier C**: agency and vendor round-ups with no published sample, and they move with
+each algorithm change. Use them to choose a starting length, never to defend one in a report. Our
+own completion data will outrank the whole table the moment `analytics-tracking` is live.
 
 **Check for:** does the length match the number of ideas (one idea per 15 seconds, maximum); is
 there a beat that exists only to fill time; does the video end the moment the payoff lands.
@@ -116,7 +124,7 @@ duplicates the voiceover word for word; a hook that promises something the video
 method; open on the exact frustration in four words.
 
 ❌ Frame one: Become logo on green, VO "Let me show you our app."
-✅ Frame one: phone propped, barbell already moving, overlay "I did not touch my phone once."
+✅ Frame one: hand lowering a phone over a full plate, shutter about to fire, overlay "One photo. Every item."
 
 ### 3. Six archetypes
 
@@ -143,7 +151,7 @@ The ranked shapes, strongest 3-second hold first: specific outcome, POV realism,
 opinion, direct question, generic product reveal (weakest, avoid).
 
 ❌ "Become is the all-in-one fitness app you have been waiting for."
-✅ "My phone counted this set while it sat on the floor."
+✅ "I photographed this plate and it came back as four lines."
 
 ❌ "Struggling to stay consistent? You are not alone."
 ✅ "Four sessions logged, zero spreadsheets."
@@ -188,21 +196,22 @@ used ("save this for your next push day").
 
 Copy the shape, not the words. Every product behaviour shown below exists today.
 
-### Script A — Mechanism demo, LIVE rep counting, 22s, no talking head
+### Script A — Mechanism demo, logging a set in LIVE mode, 22s, no talking head
 
 | Time | Shot | On-screen text | VO | Cut note |
 |---|---|---|---|---|
-| 0.0-1.5 | Phone propped against a plate, barbell already moving in frame | I never touched my phone | (none, gym ambience) | Open mid-rep |
-| 1.5-4.0 | Close on the phone screen, rep counter incrementing | LIVE mode | "The camera is counting this set." | Hard cut |
-| 4.0-8.0 | Wide, lifter finishes the set, racks the bar | 10 of 10 | "Ten reps. Logged before I stood up." | Reframe at 6.0 |
-| 8.0-13.0 | Phone screen: set row saved, previous set shown beneath | Last set: 155 x 10 | "It remembers what I did last time, so I am not guessing." | Cut on the tap |
-| 13.0-18.0 | Screen: PR badge visible on the exercise | PR 160 lbs | "And it tells me when that was the best I have done." | Slow push held under 1s |
-| 18.0-22.0 | Back to the propped phone, same angle as frame one | Send this to whoever logs sets in their notes app | "Send this to whoever still logs sets in their notes app." | Loop-close |
+| 0.0-1.5 | Close on the phone screen: empty reps field, "Last: 155 lbs x 10" sitting under it | It already knows what I did last time | (none, gym ambience) | Open on the screen, no setup |
+| 1.5-4.0 | Wide, lifter racking the bar, phone on the bench beside them | Set 3 of 3 | "I do not have to remember last Tuesday." | Hard cut |
+| 4.0-8.0 | Thumb types 160, taps the checkbox, the row goes green | 160 x 10, logged | "Two numbers and it is in." | Cut on the tap |
+| 8.0-13.0 | Screen: rest timer counting itself down | Rest started itself | "The rest timer starts on its own, so I am not watching a clock." | Reframe at 10.0 |
+| 13.0-18.0 | Screen: PR badge lands on the exercise | New PR, 160 lbs | "And it tells me when that was the best I have done." | Slow push held under 1s |
+| 18.0-22.0 | Back to the phone screen, same angle as frame one, next exercise loaded | Send this to whoever logs sets in their notes app | "Send this to whoever still logs sets in their notes app." | Loop-close |
 
-Caption: `Workout app that counts reps through the camera. LIVE mode logs the set while the phone
-sits on the floor. Free today, email link, no card.`
+Caption: `Workout app that remembers your last weight. LIVE mode holds one set on screen, last
+session's numbers underneath, rest timer on the tap. Free today, email link, no card.`
 Capture list: filmed. Reference state exists
-at `webapp/public/screenshots/v2/workout-log-dark.webp`.
+at `webapp/public/screenshots/v2/workout-log-dark.webp` (Lat Pulldown, set 3 of 3, "Last set: 155
+lbs x 10 reps", PR badge 160 lbs) — shoot the same exercise so the still and the video match.
 
 ### Script B — App Tip sequence, whole-plate photo logging, 38s
 
@@ -257,7 +266,10 @@ Capture list: `generate-light.webp`,
 ### Script E — Coach answer, Jon on camera, 40s
 
 Jon speaks first person, per `coach-brand-voice`. Do not put product second-person copy in his
-mouth.
+mouth. **Needs Jon's sign-off before it ships:** the 25.0-34.0 beat makes an experience claim
+("I have never once seen someone lose progress from a rough week. I have seen plenty quit over
+one"). That is a statement about his own coaching history, and only he can confirm it is true and
+that he is willing to say it. Draft it, mark it, do not publish it unconfirmed.
 
 | Time | Shot | On-screen text | Jon | Cut note |
 |---|---|---|---|---|
@@ -290,6 +302,10 @@ shot before promising a chart, or run `screenshot-capture`.
 
 Shot-list notation, safe areas, and the b-roll spec are in `references/shot-list-spec.md`.
 
+When the idea is a teaching sequence whose payoff is a still rather than a motion — a breakdown
+the viewer wants to save, a comparison, a five-ways list — write it as a carousel instead. The
+slide-by-slide spec, the lockup, and three worked decks are in `references/carousel-spec.md`.
+
 ## Become-specific rules
 
 - **No fabricated testimonials, user counts, results claims, or pricing.** Become is free today
@@ -299,6 +315,11 @@ Shot-list notation, safe areas, and the b-roll spec are in `references/shot-list
   via the documented capture pipeline** (`manifest.json`). Never a real member's account, never a
   mockup, never a bug, never an empty state, never "(beta)" in frame.
 - **No personal camera-roll photos of the coach.** Film for the post.
+- **LIVE mode is the live logging screen, not a camera feature.** Track and Live tabs, set and
+  weight and reps typed by hand, a checkbox per set, a rest timer, last session's numbers, a PR
+  badge. Nothing in Become watches a set or tallies repetitions. The camera belongs to whole-plate
+  photo logging, the barcode scanner, and the Mind mirror scene. A script that shows a phone
+  tallying a set cannot be filmed, because the screen it needs does not exist.
 - **The Becoming is at most one beat**, and only in the recap archetype. Never the hook, never the
   theme of a script.
 - **Health and fitness claims stay responsible:** no medical claims, no promised timelines or
@@ -306,16 +327,19 @@ Shot-list notation, safe areas, and the b-roll spec are in `references/shot-list
   one versus week twelve" physique cut is out, permanently.
 - **No shaming hooks.** "Stop making excuses," "no excuses," "beast mode," "crush it" and every
   variant are banned. The viewer is not lazy. Their tools were scattered.
-- **Numbers on screen must be numbers the product produced** on a dummy account: reps counted,
-  sets logged, calories from a photo, sessions in a phase. Never an outcome number.
+- **Numbers on screen must be numbers the product produced** on a dummy account: sets logged, the
+  weight on the last set, calories from a photo, sessions in a phase. Never an outcome number.
 - **Every statistic behind these rules is internal.** Tier A, B, and C research steers the script.
   None of it goes in a caption.
-- **Reuse before you shoot.** 42 exercise demo clips in `webapp/public/exercises/`; note the known
-  bug that `.mov` files fail in Chromium, so use the `.mp4` pair.
+- **Reuse before you shoot.** `webapp/public/exercises/` holds 42 files covering **39 of the 132
+  canonical exercises** — the big lifts, not the whole library. Never script a beat that claims
+  every exercise has a clip. The files play fine (they are served as `video/mp4`); the black panel
+  in Chromium is a `type="video/quicktime"` attribute bug in `webapp/components/FramedVideo.tsx`,
+  tracked separately. For filming, screen-record on iOS or Safari, where it renders correctly.
 - **Light and dark both exist.** Choose one per script deliberately and say which.
 - Voice: second person, present tense, concrete nouns. Banned: "journey," "unlock your potential,"
-  "game-changer," "seamless," "effortless," "just," "simply." Near-zero em dashes. At most one
-  emoji in a caption.
+  "game-changer," "seamless," "effortless," "just," "simply." Near-zero em dashes in
+  deliverable copy. At most one emoji in a caption.
 
 ## Quality bar
 
@@ -326,7 +350,10 @@ Shot-list notation, safe areas, and the b-roll spec are in `references/shot-list
 - [ ] Exactly one CTA, and it is not "link in bio" unless the post is already earning reach.
 - [ ] Any keyword CTA has its DM reply written or explicitly flagged as still needed.
 - [ ] The caption's first 125 characters contain the search phrase.
-- [ ] Every product behaviour shown exists today; nothing is invented.
+- [ ] Every product behaviour shown exists today; nothing is invented, and every beat could be
+      filmed against a real screen.
+- [ ] Any beat spoken by Jon that makes a claim about his own coaching history is marked
+      "Needs Jon's sign-off" and is not treated as shippable until he confirms it.
 - [ ] Zero results claims, zero counts, zero pricing, zero fabricated proof, zero before/after.
 - [ ] The Becoming appears in at most one beat.
 - [ ] Every capture path cited resolves in the repo, and anything not yet captured is flagged.

@@ -95,7 +95,7 @@ Write these into the plan before launch, with dates.
 | Ad | After 2,000 impressions with no landing-page views at a rate near the ad-set average, pause it. Judge hooks on 3-second view rate and hook rate first, cost per signup second. |
 | Ad | Never pause before it has spent roughly 1 to 2 times the target cost per signup. Earlier is superstition. |
 | Ad set | If cost per `signup_started` is above 2x the acceptable number after the learning window plus one week, pause and rewrite the creative, not the audience. |
-| Creative refresh | Frequency above about 2.5 on Meta, or a visible CTR decline over 3 days on TikTok, means fatigue. Refresh the creative, do not raise the bid. |
+| Creative refresh | Frequency above about 2.5 on Meta (**Tier C** — a media-buyer convention, not a Meta-published threshold; the real number depends on audience size and creative), or a visible CTR decline over 3 days on TikTok, means fatigue. Refresh the creative, do not raise the bid. |
 | Whole test | Hard stop date and hard stop budget, both set before launch. When either is hit, write the result and stop. |
 
 Do not edit budgets or audiences daily. Every meaningful edit restarts learning. Batch changes

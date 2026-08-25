@@ -8,17 +8,20 @@ does not fit a pillar, it does not get made.
 ## Pillar 1 — Watch It Work
 
 **Hubs:** Training, Nutrition.
-**Mechanism:** the camera counts reps in LIVE mode; one photo itemizes a whole plate; barcode scan.
+**Mechanism:** one photo itemizes a whole plate; barcode scan; LIVE mode logging a set with last
+session's numbers already on screen.
 **Format:** Reel, 15-30s. Occasionally a 3-slide carousel when the result is a still.
 **Default CTA:** send CTA, or `LIVE` / `PLATE` keyword.
 **Asset source:** filmed screen capture of a real session, or `webapp/public/screenshots/v2/workout-log-dark.webp` and the nutrition captures for stills.
 
 Seeded ideas:
-1. Phone propped, set of ten, counter ticking on screen. No voiceover for the first four seconds.
-2. One plate photographed, the itemized breakdown appearing line by line.
-3. Barcode scan at the shelf, macros landing before the door closes.
-4. Two ways to log the same meal, photo versus barcode, timed side by side.
-5. The set that gets logged without touching the phone.
+1. One plate photographed, the itemized breakdown appearing line by line. No voiceover for the
+   first four seconds.
+2. Barcode scan at the shelf, macros landing before the door closes.
+3. Two ways to log the same meal, photo versus barcode, timed side by side.
+4. Set finished, two numbers typed, rest timer already running before the plates are back on the
+   rack.
+5. "Last: 155 lbs x 10" sitting under an empty field, then the number that beats it.
 
 **Rule:** the mechanism must be visible in the frame. A claim about the mechanism is not this pillar.
 

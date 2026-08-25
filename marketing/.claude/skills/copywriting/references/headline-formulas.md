@@ -58,26 +58,28 @@ AI story without overclaiming either side.
 | ❌ Weak | ✅ Strong |
 |---|---|
 | AI-generated workouts tailored to you | A coach builds the phases. The AI fills the gaps. |
-| Complete fitness tracking | You lift. It counts. |
+| Complete fitness tracking | You lift. It keeps the record. |
 | Personalized nutrition guidance | You photograph the plate. It itemizes it. |
 
 ## 5. The mechanism as headline
 
 `<The strange thing it does>`
 
-Reserve for the two mechanics strange enough to stop a scroll: camera rep counting and whole-plate
-photo logging. Overused, it becomes a spec sheet.
+Reserve for the two mechanics strange enough to stop a scroll: whole-plate photo logging, and a
+session generator you hand your equipment and your available minutes. Overused, it becomes a spec
+sheet.
 
-- ✅ "Put the phone down. It still counts."
 - ✅ "One photo. The whole plate, itemized."
-- ❌ "Computer-vision-powered repetition detection." Correct, unreadable.
+- ✅ "Tell it what's in the gym. It writes today's session."
+- ❌ "AI-powered multi-item nutritional inference." Correct, unreadable.
 
 ## 6. The number that is ours
 
 `<A real count from the product>`
 
 Only counts that exist in the product and can be verified: hubs, program phases, onboarding steps,
-demo videos in `webapp/public/exercises/`. Never a user count, never a result.
+demo clips in `webapp/public/exercises/` (39 movements, not all 132 exercises). Never a user count,
+never a result.
 
 - ✅ "Five hubs. One screen."
 - ✅ "Three steps to day one." (already live in the how-it-works section)

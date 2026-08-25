@@ -156,16 +156,16 @@ Order is load-bearing. Each pass assumes the previous one is done.
 **Common issues:**
 - *Abstraction stack.* "journey," "experience," "insights," "potential," "solution," "platform,"
   "wellness." Every one of these is a slot where a real noun should be.
-- *Outcome without mechanism.* "Stay consistent" is a wish. "The camera counts the reps so you are
-  not tapping between sets" is a reason.
+- *Outcome without mechanism.* "Stay consistent" is a wish. "Last week's weight is already on the
+  screen, so you are not guessing at the bar" is a reason.
 - *Generic verbs.* "leverage," "utilize," "empower," "enable." The product's real verbs are log,
-  scan, plan, count, recap, generate, show.
+  scan, photograph, plan, recap, generate, show.
 
 **Strong patterns:**
 - Swap the abstraction for the thing on screen: ❌ "Gain powerful insights" → ✅ "See your volume,
   week over week."
-- Add the physical detail nobody would invent: "prop the phone against a plate," "chalk on your
-  hands," "Sunday night."
+- Add the physical detail nobody would invent: "chalk on your hands," "the field still blank with
+  last week's number underneath," "Sunday night."
 - Use the product's own words. If the screen says "Set 3 of 3," the copy says "set 3 of 3."
 
 ### 4. Rhythm pass
@@ -181,7 +181,7 @@ Order is load-bearing. Each pass assumes the previous one is done.
 - *Comma pile-up.* Three subordinate clauses before the main one. Split it.
 
 **Strong patterns:**
-- Short, short, long. Or long, then a three-word sentence that lands. "You lift. It counts."
+- Short, short, long. Or long, then a three-word sentence that lands. "You lift. It remembers."
 - Start with the noun or the verb. Never with "There is," "It is important that," or "By using."
 - End the block on the strongest word. Trailing qualifiers throw away the ending.
 
@@ -265,7 +265,7 @@ Three cases where the right move is to leave it alone and say so.
 
 ## Quality bar
 
-- [ ] Word count reported before and after, and it went down.
+- [ ] Word count before and after is reported, and it went down.
 - [ ] Zero banned words remain.
 - [ ] Near-zero em dashes remain, and any survivor is justified in the reasons list.
 - [ ] Every change has a numbered reason naming its pass.

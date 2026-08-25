@@ -16,11 +16,11 @@ Every row below is already shipping. Source of truth:
 |---|---|---|---|---|---|
 | Workout reminder | `workoutReminder` | 07:00-11:00 | Scheduled slot today, active program, not yet logged | `workout-reminder` | `/dashboard/calendar` |
 | Mind reminder | `mindReminder` | 08:00-11:00 | Mind module available today, not started | `mind-reminder` | `/dashboard/mind` |
-| Meal reminder | `mealReminder` | Midday | No food logged today | `meal-reminder` | `/dashboard/nutrition` |
+| Meal reminder | `mealReminder` | 17:00-20:00 | No food logged today, and the user has logged ≥3 meals in the last 10 days | `meal-reminder` | `/dashboard/nutrition` |
 | Check-in reminder | `checkInReminder` | 12:00-16:00 | No mood or weight entry today | `checkin-reminder` | `/dashboard` |
 | Re-engagement | `reEngagement` | 12:00-18:00 | Extended inactivity | `re-engagement` | `/dashboard` |
 | Goal nudge | `goalNudge` | 17:00-20:00 | Goal-specific state, 3-day per-key cooldown | `goal-nudge` | varies by goal |
-| Streak at risk | `streakAtRisk` | Evening | Live streak, nothing logged today | `streak-at-risk` | `/dashboard` |
+| Streak at risk | `streakAtRisk` | **Any hour** — no local-hour gate exists | Live streak, nothing logged today, 20h per-key cooldown | `streak-at-risk` | `/dashboard` |
 | Super streak at risk | `superStreakAtRisk` | Evening | Multi-pillar streak at risk | `super-streak-at-risk` | `/dashboard/streaks` |
 | Schedule setup | `workoutReminder` | Morning | Active program with no training days set | `schedule-setup` | `/dashboard/calendar` |
 
@@ -40,15 +40,23 @@ marketing push, must respect a **global per-user daily cap** on top of the per-k
 07:00 ─── workout reminder ────┐
 08:00 ─── mind reminder ───────┤  MORNING: crowded. Do not add here.
 11:00 ─────────────────────────┘
-12:00 ─── meal reminder / check-in / re-engagement ───┐
-16:00 ─────────────────────────────────────────────────┘  MIDDAY: moderately used.
-17:00 ─── goal nudge ──────────┐
-20:00 ─────────────────────────┘  EVENING: goal nudge plus streak-at-risk.
-21:00 ─── QUIET HOURS BEGIN. Nothing fires until 07:00 local.
+12:00 ─── check-in / re-engagement ───┐
+16:00 ───────────────────────────────┘  MIDDAY: moderately used.
+17:00 ─── goal nudge + meal reminder ──┐
+20:00 ──────────────────────────────────┘  EVENING: the real collision.
+21:00 ─── QUIET HOURS: the target, NOT what ships today.
+   └── streak-at-risk has no local-hour gate and can fire at 03:00.
 ```
 
-The goal-nudge window starts an hour after the workout window closes precisely so the two
-morning nudges do not stack. Preserve that discipline.
+The evening block is where the stacking risk actually lives: **goal nudge and meal reminder share
+the identical 17:00-20:00 local window**, and both are common states for the same person. Any new
+evening nudge has to explain how it avoids being the third one.
+
+Quiet hours are a **rule we intend to enforce, not a rule the code enforces**. Eight of the nine
+nudges are hour-gated. The streak-at-risk sweep is not: `webapp/app/api/cron/notify/route.ts`
+comments it as "any hour — urgent" and gates only on a 20-hour per-key cooldown, so a user whose
+streak enters the danger window at 03:00 local gets a 03:00 push. Fix the gate before writing
+anything that promises quiet hours to a user.
 
 ---
 
@@ -91,8 +99,11 @@ find in the app is the fastest route to a revoked permission.
    today before sending.
 5. **Is the state still true at fire time?** Resolve from live data, never from a cached field.
 6. **Does the preference toggle exist in the settings UI?** Ship both together.
-7. **What is the decay rule?** 3 consecutive ignores halves the frequency, 6 drops to weekly,
-   10 stops it and surfaces an in-app prompt instead.
+7. **What is the decay rule?** The target ladder is 3 consecutive ignores halves the frequency, 6
+   drops to weekly, 10 stops it and surfaces an in-app prompt instead. **This is to build.** No
+   ignore tracking exists in the codebase today: `lastPushSentAt` records that we sent, never
+   whether anyone opened it. A nudge cannot decay until something counts the ignores, so specify
+   the ladder and flag the dependency rather than describing it as live.
 
 ---
 
@@ -103,9 +114,10 @@ A campaign or launch push is a guest on a channel the product depends on.
 - **It consumes that user's daily slot.** If a product nudge already fired today for that user,
   the marketing push does not send. The product nudge wins, always.
 - **It needs its own preference key** or it rides an existing one. Never send ungated.
-- **It obeys the same quiet hours**, 21:00 to 07:00 local. No launch-day exception.
-- **It must be true and specific.** "We shipped something" is not a push. "The camera counts
-  your reps now. Open LIVE mode." is.
+- **It obeys the same quiet hours**, 21:00 to 07:00 local. No launch-day exception, and unlike the
+  streak sweep a marketing push has no urgency argument for skipping the gate.
+- **It must be true and specific.** "We shipped something" is not a push. "Photograph the plate.
+  It comes back itemized." is.
 - **One per launch.** Not a countdown series.
 - Coordinate the send window with `launch-campaign` and make sure the same message is not also
   going out by email that day. See `email-lifecycle`.

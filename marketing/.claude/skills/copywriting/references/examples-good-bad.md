@@ -30,17 +30,19 @@ and the footnote pre-answers the two objections that stall a signup.
 ## Feature block: LIVE mode
 
 ❌
-> **Next-generation rep tracking**
-> Our revolutionary computer vision engine leverages your device camera to deliver real-time,
-> AI-powered repetition analysis for a truly seamless workout experience.
+> **Next-generation workout tracking**
+> Our revolutionary training engine leverages intelligent data capture to deliver a real-time,
+> AI-powered logging experience for the modern athlete.
 
 ✅
-> **Put the phone down. It still counts.**
-> Prop the phone against a plate and start the set. LIVE mode watches and counts the reps, so you are
-> not tapping a screen with chalk on your hands.
+> **Log the set before you rack the bar.**
+> LIVE mode holds one set on the screen. The fields are blank, last session's 185 × 8 sits right
+> under them, and tapping done starts the rest timer for you.
 
-Why: the ✅ names the physical situation. "Chalk on your hands" is a detail nobody invents in a
-generic draft, and details are what make copy feel like it came from someone who trains.
+Why: the ✅ names what is physically on the screen. Blank fields with last session's numbers
+underneath is a real design decision (Become never pre-fills a set you did not do) and it is the kind
+of detail nobody invents in a generic draft. Details are what make copy feel like it came from
+someone who trains.
 
 ## Feature block: photo nutrition
 
@@ -119,7 +121,8 @@ and fake scarcity.
 
 ✅
 > Your program is in one app. Your food is in another. Your notes are in a third.
-> Become runs all of it: coach-built phases, photo food logging, and a camera that counts your reps.
+> Become runs all of it: coach-built phases, a photo of your plate that itemizes itself, and set
+> logging that already knows what you lifted last time.
 > Sign up with your email. Nothing to pay.
 
 ## Directory tagline (40 chars)

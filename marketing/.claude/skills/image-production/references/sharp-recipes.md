@@ -117,7 +117,10 @@ const sharp=require('./webapp/node_modules/sharp');
 (async()=>{
   const obj=await sharp('/tmp/become-img/screen-rounded.png').toBuffer();
   const {width,height}=await sharp(obj).metadata();
+  // negate() is required: the alpha channel is white where the object is opaque, and a white
+  // multiply is a no-op. Without it the composite darkens everything EXCEPT under the object.
   const shadow=await sharp(obj).extractChannel('alpha')
+    .negate()
     .blur(28).toColourspace('b-w')
     .toBuffer();
   await sharp({create:{width:width+160,height:height+200,channels:4,background:'#0a0a0a'}})
@@ -133,6 +136,10 @@ const sharp=require('./webapp/node_modules/sharp');
 
 Offset the shadow down and slightly opposite the implied light. Keep the blur generous and the
 opacity low; a hard shadow reads as a paste.
+
+If the output looks like a dark frame with a bright rectangle in the middle, `negate()` is missing.
+That is the failure this recipe is written to avoid, and it is easy to miss because the result is
+plausible-looking until you compare it against the source.
 
 ## Batch a directory
 

@@ -12,13 +12,16 @@ can be compared six months later.
 > **[event name]**. We are wrong if **[guardrail metric]** moves against us by more than
 > **[threshold]**.
 
-Worked examples:
+Worked examples. **Every number in them is
+[ILLUSTRATIVE — no analytics exists yet; replace with measured numbers].** They demonstrate the
+sentence shape, not our funnel. A hypothesis that reuses one of these figures as if it were
+measured is worse than no hypothesis, because it launders a guess into an evidence clause.
 
 **Landing hero**
 > Because 62% of mobile visitors never scroll past the hero (`page_viewed` plus scroll depth,
-> last 4 weeks, N = 1,410), we believe naming the mechanism in the H1 ("The camera counts your
-> reps") will increase signup_started per mobile visitor, measured by `signup_started`. We are
-> wrong if the bounce rate on `/` rises by more than 5 points.
+> last 4 weeks, N = 1,410), we believe naming the mechanism in the H1 ("Point your camera at
+> lunch. Get the plate itemized.") will increase signup_started per mobile visitor, measured by
+> `signup_started`. We are wrong if the bounce rate on `/` rises by more than 5 points.
 
 **Magic-link email subject**
 > Because 34% of `magic_link_sent` events have no matching `magic_link_clicked` within 24 hours
@@ -62,6 +65,9 @@ Stopping rule:        fixed horizon, no interim reads
 
 ## 3. Sizing block
 
+Numbers below are [ILLUSTRATIVE — no analytics exists yet; replace with measured numbers]. The
+arithmetic is the part to copy.
+
 ```
 Baseline (p):           3.9% signup_started per visitor, last 4 weeks, N = 1,410
 Weekly volume:          ~350 visitors
@@ -96,6 +102,9 @@ A test without this sentence will be rationalized after the fact. Every time.
 ---
 
 ## 5. Result write-up
+
+Also [ILLUSTRATIVE — no analytics exists yet; replace with measured numbers]. Copy the structure
+and the call, not the figures.
 
 ```
 Test:          202609_hero_mechanism

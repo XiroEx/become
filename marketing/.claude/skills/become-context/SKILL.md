@@ -107,7 +107,7 @@ In order of how often downstream skills read them. Full template in
 | 12 | Goals and constraints | What we are trying to move, and the hard rules | `marketing-plan`, `ab-testing` |
 
 **Check for:**
-- Does every hub entry name a mechanic, not a benefit? "Counts your reps through the camera" is a
+- Does every hub entry name a mechanic, not a benefit? "Itemizes a whole plate from one photo" is a
   mechanic. "Keeps you accountable" is not.
 - Does the ICP describe behaviour, not demographics? "Has three fitness apps open" beats "25-40, urban."
 - Does section 11 contain only things that are true today with no number we cannot reproduce?
@@ -144,7 +144,7 @@ in the file, because it is what stops an agent quoting a guess as a fact.
 - *Over-tagging* — tagging every sentence in a paragraph instead of the claim.
 
 **Strong patterns:**
-- ✅ `LIVE mode counts reps through the camera. [verified in repo: webapp/app/dashboard/workout/[programId]/workout/live/]`
+- ✅ `LIVE mode logs the set as you train, with last-session numbers and PRs on screen. [verified in repo: webapp/app/dashboard/workout/[programId]/workout/live/]`
 - ✅ `Most signups already use two or more other fitness apps. [assumption, unvalidated]`
 - ❌ `Users love the weekly recap.` (no tag, no proof, and a results claim in disguise)
 
@@ -213,7 +213,7 @@ coach Jon Don. Five hubs:
 | Hub | What you do | The mechanic |
 |---|---|---|
 | Dashboard | Day at a glance | Streaks, mood, weight, water, customizable tiles |
-| Training | Follow or generate a plan | Coach-built multi-phase programs, AI session and program generator, demo video on every movement, set logging with PR history, LIVE mode that counts reps through the camera |
+| Training | Follow or generate a plan | Coach-built multi-phase programs, AI session and program generator, demo clips on the big lifts, LIVE mode that logs the set as you train with rest timers, last-session numbers, and PR history |
 | Nutrition | Log what you ate | Photo logging that itemizes a whole plate, barcode scan, personal calorie and macro targets |
 | Mind | Short practice | Guided sessions, mood tracking, identity work |
 | Progress and The Becoming | See the trend | Weight and strength trends, plus a weekly recap that writes your week back to you |
@@ -240,6 +240,9 @@ inventing it.
 - **This document is the only place product truth is edited.** Downstream skills read it and never
   redefine it. If `copywriting` discovers the doc is wrong, it reports back here; it does not patch
   the claim locally and move on.
+- **Commit the generated doc through the normal branch flow.** `marketing/.agents/become-context.md`
+  is committable and is not gitignored. A refresh that only lives in one worktree is a refresh that
+  the next agent will not read: branch, commit, PR to `beta`, merge on.
 - **No fabricated testimonials, user counts, results claims, or pricing.** Become is free today
   and no pricing exists. Never invent a price, a tier, a trial length, or a discount.
 - **Product screenshots come only from dummy accounts via the documented capture pipeline**

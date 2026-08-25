@@ -42,7 +42,7 @@ Five rows maximum. Only capabilities that decide a switch.
 | Set logging and history | | | | | |
 | Food logging mechanic | | | | | |
 | Mind / mood | | | | | |
-| The differentiating mechanic (camera rep counting, whole-plate photo) | | | | | |
+| The differentiating mechanic (whole-plate photo logging, coach programs plus an AI generator) | | | | | |
 
 Prompt: be honest where they are deeper. A teardown that has us winning every row is not
 research, it is a pep talk, and it will produce copy that gets disproved in a comment thread.
