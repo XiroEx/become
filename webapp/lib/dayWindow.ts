@@ -12,6 +12,19 @@
 const TZ_CLAMP_MIN = -840 // ±14h
 const TZ_CLAMP_MAX = 840
 
+/**
+ * How long an incomplete workout log stays "in progress" (the dashboard's
+ * pulsing Resume pill, and the live view's silent same-session resume) rather
+ * than falling back to the separate stale-workout prompt.
+ *
+ * Deliberately a ROLLING window, not a calendar-day one: a workout started at
+ * 11:58pm and still open at 12:10am is two minutes old, not "yesterday's."
+ * Scoping resumability to the caller's local calendar day discarded a log the
+ * instant midnight passed, even though nothing about it had gone stale — the
+ * member saw the pill vanish and the workout looked lost.
+ */
+export const IN_PROGRESS_WINDOW_MS = 24 * 60 * 60 * 1000
+
 /** Read `tz` from URL search params, clamped to ±14h. Defaults to 0 (UTC). */
 export function readTzOffset(searchParams: URLSearchParams): number {
   const raw = searchParams.get('tz')
