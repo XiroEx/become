@@ -1,0 +1,768 @@
+[
+  {
+    "name": "become-context",
+    "batch": "foundation-strategy",
+    "description": "Establishes and maintains the single source of truth every other Become marketing skill loads first — product truth and hub-by-hub feature inventory, brand system, voice rules, ICP and personas, positioning summary, honest proof points, the hard constraint list, and the repo asset inventory — written to marketing/.agents/become-context.md. Use when the user says \"set up marketing context,\" \"what is Become again,\" \"update the brand doc,\" \"our messaging is inconsistent,\" \"the copy keeps making things up about the product,\" or \"remind yourself what we're selling.\" Use this before any other marketing skill, and re-run it whenever the product ships something new. For the category decision see positioning; for channel sequencing see marketing-plan.",
+    "sections_hint": [
+      "Purpose: produce/refresh marketing/.agents/become-context.md, the anchor document",
+      "Process assessment gate: does the doc exist, how stale, what shipped since, what is unverified",
+      "Frameworks > The twelve sections of the context document (overview, product truth by hub, ICP, personas, pains, competitive alternatives, differentiation, objections and anti-persona, customer language verbatim, brand and voice, proof points we can honestly make, goals)",
+      "Frameworks > Verified vs assumed: every claim tagged [verified in repo] / [verified with Jon] / [assumption, unvalidated]",
+      "Frameworks > Asset inventory table (copy the verified paths from _conventions.md section 12)",
+      "Frameworks > Document version + Changelog convention, newest first, one line per change",
+      "Become-specific rules: this doc is the ONLY place product truth is edited; downstream skills read, never redefine",
+      "Quality bar: no invented feature, no invented pricing, every path resolves, changelog updated"
+    ],
+    "crossRefs": [
+      "positioning",
+      "marketing-plan",
+      "competitor-analysis",
+      "coach-brand-voice",
+      "copywriting"
+    ],
+    "referenceFiles": [
+      "references/context-template.md",
+      "references/voice-guide.md",
+      "references/constraints.md",
+      "references/asset-inventory.md"
+    ]
+  },
+  {
+    "name": "positioning",
+    "batch": "foundation-strategy",
+    "description": "Locks Become's market category and competitive frame with the April Dunford positioning canvas — true competitive alternatives, unique attributes with proof, value themes, the behavioural traits of who cares most, and the frame of reference we want to be filed under. Use when the user says \"how do we position this,\" \"what category are we in,\" \"we sound like every other fitness app,\" \"who are we actually competing with,\" \"why would someone pick us over MyFitnessPal,\" \"should we call ourselves a tracker,\" or \"our messaging feels generic.\" Use this before writing headlines, naming a category, or planning a launch. For a per-competitor teardown see competitor-analysis; for what we ask people to say yes to see offer-design; for the channel plan that follows see marketing-plan.",
+    "sections_hint": [
+      "Process assessment gate: which best-fit users, what baggage to shed, which alternatives are real (including \"nothing\" and the Notes app)",
+      "Frameworks > The positioning canvas, five components plus optional trends, as a fillable table",
+      "Frameworks > The ten-step process in order, with the failure mode of skipping each",
+      "Frameworks > Choosing the frame of reference: candidate frames scored on where our strengths look obvious",
+      "Frameworks > From canvas to messaging: value theme becomes headline, attribute becomes proof",
+      "Become-specific rules: the draft canvas (alternatives = Notes app plus YouTube, a stitched app stack, an in-person trainer, an AI chatbot; attributes = coach-built phases plus AI generator, camera rep counting, whole-plate photo logging, every hub in one dashboard, weekly recap; themes = one app instead of five, a coach's structure without a coach's price, evidence about yourself not vibes) is DRAFT and must be validated, not quoted as settled",
+      "Become-specific rules: do not frame as \"workout tracker\" (loses on depth to Hevy/Strong)",
+      "Quality bar: every attribute has proof in the product, no attribute is a benefit in disguise"
+    ],
+    "crossRefs": [
+      "become-context",
+      "competitor-analysis",
+      "offer-design",
+      "marketing-plan",
+      "copywriting"
+    ],
+    "referenceFiles": [
+      "references/canvas-worksheet.md",
+      "references/frame-options.md",
+      "references/alternatives-map.md"
+    ]
+  },
+  {
+    "name": "marketing-plan",
+    "batch": "foundation-strategy",
+    "description": "Builds a sequenced, resourced marketing plan for Become — goals worth chasing, channel bets ordered by expected return for a free coach-led PWA, 30/60/90 phasing, the asset manifest with the skill that produces each item, and the numbers that decide whether a bet continues or dies. Use when the user says \"what should we do next,\" \"make a marketing plan,\" \"where should we spend our time,\" \"we have no strategy,\" \"what's the 90-day plan,\" \"which channel first,\" or \"how do we get users.\" Use this even when the ask is vague or the user only describes a feeling of being behind. For the positioning input it depends on see positioning; for a dated post schedule see content-calendar; for one launch moment see launch-campaign; for what to measure see analytics-tracking.",
+    "sections_hint": [
+      "Process assessment gate: what is the actual constraint (time, money, distribution, product readiness), current baseline numbers, who executes",
+      "Frameworks > Channel bets ranked for Become: organic social, coach-led audience, SEO/GEO, directories and launch surfaces, referral, paid social, community. Each with cost, time-to-signal, ceiling, and the reason it does or does not fit a free PWA",
+      "Frameworks > The 30/60/90 shape: prove one channel, then compound, then buy",
+      "Frameworks > One-bet-per-quarter discipline and the kill criteria",
+      "Frameworks > Asset manifest: every plan line names the producing skill",
+      "Become-specific rules: no paid budget assumed; no pricing lever exists; Jon's audience is the highest-leverage owned asset; team is small so plans must be executable by one person plus agents",
+      "Quality bar: every bet has a metric, a review date, and a kill rule"
+    ],
+    "crossRefs": [
+      "positioning",
+      "become-context",
+      "content-calendar",
+      "launch-campaign",
+      "analytics-tracking",
+      "social-strategy"
+    ],
+    "referenceFiles": [
+      "references/channel-bets.md",
+      "references/90-day-template.md",
+      "references/benchmarks.md"
+    ]
+  },
+  {
+    "name": "offer-design",
+    "batch": "foundation-strategy",
+    "description": "Designs what Become asks a visitor to say yes to, given that the app is free today and no pricing exists — the primary offer, the lowest-friction first step, value framing without a price anchor, honest urgency, and the risk reversal a magic-link signup already gives us. Use when the user says \"what's our offer,\" \"what should the CTA be,\" \"how do we make signup feel worth it,\" \"should we gate anything,\" \"we can't just say free forever,\" \"how do we create urgency without lying,\" or \"why would anyone sign up today.\" Never invents pricing, tiers, trial lengths, or discounts. For the words that express the offer see copywriting; for the flow after the yes see signup-activation; for the shareable version see referral-program.",
+    "sections_hint": [
+      "Process assessment gate: which audience, which surface, what is the single next action, what proof exists to back it",
+      "Frameworks > The offer stack for a free product: the promise, the first step, the time cost, the proof, the reversal",
+      "Frameworks > Value equation without price: dream outcome, perceived likelihood, time to first result, effort and sacrifice",
+      "Frameworks > Honest urgency ladder (a real cohort start, a real program drop, a real week boundary) versus fake urgency (fake countdowns, fake scarcity, invented founder pricing) with the ❌/✅ pairs",
+      "Frameworks > First-step design: magic link, no credit card, one email field, and what that buys us in objection handling",
+      "Become-specific rules: \"Free today\" is the only permitted price statement; never imply a future price; never promise a timeline or a pound count",
+      "Quality bar: the offer survives the question \"is every word of this literally true today\""
+    ],
+    "crossRefs": [
+      "positioning",
+      "copywriting",
+      "signup-activation",
+      "landing-cro",
+      "referral-program"
+    ],
+    "referenceFiles": [
+      "references/offer-patterns.md",
+      "references/urgency-and-proof.md"
+    ]
+  },
+  {
+    "name": "competitor-analysis",
+    "batch": "foundation-strategy",
+    "description": "Runs a structured teardown of a named fitness, nutrition, or mindset competitor — MyFitnessPal, Hevy, Strong, Fitbod, Ladder, STNDRD, Whoop, Strava, Cal AI, Headspace, or a local coach-led alternative — covering positioning and category claim, feature surface versus ours, pricing and monetization, acquisition channels, creative and content system, review-mined weaknesses, and the specific gap Become can own. Use when the user says \"how does X compare,\" \"what is Ladder doing,\" \"who else does photo food logging,\" \"competitor research,\" \"why would someone pick us over Hevy,\" \"is anyone else doing camera rep counting,\" or drops a competitor URL with no instruction. For our own category decision see positioning; for their visual ad patterns specifically see inspo-library.",
+    "sections_hint": [
+      "Process assessment gate: which competitor, which question we are answering, is this a one-off or a refresh",
+      "Process: research method — site, pricing page, app listings, review mining, ad libraries, social accounts — with the note that WebSearch and WebFetch are the tools and every claim gets a source line",
+      "Frameworks > The eight-axis teardown table",
+      "Frameworks > Review mining: how to pull the recurring one-star complaint into our differentiation",
+      "Frameworks > Gap analysis: where their strength is structural (do not attack) versus positional (attack)",
+      "Frameworks > Output: a comparison table plus three sentences we can honestly say about the difference",
+      "Become-specific rules: never publish a comparison claim we cannot verify today; never quote a competitor price without the date checked; competitor screenshots stay internal",
+      "Quality bar: every row cites a source with a date"
+    ],
+    "crossRefs": [
+      "positioning",
+      "become-context",
+      "inspo-library",
+      "seo-geo",
+      "copywriting"
+    ],
+    "referenceFiles": [
+      "references/competitor-dossiers.md",
+      "references/teardown-template.md",
+      "references/review-mining.md"
+    ]
+  },
+  {
+    "name": "copywriting",
+    "batch": "copy-conversion",
+    "description": "Writes new Become marketing copy from a blank page — landing sections, feature blocks, hero and subhead sets, ad copy, email and push subject lines, listing text, brand-voice social captions, share-sheet lines, and one-liners — in the Become voice, delivered with annotations and labelled alternatives. Use when the user says \"write the hero,\" \"we need copy for the nutrition section,\" \"give me headline options,\" \"write an ad for LIVE mode,\" \"what should this button say,\" \"make this page,\" or \"I need words for this.\" Use this even when the user only describes a feature and expects copy back. For improving copy that already exists see copy-editing; for diagnosing why a page does not convert see landing-cro; for Jon speaking in the first person see coach-brand-voice.",
+    "sections_hint": [
+      "Process assessment gate: which surface and its length limits, which audience state, which single idea, what proof is available, what the next action is",
+      "Frameworks > Message hierarchy: one idea per block, benefit then mechanism then proof",
+      "Frameworks > Headline formulas with weak-vs-strong pairs (outcome without the pain, the concrete noun, the specific moment, the honest contrast)",
+      "Frameworks > Feature-to-value translation table for each hub, using the real mechanic (camera counts the reps, the photo itemizes the plate, the recap writes your week back to you)",
+      "Frameworks > CTA writing: verb plus object plus payoff; weak-vs-strong table",
+      "Frameworks > Length specs per surface (hero, subhead, section, card, button, subject line, push title and body, OG description)",
+      "Output buckets: Page copy / Annotations / Alternatives A-B-C with rationale / Meta content",
+      "Become-specific rules: no pricing, no results claims, no fabricated proof, no banned words, near-zero em dashes, The Becoming at most one mention"
+    ],
+    "crossRefs": [
+      "become-context",
+      "copy-editing",
+      "landing-cro",
+      "offer-design",
+      "coach-brand-voice"
+    ],
+    "referenceFiles": [
+      "references/headline-formulas.md",
+      "references/surface-specs.md",
+      "references/feature-value-map.md",
+      "references/examples-good-bad.md"
+    ]
+  },
+  {
+    "name": "landing-cro",
+    "batch": "copy-conversion",
+    "description": "Diagnoses and improves conversion on become.redbtn.io and other entry surfaces — value-proposition clarity, section order, what happens above the fold on a 390px screen, proof placement, CTA friction, magic-link objections, form design, and load-speed drag — and returns prioritized fixes with test hypotheses. Use when the user says \"the landing page isn't converting,\" \"nobody signs up,\" \"audit our landing page,\" \"is our hero clear,\" \"should the CTA be higher,\" \"there's too much scrolling,\" \"the page feels flat,\" or just pastes a URL and asks what is wrong. For writing new words see copywriting; for tightening existing words see copy-editing; for everything after the click see signup-activation; for actually running the test see ab-testing.",
+    "sections_hint": [
+      "Process assessment gate: which traffic source, which device, what the visitor already believes, what the current page does (read webapp/components/landing/)",
+      "Frameworks > Seven dimensions in order of impact, each with Check-for / Common issues / Strong patterns: 1 value proposition clarity, 2 above-the-fold on mobile, 3 conversion action and friction, 4 proof and credibility, 5 section order and narrative flow, 6 objection handling, 7 speed and motion cost",
+      "Frameworks > Mobile-first specifics: 390x844, thumb zone, safe-area insets, sticky CTA, scroll depth before the first ask",
+      "Frameworks > The magic-link objection set (no password, will the email arrive, what if I close the tab) and how the page pre-answers it",
+      "Frameworks > Proof we can legitimately show: real product captures, coach credentials, the mechanism itself. Not: counts, testimonials, star ratings",
+      "Output buckets: Quick wins / High-impact changes / Test ideas / Copy alternatives with rationale",
+      "Become-specific rules: cite real component paths; screenshots only from screenshots/v2; light AND dark must both work"
+    ],
+    "crossRefs": [
+      "copywriting",
+      "copy-editing",
+      "signup-activation",
+      "ab-testing",
+      "marketing-psychology",
+      "offer-design"
+    ],
+    "referenceFiles": [
+      "references/page-anatomy.md",
+      "references/friction-audit.md",
+      "references/experiments.md"
+    ]
+  },
+  {
+    "name": "copy-editing",
+    "batch": "copy-conversion",
+    "description": "Edits copy that already exists down to the Become voice — cuts fluff and banned phrasing, strips AI slop and em dashes, replaces abstractions with the concrete noun, fixes rhythm and reading level, and flags any line that breaks the no-fabrication, no-pricing, or responsible-claims rules. Returns a marked before-and-after with a one-line reason per change. Use when the user says \"tighten this,\" \"this sounds like AI,\" \"make it sound like us,\" \"too wordy,\" \"punch this up,\" \"review this copy,\" \"does this sound right,\" or pastes a draft with no instruction at all. For writing from scratch see copywriting; for page structure and conversion see landing-cro; for Jon's first-person register see coach-brand-voice.",
+    "sections_hint": [
+      "Process assessment gate: which surface, which voice register (product second person vs Jon first person), what must not change (claims, links, length limits)",
+      "Frameworks > The five edit passes in order: 1 truth pass (claims, pricing, features that do not exist), 2 slop pass (banned words, em dashes, hedges, throat-clearing), 3 concreteness pass (abstraction to noun), 4 rhythm pass (sentence length variance, front-loaded verbs), 5 fit pass (length limits, scannability)",
+      "Frameworks > The banned list with a replacement for each entry, not just a prohibition",
+      "Frameworks > AI-slop tells: tricolon addiction, \"not just X but Y,\" \"in a world where,\" symmetrical clause pairs, adjective stacking, em dash overuse",
+      "Frameworks > When NOT to edit: voice-authentic roughness in Jon's first-person copy",
+      "Output buckets: Marked diff / Reason per change / Two alternate versions (tighter, warmer) / Claims flagged for verification",
+      "Quality bar: word count reduced, zero banned words, every claim traceable"
+    ],
+    "crossRefs": [
+      "copywriting",
+      "coach-brand-voice",
+      "become-context",
+      "landing-cro"
+    ],
+    "referenceFiles": [
+      "references/banned-words.md",
+      "references/edit-passes.md",
+      "references/before-after.md"
+    ]
+  },
+  {
+    "name": "signup-activation",
+    "batch": "copy-conversion",
+    "description": "Optimizes everything after the click — the magic-link signup flow, inbox and deliverability friction, the verify-and-return handoff between tabs, onboarding questions and their order, first-session activation, the PWA install prompt, and the day-1 to day-7 loop that turns a signup into a logged workout. Use when the user says \"people sign up but never come back,\" \"onboarding is too long,\" \"the magic link is confusing,\" \"improve activation,\" \"what's our aha moment,\" \"nobody installs the PWA,\" \"day 2 retention is bad,\" or \"they stall on the first screen.\" For pre-click page conversion see landing-cro; for the emails in the sequence see email-lifecycle; for the nudges see push-notifications; for the events behind the funnel see analytics-tracking.",
+    "sections_hint": [
+      "Process assessment gate: where exactly users drop (signup submitted, link clicked, onboarding started, first log), on which device, from which source",
+      "Frameworks > The activation funnel stages with the one metric each: email submitted, link delivered, link clicked, account created, onboarding completed, first meaningful action, day-7 return",
+      "Frameworks > Magic-link specific friction, in order of impact: wrong-tab confusion, inbox delay, spam placement, expired token, mobile mail app in-app browser. Check-for / Common issues / Strong patterns for each",
+      "Frameworks > Time-to-value: what is the fastest honest first win in Become (a generated session, a logged plate photo, a first mood check-in)",
+      "Frameworks > Onboarding question economics: every question must change what the app shows next or be cut",
+      "Frameworks > PWA install prompt timing: never on first load, ask after the first earned win",
+      "Output buckets: Quick wins / High-impact changes / Test ideas / Copy alternatives",
+      "Become-specific rules: cite real routes (/login, /verify, /onboarding, /dashboard); no fake progress bars; no dark patterns"
+    ],
+    "crossRefs": [
+      "landing-cro",
+      "email-lifecycle",
+      "push-notifications",
+      "analytics-tracking",
+      "marketing-psychology",
+      "offer-design"
+    ],
+    "referenceFiles": [
+      "references/funnel-map.md",
+      "references/magic-link-friction.md",
+      "references/onboarding-patterns.md"
+    ]
+  },
+  {
+    "name": "web-app-listing",
+    "batch": "copy-conversion",
+    "description": "Produces Become's listings for the surfaces a PWA actually lives on — Product Hunt, AlternativeTo, BetaList, PWA and web-app directories, fitness-tool roundups, Reddit and forum resource threads — plus the install-surface metadata that stands in for a store page, including manifest name and description, install-prompt copy, share-sheet text, Open Graph and Twitter cards, and the short and long blurbs each directory asks for. Use when the user says \"write our Product Hunt listing,\" \"list us on directories,\" \"we need an app store description,\" \"what goes in the manifest,\" \"write our install prompt,\" \"how do people find us if we're not in the App Store,\" or \"we need a tagline for this listing.\" For the launch moment around a submission see launch-campaign; for how these listings get cited by AI answers see seo-geo.",
+    "sections_hint": [
+      "Process assessment gate: which surface, its exact character limits and required fields, whether a live account is needed, submission rules",
+      "Frameworks > The listing asset kit: name, 40-char tagline, 60-char, 160-char, 260-char, and long descriptions; category and tags; gallery order; first comment",
+      "Frameworks > Directory tiers for a free PWA, ranked by realistic referral and citation value, each with format notes and gotchas",
+      "Frameworks > Install-surface metadata as our store page: manifest fields, install prompt, share text, OG and Twitter cards, and the exact files that hold them",
+      "Frameworks > Gallery rules: which of the 15 v2 captures to use, in which order, light or dark per surface",
+      "Output buckets: The listing (all fields, at length) / Gallery manifest / Submission checklist / Alternatives for the tagline",
+      "Become-specific rules: we are a PWA, not an app-store app. No ratings, no download counts, no pricing tier. Never write \"(beta)\" into a listing"
+    ],
+    "crossRefs": [
+      "copywriting",
+      "launch-campaign",
+      "seo-geo",
+      "screenshot-capture",
+      "image-production"
+    ],
+    "referenceFiles": [
+      "references/directories.md",
+      "references/field-specs.md",
+      "references/install-surfaces.md"
+    ]
+  },
+  {
+    "name": "social-strategy",
+    "batch": "social-content",
+    "description": "Sets Become's organic social operating system — platform mix and cadence, the Reels-for-reach plus carousels-for-trust split, content pillars mapped to the five product hubs, share and save mechanics that buy unconnected reach, how the Become handle and Jon's handle divide the work, and what to actually measure. Use when the user says \"what should we post,\" \"grow our Instagram,\" \"we post and nothing happens,\" \"how often should we post,\" \"TikTok or Instagram,\" \"what are our content pillars,\" \"our engagement is dropping,\" or \"should Jon post this or should the brand.\" For an individual video script see reels-scripts; for a dated schedule see content-calendar; for paid amplification of the same creative see paid-social; for Jon's on-camera voice see coach-brand-voice.",
+    "sections_hint": [
+      "Process assessment gate: which accounts exist, what has been posted, what the honest current baseline is, who can film",
+      "Frameworks > Platform mechanics (Tier A/B sourced): watch time as the entry ticket, sends and shares per reach as the scaling lever weighted well above likes, saves driving carousel distribution. State the tier next to every number and forbid restating any of it publicly",
+      "Frameworks > Format economics table: carousels ~0.50%, Reels ~0.48%, images ~0.33% engagement rate (Socialinsider 35M-post benchmark, Tier A), median cadence 8 Reels / 5 carousels / 7 images per month. Read: Reels buy reach, carousels buy trust, statics are the weakest slot",
+      "Frameworks > The share test: design every Reel so one specific person would DM it to one specific friend. \"Send this to the person who keeps restarting Monday\" beats \"double tap if you agree\"",
+      "Frameworks > Five content pillars mapped to hubs, with the mechanism each proves and the format it wants",
+      "Frameworks > Account architecture: brand account vs coach account, what each owns, how they cross-post",
+      "Output buckets: Decisions locked / Weekly operating cadence / Pillar-to-format matrix / Measurement / Open questions",
+      "Become-specific rules: no viral-only strategy, no engagement bait, no results claims, no before/after"
+    ],
+    "crossRefs": [
+      "reels-scripts",
+      "content-calendar",
+      "coach-brand-voice",
+      "paid-social",
+      "marketing-plan",
+      "ugc-creator-briefs"
+    ],
+    "referenceFiles": [
+      "references/platform-mechanics.md",
+      "references/content-pillars.md",
+      "references/benchmarks.md"
+    ]
+  },
+  {
+    "name": "reels-scripts",
+    "batch": "social-content",
+    "description": "Writes shootable short-form video scripts for Reels, TikTok, and Shorts — a hook that lands inside the first 1.5 seconds, a beat-by-beat shot list with cut timings, on-screen text that says something different from the spoken line, a loop-close, and a CTA that is not \"link in bio\" — built around real Become mechanics like LIVE rep counting, whole-plate photo logging, and the weekly recap. Use when the user says \"write a reel,\" \"script a TikTok,\" \"we need a hook,\" \"make a video about the camera counting reps,\" \"30 second video idea,\" \"turn this feature into a video,\" or \"this reel flopped, fix it.\" For the cadence and pillar decisions behind it see social-strategy; for a creator filming it see ugc-creator-briefs; for rendering a motion asset instead of filming see remotion-assets.",
+    "sections_hint": [
+      "Process assessment gate: which mechanism is the payoff, who films it, what footage or capture already exists, target length",
+      "Frameworks > Length bands: 15-30s highest completion, 21-34s most shares, 11-18s skews viral, 45-60s+ for teaching, 30-45s the most repurposable cut for paid",
+      "Frameworks > The first 1.5 seconds as production rules, not statistics: frame one holds a face, a motion, or a legible 4-7 word overlay. Never a logo, never a title card, never a slow push-in. No \"hey guys.\" Spoken hook and on-screen text carry different information. Cut or reframe every 1.5-2.5s for the first 8 seconds. Last frame rhymes with the first to earn replays",
+      "Frameworks > Six script archetypes with a full worked example each: the App Tip how-to sequence (the strongest pattern in our inspo library), the mechanism demo, the misconception flip, the day-in-the-plan, the coach answer, the recap reveal",
+      "Frameworks > Hook matrix: ten hook shapes crossed with the hubs, with weak-vs-strong pairs",
+      "Output buckets: The script (timecoded beats, VO, on-screen text, b-roll) / Annotations / Two alternate hooks / Capture list naming exact files or the screenshot-capture run needed",
+      "Become-specific rules: film real screens only; no fabricated results; no shaming hooks; The Becoming is at most one beat"
+    ],
+    "crossRefs": [
+      "social-strategy",
+      "content-calendar",
+      "ugc-creator-briefs",
+      "coach-brand-voice",
+      "remotion-assets",
+      "screenshot-capture"
+    ],
+    "referenceFiles": [
+      "references/hook-library.md",
+      "references/script-archetypes.md",
+      "references/shot-list-spec.md"
+    ]
+  },
+  {
+    "name": "content-calendar",
+    "batch": "social-content",
+    "description": "Turns pillars and campaigns into a dated, sourced publishing calendar — what posts on which day, in which format, on which platform, from which existing asset or capture, with a repeatable weekly template and named recurring slots. Every row names the asset it needs and the skill that produces it, so nothing is scheduled that cannot be shot. Use when the user says \"build a content calendar,\" \"what are we posting this month,\" \"plan the week,\" \"we keep scrambling for content,\" \"batch our posts,\" \"give me 30 days of content,\" or \"we have nothing queued.\" For the pillar and cadence decisions upstream see social-strategy; for the individual script see reels-scripts; for a launch week specifically see launch-campaign.",
+    "sections_hint": [
+      "Process assessment gate: date range, realistic production capacity, what already exists in marketing/out and screenshots/v2, what is shipping in the product this month",
+      "Frameworks > The weekly template: fixed slots by day, each bound to a pillar and format, with named recurring slots (the inspo library shows a named-slot pattern works)",
+      "Frameworks > Batch production: one capture session and one film session feed a month",
+      "Frameworks > Asset sourcing rules, in preference order: existing render in marketing/out, existing capture in screenshots/v2, new render via remotion-assets, new capture via screenshot-capture, new film via reels-scripts or ugc-creator-briefs",
+      "Frameworks > Calendar row schema (date, platform, format, pillar, hook, asset path or producing skill, caption owner, status)",
+      "Output buckets: Decisions locked / The calendar table / Assets required with producing skill / Batch plan / Open questions",
+      "Become-specific rules: never schedule a post that needs a capture nobody has agreed to shoot; never schedule around a feature that has not shipped"
+    ],
+    "crossRefs": [
+      "social-strategy",
+      "reels-scripts",
+      "launch-campaign",
+      "remotion-assets",
+      "screenshot-capture",
+      "coach-brand-voice"
+    ],
+    "referenceFiles": [
+      "references/weekly-template.md",
+      "references/recurring-slots.md",
+      "references/asset-sourcing.md"
+    ]
+  },
+  {
+    "name": "ugc-creator-briefs",
+    "batch": "social-content",
+    "description": "Writes briefs for creators, members, and affiliates filming Become content — deliverable spec and usage rights, hook direction, must-show product moments, shot list, a do-not-say list, FTC disclosure requirements, and the approval checklist that keeps captured footage inside our constraints. Use when the user says \"brief a creator,\" \"we're working with an influencer,\" \"UGC brief,\" \"what should the creator say,\" \"can we repost this member's video,\" \"do they have to say ad,\" \"send them the rules,\" or \"we got a video, can we use it.\" No fabricated testimonial, invented result, or price claim may enter through creator content, and permission is required before any member content is reposted. For Jon's own first-person voice see coach-brand-voice; for the beat structure of the video itself see reels-scripts; for paid amplification of creator assets see paid-social.",
+    "sections_hint": [
+      "Process assessment gate: paid or gifted or organic, deliverable count and format, usage window and paid-amplification rights, who approves",
+      "Frameworks > The brief template, section by section: context, audience, the one idea, hook direction, must-show moments, shot list, do-not-say list, disclosure, deliverable spec, timeline, rights",
+      "Frameworks > FTC disclosure rules: material connection disclosed clearly and conspicuously, in the video and in the caption, \"#ad\" or \"paid partnership\" not buried, disclosure applies to gifted access too",
+      "Frameworks > The do-not-say list for fitness creators: no medical claims, no promised pounds or timelines, no before/after implying a guarantee, no \"this cured my X,\" no invented pricing, no naming a competitor negatively",
+      "Frameworks > Member content and reposting: written permission, no minors, no camera-roll body photos, no screenshot of another user's data",
+      "Output buckets: The brief / Annotations / Alternate hook directions / Approval checklist",
+      "Become-specific rules: creator claims are our claims; the constraint list applies to their words too"
+    ],
+    "crossRefs": [
+      "reels-scripts",
+      "coach-brand-voice",
+      "social-strategy",
+      "paid-social",
+      "referral-program"
+    ],
+    "referenceFiles": [
+      "references/brief-template.md",
+      "references/ftc-disclosure.md",
+      "references/do-not-say.md"
+    ]
+  },
+  {
+    "name": "coach-brand-voice",
+    "batch": "social-content",
+    "description": "Defines and writes Jon Don's first-person coach voice for anything fronted by him — talking-head scripts, captions, direct-to-camera openers, member replies, story answers, DM and comment responses, and coaching one-liners — and keeps that register cleanly separate from the product's second-person voice. Use when the user says \"write this as Jon,\" \"make it sound like the coach,\" \"Jon's caption,\" \"what would the coach say,\" \"this doesn't sound like him,\" \"reply to this comment,\" or \"we need a founder post.\" Enforces the no-personal-camera-roll-photos rule and the responsible-claims limits on everything attributed to a real person. For the product's own voice see copywriting; for the video structure around his words see reels-scripts; for creators who are not Jon see ugc-creator-briefs.",
+    "sections_hint": [
+      "Process assessment gate: is this Jon or the brand speaking, which surface, is it a reply to a real person, is any claim being made about a client",
+      "Frameworks > The two registers side by side: product (second person, present tense, mechanism-first) vs coach (first person, experience-first, direct address). Table with the same message written both ways",
+      "Frameworks > Jon's voice rules: says what he would say to a client in the gym, gives the reason not just the rule, admits tradeoffs, never shames, never hypes, never promises an outcome",
+      "Frameworks > Reply patterns: acknowledge, answer concretely, one next step. With ❌/✅ pairs for real comment types (skeptic, beginner, injury question, price question, competitor comparison)",
+      "Frameworks > Injury, medical, and pregnancy questions: the referral response and why it is non-negotiable",
+      "Frameworks > Coach credibility as proof: what he has actually built is the proof, not numbers we do not have",
+      "Output buckets: The copy / Annotations / Two alternates (shorter, warmer) / Anything needing Jon's sign-off",
+      "Become-specific rules: never invent a client story, a client result, or a personal anecdote"
+    ],
+    "crossRefs": [
+      "copywriting",
+      "reels-scripts",
+      "ugc-creator-briefs",
+      "social-strategy",
+      "copy-editing",
+      "become-context"
+    ],
+    "referenceFiles": [
+      "references/voice-registers.md",
+      "references/reply-patterns.md",
+      "references/claims-boundaries.md"
+    ]
+  },
+  {
+    "name": "email-lifecycle",
+    "batch": "lifecycle-launch",
+    "description": "Designs and writes Become's email program — the magic-link and verification transactional set, the welcome and activation sequence, week-one habit emails, the weekly recap send, lapsed-user win-back, and re-engagement — with subject lines, preview text, send timing, trigger and suppression logic, and plain deliverable HTML because sending runs through Nodemailer SMTP. Use when the user says \"write a welcome email,\" \"our emails don't get opened,\" \"win-back sequence,\" \"email people who haven't logged a workout,\" \"what should the recap email say,\" \"set up onboarding emails,\" or \"the magic link email looks bad.\" For in-app and browser nudges see push-notifications; for the activation flow the emails support see signup-activation; for the launch announcement send see launch-campaign.",
+    "sections_hint": [
+      "Process assessment gate: which lifecycle stage, what triggers it, what data the app actually has to personalize it, what the single action is",
+      "Frameworks > The lifecycle map: transactional (magic link, verify), activation (day 0-7), habit (weekly recap, streak), reactivation (7/14/30-day lapse), broadcast (launch, program drop). Each with trigger, timing, goal metric, and suppression",
+      "Frameworks > The magic-link email itself: deliverability, subject clarity, one button, expiry stated, what to do if it was not you. This is the highest-stakes email we send",
+      "Frameworks > Subject line and preview text craft with weak-vs-strong pairs and length specs",
+      "Frameworks > Recap emails from real data: workouts logged, volume, streak, mood trend, calories hit. Never a metric the user did not generate",
+      "Frameworks > Deliverability under SMTP: plain structure, low image weight, real from-name, one link domain, unsubscribe on non-transactional",
+      "Output buckets: The sequence table / Full copy per email / Annotations / Subject line alternates / Suppression rules",
+      "Become-specific rules: no fake urgency, no guilt subject lines, no pricing, no promised results"
+    ],
+    "crossRefs": [
+      "signup-activation",
+      "push-notifications",
+      "copywriting",
+      "launch-campaign",
+      "analytics-tracking"
+    ],
+    "referenceFiles": [
+      "references/lifecycle-map.md",
+      "references/subject-lines.md",
+      "references/deliverability.md"
+    ]
+  },
+  {
+    "name": "push-notifications",
+    "batch": "lifecycle-launch",
+    "description": "Writes and schedules Become's web push notifications — permission-prompt timing and copy, the daily nudge set, streak and recap triggers, workout-day reminders, quiet hours, frequency caps, and a visible opt-out — tuned to a PWA where one badly timed prompt loses the channel permanently. Use when the user says \"write a push notification,\" \"when should we ask for notification permission,\" \"our notifications are annoying,\" \"streak reminder copy,\" \"people are turning off push,\" \"nudge users who missed a workout,\" or \"can we send a push for this.\" Web push exists in Become today and there is no native app, so browser permission rules govern everything. For longer-form messaging see email-lifecycle; for the habit loop the nudges serve see signup-activation; for the behavioural principles behind them see marketing-psychology.",
+    "sections_hint": [
+      "Process assessment gate: what user state triggers this, what the user gets by tapping, is this the best channel or should it be email, what happens if they ignore it",
+      "Frameworks > Permission prompt: never on first load, never a browser prompt without a pre-prompt, ask after the first earned win, explain what they will get, allow \"not now\" without penalty",
+      "Frameworks > The nudge inventory: workout-day reminder, missed-session recovery, streak-at-risk, weekly recap ready, mood check-in, water and nutrition targets, program phase change. Each with trigger, timing window, cap, and copy",
+      "Frameworks > Copy specs: title character budget, body character budget, one action, no ALL CAPS, no emoji spam, the notification must be true at the moment it fires",
+      "Frameworks > Frequency, quiet hours, and the do-not-disturb rules; how to decay nudges for a user who ignores them",
+      "Frameworks > Never-shame rule with ❌/✅ pairs on streak-at-risk copy, the highest-risk category",
+      "Output buckets: The nudge table / Full copy per nudge / Annotations / Alternates / Trigger and cap spec",
+      "Become-specific rules: never fabricate a stat inside a push; never guilt; every push must be dismissible without cost"
+    ],
+    "crossRefs": [
+      "email-lifecycle",
+      "signup-activation",
+      "marketing-psychology",
+      "copywriting",
+      "analytics-tracking"
+    ],
+    "referenceFiles": [
+      "references/nudge-inventory.md",
+      "references/permission-timing.md",
+      "references/copy-specs.md"
+    ]
+  },
+  {
+    "name": "launch-campaign",
+    "batch": "lifecycle-launch",
+    "description": "Plans and runs a single Become launch moment — a feature launch like LIVE rep counting or whole-plate photo logging, a program drop, a directory submission, or a relaunch — using an owned, rented, and borrowed channel split, a readiness gate that stops a premature launch, a day-by-day run of show, the asset manifest, and the post-launch review. Use when the user says \"we're launching X,\" \"launch plan,\" \"how do we announce this,\" \"Product Hunt launch,\" \"big feature drop next week,\" \"nobody noticed our last launch,\" or \"we shipped something, now what.\" For the standing plan this fits inside see marketing-plan; for the directory listings themselves see web-app-listing; for the dated posts see content-calendar; for the announcement email see email-lifecycle.",
+    "sections_hint": [
+      "Process assessment gate: what actually shipped and is it stable on production, who is the launch for, what does success mean, what is the single date",
+      "Frameworks > The readiness gate: feature works on mobile in light and dark, captures exist and show no bug or empty state, the landing page mentions it, tracking is in place, support answer written. No gate, no launch",
+      "Frameworks > Owned / Rented / Borrowed: owned (landing, email list, push, in-app), rented (social accounts, directories), borrowed (Jon's audience, creators, communities, press). Sequence and expected contribution of each",
+      "Frameworks > Run of show: T-14 through T+7, with the owner and asset per row",
+      "Frameworks > Directory and community launch etiquette: what gets you removed from a subreddit or a Product Hunt front page",
+      "Output buckets: Decisions locked / Run of show table / Assets required with producing skill / Success metrics / Post-launch review template",
+      "Become-specific rules: never launch on a feature not live on become.redbtn.io; never launch with \"(beta)\" visible in a capture; no invented launch-day pricing or discount"
+    ],
+    "crossRefs": [
+      "marketing-plan",
+      "web-app-listing",
+      "content-calendar",
+      "email-lifecycle",
+      "push-notifications",
+      "screenshot-capture"
+    ],
+    "referenceFiles": [
+      "references/orb-framework.md",
+      "references/run-of-show.md",
+      "references/readiness-gate.md"
+    ]
+  },
+  {
+    "name": "referral-program",
+    "batch": "lifecycle-launch",
+    "description": "Designs Become's word-of-mouth and referral mechanics without a paid incentive to spend — choosing the shareable artifact (weekly recap, streak, a PR, a plate breakdown), writing the share-sheet and invite copy, timing the ask to a moment of earned pride, designing the invite loop end to end, and picking honest non-monetary rewards. Use when the user says \"add a referral program,\" \"how do we get users to invite friends,\" \"make it shareable,\" \"viral loop,\" \"what's our share moment,\" \"should we do a referral bonus,\" or \"how do we grow without ads.\" Become is free, so there is no discount to give and none may be invented. For the in-product sharing surface and timing see signup-activation; for social amplification of what gets shared see social-strategy; for the psychology of the ask see marketing-psychology.",
+    "sections_hint": [
+      "Process assessment gate: what does the user already feel proud of, what artifact can we render, what does the recipient actually receive, is there an existing /share route",
+      "Frameworks > The loop diagram: trigger, share artifact, channel, recipient experience, activation, back to trigger. Where each Become loop leaks",
+      "Frameworks > Shareable artifact design: it must be legible out of context, flattering to the sharer, honest about the data, and branded without being an ad",
+      "Frameworks > Timing the ask: after a completed session, a hit target, a streak milestone, a recap. Never on day one, never after a missed day",
+      "Frameworks > Non-monetary rewards that are honest for a free product: early access, a named program, a coach answer, recognition. Never invented credits or discounts",
+      "Frameworks > The recipient side: an invite link must land on something better than the cold homepage",
+      "Output buckets: Decisions locked / The loop spec / Share copy with alternates / Assets required / Metrics",
+      "Become-specific rules: no leaderboards that shame, no forced sharing to unlock, no exposing another user's data in a share image"
+    ],
+    "crossRefs": [
+      "signup-activation",
+      "social-strategy",
+      "marketing-psychology",
+      "image-production",
+      "copywriting"
+    ],
+    "referenceFiles": [
+      "references/loop-patterns.md",
+      "references/share-artifacts.md",
+      "references/incentives-without-price.md"
+    ]
+  },
+  {
+    "name": "seo-geo",
+    "batch": "measure-growth",
+    "description": "Builds Become's search and AI-answer visibility from an effectively greenfield state — the technical basics the repo is missing (robots.txt, sitemap, llms.txt, JSON-LD, metadataBase, canonical, per-route metadata, Open Graph and Twitter cards), a three-tier query map from decision to comparison to informational, the exercise library as a programmatic content asset, and generative-engine optimization for AI Overviews and assistant citations. Use when the user says \"SEO,\" \"we don't rank for anything,\" \"get us into ChatGPT answers,\" \"AI search,\" \"add schema markup,\" \"we have no sitemap,\" \"we need a blog,\" or \"best fitness app queries.\" Plan for citations, not clicks. For the words on the page see copywriting; for measuring any of it see analytics-tracking; for competitor query gaps see competitor-analysis.",
+    "sections_hint": [
+      "Process assessment gate: which tier of query, does the page exist at all, what is the repo missing, who maintains it",
+      "Frameworks > Click economics 2026, cited: zero-click is 68% of US Google queries; AI Overviews appear on 20%+ of searches and cut CTR roughly 60% when present; AI Mode is ~93% zero-click. Conclusion: optimize to be the cited answer, not the blue link",
+      "Frameworks > The three-tier query map: T1 decision (\"best X app,\" \"X vs Y,\" \"X alternatives\"), T2 comparison and evaluation, T3 informational (exercise and nutrition how-to). Become's play and a realistic goal per tier",
+      "Frameworks > Technical greenfield checklist with the exact files to create in webapp/ (app/robots.ts, app/sitemap.ts, public/llms.txt, JSON-LD via a Script component, metadataBase and per-route generateMetadata)",
+      "Frameworks > Entity and schema set: Organization, WebApplication, Person for Jon, FAQPage, HowTo, VideoObject for exercise demos, BreadcrumbList",
+      "Frameworks > GEO tactics from the Princeton GEO study (cite sources, add statistics, add quotations, authoritative tone) with the exact caveat that lifts are study-measured on other content and are not Become claims. 40-60 word answer passages. Named crawlers: GPTBot, PerplexityBot, ClaudeBot, Google-Extended, Bingbot",
+      "Frameworks > The exercise library as programmatic content: 42 demo videos and the Exercise model make a defensible T3 corpus",
+      "Output buckets: Quick wins / High-impact changes / Content roadmap by tier / Test ideas",
+      "Become-specific rules: only the landing and public routes are indexable; dashboard is behind auth and must be disallowed"
+    ],
+    "crossRefs": [
+      "analytics-tracking",
+      "copywriting",
+      "competitor-analysis",
+      "web-app-listing",
+      "marketing-plan"
+    ],
+    "referenceFiles": [
+      "references/technical-checklist.md",
+      "references/query-map.md",
+      "references/schema-recipes.md",
+      "references/geo-tactics.md"
+    ]
+  },
+  {
+    "name": "analytics-tracking",
+    "batch": "measure-growth",
+    "description": "Defines what Become measures and how — the acquisition to activation to retention funnel, an event and property naming scheme, the North Star metric and its supporting set, cohort and retention reporting, UTM conventions, and the dashboard that answers whether a channel worked. Grounded in the app's real data model of workouts, sets, weight, mood, nutrition logs, water, streaks, programs, and schedules. Use when the user says \"what should we track,\" \"set up analytics,\" \"we have no data,\" \"what's our north star metric,\" \"how do we measure this campaign,\" \"name these events,\" \"why can't I tell if it worked,\" or \"is retention good.\" For running an experiment on top of the events see ab-testing; for the growth plan the numbers feed see marketing-plan; for search-specific measurement see seo-geo.",
+    "sections_hint": [
+      "Process assessment gate: what decision will this number change, what already exists in the DB versus what needs instrumenting, who reads the report",
+      "Frameworks > The funnel with a definition per stage: visit, signup started, account created, onboarding completed, first workout logged, week-1 return, week-4 active",
+      "Frameworks > North Star candidates for Become and the tradeoffs of each (weekly logged sessions per active user is the leading candidate); supporting metrics and guardrails",
+      "Frameworks > Event naming scheme: object_action, snake_case, a fixed property set, versioning, and the anti-patterns that make data unusable",
+      "Frameworks > What the database already answers without any new instrumentation, from UserProgress, Schedule, and the nutrition collections",
+      "Frameworks > UTM convention table and the campaign naming grammar",
+      "Frameworks > Retention reading: cohort tables, the difference between a leaky funnel and a leaky product, when N is too small to read",
+      "Output buckets: Metric definitions / Event spec table / Instrumentation tasks / Reporting cadence / Open questions",
+      "Become-specific rules: never report a number we cannot reproduce; never mix beta and production data silently (both channels share one database)"
+    ],
+    "crossRefs": [
+      "ab-testing",
+      "marketing-plan",
+      "signup-activation",
+      "seo-geo",
+      "paid-social"
+    ],
+    "referenceFiles": [
+      "references/event-spec.md",
+      "references/funnel-definitions.md",
+      "references/utm-conventions.md"
+    ]
+  },
+  {
+    "name": "ab-testing",
+    "batch": "measure-growth",
+    "description": "Designs and reads marketing experiments for Become — turning an observation into a falsifiable hypothesis, choosing a primary metric and guardrails, sizing the test honestly against low traffic, sequencing tests by expected value, and calling a result without fooling ourselves. Use when the user says \"A/B test this,\" \"which headline wins,\" \"run an experiment,\" \"is this result significant,\" \"we don't have enough traffic to test,\" \"should we test or just ship,\" \"the test looks positive,\" or \"how long do we run it.\" At our volume it will often recommend shipping the better-reasoned version and measuring sequentially instead of running an underpowered split. For the page changes worth testing see landing-cro; for the events behind the metric see analytics-tracking; for creative testing inside ad platforms see paid-social.",
+    "sections_hint": [
+      "Process assessment gate: current baseline conversion, weekly traffic, minimum effect worth detecting, how long we are willing to wait",
+      "Frameworks > Hypothesis format: because [evidence], we believe [change] will cause [metric] to [direction] for [segment], measured by [event], and we are wrong if [guardrail]",
+      "Frameworks > Sizing honestly: the sample-size intuition table (baseline rate x detectable lift x weeks required at our traffic). When the answer is \"never,\" say so",
+      "Frameworks > The low-traffic playbook: sequential shipping with pre and post windows, painted-door and demand tests, qualitative session review, five-second tests, and why big swings beat button colours",
+      "Frameworks > Calling a result: peeking, novelty effects, segment fishing, guardrail regressions, and the write-up template",
+      "Frameworks > The test backlog: scoring by expected value and effort, not by curiosity",
+      "Output buckets: Hypothesis / Test design / Sizing verdict (run it, ship it, or skip it) / Analysis plan / Decision rule agreed in advance",
+      "Become-specific rules: two channels share one database, so any test must isolate by channel or route; never test anything that degrades a real user's health data"
+    ],
+    "crossRefs": [
+      "landing-cro",
+      "analytics-tracking",
+      "paid-social",
+      "copywriting",
+      "marketing-psychology"
+    ],
+    "referenceFiles": [
+      "references/hypothesis-templates.md",
+      "references/sizing-guide.md",
+      "references/low-traffic-playbook.md"
+    ]
+  },
+  {
+    "name": "paid-social",
+    "batch": "measure-growth",
+    "description": "Plans and writes paid social for Become on Meta and TikTok — campaign and audience structure, creative-first testing with a hook matrix, the budget floor below which a test teaches nothing, Spark and whitelisted creator ads, landing-page match, and the read-and-kill rules. Use when the user says \"run ads,\" \"Facebook ads,\" \"Instagram ads,\" \"TikTok ads,\" \"boost this post,\" \"our ads aren't working,\" \"how much should we spend,\" \"what creative should we test,\" or \"is paid worth it for us.\" Ad copy may not claim results, use fabricated testimonials, or reference pricing that does not exist, and fitness ad policies restrict body-focused targeting and imagery. For organic reach with the same creative see social-strategy; for the video itself see reels-scripts; for creator-sourced ad assets see ugc-creator-briefs; for measurement see analytics-tracking.",
+    "sections_hint": [
+      "Process assessment gate: is the funnel ready to pay for traffic (activation working, tracking live), what budget is real, what creative already exists",
+      "Frameworks > Creative is the targeting: account structure that lets the algorithm find the audience, broad targeting, consolidated ad sets",
+      "Frameworks > The hook matrix: 5 hooks x 3 mechanisms x 2 formats, and what a fair test of it costs",
+      "Frameworks > Budget floors and learning phase reality; why boosting a post is not a test",
+      "Frameworks > Spark ads and whitelisting: running creator-authentic assets from their handle, with the rights language required (see ugc-creator-briefs)",
+      "Frameworks > Ad-to-page match: the hook, the first line of the landing page, and the CTA must be the same promise",
+      "Frameworks > Fitness ad policy limits: no body-shaming, no before/after, no personal-attribute targeting or copy implying knowledge of the user's body, no health claims",
+      "Output buckets: Campaign structure / Creative test matrix / Ad copy variants with rationale / Read-and-kill rules / Budget plan",
+      "Become-specific rules: no pricing in ads, no results claims, no fabricated proof, landing must be the real page not an invented offer page"
+    ],
+    "crossRefs": [
+      "social-strategy",
+      "reels-scripts",
+      "ugc-creator-briefs",
+      "analytics-tracking",
+      "ab-testing",
+      "landing-cro"
+    ],
+    "referenceFiles": [
+      "references/account-structure.md",
+      "references/creative-matrix.md",
+      "references/policy-limits.md"
+    ]
+  },
+  {
+    "name": "marketing-psychology",
+    "batch": "measure-growth",
+    "description": "Applies behavioural principles to Become's marketing and product surfaces — loss aversion around streaks, endowed progress and the fresh-start effect, identity-based habit framing, social proof we can honestly use, friction and default design, and the Zeigarnik pull of an unfinished week — with an explicit line between persuasion and manipulation. Use when the user says \"why don't people convert,\" \"make this more persuasive,\" \"psychology of habit apps,\" \"how do streaks actually work,\" \"is this dark-pattern-y,\" \"what makes people come back,\" or \"is this urgency manipulative.\" Every technique is checked against the no-shaming, no-fabrication, and responsible-claims rules before it is recommended. For applying it to the page see landing-cro; for the nudge copy see push-notifications; for the offer framing see offer-design.",
+    "sections_hint": [
+      "Process assessment gate: which behaviour are we trying to change, is the barrier motivation or ability or trigger, is the honest version of this technique available to us",
+      "Frameworks > Principles ranked by fit for Become, each with Check-for / Common issues / Strong patterns and a Become application: identity and self-signalling, endowed progress, loss aversion on streaks, fresh start effect, Zeigarnik and the unfinished week, implementation intentions, social proof without numbers, defaults and friction, peak-end for the weekly recap",
+      "Frameworks > The manipulation line: a technique is legitimate if the user would still endorse it after it is explained. Table of dark patterns we refuse (confirmshaming, fake scarcity, roach-motel opt-out, guilt streaks, forced continuity)",
+      "Frameworks > Honest social proof for a product with no counts to show: mechanism proof, coach credibility, real product captures, member words only with permission",
+      "Frameworks > Streaks done responsibly: streak repair, no punishment, no public loss",
+      "Output buckets: Diagnosis / Techniques recommended with the principle named / Copy or UX changes / What we refuse and why",
+      "Become-specific rules: users are not lazy, their tools were scattered; never shame; never fabricate proof to trigger a bias"
+    ],
+    "crossRefs": [
+      "landing-cro",
+      "push-notifications",
+      "offer-design",
+      "signup-activation",
+      "copywriting",
+      "referral-program"
+    ],
+    "referenceFiles": [
+      "references/principles.md",
+      "references/dark-patterns-refused.md",
+      "references/honest-proof.md"
+    ]
+  },
+  {
+    "name": "screenshot-capture",
+    "batch": "production-pipelines",
+    "description": "Captures new Become product screenshots through the documented dummy-account pipeline — Playwright at a 390x844 viewport at 2x device scale against become.redbtn.io, short-lived JWTs minted by webapp/tests/e2e/test-auth.ts, state seeded only through the app's own HTTP APIs, tutorial overlays dismissed, light and dark pairs, and a manifest entry recording page, account, state, seeding writes, and known issues. Use when the user says \"we need a new screenshot,\" \"capture the X screen,\" \"the screenshots are stale,\" \"get a shot of LIVE mode,\" \"refresh the marketing images,\" \"can we show the nutrition screen,\" or \"do we have a picture of that.\" No real user account is ever captured, and no shot may ship showing a bug, an empty state, or \"(beta).\" For turning a capture into a finished asset see image-production or remotion-assets.",
+    "sections_hint": [
+      "Purpose: produce new webp captures plus a manifest entry, or confirm an existing capture already covers the need",
+      "Process assessment gate: does an existing shot in webapp/public/screenshots/v2/ already answer this (check manifest.json first), which screen and state, light dark or both",
+      "Process: the run recipe — spec file in webapp/tests/e2e/, mobile project config in playwright.config.ts, iPhone 14 device profile, waitForAppScreen and dismissTutorials helpers, bounded with timeout, JWT_SECRET read from webapp/.env.local and never printed",
+      "Frameworks > Seeding rules: only dummy accounts, only through app HTTP APIs, never a direct DB write, never a real user. The known account is playwright-test-mobile1@become.test (Alex Rivera)",
+      "Frameworks > What makes a shippable capture: populated realistic state, no empty tiles, no zero rows, no locked-card wall, no dev banner, no \"(beta),\" nothing mid-animation, consistent scroll offset between the light and dark twin",
+      "Frameworks > Known capture traps, recorded from the last run: weight and mood cannot be backdated through any API so trend charts are single-point; the progress Weekly Volume bar uses a hardcoded dark fill invisible on the dark card; .mov exercise demos fail in Chromium so use the .mp4; auto-rotating carousels must be clicked back to match the twin",
+      "Frameworks > Any DOM patching done at capture time must be disclosed in manifest knownIssues, and the underlying bug filed",
+      "Output buckets: Preflight checks / Commands to run / Outputs and where they land / Manifest entry to append / Known failure modes",
+      "Become-specific rules: never capture a bug to make a point; never expose a token; both channels share one production database so treat every write as production"
+    ],
+    "crossRefs": [
+      "image-production",
+      "remotion-assets",
+      "web-app-listing",
+      "landing-cro",
+      "content-calendar",
+      "launch-campaign"
+    ],
+    "referenceFiles": [
+      "references/capture-recipe.md",
+      "references/seeding-playbook.md",
+      "references/manifest-schema.md",
+      "references/known-traps.md"
+    ]
+  },
+  {
+    "name": "remotion-assets",
+    "batch": "production-pipelines",
+    "description": "Renders Become campaign assets from the existing Remotion project in marketing/ — 1080x1080 square posts, 1080x1920 story and reel covers, 1200x628 landscape, the open-graph still, the reel, and the reviewed video collection — by editing src/campaigns.json and the composition components, running the npm render scripts, and refreshing source images with assets:sync. Use when the user says \"render the campaign assets,\" \"make a story graphic,\" \"we need an OG image,\" \"add a new campaign to the collection,\" \"regenerate the videos,\" \"change the copy on asset 12,\" \"make a video ad,\" or \"design a social post.\" Reuse existing compositions before writing new ones; outputs land in the gitignored marketing/out/. For the product captures the assets sit on see screenshot-capture; for one-off resizing and export see image-production; for the visual patterns worth copying see inspo-library.",
+    "sections_hint": [
+      "Purpose: produce rendered brand assets from the real Remotion project, not from scratch",
+      "Process assessment gate: does an asset already exist in marketing/out, which format and dimensions, which campaign row, which source screenshot",
+      "Process: the render recipe with the real npm scripts (assets:sync, studio, render:square, render:story, render:og, render:reel, render:collection, render:videos, render:reviewed, review:pass, typecheck), each wrapped in timeout, and the note that a full render is long",
+      "Frameworks > Project map: src/Root.tsx registers compositions, src/compositions.tsx holds the four hero pieces, src/campaignCollection.tsx renders the 46-asset collection from src/campaigns.json, src/videoCollection.tsx and src/reviewedVideo.tsx hold the video systems, src/reviewedCampaigns.ts holds the reviewed storyboards",
+      "Frameworks > The campaign row schema (id, slug, format, pillar, kicker, headline lines, body, cta, image, variant) and the rules for adding one: unique id and slug, format must exist in the dimensions map, image must exist in marketing/public/",
+      "Frameworks > Adding copy: headline is an array of lines and controls the line break, so write to the break; body is one sentence; cta is a verb phrase; run it past copywriting rules first",
+      "Frameworks > Design system in the project: monochrome shell, rounded product geometry, pillar colours mapping training / mindset / nutrition, the arrow spine. Reconcile with the brand tokens in become-context before inventing a new colour",
+      "Output buckets: Preflight checks / Files edited / Commands to run / Outputs and where they land / Verification checklist",
+      "Become-specific rules: never render copy that claims a result or a price; never use a stale source screenshot; out/ is gitignored so deliverables must be reported by path, not assumed committed"
+    ],
+    "crossRefs": [
+      "screenshot-capture",
+      "image-production",
+      "inspo-library",
+      "copywriting",
+      "content-calendar",
+      "reels-scripts"
+    ],
+    "referenceFiles": [
+      "references/project-map.md",
+      "references/campaign-schema.md",
+      "references/render-recipes.md"
+    ]
+  },
+  {
+    "name": "image-production",
+    "batch": "production-pipelines",
+    "description": "Processes and exports Become brand imagery with sharp, which is already a webapp dependency — resizing and cropping captures to platform specs, webp and jpeg export at quality targets, device-frame and drop-shadow composites, cut-out UI chips lifted from a screenshot, open-graph and manifest icon sets, and matched light and dark variants. Use when the user says \"resize this for stories,\" \"export this at open-graph size,\" \"make a webp,\" \"crop the phone screenshot,\" \"these files are too big,\" \"generate the icons,\" \"put this screenshot in a phone frame,\" or \"why does this look blurry.\" No new image dependency may be added. For multi-layer designed and animated assets see remotion-assets; for producing the source capture in the first place see screenshot-capture; for the layout patterns worth imitating see inspo-library.",
+    "sections_hint": [
+      "Purpose: turn a source capture into correctly sized, correctly compressed, on-brand output files",
+      "Process assessment gate: what is the source and its true pixel dimensions, what surface is it for, does an export already exist",
+      "Process: sharp recipes as short runnable node snippets, each bounded with timeout, writing to a named output directory",
+      "Frameworks > Platform spec table: story 1080x1920, square 1080x1080, landscape 1200x628, OG 1200x630, Twitter card, PWA icons, favicon, directory gallery sizes. With safe-area notes for story crops",
+      "Frameworks > Format and quality: webp for product captures, jpeg for photographic composites, png only when transparency is required. Quality targets and the size budget per surface",
+      "Frameworks > Composite recipes taken from the inspo analysis: text-left with the phone bleeding off the right edge, tilted multi-device fans, the cut-out floating UI chip with a shadow, the persistent footer lockup",
+      "Frameworks > Never upscale a capture; never re-compress an already-compressed webp; capture at 2x and downscale instead",
+      "Output buckets: Preflight checks / Commands to run / Outputs and where they land / Verification (dimensions, file size, both themes) / Known failure modes",
+      "Become-specific rules: brand green #16a34a and #22c55e, violet for AI and Mind, gold for streaks; light and dark variants ship together; never edit a screenshot to hide a bug, fix the bug or recapture"
+    ],
+    "crossRefs": [
+      "screenshot-capture",
+      "remotion-assets",
+      "inspo-library",
+      "web-app-listing",
+      "referral-program"
+    ],
+    "referenceFiles": [
+      "references/platform-specs.md",
+      "references/sharp-recipes.md",
+      "references/composite-patterns.md"
+    ]
+  },
+  {
+    "name": "inspo-library",
+    "batch": "production-pipelines",
+    "description": "Reads and grows Become's competitor creative reference library — marketing/inspo/ (local and gitignored) and its committed digest marketing/inspo-analysis.md, currently STNDRD's 25 Instagram Story ads and Ladder's 5-slide meal-logging carousel — extracting reusable layout, type, colour, sequence, and CTA patterns, and filing new captures in the same dated structure with an updated analysis. Use when the user says \"what do competitor ads look like,\" \"find a reference for this layout,\" \"add these screenshots to inspo,\" \"how does STNDRD do it,\" \"what should this ad look like,\" \"give me a visual reference,\" or \"I saved some ads, look at them.\" Read the analysis file before opening any image; it is the durable artifact. For strategic competitor teardown rather than creative patterns see competitor-analysis; for turning a pattern into an asset see remotion-assets or image-production.",
+    "sections_hint": [
+      "Purpose: use the reference library as a design input, and keep it useful as it grows",
+      "Process assessment gate: is this a read (find a pattern) or a write (file new captures), does marketing/inspo-analysis.md already answer it",
+      "Process: reading path — analysis first, per-image index second, the images themselves only when a specific frame is needed. Note that marketing/inspo/ is gitignored so it may be absent in a fresh worktree; the analysis is not",
+      "Frameworks > The pattern catalogue extracted so far: (a) feature-list story, one hub per frame, headline plus 4-6 arrow bullets, phone bleeding off the right edge; (b) feature hero, one claim in huge type; (c) App Tip how-to sequences, a branded pill badge, one tap per frame, hand-drawn circles and arrows on the exact control, CTA last — the strongest asset class in the set; (d) named recurring slots; (e) modality carousel, cover states the problem then one slide per method with an identical lower-third lockup; (f) social-proof-as-screenshot",
+      "Frameworks > Layout, type, and colour rules observed: text-left phone-right-bleed as the workhorse, tilted multi-phone fans for breadth, cut-out floating UI chips, persistent footer lockup, dark-first single-accent with the accent matched to the in-app primary button, wide condensed all-caps, max two weights per frame",
+      "Frameworks > Premium versus cheap signals: reused gradient system, real hands and real rooms, quantified self-deprecation (Ladder's accuracy bars) read premium; leaked empty states and \"Not Achieved\" grids read cheap",
+      "Frameworks > What is absent from both brands and why it matters: no memes, no talking-head UGC, no before/afters, no testimonial cards, no pricing creative. Both sell the mechanism, not a promise",
+      "Frameworks > Filing new captures: dated folder marketing/inspo/YYYY-MM-DD-<slug>/, then append a per-image index row and a pattern note to marketing/inspo-analysis.md",
+      "Become-specific rules: competitor creative is a reference, never a source asset; never trace or reuse their imagery; ignore the iOS and Instagram chrome in screen-recorded captures; translate a pattern into Become's green and Geist system rather than copying their palette"
+    ],
+    "crossRefs": [
+      "competitor-analysis",
+      "remotion-assets",
+      "image-production",
+      "reels-scripts",
+      "social-strategy"
+    ],
+    "referenceFiles": [
+      "references/pattern-catalogue.md",
+      "references/filing-guide.md"
+    ]
+  }
+]
