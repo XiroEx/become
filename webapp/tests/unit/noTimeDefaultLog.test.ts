@@ -65,3 +65,25 @@ test('the timeline page\'s Add Food no longer drops the untimed flag on its way 
   assert.match(postBody.slice(0, 400), /untimed:\s*untimed === true/)
   assert.match(ui, /onSelectFood=\{\(entry, tag, loggedAt, planOptions, untimed\) => handleAddFood\(/)
 })
+
+test('the nutrition page\'s smart-append never merges a timed pick into an untimed log (or the reverse)', () => {
+  // Regression: findLogForTag() matches by TAG only. Picking "Now" for a
+  // second Dinner item while today's Dinner log was already untimed used to
+  // append the new (timed) item straight into that untimed log without
+  // touching its `untimed` flag — the item silently lost its clock time and
+  // the whole section kept reading "no time" even though the member had just
+  // picked one. Guard: only reuse the smart-append target when its `untimed`
+  // status already matches what this item is about to be logged as.
+  const ui = read('app/dashboard/nutrition/page.tsx')
+  const fn = ui.slice(ui.indexOf('const handleAddFood = async ('), ui.indexOf('const handleAddFood = async (') + 2500)
+  assert.match(
+    fn,
+    /const smartTarget = loggedAtOverride \? undefined : findLogForTag\(useTag\)/,
+    'smart-append lookup must be a named value the merge condition can inspect',
+  )
+  assert.match(
+    fn,
+    /Boolean\(smartTarget\.untimed\) === \(untimed === true\)/,
+    'the merge target must be rejected when its untimed status disagrees with the incoming item',
+  )
+})
