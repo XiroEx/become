@@ -1,5 +1,8 @@
 # Accounts setup: social bootstrap from zero
 
+> **8/26 binding update (calendar §2 R-15..R-17):** brand IG = **`@becomeurbest_`** (already exists — `becomeapp.fit` candidates void); TikTok claims the same string. Jon's fitness surface = **`@jondon_fit`**, personal `@jondon275` supports with one story. All printed URLs become **`becomeurbest.com`**. Bio/pin/grid plans below apply unchanged to the corrected handles.
+
+
 **Owner of this document:** social bootstrap agent, executing `social-strategy` (+ `coach-brand-voice`
 for the handle split).
 **Window:** Tue 2026-08-25 (accounts created) → Tue 2026-09-01 (launch) → Tue 2026-09-08 (T+7 review).
