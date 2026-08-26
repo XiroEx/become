@@ -96,7 +96,7 @@ test.describe('New User Journey', () => {
     // ─────────────────────────────────────────────────────────────────────────
 
     console.log('\n=== PHASE 1: Register ===')
-    await page.goto(`${BASE_URL}/register`)
+    await page.goto(`${BASE_URL}/login?register`)
     await page.waitForLoadState('domcontentloaded')
     // Seed localStorage token so client-side API calls (AuthGuard → /api/auth/me) work
     await page.evaluate((t) => localStorage.setItem('token', t), e2eToken)

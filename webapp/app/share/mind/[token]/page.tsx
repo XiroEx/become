@@ -121,7 +121,7 @@ export default function SharedSessionPage({ params }: { params: Promise<{ token:
       {/* Persistent CTA — Become is the only way to actually do the session. */}
       <div className="sticky bottom-0 border-t border-white/10 bg-zinc-950/90 px-4 py-3 backdrop-blur">
         <Link
-          href={`/register?next=${next}`}
+          href={`/login?register&next=${next}`}
           className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-white py-3 text-sm font-bold text-black transition-colors hover:bg-zinc-200"
         >
           <Sparkles className="h-4 w-4" /> Do this session in Become
@@ -138,7 +138,7 @@ export default function SharedSessionPage({ params }: { params: Promise<{ token:
             <h2 className="text-lg font-bold">Log in to continue</h2>
             <p className="mt-1.5 text-sm text-zinc-400">Create a free Become account to actually run this session and track your progress.</p>
             <div className="mt-4 flex flex-col gap-2">
-              <Link href={`/register?next=${next}`} className="rounded-xl bg-white py-2.5 text-sm font-bold text-black hover:bg-zinc-200">Sign up free</Link>
+              <Link href={`/login?register&next=${next}`} className="rounded-xl bg-white py-2.5 text-sm font-bold text-black hover:bg-zinc-200">Sign up free</Link>
               <Link href={`/login?next=${next}`} className="rounded-xl border border-white/15 py-2.5 text-sm font-semibold text-white hover:bg-white/5">Log in</Link>
             </div>
           </div>

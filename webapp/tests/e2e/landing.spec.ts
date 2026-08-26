@@ -10,7 +10,7 @@ test.describe('public landing page', () => {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: 'Who are you becoming?' })).toBeVisible()
-    await expect(page.getByRole('link', { name: /Start your line/i })).toHaveAttribute('href', '/register')
+    await expect(page.getByRole('link', { name: /Start your line/i })).toHaveAttribute('href', '/login?register')
 
     await page.getByRole('tab', { name: /Fuel/i }).click()
     await expect(page.getByRole('heading', { name: 'Eat with context, not guilt.' })).toBeVisible()
@@ -35,7 +35,7 @@ test.describe('public landing page', () => {
 
     await expect(page.getByText('Most apps tell you what you did.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Your weeks become evidence.' })).toBeVisible()
-    await expect(page.getByRole('link', { name: /Begin becoming/i })).toHaveAttribute('href', '/register')
+    await expect(page.getByRole('link', { name: /Begin becoming/i })).toHaveAttribute('href', '/login?register')
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
     expect(overflow).toBeLessThanOrEqual(1)
