@@ -2778,7 +2778,9 @@ export default function LiveWorkoutPage() {
         onClose={() => setShowAddExercise(false)}
         onAdd={handleAddExercise}
         anchorName={currentExercise?.name}
+        anchorSlug={currentExercise?.exerciseSlug}
         anchorInGroup={!!currentExercise?.groupId}
+        workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         tone="dark"
       />
 
