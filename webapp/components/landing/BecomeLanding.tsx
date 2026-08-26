@@ -286,7 +286,7 @@ function Nav({ isLoggedIn }: { isLoggedIn: boolean }) {
           <Link className={styles.signIn} href={isLoggedIn ? "/dashboard" : "/login"}>
             {isLoggedIn ? "Open app" : "Sign in"}
           </Link>
-          <Link className={styles.navCta} href="/register">
+          <Link className={styles.navCta} href="/login?register">
             Get started <ArrowRight size={15} />
           </Link>
         </div>
@@ -378,7 +378,7 @@ function Hero() {
             organized into one clear plan, so you always know exactly what to do next.
           </motion.p>
           <motion.div className={styles.heroActions} {...rise(0.34)}>
-            <Link className={styles.primaryCta} href="/register">
+            <Link className={styles.primaryCta} href="/login?register">
               Get started <ArrowRight size={18} className={styles.ctaArrow} />
             </Link>
             <a className={styles.secondaryCta} href="#why">
@@ -1020,7 +1020,7 @@ function ClosingSection({ isLoggedIn }: { isLoggedIn: boolean }) {
           <h2>Ready to become?</h2>
           <p>Your first workout is minutes away. Sign up with your email — no credit card, no fuss.</p>
           <div className={styles.closingActions}>
-            <Link className={styles.primaryCta} href="/register">
+            <Link className={styles.primaryCta} href="/login?register">
               Start today <ArrowRight size={18} className={styles.ctaArrow} />
             </Link>
             <Link className={styles.closingSignIn} href={isLoggedIn ? "/dashboard" : "/login"}>
@@ -1069,7 +1069,7 @@ export default function BecomeLanding() {
             <p>Training · Nutrition · Mind — one app.</p>
             <div className={styles.footerLinks}>
               <Link href="/login">Sign in</Link>
-              <Link href="/register">Register</Link>
+              <Link href="/login?register">Register</Link>
               <Link href="/information">Info</Link>
             </div>
           </div>

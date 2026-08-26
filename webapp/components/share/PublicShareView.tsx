@@ -148,7 +148,7 @@ export default function PublicShareView({ share }: { share: SharePayloadData }) 
             </p>
             <div className="mt-4 flex flex-col gap-2">
               <Link href="/login" className="rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white dark:bg-white dark:text-black">Log in</Link>
-              <Link href="/register" className="rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">Create account</Link>
+              <Link href="/login?register" className="rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-200">Create account</Link>
             </div>
           </div>
         </div>

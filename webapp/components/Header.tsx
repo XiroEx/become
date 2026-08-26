@@ -49,7 +49,7 @@ export default function Header({
           <Link href="/login" className="flex-1 rounded-full border px-4 py-2 text-center text-sm sm:flex-none sm:text-base">
             Log in
           </Link>
-          <Link href="/register" className="flex-1 rounded-full bg-foreground px-4 py-2 text-center text-sm text-background sm:flex-none sm:text-base">
+          <Link href="/login?register" className="flex-1 rounded-full bg-foreground px-4 py-2 text-center text-sm text-background sm:flex-none sm:text-base">
             Book a Call
           </Link>
         </div>
