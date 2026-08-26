@@ -1031,6 +1031,7 @@ export default function SnapPlateModal({
           items: mealItems,
           tags: [selectedTag],
           loggedAt,
+          untimed: true,
           // Capture provenance → day view groups a multi-food capture under a
           // source-colored card. imageThumb covers snap + upload; else describe.
           source: imageThumb ? 'photo' : 'describe',

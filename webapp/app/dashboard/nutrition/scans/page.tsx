@@ -85,7 +85,7 @@ export default function ScanHistoryPage() {
       const res = await fetch('/api/meal-logs', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ items, tags: [scan.tag || defaultTagNow()], loggedAt: new Date().toISOString() }),
+        body: JSON.stringify({ items, tags: [scan.tag || defaultTagNow()], loggedAt: new Date().toISOString(), untimed: true }),
       })
       showToast(res.ok ? 'Logged to today' : 'Could not log. Try again.', res.ok ? 'success' : 'error')
     } catch {

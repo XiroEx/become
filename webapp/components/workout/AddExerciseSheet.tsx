@@ -21,6 +21,7 @@ import ExerciseVariationPicker, { type ExerciseVariation } from '@/components/Ex
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
+import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
 
 export type Placement = 'end' | 'group'
 
@@ -43,8 +44,14 @@ export interface AddExerciseSheetProps {
   onAdd: (result: AddExerciseResult) => void | Promise<void>
   /** The exercise the member is standing in, if any — the superset anchor. */
   anchorName?: string
+  /** Slug of the anchor exercise. Drives the "Suggested" list shown before
+   *  the member types anything — omit it and the sheet falls back to the
+   *  plain "search for what you are about to do" empty state. */
+  anchorSlug?: string
   /** True when the anchor already belongs to a group, so we say "add into it". */
   anchorInGroup?: boolean
+  /** Exercise slugs already in this workout, so suggestions don't repeat one. */
+  workoutExerciseSlugs?: string[]
   tone?: 'dark' | 'app'
   title?: string
 }
@@ -61,13 +68,17 @@ export default function AddExerciseSheet({
   onClose,
   onAdd,
   anchorName,
+  anchorSlug,
   anchorInGroup = false,
+  workoutExerciseSlugs = [],
   tone = 'app',
   title = 'Add an exercise',
 }: AddExerciseSheetProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchExercise[]>([])
   const [customs, setCustoms] = useState<SearchExercise[]>([])
+  const [suggested, setSuggested] = useState<SearchExercise[]>([])
+  const [loadingSuggested, setLoadingSuggested] = useState(false)
   const [searching, setSearching] = useState(false)
   const [creating, setCreating] = useState(false)
   const [creatingError, setCreatingError] = useState<string | null>(null)
@@ -96,6 +107,32 @@ export default function AddExerciseSheet({
     const t = setTimeout(() => inputRef.current?.focus(), 120)
     return () => clearTimeout(t)
   }, [open])
+
+  // What to add next, guessed from the exercise you're standing in — shown
+  // before you type anything, so the sheet isn't just a naked search box.
+  const workoutSlugsKey = workoutExerciseSlugs.join(',')
+  useEffect(() => {
+    if (!open || !anchorSlug) { setSuggested([]); return }
+    let cancelled = false
+    setLoadingSuggested(true)
+    ;(async () => {
+      try {
+        const params = new URLSearchParams({ slug: anchorSlug, limit: '12' })
+        if (workoutSlugsKey) params.set('workoutSlugs', workoutSlugsKey)
+        const res = await fetch(`/api/exercises/alternatives?${params}`, { headers: authHeaders() })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { alternatives?: SearchExercise[] }
+        if (!cancelled) {
+          setSuggested(buildSuggestedExercises(data.alternatives ?? [], workoutSlugsKey ? workoutSlugsKey.split(',') : []))
+        }
+      } catch {
+        if (!cancelled) setSuggested([])
+      } finally {
+        if (!cancelled) setLoadingSuggested(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [open, anchorSlug, workoutSlugsKey])
 
   // Your custom exercises, so a machine you named yourself is one search away.
   useEffect(() => {
@@ -230,7 +267,7 @@ export default function AddExerciseSheet({
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" data-testid="add-exercise-sheet">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className={`relative max-h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-md sm:rounded-3xl ${surface}`}>
+      <div className={`relative min-h-[60vh] max-h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:min-h-0 sm:max-w-md sm:rounded-3xl ${surface}`}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-bold">{title}</h2>
           <button onClick={onClose} aria-label="Close" className={`rounded-full p-1.5 ${rowIdle}`}>
@@ -314,7 +351,33 @@ export default function AddExerciseSheet({
                   </button>
                 </div>
               )}
-              {q.length < 2 && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
+              {q.length < 2 && anchorSlug && (
+                <div data-testid="add-exercise-suggested">
+                  {suggested.length > 0 ? (
+                    <>
+                      <p className={`px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Suggested</p>
+                      {suggested.map(s => (
+                        <button
+                          key={s.slug}
+                          onClick={() => choose(s)}
+                          data-testid="add-exercise-suggested-result"
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
+                        >
+                          <span className="truncate font-medium">{s.name}</span>
+                          <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
+                        </button>
+                      ))}
+                    </>
+                  ) : loadingSuggested ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className={`h-4 w-4 animate-spin ${muted}`} />
+                    </div>
+                  ) : (
+                    <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>
+                  )}
+                </div>
+              )}
+              {q.length < 2 && !anchorSlug && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
             </div>
           </>
         ) : (
