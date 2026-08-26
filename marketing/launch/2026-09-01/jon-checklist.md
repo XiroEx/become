@@ -42,7 +42,7 @@ I am not being nosy. The entire plan is sized off those numbers. If your reach i
 think, we aim lower and we do not call the launch a failure at the end of the week. If it is
 bigger, we aim higher. Either way we need the real number before Wednesday.
 
-Also confirm: is your handle exactly **@jondon275**? Type it out so we are certain.
+**8/26 update:** we now know you run two pages. The numbers we need are from **@jondon_fit** (your fitness page) — that is where the launch posts go. @jondon275 does exactly one thing on launch day: a story resharing the fit page's launch reel.
 
 ### 3. Write the list of 15. (15 minutes)
 

@@ -1,5 +1,7 @@
 # Become public launch - Tue 2026-09-01 - read this first
 
+**8/26 UPDATE (binding, see `content-calendar.md` §2 R-15..R-18):** date is a confirmed GO from Jon and George. Launch channel is **`@jondon_fit`** (Jon's fitness page, 1,327 followers) — not `@jondon275` (personal, supports with one story). Brand IG **`@becomeurbest_` already exists** (claim done; TikTok same string, George claims Wed). Public URL in all copy is now **`becomeurbest.com`** (registered, live, serving the landing — the domain gate is satisfied; Mon's metadata branch sets it canonical). Jon still owes: insights numbers from `@jondon_fit` + his list of 15.
+
 **Verdict: READY-WITH-CUTS.** 9/1 is achievable at the plan's scope *as amended at the 8/25
 readiness review* (cuts and reconciliations listed in `content-calendar.md` §2 R-9..R-14 and the
 edits marked "8/25 review" across the folder). Four blockers remain, all human, all this week.
@@ -7,9 +9,9 @@ edits marked "8/25 review" across the folder). Four blockers remain, all human, 
 ## The plan in 20 lines
 
 1. This is a visibility launch, not a deploy: the app has been live for months; 9/1 is the first coordinated announcement.
-2. One claim: coach-built programs, set-by-set logging, a photo of your plate, a weekly recap. One CTA: `become.redbtn.io`. Free today.
+2. One claim: coach-built programs, set-by-set logging, a photo of your plate, a weekly recap. One CTA: `becomeurbest.com`. Free today.
 3. Jon's warm audience is the launch (predicted 85% of signups); the brand handle is a credibility surface, not distribution.
-4. Channels: Jon's IG `@jondon275`, a new brand IG + TikTok (one handle string, George claims in-form today), 3 directory submissions on 9/1. No email (compliance gate), no Product Hunt (deferred 10/6), no Reddit, no paid, no creators.
+4. Channels: Jon's IG `@jondon_fit` (personal `@jondon275` = one supporting story), brand IG `@becomeurbest_` (exists) + TikTok same string, 3 directory submissions on 9/1. No email (compliance gate), no Product Hunt (deferred 10/6), no Reddit, no paid, no creators.
 5. Owned tier = one push at members' local 12:00-14:00 (`lifecycle.md` §2 owns copy + runbook), gated on a guard shipping Thu; ungated = no send.
 6. Target: 25 signups Tue 9/1–Mon 9/7, rebased off Jon's real reach (under 500 followers → 10; over 5,000 → 60). Baseline recorded Wed 8/26, review Tue 9/8 10:00.
 7. All launch stills already exist: rendered + truth-passed Tue 8/25 in this worktree's `marketing/out/` (`assets-manifest.md`); post only from there, never from the main checkout (stale files live there).
@@ -33,8 +35,8 @@ edits marked "8/25 review" across the folder). Four blockers remain, all human, 
 |---|---|---|
 | 1.2/1.5/1.6 phone pass + cold signup on production | **RED - decides the date** | Tue 8/25 22:00 (George) |
 | 3.3/3.4 signup + magic link end to end | **RED - decides the date** | Tue 8/25 22:00 (George) |
-| 5.3 Jon has the plan, says yes, sends reach numbers + list of 15 | **RED** | Tue 8/25 (Jon) |
-| Handles claimed (availability unverifiable by HTTP) | **RED** | Tue 8/25 22:00 (George) |
+| 5.3 Jon: date YES ✓ (8/26); reach numbers (from `@jondon_fit`) + list of 15 still owed | **AMBER** | Wed 8/26 (Jon) |
+| Handles: IG `@becomeurbest_` DONE; TikTok `becomeurbest_` | **AMBER** | Wed 8/26 (George, in-form) |
 | 4.1/4.4 baseline + push-subscription count | **RED** | Wed 8/26 09:00 (no-slip) |
 | 2.7/2.8/2.9 renders + video truth pass | **GREEN** (closed 8/25) | done; O-5 names Wed, F3/F6 Fri |
 | V1–V4 pre-batch product checks (recap line, generate POST, plate path, program names) | **AMBER** | Wed 8/26 (George + Jon) |
@@ -57,7 +59,7 @@ staging, UTMs, OG render, F2a, F3/F6, go/no-go) - protect it by finishing Thursd
 **George**
 1. Hand `jon-checklist.md` to Jon; get yes/no on the date by 18:00. Nothing else matters first.
 2. Phone pass on production (both themes) + one cold signup on a fresh address, by 20:00. Failure = move to 9/8 tonight.
-3. Claim the handles in-form (top candidate `becomeapp.fit`, same string on both platforms), by 22:00.
+3. ~~Claim IG handle~~ DONE (`@becomeurbest_` exists). Claim TikTok `becomeurbest_` in-form today.
 4. Delete the five stale renders in the main checkout's `marketing/out/` so nobody grabs one by name.
 5. Wed 09:00: create `measurement.md` - baseline aggregation, push-subscription count (<15 kills the push), gate log. Does not slip.
 6. Wed: V1–V4 checks, failure-case tests, fill both profiles, durable-copy the frozen asset set, Umami (moved here), F3/F6 prep.
