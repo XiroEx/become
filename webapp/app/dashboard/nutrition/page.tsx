@@ -675,9 +675,14 @@ function NutritionPageInner() {
       // log of this tag" behavior.
       // "Add to this meal" targets a specific log; otherwise smart-append to the
       // tag's log (unless the user pinned a custom time → always a new entry).
+      // The smart-append target also has to agree on untimed-ness: merging a
+      // "Now"-timed item into an existing untimed log (or vice versa) would
+      // silently discard the user's choice and mislabel the whole section —
+      // this was the "I still incorrectly see 'no time'" report.
+      const smartTarget = loggedAtOverride ? undefined : findLogForTag(useTag)
       const existing = addToLogId
         ? logs.find(l => l._id === addToLogId)
-        : (loggedAtOverride ? undefined : findLogForTag(useTag))
+        : (smartTarget && Boolean(smartTarget.untimed) === (untimed === true) ? smartTarget : undefined)
       let res: Response
       if (existing) {
         res = await fetch(`/api/meal-logs/${existing._id}/items`, {
