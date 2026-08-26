@@ -109,7 +109,7 @@ export default function MealApplySheet({
   // Meals had NO time control at all — every meal landed at the current minute,
   // which on a time-ordered day view meant a breakfast logged at 9pm sorted to
   // the end of the day. Foods gained this and meals were left behind.
-  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('now')
+  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('none')
   const [customTime, setCustomTime] = useState<string | null>(null)
   const { windows: scheduleWindows } = useMealSchedule()
   const [dateEditOpen, setDateEditOpen] = useState(false)
@@ -132,7 +132,7 @@ export default function MealApplySheet({
       setCustomDate(null)
       // A time belongs to the entry it was chosen for, not the next one.
       setCustomTime(null)
-      setTimeMode('now')
+      setTimeMode('none')
       setDateEditOpen(false)
       setApplied(false)
       setError(null)
@@ -524,7 +524,7 @@ export default function MealApplySheet({
                           value={customDate ?? dateToKey(viewedDate ?? new Date())}
                           maxDate={dateToKey(new Date())}
                           showTodayChip
-                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('now'); setDateEditOpen(false) }}
+                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('none'); setDateEditOpen(false) }}
                           onChange={(next) => {
                             const todayKey = dateToKey(new Date())
                             setCustomDate(next === todayKey ? null : next)
@@ -549,7 +549,7 @@ export default function MealApplySheet({
                               value={timeMode === 'custom' && customTime ? customTime : formatHHMM(minutesOfDay(new Date()))}
                               onChange={(ev) => {
                                 const v = ev.target.value
-                                if (!v) { setCustomTime(null); setTimeMode('now'); return }
+                                if (!v) { setCustomTime(null); setTimeMode('none'); return }
                                 setCustomTime(v); setTimeMode('custom')
                               }}
                               disabled={timeMode === 'none'}
