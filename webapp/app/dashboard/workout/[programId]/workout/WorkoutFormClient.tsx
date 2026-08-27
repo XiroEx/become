@@ -24,7 +24,7 @@ import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
-import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled } from "@/lib/workout/tracking";
+import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, findPhantomPrefilledSets } from "@/lib/workout/tracking";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
@@ -581,25 +581,38 @@ export default function WorkoutFormPage() {
                   savedEx.originalExerciseSlug ||
                   savedEx.swappedFromName
                 );
+                const tracking = normalizeTracking(ex.trackingType);
+                if (!isMatch || !savedEx) {
+                  return {
+                    exerciseIndex: exIdx,
+                    sets: Array.from({ length: ex.sets || 3 }, () => ({
+                      reps: "",
+                      weight: "",
+                      completed: false,
+                      duration: "",
+                      distance: "",
+                      speed: "",
+                    })),
+                  };
+                }
+                const restoredSets = savedEx.sets.map(s => ({
+                  reps: s.reps > 0 ? s.reps.toString() : "",
+                  weight: s.weight > 0 ? s.weight.toString() : "",
+                  completed: s.completed,
+                  duration: s.duration != null && s.duration > 0 ? s.duration.toString() : "",
+                  distance: s.distance != null && s.distance > 0 ? s.distance.toString() : "",
+                  speed: s.speed != null && s.speed > 0 ? s.speed.toString() : "",
+                }));
+                // Two or more of this exercise's incomplete sets sharing the exact
+                // same numbers is the old "seeded from last time" bug's fingerprint,
+                // not something normal typing produces — blank those before display
+                // instead of resurfacing them on every future resume.
+                const phantomIndices = new Set(findPhantomPrefilledSets(tracking, restoredSets));
                 return {
                   exerciseIndex: exIdx,
-                  sets: isMatch && savedEx
-                    ? savedEx.sets.map(s => ({
-                        reps: s.reps > 0 ? s.reps.toString() : "",
-                        weight: s.weight > 0 ? s.weight.toString() : "",
-                        completed: s.completed,
-                        duration: s.duration != null && s.duration > 0 ? s.duration.toString() : "",
-                        distance: s.distance != null && s.distance > 0 ? s.distance.toString() : "",
-                        speed: s.speed != null && s.speed > 0 ? s.speed.toString() : "",
-                      }))
-                    : Array.from({ length: ex.sets || 3 }, () => ({
-                        reps: "",
-                        weight: "",
-                        completed: false,
-                        duration: "",
-                        distance: "",
-                        speed: "",
-                      }))
+                  sets: restoredSets.map((s, i) =>
+                    phantomIndices.has(i) ? { ...s, reps: "", weight: "", duration: "", distance: "", speed: "" } : s
+                  ),
                 };
               });
 

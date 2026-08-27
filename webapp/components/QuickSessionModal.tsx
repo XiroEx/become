@@ -25,6 +25,7 @@ import {
 import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
 import { SESSIONS_HUB_HREF, BUILD_SESSION_HREF } from "@/lib/quickSession/hubLinks";
 import { pickRecentQuickSessions } from "@/lib/quickSession/recentSessions";
+import { logPlanAvailability, localDateStr } from "@/lib/quickSession/logPlanDate";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 import ShareButton from "@/components/share/ShareButton";
@@ -34,6 +35,9 @@ import ShareButton from "@/components/share/ShareButton";
 export interface QuickSessionModalProps {
   open: boolean;
   onClose: () => void;
+  /** Local YYYY-MM-DD to pre-fill the resulting session's Log/Plan date with —
+   *  set when opened from a specific Calendar day rather than "workout now". */
+  date?: string;
 }
 
 // ─── Fetch response shapes ──────────────────────────────────────────────────────
@@ -118,7 +122,7 @@ async function resolveAiSession(
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function QuickSessionModal({ open, onClose }: QuickSessionModalProps) {
+export default function QuickSessionModal({ open, onClose, date }: QuickSessionModalProps) {
   const router = useRouter();
 
   const [error, setError] = useState<string | null>(null);
@@ -240,9 +244,9 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
   const startPreview = useCallback(() => {
     if (!preview) return;
     const id = stashQuickSession(preview, { needsName: true });
-    router.push(quickSessionOverviewHref(id));
+    router.push(quickSessionOverviewHref(id, { date }));
     onClose();
-  }, [preview, router, onClose]);
+  }, [preview, router, onClose, date]);
 
   // ── Repeat a recent session ──
   // Genuinely repeats it: same title, same exercises. It used to re-GENERATE
@@ -263,7 +267,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
           },
           { needsName: false, ...(log.sessionId ? { sourceSessionId: log.sessionId } : {}) },
         );
-        router.push(quickSessionOverviewHref(id));
+        router.push(quickSessionOverviewHref(id, { date }));
         onClose();
         return;
       }
@@ -284,7 +288,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         }
         const data = (await res.json()) as GenerateSessionResponse;
         const id = stashQuickSession(data.session, { needsName: true });
-        router.push(quickSessionOverviewHref(id));
+        router.push(quickSessionOverviewHref(id, { date }));
         onClose();
       } catch {
         setError("Network error. Try again.");
@@ -292,10 +296,18 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         setRepeating(false);
       }
     },
-    [router, onClose],
+    [router, onClose, date],
   );
 
   const busy = generating || repeating;
+
+  // Heading reflects the target day when opened from a specific Calendar date
+  // rather than the default "right now" flow.
+  const modalTitle = (() => {
+    if (!date || date === localDateStr()) return "Workout Now";
+    const { canLog, canPlan } = logPlanAvailability(date, localDateStr());
+    return canPlan && !canLog ? "Schedule a Workout" : "Log a Workout";
+  })();
 
   return (
     <AnimatePresence>
@@ -330,7 +342,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-purple-500 text-white">
                     <Sparkles className="h-4 w-4" />
                   </span>
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Workout Now</h2>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">{modalTitle}</h2>
                 </div>
                 <button
                   onClick={onClose}
