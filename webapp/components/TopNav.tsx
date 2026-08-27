@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { AnimatePresence, motion } from 'framer-motion'
 import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound, Bell } from 'lucide-react'
 import FoodReportsPanel from './nutrition/FoodReportsPanel'
 import FeedbackModal from './FeedbackModal'
@@ -121,8 +122,15 @@ export default function TopNav() {
               )}
             </button>
 
+            <AnimatePresence>
             {isOpen && (
-              <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+              >
                 {userName && (
                   <div className="border-b border-zinc-100 px-4 py-2 dark:border-zinc-700">
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
@@ -182,8 +190,9 @@ export default function TopNav() {
                   <LogOut className="h-4 w-4" />
                   Logout
                 </button>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
