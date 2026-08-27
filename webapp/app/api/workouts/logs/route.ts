@@ -29,6 +29,7 @@ type RawLog = {
   sessionId?: string
   completed: boolean
   skipped?: boolean
+  favorite?: boolean
   date: Date
   duration?: number
   exercises?: Array<{
@@ -284,6 +285,7 @@ export async function GET(request: NextRequest) {
           sessionId: log.sessionId,
           completed: log.completed,
           skipped: !!log.skipped,
+          favorite: !!log.favorite,
           date: new Date(log.date).toISOString(),
           duration: log.duration,
           exerciseCount,
