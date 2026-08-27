@@ -118,6 +118,10 @@ test('overview href carries saved and started state independently', () => {
     quickSessionOverviewHref('abc', { saved: true, started: true }),
     '/dashboard/workout/quick-session?session=abc&saved=1&started=1',
   )
+  assert.equal(
+    quickSessionOverviewHref('abc', { date: '2026-08-30' }),
+    '/dashboard/workout/quick-session?session=abc&date=2026-08-30',
+  )
 })
 
 test('continuing an unfinished server session opens an edit-persisting saved href', async () => {

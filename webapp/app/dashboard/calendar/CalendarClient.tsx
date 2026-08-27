@@ -7,7 +7,9 @@ import PageTransition from '@/components/PageTransition'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
 import QuickSessionSummary from '@/components/QuickSessionSummary'
+import QuickSessionModal from '@/components/QuickSessionModal'
 import { continueQuickSession } from '@/lib/quickSession/openQuick'
+import { logPlanAvailability } from '@/lib/quickSession/logPlanDate'
 import { BackButton } from '@/components/ui/BackButton'
 import {
     ChevronLeft,
@@ -17,6 +19,7 @@ import {
     Clock,
     Dumbbell,
     Calendar,
+    CalendarClock,
     Settings,
     SkipForward,
     ArrowRightLeft,
@@ -258,6 +261,9 @@ export default function CalendarClient() {
     exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }>
   } | null>(null)
   const [logSummaryLoading, setLogSummaryLoading] = useState(false)
+  // Local YYYY-MM-DD of the day a "Log a Workout" / "Schedule a Workout" tap
+  // came from — opens the quick-session builder pre-dated to that day.
+  const [quickSessionDate, setQuickSessionDate] = useState<string | null>(null)
 
   // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
@@ -930,7 +936,35 @@ export default function CalendarClient() {
                 )}
 
                 {selectedWorkouts.length === 0 && selectedQuick.length === 0 ? (
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Rest day — no workouts scheduled.</p>
+                  <div>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Rest day — no workouts scheduled.</p>
+                    {(() => {
+                      const dateKey = toDateKey(selectedDate)
+                      const { canLog, canPlan } = logPlanAvailability(dateKey, toDateKey(today))
+                      return (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {canLog && (
+                            <button
+                              onClick={() => setQuickSessionDate(dateKey)}
+                              className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                            >
+                              <Dumbbell className="h-3 w-3" />
+                              Log a Workout
+                            </button>
+                          )}
+                          {canPlan && (
+                            <button
+                              onClick={() => setQuickSessionDate(dateKey)}
+                              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            >
+                              <CalendarClock className="h-3 w-3" />
+                              Schedule a Workout
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 ) : selectedWorkouts.length === 0 ? null : (
                   <div className="space-y-3">
                     {selectedWorkouts.map((w, idx) => {
@@ -1110,6 +1144,13 @@ export default function CalendarClient() {
           </AnimatePresence>
         </>
       )}
+
+      {/* Log/Schedule a Workout — quick-session builder pre-dated to the tapped day */}
+      <QuickSessionModal
+        open={!!quickSessionDate}
+        date={quickSessionDate ?? undefined}
+        onClose={() => setQuickSessionDate(null)}
+      />
 
       {/* Workout Log Summary Overlay */}
       <AnimatePresence>
