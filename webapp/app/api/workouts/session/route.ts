@@ -119,6 +119,8 @@ export async function DELETE(request: NextRequest) {
 //   { id, skipped: true }   → mark the planned session skipped
 //   { id, skipped: false }  → un-skip (back to planned)
 //   { id, title }           → rename without altering the recorded workout
+//   { id, favorite: true }  → star the session for quick access from the list
+//   { id, favorite: false } → unstar
 // Fields can be sent together or separately.
 export async function PATCH(request: NextRequest) {
   try {
@@ -129,11 +131,12 @@ export async function PATCH(request: NextRequest) {
       date?: string
       skipped?: boolean
       title?: unknown
+      favorite?: boolean
     }
     const id = body.id
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    if (body.date === undefined && body.skipped === undefined && body.title === undefined) {
-      return NextResponse.json({ error: 'date, skipped, or title is required' }, { status: 400 })
+    if (body.date === undefined && body.skipped === undefined && body.title === undefined && body.favorite === undefined) {
+      return NextResponse.json({ error: 'date, skipped, title, or favorite is required' }, { status: 400 })
     }
     if (body.title !== undefined && (typeof body.title !== 'string' || !body.title.trim())) {
       return NextResponse.json({ error: 'title must not be empty' }, { status: 400 })
@@ -152,6 +155,9 @@ export async function PATCH(request: NextRequest) {
     }
     if (typeof body.title === 'string') {
       set['workoutLogs.$[elem].title'] = body.title.trim()
+    }
+    if (body.favorite !== undefined) {
+      set['workoutLogs.$[elem].favorite'] = !!body.favorite
     }
     set.updatedAt = new Date()
 

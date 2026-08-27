@@ -92,6 +92,8 @@ export interface IWorkoutLog {
   // Quick sessions only: a planned session the user deliberately skipped. Never
   // set on program logs (those track skips on the Schedule slot instead).
   skipped?: boolean
+  // Quick sessions only: starred from the Sessions list for quick access.
+  favorite?: boolean
   duration?: number // in minutes (final, set on completion)
   startedAt?: Date // First time the live view was opened / first set saved
   activeSeconds?: number // Accumulated active seconds across all sessions
@@ -322,6 +324,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   focus: { type: String },
   completed: { type: Boolean, default: false },
   skipped: { type: Boolean },
+  favorite: { type: Boolean },
   duration: { type: Number },
   startedAt: { type: Date },
   activeSeconds: { type: Number, default: 0 },
