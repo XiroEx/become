@@ -15,6 +15,7 @@ import FoodSearchModal, { type LoggedFoodEntry } from '@/components/nutrition/Fo
 import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
+import EditMealModal from '@/components/nutrition/EditMealModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
 import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, CalendarClock, Copy, Camera, ImagePlus, Upload, PencilLine, History, ChevronDown } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
@@ -172,6 +173,16 @@ function NutritionPageInner() {
     loggedAt: string
     untimed?: boolean
   } | null>(null)
+  // Edit a whole logged meal (tag + time) at once, from the meal group
+  // card's own edit affordance — separate from editEntry, which edits one
+  // food item and (for a multi-item meal) splits it off.
+  const [editMeal, setEditMeal] = useState<{
+    logId: string
+    mealName?: string
+    currentTag: string
+    loggedAt: string
+    untimed?: boolean
+  } | null>(null)
   // When set, the food picker appends to THIS specific MealLog (used by "add to
   // this meal" on a logged meal group) rather than the smart tag-append.
   const [addToLogId, setAddToLogId] = useState<string | null>(null)
@@ -253,7 +264,7 @@ function NutritionPageInner() {
     changeDate(d)
   }
   const anyOverlayOpen =
-    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null || snapPlateOpen
+    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null || editMeal !== null || snapPlateOpen
   const swipe = useSwipeNav({
     onPrev: () => shiftDay(-1),
     onNext: () => shiftDay(1),
@@ -1262,6 +1273,9 @@ function NutritionPageInner() {
             onEditEntry={(logId, item, currentTag, loggedAt, untimed) => {
               setEditEntry({ logId, item, currentTag, loggedAt, untimed })
             }}
+            onEditMeal={(logId, mealName, currentTag, loggedAt, untimed) => {
+              setEditMeal({ logId, mealName, currentTag, loggedAt, untimed })
+            }}
             onRemoveEntry={handleRemoveEntry}
             onRemovePlan={handleRemovePlan}
             onLogPlan={dateParam === todayLocalKey() ? handleLogPlan : undefined}
@@ -1570,6 +1584,19 @@ function NutritionPageInner() {
         currentTag={editEntry?.currentTag}
         availableTags={tagsResp}
         onClose={() => setEditEntry(null)}
+        onSaved={() => { fetchMealLogs(); fetchTags() }}
+      />
+
+      {/* Edit Meal Modal — moves a whole logged meal's tag/time at once */}
+      <EditMealModal
+        isOpen={editMeal !== null}
+        logId={editMeal?.logId ?? null}
+        mealName={editMeal?.mealName}
+        currentTag={editMeal?.currentTag ?? 'snack'}
+        loggedAt={editMeal?.loggedAt}
+        untimed={editMeal?.untimed}
+        availableTags={tagsResp}
+        onClose={() => setEditMeal(null)}
         onSaved={() => { fetchMealLogs(); fetchTags() }}
       />
 

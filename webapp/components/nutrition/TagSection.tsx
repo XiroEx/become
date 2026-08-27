@@ -88,6 +88,15 @@ interface TagSectionProps {
     loggedAt: string,
     untimed?: boolean,
   ) => void
+  // Edit a whole logged meal (tag + time) at once — every item in it moves
+  // together. Omitted where no meal groups render (no-op prop otherwise).
+  onEditMeal?: (
+    logId: string,
+    mealName: string | undefined,
+    currentTag: string,
+    loggedAt: string,
+    untimed?: boolean,
+  ) => void
   onRemoveEntry: (logId: string, itemId: string) => void
   onRemoveTag?: (tag: string) => void
   removable?: boolean
@@ -214,6 +223,7 @@ export default function TagSection({
   onAddFood,
   onAddToMeal,
   onEditEntry,
+  onEditMeal,
   onRemoveEntry,
   onRemoveTag,
   removable = false,
@@ -627,6 +637,7 @@ export default function TagSection({
                         group={group}
                         tag={tag}
                         onEditEntry={onEditEntry}
+                        onEditMeal={onEditMeal}
                         onRemoveEntry={onRemoveEntry}
                         onAddToMeal={onAddToMeal}
                         selecting={selecting}
@@ -755,28 +766,51 @@ interface MealGroupCardProps {
   group: { key: string; mealName?: string; items: FlattenedItem[] }
   tag: string
   onEditEntry: TagSectionProps['onEditEntry']
+  onEditMeal?: TagSectionProps['onEditMeal']
   onRemoveEntry: (logId: string, itemId: string) => void
   onAddToMeal?: (logId: string, tag: string) => void
 }
 
 function MealGroupCard({
-  group, tag, onEditEntry, onRemoveEntry, onAddToMeal,
+  group, tag, onEditEntry, onEditMeal, onRemoveEntry, onAddToMeal,
   selecting, isSelected, onToggleSelect,
 }: MealGroupCardProps) {
   const [open, setOpen] = useState(false)
   const totalCal = Math.round(group.items.reduce((s, fi) => s + (fi.item.nutrition?.calories ?? 0) * (fi.item.servings ?? 1), 0))
+  const first = group.items[0]
   return (
     <div className="mx-3 my-2 overflow-hidden rounded-xl border border-orange-200 bg-orange-50/40 dark:border-orange-900/40 dark:bg-orange-900/10">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`flex w-full items-center gap-1.5 px-3 py-2.5 text-left ${open ? 'border-b border-orange-200/70 dark:border-orange-900/40' : ''}`}
-      >
-        <ChefHat className="h-3.5 w-3.5 shrink-0 text-orange-500" />
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{group.mealName}</span>
-        <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-orange-400 transition-transform ${open ? '' : '-rotate-90'}`} />
-      </button>
+      <div className={`flex items-center gap-1.5 pl-3 pr-1.5 ${open ? 'border-b border-orange-200/70 dark:border-orange-900/40' : ''}`}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-2.5 text-left"
+          aria-expanded={open}
+        >
+          <ChefHat className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{group.mealName}</span>
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
+        </button>
+        {onEditMeal && first && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditMeal(first.logId, group.mealName, tag, first.loggedAt, first.untimed)
+            }}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-orange-500/80 transition-colors hover:bg-orange-100 hover:text-orange-700 dark:hover:bg-orange-900/30 dark:hover:text-orange-300"
+            aria-label={`Edit ${group.mealName || 'meal'}`}
+          >
+            <PencilLine className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center text-orange-400"
+          aria-label={open ? 'Collapse meal' : 'Expand meal'}
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+        </button>
+      </div>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
