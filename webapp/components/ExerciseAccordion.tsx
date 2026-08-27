@@ -108,7 +108,6 @@ function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exe
       <FramedVideo
         src={videoUrl}
         surface="form"
-        showMuteToggle
         showFullscreenToggle
       />
     );
