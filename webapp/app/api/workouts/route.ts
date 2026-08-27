@@ -74,6 +74,14 @@ interface QuickSessionSaveRequest {
   tz?: number
   /** Optional backdate — ISO string / YYYY-MM-DD for a workout performed earlier. */
   performedAt?: string
+  /**
+   * Carried over from a favorited session's client-side draft when it is
+   * repeated (a repeat gets a new sessionId, so without this the star is
+   * silently lost on the new log). Only honored on the FIRST save for a
+   * sessionId — an update never touches an existing log's favorite, that is
+   * the dedicated PATCH /api/workouts/session toggle's job.
+   */
+  favorite?: boolean
 }
 
 /**
@@ -703,7 +711,7 @@ async function handleQuickSessionSave(
   body: QuickSessionSaveRequest,
   payload: { userId: string; email: string },
 ) {
-  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes } = body
+  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes, favorite } = body
 
   if (!sessionId || !Array.isArray(exercises)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -783,6 +791,7 @@ async function handleQuickSessionSave(
             startedAt: workoutDate,
             activeSeconds: activeSeconds ?? 0,
             ...(notes && { notes }),
+            ...(favorite === true && { favorite: true }),
             exercises,
           },
         },
