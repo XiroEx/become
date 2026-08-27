@@ -26,11 +26,11 @@ import { FOCUS_DEFS, type DraftExercise } from '@/lib/quickSession/types'
 import { buildLoggedExercises } from '@/lib/quickSession/log'
 import { persistSourceQuickSessionRename } from '@/lib/quickSession/rename'
 import { shouldPromptForQuickSessionName } from '@/lib/quickSession/naming'
+import { localDateStr, logPlanAvailability } from '@/lib/quickSession/logPlanDate'
 
-// Local YYYY-MM-DD (not UTC) so the date picker + max match the user's day.
-function localDateStr(d = new Date()): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+// YYYY-MM-DD only — guards against a malformed/garbage `date` query param
+// silently becoming the pre-filled log date.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 export default function QuickSessionOverviewPage() {
   const router = useRouter()
@@ -43,26 +43,31 @@ export default function QuickSessionOverviewPage() {
   // `started` is a fallback for browsers where localStorage is unavailable;
   // normal resumes are detected from their shared Track/Live progress draft.
   const startedFromHref = params.get('started') === '1'
+  // Pre-filled by the Calendar when this session was started from a specific
+  // day — otherwise default to today, as before.
+  const dateParam = params.get('date')
+  const initialLogDate = dateParam && DATE_RE.test(dateParam) ? dateParam : localDateStr()
   const [session, setSession] = useState<StoredQuickSession | null | undefined>(undefined)
   const [hasStarted, setHasStarted] = useState(startedFromHref)
   const [editing, setEditing] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
-  const [logOpen, setLogOpen] = useState(false)
-  const [logDate, setLogDate] = useState(localDateStr())
+  // Opens automatically when a specific date was requested — that is the
+  // whole reason the Calendar sent the user here.
+  const [logOpen, setLogOpen] = useState(!!dateParam)
+  const [logDate, setLogDate] = useState(initialLogDate)
   const [logging, setLogging] = useState(false)
   const [logError, setLogError] = useState<string | null>(null)
   const [showNamePrompt, setShowNamePrompt] = useState(false)
-  // Future date = planning ahead (saved incomplete); past/today = logging done.
-  const isFutureDate = logDate > localDateStr()
+  // Past days can only be logged, future days can only be planned, today allows both.
+  const { canLog, canPlan } = logPlanAvailability(logDate, localDateStr())
 
-  const saveLog = async (title: string) => {
+  const saveLog = async (title: string, done: boolean) => {
     if (!session) return
     setLogging(true)
     setLogError(null)
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-      const done = !isFutureDate
       const exercises = buildLoggedExercises(session.exercises, done)
       const totalSets = exercises.reduce((n, e) => n + e.sets.length, 0)
       const res = await fetch('/api/workouts', {
@@ -98,11 +103,16 @@ export default function QuickSessionOverviewPage() {
 
   const logAsDone = () => {
     if (!session) return
-    if (!isFutureDate && shouldPromptForQuickSessionName(session)) {
+    if (shouldPromptForQuickSessionName(session)) {
       setShowNamePrompt(true)
       return
     }
-    void saveLog(session.title).catch(() => {})
+    void saveLog(session.title, true).catch(() => {})
+  }
+
+  const planForLater = () => {
+    if (!session) return
+    void saveLog(session.title, false).catch(() => {})
   }
 
   // Apply an edit: always update the local stash (that is what Start workout and
@@ -222,12 +232,13 @@ export default function QuickSessionOverviewPage() {
           </div>
         </div>
 
-        {/* Log / plan date panel — revealed by the header button. Past date =
-            logs it done; future date = plans it. */}
+        {/* Log / plan date panel — revealed by the header button. A past date
+            can only be logged, a future date can only be planned, and today
+            offers both. */}
         {logOpen && !editing && (
           <div className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              {isFutureDate ? 'Plan this session for' : 'When did you do this?'}
+              {canLog && canPlan ? 'Log or schedule this for' : canPlan ? 'Plan this session for' : 'When did you do this?'}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -236,13 +247,24 @@ export default function QuickSessionOverviewPage() {
                 onChange={(e) => setLogDate(e.target.value)}
                 className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               />
-              <button
-                onClick={logAsDone}
-                disabled={logging}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
-              >
-                <Check className="h-4 w-4" /> {logging ? 'Saving…' : isFutureDate ? 'Plan it' : 'Log it'}
-              </button>
+              {canLog && (
+                <button
+                  onClick={logAsDone}
+                  disabled={logging}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                >
+                  <Check className="h-4 w-4" /> {logging ? 'Saving…' : 'Log it'}
+                </button>
+              )}
+              {canPlan && (
+                <button
+                  onClick={planForLater}
+                  disabled={logging}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-200"
+                >
+                  <CalendarClock className="h-4 w-4" /> {logging ? 'Saving…' : 'Plan it'}
+                </button>
+              )}
             </div>
             {logError && <p className="mt-1.5 text-xs text-red-500">{logError}</p>}
           </div>
@@ -314,7 +336,7 @@ export default function QuickSessionOverviewPage() {
         <QuickSessionNamePrompt
           initialName={session.title}
           confirmLabel="Save name & log"
-          onConfirm={(title) => saveLog(title)}
+          onConfirm={(title) => saveLog(title, true)}
           onCancel={() => setShowNamePrompt(false)}
         />
       )}

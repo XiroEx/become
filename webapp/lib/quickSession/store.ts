@@ -162,15 +162,20 @@ export function clearQuickSession(sessionId: string): void {
  * sessionId (a planned session). The overview uses it to decide whether editing
  * should write back to that log — for an unsaved draft it must not, or the edit
  * would insert a stray log nobody asked for.
+ *
+ * `date` (a local YYYY-MM-DD) pre-fills the overview's Log/Plan date — used
+ * when the session was started from a specific day on the Calendar, so the
+ * user isn't left to re-pick a date the app already knew.
  */
 export function quickSessionOverviewHref(
   sessionId: string,
-  opts?: { saved?: boolean; started?: boolean },
+  opts?: { saved?: boolean; started?: boolean; date?: string },
 ): string {
   const q = [
     `session=${encodeURIComponent(sessionId)}`,
     ...(opts?.saved ? ['saved=1'] : []),
     ...(opts?.started ? ['started=1'] : []),
+    ...(opts?.date ? [`date=${encodeURIComponent(opts.date)}`] : []),
   ].join('&')
   return `/dashboard/workout/quick-session?${q}`
 }
