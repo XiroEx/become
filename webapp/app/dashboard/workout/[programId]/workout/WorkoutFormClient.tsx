@@ -96,7 +96,6 @@ function VideoPlayer({
         videoHeight={videoHeight}
         videoFraming={videoFraming}
         videoTrim={videoTrim}
-        showMuteToggle
         showFullscreenToggle
         onDimensions={(w, h) => {
           // Self-heal: first time a user plays a video with no persisted dims,
