@@ -21,6 +21,7 @@ function ctx(over: Partial<DashboardTileContext> = {}): DashboardTileContext {
     isMoodUpdating: false,
     onMoodChange: () => {},
     onOpenWeightSheet: () => {},
+    onOpenQuickSession: () => {},
     ...over,
   }
 }

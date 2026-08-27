@@ -9,6 +9,7 @@ import { useTutorialMaybe } from '@redbtn/redtutorial'
 import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import WeightLogSheet from '@/components/WeightLogSheet'
+import QuickSessionModal from '@/components/QuickSessionModal'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import GoalAchievedModal from '@/components/GoalAchievedModal'
 import type { GoalReached } from '@/lib/goals/reached'
@@ -121,6 +122,9 @@ export default function DashboardClient() {
   const [showCustomize, setShowCustomize] = useState(false)
   // The Weight tile opens this in place instead of navigating to Progress.
   const [weightSheetOpen, setWeightSheetOpen] = useState(false)
+  // The Workout Now tile opens this in place instead of navigating to the
+  // Workout hub first.
+  const [quickSessionOpen, setQuickSessionOpen] = useState(false)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -593,6 +597,7 @@ export default function DashboardClient() {
     isMoodUpdating,
     onMoodChange: handleMoodCardChange,
     onOpenWeightSheet: () => setWeightSheetOpen(true),
+    onOpenQuickSession: () => setQuickSessionOpen(true),
     // Stat tiles render a shimmer instead of zeros/dashes while the first
     // progress load is in flight. A cache hit clears `loading` synchronously on
     // mount, so reopens never show the skeleton.
@@ -644,6 +649,11 @@ export default function DashboardClient() {
         onLogged={handleWeightLogged}
         lastWeight={data.weightData.length ? data.weightData[data.weightData.length - 1].value : undefined}
         targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+      />
+
+      <QuickSessionModal
+        open={quickSessionOpen}
+        onClose={() => setQuickSessionOpen(false)}
       />
 
       <PageTransition className="space-y-4 sm:space-y-6">
