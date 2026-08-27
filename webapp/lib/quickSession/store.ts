@@ -19,11 +19,15 @@ export interface StoredQuickSession extends DraftSession {
   /** Server log this repeat was copied from. Kept separate from sessionId so
    *  completing the repeat cannot overwrite the historical workout. */
   sourceSessionId?: string
+  /** Carried over from a favorited source session so repeating it doesn't
+   *  silently drop the star — see openQuickSession call sites. */
+  favorite?: boolean
 }
 
 interface StashQuickSessionOptions {
   sourceSessionId?: string
   needsName?: boolean
+  favorite?: boolean
 }
 
 function genId(): string {
@@ -50,6 +54,7 @@ export function stashQuickSession(session: DraftSession, options?: StashQuickSes
     sessionId,
     ...(options?.needsName !== undefined ? { needsName: options.needsName } : {}),
     ...(options?.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}),
+    ...(options?.favorite ? { favorite: true } : {}),
   }
   try {
     // localStorage (not sessionStorage) so a generated session survives closing

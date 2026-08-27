@@ -79,6 +79,7 @@ export default function QuickSessionOverviewPage() {
           title,
           needsName: done ? false : shouldPromptForQuickSessionName(session),
           ...(session.focus && { focus: session.focus }),
+          ...(session.favorite && { favorite: true }),
           exercises,
           completed: done,
           ...(done && { duration: Math.max(1, Math.round(totalSets * 1.5)) }),

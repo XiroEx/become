@@ -742,6 +742,7 @@ export default function WorkoutFormPage() {
               title: options.quickTitle ?? workout.title,
               needsName: false,
               ...(stored?.focus && { focus: stored.focus }),
+              ...(stored?.favorite && { favorite: true }),
               exercises: exercisesToSave,
               completed: true,
               duration: Math.max(1, Math.round(total * 1.5)),
@@ -934,6 +935,7 @@ export default function WorkoutFormPage() {
           title: workout?.title ?? stored?.title ?? "Quick Session",
           needsName: shouldPromptForQuickSessionName(stored),
           ...(stored?.focus && { focus: stored.focus }),
+          ...(stored?.favorite && { favorite: true }),
           exercises: next.map((ex, i) => {
             const ep = nextProgress.find((p) => p.exerciseIndex === i);
             const isTimeBased = tracksTime(ex.trackingType);
