@@ -5,8 +5,9 @@
 // ritual) is THE thing on screen; a quiet "More →" leads to the Arsenal of
 // unlocked tools. Begin → launches the immersive SessionPlayer.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
@@ -22,6 +23,7 @@ import { precomposeMindSession } from '@/lib/mind/precompose'
 import { suggestActions } from '@/lib/mind/suggestActions'
 import { getPathSession } from '@/lib/mind/sessionPath'
 import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
+import { shouldAutoStartMindSession } from '@/lib/mind/autoStart'
 import { runAiTask } from '@/lib/ai/runClient'
 import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
@@ -91,6 +93,12 @@ const SUGG_CACHE_KEY = 'mind-suggested-next'
 const SUGG_CACHE_TTL = 12 * 60 * 60 * 1000
 
 export default function MindJourney() {
+  // The home dashboard's Mindset tile links here with ?start=1 to jump
+  // straight into today's session instead of just onto this page.
+  const searchParams = useSearchParams()
+  const autoStart = searchParams?.get('start') === '1'
+  const autoStartedRef = useRef(false)
+
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
@@ -265,6 +273,24 @@ export default function MindJourney() {
       }).catch(() => {})
     }
   }, [resumable, aiPlan, plan])
+
+  // Auto-begin for the dashboard tile's ?start=1. Fires at most once, and
+  // only once there's an actual session to jump into — during onboarding or
+  // the post-session cooldown it silently no-ops and the page renders as
+  // normal instead of forcing a session that doesn't exist.
+  useEffect(() => {
+    if (!shouldAutoStartMindSession({
+      autoStart,
+      alreadyStarted: autoStartedRef.current,
+      loading,
+      playing,
+      onboarded,
+      available: progress?.mainSessionAvailable ?? true,
+      hasPlan: !!effectivePlan,
+    })) return
+    autoStartedRef.current = true
+    begin()
+  }, [autoStart, loading, playing, onboarded, progress, effectivePlan, begin])
 
   // Deterministic suggested actions — shown instantly (and the fallback if the AI
   // drifts). The AI upgrade replaces them when it resolves.

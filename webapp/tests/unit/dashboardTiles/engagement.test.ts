@@ -12,7 +12,7 @@ function ctx(over: Partial<DashboardTileContext> = {}): DashboardTileContext {
     data: { weightData: [], bmiData: [], moodData: [], currentProgram: null,
       stats: { streakDays: 0, totalWorkouts: 0, thisWeekWorkouts: 0, goalProgress: 0 } },
     streakData: null, nutritionData: null, weeklyAvailability: 4, weightUnit: 'lbs',
-    todaysMood: 4, isMoodUpdating: false, onMoodChange: () => {}, onOpenWeightSheet: () => {}, ...over,
+    todaysMood: 4, isMoodUpdating: false, onMoodChange: () => {}, onOpenWeightSheet: () => {}, onOpenQuickSession: () => {}, ...over,
   }
 }
 

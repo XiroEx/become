@@ -1,5 +1,6 @@
 'use client'
 
+import { Suspense } from 'react'
 import MindJourney from '@/components/mind/MindJourney'
 
 // Mindset used to be admin-gated by FeatureGuard while the session engine
@@ -7,5 +8,9 @@ import MindJourney from '@/components/mind/MindJourney'
 // It's been live and stable for a while now, so it renders for every authed
 // user like the rest of the dashboard instead of only role === "admin".
 export default function MindPage() {
-  return <MindJourney />
+  return (
+    <Suspense fallback={null}>
+      <MindJourney />
+    </Suspense>
+  )
 }
