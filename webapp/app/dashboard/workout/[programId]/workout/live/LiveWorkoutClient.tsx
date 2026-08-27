@@ -20,6 +20,7 @@ import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt"
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
+import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
@@ -173,6 +174,12 @@ export default function LiveWorkoutPage() {
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
   const [currentSpeed, setCurrentSpeed] = useState("");
+  // Display unit for the duration input only — currentReps (the value that's
+  // actually saved) always stays in seconds underneath. Defaults per-exercise
+  // (minutes for time+distance cardio, seconds otherwise) and resets whenever
+  // the active exercise changes so a previous exercise's toggle choice can't
+  // leak into the next one.
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>("sec");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
@@ -294,6 +301,15 @@ export default function LiveWorkoutPage() {
   const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
   const setUnit = setUnitLabel(tracking, 1);
   const setUnitPlural = setUnitLabel(tracking, totalSets);
+  const isFloorsInput = isFloorsExercise(currentExercise?.name);
+
+  // Reset the duration unit toggle to this exercise's sane default whenever
+  // the active exercise changes (not on every set, which would flip it back
+  // mid-exercise).
+  useEffect(() => {
+    setDurationUnit(defaultDurationUnit(currentExercise?.trackingType));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExerciseIndex]);
 
   // Per-bell weight convention: when the exercise name implies a dumbbell or
   // kettlebell, the user logs the per-bell weight (e.g. "90" for a pair of
@@ -2294,7 +2310,11 @@ export default function LiveWorkoutPage() {
                         {(() => {
                           const h = exerciseHistory[currentExercise.name]
                           if (isIntervalExercise || showTimeInput) {
-                            return h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : "completed"
+                            const lastSeconds = h.duration || h.reps
+                            if (!lastSeconds) return "completed"
+                            return durationUnit === "min"
+                              ? `${secondsToUnitDisplay(lastSeconds, "min")}m`
+                              : `${lastSeconds}s`
                           }
                           if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
                           return h.reps > 0 ? `${h.reps} reps` : "completed"
@@ -2403,26 +2423,46 @@ export default function LiveWorkoutPage() {
                     {/* Duration input — for time, time_distance, intervals */}
                     {showTimeInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">
-                          {isIntervalExercise ? 'Duration (sec) — optional' : 'Duration (sec)'}
-                        </label>
+                        <div className="mb-1 flex items-center justify-between gap-1">
+                          <label className="block text-xs text-white/60">
+                            {isIntervalExercise ? `Duration (${durationUnit}) — optional` : `Duration (${durationUnit})`}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setDurationUnit((u) => (u === "sec" ? "min" : "sec"))}
+                            className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/70 hover:bg-white/20"
+                          >
+                            {durationUnit === "sec" ? "Use min" : "Use sec"}
+                          </button>
+                        </div>
                         <input
+                          // Uncontrolled + remounted on step/unit change: a
+                          // controlled value re-derived from the seconds↔unit
+                          // round trip on every keystroke would eat a
+                          // trailing decimal point ("2." collapses back to
+                          // "2" the instant it's typed). defaultValue only
+                          // resyncs when the key changes; while it doesn't,
+                          // the browser owns exactly what was typed.
+                          key={`duration-${currentStepIndex}-${durationUnit}`}
                           type="number"
-                          inputMode="numeric"
-                          value={currentReps}
-                          onChange={(e) => updateCurrentInput("reps", e.target.value)}
+                          inputMode="decimal"
+                          defaultValue={secondsToUnitDisplay(currentReps, durationUnit)}
+                          onChange={(e) => updateCurrentInput("reps", unitDisplayToSeconds(e.target.value, durationUnit))}
                           placeholder={currentExercise?.duration?.replace(/[^0-9]/g, "") || currentExercise?.reps || "30"}
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
                       </div>
                     )}
-                    {/* Distance input — time_distance only */}
+                    {/* Distance input — time_distance only. Stairmaster-style
+                        exercises measure floors climbed, not meters. */}
                     {tracking === "time_distance" && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Distance (m)</label>
+                        <label className="mb-1 block text-xs text-white/60">
+                          {isFloorsInput ? "Floors" : "Distance (m)"}
+                        </label>
                         <input
                           type="number"
-                          inputMode="decimal"
+                          inputMode={isFloorsInput ? "numeric" : "decimal"}
                           value={currentWeight}
                           onChange={(e) => updateCurrentInput("weight", e.target.value)}
                           placeholder="0"

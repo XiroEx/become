@@ -25,6 +25,7 @@ import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt"
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled } from "@/lib/workout/tracking";
+import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 
@@ -334,6 +335,11 @@ export default function WorkoutFormPage() {
   const [summaryStreak, setSummaryStreak] = useState<{ streakDays: number; nextMilestone: number | null } | null>(null);
   const [summaryGoal, setSummaryGoal] = useState<string | null>(null);
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
+  // Display unit for each exercise's duration column — keyed by exerciseIndex
+  // since the Track view lists every exercise at once (unlike the Live view's
+  // single active exercise). Stored sets always stay in seconds; this only
+  // controls what the input shows and how a typed value gets converted back.
+  const [durationUnits, setDurationUnits] = useState<Record<number, DurationUnit>>({});
 
   // Fetch contextual nudges for this workout's exercises (once per slug set).
   const workoutSlugKey = (workout?.exercises ?? [])
@@ -1561,6 +1567,8 @@ export default function WorkoutFormPage() {
                             const isTimeBased = tracksTime(tracking)
                             const showSpeed = tracksSpeed(tracking)
                             const isNone = tracking === "none"
+                            const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
+                            const isFloorsInput = isFloorsExercise(exercise.name)
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
                               exercise.tempo && `Tempo ${exercise.tempo}`,
@@ -1597,8 +1605,11 @@ export default function WorkoutFormPage() {
                                 {/* Exercise history hint */}
                                 {exerciseHistory[exercise.name] && (() => {
                                   const h = exerciseHistory[exercise.name]
+                                  const lastSeconds = h.duration || h.reps
                                   const label = isTimeBased
-                                    ? (h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : 'completed')
+                                    ? (lastSeconds
+                                        ? (durationUnit === "min" ? `${secondsToUnitDisplay(lastSeconds, "min")}m` : `${lastSeconds}s`)
+                                        : 'completed')
                                     : h.weight > 0 ? `${h.weight} lbs × ${h.reps} reps`
                                     : h.reps > 0 ? `${h.reps} reps` : null
                                   return label ? (
@@ -1608,15 +1619,32 @@ export default function WorkoutFormPage() {
                                   ) : null
                                 })()}
                                 {/* Column headers */}
-                                <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                <div className="mt-2 grid grid-cols-12 items-center gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                                   <div className="col-span-2">{setUnitLabel(tracking, 1)}</div>
                                   {showWeight && <div className="col-span-3">Weight</div>}
                                   {!isNone && (
-                                    <div className={showWeight ? "col-span-3" : "col-span-6"}>
-                                      {isTimeBased ? (tracking === "time_distance" ? "Sec" : "Sec") : "Reps"}
+                                    <div className={`${showWeight ? "col-span-3" : "col-span-6"} flex items-center gap-1`}>
+                                      {isTimeBased ? durationUnit.charAt(0).toUpperCase() + durationUnit.slice(1) : "Reps"}
+                                      {isTimeBased && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setDurationUnits((prev) => ({
+                                              ...prev,
+                                              [exerciseIndex]: durationUnit === "sec" ? "min" : "sec",
+                                            }))
+                                          }}
+                                          className="normal-case rounded-full bg-zinc-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-normal text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+                                        >
+                                          {durationUnit === "sec" ? "min" : "sec"}
+                                        </button>
+                                      )}
                                     </div>
                                   )}
-                                  {tracking === "time_distance" && <div className="col-span-2">Dist (m)</div>}
+                                  {tracking === "time_distance" && (
+                                    <div className="col-span-2">{isFloorsInput ? "Floors" : "Dist (m)"}</div>
+                                  )}
                                   {showSpeed && <div className="col-span-2">mph</div>}
                                   <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
                                 </div>
@@ -1631,6 +1659,8 @@ export default function WorkoutFormPage() {
                             const isTimeBased = tracksTime(tracking)
                             const showSpeed = tracksSpeed(tracking)
                             const isNone = tracking === "none"
+                            const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
+                            const isFloorsInput = isFloorsExercise(exercise.name)
                             const repPlaceholder = isTimeBased
                               ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
                               : (exercise.reps?.split("-")[0] || "0")
@@ -1666,25 +1696,43 @@ export default function WorkoutFormPage() {
                                         />
                                       </div>
                                     )}
-                                    {/* Reps / Duration input */}
+                                    {/* Reps / Duration input. The duration case is
+                                        uncontrolled + remounted on unit toggle: a
+                                        controlled value re-derived through the
+                                        seconds↔unit round trip on every keystroke
+                                        would eat a trailing decimal point as it's
+                                        typed. */}
                                     {!isNone && (
                                       <div className={showWeight ? "col-span-3" : "col-span-6"}>
-                                        <input
-                                          type="number"
-                                          inputMode="decimal"
-                                          placeholder={repPlaceholder}
-                                          value={isTimeBased ? set.duration : set.reps}
-                                          onChange={(e) => updateSet(exerciseIndex, setIndex, isTimeBased ? "duration" : "reps", e.target.value)}
-                                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                        />
+                                        {isTimeBased ? (
+                                          <input
+                                            key={`duration-${exerciseIndex}-${setIndex}-${durationUnit}`}
+                                            type="number"
+                                            inputMode="decimal"
+                                            placeholder={repPlaceholder}
+                                            defaultValue={secondsToUnitDisplay(set.duration, durationUnit)}
+                                            onChange={(e) => updateSet(exerciseIndex, setIndex, "duration", unitDisplayToSeconds(e.target.value, durationUnit))}
+                                            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                          />
+                                        ) : (
+                                          <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            placeholder={repPlaceholder}
+                                            value={set.reps}
+                                            onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
+                                            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                          />
+                                        )}
                                       </div>
                                     )}
-                                    {/* Distance input — time_distance only */}
+                                    {/* Distance input — time_distance only. Stairmaster-style
+                                        exercises measure floors climbed, not meters. */}
                                     {tracking === "time_distance" && (
                                       <div className="col-span-2">
                                         <input
                                           type="number"
-                                          inputMode="decimal"
+                                          inputMode={isFloorsInput ? "numeric" : "decimal"}
                                           placeholder="0"
                                           value={set.distance}
                                           onChange={(e) => updateSet(exerciseIndex, setIndex, "distance", e.target.value)}
