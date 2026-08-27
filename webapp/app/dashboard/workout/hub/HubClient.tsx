@@ -8,9 +8,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight, CalendarClock } from 'lucide-react'
+import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight, CalendarClock, Bookmark, Loader2 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
-import { Card, EmptyState } from '@/components/ui'
+import { Card, EmptyState, Toast } from '@/components/ui'
+import { useToast } from '@/hooks/useToast'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
 import MyProgramsClient from '../../programs/mine/MyProgramsClient'
 import SessionBuilder from '@/components/SessionBuilder'
@@ -41,6 +42,7 @@ interface SessionLog {
   duration?: number
   exerciseCount: number
   sessionId?: string
+  favorite?: boolean
   /** The exercises actually performed. Present for quick sessions saved with
    *  them; absent on very old logs, which fall back to regenerating. */
   exercises?: DraftExercise[]
@@ -94,6 +96,33 @@ function SessionsTab() {
   // into the builder instead of requiring a second tap on "Build".
   const [building, setBuilding] = useState(() => shouldAutoOpenBuilder(searchParams))
   const [opening, setOpening] = useState<string | null>(null)
+  const [togglingFavorite, setTogglingFavorite] = useState<string | null>(null)
+  const { toast, showToast } = useToast(2200)
+
+  // Star/unstar a session from the list. Optimistic (the list is the whole
+  // point of "quick access"), with a rollback + toast if the PATCH fails.
+  async function toggleFavorite(e: React.MouseEvent, log: SessionLog) {
+    e.stopPropagation()
+    const id = log.sessionId
+    if (!id || togglingFavorite) return
+    const next = !log.favorite
+    setTogglingFavorite(id)
+    setSessions((prev) => prev.map((s) => (s.sessionId === id ? { ...s, favorite: next } : s)))
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/workouts/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+        body: JSON.stringify({ id, favorite: next }),
+      })
+      if (!res.ok) throw new Error('favorite toggle failed')
+    } catch {
+      setSessions((prev) => prev.map((s) => (s.sessionId === id ? { ...s, favorite: !next } : s)))
+      showToast('Failed to update favorite', 'error')
+    } finally {
+      setTogglingFavorite(null)
+    }
+  }
 
   // Open a planned session under its OWN sessionId so finishing it consumes the
   // plan (updates the same log to completed) rather than creating a new one.
@@ -304,11 +333,28 @@ function SessionsTab() {
                   ) : null}
                 </div>
               </div>
+              {log.sessionId && (
+                <button
+                  type="button"
+                  onClick={(e) => toggleFavorite(e, log)}
+                  disabled={togglingFavorite === log.sessionId}
+                  aria-label={log.favorite ? 'Remove from favorites' : 'Add to favorites'}
+                  title={log.favorite ? 'Remove from favorites' : 'Add to favorites'}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                >
+                  {togglingFavorite === log.sessionId ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Bookmark className={`h-4 w-4 ${log.favorite ? 'fill-current text-amber-500' : ''}`} />
+                  )}
+                </button>
+              )}
               <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
             </Card>
           ))}
         </div>
       )}
+      <Toast toast={toast} />
     </div>
   )
 }
