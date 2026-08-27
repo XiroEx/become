@@ -167,7 +167,11 @@ function SessionsTab() {
           exercises: log.exercises,
           source: 'saved',
         },
-        { needsName: false, ...(log.sessionId ? { sourceSessionId: log.sessionId } : {}) },
+        {
+          needsName: false,
+          ...(log.sessionId ? { sourceSessionId: log.sessionId } : {}),
+          ...(log.favorite ? { favorite: true } : {}),
+        },
       )
       router.push(quickSessionOverviewHref(id))
       return

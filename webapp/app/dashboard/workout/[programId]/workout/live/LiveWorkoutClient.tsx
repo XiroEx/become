@@ -127,7 +127,7 @@ export default function LiveWorkoutPage() {
   // plumbing entirely and save with kind:'quick'.
   const quickSessionId = searchParams.get("session");
   const isQuick = programId === QUICK_PROGRAM_ID || !!quickSessionId;
-  const [quickMeta, setQuickMeta] = useState<{ title: string; focus?: string } | null>(null);
+  const [quickMeta, setQuickMeta] = useState<{ title: string; focus?: string; favorite?: boolean } | null>(null);
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>(fallbackExercises);
   const [currentPhase, setCurrentPhase] = useState(1);
@@ -483,7 +483,7 @@ export default function LiveWorkoutPage() {
             ...(d.addedAdHoc && { addedAdHoc: true }),
           }));
           const title = stored?.title || "Quick Session";
-          setQuickMeta({ title, focus: stored?.focus });
+          setQuickMeta({ title, focus: stored?.focus, favorite: stored?.favorite });
           setQuickNeedsName(shouldPromptForQuickSessionName(stored));
 
           if (exs.length === 0) {
@@ -1095,6 +1095,7 @@ export default function LiveWorkoutPage() {
             title: quickTitleOverride ?? workout.title,
             needsName: isComplete ? false : quickNeedsName,
             ...(quickMeta?.focus && { focus: quickMeta.focus }),
+            ...(quickMeta?.favorite && { favorite: true }),
             exercises: exercisesToSave,
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
