@@ -16,6 +16,8 @@ import {
   splitForPreset,
   recommendedPresetForGoal,
   recommendPreset,
+  gramsFromPercent,
+  percentFromGrams,
   MACRO_PRESET_LABELS,
   type FitnessGoal,
   MACRO_PRESET_SPLITS,
@@ -450,5 +452,46 @@ describe('macro preset naming and recommendation', () => {
         assert.ok(r.badge.length > 0 && r.badge.length <= 16, `badge "${r.badge}" is not card-sized`)
       }
     }
+  })
+})
+
+// ── Manual split entered as a percent, not just grams ────────────────────────
+//
+// The Manual (macroPreset 'custom') screen used to only accept grams — the
+// percent shown next to each field was read-only, computed from whatever
+// grams were typed. gramsFromPercent/percentFromGrams are the conversion the
+// Nutrition Goals page now uses to let Manual accept a typed percentage too,
+// using the same calories*pct/100/kcalPerGram math as a preset's split.
+
+describe('gramsFromPercent / percentFromGrams', () => {
+  it('matches the split math computeNutritionTargets already applies to presets', () => {
+    // 2328 cal at 40/30/30 (the reported screenshot) is 233/175/78.
+    assert.equal(gramsFromPercent(2328, 40, 4), 233)
+    assert.equal(gramsFromPercent(2328, 30, 4), 175)
+    assert.equal(gramsFromPercent(2328, 30, 9), 78)
+  })
+
+  it('round-trips grams -> percent -> grams for a real split', () => {
+    // Chosen so grams/calories divides evenly and rounding never has to bite,
+    // so this proves the two functions are true inverses, not just "close".
+    assert.equal(gramsFromPercent(2000, percentFromGrams(2000, 200, 4), 4), 200)
+    assert.equal(gramsFromPercent(1800, percentFromGrams(1800, 72, 9), 9), 72)
+
+    // A percentage that doesn't divide evenly is still stable within rounding.
+    const pct = percentFromGrams(2400, 220, 4)
+    const backToGrams = gramsFromPercent(2400, pct, 4)
+    assert.ok(Math.abs(backToGrams - 220) <= 3, `220g -> ${pct}% -> ${backToGrams}g drifted too far`)
+  })
+
+  it('refuses to invent a number when calories is not set yet', () => {
+    assert.equal(gramsFromPercent(0, 40, 4), 0)
+    assert.equal(percentFromGrams(0, 233, 4), 0)
+  })
+
+  it('0% is 0g and 100% of calories from one macro is the whole target', () => {
+    assert.equal(gramsFromPercent(2000, 0, 4), 0)
+    assert.equal(gramsFromPercent(2000, 100, 4), 500)
+    assert.equal(percentFromGrams(2000, 0, 4), 0)
+    assert.equal(percentFromGrams(2000, 500, 4), 100)
   })
 })

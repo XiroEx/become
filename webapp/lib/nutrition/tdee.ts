@@ -517,6 +517,21 @@ export function computeNutritionTargets(input: TargetsInput): NutritionTargets |
   return { tdee, calories, protein, carbs, fats, direction, activityLevel, split }
 }
 
+/** Grams of a macro that make up `percent`% of a calorie target — the same
+ *  math computeNutritionTargets() applies to a preset's split, exposed so the
+ *  Manual macro split can accept a typed percentage instead of only grams. */
+export function gramsFromPercent(calories: number, percent: number, kcalPerGram: number): number {
+  if (!(calories > 0) || !(kcalPerGram > 0)) return 0
+  return Math.round((calories * percent) / 100 / kcalPerGram)
+}
+
+/** Inverse of gramsFromPercent — what share of the calorie target a gram
+ *  figure represents. Used to show the Manual split in percent form. */
+export function percentFromGrams(calories: number, grams: number, kcalPerGram: number): number {
+  if (!(calories > 0)) return 0
+  return Math.round((grams * kcalPerGram / calories) * 100)
+}
+
 /** Water target in oz — bodyweight-scaled, which is closer than a flat 96. */
 export function waterGoalOz(currentWeightKg?: number): number {
   if (!currentWeightKg) return 96
