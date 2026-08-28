@@ -68,16 +68,25 @@ const MAX_SURPLUS_PCT = 0.15
 const CAL_PER_LB = 3500
 
 /**
- * The calorie delta for this member: the smaller of a cap and either their
- * chosen pace (converted from lb/week) or, absent one, the flat default. Large
- * members are unaffected by the cap (their percentage exceeds it); small
- * members stop being handed a 30% cut.
+ * The calorie delta for this member: either their chosen pace (converted from
+ * lb/week), or, absent one, the flat default capped to a sane share of TDEE.
  *
  * `paceLbPerWeek` is what makes this respond to the member's own choice
  * instead of always landing on the same -500/+300 regardless of whether they
  * picked 0.5, 1 or 1.5 lb a week — see the Goal's target.paceKgPerWeek. Omit it
  * (no active weight Goal yet, e.g. mid-onboarding) to get the historical flat
  * default.
+ *
+ * An explicit pace is NOT run through the percentage cap. It used to be —
+ * "1.5 lb/week says -566 for some reason" was that cap quietly rewriting a
+ * 750 cal deficit (1.5 * 3500 / 7) down to 20% of a 2,828 cal TDEE. The pace
+ * picker already bounds the choice to 0.5-1.5 lb/week, well inside what
+ * George/Jon Don agreed was reasonable ("above 2lb weekly" is the line, and
+ * "the math is the math" below it) — the cap was protecting against a flat
+ * default nobody chose, not against this. The 1,200 cal floor in
+ * computeNutritionTargets() is what still catches a small member on an
+ * aggressive pace; capping the delta itself just produced a number that
+ * didn't match the pace they picked.
  */
 export function calorieAdjustment(
   tdee: number,
@@ -85,9 +94,11 @@ export function calorieAdjustment(
   paceLbPerWeek?: number,
 ): number {
   if (direction === 'maintain') return 0
-  const base = paceLbPerWeek && paceLbPerWeek > 0
-    ? Math.round((paceLbPerWeek * CAL_PER_LB) / 7)
-    : Math.abs(DIRECTION_ADJUSTMENT[direction])
+  if (paceLbPerWeek && paceLbPerWeek > 0) {
+    const chosen = Math.round((paceLbPerWeek * CAL_PER_LB) / 7)
+    return direction === 'lose' ? -chosen : chosen
+  }
+  const base = Math.abs(DIRECTION_ADJUSTMENT[direction])
   const capPct = direction === 'lose' ? MAX_DEFICIT_PCT : MAX_SURPLUS_PCT
   const capped = Math.min(base, Math.round(tdee * capPct))
   return direction === 'lose' ? -capped : capped
@@ -220,11 +231,14 @@ const RECOMMENDED_CARB_PCT = { min: 25, max: 50 }
  *      (Goal.target.paceKgPerWeek) instead of always being the flat
  *      -500/+300 default, so 0.5/1/1.5 lb a week actually produce different
  *      targets
+ *   4  a chosen pace is no longer run through the flat-default percentage
+ *      cap, so 1.5 lb/week means -750 (the real math) instead of being
+ *      quietly rewritten to -566 by a cap meant for the unchosen default
  *
  * Targets are computed once at onboarding and persisted, so without this a fix
  * only ever reaches new signups.
  */
-export const MACRO_CALC_VERSION = 3
+export const MACRO_CALC_VERSION = 4
 
 export type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
 

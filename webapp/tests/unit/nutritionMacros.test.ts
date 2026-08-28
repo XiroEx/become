@@ -235,9 +235,30 @@ test('without a pace, calorieAdjustment keeps its historical flat default', () =
   assert.equal(calorieAdjustment(4427, 'maintain', 1.5), 0)
 })
 
-test('the safety cap still binds on an aggressive pace for a small member', () => {
-  const tdee = 1667 // 20% cap = 333, below the 750 a 1.5 lb/week pace implies
-  assert.equal(calorieAdjustment(tdee, 'lose', 1.5), -333)
+test('REGRESSION: a chosen pace is no longer watered down by the flat-default safety cap', () => {
+  // Reported: TDEE 2,828 at 1.5 lb/week showed "-566" instead of "-750". The
+  // 20% cap exists to protect the flat, UNCHOSEN default (see the next test)
+  // — it should never touch a pace the member explicitly picked. "1lb of fat
+  // = 3500 calories ... the math is the math" (card comment thread).
+  const tdee = 2828
+  assert.equal(calorieAdjustment(tdee, 'lose', 0.5), -250)
+  assert.equal(calorieAdjustment(tdee, 'lose', 1), -500)
+  assert.equal(calorieAdjustment(tdee, 'lose', 1.5), -750)
+
+  // Even for a small member, the chosen pace is taken at face value here —
+  // it is the 1,200 cal FLOOR in computeNutritionTargets() that protects
+  // them, not a percentage cap that would hand back a number unrelated to
+  // the pace they picked.
+  assert.equal(calorieAdjustment(1667, 'lose', 1.5), -750)
+})
+
+test('the calorie floor, not the percentage cap, protects a small member on an aggressive pace', () => {
+  const t = computeNutritionTargets({
+    currentWeightKg: 59.87, heightCm: 157.5, age: 42, biologicalSex: 'female',
+    direction: 'lose', activityLevel: 'light',
+    paceKgPerWeek: 1.5 * KG_PER_LB,
+  })!
+  assert.equal(t.calories, 1200, 'a small member on the fastest pace must still be floored, not just capped')
 })
 
 test('computeNutritionTargets actually moves when the Plan pace changes', () => {
