@@ -8,7 +8,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight, CalendarClock, Bookmark, Loader2 } from 'lucide-react'
+import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight, CalendarClock, Bookmark, Loader2, GripVertical } from 'lucide-react'
+import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState, Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
@@ -86,11 +87,129 @@ function formatDate(iso: string): string {
   })
 }
 
+export function moveInArray<T>(arr: T[], from: number, to: number): T[] {
+  if (from === to) return arr.slice()
+  const next = arr.slice()
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
+}
+
+// Favorites always float to the top, in `favoriteOrder` (falling back to
+// newest-first for any favorite that hasn't been dragged yet). Everything
+// else keeps its original (newest-first) order.
+export function sortFavoritesFirst<T extends { sessionId?: string; favorite?: boolean; date: string }>(
+  sessions: T[],
+  favoriteOrder: string[],
+): { favorites: (T & { sessionId: string })[]; others: T[] } {
+  const orderIndex = new Map(favoriteOrder.map((id, i) => [id, i]))
+  const favorites = sessions
+    .filter((s): s is T & { sessionId: string } => !!s.favorite && !!s.sessionId)
+    .sort((a, b) => {
+      const ai = orderIndex.get(a.sessionId) ?? Infinity
+      const bi = orderIndex.get(b.sessionId) ?? Infinity
+      if (ai !== bi) return ai - bi
+      return new Date(b.date).getTime() - new Date(a.date).getTime()
+    })
+  const others = sessions.filter((s) => !s.favorite || !s.sessionId)
+  return { favorites, others }
+}
+
+// One row in the Sessions list. Shared by the reorderable Favorites group and
+// the plain history below it — `handleProps`/`cardRef`/`cardProps` are only
+// passed for rows rendered inside a Draggable.
+function SessionRow({
+  log,
+  opening,
+  togglingFavorite,
+  openSession,
+  toggleFavorite,
+  cardRef,
+  cardProps,
+  handleProps,
+  dragging,
+}: {
+  log: SessionLog
+  opening: string | null
+  togglingFavorite: string | null
+  openSession: (log: SessionLog) => void
+  toggleFavorite: (e: React.MouseEvent, log: SessionLog) => void
+  cardRef?: React.Ref<HTMLDivElement>
+  cardProps?: React.HTMLAttributes<HTMLDivElement>
+  handleProps?: DraggableProvidedDragHandleProps | null
+  dragging?: boolean
+}) {
+  return (
+    <Card
+      ref={cardRef}
+      accent="info"
+      onClick={() => openSession(log)}
+      className={`flex items-center gap-2 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 ${opening ? 'opacity-60' : 'cursor-pointer'} ${dragging ? 'shadow-lg ring-1 ring-emerald-500/40' : ''}`}
+      {...cardProps}
+    >
+      {handleProps && (
+        <div
+          {...handleProps}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Drag to reorder"
+          className="flex h-9 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-zinc-300 active:cursor-grabbing dark:text-zinc-600"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+      )}
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
+        <Sparkles className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+          {log.title}
+        </h3>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="inline-flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {formatDate(log.date)}
+          </span>
+          <span>
+            {log.exerciseCount} {log.exerciseCount === 1 ? 'exercise' : 'exercises'}
+          </span>
+          {log.duration ? (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {log.duration} min
+            </span>
+          ) : null}
+        </div>
+      </div>
+      {log.sessionId && (
+        <button
+          type="button"
+          onClick={(e) => toggleFavorite(e, log)}
+          disabled={togglingFavorite === log.sessionId}
+          aria-label={log.favorite ? 'Remove from favorites' : 'Add to favorites'}
+          title={log.favorite ? 'Remove from favorites' : 'Add to favorites'}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+        >
+          {togglingFavorite === log.sessionId ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Bookmark className={`h-4 w-4 ${log.favorite ? 'fill-current text-amber-500' : ''}`} />
+          )}
+        </button>
+      )}
+      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
+    </Card>
+  )
+}
+
 function SessionsTab() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [sessions, setSessions] = useState<SessionLog[]>([])
   const [planned, setPlanned] = useState<PlannedSession[]>([])
+  // Manual drag order for favorited sessions — sessionIds, in display order.
+  // A favorite not listed here (never dragged, or just starred) sorts by date
+  // among the other un-ordered favorites, still above every non-favorite.
+  const [favoriteOrder, setFavoriteOrder] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   // Deep-linked from "Build a custom session" (?build=1) so it opens straight
   // into the builder instead of requiring a second tap on "Build".
@@ -121,6 +240,36 @@ function SessionsTab() {
       showToast('Failed to update favorite', 'error')
     } finally {
       setTogglingFavorite(null)
+    }
+  }
+
+  const { favorites: favoriteSessions, others: otherSessions } = useMemo(
+    () => sortFavoritesFirst(sessions, favoriteOrder),
+    [sessions, favoriteOrder],
+  )
+
+  // Drag reorder within Favorites only. Optimistic + persisted as the FULL
+  // new favorite order, same pattern as toggleFavorite above.
+  async function onFavoriteDragEnd(result: DropResult) {
+    if (!result.destination) return
+    const from = result.source.index
+    const to = result.destination.index
+    if (from === to) return
+    const ids = favoriteSessions.map((s) => s.sessionId)
+    const next = moveInArray(ids, from, to)
+    const prev = favoriteOrder
+    setFavoriteOrder(next)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/workouts/favorite-order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+        body: JSON.stringify({ order: next }),
+      })
+      if (!res.ok) throw new Error('reorder failed')
+    } catch {
+      setFavoriteOrder(prev)
+      showToast('Failed to save order', 'error')
     }
   }
 
@@ -211,8 +360,9 @@ function SessionsTab() {
           fetch('/api/workouts/planned', { headers: { Authorization: `Bearer ${token}` } }),
         ])
         if (res.ok) {
-          const data = (await res.json()) as { logs?: SessionLog[] }
+          const data = (await res.json()) as { logs?: SessionLog[]; favoriteSessionOrder?: string[] }
           setSessions((data.logs ?? []).filter((l) => l.kind === 'quick'))
+          setFavoriteOrder(data.favoriteSessionOrder ?? [])
         }
         if (plannedRes.ok) {
           const pdata = (await plannedRes.json()) as { planned?: PlannedSession[] }
@@ -306,57 +456,57 @@ function SessionsTab() {
           description={building ? 'Add exercises above to build one.' : 'Tap Build to create your first session.'}
         />
       ) : (
-        <div className="space-y-3">
-          {sessions.map((log, i) => (
-            <Card
-              key={`${log.sessionId ?? log.date}-${i}`}
-              accent="info"
-              onClick={() => openSession(log)}
-              className={`flex items-center gap-3 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 ${opening ? 'opacity-60' : 'cursor-pointer'}`}
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
-                  {log.title}
-                </h3>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(log.date)}
-                  </span>
-                  <span>
-                    {log.exerciseCount} {log.exerciseCount === 1 ? 'exercise' : 'exercises'}
-                  </span>
-                  {log.duration ? (
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {log.duration} min
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              {log.sessionId && (
-                <button
-                  type="button"
-                  onClick={(e) => toggleFavorite(e, log)}
-                  disabled={togglingFavorite === log.sessionId}
-                  aria-label={log.favorite ? 'Remove from favorites' : 'Add to favorites'}
-                  title={log.favorite ? 'Remove from favorites' : 'Add to favorites'}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                >
-                  {togglingFavorite === log.sessionId ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Bookmark className={`h-4 w-4 ${log.favorite ? 'fill-current text-amber-500' : ''}`} />
+        <>
+          {favoriteSessions.length > 0 && (
+            <div className="mb-4">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                <Bookmark className="h-3 w-3 fill-current text-amber-500" />
+                Favorites
+              </h3>
+              <DragDropContext onDragEnd={onFavoriteDragEnd}>
+                <Droppable droppableId="favorite-sessions">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-3">
+                      {favoriteSessions.map((log, i) => (
+                        <Draggable key={log.sessionId} draggableId={log.sessionId} index={i}>
+                          {(p, snapshot) => (
+                            <SessionRow
+                              log={log}
+                              opening={opening}
+                              togglingFavorite={togglingFavorite}
+                              openSession={openSession}
+                              toggleFavorite={toggleFavorite}
+                              cardRef={p.innerRef}
+                              cardProps={p.draggableProps as unknown as React.HTMLAttributes<HTMLDivElement>}
+                              handleProps={p.dragHandleProps}
+                              dragging={snapshot.isDragging}
+                            />
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
                   )}
-                </button>
-              )}
-              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-400" />
-            </Card>
-          ))}
-        </div>
+                </Droppable>
+              </DragDropContext>
+            </div>
+          )}
+
+          {otherSessions.length > 0 && (
+            <div className="space-y-3">
+              {otherSessions.map((log, i) => (
+                <SessionRow
+                  key={`${log.sessionId ?? log.date}-${i}`}
+                  log={log}
+                  opening={opening}
+                  togglingFavorite={togglingFavorite}
+                  openSession={openSession}
+                  toggleFavorite={toggleFavorite}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
       <Toast toast={toast} />
     </div>
