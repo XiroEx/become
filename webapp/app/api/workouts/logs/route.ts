@@ -201,10 +201,11 @@ export async function GET(request: NextRequest) {
     const withExercises = searchParams.get('withExercises') === 'true'
 
     const userProgress = await UserProgress.findOne({ userId: payload.userId })
-      .select('workoutLogs activePrograms')
+      .select('workoutLogs activePrograms favoriteSessionOrder')
       .lean<{
         workoutLogs?: RawLog[]
         activePrograms?: Array<{ programId: string; programName: string }>
+        favoriteSessionOrder?: string[]
       } | null>()
 
     const programNames = new Map<string, string>()
@@ -295,7 +296,10 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    return NextResponse.json({ logs })
+    // Manual drag order for favorited quick sessions in the Sessions list.
+    // History/Calendar/etc. ignore this field and keep the date-desc sort
+    // above; only the Sessions tab re-groups favorites to the top with it.
+    return NextResponse.json({ logs, favoriteSessionOrder: userProgress?.favoriteSessionOrder ?? [] })
   } catch (error) {
     console.error('Error fetching workout logs:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
