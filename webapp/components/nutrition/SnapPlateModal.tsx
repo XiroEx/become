@@ -22,6 +22,7 @@ import ServingQuantityControls from '@/components/nutrition/ServingQuantityContr
 import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
 import { scalingFactor, nutritionForQuantity } from '@/lib/foodMath'
 import { variantForServingChoice, buildServingChoiceGroups, type ServingChoice } from '@/lib/nutrition/servingOptions'
+import { servingQuantityStep } from '@/lib/nutrition/servingQuantityStep'
 import { parseQuantityString, type Unit } from '@/lib/units'
 import type { ServingUnit } from '@/models/Food'
 
@@ -231,15 +232,6 @@ function formatAmount(qty: number, unit: string): string {
   if (MASS_UNITS.has(unit)) return `${n} ${unit}`
   const label = n === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`)
   return `${n} ${label}`
-}
-function stepForUnit(unit: string): number {
-  if (unit === 'g' || unit === 'ml') return 10
-  // 0.5 so a fractional AI estimate (0.5) walks through whole numbers:
-  // 0.5 → 1 → 1.5 → 2 (was 1, which stepped 0.5 → 1.5 → 2.5, skipping wholes).
-  return 0.5
-}
-function floorForUnit(unit: string): number {
-  return MASS_UNITS.has(unit) ? stepForUnit(unit) : 0.5
 }
 type Macros = { calories: number; protein: number; carbs: number; fats: number }
 /** Per-ONE-unit macros, given the macros for the whole `qty`-unit portion. */
@@ -873,7 +865,7 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) => {
         if (i !== idx) return it
-        const multiplier = Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(3)))
+        const multiplier = Math.max(servingQuantityStep(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(3)))
         // When a DB serving is selected, keep the combined "N × serving" label in
         // sync; otherwise clear any stale freeform label.
         const labelOverride = it.servingLabelBase ? combinedServingLabel(it.servingLabelBase, multiplier) : undefined
@@ -1618,8 +1610,8 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
                         servingLabel={summary}
                         originalLabel={item.origServing?.label}
                         count={item.multiplier}
-                        stepDelta={stepForUnit(item.unitLabel)}
-                        stepFloor={floorForUnit(item.unitLabel)}
+                        stepDelta={servingQuantityStep(item.unitLabel)}
+                        stepFloor={servingQuantityStep(item.unitLabel)}
                         onSelectServing={(choice) => onSetServing(idx, choice)}
                         onResetToOriginal={() => onResetServing(idx)}
                         onStep={(delta) => onSetMultiplier(idx, delta)}
