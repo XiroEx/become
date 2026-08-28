@@ -215,6 +215,10 @@ export interface IUserProgress {
   // Dashboard rotator pins — ids that always appear first in the dashboard
   // tile list, in this exact order. Defaults to [].
   pinnedTiles: string[]
+  // Manual drag order for favorited quick sessions in the Sessions list —
+  // sessionIds in display order. Favorites not listed here (never dragged, or
+  // newly favorited) fall back to newest-first. Defaults to [].
+  favoriteSessionOrder: string[]
   // Dashboard rotator history: per-id last-shown timestamps. Stored as an
   // array of { id, at } subdocs (not a Map) so .lean() queries return plain
   // JSON arrays that downstream code can iterate without Mongoose Map APIs.
@@ -465,6 +469,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
   exercisePRs: { type: [ExercisePRSchema], default: [] },
   dismissedSuggestions: { type: [DismissedSuggestionSchema], default: [] },
   pinnedTiles: { type: [String], default: [] },
+  favoriteSessionOrder: { type: [String], default: [] },
   tileLastShownAt: { type: [TileLastShownSchema], default: [] },
   dashboardLayout: { type: [DashboardTileSchema], default: [] },
   tileEngagement: { type: [TileEngagementSchema], default: [] },
