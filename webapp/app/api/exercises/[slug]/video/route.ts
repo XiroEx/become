@@ -17,6 +17,7 @@ import Exercise from '@/models/Exercise'
 import ExerciseVideo from '@/models/ExerciseVideo'
 import { getBlobStore, exerciseVideoKey } from '@/lib/blobStorage'
 import { invalidateExerciseCache } from '@/lib/hydrateExercises'
+import { upsertRetryingStaleIndex } from '@/lib/exerciseVideoIndex'
 import {
   MAX_VIDEO_BYTES as MAX_BYTES,
   isValidationFailure,
@@ -131,26 +132,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // each other's video metadata. Slug is unique on Exercise, so it's the
     // correct join key. `exerciseName` is still written for display + legacy
     // readers that haven't been switched to slug lookups yet.
-    await ExerciseVideo.findOneAndUpdate(
-      { slug },
-      {
-        $set: {
-          slug,
-          exerciseName: exercise.name,
-          videoUrl: publicUrl,
-          isPlaceholder: false,
-          storageKey: key,
-          status: 'active',
-          sizeBytes: file.size,
-          mimeType,
-          uploadedBy: gate.userId,
-          // Reset dims + framing — see Exercise block above for rationale.
-          videoWidth: null,
-          videoHeight: null,
+    //
+    // Wrapped in `upsertRetryingStaleIndex`: some environments still carry a
+    // stale UNIQUE index on `exerciseName` from before this route switched to
+    // slug-keying (see lib/exerciseVideoIndex.ts) — two exercises sharing a
+    // display name (e.g. "Leg Press") hit E11000 here on every attempt. The
+    // wrapper self-heals that index on first collision and retries once.
+    await upsertRetryingStaleIndex(() =>
+      ExerciseVideo.findOneAndUpdate(
+        { slug },
+        {
+          $set: {
+            slug,
+            exerciseName: exercise.name,
+            videoUrl: publicUrl,
+            isPlaceholder: false,
+            storageKey: key,
+            status: 'active',
+            sizeBytes: file.size,
+            mimeType,
+            uploadedBy: gate.userId,
+            // Reset dims + framing — see Exercise block above for rationale.
+            videoWidth: null,
+            videoHeight: null,
+          },
+          $unset: { framing: '', trim: '' },
         },
-        $unset: { framing: '', trim: '' },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      )
     )
 
     invalidateExerciseCache()
@@ -203,19 +212,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Key on slug (canonical join). The name fallback used to fail closed
     // for unmigrated rows; we tack on a $or so the delete still finds a
     // legacy row that only has `exerciseName`.
-    await ExerciseVideo.findOneAndUpdate(
-      { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
-      {
-        // `status: 'retired'` rather than `videoUrl: ''`: the field is
-        // `required` on the schema, so blanking it only slipped through
-        // because findOneAndUpdate skips validators by default — and it
-        // destroyed the only record of what the video had been. Retiring keeps
-        // the URL readable in the admin list while excluding the row from the
-        // name-keyed fallback that would otherwise re-surface the video we
-        // just deleted.
-        $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired' },
-        $unset: { framing: '', trim: '' },
-      }
+    // Wrapped for the same reason as the POST upsert above — setting
+    // `exerciseName` here can also collide with the stale unique index.
+    await upsertRetryingStaleIndex(() =>
+      ExerciseVideo.findOneAndUpdate(
+        { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
+        {
+          // `status: 'retired'` rather than `videoUrl: ''`: the field is
+          // `required` on the schema, so blanking it only slipped through
+          // because findOneAndUpdate skips validators by default — and it
+          // destroyed the only record of what the video had been. Retiring keeps
+          // the URL readable in the admin list while excluding the row from the
+          // name-keyed fallback that would otherwise re-surface the video we
+          // just deleted.
+          $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired' },
+          $unset: { framing: '', trim: '' },
+        }
+      )
     )
 
     invalidateExerciseCache()
