@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
+    "@aws-sdk/lib-storage": "^3.1121.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@redbtn/redauth": "1.4.2",
@@ -30,6 +31,7 @@
     "@zxing/browser": "^0.2.0",
     "@zxing/library": "^0.22.0",
     "bcrypt": "^6.0.0",
+    "busboy": "^1.6.0",
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.26",
     "ioredis": "^5.4.1",
@@ -49,6 +51,7 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
+    "@types/busboy": "^1.5.4",
     "@types/node": "^25",
     "@types/nodemailer": "^7.0.5",
     "@types/react": "^19",
