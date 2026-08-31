@@ -328,7 +328,7 @@ const Outro: React.FC<{
             fontWeight: 950,
           }}
         >
-          BECOME.REDBTN.IO →
+          BECOMEURBEST.COM →
         </div>
       </div>
     </AbsoluteFill>

@@ -693,7 +693,7 @@ const EndCard: React.FC<{campaign: ReviewedCampaign; frame: number; accent: stri
       <div style={{width:930,textAlign:'center',marginTop:330,transform:'translateY('+interpolate(value,[0,1],[100,0])+'px)'}}>
         <div style={{fontFamily:mono,color:accent,fontSize:23,fontWeight:900,letterSpacing:5}}>YOUR NEXT MOVE</div>
         <div style={{fontFamily:display,fontSize:104,lineHeight:.92,fontWeight:950,letterSpacing:-7,textTransform:'uppercase',marginTop:34}}>{campaign.cta}.</div>
-        <div style={{display:'inline-flex',alignItems:'center',gap:30,marginTop:58,padding:'26px 42px',borderRadius:999,background:campaign.light?ink:chalk,color:campaign.light?chalk:ink,fontFamily:mono,fontSize:30,letterSpacing:.5,fontWeight:900}}>BECOME.REDBTN.IO <span>→</span></div>
+        <div style={{display:'inline-flex',alignItems:'center',gap:30,marginTop:58,padding:'26px 42px',borderRadius:999,background:campaign.light?ink:chalk,color:campaign.light?chalk:ink,fontFamily:mono,fontSize:30,letterSpacing:.5,fontWeight:900}}>BECOMEURBEST.COM <span>→</span></div>
       </div>
     </AbsoluteFill>
   );
