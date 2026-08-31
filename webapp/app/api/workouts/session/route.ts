@@ -148,7 +148,14 @@ export async function PATCH(request: NextRequest) {
       const d = new Date(raw)
       if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 })
       set['workoutLogs.$[elem].date'] = d
-      set['workoutLogs.$[elem].startedAt'] = d
+      // startedAt is deliberately left untouched: it's the "has this session
+      // actually been engaged" signal GET /api/workouts/in-progress gates on
+      // (see IWorkoutLog.startedAt), and this is a re-date, not an engagement.
+      // Stamping it here would make dragging a never-started planned session
+      // onto today/a past day show it as "in progress" — the same bug this
+      // gate exists to prevent, just reached from the calendar instead of
+      // "Plan it". A log that was already started keeps its real startedAt;
+      // one that wasn't stays that way after moving days.
     }
     if (body.skipped !== undefined) {
       set['workoutLogs.$[elem].skipped'] = !!body.skipped

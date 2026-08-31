@@ -1101,6 +1101,11 @@ export default function LiveWorkoutPage() {
             activeSeconds: activeSecondsAtSave,
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
             ...(logDateOverride && { performedAt: logDateOverride }),
+            // Reaching this save means the live view is genuinely open —
+            // stamps/refreshes startedAt server-side (see IWorkoutLog.startedAt),
+            // which is what turns a same-day "Plan it" placeholder into a real
+            // in-progress workout the moment it's actually started.
+            started: true,
             tz: new Date().getTimezoneOffset(),
             // The zone name, not just the offset: an offset is wrong for half
             // the year the moment daylight saving moves.
