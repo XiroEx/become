@@ -1,0 +1,107 @@
+[
+  {
+    "id": "CarouselFuel1",
+    "deck": "fuel",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 5,
+    "variant": "cover",
+    "pillar": "nutrition",
+    "kicker": "Nutrition",
+    "headline": [
+      "FUEL",
+      "THE",
+      "WORK"
+    ],
+    "lead": "A whole day of food — 2,229 calories, 187g of protein. Logged from two photos.",
+    "steps": [
+      "Snap the plate",
+      "Or say it in words",
+      "Or just find it"
+    ],
+    "image": "carousel/fuel/day.png"
+  },
+  {
+    "id": "CarouselFuel2",
+    "deck": "fuel",
+    "slug": "02-snap",
+    "index": 2,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "One · Photo",
+    "headline": [
+      "SNAP IT."
+    ],
+    "lead": "One photo of the plate comes back itemized, and nothing is logged until you say so.",
+    "bullets": [
+      "Eight foods, each on its own line with its own calories.",
+      "A confidence read on every row: High or Medium.",
+      "Not right? Type the fix — \"it was 6 tacos.\""
+    ],
+    "image": "carousel/fuel/snap.png"
+  },
+  {
+    "id": "CarouselFuel3",
+    "deck": "fuel",
+    "slug": "03-say",
+    "index": 3,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Two · Words",
+    "headline": [
+      "SAY IT."
+    ],
+    "lead": "No photo, no problem. Describe the meal in your own words instead.",
+    "bullets": [
+      "\"grilled chicken, rice and broccoli\" is enough to start.",
+      "Add a photo too, or estimate from the text alone.",
+      "Then the same review: check every line, then log it."
+    ],
+    "image": "carousel/fuel/describe.png",
+    "phoneWidth": 396
+  },
+  {
+    "id": "CarouselFuel4",
+    "deck": "fuel",
+    "slug": "04-find",
+    "index": 4,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Three · Everything else",
+    "headline": [
+      "FIND IT."
+    ],
+    "lead": "When you already know what it was, the whole database is one field away.",
+    "bullets": [
+      "Search foods and saved meals, brands and calories included.",
+      "Barcode, snap and upload, all on the same sheet.",
+      "Your foods, recents and frequents — one tap each."
+    ],
+    "image": "carousel/fuel/find.png"
+  },
+  {
+    "id": "CarouselFuel5",
+    "deck": "fuel",
+    "slug": "05-cta",
+    "index": 5,
+    "total": 5,
+    "variant": "cta",
+    "pillar": "nutrition",
+    "kicker": "Free today",
+    "headline": [
+      "START",
+      "TONIGHT'S",
+      "LOG."
+    ],
+    "lead": "We email you a sign-in link. No password, no card.",
+    "image": "carousel/fuel/itemized.png",
+    "steps": [
+      "Snap the plate",
+      "Or say it in words",
+      "Or just find it"
+    ]
+  }
+]
