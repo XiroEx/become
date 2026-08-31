@@ -62,7 +62,7 @@ const Brand: React.FC<{dark?: boolean; size?: number}> = ({dark = true, size = 5
   </div>
 );
 
-const Footer: React.FC<{dark?: boolean}> = ({dark = true}) => (
+const Footer: React.FC<{dark?: boolean; showUrl?: boolean}> = ({dark = true, showUrl = true}) => (
   <div
     style={{
       position: 'absolute',
@@ -78,7 +78,7 @@ const Footer: React.FC<{dark?: boolean}> = ({dark = true}) => (
       textTransform: 'uppercase',
     }}
   >
-    <span>BECOMEURBEST.COM</span>
+    <span>{showUrl ? 'BECOMEURBEST.COM' : ''}</span>
     <span>Body · Mind · Routine</span>
   </div>
 );
@@ -213,22 +213,89 @@ const Kicker: React.FC<{campaign: Campaign; color: string}> = ({campaign, color}
   </div>
 );
 
-const Cta: React.FC<{campaign: Campaign; light?: boolean; color?: string}> = ({campaign, light = false, color = white}) => (
+// Nothing on a square may read as tappable. The old rounded CTA pill was replaced by a
+// poster-native URL lockup: tracked caps type on the background, no box, no border.
+const UrlLockup: React.FC<{color?: string; size?: number}> = ({color = white, size = 28}) => (
   <div
     style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 18,
-      padding: '18px 27px',
-      borderRadius: 999,
-      background: light ? ink : white,
-      color: light ? white : ink,
-      fontSize: 21,
+      fontSize: size,
       fontWeight: 900,
-      boxShadow: `inset 0 0 0 3px ${color === white ? 'transparent' : color}`,
+      letterSpacing: size * 0.14,
+      color,
+      whiteSpace: 'nowrap',
+      lineHeight: 1.15,
     }}
   >
-    {campaign.cta} <span>→</span>
+    BECOMEURBEST.COM →
+  </div>
+);
+
+// Kept as `Cta` so every call site keeps working, but it now renders the lockup.
+const Cta: React.FC<{campaign: Campaign; light?: boolean; color?: string; size?: number}> = ({
+  light = false,
+  size = 28,
+}) => <UrlLockup color={light ? ink : white} size={size} />;
+
+const pillarWords: [string, string][] = [
+  ['TRAIN', '#00D26A'],
+  ['MIND', '#9818FF'],
+  ['FUEL', '#FF981A'],
+];
+
+// Replaces the outlined TRAIN / MIND / FUEL chips. Same weight and tracking family as the
+// kicker so it reads as a typeset line, not a control.
+const PillarLine: React.FC<{dark?: boolean; size?: number}> = ({dark = true, size = 21}) => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      fontSize: size,
+      fontWeight: 850,
+      letterSpacing: size * 0.2,
+      textTransform: 'uppercase',
+      lineHeight: 1.15,
+    }}
+  >
+    {pillarWords.map(([label, color], index) => (
+      <React.Fragment key={label}>
+        {index > 0 && (
+          <span style={{color: dark ? '#5C5C64' : '#8C8C93', padding: `0 ${size * 0.42}px`, letterSpacing: 0}}>·</span>
+        )}
+        <span style={{color}}>{label}</span>
+      </React.Fragment>
+    ))}
+  </div>
+);
+
+// Three true product facts. Fills the left column that used to read empty at phone scale.
+const featureLines: [string, string][] = [
+  ['Coach-built programs', '#00D26A'],
+  ['Photo plate logging', '#FF981A'],
+  ['A weekly recap', '#9818FF'],
+];
+
+const FeatureStack: React.FC<{dark?: boolean; size?: number; gap?: number}> = ({
+  dark = true,
+  size = 32,
+  gap = 30,
+}) => (
+  <div style={{display: 'flex', flexDirection: 'column', gap}}>
+    {featureLines.map(([label, color]) => (
+      <div key={label} style={{display: 'flex', alignItems: 'center', gap: 22}}>
+        <div style={{width: 28, height: 3, background: color, flexShrink: 0}} />
+        <span
+          style={{
+            fontSize: size,
+            fontWeight: 600,
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+            color: dark ? 'rgba(247,247,245,0.75)' : 'rgba(8,8,10,0.8)',
+          }}
+        >
+          {label}
+        </span>
+      </div>
+    ))}
   </div>
 );
 
@@ -255,7 +322,7 @@ const RailLayout: React.FC<CampaignProps> = ({campaign}) => {
         <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 600 : story ? 680 : 560} size={landscape ? 23 : 27} /></div>
         {!story && <div style={{marginTop: 30}}><Cta campaign={campaign} color={accent} /></div>}
       </div>
-      {!landscape && <Footer />}
+      {!landscape && <Footer showUrl={false} />}
       <ProductFrame
         image={campaign.image}
         width={phoneWidth}
@@ -272,21 +339,31 @@ const ProductWindowLayout: React.FC<CampaignProps> = ({campaign}) => {
   const accent = colors[campaign.pillar];
   const story = campaign.format === 'story';
   const landscape = campaign.format === 'landscape';
+  const square = !story && !landscape;
+  // Square: let the headline fill the column instead of sitting at a fixed 104, which left a
+  // dead field to its right on short lines, then hang the sub and the window off it.
+  const squareHeadTop = 150;
+  const squareHeadBottom =
+    squareHeadTop + kickerHeight + 22 + headlineHeight(campaign, headlineSize(campaign, 880, 120));
+  const squareCopyTop = Math.round(squareHeadBottom + 24);
+  const squareWindowTop = Math.max(520, squareCopyTop + 98);
   return (
     <AbsoluteFill style={darkBase}>
       <Grid />
       <div style={{position: 'absolute', left: 58, top: 48}}><Brand size={story ? 66 : 52} /></div>
-      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 135 : 170, width: landscape ? 600 : 900}}>
+      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 135 : squareHeadTop, width: landscape ? 600 : 900}}>
         <Kicker campaign={campaign} color={accent} />
-        <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 590 : 880} baseSize={story ? 132 : landscape ? 80 : 104} /></div>
+        <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 590 : 880} baseSize={story ? 132 : landscape ? 80 : 120} /></div>
       </div>
       <div
         style={{
           position: 'absolute',
           left: story ? 58 : landscape ? 700 : 58,
           right: story ? 58 : landscape ? 46 : 58,
-          top: story ? 760 : landscape ? 46 : 520,
-          bottom: story ? 170 : landscape ? 46 : 55,
+          top: story ? 760 : landscape ? 46 : squareWindowTop,
+          // Square: the window stops short of the bottom so the URL lockup sits on the
+          // poster rather than on top of the screenshot, which is where the old pill sat.
+          bottom: story ? 170 : landscape ? 46 : 118,
           borderRadius: story ? 52 : 38,
           overflow: 'hidden',
           background: paper,
@@ -295,11 +372,16 @@ const ProductWindowLayout: React.FC<CampaignProps> = ({campaign}) => {
       >
         <Img src={staticFile(campaign.image)} style={{width: '100%', display: 'block'}} />
       </div>
-      <div style={{position: 'absolute', left: 60, bottom: story ? 88 : landscape ? 62 : 75, zIndex: 3}}>
-        <Cta campaign={campaign} color={accent} />
+      <div style={{position: 'absolute', left: 58, bottom: story ? 88 : landscape ? 62 : 46, zIndex: 3}}>
+        <Cta campaign={campaign} />
       </div>
+      {square && (
+        <div style={{position: 'absolute', right: 58, bottom: 52, zIndex: 3}}>
+          <PillarLine size={20} />
+        </div>
+      )}
       {landscape && <div style={{position: 'absolute', left: 60, top: 420}}><Copy campaign={campaign} width={570} size={22} /></div>}
-      {!story && !landscape && <div style={{position: 'absolute', left: 58, top: 420}}><Copy campaign={campaign} /></div>}
+      {square && <div style={{position: 'absolute', left: 58, top: squareCopyTop}}><Copy campaign={campaign} width={620} size={28} /></div>}
       <Grain />
     </AbsoluteFill>
   );
@@ -309,18 +391,49 @@ const LightLayout: React.FC<CampaignProps> = ({campaign}) => {
   const accent = colors[campaign.pillar] === white ? ink : colors[campaign.pillar];
   const story = campaign.format === 'story';
   const landscape = campaign.format === 'landscape';
+  const square = !story && !landscape;
+  // Square: the lower-left used to be a dead field between the sub line and the footer.
+  // Hang a full column off the measured headline bottom and let it stretch to the margin.
+  const squareHeadTop = 185;
+  const squareColumnTop = Math.round(
+    squareHeadTop + kickerHeight + 24 + headlineHeight(campaign, headlineSize(campaign, 900, 110)) + 34,
+  );
   return (
     <AbsoluteFill style={{...darkBase, background: paper, color: ink}}>
       <Grid dark={false} />
       <div style={{position: 'absolute', left: 58, top: 48}}><Brand dark={false} size={story ? 66 : 52} /></div>
-      <div style={{position: 'absolute', left: 58, top: story ? 230 : landscape ? 145 : 185, width: landscape ? 690 : 920}}>
+      <div style={{position: 'absolute', left: 58, top: story ? 230 : landscape ? 145 : squareHeadTop, width: landscape ? 690 : 920}}>
         <Kicker campaign={campaign} color={accent} />
         <div style={{marginTop: 24}}><Headline campaign={campaign} color={ink} maxWidth={landscape ? 670 : 900} baseSize={story ? 132 : landscape ? 84 : 110} /></div>
-        <div style={{marginTop: 28}}><Copy campaign={campaign} dark={false} width={landscape ? 600 : 720} size={landscape ? 22 : 27} /></div>
-        <div style={{marginTop: 30}}><Cta campaign={campaign} light color={accent} /></div>
+        {!square && (
+          <>
+            <div style={{marginTop: 28}}><Copy campaign={campaign} dark={false} width={landscape ? 600 : 720} size={landscape ? 22 : 27} /></div>
+            <div style={{marginTop: 30}}><Cta campaign={campaign} light color={accent} /></div>
+          </>
+        )}
       </div>
+      {square && (
+        <div
+          style={{
+            position: 'absolute',
+            left: 58,
+            top: squareColumnTop,
+            bottom: 46,
+            width: 520,
+            zIndex: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Copy campaign={campaign} dark={false} width={510} size={31} />
+          <FeatureStack dark={false} size={32} gap={30} />
+          <PillarLine dark={false} />
+          <UrlLockup color={ink} />
+        </div>
+      )}
       <div style={{position: 'absolute', background: accent, left: 0, bottom: 0, width: story ? 22 : 16, height: '72%'}} />
-      <Footer dark={false} />
+      {!square && <Footer dark={false} showUrl={false} />}
       <ProductFrame
         image={campaign.image}
         width={story ? 500 : landscape ? 290 : 450}
@@ -344,7 +457,7 @@ const CardLayout: React.FC<CampaignProps> = ({campaign}) => {
   const squareTrack = 0.035;
   const squareHeadSize = headlineSize(campaign, 920, 200, squareTrack);
   const squareHeadBottom = squareHeadTop + kickerHeight + 22 + headlineHeight(campaign, squareHeadSize);
-  const squareCardTop = Math.min(660, Math.max(548, Math.round(squareHeadBottom + 46)));
+  const squareCardTop = Math.min(640, Math.max(520, Math.round(squareHeadBottom + 38)));
   const cardTop = story ? 730 : landscape ? 115 : squareCardTop;
   return (
     <AbsoluteFill style={darkBase}>
@@ -356,16 +469,18 @@ const CardLayout: React.FC<CampaignProps> = ({campaign}) => {
       </div>
       <div
         style={{
-          position: 'absolute', left: 58, right: landscape ? 445 : 58, top: cardTop, bottom: story ? 150 : 55,
+          position: 'absolute', left: 58, right: landscape ? 445 : 58, top: cardTop, bottom: story ? 150 : square ? 50 : 55,
           borderRadius: 38, border: '2px solid #303036', background: '#131316', padding: story ? 44 : 34,
-          display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          display: 'flex', flexDirection: 'column', justifyContent: square ? 'space-between' : 'center',
         }}
       >
-        <div style={{display: 'flex', gap: 12, marginBottom: 26}}>
+        <div style={{display: 'flex', gap: 12, marginBottom: square ? 0 : 26}}>
           {[accent, '#35353A', '#35353A'].map((c, index) => <div key={`${c}-${index}`} style={{width: index === 0 ? 72 : 28, height: 8, borderRadius: 99, background: c}} />)}
         </div>
-        <Copy campaign={campaign} width={story ? 760 : landscape ? 590 : 500} size={story ? 31 : square ? 26 : 23} />
-        <div style={{marginTop: 30}}><Cta campaign={campaign} color={accent} /></div>
+        <Copy campaign={campaign} width={story ? 760 : landscape ? 590 : 520} size={story ? 31 : square ? 28 : 23} />
+        {square && <FeatureStack size={29} gap={24} />}
+        {square && <PillarLine />}
+        <div style={{marginTop: square ? 0 : 30}}><Cta campaign={campaign} /></div>
       </div>
       <ProductFrame image={campaign.image} width={story ? 480 : landscape ? 330 : 470} rotate={4} style={landscape ? {right: 55, top: 70} : story ? {right: 70, top: 1020} : {right: -20, top: cardTop - 12}} />
       <Grain />
@@ -377,14 +492,18 @@ const TypeCropLayout: React.FC<CampaignProps> = ({campaign}) => {
   const accent = colors[campaign.pillar] === white ? '#D7D7D2' : colors[campaign.pillar];
   const story = campaign.format === 'story';
   const landscape = campaign.format === 'landscape';
-  // Square: fit the headline to the column, then hang the subline and the diagonal off it so
-  // the light band and the dark band both stay tight instead of leaving a dead strip.
-  const squareHeadTop = 175;
+  const square = !story && !landscape;
+  // Square: fit the headline to the column, then hang the subline, the feature stack and the
+  // diagonal off it. The band that straddled the split used to read empty at phone scale, so
+  // the stack now lives in the light zone and the split is pushed down to make room for it.
+  const squareHeadTop = 160;
   const squareTrack = 0.05;
   const squareHeadSize = headlineSize(campaign, 900, 150, squareTrack);
   const squareHeadBottom = squareHeadTop + kickerHeight + 22 + headlineHeight(campaign, squareHeadSize);
-  const squareCopyTop = Math.round(squareHeadBottom + 44);
-  const squareSplitTop = Math.round(squareCopyTop + 78 + 135);
+  const squareCopyTop = Math.round(squareHeadBottom + 42);
+  const squareStackTop = squareCopyTop + 132;
+  const squareStackBottom = squareStackTop + 3 * 34 + 2 * 26;
+  const squareSplitTop = Math.max(800, squareStackBottom + 42);
   return (
     <AbsoluteFill style={{...darkBase, background: accent, color: ink}}>
       <div style={{position: 'absolute', left: 54, top: 46}}><Brand dark={false} size={story ? 66 : 52} /></div>
@@ -392,7 +511,12 @@ const TypeCropLayout: React.FC<CampaignProps> = ({campaign}) => {
         <Kicker campaign={campaign} color={ink} />
         <div style={{marginTop: 22}}><Headline campaign={campaign} color={ink} maxWidth={landscape ? 680 : 900} baseSize={story ? 134 : landscape ? 88 : 150} track={story || landscape ? tracking : squareTrack} /></div>
       </div>
-      <div style={{position: 'absolute', left: 54, top: story ? 650 : landscape ? 420 : squareCopyTop}}><Copy campaign={campaign} dark={false} color={ink} width={landscape ? 620 : story ? 720 : 560} size={landscape ? 22 : story ? 28 : 29} /></div>
+      <div style={{position: 'absolute', left: 54, top: story ? 650 : landscape ? 420 : squareCopyTop}}><Copy campaign={campaign} dark={false} color={ink} width={landscape ? 620 : story ? 720 : 520} size={landscape ? 22 : story ? 28 : 31} /></div>
+      {square && (
+        <div style={{position: 'absolute', left: 54, top: squareStackTop, zIndex: 2}}>
+          <FeatureStack dark={false} size={31} gap={26} />
+        </div>
+      )}
       <div
         style={{
           position: 'absolute', background: ink,
@@ -401,8 +525,13 @@ const TypeCropLayout: React.FC<CampaignProps> = ({campaign}) => {
           clipPath: story ? 'polygon(0 12%, 100% 0, 100% 100%, 0 100%)' : landscape ? 'polygon(18% 0, 100% 0, 100% 100%, 0 100%)' : 'polygon(0 10%, 100% 0, 100% 100%, 0 100%)',
         }}
       />
-      <ProductFrame image={campaign.image} width={story ? 455 : landscape ? 275 : 480} rotate={story ? 5 : -4} style={landscape ? {right: 60, top: 40} : story ? {right: 80, top: 900} : {right: 15, top: squareSplitTop - 120}} />
-      <div style={{position: 'absolute', left: 54, bottom: story ? 80 : 44}}><Cta campaign={campaign} /></div>
+      <ProductFrame image={campaign.image} width={story ? 455 : landscape ? 275 : 480} rotate={story ? 5 : -4} style={landscape ? {right: 60, top: 40} : story ? {right: 80, top: 900} : {right: 15, top: squareSplitTop - 205}} />
+      {square && (
+        <div style={{position: 'absolute', left: 54, bottom: 152, zIndex: 3}}><PillarLine size={23} /></div>
+      )}
+      <div style={{position: 'absolute', left: 54, bottom: story ? 80 : square ? 50 : 44, zIndex: 3}}>
+        <Cta campaign={campaign} light={landscape} />
+      </div>
       <Grain />
     </AbsoluteFill>
   );
@@ -412,28 +541,48 @@ const SystemLayout: React.FC<CampaignProps> = ({campaign}) => {
   const accent = colors[campaign.pillar];
   const story = campaign.format === 'story';
   const landscape = campaign.format === 'landscape';
-  const nodes = [
-    ['TRAIN', '#00D26A'],
-    ['MIND', '#9818FF'],
-    ['FUEL', '#FF981A'],
-  ];
+  const square = !story && !landscape;
+  // Square: the strip under the sub line used to be dead. Run one measured column from the
+  // headline bottom to the bottom margin: sub, feature stack, pillar line, URL lockup.
+  const squareHeadTop = 175;
+  const squareColumnTop = Math.round(
+    squareHeadTop + kickerHeight + 22 + headlineHeight(campaign, headlineSize(campaign, 940, 118)) + 32,
+  );
   return (
     <AbsoluteFill style={darkBase}>
       <Grid />
       <div style={{position: 'absolute', left: 58, top: 48}}><Brand size={story ? 66 : 52} /></div>
-      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 120 : 175, width: landscape ? 670 : 950}}>
+      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 120 : squareHeadTop, width: landscape ? 670 : 950}}>
         <Kicker campaign={campaign} color={accent} />
         <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 660 : story ? 900 : 940} baseSize={story ? 128 : landscape ? 82 : 118} /></div>
-        <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 590 : story ? 700 : 640} size={landscape ? 22 : story ? 27 : 30} /></div>
+        {!square && <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 590 : 700} size={landscape ? 22 : 27} /></div>}
       </div>
-      <div style={{position: 'absolute', left: 60, top: story ? 760 : landscape ? 455 : 745, display: 'flex', gap: story ? 24 : 18}}>
-        {nodes.map(([label, color]) => (
-          <div key={label} style={{padding: story ? '17px 29px' : '16px 27px', border: `3px solid ${color}`, borderRadius: 999, color, fontSize: story ? 24 : 22, fontWeight: 900, letterSpacing: 2.5}}>{label}</div>
-        ))}
-      </div>
-      <Arrow color={accent} direction={landscape ? 'right' : 'up'} length={story ? 720 : landscape ? 360 : 205} style={landscape ? {left: 760, top: 450} : {left: 85, top: story ? 970 : 800}} />
+      {square ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 58,
+            top: squareColumnTop,
+            bottom: 50,
+            width: 500,
+            zIndex: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Copy campaign={campaign} width={500} size={32} />
+          <FeatureStack size={32} gap={30} />
+          <PillarLine />
+          <UrlLockup />
+        </div>
+      ) : (
+        <div style={{position: 'absolute', left: 60, top: story ? 780 : 460, zIndex: 2}}>
+          <PillarLine size={story ? 24 : 21} />
+        </div>
+      )}
       <ProductFrame image={campaign.image} width={story ? 480 : landscape ? 285 : 470} rotate={story ? -4 : 5} style={landscape ? {right: 55, top: 55} : story ? {right: 70, top: 960} : {right: 20, top: 520}} />
-      <div style={{position: 'absolute', left: 58, bottom: story ? 88 : 48}}><Cta campaign={campaign} color={accent} /></div>
+      {!square && <div style={{position: 'absolute', left: 58, bottom: story ? 88 : 48}}><Cta campaign={campaign} /></div>}
       <Grain />
     </AbsoluteFill>
   );
