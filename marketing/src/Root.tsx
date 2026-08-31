@@ -6,6 +6,8 @@ import {CampaignAsset, type Campaign} from './campaignCollection';
 import {CampaignVideo} from './videoCollection';
 import {reviewedCampaigns} from './reviewedCampaigns';
 import {ReviewedVideo} from './reviewedVideo';
+import carousels from './carousels.json';
+import {CarouselSlide, type Slide} from './carouselSlides';
 
 const dimensions = {
   square: {width: 1080, height: 1080},
@@ -73,6 +75,19 @@ export const RemotionRoot: React.FC = () => (
           campaignNumber: index + 1,
           campaignTotal: 19,
         }}
+      />
+    ))}
+    {/* Carousel decks — 1080x1350 (4:5), the IG/TikTok feed ratio. */}
+    {(carousels as Slide[]).map((slide) => (
+      <Composition
+        key={slide.id}
+        id={slide.id}
+        component={CarouselSlide}
+        durationInFrames={1}
+        fps={30}
+        width={1080}
+        height={1350}
+        defaultProps={{slide}}
       />
     ))}
     {reviewedCampaigns.map((campaign) => (

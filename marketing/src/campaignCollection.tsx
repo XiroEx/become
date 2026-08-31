@@ -34,7 +34,7 @@ const muted = '#A1A1AA';
 const paper = '#F3F3F1';
 const font = 'Arial, Helvetica, sans-serif';
 
-const Grid: React.FC<{dark?: boolean}> = ({dark = true}) => (
+export const Grid: React.FC<{dark?: boolean}> = ({dark = true}) => (
   <AbsoluteFill
     style={{
       backgroundImage: `linear-gradient(${dark ? 'rgba(255,255,255,.045)' : 'rgba(8,8,10,.06)'} 1px, transparent 1px), linear-gradient(90deg, ${dark ? 'rgba(255,255,255,.045)' : 'rgba(8,8,10,.06)'} 1px, transparent 1px)`,
@@ -44,7 +44,7 @@ const Grid: React.FC<{dark?: boolean}> = ({dark = true}) => (
   />
 );
 
-const Grain: React.FC = () => (
+export const Grain: React.FC = () => (
   <AbsoluteFill
     style={{
       opacity: 0.05,
@@ -55,7 +55,7 @@ const Grain: React.FC = () => (
   />
 );
 
-const Brand: React.FC<{dark?: boolean; size?: number}> = ({dark = true, size = 58}) => (
+export const Brand: React.FC<{dark?: boolean; size?: number}> = ({dark = true, size = 58}) => (
   <div style={{display: 'flex', alignItems: 'center', gap: 16, color: dark ? white : ink}}>
     <Img src={staticFile('logo.png')} style={{width: size, height: size, borderRadius: size * 0.18}} />
     <span style={{fontSize: size * 0.48, fontWeight: 900, letterSpacing: -1}}>BECOME</span>
@@ -168,6 +168,13 @@ const lineEm = (line: string, track: number) =>
     [...line].reduce((sum, char) => sum + (boldAdvance[char] ?? 0.62), 0) - line.length * track,
   );
 
+// Same glyph-metric fit as headlineSize, but for a bare array of lines so other
+// compositions (carousels) can size a headline without building a Campaign.
+export const fitLines = (lines: string[], maxWidth: number, baseSize: number, track = tracking) => {
+  const widest = Math.max(...lines.map((line) => lineEm(line, track)));
+  return Math.min(baseSize, Math.floor(maxWidth / widest));
+};
+
 export const headlineSize = (campaign: Campaign, maxWidth: number, baseSize: number, track = tracking) => {
   const widest = Math.max(...campaign.headline.map((line) => lineEm(line, track)));
   return Math.min(baseSize, Math.floor(maxWidth / widest));
@@ -215,7 +222,7 @@ const Kicker: React.FC<{campaign: Campaign; color: string}> = ({campaign, color}
 
 // Nothing on a square may read as tappable. The old rounded CTA pill was replaced by a
 // poster-native URL lockup: tracked caps type on the background, no box, no border.
-const UrlLockup: React.FC<{color?: string; size?: number}> = ({color = white, size = 28}) => (
+export const UrlLockup: React.FC<{color?: string; size?: number}> = ({color = white, size = 28}) => (
   <div
     style={{
       fontSize: size,
@@ -244,7 +251,7 @@ const pillarWords: [string, string][] = [
 
 // Replaces the outlined TRAIN / MIND / FUEL chips. Same weight and tracking family as the
 // kicker so it reads as a typeset line, not a control.
-const PillarLine: React.FC<{dark?: boolean; size?: number}> = ({dark = true, size = 21}) => (
+export const PillarLine: React.FC<{dark?: boolean; size?: number}> = ({dark = true, size = 21}) => (
   <div
     style={{
       display: 'flex',
