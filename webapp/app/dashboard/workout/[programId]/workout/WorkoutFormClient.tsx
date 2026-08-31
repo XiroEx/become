@@ -28,6 +28,7 @@ import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, 
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
+import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -242,6 +243,9 @@ interface Exercise {
   videoTrim?: VideoTrimOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -400,6 +404,9 @@ export default function WorkoutFormPage() {
             reps: d.reps,
             ...(d.rest && { rest: d.rest }),
             ...(d.duration && { duration: d.duration }),
+            ...(d.equipment && { equipment: d.equipment }),
+            ...(d.laterality && { laterality: d.laterality }),
+            ...(d.movementPatterns && { movementPatterns: d.movementPatterns }),
             // Supersets made mid-session live in the stash — without these the
             // Track view would draw a circuit as four unrelated exercises.
             ...(d.groupId && { groupId: d.groupId }),
@@ -913,6 +920,9 @@ export default function WorkoutFormPage() {
           ...(e.rest && { rest: e.rest }),
           ...(e.duration && { duration: e.duration }),
           ...(e.primaryMuscles && { primaryMuscles: e.primaryMuscles }),
+          ...(e.equipment && { equipment: e.equipment }),
+          ...(e.laterality && { laterality: e.laterality }),
+          ...(e.movementPatterns && { movementPatterns: e.movementPatterns }),
           ...(e.groupId && { groupId: e.groupId }),
           ...(e.groupType && { groupType: e.groupType }),
           ...(e.groupLabel && { groupLabel: e.groupLabel }),
@@ -1199,7 +1209,7 @@ export default function WorkoutFormPage() {
     setShowSwapModal(true);
   };
 
-  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
     if (!workout) return;
 
     const oldExercise = workout.exercises[exerciseIndex];
@@ -1223,6 +1233,9 @@ export default function WorkoutFormPage() {
       name: alternative.name,
       type: alternative.category,
       trackingType: alternative.trackingType,
+      equipment: alternative.equipment,
+      laterality: alternative.laterality,
+      movementPatterns: alternative.movementPatterns,
       videoUrl: undefined,
       videoWidth: null,
       videoHeight: null,
@@ -1237,6 +1250,9 @@ export default function WorkoutFormPage() {
         name: alternative.name,
         exerciseSlug: alternative.slug,
         trackingType: alternative.trackingType,
+        equipment: alternative.equipment,
+        laterality: alternative.laterality,
+        movementPatterns: alternative.movementPatterns,
       });
     }
 
@@ -1583,6 +1599,7 @@ export default function WorkoutFormPage() {
                             const isNone = tracking === "none"
                             const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
                             const isFloorsInput = isFloorsExercise(exercise.name)
+                            const bellInfo = getBellWeightInfo(exercise)
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
                               exercise.tempo && `Tempo ${exercise.tempo}`,
@@ -1616,15 +1633,23 @@ export default function WorkoutFormPage() {
                                 {isNone && (
                                   <p className="text-xs text-zinc-500 dark:text-zinc-400">No tracking needed — just mark complete.</p>
                                 )}
+                                {/* Per-DB/KB weight convention — see lib/workout/dumbbellWeight.ts */}
+                                {showWeight && bellInfo.style && (
+                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                    Enter the weight of one {bellInfo.style === 'dumbbell' ? 'dumbbell' : 'kettlebell'}
+                                    {bellInfo.showTotal ? ' — not the combined total.' : '.'}
+                                  </p>
+                                )}
                                 {/* Exercise history hint */}
                                 {exerciseHistory[exercise.name] && (() => {
                                   const h = exerciseHistory[exercise.name]
                                   const lastSeconds = h.duration || h.reps
+                                  const bellSuffix = bellInfo.style === 'dumbbell' ? ' per DB' : bellInfo.style === 'kettlebell' ? ' per KB' : ''
                                   const label = isTimeBased
                                     ? (lastSeconds
                                         ? (durationUnit === "min" ? `${secondsToUnitDisplay(lastSeconds, "min")}m` : `${lastSeconds}s`)
                                         : 'completed')
-                                    : h.weight > 0 ? `${h.weight} lbs × ${h.reps} reps`
+                                    : h.weight > 0 ? `${h.weight} lbs${bellSuffix} × ${h.reps} reps`
                                     : h.reps > 0 ? `${h.reps} reps` : null
                                   return label ? (
                                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
@@ -1635,7 +1660,11 @@ export default function WorkoutFormPage() {
                                 {/* Column headers */}
                                 <div className="mt-2 grid grid-cols-12 items-center gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                                   <div className="col-span-2">{setUnitLabel(tracking, 1)}</div>
-                                  {showWeight && <div className="col-span-3">Weight</div>}
+                                  {showWeight && (
+                                    <div className="col-span-3">
+                                      {bellInfo.style === 'dumbbell' ? 'Wt/DB' : bellInfo.style === 'kettlebell' ? 'Wt/KB' : 'Weight'}
+                                    </div>
+                                  )}
                                   {!isNone && (
                                     <div className={`${showWeight ? "col-span-3" : "col-span-6"} flex items-center gap-1`}>
                                       {isTimeBased ? durationUnit.charAt(0).toUpperCase() + durationUnit.slice(1) : "Reps"}
@@ -1983,8 +2012,9 @@ export default function WorkoutFormPage() {
                                         </div>
                                       )
                                     }
+                                    const gBell = getBellWeightInfo(exercise).style
                                     const fields: Array<{ key: keyof SetData; label: string; placeholder: string; span: string }> = []
-                                    if (gWeight) fields.push({ key: "weight", label: "lbs", placeholder: "0", span: "col-span-4" })
+                                    if (gWeight) fields.push({ key: "weight", label: gBell === 'dumbbell' ? "lbs/DB" : gBell === 'kettlebell' ? "lbs/KB" : "lbs", placeholder: "0", span: "col-span-4" })
                                     fields.push(
                                       gTimed
                                         ? { key: "duration", label: "sec", placeholder: exercise.duration?.replace(/[^0-9]/g, "") || "30", span: gWeight ? "col-span-4" : gSpeed ? "col-span-3" : "col-span-8" }

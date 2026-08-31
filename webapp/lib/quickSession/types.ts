@@ -55,6 +55,11 @@ export interface DraftExercise {
   rest?: string
   duration?: string // timed prescription for time-based tracking
   primaryMuscles?: string[]
+  /** Catalog fields needed to log weight per-dumbbell/kettlebell rather than
+   *  a barbell total — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
   // Grouping — a superset or circuit, which can now be made mid-session
   // (see lib/workout/buildAsYouGo). Consecutive exercises sharing a groupId
   // are interleaved by the live flow builder.
@@ -90,6 +95,7 @@ export interface CandidateExercise {
   movementPatterns: string[]
   primaryMuscles: string[]
   equipment: string[]
+  laterality?: string
   difficulty: string
   trackingType: string
   bodyRegion: string

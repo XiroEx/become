@@ -27,6 +27,7 @@ import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import DayChoiceModal from "@/components/workout/DayChoiceModal";
 import { dateKey } from "@/lib/dayWindow";
+import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from "@/lib/workout/dumbbellWeight";
 
 interface SetData {
   reps: string;
@@ -88,6 +89,9 @@ interface Exercise {
   videoTrim?: VideoTrimOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -311,16 +315,9 @@ export default function LiveWorkoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentExerciseIndex]);
 
-  // Per-bell weight convention: when the exercise name implies a dumbbell or
-  // kettlebell, the user logs the per-bell weight (e.g. "90" for a pair of
-  // 90s — saying "I dumbbell benched 180" is awkward). We surface this by
-  // adjusting the label and showing a small "= total" helper below the input.
-  const bellStyle: 'dumbbell' | 'kettlebell' | null = (() => {
-    const n = (currentExercise?.name || '').toLowerCase()
-    if (/\bkettlebell|\bkb\b/.test(n)) return 'kettlebell'
-    if (/\bdumbbell|\bdb\b/.test(n)) return 'dumbbell'
-    return null
-  })()
+  // Per-bell weight convention — see lib/workout/dumbbellWeight.ts.
+  const bellInfo = getBellWeightInfo(currentExercise);
+  const bellStyle = bellInfo.style;
 
   // Check if inputs are empty (for skip button text)
   // Interval exercises are always "complete" (no required input) — user marks done and moves on
@@ -473,6 +470,9 @@ export default function LiveWorkoutPage() {
             ...(d.rest && { rest: d.rest }),
             ...(d.duration && { duration: d.duration }),
             ...(d.primaryMuscles && { primaryMuscles: d.primaryMuscles }),
+            ...(d.equipment && { equipment: d.equipment }),
+            ...(d.laterality && { laterality: d.laterality }),
+            ...(d.movementPatterns && { movementPatterns: d.movementPatterns }),
             // A superset made mid-session lives in the stash — carry it back in
             // or the flow stops interleaving the moment the view reloads.
             ...(d.groupId && { groupId: d.groupId }),
@@ -1455,7 +1455,7 @@ export default function LiveWorkoutPage() {
     setShowSummary(true);
   }, [pendingQuickCompletion, quickSessionId, saveWorkout]);
 
-  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
     const exIdx = currentExerciseIndex;
     const oldExercise = exercises[exIdx];
     if (!oldExercise) return;
@@ -1480,6 +1480,9 @@ export default function LiveWorkoutPage() {
       name: alternative.name,
       type: alternative.category,
       trackingType: alternative.trackingType,
+      equipment: alternative.equipment,
+      laterality: alternative.laterality,
+      movementPatterns: alternative.movementPatterns,
       videoUrl: undefined,
       videoWidth: null,
       videoHeight: null,
@@ -1494,6 +1497,9 @@ export default function LiveWorkoutPage() {
         name: alternative.name,
         exerciseSlug: alternative.slug,
         trackingType: alternative.trackingType,
+        equipment: alternative.equipment,
+        laterality: alternative.laterality,
+        movementPatterns: alternative.movementPatterns,
       });
     }
 
@@ -1582,6 +1588,9 @@ export default function LiveWorkoutPage() {
           ...(e.rest && { rest: e.rest }),
           ...(e.duration && { duration: e.duration }),
           ...(e.primaryMuscles && { primaryMuscles: e.primaryMuscles }),
+          ...(e.equipment && { equipment: e.equipment }),
+          ...(e.laterality && { laterality: e.laterality }),
+          ...(e.movementPatterns && { movementPatterns: e.movementPatterns }),
           ...(e.groupId && { groupId: e.groupId }),
           ...(e.groupType && { groupType: e.groupType }),
           ...(e.groupLabel && { groupLabel: e.groupLabel }),
@@ -2386,9 +2395,7 @@ export default function LiveWorkoutPage() {
                       <div className="flex-1">
                         <div className="mb-1 flex items-center justify-between">
                           <label className="text-xs text-white/60">
-                            {bellStyle === 'dumbbell' ? 'Weight per DB (lbs)'
-                              : bellStyle === 'kettlebell' ? 'Weight per KB (lbs)'
-                              : 'Weight (lbs)'}
+                            {bellWeightLabel(bellStyle)}
                           </label>
                           {currentExercise && exercisePRs[currentExercise.name] &&
                             exercisePRs[currentExercise.name].weight > 0 &&
@@ -2405,7 +2412,7 @@ export default function LiveWorkoutPage() {
                           placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
-                        {bellStyle === 'dumbbell' && Number(currentWeight) > 0 && (
+                        {bellInfo.showTotal && Number(currentWeight) > 0 && (
                           <div className="mt-1 text-center text-[10px] text-white/40">
                             = {Number(currentWeight) * 2} lbs total
                           </div>
@@ -2500,7 +2507,7 @@ export default function LiveWorkoutPage() {
                   {/* Quick weight buttons — only for weighted exercises */}
                   {showWeightInput && (
                     <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                      {[45, 95, 135, 185, 225].map((weight) => (
+                      {weightQuickPicks(bellStyle).map((weight) => (
                         <button
                           key={weight}
                           onClick={() => updateCurrentInput("weight", weight.toString())}

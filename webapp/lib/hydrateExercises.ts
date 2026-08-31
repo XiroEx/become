@@ -18,6 +18,9 @@ interface HydratedExerciseFields {
   thumbnailUrl?: string;
   primaryMuscles?: string[];
   difficulty?: string;
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
   videoWidth?: number;
   videoHeight?: number;
   videoFraming?: {
@@ -45,7 +48,7 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
 
   const exercises = await ExerciseModel.find(
     {},
-    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1, videoTrim: 1, _id: 0 }
+    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, equipment: 1, laterality: 1, movementPatterns: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1, videoTrim: 1, _id: 0 }
   ).lean();
 
   slugCache = new Map();
@@ -59,6 +62,9 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
       thumbnailUrl: ex.thumbnailUrl || undefined,
       primaryMuscles: ex.primaryMuscles?.length ? ex.primaryMuscles : undefined,
       difficulty: ex.difficulty || undefined,
+      equipment: ex.equipment?.length ? ex.equipment : undefined,
+      laterality: ex.laterality || undefined,
+      movementPatterns: ex.movementPatterns?.length ? ex.movementPatterns : undefined,
       videoWidth: ex.videoWidth ?? undefined,
       videoHeight: ex.videoHeight ?? undefined,
       videoFraming: ex.videoFraming ?? undefined,
@@ -133,6 +139,9 @@ function hydrateExercise(
     ...(info.thumbnailUrl && { thumbnailUrl: info.thumbnailUrl }),
     ...(info.primaryMuscles && { primaryMuscles: info.primaryMuscles }),
     ...(info.difficulty && { difficulty: info.difficulty }),
+    ...(info.equipment && { equipment: info.equipment }),
+    ...(info.laterality && { laterality: info.laterality }),
+    ...(info.movementPatterns && { movementPatterns: info.movementPatterns }),
     ...(info.videoWidth != null && { videoWidth: info.videoWidth }),
     ...(info.videoHeight != null && { videoHeight: info.videoHeight }),
     ...(info.videoFraming && { videoFraming: info.videoFraming }),

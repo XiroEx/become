@@ -18,6 +18,10 @@ interface SearchExercise {
   slug: string
   name: string
   trackingType: string
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
 }
 
 export interface SessionEditorProps {
@@ -136,6 +140,9 @@ export default function SessionEditor({
         sets: 3,
         reps: isTime ? '' : '8-12',
         ...(isTime ? { duration: '30' } : {}),
+        ...(ex.equipment && { equipment: ex.equipment }),
+        ...(ex.laterality && { laterality: ex.laterality }),
+        ...(ex.movementPatterns && { movementPatterns: ex.movementPatterns }),
       },
     ])
     setQuery('')

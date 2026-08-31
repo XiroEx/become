@@ -23,6 +23,10 @@ interface SearchExercise {
   slug: string;
   name: string;
   trackingType: string;
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
 }
 
 interface SearchResponse {
@@ -89,8 +93,8 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       try {
         const res = await fetch("/api/exercises/custom", { headers: authHeaders() });
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { exercises?: Array<{ slug: string; name: string; trackingType: string }> };
-        if (!cancelled) setCustoms((data.exercises ?? []).map((e) => ({ slug: e.slug, name: e.name, trackingType: e.trackingType })));
+        const data = (await res.json()) as { exercises?: SearchExercise[] };
+        if (!cancelled) setCustoms((data.exercises ?? []).map((e) => ({ slug: e.slug, name: e.name, trackingType: e.trackingType, equipment: e.equipment, laterality: e.laterality, movementPatterns: e.movementPatterns })));
       } catch { /* customs stay empty */ }
     })();
     return () => { cancelled = true };
@@ -196,6 +200,9 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         trackingType: r.trackingType,
         sets: 3,
         reps: r.trackingType.startsWith("time") ? "" : "8-12",
+        ...(r.equipment && { equipment: r.equipment }),
+        ...(r.laterality && { laterality: r.laterality }),
+        ...(r.movementPatterns && { movementPatterns: r.movementPatterns }),
       };
       return [...prev, exercise];
     });
@@ -292,13 +299,13 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         headers: authHeaders(),
         body: JSON.stringify(customForm),
       });
-      const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string }; error?: string };
+      const data = (await res.json()) as { exercise?: SearchExercise; error?: string };
       if (!res.ok || !data.exercise) {
         setCreatingError(data.error || "Failed to create exercise");
         return;
       }
-      setCustoms((prev) => [...prev, { slug: data.exercise!.slug, name: data.exercise!.name, trackingType: data.exercise!.trackingType }]);
-      addExercise({ slug: data.exercise.slug, name: data.exercise.name, trackingType: data.exercise.trackingType });
+      setCustoms((prev) => [...prev, data.exercise!]);
+      addExercise(data.exercise);
       setShowCreateForm(false);
       setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES);
     } catch {
