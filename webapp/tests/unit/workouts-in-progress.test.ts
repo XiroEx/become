@@ -25,7 +25,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { NextRequest } from 'next/server'
 import { GET } from '../../app/api/workouts/in-progress/route'
-import { IN_PROGRESS_WINDOW_MS, isWithinInProgressWindow } from '../../lib/dayWindow'
+import { IN_PROGRESS_WINDOW_MS, isWithinInProgressWindow, isOnLocalToday } from '../../lib/dayWindow'
 
 function makeRequest(authHeader?: string): NextRequest {
   const headers = new Headers()
@@ -160,6 +160,78 @@ test('handleQuickSessionSave: an update only stamps startedAt on explicit starte
     updateClause,
     /\.\.\.\(started === true && \{ 'workoutLogs\.\$\[elem\]\.startedAt': workoutDate \}\)/,
     'an update must gate startedAt on started === true — an edit to an existing plan (which sends neither started nor performedAt) must leave a never-started log without startedAt, or editing it would wake it up as "in progress"',
+  )
+})
+
+// ── "Today" CTA for a quick session planned but not started ───────────────
+//
+// George, after the startedAt fix shipped: "I actually do want a CTA on the
+// workout page for a workout you have scheduled for the day but haven't
+// started. But the text should be appropriate." Suppressing the pill
+// entirely for a same-day, never-started plan was correct but left nothing
+// where a CTA plainly belongs — this covers surfacing it again, worded so it
+// can't be confused with "you're mid-workout" (see `planned` on the route
+// and the 'planned' status in ResumeWorkoutButton).
+
+test('isOnLocalToday: accepts a plan dated today in the caller local zone', () => {
+  const now = new Date('2026-08-31T12:00:00.000Z')
+  const plannedForToday = new Date('2026-08-31T18:00:00.000Z')
+  assert.equal(isOnLocalToday(plannedForToday, 0, now), true)
+})
+
+test('isOnLocalToday: rejects a plan dated tomorrow', () => {
+  const now = new Date('2026-08-31T12:00:00.000Z')
+  const plannedForTomorrow = new Date('2026-09-01T09:00:00.000Z')
+  assert.equal(isOnLocalToday(plannedForTomorrow, 0, now), false)
+})
+
+test('isOnLocalToday: rejects a plan dated yesterday (overdue, not "today")', () => {
+  const now = new Date('2026-08-31T12:00:00.000Z')
+  const plannedYesterday = new Date('2026-08-30T09:00:00.000Z')
+  assert.equal(isOnLocalToday(plannedYesterday, 0, now), false)
+})
+
+test('isOnLocalToday: honors the caller local timezone, not UTC', () => {
+  // 11:30pm Pacific (tz offset +420, i.e. UTC-7) on the 31st is 2026-09-01T06:30Z —
+  // a UTC-only check would call this "tomorrow" even though it is the same
+  // local evening the member is planning for.
+  const now = new Date('2026-08-31T20:00:00.000Z') // 1pm Pacific same day
+  const plannedTonight = new Date('2026-09-01T06:30:00.000Z') // 11:30pm Pacific
+  assert.equal(isOnLocalToday(plannedTonight, 420, now), true)
+})
+
+test('the in-progress route falls back to a same-day, never-started quick plan when nothing is active', () => {
+  const routePath = path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'in-progress', 'route.ts')
+  const src = fs.readFileSync(routePath, 'utf8')
+  const plannedStart = src.indexOf('const planned = logs')
+  assert.ok(plannedStart !== -1, 'could not locate the planned-today filter')
+  const plannedSrc = src.slice(plannedStart, plannedStart + 400)
+
+  assert.match(plannedSrc, /startedAt\s*==\s*null/, 'planned lookup must require no startedAt (never opened live)')
+  assert.match(plannedSrc, /isOnLocalToday/, 'planned lookup must scope to the caller local TODAY, not just "not stale"')
+  assert.match(plannedSrc, /kind\s*===\s*'quick'/, 'planned lookup is quick-session only — program days already get an honestly-worded card elsewhere (UpcomingWorkouts)')
+})
+
+test('a genuinely active workout takes priority over a same-day planned one', () => {
+  const routePath = path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'in-progress', 'route.ts')
+  const src = fs.readFileSync(routePath, 'utf8')
+  const openIdx = src.indexOf('if (open) {')
+  const plannedIdx = src.indexOf('const planned = logs')
+  assert.ok(
+    openIdx !== -1 && plannedIdx !== -1 && openIdx < plannedIdx,
+    'the active-workout branch must return before the planned-today lookup ever runs',
+  )
+})
+
+test('ResumeWorkoutButton renders a distinct, non-"active" CTA for a planned-but-not-started session', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'components', 'ResumeWorkoutButton.tsx'), 'utf8')
+
+  assert.match(src, /planned/i, 'component must read the planned field from the API response')
+  assert.match(src, /Start Workout/, 'planned CTA must say "Start Workout", never "Get back into the workout"')
+  assert.match(
+    src,
+    /status === 'active' &&[\s\S]{0,150}animate-ping/,
+    'the pulsing "live" dot must be gated to the active state only',
   )
 })
 
