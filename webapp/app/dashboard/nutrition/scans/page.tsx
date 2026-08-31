@@ -7,10 +7,13 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState, Toast } from '@/components/ui'
+import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
-import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2, X, Maximize2 } from 'lucide-react'
+import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2, X, Maximize2, CalendarDays } from 'lucide-react'
 import { useMealSchedule } from '@/hooks/useMealSchedule'
+import { todayLocalKey } from '@/lib/mealPlanDates'
+import { resolveLogAgainTimestamp } from '@/lib/nutrition/resolveLogAgainTimestamp'
 
 interface ScanItem {
   foodId?: string
@@ -54,6 +57,10 @@ export default function ScanHistoryPage() {
   // Full-image lightbox — holds the src of the photo being viewed (full-res
   // imageUrl when we have it, else the inline thumb).
   const [lightbox, setLightbox] = useState<string | null>(null)
+  // "Log to a day" sheet — lets a historical estimate be logged onto a day
+  // other than today instead of always landing on "now". `date` is a
+  // YYYY-MM-DD key, or null meaning today.
+  const [dateSheet, setDateSheet] = useState<{ scan: Scan; date: string | null } | null>(null)
   const { toast, showToast } = useToast(3000)
   const { defaultTagNow } = useMealSchedule()
 
@@ -69,7 +76,10 @@ export default function ScanHistoryPage() {
 
   useEffect(() => { load() }, [load])
 
-  const logAgain = async (scan: Scan) => {
+  // `dateKey` (YYYY-MM-DD) backdates the log onto that day at the current
+  // wall-clock time, same convention the rest of the app's log flows use
+  // (see FoodLogSheet). null/omitted means "right now, today".
+  const logAgain = async (scan: Scan, dateKey: string | null = null) => {
     if (busyId) return
     setBusyId(scan._id)
     try {
@@ -82,12 +92,16 @@ export default function ScanHistoryPage() {
         servings: it.servings ?? 1,
         nutrition: it.nutrition,
       }))
+      const loggedAt = resolveLogAgainTimestamp(dateKey)
       const res = await fetch('/api/meal-logs', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ items, tags: [scan.tag || defaultTagNow()], loggedAt: new Date().toISOString(), untimed: true }),
+        body: JSON.stringify({ items, tags: [scan.tag || defaultTagNow()], loggedAt, untimed: true }),
       })
-      showToast(res.ok ? 'Logged to today' : 'Could not log. Try again.', res.ok ? 'success' : 'error')
+      showToast(
+        res.ok ? `Logged to ${dateKey ? formatDatePillLabel(dateKey) : 'today'}` : 'Could not log. Try again.',
+        res.ok ? 'success' : 'error',
+      )
     } catch {
       showToast('Could not log. Check your connection.', 'error')
     } finally { setBusyId(null) }
@@ -170,6 +184,14 @@ export default function ScanHistoryPage() {
                     <Pencil className="h-3.5 w-3.5" />
                   </Link>
                   <button
+                    onClick={() => setDateSheet({ scan, date: null })}
+                    disabled={busyId === scan._id}
+                    aria-label="Log to another day"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => logAgain(scan)}
                     disabled={busyId === scan._id}
                     className="flex items-center gap-1 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-50 dark:bg-white dark:text-zinc-900"
@@ -215,6 +237,56 @@ export default function ScanHistoryPage() {
               )}
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* "Log to a day" sheet — backdate a re-log instead of always landing on now */}
+      {dateSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={() => setDateSheet(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Log to a day"
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-5 dark:bg-zinc-900 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-bold text-zinc-900 dark:text-white">Log to a day</h3>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Pick the day this estimate was actually eaten.
+            </p>
+            <DateOnlyPicker
+              value={dateSheet.date ?? todayLocalKey()}
+              maxDate={todayLocalKey()}
+              showTodayChip
+              className="mt-3"
+              onChange={(next) => {
+                const today = todayLocalKey()
+                setDateSheet((s) => (s ? { ...s, date: next === today ? null : next } : s))
+              }}
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setDateSheet(null)}
+                className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { scan, date } = dateSheet
+                  setDateSheet(null)
+                  logAgain(scan, date)
+                }}
+                disabled={busyId === dateSheet.scan._id}
+                className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-black"
+              >
+                Log to {dateSheet.date ? formatDatePillLabel(dateSheet.date) : 'today'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
