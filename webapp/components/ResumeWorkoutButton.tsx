@@ -7,14 +7,20 @@ import { Play } from 'lucide-react'
 import ConfirmModal from '@/components/workout/ConfirmModal'
 import { clearQuickSession } from '@/lib/quickSession/store'
 
-// Shows ONLY when the user has an in-progress workout log started within the
-// last 24h (rolling, not the calendar day — see IN_PROGRESS_WINDOW_MS) and
-// not yet completed. Disappears the moment the workout is marked complete.
-// Sits between the dashboard tile grid and the "Up Next" card — and,
-// rendered a second time, at the top of the workout section, so it's
-// reachable from wherever a member actually is.
+// Shows in one of two states, both sourced from GET /api/workouts/in-progress:
 //
-// Wiring: GET /api/workouts/in-progress → the open log itself.
+//   'active'  — a genuinely in-progress workout log (started within the last
+//               24h, rolling — see IN_PROGRESS_WINDOW_MS — and not yet
+//               completed). "Active · <label> / Get back into the workout."
+//   'planned' — nothing active, but a quick session is planned for today
+//               (Calendar → "Plan it") and hasn't been started. Worded
+//               honestly instead of implying the member is already mid-
+//               workout: "Today · <label> / Start Workout", no pulsing dot.
+//
+// Disappears the moment the workout is marked complete. Sits between the
+// dashboard tile grid and the "Up Next" card — and, rendered a second time,
+// at the top of the workout section, so it's reachable from wherever a
+// member actually is.
 //
 // It used to derive the workout from the ENROLMENT instead: read
 // /api/programs/active, take the first in-progress program, then ask
@@ -46,6 +52,8 @@ interface ResumeState {
   programId: string | null
   day: string | null
   sessionId: string | null
+  /** 'active' = genuinely mid-workout. 'planned' = scheduled today, not started. */
+  status: 'active' | 'planned'
 }
 
 const HOLD_MS = 550
@@ -78,6 +86,11 @@ export default function ResumeWorkoutButton({ className }: { className?: string 
           sessionId?: string | null
           title?: string | null
         } | null
+        planned?: {
+          kind?: 'quick'
+          sessionId: string | null
+          title?: string | null
+        } | null
       }
 
       const w = data.workout
@@ -90,8 +103,11 @@ export default function ResumeWorkoutButton({ className }: { className?: string 
           programId: null,
           day: null,
           sessionId: w.sessionId,
+          status: 'active',
         })
-      } else if (w?.programId && w.day) {
+        return
+      }
+      if (w?.programId && w.day) {
         setResume({
           href: `/dashboard/workout/${encodeURIComponent(w.programId)}/workout/live?day=${encodeURIComponent(w.day)}`,
           label: w.day,
@@ -99,10 +115,26 @@ export default function ResumeWorkoutButton({ className }: { className?: string 
           programId: w.programId,
           day: w.day,
           sessionId: null,
+          status: 'active',
         })
-      } else {
-        setResume(null)
+        return
       }
+
+      const p = data.planned
+      if (p?.sessionId) {
+        setResume({
+          href: `/dashboard/workout/quick/workout/live?session=${encodeURIComponent(p.sessionId)}`,
+          label: p.title || 'Quick session',
+          kind: 'quick',
+          programId: null,
+          day: null,
+          sessionId: p.sessionId,
+          status: 'planned',
+        })
+        return
+      }
+
+      setResume(null)
     } catch {
       /* silent — don't pollute the dashboard with errors */
     }
@@ -211,7 +243,11 @@ export default function ResumeWorkoutButton({ className }: { className?: string 
           <Link
             href={resume.href}
             className="group relative block touch-pan-y select-none overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 p-4 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-[1.01] active:scale-[0.99] dark:from-emerald-600 dark:via-green-600 dark:to-teal-600"
-            aria-label={`Get back into ${resume.label}. Hold to delete this workout.`}
+            aria-label={
+              resume.status === 'planned'
+                ? `Start ${resume.label}. Hold to delete this workout.`
+                : `Get back into ${resume.label}. Hold to delete this workout.`
+            }
             data-testid="resume-workout-button"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -230,18 +266,23 @@ export default function ResumeWorkoutButton({ className }: { className?: string 
             />
 
             <div className="relative flex items-center gap-3">
-              {/* Pulsing live dot */}
+              {/* Pulsing live dot — only for a genuinely active workout. A
+                  planned-but-not-started session gets a plain static dot, so
+                  the pill doesn't visually claim "live" for something the
+                  member hasn't opened yet. */}
               <span aria-hidden className="relative flex h-3 w-3 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+                {resume.status === 'active' && (
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+                )}
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-white" />
               </span>
 
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-bold uppercase tracking-widest text-white/80">
-                  Active · {resume.label}
+                  {resume.status === 'planned' ? 'Today · ' : 'Active · '}{resume.label}
                 </div>
                 <div className="truncate text-base font-bold text-white">
-                  Get back into the workout
+                  {resume.status === 'planned' ? 'Start Workout' : 'Get back into the workout'}
                 </div>
               </div>
 
@@ -256,7 +297,11 @@ export default function ResumeWorkoutButton({ className }: { className?: string 
       <ConfirmModal
         open={confirmOpen}
         title="Delete this workout?"
-        body="This removes the in-progress workout completely — on the dashboard, in the workout section, and on the calendar. This can't be undone."
+        body={
+          resume?.status === 'planned'
+            ? "This removes today's planned workout completely — on the dashboard, in the workout section, and on the calendar. This can't be undone."
+            : "This removes the in-progress workout completely — on the dashboard, in the workout section, and on the calendar. This can't be undone."
+        }
         confirmLabel={deleting ? 'Deleting…' : 'Delete workout'}
         cancelLabel="Keep it"
         destructive

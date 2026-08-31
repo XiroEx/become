@@ -43,6 +43,20 @@ export function isWithinInProgressWindow(d: Date | string, now: Date = new Date(
   return at.getTime() >= cutoff && at.getTime() <= now.getTime()
 }
 
+/**
+ * Does `d` fall on the caller's LOCAL calendar day, right now? Unlike
+ * isWithinInProgressWindow (a rolling 24h window), this is the actual
+ * caller-local calendar day boundary — used to find a quick session PLANNED
+ * for today (Calendar/"Plan it", see resolvePerformedAt) that has not been
+ * started (no startedAt) so it can be offered honestly as "today's workout"
+ * instead of disappearing entirely once it stops qualifying as in-progress.
+ */
+export function isOnLocalToday(d: Date | string, tzOffsetMinutes: number, now: Date = new Date()): boolean {
+  const at = new Date(d)
+  if (Number.isNaN(at.getTime())) return false
+  return dateKey(at, tzOffsetMinutes) === localDateKey(null, tzOffsetMinutes, now)
+}
+
 /** Read `tz` from URL search params, clamped to ±14h. Defaults to 0 (UTC). */
 export function readTzOffset(searchParams: URLSearchParams): number {
   const raw = searchParams.get('tz')
