@@ -13,6 +13,7 @@
     "render:story": "remotion still src/index.ts StoryPoster out/become-story-poster.png",
     "render:og": "remotion still src/index.ts OpenGraph out/become-open-graph.png",
     "render:collection": "node scripts/render-collection.mjs",
+    "render:carousel": "node scripts/render-carousel.mjs",
     "render": "npm run assets:sync && npm run render:square && npm run render:story && npm run render:og && npm run render:reel && npm run render:collection && npm run render:videos && npm run render:reviewed",
     "skills:check": "node scripts/validate-skills.mjs",
     "typecheck": "tsc --noEmit"
