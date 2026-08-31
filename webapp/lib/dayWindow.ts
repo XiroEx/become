@@ -25,6 +25,24 @@ const TZ_CLAMP_MAX = 840
  */
 export const IN_PROGRESS_WINDOW_MS = 24 * 60 * 60 * 1000
 
+/**
+ * Does `d` count as "in progress right now"? Bounded on BOTH sides of `now`:
+ * not so old it's gone stale (the rolling IN_PROGRESS_WINDOW_MS), and not
+ * dated in the future.
+ *
+ * The upper bound matters because a quick session PLANNED for a future date
+ * (Calendar → "Plan it") writes an incomplete workout-log row immediately,
+ * dated on that future day — a lower-bound-only check (`d >= cutoff`) is
+ * satisfied by any future date, which surfaced a session the member had only
+ * scheduled as if they were mid-workout in it right now.
+ */
+export function isWithinInProgressWindow(d: Date | string, now: Date = new Date()): boolean {
+  const at = new Date(d)
+  if (Number.isNaN(at.getTime())) return false
+  const cutoff = now.getTime() - IN_PROGRESS_WINDOW_MS
+  return at.getTime() >= cutoff && at.getTime() <= now.getTime()
+}
+
 /** Read `tz` from URL search params, clamped to ±14h. Defaults to 0 (UTC). */
 export function readTzOffset(searchParams: URLSearchParams): number {
   const raw = searchParams.get('tz')
