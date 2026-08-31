@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
-import { IN_PROGRESS_WINDOW_MS } from '@/lib/dayWindow'
+import { isWithinInProgressWindow } from '@/lib/dayWindow'
 
 /**
  * The workout the member is in the middle of RIGHT NOW, if any.
@@ -27,6 +27,12 @@ import { IN_PROGRESS_WINDOW_MS } from '@/lib/dayWindow'
  * a few minutes later, once the day has technically rolled over. A log left
  * open from last week remains genuinely stale — that's handled separately,
  * further out, by the 30-day auto-cleanup in GET /api/workouts.
+ *
+ * That window is bounded on both sides (see isWithinInProgressWindow): a
+ * quick session PLANNED for a future date (Calendar → "Plan it") writes an
+ * incomplete log dated on that future day immediately, and without the upper
+ * bound it would satisfy "not stale" and show up here as if the member were
+ * mid-workout in a session they only scheduled, not started.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -43,16 +49,10 @@ export async function GET(request: NextRequest) {
     const logs = progress?.workoutLogs ?? []
     if (logs.length === 0) return NextResponse.json({ workout: null })
 
-    const cutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
-
     // Newest first: if a member somehow has two open logs, the one they are
     // actually in is the one they started last.
     const open = logs
-      .filter((w) => {
-        if (w.completed) return false
-        const at = new Date(w.date as string)
-        return at >= cutoff
-      })
+      .filter((w) => !w.completed && isWithinInProgressWindow(w.date as string))
       .sort((a, b) => new Date(b.date as string).getTime() - new Date(a.date as string).getTime())[0]
 
     if (!open) return NextResponse.json({ workout: null })
