@@ -13,13 +13,27 @@
       "THE",
       "WORK"
     ],
-    "lead": "A whole day of food — 2,229 calories, 187g of protein. Logged from two photos.",
+    "lead": "A whole day of food, logged from two photos.",
     "steps": [
       "Snap the plate",
       "Or say it in words",
       "Or just find it"
     ],
-    "image": "carousel/fuel/day.png"
+    "image": "carousel/fuel/day.png",
+    "stats": [
+      {
+        "value": "2,229",
+        "label": "Calories"
+      },
+      {
+        "value": "187g",
+        "label": "Protein"
+      },
+      {
+        "value": "2",
+        "label": "Photos"
+      }
+    ]
   },
   {
     "id": "CarouselFuel2",
@@ -37,7 +51,7 @@
     "bullets": [
       "Eight foods, each on its own line with its own calories.",
       "A confidence read on every row: High or Medium.",
-      "Not right? Type the fix — \"it was 6 tacos.\""
+      "Not right? Type the fix: \"it was 6 tacos.\""
     ],
     "image": "carousel/fuel/snap.png"
   },
@@ -78,7 +92,7 @@
     "bullets": [
       "Search foods and saved meals, brands and calories included.",
       "Barcode, snap and upload, all on the same sheet.",
-      "Your foods, recents and frequents — one tap each."
+      "Your foods, recents and frequents, one tap each."
     ],
     "image": "carousel/fuel/find.png"
   },
