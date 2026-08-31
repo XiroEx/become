@@ -34,6 +34,8 @@ export type Slide = {
   bullets?: string[];
   /** COVER only — the deck's steps, previewed. */
   steps?: string[];
+  /** COVER only — the hook's numbers, set at poster scale in the top-right. */
+  stats?: {value: string; label: string}[];
   image: string;
   /** Override when a crop is squatter than a phone and needs more width to carry. */
   phoneWidth?: number;
@@ -153,6 +155,23 @@ const StepList: React.FC<{steps: string[]; accent: string; size?: number; gap?: 
   </div>
 );
 
+/** The hook's numbers at poster scale, right-aligned over the cover phone. */
+const StatStack: React.FC<{stats: {value: string; label: string}[]; accent: string}> = ({stats, accent}) => (
+  <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 40}}>
+    <div style={{width: 30, height: 4, background: accent}} />
+    {stats.map((stat) => (
+      <div key={stat.label} style={{textAlign: 'right'}}>
+        <div style={{fontSize: 84, fontWeight: 950, letterSpacing: -2, lineHeight: 0.95, color: white}}>
+          {stat.value}
+        </div>
+        <div style={{marginTop: 10, fontSize: 19, fontWeight: 850, letterSpacing: 4, textTransform: 'uppercase', color: muted}}>
+          {stat.label}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 /**
  * Identical on every frame — the repetition is what makes five posts read as one
  * object. Only the footer's *side* moves: on the layouts where the phone bleeds off
@@ -203,6 +222,11 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
     <AbsoluteFill style={base}>
       <Grid />
       <Phone image={slide.image} width={392} style={{right: -46, bottom: -120, transform: 'rotate(5deg)'}} />
+      {slide.stats ? (
+        <div style={{position: 'absolute', right: M, top: 172, zIndex: 3}}>
+          <StatStack stats={slide.stats} accent={accent} />
+        </div>
+      ) : null}
       <div
         style={{
           position: 'absolute',
