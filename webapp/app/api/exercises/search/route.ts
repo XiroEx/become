@@ -36,10 +36,10 @@ export async function GET(req: NextRequest) {
         },
       ],
     },
-    { slug: 1, name: 1, trackingType: 1 }
+    { slug: 1, name: 1, trackingType: 1, equipment: 1, laterality: 1, movementPatterns: 1 }
   )
     .limit(limit)
-    .lean<{ slug: string; name: string; trackingType: string }[]>();
+    .lean<{ slug: string; name: string; trackingType: string; equipment?: string[]; laterality?: string; movementPatterns?: string[] }[]>();
 
   return NextResponse.json({ exercises });
 }

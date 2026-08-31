@@ -98,7 +98,19 @@ export function stashQuickSessionWithId(
 export function swapQuickSessionExercise(
   sessionId: string,
   exIdx: number,
-  next: { name: string; exerciseSlug?: string; trackingType?: string; primaryMuscles?: string[] },
+  next: {
+    name: string
+    exerciseSlug?: string
+    trackingType?: string
+    primaryMuscles?: string[]
+    /** Always passed by the caller (possibly []) so a swap fully replaces the
+     *  old exercise's catalog metadata rather than leaving stale values —
+     *  e.g. swapping a dumbbell row for a bodyweight one must drop `equipment`,
+     *  not just skip setting the new one. */
+    equipment?: string[]
+    laterality?: string
+    movementPatterns?: string[]
+  },
 ): void {
   const s = readQuickSession(sessionId)
   if (!s || !Array.isArray(s.exercises) || !s.exercises[exIdx]) return
@@ -108,6 +120,9 @@ export function swapQuickSessionExercise(
     if (next.exerciseSlug !== undefined) patched.exerciseSlug = next.exerciseSlug
     if (next.trackingType) patched.trackingType = next.trackingType
     if (next.primaryMuscles) patched.primaryMuscles = next.primaryMuscles
+    if (next.equipment !== undefined) patched.equipment = next.equipment
+    if (next.laterality !== undefined) patched.laterality = next.laterality
+    if (next.movementPatterns !== undefined) patched.movementPatterns = next.movementPatterns
     return patched
   })
   stashQuickSessionWithId({ ...(s as DraftSession), exercises }, sessionId)

@@ -36,6 +36,10 @@ interface SearchExercise {
   slug: string
   name: string
   trackingType: string
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
 }
 
 export interface AddExerciseSheetProps {
@@ -143,7 +147,7 @@ export default function AddExerciseSheet({
         const res = await fetch('/api/exercises/custom', { headers: authHeaders() })
         if (!res.ok || cancelled) return
         const data = (await res.json()) as { exercises?: SearchExercise[] }
-        if (!cancelled) setCustoms((data.exercises ?? []).map(e => ({ slug: e.slug, name: e.name, trackingType: e.trackingType })))
+        if (!cancelled) setCustoms((data.exercises ?? []).map(e => ({ slug: e.slug, name: e.name, trackingType: e.trackingType, equipment: e.equipment, laterality: e.laterality, movementPatterns: e.movementPatterns })))
       } catch { /* customs stay empty */ }
     })()
     return () => { cancelled = true }
@@ -189,7 +193,7 @@ export default function AddExerciseSheet({
       if (isTimed(v.trackingType) !== isTimed(prev?.trackingType)) {
         setReps(isTimed(v.trackingType) ? '' : '8-12')
       }
-      return { slug: v.slug, name: v.name, trackingType: v.trackingType }
+      return { slug: v.slug, name: v.name, trackingType: v.trackingType, equipment: v.equipment, laterality: v.laterality }
     })
   }, [])
 
@@ -231,6 +235,9 @@ export default function AddExerciseSheet({
       sets,
       reps: timed ? '' : reps.trim() || '8-12',
       ...(timed ? { duration: `${seconds} sec` } : {}),
+      ...(picked.equipment && { equipment: picked.equipment }),
+      ...(picked.laterality && { laterality: picked.laterality }),
+      ...(picked.movementPatterns && { movementPatterns: picked.movementPatterns }),
     }
     try {
       await onAdd({ exercise, placement, groupKind })
