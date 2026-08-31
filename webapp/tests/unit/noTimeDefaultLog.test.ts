@@ -48,10 +48,14 @@ test('SnapPlateModal (photo/describe scans) logs untimed — no time control in 
   assert.match(postBody.slice(0, 400), /untimed:\s*true/)
 })
 
-test('re-logging a past scan from history is untimed too', () => {
+test('re-logging a past scan from history defaults to no time, matching the food/meal pickers', () => {
+  // Estimate history's "Log to a day" sheet gained a real time control (the
+  // same Now/Custom/None model as FoodSearchModal/MealApplySheet above), so
+  // unlike FoodLogSheet/SnapPlateModal it CAN send `untimed: false` when a
+  // member deliberately picks a clock time. What must still hold is the
+  // default: opening the sheet lands on 'none', same as every other picker.
   const ui = read('app/dashboard/nutrition/scans/page.tsx')
-  const postBody = ui.slice(ui.indexOf("fetch('/api/meal-logs'"))
-  assert.match(postBody.slice(0, 400), /untimed:\s*true/)
+  assert.match(ui, /timeMode: 'none'/)
 })
 
 test('the timeline page\'s Add Food no longer drops the untimed flag on its way to the API', () => {

@@ -1,19 +1,24 @@
 'use client'
 
 // Scan history — a browsable list of the user's saved AI nutrition scans
-// (photo / describe). Each can be re-logged to today or deleted.
+// (photo / describe). Each can be re-logged (to a chosen day, time and tag)
+// or deleted.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState, Toast } from '@/components/ui'
 import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
 import { useToast } from '@/hooks/useToast'
 import { getToken } from '@/lib/clientAuth'
-import { Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2, X, Maximize2, CalendarDays } from 'lucide-react'
+import {
+  Camera, PencilLine, Pencil, ArrowLeft, Trash2, RotateCcw, Loader2, X, Maximize2,
+  Tag as TagIcon, ChevronDown, Check, Clock,
+} from 'lucide-react'
 import { useMealSchedule } from '@/hooks/useMealSchedule'
 import { todayLocalKey } from '@/lib/mealPlanDates'
-import { resolveLogAgainTimestamp } from '@/lib/nutrition/resolveLogAgainTimestamp'
+import { anchorMinutesForTag, formatHHMM, formatClockLabel, parseHHMM, minutesOfDay } from '@/lib/nutrition/mealSchedule'
+import { resolveLogAgainTimestamp, type LogAgainTimeMode } from '@/lib/nutrition/resolveLogAgainTimestamp'
 
 interface ScanItem {
   foodId?: string
@@ -39,15 +44,23 @@ interface Scan {
   createdAt: string
 }
 
+const DEFAULT_TAGS = ['breakfast', 'lunch', 'dinner', 'snack', 'pre-workout', 'post-workout']
+
 function authHeaders(): HeadersInit {
   const t = getToken()
   return { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) }
 }
 
-
 function whenLabel(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+function titleCaseTag(tag: string): string {
+  return tag
+    .split(/[-_\s]+/)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('-')
 }
 
 export default function ScanHistoryPage() {
@@ -57,12 +70,23 @@ export default function ScanHistoryPage() {
   // Full-image lightbox — holds the src of the photo being viewed (full-res
   // imageUrl when we have it, else the inline thumb).
   const [lightbox, setLightbox] = useState<string | null>(null)
-  // "Log to a day" sheet — lets a historical estimate be logged onto a day
-  // other than today instead of always landing on "now". `date` is a
-  // YYYY-MM-DD key, or null meaning today.
-  const [dateSheet, setDateSheet] = useState<{ scan: Scan; date: string | null } | null>(null)
+  const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
+    defaults: DEFAULT_TAGS, userTags: [],
+  })
+  // "Log to a day" sheet — the single entry point for a (re)log, opened from
+  // "Log again". Lets the day, time and tag be chosen instead of always
+  // landing on "now, untimed, saved tag".
+  const [dateSheet, setDateSheet] = useState<{
+    scan: Scan
+    date: string | null
+    tag: string
+    timeMode: LogAgainTimeMode
+    time: string | null
+  } | null>(null)
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false)
+  const [customTagInput, setCustomTagInput] = useState('')
   const { toast, showToast } = useToast(3000)
-  const { defaultTagNow } = useMealSchedule()
+  const { windows, defaultTagNow } = useMealSchedule()
 
   const load = useCallback(async () => {
     try {
@@ -74,13 +98,63 @@ export default function ScanHistoryPage() {
     } catch { /* ignore */ } finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadTags = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tags', { headers: authHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setTagsResp({
+          defaults: Array.isArray(data.defaults) ? data.defaults : DEFAULT_TAGS,
+          userTags: Array.isArray(data.userTags) ? data.userTags : [],
+        })
+      }
+    } catch { /* ignore */ }
+  }, [])
 
-  // `dateKey` (YYYY-MM-DD) backdates the log onto that day at the current
-  // wall-clock time, same convention the rest of the app's log flows use
-  // (see FoodLogSheet). null/omitted means "right now, today".
-  const logAgain = async (scan: Scan, dateKey: string | null = null) => {
+  useEffect(() => { load(); loadTags() }, [load, loadTags])
+
+  const allTagOptions = useMemo<string[]>(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const t of [...tagsResp.defaults, ...tagsResp.userTags]) {
+      const norm = String(t).toLowerCase()
+      if (norm && !seen.has(norm)) {
+        seen.add(norm)
+        out.push(norm)
+      }
+    }
+    return out
+  }, [tagsResp])
+
+  const openLogSheet = (scan: Scan) => {
+    setDateSheet({ scan, date: null, tag: scan.tag || defaultTagNow(), timeMode: 'none', time: null })
+    setTagDropdownOpen(false)
+    setCustomTagInput('')
+  }
+
+  const handleAddCustomTag = () => {
+    const norm = customTagInput.trim().toLowerCase().replace(/\s+/g, '-')
+    if (!norm) return
+    setDateSheet((s) => (s ? { ...s, tag: norm } : s))
+    setCustomTagInput('')
+    setTagDropdownOpen(false)
+  }
+
+  // `dateKey` (YYYY-MM-DD) backdates the log onto that day; `timeMode`/`time`
+  // follow the Now/Custom/None model the rest of nutrition logging uses (see
+  // resolveLogAgainTimestamp). Defaults reproduce the old one-tap behavior:
+  // today, the scan's saved tag, untimed.
+  const logAgain = async (
+    scan: Scan,
+    opts: { dateKey?: string | null; tag?: string; timeMode?: LogAgainTimeMode; time?: string | null } = {},
+  ) => {
     if (busyId) return
+    const {
+      dateKey = null,
+      tag = scan.tag || defaultTagNow(),
+      timeMode = 'none',
+      time = null,
+    } = opts
     setBusyId(scan._id)
     try {
       const items = scan.items.map((it) => ({
@@ -92,11 +166,12 @@ export default function ScanHistoryPage() {
         servings: it.servings ?? 1,
         nutrition: it.nutrition,
       }))
-      const loggedAt = resolveLogAgainTimestamp(dateKey)
+      const anchorHHMM = formatHHMM(anchorMinutesForTag(windows, tag))
+      const { loggedAt, untimed } = resolveLogAgainTimestamp(dateKey, timeMode, time, anchorHHMM)
       const res = await fetch('/api/meal-logs', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ items, tags: [scan.tag || defaultTagNow()], loggedAt, untimed: true }),
+        body: JSON.stringify({ items, tags: [tag], loggedAt, untimed }),
       })
       showToast(
         res.ok ? `Logged to ${dateKey ? formatDatePillLabel(dateKey) : 'today'}` : 'Could not log. Try again.',
@@ -184,15 +259,7 @@ export default function ScanHistoryPage() {
                     <Pencil className="h-3.5 w-3.5" />
                   </Link>
                   <button
-                    onClick={() => setDateSheet({ scan, date: null })}
-                    disabled={busyId === scan._id}
-                    aria-label="Log to another day"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  >
-                    <CalendarDays className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => logAgain(scan)}
+                    onClick={() => openLogSheet(scan)}
                     disabled={busyId === scan._id}
                     className="flex items-center gap-1 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-50 dark:bg-white dark:text-zinc-900"
                   >
@@ -240,7 +307,8 @@ export default function ScanHistoryPage() {
         </div>
       )}
 
-      {/* "Log to a day" sheet — backdate a re-log instead of always landing on now */}
+      {/* "Log to a day" sheet — day, time and tag for a (re)log, opened from
+          "Log again" instead of logging instantly. */}
       {dateSheet && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
@@ -255,8 +323,69 @@ export default function ScanHistoryPage() {
           >
             <h3 className="text-base font-bold text-zinc-900 dark:text-white">Log to a day</h3>
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Pick the day this estimate was actually eaten.
+              Pick the day, time and tag this estimate was actually eaten.
             </p>
+
+            {/* Tag picker */}
+            <div className="relative mt-3">
+              <button
+                type="button"
+                onClick={() => setTagDropdownOpen(v => !v)}
+                className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+              >
+                <TagIcon className="h-3.5 w-3.5 text-zinc-400" />
+                <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Adding to</span>
+                <span className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  {titleCaseTag(dateSheet.tag)}
+                </span>
+                <ChevronDown className={`ml-auto h-4 w-4 text-zinc-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {tagDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                  <div className="grid grid-cols-2 gap-1">
+                    {allTagOptions.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => { setDateSheet((s) => (s ? { ...s, tag: t } : s)); setTagDropdownOpen(false) }}
+                        className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
+                          dateSheet.tag === t
+                            ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-600'
+                        }`}
+                      >
+                        <span className="truncate">{titleCaseTag(t)}</span>
+                        {dateSheet.tag === t && <Check className="h-3 w-3 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                    <p className="mb-1 px-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      New tag
+                    </p>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={customTagInput}
+                        onChange={(e) => setCustomTagInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCustomTag() } }}
+                        placeholder="e.g. brunch"
+                        className="flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400/30 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white dark:placeholder-zinc-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomTag}
+                        disabled={!customTagInput.trim()}
+                        className="rounded-md bg-zinc-900 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <DateOnlyPicker
               value={dateSheet.date ?? todayLocalKey()}
               maxDate={todayLocalKey()}
@@ -267,6 +396,60 @@ export default function ScanHistoryPage() {
                 setDateSheet((s) => (s ? { ...s, date: next === today ? null : next } : s))
               }}
             />
+
+            {/* Time — same Now/pick a time/no time model the rest of nutrition
+                logging uses, so logging an estimate behaves like logging food. */}
+            <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                <span className="shrink-0 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Time</span>
+                <input
+                  type="time"
+                  value={dateSheet.timeMode === 'custom' && dateSheet.time ? dateSheet.time : formatHHMM(minutesOfDay(new Date()))}
+                  onChange={(ev) => {
+                    const v = ev.target.value
+                    setDateSheet((s) => (s ? { ...s, time: v || null, timeMode: v ? 'custom' : 'none' } : s))
+                  }}
+                  disabled={dateSheet.timeMode === 'none'}
+                  aria-label="Time this was eaten"
+                  className="ml-auto rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs tabular-nums text-zinc-900 disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+                />
+                {dateSheet.timeMode === 'custom' && dateSheet.time && (
+                  <span className="shrink-0 text-[11px] tabular-nums text-blue-600 dark:text-blue-300">
+                    {formatClockLabel(parseHHMM(dateSheet.time) ?? 0)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDateSheet((s) => (s ? { ...s, time: null, timeMode: 'now' } : s))}
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                    dateSheet.timeMode === 'now'
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                      : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                  }`}
+                >
+                  Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateSheet((s) => (s ? { ...s, time: null, timeMode: 'none' } : s))}
+                  aria-label="Clear the time and log for the day only"
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+                    dateSheet.timeMode === 'none'
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                      : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                {dateSheet.timeMode === 'none'
+                  ? 'No time. This sits in your meal order rather than at a clock position.'
+                  : 'Tap the X to log for the day with no time at all.'}
+              </p>
+            </div>
+
             <div className="mt-4 flex gap-2">
               <button
                 onClick={() => setDateSheet(null)}
@@ -276,9 +459,9 @@ export default function ScanHistoryPage() {
               </button>
               <button
                 onClick={() => {
-                  const { scan, date } = dateSheet
+                  const { scan, date, tag, timeMode, time } = dateSheet
                   setDateSheet(null)
-                  logAgain(scan, date)
+                  logAgain(scan, { dateKey: date, tag, timeMode, time })
                 }}
                 disabled={busyId === dateSheet.scan._id}
                 className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-black"
