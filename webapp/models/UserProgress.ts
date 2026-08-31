@@ -95,7 +95,11 @@ export interface IWorkoutLog {
   // Quick sessions only: starred from the Sessions list for quick access.
   favorite?: boolean
   duration?: number // in minutes (final, set on completion)
-  startedAt?: Date // First time the live view was opened / first set saved
+  // Set once the live view is genuinely engaged (opened, or a later autosave
+  // from it) — absent on a quick session written by "Plan it", which only
+  // records a future/today placeholder nobody has started. Read by
+  // GET /api/workouts/in-progress: no startedAt, no "in progress" pill.
+  startedAt?: Date
   activeSeconds?: number // Accumulated active seconds across all sessions
   notes?: string
   exercises: IExerciseLog[]

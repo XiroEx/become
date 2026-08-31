@@ -82,6 +82,16 @@ interface QuickSessionSaveRequest {
    * the dedicated PATCH /api/workouts/session toggle's job.
    */
   favorite?: boolean
+  /**
+   * True when this save represents genuinely engaging with the workout (the
+   * live view opening, or a subsequent autosave from it) — as opposed to the
+   * "Plan it" screen merely writing a placeholder for a future/today session
+   * nobody has started yet. Only ever `false` from the plan-only save path;
+   * every other caller either omits it (an edit to an existing plan, which
+   * must not resurrect it as "started") or sends `true`. Gates `startedAt`
+   * (see below) — never stored directly.
+   */
+  started?: boolean
 }
 
 /**
@@ -711,7 +721,7 @@ async function handleQuickSessionSave(
   body: QuickSessionSaveRequest,
   payload: { userId: string; email: string },
 ) {
-  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes, favorite } = body
+  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes, started, favorite } = body
 
   if (!sessionId || !Array.isArray(exercises)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -750,10 +760,10 @@ async function handleQuickSessionSave(
         ...(notes !== undefined && { 'workoutLogs.$[elem].notes': notes }),
         // Backdate only when the client explicitly sends performedAt — autosaves
         // omit it, so they never disturb the log's date.
-        ...(body.performedAt && {
-          'workoutLogs.$[elem].date': workoutDate,
-          'workoutLogs.$[elem].startedAt': workoutDate,
-        }),
+        ...(body.performedAt && { 'workoutLogs.$[elem].date': workoutDate }),
+        // Stamp startedAt only on real engagement (`started: true`). A plan
+        // edit sends neither flag and must leave it untouched — see `started`.
+        ...(started === true && { 'workoutLogs.$[elem].startedAt': workoutDate }),
         updatedAt: new Date(),
       },
     },
@@ -788,7 +798,8 @@ async function handleQuickSessionSave(
             ...(focus && { focus }),
             completed,
             duration,
-            startedAt: workoutDate,
+            // Absent for a plan nobody has started yet — see `started` above.
+            ...(started !== false && { startedAt: workoutDate }),
             activeSeconds: activeSeconds ?? 0,
             ...(notes && { notes }),
             ...(favorite === true && { favorite: true }),

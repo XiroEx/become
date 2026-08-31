@@ -84,6 +84,11 @@ export default function QuickSessionOverviewPage() {
           completed: done,
           ...(done && { duration: Math.max(1, Math.round(totalSets * 1.5)) }),
           performedAt: logDate,
+          // This screen only ever plans or backfills — the live view is what
+          // "starting" means. Marking a not-done save `started: false` keeps
+          // a same-day/future plan from showing as an in-progress workout
+          // (see IWorkoutLog.startedAt) until it's actually opened live.
+          started: done,
           tz: new Date().getTimezoneOffset(),
         }),
       })

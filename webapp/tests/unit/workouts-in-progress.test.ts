@@ -11,6 +11,14 @@
 // exercised directly (no DB touched); the window contract is locked in via
 // isWithinInProgressWindow (unit-tested directly) plus a source-shape
 // assertion, mirroring the pattern in workouts-delete-in-progress.test.ts.
+//
+// Neither fix covered a quick session planned for TODAY: its date already
+// satisfies the window (today isn't the future), so "Plan it" for later the
+// same day still showed the pill worded "Get back into the workout" for a
+// session nobody had opened yet. Fixed by requiring `startedAt` — only
+// written once the live view is genuinely engaged (see IWorkoutLog.startedAt
+// and the `started` field on POST /api/workouts) — in addition to the
+// existing completed/window checks.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -95,5 +103,76 @@ test('the in-progress lookup is a rolling window, not the caller local calendar 
     src.includes('localDayWindowForKey') || src.includes('localDateKey('),
     false,
     'in-progress route must not scope resumability to the caller local calendar day',
+  )
+})
+
+// ── Same-day "Plan it" must not read back as "in progress" ────────────────
+//
+// A quick session planned for TODAY has a `date` that already satisfies
+// isWithinInProgressWindow (it isn't in the future), so the window check
+// alone can't tell "planned for later today" apart from "genuinely mid-
+// workout right now". `startedAt` is the extra signal: it's only present
+// once the live view has actually been opened (see the `started` field on
+// POST /api/workouts and IWorkoutLog.startedAt).
+
+test('the in-progress lookup requires startedAt, not just completed:false + window', () => {
+  const routePath = path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'in-progress', 'route.ts')
+  const src = fs.readFileSync(routePath, 'utf8')
+  const filterStart = src.indexOf('const open = logs')
+  assert.ok(filterStart !== -1, 'could not locate the open-log filter')
+  const filterSrc = src.slice(filterStart, filterStart + 300)
+
+  assert.match(
+    filterSrc,
+    /startedAt\s*!=\s*null/,
+    'a same-day plan (completed:false, date within window, no startedAt) must be excluded — that is exactly the reported bug: "Plan it" for today showing as an in-progress workout',
+  )
+})
+
+test('handleQuickSessionSave: a plan-only insert (started: false) omits startedAt entirely', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'route.ts'), 'utf8')
+  const start = src.indexOf('async function handleQuickSessionSave')
+  assert.ok(start !== -1)
+  const fn = src.slice(start, start + 4500)
+
+  const pushIdx = fn.indexOf('$push: {')
+  assert.ok(pushIdx !== -1, 'could not locate the insert $push')
+  const insertClause = fn.slice(pushIdx, pushIdx + 800)
+  assert.match(
+    insertClause,
+    /\.\.\.\(started !== false && \{ startedAt: workoutDate \}\)/,
+    'the insert branch must only set startedAt when the caller did not explicitly say started: false',
+  )
+})
+
+test('handleQuickSessionSave: an update only stamps startedAt on explicit started: true, never on a plan edit', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'route.ts'), 'utf8')
+  const start = src.indexOf('async function handleQuickSessionSave')
+  assert.ok(start !== -1)
+  const fn = src.slice(start, start + 4500)
+
+  const setIdx = fn.indexOf('$set: {')
+  const pushIdx = fn.indexOf('$push: {')
+  assert.ok(setIdx !== -1 && pushIdx !== -1 && setIdx < pushIdx)
+  const updateClause = fn.slice(setIdx, pushIdx)
+
+  assert.match(
+    updateClause,
+    /\.\.\.\(started === true && \{ 'workoutLogs\.\$\[elem\]\.startedAt': workoutDate \}\)/,
+    'an update must gate startedAt on started === true — an edit to an existing plan (which sends neither started nor performedAt) must leave a never-started log without startedAt, or editing it would wake it up as "in progress"',
+  )
+})
+
+test('the calendar re-date (PATCH /api/workouts/session) must not stamp startedAt', () => {
+  // Otherwise dragging a never-started planned quick session onto today (or
+  // any past day) would reproduce the exact same bug via a different path.
+  const routePath = path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'session', 'route.ts')
+  const src = fs.readFileSync(routePath, 'utf8')
+  const dateSetIdx = src.indexOf("set['workoutLogs.$[elem].date'] = d")
+  assert.ok(dateSetIdx !== -1, 'could not locate the re-date assignment')
+  assert.equal(
+    src.includes("set['workoutLogs.$[elem].startedAt']"),
+    false,
+    'PATCH /api/workouts/session must never assign workoutLogs.$[elem].startedAt',
   )
 })
