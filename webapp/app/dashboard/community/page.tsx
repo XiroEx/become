@@ -6,6 +6,7 @@ import { CalendarDays, MessageCircle, Users, ArrowRight } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui'
 import { CommunityEvent, CommunityGroup, formatEventTime, getToken } from '@/components/community/types'
+import FeatureGuard from '@/components/FeatureGuard'
 
 export default function CommunityPage() {
   const [groups, setGroups] = useState<CommunityGroup[]>([])
@@ -30,6 +31,11 @@ export default function CommunityPage() {
   ]
 
   return (
+    <FeatureGuard
+      feature="Community"
+      description="Events, groups, and chats with your coach and other members. Coming soon."
+      icon={<Users className="h-10 w-10" />}
+    >
     <PageTransition>
       <div className="mb-5">
         <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Community</h1>
@@ -89,5 +95,6 @@ export default function CommunityPage() {
         </section>
       </div>
     </PageTransition>
+    </FeatureGuard>
   )
 }

@@ -7,6 +7,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, formatEventTime, getToken } from '@/components/community/types'
+import FeatureGuard from '@/components/FeatureGuard'
 
 function eventPlace(event: CommunityEvent) {
   if (event.format === 'virtual') return 'Virtual'
@@ -48,6 +49,11 @@ export default function EventsPage() {
   }
 
   return (
+    <FeatureGuard
+      feature="Events"
+      description="Workshops, check-ins, and live sessions with your coach. Coming soon."
+      icon={<CalendarDays className="h-10 w-10" />}
+    >
     <PageTransition>
       <div className="mb-5">
         <div className="flex items-center gap-3">
@@ -96,5 +102,6 @@ export default function EventsPage() {
       )}
       </div>
     </PageTransition>
+    </FeatureGuard>
   )
 }
