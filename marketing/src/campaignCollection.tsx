@@ -78,7 +78,7 @@ const Footer: React.FC<{dark?: boolean}> = ({dark = true}) => (
       textTransform: 'uppercase',
     }}
   >
-    <span>BECOME.REDBTN.IO</span>
+    <span>BECOMEURBEST.COM</span>
     <span>Body · Mind · Routine</span>
   </div>
 );
@@ -143,17 +143,53 @@ const ProductFrame: React.FC<{
   </div>
 );
 
+// Arial Bold advance widths (em units). The layouts render fontWeight 950 against the
+// Arial stack, which resolves to Arial Bold, so these are the real glyph widths. Used to
+// fit a headline to its column instead of guessing from character count.
+const boldAdvance: Record<string, number> = {
+  ' ': 0.278, '!': 0.333, '"': 0.474, '#': 0.556, $: 0.556, '%': 0.889, '&': 0.722, "'": 0.238,
+  '(': 0.333, ')': 0.333, '*': 0.389, '+': 0.584, ',': 0.278, '-': 0.333, '.': 0.278, '/': 0.278,
+  '0': 0.556, '1': 0.556, '2': 0.556, '3': 0.556, '4': 0.556, '5': 0.556, '6': 0.556, '7': 0.556,
+  '8': 0.556, '9': 0.556, ':': 0.333, ';': 0.333, '?': 0.611, '@': 0.975,
+  A: 0.722, B: 0.722, C: 0.722, D: 0.722, E: 0.667, F: 0.611, G: 0.778, H: 0.722, I: 0.278,
+  J: 0.556, K: 0.722, L: 0.611, M: 0.833, N: 0.722, O: 0.778, P: 0.667, Q: 0.778, R: 0.722,
+  S: 0.667, T: 0.611, U: 0.722, V: 0.667, W: 0.944, X: 0.667, Y: 0.667, Z: 0.611,
+  a: 0.556, b: 0.611, c: 0.556, d: 0.611, e: 0.556, f: 0.333, g: 0.611, h: 0.611, i: 0.278,
+  j: 0.278, k: 0.556, l: 0.278, m: 0.889, n: 0.611, o: 0.611, p: 0.611, q: 0.611, r: 0.389,
+  s: 0.556, t: 0.333, u: 0.611, v: 0.556, w: 0.778, x: 0.556, y: 0.556, z: 0.5,
+};
+
+const tracking = 0.07;
+
+// Width of a headline line in em, including the negative letter-spacing the layouts apply.
+const lineEm = (line: string, track: number) =>
+  Math.max(
+    0.5,
+    [...line].reduce((sum, char) => sum + (boldAdvance[char] ?? 0.62), 0) - line.length * track,
+  );
+
+export const headlineSize = (campaign: Campaign, maxWidth: number, baseSize: number, track = tracking) => {
+  const widest = Math.max(...campaign.headline.map((line) => lineEm(line, track)));
+  return Math.min(baseSize, Math.floor(maxWidth / widest));
+};
+
+// Rendered height of the headline block at a given size (lineHeight 0.88).
+const headlineHeight = (campaign: Campaign, fontSize: number) =>
+  campaign.headline.length * fontSize * 0.88;
+
+const kickerHeight = 24;
+
 const Headline: React.FC<{
   campaign: Campaign;
   color?: string;
   maxWidth?: number;
   baseSize?: number;
   align?: 'left' | 'center';
-}> = ({campaign, color = white, maxWidth = 850, baseSize = 110, align = 'left'}) => {
-  const longest = Math.max(...campaign.headline.map((line) => line.length));
-  const fontSize = Math.min(baseSize, Math.floor(maxWidth / Math.max(longest * 0.56, 5)));
+  track?: number;
+}> = ({campaign, color = white, maxWidth = 850, baseSize = 110, align = 'left', track = tracking}) => {
+  const fontSize = headlineSize(campaign, maxWidth, baseSize, track);
   return (
-    <div style={{fontSize, lineHeight: 0.88, fontWeight: 950, letterSpacing: -fontSize * 0.07, color, textAlign: align}}>
+    <div style={{fontSize, lineHeight: 0.88, fontWeight: 950, letterSpacing: -fontSize * track, color, textAlign: align}}>
       {campaign.headline.map((line) => (
         <div key={line}>{line}</div>
       ))}
@@ -287,9 +323,9 @@ const LightLayout: React.FC<CampaignProps> = ({campaign}) => {
       <Footer dark={false} />
       <ProductFrame
         image={campaign.image}
-        width={story ? 500 : landscape ? 290 : 390}
+        width={story ? 500 : landscape ? 290 : 450}
         rotate={story ? -4 : landscape ? 4 : -5}
-        style={landscape ? {right: 60, top: 65} : story ? {left: 315, top: 900} : {right: -15, bottom: -225}}
+        style={landscape ? {right: 60, top: 65} : story ? {left: 315, top: 900} : {right: -15, top: 489}}
       />
       <Grain />
     </AbsoluteFill>
@@ -300,28 +336,38 @@ const CardLayout: React.FC<CampaignProps> = ({campaign}) => {
   const accent = colors[campaign.pillar];
   const story = campaign.format === 'story';
   const landscape = campaign.format === 'landscape';
-  const cardTop = story ? 730 : landscape ? 115 : 495;
+  const square = !story && !landscape;
+  // Square: the headline fills the column, so the card has to follow it down instead of
+  // sitting at a fixed height with a dead band above and a mostly empty interior below.
+  const squareHeadTop = 155;
+  // Poster-scale type needs looser tracking or a trailing period fuses into the last letter.
+  const squareTrack = 0.035;
+  const squareHeadSize = headlineSize(campaign, 920, 200, squareTrack);
+  const squareHeadBottom = squareHeadTop + kickerHeight + 22 + headlineHeight(campaign, squareHeadSize);
+  const squareCardTop = Math.min(660, Math.max(548, Math.round(squareHeadBottom + 46)));
+  const cardTop = story ? 730 : landscape ? 115 : squareCardTop;
   return (
     <AbsoluteFill style={darkBase}>
       <Grid />
       <div style={{position: 'absolute', left: 58, top: 48}}><Brand size={story ? 66 : 52} /></div>
-      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 120 : 175, width: landscape ? 640 : 910}}>
+      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 120 : squareHeadTop, width: landscape ? 640 : 950}}>
         <Kicker campaign={campaign} color={accent} />
-        <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 630 : 890} baseSize={story ? 128 : landscape ? 82 : 106} /></div>
+        <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 630 : story ? 890 : 920} baseSize={story ? 128 : landscape ? 82 : 200} track={square ? squareTrack : tracking} /></div>
       </div>
       <div
         style={{
           position: 'absolute', left: 58, right: landscape ? 445 : 58, top: cardTop, bottom: story ? 150 : 55,
-          borderRadius: 38, border: '2px solid #303036', background: '#131316', padding: story ? 44 : 32,
+          borderRadius: 38, border: '2px solid #303036', background: '#131316', padding: story ? 44 : 34,
+          display: 'flex', flexDirection: 'column', justifyContent: 'center',
         }}
       >
-        <div style={{display: 'flex', gap: 12, marginBottom: 28}}>
+        <div style={{display: 'flex', gap: 12, marginBottom: 26}}>
           {[accent, '#35353A', '#35353A'].map((c, index) => <div key={`${c}-${index}`} style={{width: index === 0 ? 72 : 28, height: 8, borderRadius: 99, background: c}} />)}
         </div>
-        <Copy campaign={campaign} width={story ? 760 : landscape ? 590 : 700} size={story ? 31 : 23} />
-        <div style={{marginTop: 32}}><Cta campaign={campaign} color={accent} /></div>
+        <Copy campaign={campaign} width={story ? 760 : landscape ? 590 : 500} size={story ? 31 : square ? 26 : 23} />
+        <div style={{marginTop: 30}}><Cta campaign={campaign} color={accent} /></div>
       </div>
-      <ProductFrame image={campaign.image} width={story ? 480 : landscape ? 330 : 350} rotate={4} style={landscape ? {right: 55, top: 70} : story ? {right: 70, top: 1020} : {right: -10, bottom: -210}} />
+      <ProductFrame image={campaign.image} width={story ? 480 : landscape ? 330 : 470} rotate={4} style={landscape ? {right: 55, top: 70} : story ? {right: 70, top: 1020} : {right: -20, top: cardTop - 12}} />
       <Grain />
     </AbsoluteFill>
   );
@@ -331,23 +377,31 @@ const TypeCropLayout: React.FC<CampaignProps> = ({campaign}) => {
   const accent = colors[campaign.pillar] === white ? '#D7D7D2' : colors[campaign.pillar];
   const story = campaign.format === 'story';
   const landscape = campaign.format === 'landscape';
+  // Square: fit the headline to the column, then hang the subline and the diagonal off it so
+  // the light band and the dark band both stay tight instead of leaving a dead strip.
+  const squareHeadTop = 175;
+  const squareTrack = 0.05;
+  const squareHeadSize = headlineSize(campaign, 900, 150, squareTrack);
+  const squareHeadBottom = squareHeadTop + kickerHeight + 22 + headlineHeight(campaign, squareHeadSize);
+  const squareCopyTop = Math.round(squareHeadBottom + 44);
+  const squareSplitTop = Math.round(squareCopyTop + 78 + 135);
   return (
     <AbsoluteFill style={{...darkBase, background: accent, color: ink}}>
       <div style={{position: 'absolute', left: 54, top: 46}}><Brand dark={false} size={story ? 66 : 52} /></div>
-      <div style={{position: 'absolute', left: 54, top: story ? 235 : landscape ? 140 : 180, width: landscape ? 690 : 920}}>
+      <div style={{position: 'absolute', left: 54, top: story ? 235 : landscape ? 140 : squareHeadTop, width: landscape ? 690 : 930}}>
         <Kicker campaign={campaign} color={ink} />
-        <div style={{marginTop: 22}}><Headline campaign={campaign} color={ink} maxWidth={landscape ? 680 : 900} baseSize={story ? 134 : landscape ? 88 : 112} /></div>
+        <div style={{marginTop: 22}}><Headline campaign={campaign} color={ink} maxWidth={landscape ? 680 : 900} baseSize={story ? 134 : landscape ? 88 : 150} track={story || landscape ? tracking : squareTrack} /></div>
       </div>
-      <div style={{position: 'absolute', left: 54, top: story ? 650 : landscape ? 420 : 500}}><Copy campaign={campaign} dark={false} color={ink} width={landscape ? 620 : 720} size={landscape ? 22 : 28} /></div>
+      <div style={{position: 'absolute', left: 54, top: story ? 650 : landscape ? 420 : squareCopyTop}}><Copy campaign={campaign} dark={false} color={ink} width={landscape ? 620 : story ? 720 : 560} size={landscape ? 22 : story ? 28 : 29} /></div>
       <div
         style={{
           position: 'absolute', background: ink,
           left: story ? 0 : landscape ? 790 : 0,
-          right: 0, top: story ? 870 : landscape ? 0 : 650, bottom: 0,
+          right: 0, top: story ? 870 : landscape ? 0 : squareSplitTop, bottom: 0,
           clipPath: story ? 'polygon(0 12%, 100% 0, 100% 100%, 0 100%)' : landscape ? 'polygon(18% 0, 100% 0, 100% 100%, 0 100%)' : 'polygon(0 10%, 100% 0, 100% 100%, 0 100%)',
         }}
       />
-      <ProductFrame image={campaign.image} width={story ? 455 : landscape ? 275 : 360} rotate={story ? 5 : -4} style={landscape ? {right: 60, top: 40} : story ? {right: 80, top: 900} : {right: 55, top: 620}} />
+      <ProductFrame image={campaign.image} width={story ? 455 : landscape ? 275 : 480} rotate={story ? 5 : -4} style={landscape ? {right: 60, top: 40} : story ? {right: 80, top: 900} : {right: 15, top: squareSplitTop - 120}} />
       <div style={{position: 'absolute', left: 54, bottom: story ? 80 : 44}}><Cta campaign={campaign} /></div>
       <Grain />
     </AbsoluteFill>
@@ -367,18 +421,18 @@ const SystemLayout: React.FC<CampaignProps> = ({campaign}) => {
     <AbsoluteFill style={darkBase}>
       <Grid />
       <div style={{position: 'absolute', left: 58, top: 48}}><Brand size={story ? 66 : 52} /></div>
-      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 120 : 175, width: landscape ? 670 : 920}}>
+      <div style={{position: 'absolute', left: 58, top: story ? 220 : landscape ? 120 : 175, width: landscape ? 670 : 950}}>
         <Kicker campaign={campaign} color={accent} />
-        <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 660 : 900} baseSize={story ? 128 : landscape ? 82 : 106} /></div>
-        <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 590 : 700} size={landscape ? 22 : 27} /></div>
+        <div style={{marginTop: 22}}><Headline campaign={campaign} maxWidth={landscape ? 660 : story ? 900 : 940} baseSize={story ? 128 : landscape ? 82 : 118} /></div>
+        <div style={{marginTop: 28}}><Copy campaign={campaign} width={landscape ? 590 : story ? 700 : 640} size={landscape ? 22 : story ? 27 : 30} /></div>
       </div>
-      <div style={{position: 'absolute', left: 60, top: story ? 760 : landscape ? 455 : 565, display: 'flex', gap: story ? 24 : 15}}>
+      <div style={{position: 'absolute', left: 60, top: story ? 760 : landscape ? 455 : 745, display: 'flex', gap: story ? 24 : 18}}>
         {nodes.map(([label, color]) => (
-          <div key={label} style={{padding: story ? '17px 29px' : '13px 21px', border: `3px solid ${color}`, borderRadius: 999, color, fontSize: story ? 24 : 18, fontWeight: 900, letterSpacing: 2.5}}>{label}</div>
+          <div key={label} style={{padding: story ? '17px 29px' : '16px 27px', border: `3px solid ${color}`, borderRadius: 999, color, fontSize: story ? 24 : 22, fontWeight: 900, letterSpacing: 2.5}}>{label}</div>
         ))}
       </div>
-      <Arrow color={accent} direction={landscape ? 'right' : 'up'} length={story ? 720 : landscape ? 360 : 390} style={landscape ? {left: 760, top: 450} : {left: 85, top: story ? 970 : 610}} />
-      <ProductFrame image={campaign.image} width={story ? 480 : landscape ? 285 : 350} rotate={story ? -4 : 5} style={landscape ? {right: 55, top: 55} : story ? {right: 70, top: 960} : {right: 30, bottom: -180}} />
+      <Arrow color={accent} direction={landscape ? 'right' : 'up'} length={story ? 720 : landscape ? 360 : 205} style={landscape ? {left: 760, top: 450} : {left: 85, top: story ? 970 : 800}} />
+      <ProductFrame image={campaign.image} width={story ? 480 : landscape ? 285 : 470} rotate={story ? -4 : 5} style={landscape ? {right: 55, top: 55} : story ? {right: 70, top: 960} : {right: 20, top: 520}} />
       <div style={{position: 'absolute', left: 58, bottom: story ? 88 : 48}}><Cta campaign={campaign} color={accent} /></div>
       <Grain />
     </AbsoluteFill>

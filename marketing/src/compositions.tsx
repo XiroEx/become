@@ -399,7 +399,7 @@ const ReelOutro: React.FC = () => {
             fontWeight: 900,
           }}
         >
-          BECOME.REDBTN.IO →
+          BECOMEURBEST.COM →
         </div>
       </div>
     </AbsoluteFill>
