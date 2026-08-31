@@ -33,6 +33,15 @@ import { isWithinInProgressWindow } from '@/lib/dayWindow'
  * incomplete log dated on that future day immediately, and without the upper
  * bound it would satisfy "not stale" and show up here as if the member were
  * mid-workout in a session they only scheduled, not started.
+ *
+ * That still isn't enough for a session planned for TODAY: its date already
+ * satisfies the window (it's today, not the future), so a member who used
+ * "Plan it" for later this same day — never having opened the live view —
+ * saw the pill anyway, worded "Get back into the workout" as if they were
+ * already mid-session. `startedAt` is the real "has this been engaged"
+ * signal (see IWorkoutLog.startedAt): it's only written once the live view
+ * is actually opened, so requiring it here excludes a same-day plan that was
+ * never started while still surfacing one the member genuinely began.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -52,7 +61,7 @@ export async function GET(request: NextRequest) {
     // Newest first: if a member somehow has two open logs, the one they are
     // actually in is the one they started last.
     const open = logs
-      .filter((w) => !w.completed && isWithinInProgressWindow(w.date as string))
+      .filter((w) => !w.completed && isWithinInProgressWindow(w.date as string) && w.startedAt != null)
       .sort((a, b) => new Date(b.date as string).getTime() - new Date(a.date as string).getTime())[0]
 
     if (!open) return NextResponse.json({ workout: null })
