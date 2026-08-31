@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
-import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
+import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import type { IWorkoutLog } from '@/models/UserProgress'
@@ -222,6 +222,13 @@ export async function GET(request: NextRequest) {
             .flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)),
         )
       : {}
+    const bellMap = withExercises
+      ? await bellFieldsBySlug(
+          (userProgress?.workoutLogs ?? [])
+            .filter((l) => l.kind === 'quick' || !l.programId)
+            .flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)),
+        )
+      : {}
 
     const logs = (userProgress?.workoutLogs ?? [])
       .filter((log) => includeIncomplete || log.completed)
@@ -261,6 +268,7 @@ export async function GET(request: NextRequest) {
                   // hand-edited log so the row can't render blank.
                   name: ex.name || 'Exercise',
                   trackingType: trackingFor(ex, trackingMap),
+                  ...bellFieldsFor(ex, bellMap),
                   sets: p?.sets ?? (ex.sets?.length || 1),
                   reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
                   ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),

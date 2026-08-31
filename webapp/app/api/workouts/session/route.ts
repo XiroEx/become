@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
-import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
+import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/session?id=<sessionId> — the full quick (kind:'quick') log
 // for one session: exercises with their logged sets. Powers the calendar/history
@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
     // What each exercise asks you to log — from the log itself, else the
     // catalog. Without it a resumed session came back untyped and unloggable.
     const bySlug = await trackingBySlug((log.exercises ?? []).map((ex) => ex.exerciseSlug))
+    const bellBySlug = await bellFieldsBySlug((log.exercises ?? []).map((ex) => ex.exerciseSlug))
 
     return NextResponse.json({
       session: {
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
           name: ex.name,
           exerciseSlug: ex.exerciseSlug || '',
           trackingType: trackingFor(ex, bySlug),
+          ...bellFieldsFor(ex, bellBySlug),
           sets: (ex.sets ?? []).map((s) => ({
             setNumber: s.setNumber,
             reps: s.reps ?? null,
