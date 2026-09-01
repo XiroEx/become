@@ -6,9 +6,9 @@
 //   with ?tab=exercises / ?tab=programs. Only the active tab's panel is mounted,
 //   so the embedded clients' fetches don't all fire at once.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, ChevronRight, CalendarClock, Bookmark, Loader2, GripVertical } from 'lucide-react'
+import { Dumbbell, Zap, Sparkles, Calendar, Clock, Plus, Upload, ChevronRight, CalendarClock, Bookmark, Loader2, GripVertical } from 'lucide-react'
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState, Toast } from '@/components/ui'
@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/useToast'
 import ExerciseLibraryClient from '../library/ExerciseLibraryClient'
 import MyProgramsClient from '../../programs/mine/MyProgramsClient'
 import SessionBuilder from '@/components/SessionBuilder'
+import ImportSessionFlow from '@/components/workout/ImportSessionFlow'
 import { BackButton } from '@/components/ui/BackButton'
 import { stashQuickSession, stashQuickSessionWithId, quickSessionOverviewHref } from '@/lib/quickSession/store'
 import { isFocusKey, type DraftExercise } from '@/lib/quickSession/types'
@@ -214,6 +215,12 @@ function SessionsTab() {
   // Deep-linked from "Build a custom session" (?build=1) so it opens straight
   // into the builder instead of requiring a second tap on "Build".
   const [building, setBuilding] = useState(() => shouldAutoOpenBuilder(searchParams))
+  const [importing, setImporting] = useState(false)
+  // Set by ImportSessionFlow, then handed to SessionBuilder as its initialDraft
+  // so the paste/upload result lands in the same review-and-edit surface a
+  // hand-built session uses. Cleared whenever the builder closes so a later,
+  // unrelated "Build" doesn't resurrect a stale import.
+  const [importedDraft, setImportedDraft] = useState<ComponentProps<typeof SessionBuilder>['initialDraft']>(undefined)
   const [opening, setOpening] = useState<string | null>(null)
   const [togglingFavorite, setTogglingFavorite] = useState<string | null>(null)
   const { toast, showToast } = useToast(2200)
@@ -416,16 +423,50 @@ function SessionsTab() {
       {/* Header + create toggle (mirrors the Exercises tab) */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Your sessions</h2>
-        {!building && (
-          <button
-            onClick={() => setBuilding(true)}
-            className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-700 active:bg-green-800"
-          >
-            <Plus className="h-4 w-4" />
-            Build
-          </button>
+        {!building && !importing && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setImporting(true)}
+              className="flex h-9 items-center gap-1.5 rounded-full border border-zinc-200 px-3.5 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <Upload className="h-4 w-4" />
+              Import
+            </button>
+            <button
+              onClick={() => setBuilding(true)}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-700 active:bg-green-800"
+            >
+              <Plus className="h-4 w-4" />
+              Build
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Import a session — paste/upload, same idea as program import but for
+          one workout (see components/workout/ImportSessionFlow.tsx). Success
+          hands off into the same builder panel below for review before saving. */}
+      {importing && (
+        <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Import a session</h3>
+            <button
+              onClick={() => setImporting(false)}
+              className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              Cancel
+            </button>
+          </div>
+          <ImportSessionFlow
+            onImported={(draft) => {
+              setImportedDraft(draft)
+              setImporting(false)
+              setBuilding(true)
+            }}
+            onCancel={() => setImporting(false)}
+          />
+        </div>
+      )}
 
       {/* Inline builder (revealed on demand) */}
       {building && (
@@ -433,13 +474,22 @@ function SessionsTab() {
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-semibold text-zinc-900 dark:text-white">Build a session</h3>
             <button
-              onClick={() => setBuilding(false)}
+              onClick={() => {
+                setBuilding(false)
+                setImportedDraft(undefined)
+              }}
               className="text-sm font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
             >
               Cancel
             </button>
           </div>
-          <SessionBuilder onLaunch={() => setBuilding(false)} />
+          <SessionBuilder
+            initialDraft={importedDraft}
+            onLaunch={() => {
+              setBuilding(false)
+              setImportedDraft(undefined)
+            }}
+          />
         </div>
       )}
 

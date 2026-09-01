@@ -23,6 +23,7 @@ import {
   type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
+import { curatedGlutesSession } from "@/lib/quickSession/curatedGlutes";
 import { SESSIONS_HUB_HREF, BUILD_SESSION_HREF } from "@/lib/quickSession/hubLinks";
 import { pickRecentQuickSessions } from "@/lib/quickSession/recentSessions";
 import { logPlanAvailability, localDateStr } from "@/lib/quickSession/logPlanDate";
@@ -190,6 +191,13 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
       setGenerating(true);
       const genId = ++activeGenRef.current;
       const headers = authHeaders();
+
+      // ── Coach-curated fixed session (bypasses AI + the algorithmic generator) ──
+      if (focus === "glutes") {
+        setPreview(curatedGlutesSession());
+        setGenerating(false);
+        return;
+      }
 
       // ── AI path ────────────────────────────────────────────────────────────
       if (useAi) {
