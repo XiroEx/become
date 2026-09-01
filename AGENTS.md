@@ -230,6 +230,32 @@ Two guards to keep in mind when adding a gate:
   Every create path uses this one. A create path left on `requireFeature` is
   silently ungated.
 
+#### The client side of a gate
+
+Four pieces, and nothing else should exist:
+
+| Piece | Job |
+|---|---|
+| `hooks/useEntitlements.ts` | The ONLY caller of `GET /api/me/entitlements`. Module-level snapshot + 60s TTL + a localStorage seed, so a screen with three gated components makes one request. |
+| `lib/entitlementsClient.ts` | Client-safe types and copy, plus `gateFrom(status, body)` — the one 403 parser. `lib/entitlements.ts` imports mongoose, so a component may only take TYPES from it. |
+| `components/UpgradeSheet.tsx` | The one upsell. Renders `gate.error` verbatim; the server owns the wording. |
+| `components/TierGate.tsx` | Wraps a whole surface a free member may see but not use (Vision). |
+
+Rules that are easy to get wrong:
+- **Read `canCreate`, never `allowed`.** `allowed` is true for a capped free
+  member on purpose (that is what lets them edit and delete their own rows), so
+  a create button wired to `allowed` is silently ungated.
+- **Every tier surface must bail on `enforced === false`.** That single check is
+  what makes the whole epic ship dark, and it is asserted in
+  `tests/unit/entitlements/uiSurfaces.test.tsx`.
+- `gateFrom` only accepts a 403 carrying BOTH `feature` and `requiresTier`, so
+  an ownership or role 403 still falls through to the caller's normal error.
+- UI locks are explanatory. The client fails OPEN (network blip → no lock); the
+  server is the gate.
+- Nutrition AI refusals arrive as `EntitlementRequiredError` from
+  `lib/nutrition/aiEngine.ts`, threaded from `runStore`'s HTTP status. Check it
+  BEFORE `PlateUnavailableError` or a paywall reads as an outage.
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"

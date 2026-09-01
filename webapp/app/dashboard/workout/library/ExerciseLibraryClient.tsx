@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
-import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell, Globe2, Clock, ArrowDownAZ } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell, Globe2, Clock, ArrowDownAZ, Lock } from "lucide-react";
 import { Card } from "@/components/ui";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import AdminVideoPreview from "@/app/dashboard/admin/exercises/_form/AdminVideoPreview";
@@ -16,6 +16,9 @@ import { inferCustomExerciseMuscleGroup, inferCustomExerciseCategory } from "@/l
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { CUSTOM_TAG } from "@/lib/customExerciseTags";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, syntheticGate, type GatePayload } from "@/lib/entitlementsClient";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -127,6 +130,17 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
   const [exercises, setExercises] = useState<CustomExercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [gate, setGate] = useState<GatePayload | null>(null);
+  const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
+    useEntitlements();
+  // canCreate, not allowed: DELETE and edit stay enabled at the cap on purpose
+  // — deleting one is the only way back under an inventory limit.
+  const canCreate =
+    !entitlements ||
+    entitlements.enforced === false ||
+    entitlementFor("custom-exercises")?.canCreate !== false;
+  const openCreate = () =>
+    canCreate ? setShowForm(true) : setGate(syntheticGate("custom-exercises"));
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -196,12 +210,20 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       });
       const data = await res.json();
       if (!res.ok) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setForm(p => ({ ...p, submitting: false }));
+          setGate(g);
+          void refreshEntitlements();
+          return;
+        }
         setForm(p => ({ ...p, submitting: false, error: data.error || "Failed to create" }));
         return;
       }
       setExercises(prev => [...prev, data.exercise]);
       setForm(EMPTY_FORM);
       setShowForm(false);
+      void refreshEntitlements();
     } catch {
       setForm(p => ({ ...p, submitting: false, error: "Network error" }));
     }
@@ -349,10 +371,10 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
 
   const addButton = !showForm && (
     <button
-      onClick={() => setShowForm(true)}
+      onClick={openCreate}
       className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
     >
-      <Plus className="h-4 w-4" />
+      {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
       Add
     </button>
   );
@@ -412,6 +434,7 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
 
   const content = (
     <>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       {/* Header — embedded (Hub tab) skips the Add button here; it renders
           below the search bar instead so this row doesn't sit empty. */}
       {embedded ? null : (
@@ -554,10 +577,10 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
             Tap &quot;Add&quot; to create your first exercise.
           </p>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={openCreate}
             className="mt-4 flex items-center gap-1.5 rounded-full bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
-            <Plus className="h-4 w-4" />
+            {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
             Create Exercise
           </button>
         </div>

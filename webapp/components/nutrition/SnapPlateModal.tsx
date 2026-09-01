@@ -3,13 +3,17 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare, ChevronDown } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare, ChevronDown, Lock } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
   plateEstimator,
   PlateUnavailableError,
+  EntitlementRequiredError,
 } from '@/lib/nutrition/aiEngine'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
+import { useEntitlements } from '@/hooks/useEntitlements'
 import type { PlateEstimate, EstimatedPlateItem } from '@/lib/nutrition/aiSeams'
 import { getToken } from '@/lib/clientAuth'
 import { Toast } from '@/components/ui'
@@ -600,8 +604,12 @@ export default function SnapPlateModal({
   const noteRef = useRef('')
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [addMoreOpen, setAddMoreOpen] = useState(false)
+  // A gate refused the estimate (or the meal save) — the upgrade sheet's input.
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
+  const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
+    useEntitlements()
 
   useLockScroll(open)
 
@@ -762,6 +770,14 @@ export default function SnapPlateModal({
       }
       setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
+      // A plan/allowance refusal is NOT a service fault — say so with the
+      // upsell rather than "our end, not yours", which would be a lie.
+      if (err instanceof EntitlementRequiredError) {
+        setState({ phase: 'idle' })
+        setGate(err.gate)
+        void refreshEntitlements()
+        return
+      }
       if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] estimate error', err)
       setState({
         phase: 'error',
@@ -769,7 +785,7 @@ export default function SnapPlateModal({
         hint: 'That one is on our end, not yours. Give it a minute and try again.',
       })
     }
-  }, [])
+  }, [refreshEntitlements])
 
   const handleDescribe = () => {
     const t = describeText.trim()
@@ -821,13 +837,21 @@ export default function SnapPlateModal({
       }
       setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
+      // Keep the estimate they already have — a refused CORRECTION must never
+      // cost them the work the correction was refining.
+      if (err instanceof EntitlementRequiredError) {
+        setState({ phase: 'review', items: priorItems, imageThumb })
+        setGate(err.gate)
+        void refreshEntitlements()
+        return
+      }
       if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] correction error', err)
       // Nothing came back at all. Rephrasing cannot fix a backend that is not
       // answering, so do not ask for it. See runEstimate for the full reasoning.
       setState({ phase: 'review', items: priorItems, imageThumb })
       showToast("Couldn't reach the food AI. Try again in a minute.", 'error')
     }
-  }, [showToast])
+  }, [showToast, refreshEntitlements])
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -1108,12 +1132,20 @@ export default function SnapPlateModal({
         headers,
         body: JSON.stringify({ name: name.trim(), items, defaultTag: selectedTag }),
       })
-      if (res.status === 402 || res.status === 403) {
-        showToast('Saving meals needs a Plus plan.', 'error')
-        return false
-      }
       if (!res.ok) {
         const d = await res.json().catch(() => null)
+        // A real gate carries its own copy and its own remaining/resets — show
+        // the sheet instead of a toast that invents a plan name.
+        const g = gateFrom(res.status, d)
+        if (g) {
+          setGate(g)
+          void refreshEntitlements()
+          return false
+        }
+        if (res.status === 402 || res.status === 403) {
+          showToast('Saving meals needs a Plus plan.', 'error')
+          return false
+        }
         showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save meal.", 'error')
         return false
       }
@@ -1153,6 +1185,10 @@ export default function SnapPlateModal({
         onChange={handleFileChange}
         aria-hidden="true"
       />
+
+      {/* Raised by an entitlement refusal on the estimate, the correction, or
+          the meal save. Sits above this modal (z-[200]/[201] vs z-[60]). */}
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
 
       <AnimatePresence>
         {open && (
@@ -1237,6 +1273,21 @@ export default function SnapPlateModal({
                         Describe it instead
                       </button>
                     </div>
+                    {/* Remaining scans. Photo, upload and describe share ONE
+                        daily allowance, so it belongs on the chooser rather
+                        than on any single button. Hidden entirely while
+                        enforcement is off, and for anyone uncapped. */}
+                    {(() => {
+                      if (!entitlements?.enforced) return null
+                      const scans = entitlementFor('ai-food-estimate')
+                      if (!scans || scans.limit === null || scans.remaining === null) return null
+                      return (
+                        <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                          {scans.remaining} of {scans.limit} free scan
+                          {scans.limit === 1 ? '' : 's'} left today
+                        </p>
+                      )
+                    })()}
                   </div>
                 )}
 
@@ -1382,6 +1433,10 @@ export default function SnapPlateModal({
                   onLog={handleLog}
                   onSaveRecipe={handleSaveRecipe}
                   onRetry={handleRetry}
+                  mealsAtCap={
+                    !!entitlements?.enforced && entitlementFor('custom-meals')?.canCreate === false
+                  }
+                  onCappedSave={() => setGate(syntheticGate('custom-meals'))}
                 />
               )}
             </motion.div>
@@ -1797,9 +1852,13 @@ interface ReviewFooterProps {
   onLog: () => void
   onSaveRecipe: (name: string) => Promise<boolean>
   onRetry: () => void
+  /** Saved-meal slots are full. Explanatory only — the server is the gate. */
+  mealsAtCap?: boolean
+  /** Tapped "Save as meal" while capped. */
+  onCappedSave?: () => void
 }
 
-function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecipe, onRetry }: ReviewFooterProps) {
+function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecipe, onRetry, mealsAtCap, onCappedSave }: ReviewFooterProps) {
   const totals = runningTotal(items)
   const activeCount = items.filter((it) => !it.removed).length
   const [saveOpen, setSaveOpen] = useState(false)
@@ -1900,11 +1959,11 @@ function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecip
         </div>
       ) : (
         <button
-          onClick={() => setSaveOpen(true)}
+          onClick={() => (mealsAtCap ? onCappedSave?.() : setSaveOpen(true))}
           disabled={activeCount === 0}
           className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-800 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
-          <BookmarkPlus className="h-3.5 w-3.5" />
+          {mealsAtCap ? <Lock className="h-3.5 w-3.5" /> : <BookmarkPlus className="h-3.5 w-3.5" />}
           Save as meal
         </button>
       )}

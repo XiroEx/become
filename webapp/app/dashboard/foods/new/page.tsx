@@ -6,6 +6,8 @@ import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { ArrowLeft, Loader2, Save, AlertCircle } from 'lucide-react'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 const CATEGORIES = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -44,6 +46,7 @@ export default function NewCustomFoodPage() {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [gate, setGate] = useState<GatePayload | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -114,6 +117,14 @@ export default function NewCustomFoodPage() {
 
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
+        // Out of free custom-food slots — a price, so the upsell, not the
+        // red banner a validation failure gets.
+        const g = gateFrom(res.status, d)
+        if (g) {
+          setGate(g)
+          setSaving(false)
+          return
+        }
         setError(d?.error || 'Failed to create food.')
         setSaving(false)
         return
@@ -145,6 +156,7 @@ export default function NewCustomFoodPage() {
 
   return (
     <PageTransition className="space-y-5 pb-24">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <header className="flex items-center justify-between">
         <button
           onClick={() => router.back()}

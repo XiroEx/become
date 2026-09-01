@@ -13,6 +13,7 @@
 //     condition. Returns ProductMatch[] when the route eventually resolves.
 
 import { runAiTask } from '@/lib/ai/runClient'
+import type { GatePayload } from '@/lib/entitlementsClient'
 import type {
   PlateEstimate,
   PlateEstimator,
@@ -40,6 +41,21 @@ export class ProductUnavailableError extends Error {
   }
 }
 
+/**
+ * The member's plan (or their allowance for today) refused the estimate.
+ *
+ * This MUST be checked before PlateUnavailableError: both end up as "no
+ * estimate came back", but one is our service being down and the other is a
+ * price. Telling someone the food AI is unreachable when they have simply used
+ * today's free scan sends them retrying against a wall.
+ */
+export class EntitlementRequiredError extends Error {
+  constructor(public readonly gate: GatePayload) {
+    super(gate.error)
+    this.name = 'EntitlementRequiredError'
+  }
+}
+
 // ── PlateEstimator ───────────────────────────────────────────────────────────
 
 class PlateEstimatorImpl implements PlateEstimator {
@@ -52,6 +68,8 @@ class PlateEstimatorImpl implements PlateEstimator {
     })
     const est = r.result as PlateEstimate | undefined
     if (r.ok && est && Array.isArray(est.items)) return est
+    // A gate refused it — a price, not an outage. Checked FIRST.
+    if (r.error === 'entitlement' && r.gate) throw new EntitlementRequiredError(r.gate)
     // unavailable / failure → one error type for callers.
     throw new PlateUnavailableError()
   }
@@ -65,6 +83,7 @@ class PlateEstimatorImpl implements PlateEstimator {
     })
     const est = r.result as PlateEstimate | undefined
     if (r.ok && est && Array.isArray(est.items)) return est
+    if (r.error === 'entitlement' && r.gate) throw new EntitlementRequiredError(r.gate)
     throw new PlateUnavailableError()
   }
 }

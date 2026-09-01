@@ -18,6 +18,9 @@ import { SYSTEM_INFO, getUnlockedSystems } from '@/lib/mindXP'
 import { composeThemedSession, systemHasScene } from '@/lib/mind/composeSession'
 import type { MindSessionPlan, SessionContext } from '@/lib/mind/moves'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
+import { useEntitlements } from '@/hooks/useEntitlements'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
 
 const ICONS: Record<string, LucideIcon> = { Wind, Sparkles, Eye, BookOpen, Sword, Shield, Users }
 
@@ -33,6 +36,10 @@ export default function ArsenalClient() {
   const [identityStatement, setIdentityStatement] = useState<string | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [gate, setGate] = useState<GatePayload | null>(null)
+  const { data: entitlements, feature } = useEntitlements()
+  const visionPlusLocked =
+    entitlements?.enforced === true && feature('vision')?.allowed === false
   const [activePlan, setActivePlan] = useState<MindSessionPlan | null>(null)
 
   useEffect(() => {
@@ -94,6 +101,7 @@ export default function ArsenalClient() {
 
   return (
     <PageTransition className="pb-6">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <header className="mb-2 flex items-center gap-3">
         <BackButton fallbackHref="/dashboard/mind" />
         <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white sm:text-3xl">Your Arsenal</h1>
@@ -160,19 +168,26 @@ export default function ArsenalClient() {
               <div className="space-y-3" data-tour="arsenal-locked">
                 {lockedIds.map((id) => {
                   const info = SYSTEM_INFO[id]
+                  // Vision is locked by PLAN, not by chapter — see the same
+                  // note in components/mind/TrainingGrounds.tsx.
+                  const planLocked = id === 'vision' && visionPlusLocked
+                  const Wrapper = planLocked ? 'button' : 'div'
                   return (
-                    <div
+                    <Wrapper
                       key={id}
-                      className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 opacity-70 dark:border-zinc-800 dark:bg-zinc-900/40"
+                      {...(planLocked ? { type: 'button' as const, onClick: () => setGate(syntheticGate('vision')) } : {})}
+                      className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-left opacity-70 dark:border-zinc-800 dark:bg-zinc-900/40"
                     >
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-zinc-200 dark:bg-zinc-800">
                         <Lock className="h-5 w-5 text-zinc-400" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-semibold text-zinc-600 dark:text-zinc-400">{info.label}</h3>
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500">Unlocks in Chapter {info.chapter}</p>
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                          {planLocked ? 'Plus' : `Unlocks in Chapter ${info.chapter}`}
+                        </p>
                       </div>
-                    </div>
+                    </Wrapper>
                   )
                 })}
               </div>

@@ -8,6 +8,8 @@ import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
@@ -187,6 +189,8 @@ export default function ExerciseSwapModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Out of free custom-exercise slots — shown as an upsell, not a form error.
+  const [gate, setGate] = useState<GatePayload | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<Filters>({
     equipment: null,
@@ -427,6 +431,12 @@ export default function ExerciseSwapModal({
       });
       const data = await res.json();
       if (!res.ok) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setCustomForm(p => ({ ...p, submitting: false }));
+          setGate(g);
+          return;
+        }
         setCustomForm(p => ({ ...p, submitting: false, error: data.error || "Failed to create" }));
         return;
       }
@@ -449,6 +459,7 @@ export default function ExerciseSwapModal({
 
   return (
     <AnimatePresence>
+      <UpgradeSheet key="swap-upgrade" open={!!gate} gate={gate} onClose={() => setGate(null)} />
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }}

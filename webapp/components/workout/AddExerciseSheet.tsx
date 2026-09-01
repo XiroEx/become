@@ -22,6 +22,8 @@ import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
 import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 export type Placement = 'end' | 'group'
 
@@ -86,6 +88,9 @@ export default function AddExerciseSheet({
   const [searching, setSearching] = useState(false)
   const [creating, setCreating] = useState(false)
   const [creatingError, setCreatingError] = useState<string | null>(null)
+  // Custom-exercise slots are full — a price, not a validation error, so it
+  // gets the upgrade sheet rather than the inline red text.
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES)
   const [picked, setPicked] = useState<SearchExercise | null>(null)
@@ -211,6 +216,11 @@ export default function AddExerciseSheet({
       })
       const data = (await res.json()) as { exercise?: SearchExercise; error?: string }
       if (!res.ok || !data.exercise) {
+        const g = gateFrom(res.status, data)
+        if (g) {
+          setGate(g)
+          return
+        }
         setCreatingError(data.error || 'Failed to create exercise')
         return
       }
@@ -273,6 +283,7 @@ export default function AddExerciseSheet({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" data-testid="add-exercise-sheet">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className={`relative min-h-[60vh] max-h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:min-h-0 sm:max-w-md sm:rounded-3xl ${surface}`}>
         <div className="mb-3 flex items-center justify-between">

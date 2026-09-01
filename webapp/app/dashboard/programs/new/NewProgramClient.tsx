@@ -1,71 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Sparkles, Lock, PencilLine, Upload } from "lucide-react";
 import ProgramCreator from "@/app/dashboard/admin/programs/_editors/ProgramCreator";
 import PageTransition from "@/components/PageTransition";
 import ImportProgramFlow from "./ImportProgramFlow";
 import type { ImportedProgram } from "@/lib/workout/importProgram";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { syntheticGate, tierLabel, type GatePayload, type Tier } from "@/lib/entitlementsClient";
 
 const USER_CREATE_DRAFT_KEY = "become_user_program_creator_draft";
-
-interface EntitlementResponse {
-  role: string;
-  tier: string;
-  features: Record<string, { allowed: boolean; requiresTier: string }>;
-}
 
 type EntryMode = "choose" | "scratch" | "import";
 
 export default function NewProgramClient() {
-  const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [requiresTier, setRequiresTier] = useState<string>('plus');
+  const { data, loading, feature } = useEntitlements();
   const [entryMode, setEntryMode] = useState<EntryMode>("choose");
   const [imported, setImported] = useState<ImportedProgram | null>(null);
+  const [gate, setGate] = useState<GatePayload | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        if (!token) {
-          if (!cancelled) {
-            setAllowed(false);
-            setLoading(false);
-          }
-          return;
-        }
-        const res = await fetch('/api/me/entitlements', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          if (!cancelled) {
-            setAllowed(false);
-            setLoading(false);
-          }
-          return;
-        }
-        const data: EntitlementResponse = await res.json();
-        const feature = data.features?.['custom-programs'];
-        if (!cancelled) {
-          setAllowed(!!feature?.allowed);
-          if (feature?.requiresTier) setRequiresTier(feature.requiresTier);
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setAllowed(false);
-          setLoading(false);
-        }
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, []);
+  const ent = feature('custom-programs');
+  const requiresTier: Tier = ent?.requiresTier ?? 'plus';
+  // canCreate, NOT allowed: a free member IS allowed to touch custom programs
+  // (they can edit and delete the ones they have) — the question this page asks
+  // is whether they may build ANOTHER one.
+  const canCreate = !data || data.enforced === false || ent?.canCreate !== false;
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <PageTransition className="pb-6">
         <div className="mx-auto max-w-3xl px-0 py-12 sm:px-6">
@@ -76,7 +39,7 @@ export default function NewProgramClient() {
     );
   }
 
-  if (!allowed) {
+  if (!canCreate) {
     return (
       <PageTransition className="pb-6">
         <div className="mx-auto max-w-2xl px-0 py-12 sm:px-6">
@@ -85,7 +48,7 @@ export default function NewProgramClient() {
               <Sparkles className="h-8 w-8" />
             </div>
             <h1 className="mt-6 text-2xl font-extrabold text-zinc-900 dark:text-white">
-              Custom Programs are a {requiresTier.charAt(0).toUpperCase() + requiresTier.slice(1)} feature
+              Custom Programs are a {tierLabel(requiresTier)} feature
             </h1>
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
               Build your own multi-phase training program — pick the exercises, prescribe the
@@ -118,11 +81,11 @@ export default function NewProgramClient() {
 
             <button
               type="button"
-              onClick={() => alert('Billing coming soon. We’ll email you when upgrades are live.')}
+              onClick={() => setGate(syntheticGate('custom-programs', requiresTier))}
               className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:from-purple-700 hover:to-indigo-700"
             >
               <Lock className="h-4 w-4" />
-              Upgrade to {requiresTier.charAt(0).toUpperCase() + requiresTier.slice(1)}
+              Upgrade to {tierLabel(requiresTier)}
             </button>
 
             <div className="mt-4">
@@ -135,6 +98,8 @@ export default function NewProgramClient() {
             </div>
           </div>
         </div>
+
+        <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       </PageTransition>
     );
   }
