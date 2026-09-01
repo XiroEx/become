@@ -18,6 +18,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
+import { hydrateQuickSessionVideos } from "@/lib/quickSession/hydrateVideos";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
@@ -418,7 +419,11 @@ export default function WorkoutFormPage() {
           }));
           const title = stored?.title || "Quick Session";
           setQuickNeedsName(shouldPromptForQuickSessionName(stored));
-          const wd: WorkoutData = { day: title, title, exercises: exs.length ? exs : fallbackWorkout.exercises };
+          // Mirrors LiveWorkoutClient: a quick session has no program to
+          // denormalize videoUrl/thumbnailUrl/etc through, so resolve them by
+          // slug here or this view falls back to the legacy by-name lookup.
+          const hydratedExs = await hydrateQuickSessionVideos(exs, localStorage.getItem("token"));
+          const wd: WorkoutData = { day: title, title, exercises: hydratedExs.length ? hydratedExs : fallbackWorkout.exercises };
           setWorkout(wd);
 
           // "Last session: 185 lbs × 8" — a quick session has no program to ask
