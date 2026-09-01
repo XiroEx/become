@@ -155,9 +155,24 @@ const StepList: React.FC<{steps: string[]; accent: string; size?: number; gap?: 
   </div>
 );
 
+/**
+ * The ask is joining the app, not visiting a domain — JOIN BECOME leads and the
+ * URL rides underneath as the way there. Typeset, never button-styled.
+ */
+const JoinLockup: React.FC<{accent: string; size?: number}> = ({accent, size = 30}) => (
+  <div>
+    <div style={{fontSize: size, fontWeight: 900, letterSpacing: size * 0.14, color: white, whiteSpace: 'nowrap', lineHeight: 1.1}}>
+      JOIN BECOME <span style={{color: accent}}>→</span>
+    </div>
+    <div style={{marginTop: Math.round(size * 0.42), fontSize: Math.round(size * 0.62), fontWeight: 700, letterSpacing: size * 0.1, color: muted, whiteSpace: 'nowrap'}}>
+      BECOMEURBEST.COM
+    </div>
+  </div>
+);
+
 /** The hook's numbers at poster scale, right-aligned over the cover phone. */
 const StatStack: React.FC<{stats: {value: string; label: string}[]; accent: string}> = ({stats, accent}) => (
-  <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 40}}>
+  <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 32}}>
     <div style={{width: 30, height: 4, background: accent}} />
     {stats.map((stat) => (
       <div key={stat.label} style={{textAlign: 'right'}}>
@@ -181,9 +196,9 @@ const StatStack: React.FC<{stats: {value: string; label: string}[]; accent: stri
 const Chrome: React.FC<{
   slide: Slide;
   accent: string;
-  showUrl?: boolean;
+  showJoin?: boolean;
   pillar?: 'left' | 'right';
-}> = ({slide, accent, showUrl = true, pillar = 'right'}) => (
+}> = ({slide, accent, showJoin = true, pillar = 'right'}) => (
   <>
     <div style={{position: 'absolute', left: M, top: 52, zIndex: 5}}>
       <Brand size={54} />
@@ -203,7 +218,7 @@ const Chrome: React.FC<{
       }}
     >
       {pillar === 'left' ? <PillarLine size={19} /> : null}
-      {showUrl ? <UrlLockup size={26} /> : null}
+      {showJoin ? <JoinLockup accent={accent} size={30} /> : null}
     </div>
     {pillar === 'right' ? (
       <div style={{position: 'absolute', right: M, bottom: 60, zIndex: 5}}>
@@ -221,9 +236,9 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
   return (
     <AbsoluteFill style={base}>
       <Grid />
-      <Phone image={slide.image} width={392} style={{right: -46, bottom: -120, transform: 'rotate(5deg)'}} />
+      <Phone image={slide.image} width={450} style={{right: -55, bottom: -150, transform: 'rotate(5deg)'}} />
       {slide.stats ? (
-        <div style={{position: 'absolute', right: M, top: 172, zIndex: 3}}>
+        <div style={{position: 'absolute', right: M, top: 150, zIndex: 3}}>
           <StatStack stats={slide.stats} accent={accent} />
         </div>
       ) : null}
@@ -232,7 +247,7 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
           position: 'absolute',
           left: M,
           top: 196,
-          bottom: 168,
+          bottom: 250,
           width: 620,
           zIndex: 3,
           display: 'flex',
@@ -265,8 +280,8 @@ const Detail: React.FC<SlideProps> = ({slide}) => {
       <Grid />
       <Phone
         image={slide.image}
-        width={slide.phoneWidth ?? 372}
-        style={{right: 56, top: '52%', transform: 'translateY(-50%)'}}
+        width={slide.phoneWidth ?? 440}
+        style={{right: 36, top: '52%', transform: 'translateY(-50%)'}}
       />
       <div
         style={{
@@ -274,7 +289,7 @@ const Detail: React.FC<SlideProps> = ({slide}) => {
           left: M,
           top: 196,
           bottom: 150,
-          width: 540,
+          width: 500,
           zIndex: 3,
           display: 'flex',
           flexDirection: 'column',
@@ -284,16 +299,16 @@ const Detail: React.FC<SlideProps> = ({slide}) => {
         <div>
           <Kicker text={slide.kicker} color={accent} />
           <div style={{marginTop: 24}}>
-            <Headline lines={slide.headline} maxWidth={540} baseSize={150} />
+            <Headline lines={slide.headline} maxWidth={500} baseSize={150} />
           </div>
         </div>
         {/* The lead carries a hairline under it so the column reads as two measured
             gaps rather than one dead field between the headline and the bullets. */}
-        <div style={{width: 512}}>
+        <div style={{width: 470}}>
           <div style={{fontSize: 33, lineHeight: 1.36, color: muted}}>{slide.lead}</div>
-          <div style={{marginTop: 40, width: 512, height: 1, background: 'rgba(247,247,245,0.16)'}} />
+          <div style={{marginTop: 40, width: 470, height: 1, background: 'rgba(247,247,245,0.16)'}} />
         </div>
-        <Bullets items={slide.bullets ?? []} accent={accent} width={478} size={36} gap={46} />
+        <Bullets items={slide.bullets ?? []} accent={accent} width={430} size={36} gap={46} />
       </div>
       <Chrome slide={slide} accent={accent} />
       <Grain />
@@ -308,7 +323,7 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
   return (
     <AbsoluteFill style={base}>
       <Grid />
-      <Phone image={slide.image} width={330} style={{right: -34, bottom: -150, transform: 'rotate(5deg)'}} />
+      <Phone image={slide.image} width={420} style={{right: -55, bottom: -170, transform: 'rotate(5deg)'}} />
       <div
         style={{
           position: 'absolute',
@@ -336,10 +351,10 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
             frame never carries the URL twice. */}
         <div>
           <div style={{width: 120, height: 4, background: accent, marginBottom: 34}} />
-          <UrlLockup size={46} />
+          <JoinLockup accent={accent} size={50} />
         </div>
       </div>
-      <Chrome slide={slide} accent={accent} showUrl={false} pillar="left" />
+      <Chrome slide={slide} accent={accent} showJoin={false} pillar="left" />
       <Grain />
     </AbsoluteFill>
   );
