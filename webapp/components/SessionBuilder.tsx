@@ -45,6 +45,14 @@ export interface SessionBuilderProps {
   /** Fired right before navigating to the live session (e.g. close a modal). */
   onLaunch?: () => void;
   className?: string;
+  /** Pre-seeds the draft — e.g. from ImportSessionFlow's paste/upload import.
+   *  Applied once, on mount, same as a fresh initial value. */
+  initialDraft?: {
+    title: string;
+    exercises: DraftExercise[];
+    /** Parsed names that couldn't be matched to a real exercise — surfaced as a dismissible notice. */
+    unresolved?: string[];
+  };
 }
 
 function authHeaders(): HeadersInit {
@@ -54,15 +62,16 @@ function authHeaders(): HeadersInit {
   };
 }
 
-export default function SessionBuilder({ onLaunch, className }: SessionBuilderProps) {
+export default function SessionBuilder({ onLaunch, className, initialDraft }: SessionBuilderProps) {
   const router = useRouter();
 
-  const [title, setTitle] = useState("Quick Session");
-  const [titleWasEdited, setTitleWasEdited] = useState(false);
+  const [title, setTitle] = useState(() => initialDraft?.title || "Quick Session");
+  const [titleWasEdited, setTitleWasEdited] = useState(() => !!initialDraft?.title);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchExercise[]>([]);
   const [searching, setSearching] = useState(false);
-  const [chosen, setChosen] = useState<DraftExercise[]>([]);
+  const [chosen, setChosen] = useState<DraftExercise[]>(() => initialDraft?.exercises ?? []);
+  const [unresolved, setUnresolved] = useState<string[]>(() => initialDraft?.unresolved ?? []);
   // Your custom exercises — merged into search results; creatable inline below.
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
   const [creating, setCreating] = useState(false);
@@ -368,6 +377,27 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
 
   return (
     <div className={className}>
+      {/* Imported exercises that couldn't be matched to the library — the user
+          adds them by hand via the search box below, same as any other exercise. */}
+      {unresolved.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Couldn&apos;t match {unresolved.length} {unresolved.length === 1 ? "exercise" : "exercises"} to your library</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+              Search above to add: {unresolved.join(", ")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUnresolved([])}
+            aria-label="Dismiss"
+            className="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-200"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Title */}
       <input
         type="text"
