@@ -765,5 +765,33 @@
       "references/pattern-catalogue.md",
       "references/filing-guide.md"
     ]
+  },
+  {
+    "name": "carousel-editing",
+    "batch": "production-pipelines",
+    "description": "Edits and extends the Become Instagram and TikTok carousel decks that live in marketing/src/carousels.json and render through marketing/src/carouselSlides.tsx — the locked 1080x1350 template with cover, detail, trio and CTA variants, the client standing rules (phones anchored at the red line and big, JOIN BECOME closing every slide, lists vertically centered, stats read straight off the visible screen, zero em dashes, no step that starts with Or), read-only Playwright captures with a non-GET route guard, sharp crops that drop status bars and beta headers, render plus 360px review, marketing-only PRs, and the email-plus-captions handoff. Use when the user says \"fix up the carousel,\" \"the phone should be where I put the red line,\" \"make it three phones,\" \"add another phone with this photo,\" \"fix the spacing on the lists,\" \"send the final drafts to the become email,\" \"give me a caption for Instagram and TikTok,\" or attaches annotated slides. For new words see copywriting; for one-off crops see image-production; for fresh product captures at scale see screenshot-capture; for squares and stories see remotion-assets.",
+    "sections_hint": [
+      "Purpose: revise an existing carousel deck to the client's annotated notes and hand it back by email with captions",
+      "Process assessment gate: which deck and slide, what the client marked (red line, missing phone, list spacing, copy), which screens already exist under marketing/public/carousel/, whether a new capture is needed and from which account",
+      "Process: edit carousels.json first, carouselSlides.tsx only for geometry or a new variant, render with render:carousel, review every slide at 1080 and 360, guard copy for em dashes and leading Or, ship marketing-only, email, captions",
+      "Frameworks > The template: cover (StatStack top-right, phone top-anchored ~590 width 560, optional image2 front phone), detail (phone 440 right, lead+bullets centered), trio (three fanned phones under the text with a scrim), CTA (JOIN BECOME at poster scale)",
+      "Frameworks > Reading a client annotation: red line = phone edge, 'more photos' = trio or image2, 'spacing' = the centered group, 'or' = the step list",
+      "Frameworks > Captures: redeem-session.mjs for a session with no hand-inserted auth rows, shoot.cjs with the GET-only guard, crop rules",
+      "Frameworks > Captions: hook line, swipe map, free and no card, becomeurbest.com, one question, hashtags per platform",
+      "Become-specific rules: every number on a slide must be visible on its screenshot; George's account may be used only when he says so; the LIVE screen is camera recording plus manual set logging"
+    ],
+    "crossRefs": [
+      "copywriting",
+      "copy-editing",
+      "image-production",
+      "screenshot-capture",
+      "remotion-assets",
+      "social-strategy",
+      "content-calendar"
+    ],
+    "referenceFiles": [
+      "references/client-rules.md",
+      "references/captions.md"
+    ]
   }
 ]

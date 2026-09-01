@@ -166,6 +166,7 @@ Dated snapshot, 2026-08-25. `marketing/.claude/skills/` is the live list.
 | `screenshot-capture` | A new product screenshot through the dummy-account Playwright pipeline |
 | `remotion-assets` | Rendering campaign assets from the Remotion project in `marketing/` |
 | `image-production` | sharp work: resize, crop, webp, frames, shadows, icons, light and dark twins |
+| `carousel-editing` | Revising an existing IG/TikTok carousel to the client's annotated notes, then email + captions |
 | `inspo-library` | Competitor creative patterns, and filing new reference captures |
 
 ## Asset inventory
