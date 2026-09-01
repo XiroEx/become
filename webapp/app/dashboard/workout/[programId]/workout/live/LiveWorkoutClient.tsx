@@ -13,6 +13,7 @@ import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { readQuickSession, clearQuickSession, stashQuickSessionWithId, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { hydrateQuickSessionVideos } from "@/lib/quickSession/hydrateVideos";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
@@ -499,20 +500,28 @@ export default function LiveWorkoutPage() {
             return;
           }
 
-          const wd: WorkoutData = { day: title, title, exercises: exs };
+          // Programs get videoUrl/thumbnailUrl/etc denormalized server-side
+          // (see /api/programs/current-workout); a quick session has no
+          // program to hydrate through, so its exercises never carry them —
+          // resolve by slug here or the live view falls back to the
+          // legacy by-name lookup, which rarely has anything for a modern
+          // exercise.
+          const token = localStorage.getItem("token");
+          const hydratedExs = await hydrateQuickSessionVideos(exs, token);
+
+          const wd: WorkoutData = { day: title, title, exercises: hydratedExs };
           setWorkout(wd);
-          setExercises(exs);
+          setExercises(hydratedExs);
           setCurrentPhase(1);
 
           // Prefill last-time numbers (slug-based — works without a program).
-          const token = localStorage.getItem("token");
-          const lastPerformance = token ? await fetchLastPerformance(token, exs) : {};
+          const lastPerformance = token ? await fetchLastPerformance(token, hydratedExs) : {};
           // "Last session: 185 lbs × 8" and the summary's PR count both read
           // exerciseHistory, keyed by NAME. Programs get it from the workouts
           // endpoint; a quick session had nothing, so it never celebrated a PR
           // it had just watched you set.
           const quickHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {};
-          for (const ex of exs) {
+          for (const ex of hydratedExs) {
             const slug = (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || '').toLowerCase();
             const prior = slug ? lastPerformance[slug] : null;
             if (prior) {
@@ -525,14 +534,14 @@ export default function LiveWorkoutPage() {
             }
           }
           setExerciseHistory(quickHistory);
-          const { data, flow } = initializeExercises(exs);
+          const { data, flow } = initializeExercises(hydratedExs);
           // Restore shared progress from the Track view (reps/weight/completed) so
           // flipping the Track|Live tab never loses entered sets.
           const savedQP = quickSessionId ? readQuickProgress(quickSessionId) : null;
           const restored = savedQP?.exercises?.length
             ? data.map((sets, i) => {
                 const savedEx = savedQP.exercises[i];
-                const timed = tracksTime(exs[i]?.trackingType);
+                const timed = tracksTime(hydratedExs[i]?.trackingType);
                 return sets.map((s, si) => {
                   const ss = savedEx?.sets?.[si];
                   if (!ss) return s;
@@ -1859,7 +1868,13 @@ export default function LiveWorkoutPage() {
         onClick={handleVideoTap}
       >
         {!currentVideo ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-white/5 backdrop-blur-sm">
+          // A real video fills this same full-screen area, framed so its
+          // subject sits above the exercise info panel (`absolute bottom-0`,
+          // transparent at its own top edge — see below). Centering this
+          // placeholder on the full height instead would land it behind that
+          // panel, where the icon/text visibly bled through the Swap/Add
+          // Exercise buttons. Anchoring near the top keeps it clear.
+          <div className="flex h-full w-full flex-col items-center justify-start gap-3 bg-white/5 pt-28 backdrop-blur-sm">
             <Dumbbell className="h-12 w-12 text-white/30" />
             <span className="text-sm font-medium text-white/40">No video available</span>
           </div>
