@@ -13,11 +13,11 @@
       "THE",
       "WORK"
     ],
-    "lead": "A whole day of food, logged from two photos.",
+    "lead": "Tracking food is this easy: a whole day, logged from two photos.",
     "steps": [
       "Snap the plate",
-      "Or say it in words",
-      "Or just find it"
+      "Say it in words",
+      "Find it in search"
     ],
     "image": "carousel/fuel/day.png",
     "stats": [
@@ -70,11 +70,11 @@
     "lead": "No photo, no problem. Describe the meal in your own words instead.",
     "bullets": [
       "\"grilled chicken, rice and broccoli\" is enough to start.",
-      "Add a photo too, or estimate from the text alone.",
+      "Works from your words alone. A photo is optional.",
       "Then the same review: check every line, then log it."
     ],
     "image": "carousel/fuel/describe.png",
-    "phoneWidth": 396
+    "phoneWidth": 470
   },
   {
     "id": "CarouselFuel4",
@@ -110,12 +110,12 @@
       "TONIGHT'S",
       "LOG."
     ],
-    "lead": "We email you a sign-in link. No password, no card.",
+    "lead": "Free. We email you a sign-in link. No password, no card.",
     "image": "carousel/fuel/itemized.png",
     "steps": [
       "Snap the plate",
-      "Or say it in words",
-      "Or just find it"
+      "Say it in words",
+      "Find it in search"
     ]
   }
 ]
