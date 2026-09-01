@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -27,6 +28,10 @@ export async function POST(request: NextRequest) {
   const topic = asText(body.topic, 200)
   if (!system.trim()) return NextResponse.json({ error: 'Missing system' }, { status: 400 })
 
+  // Spend ceiling on Mind composition — see /api/ai/mind/session.
+  const cap = await requireSpendCap(gate.user.userId, 'mind-composition')
+  if (!cap.ok) return cap.response
+
   // (A) Ground this flow the same way the main session / coach are grounded — the
   // full cross-app context (mood, streak, mission, identity, wins, workouts). This
   // route was the one AI surface that sent nothing, which is why generated flows
@@ -45,5 +50,6 @@ export async function POST(request: NextRequest) {
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

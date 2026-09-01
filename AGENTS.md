@@ -230,6 +230,64 @@ Two guards to keep in mind when adding a gate:
   Every create path uses this one. A create path left on `requireFeature` is
   silently ungated.
 
+#### Counted allowances (the ledger)
+
+Inventory allowances ("3 custom exercises") are a live count of rows the member
+owns. Windowed ones — **1 AI food estimate per day, 3 workout generations per
+week** — have nothing to count, because what is spent is a graph dispatch that
+leaves no row behind. `models/AllowanceUsage.ts` is that row: one document per
+`(userId, feature, bucketKey)`, with a **unique** index on exactly those three.
+
+That index is the mechanism, not a nicety. `lib/allowanceLedger.ts` increments
+first (`findOneAndUpdate` + `$inc` + `new: true`) and the decision reads the
+value the increment RETURNED. A peek-then-compare would let two requests
+arriving together against a limit of 1 both read 0 and both spend — a
+double-tapped button is enough. Two rules fall out of it:
+
+- **E11000 means two opposite things.** An upsert can lose the insert race (retry
+  once — it is a plain `$inc` now, and without the retry the loser of the first
+  claim of the day gets a 500 under load only), or the dedupe filter excluded a
+  row that already holds this outcome's key (do NOT retry — that bills twice for
+  one estimate). `chargeWithRetry` handles both and is unit-tested for it.
+- **A denied claim does not decrement.** `used` counts attempts once enforcement
+  is on; `remaining` still clamps to 0 and the inflation is a free abuse signal.
+  Spend analysis should read `used` (already net of refunds), never `used +
+  refunds`.
+
+The bucket is the **member's local day/week**, from `windowBucket()` in
+`lib/allowances.ts`, and the offset comes from `UserProgress.timezoneOffset` —
+**never from the request**. A client-supplied `tz` is a window-minting oracle
+(a different offset per call = a fresh allowance each time), and it also has to
+agree with what `GET /api/me/entitlements` reports.
+
+Refund ONLY when the server knows nothing was queued — `triggerOwnedRun`
+returned `ok: false`. A run that started and then failed is not refundable: the
+graph ran, and "it didn't work" is a claim only the client can make.
+
+`/api/ai/*` routes call `requireAiAllowance` / `requireSpendCap`
+(`lib/ai/allowance.ts`) in a fixed order: **auth → validate body → charge →
+trigger → refund on trigger failure**. Validating first keeps a typo free;
+charging before the trigger makes the allowance a gate rather than a meter.
+`tests/unit/allowance/inventory.test.ts` fails the build if a new `/api/ai` POST
+route ships without one, and pins `app/api/generate/*` as permanently unmetered
+— those are the deterministic fallback every AI route degrades to, so metering
+them would turn a soft paywall into a dead end for exactly the people who hit
+the cap.
+
+```
+ALLOWANCE_ABUSE_CAPS_ENFORCED   # "false" (default) | "true"
+```
+A **second, separate** switch for `lib/spendCaps.ts` — ceilings on the AI
+surfaces that carry no price (coach replies, Mind composition, food
+verification). They exist because those dispatch with no user in the loop
+(`lib/mind/precompose.ts` on app open, `MindJourney`'s suggestions effect, the
+food-flag relaunch), braked only by localStorage, which is per device and gone
+with any storage wipe. They are **not** a paywall: identical for free and plus,
+refused as **429** so `gateFrom` cannot raise the upgrade sheet from one, and
+set an order of magnitude above a real session. Default OFF so launch day has
+zero user-visible gating; the counts accrue regardless, so the distribution is
+known before it is ever turned on.
+
 #### The client side of a gate
 
 Four pieces, and nothing else should exist:

@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -24,6 +25,15 @@ export async function POST(request: NextRequest) {
   }
 
   const ctx = (body.context && typeof body.context === 'object' ? body.context : {}) as Record<string, unknown>
+
+  // THE most important ceiling in the app. lib/mind/precompose.ts calls this
+  // route on APP OPEN, silently, with no user asking for it — and its only
+  // brake is an 8h localStorage stamp, which is per device, per browser
+  // profile, and gone with any storage wipe. This is the server-side limit that
+  // a client-side cooldown was never able to be. Not enforced until
+  // ALLOWANCE_ABUSE_CAPS_ENFORCED is set; counted from day one.
+  const cap = await requireSpendCap(gate.user.userId, 'mind-composition')
+  if (!cap.ok) return cap.response
 
   // Ground the session in the user's durable context (mission, vision, identity,
   // wins, state) AND read their OWN recent answers back out of MindJournal — the
@@ -45,5 +55,6 @@ export async function POST(request: NextRequest) {
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

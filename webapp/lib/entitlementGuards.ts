@@ -14,6 +14,7 @@ import {
 } from '@/lib/entitlements'
 import {
   consumeAllowance,
+  consumeFollowUp,
   peekAllowance,
   type AllowanceState,
   type AllowanceCtx,
@@ -100,10 +101,28 @@ export async function requireQuota(
       response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     }
   }
+  return requireQuotaForUser(authResult.userId, feature, {
+    ...opts,
+    email: authResult.email,
+  })
+}
 
-  const { role, tier } = await loadUserEntitlement(authResult.userId)
+/**
+ * The same guard for a caller that has ALREADY been authenticated.
+ *
+ * The /api/ai/* routes verify through requireAiUser() before they parse a body,
+ * so re-deriving the user from the request would mean a second JWT verify and,
+ * worse, two places that could disagree about who is being charged. This is the
+ * single decision path; requireQuota() is the wrapper that authenticates first.
+ */
+export async function requireQuotaForUser(
+  userId: string,
+  feature: Feature,
+  opts: RequireQuotaOptions & { email?: string; followUp?: boolean } = {}
+): Promise<RequireQuotaResult> {
+  const { role, tier } = await loadUserEntitlement(userId)
   const access = featureAccess(role, tier, feature)
-  const ctx: AllowanceCtx = { userId: authResult.userId, tzOffset: opts.tzOffset }
+  const ctx: AllowanceCtx = { userId, tzOffset: opts.tzOffset }
 
   // Uncapped (plus, or any admin) — nothing to count, nothing to charge. The
   // returned allowance is the "no ceiling" sentinel, never serialised to a
@@ -111,8 +130,8 @@ export async function requireQuota(
   if (access === 'full') {
     return {
       ok: true,
-      userId: authResult.userId,
-      email: authResult.email!,
+      userId,
+      email: opts.email ?? '',
       role,
       tier,
       access,
@@ -120,7 +139,8 @@ export async function requireQuota(
     }
   }
 
-  const { allowed, state, ticketId } = await consumeAllowance(feature, ctx, {
+  const consume = opts.followUp ? consumeFollowUp : consumeAllowance
+  const { allowed, state, ticketId } = await consume(feature, ctx, {
     enforce: entitlementsEnforced(),
     dedupeKey: opts.dedupeKey,
     dedupeWindowMs: opts.dedupeWindowMs,
@@ -132,8 +152,8 @@ export async function requireQuota(
 
   return {
     ok: true,
-    userId: authResult.userId,
-    email: authResult.email!,
+    userId,
+    email: opts.email ?? '',
     role,
     tier,
     access,

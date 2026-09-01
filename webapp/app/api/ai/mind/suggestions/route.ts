@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import { requireAiUser, triggerOwnedRun, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
+import { requireSpendCap } from '@/lib/ai/allowance'
 import { PROTOCOL_CATALOG } from '@/lib/mind/suggestedProtocols'
 import dbConnect from '@/lib/mongodb'
 import MindJournal from '@/models/MindJournal'
@@ -29,6 +30,14 @@ export async function POST(request: NextRequest) {
 
   const ctx = (body.context && typeof body.context === 'object' ? body.context : {}) as Record<string, unknown>
   const unlocked = Array.isArray(ctx.unlockedSystems) ? (ctx.unlockedSystems as string[]) : null
+
+  // components/mind/MindJourney.tsx fires this from an EFFECT whenever the
+  // post-session view renders without a fresh cache — braked only by a 12h
+  // localStorage entry, with the same per-device weakness as precompose.
+  // Charged before the aggregate below so a hammering client cannot make us do
+  // the work either.
+  const cap = await requireSpendCap(gate.user.userId, 'mind-composition')
+  if (!cap.ok) return cap.response
 
   // Per-tool rep counts (lifetime journal entries per system) — the in-tool
   // progression opens 1 + reps protocols, so candidates must respect BOTH the
@@ -64,5 +73,6 @@ export async function POST(request: NextRequest) {
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun } from '@/lib/ai/routeHelpers'
+import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -28,6 +29,15 @@ export async function POST(request: NextRequest) {
   // tacos") — the plate prompt is instructed to trust explicit counts/ingredients.
   const note = typeof body.note === 'string' ? body.note.slice(0, 500) : ''
 
+  // Charged AFTER validation (a missing image must not cost a scan) and BEFORE
+  // the trigger (the allowance gates the dispatch, it does not merely count
+  // it). Photo, upload and "describe it" share ONE daily allowance, which is
+  // why all three routes name the same feature.
+  const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
+    followUpTicket: body.allowanceTicket,
+  })
+  if (!allow.ok) return allow.response
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
   const trig = await triggerOwnedRun(
     gate.user,
@@ -36,7 +46,8 @@ export async function POST(request: NextRequest) {
     { image },
   )
 
-  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
-  // couldn't even trigger → graceful unavailable.
+  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  // couldn't even trigger → nothing was queued, so give the unit back.
+  await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })
 }

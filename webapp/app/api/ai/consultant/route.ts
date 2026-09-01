@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { type BecomeTask } from '@/lib/ai/becomeGraph'
 import { requireAiUser, triggerOwnedRun, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -44,6 +45,13 @@ export async function POST(request: NextRequest) {
   const message = asText(body.message)
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
+  // Coach chat carries no price, so this is a spend ceiling rather than a
+  // paywall: identical for free and plus, refused as 429 (never a 403 the
+  // upgrade sheet could be raised from), and not enforced until
+  // ALLOWANCE_ABUSE_CAPS_ENFORCED is set. It counts from day one either way.
+  const cap = await requireSpendCap(gate.user.userId, 'coach-message')
+  if (!cap.ok) return cap.response
+
   // Server-assembled per-user context (push) merged with any client-sent grounding.
   const context = {
     message,
@@ -57,5 +65,6 @@ export async function POST(request: NextRequest) {
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, reply: FALLBACK[domain] ?? FALLBACK.mindset, fallback: true })
 }

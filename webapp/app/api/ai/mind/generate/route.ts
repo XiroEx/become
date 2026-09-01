@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -27,6 +28,10 @@ export async function POST(request: NextRequest) {
   const kind = String(body.kind ?? 'identity')
   if (!ALLOWED.has(kind)) return NextResponse.json({ error: 'Unknown kind' }, { status: 400 })
 
+  // Spend ceiling on Mind composition — see /api/ai/mind/session.
+  const cap = await requireSpendCap(gate.user.userId, 'mind-composition')
+  if (!cap.ok) return cap.response
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
   const trig = await triggerOwnedRun(gate.user, 'mind.generateContent', {
     kind,
@@ -35,5 +40,6 @@ export async function POST(request: NextRequest) {
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

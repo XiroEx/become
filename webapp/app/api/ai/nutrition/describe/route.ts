@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
+import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -29,6 +30,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Provide a description or a correction' }, { status: 400 })
   }
 
+  // Same daily allowance as the photo path — this is the same outcome by a
+  // different door. A CORRECTION carries the ticket the estimate handed back
+  // and spends a bounded follow-up instead of a fresh scan: without that, a
+  // free member gets one estimate a day and no way to fix it.
+  const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
+    followUpTicket: body.allowanceTicket,
+  })
+  if (!allow.ok) return allow.response
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
   const trig = await triggerOwnedRun(gate.user, 'nutrition.describeEstimate', {
     ...(description.trim() ? { description } : {}),
@@ -37,6 +47,7 @@ export async function POST(request: NextRequest) {
     user: grounding,
   })
 
-  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })
 }

@@ -7,6 +7,11 @@ import UserProgress from '@/models/UserProgress'
 import MindProgress from '@/models/MindProgress'
 import { localDateKey, localDayWindowForKey, utcMidnightDateKey } from '@/lib/dayWindow'
 import { FREE_LIMITS, type Feature, type FreeLimit } from '@/lib/entitlements'
+import {
+  mongoAllowanceLedger,
+  type AllowanceLedger,
+  type LedgerCounts,
+} from '@/lib/allowanceLedger'
 
 /**
  * ─── Free-tier allowance accounting ──────────────────────────────────────────
@@ -41,18 +46,41 @@ export interface AllowanceState {
 
 export interface AllowanceCtx {
   userId: string
-  /** Minutes WEST of UTC (browser `getTimezoneOffset()` semantics). Day and
-   *  week keys are the CALLER'S LOCAL ones. */
+  /**
+   * Minutes WEST of UTC (browser `getTimezoneOffset()` semantics).
+   *
+   * IGNORED for 'window' features — those resolve the offset from the member's
+   * persisted UserProgress.timezoneOffset instead. A client-supplied offset is
+   * a window-minting oracle: send a different `tz` on every request and each
+   * call lands in a fresh bucket with a fresh allowance. It also has to match
+   * what GET /api/me/entitlements reports, and that endpoint takes `tz` from
+   * the query string, so two sources would let a member read 1/1 remaining
+   * while the gate reads 0/1.
+   */
   tzOffset?: number
+  /** @internal Test seam. Production always uses the Mongo ledger. */
+  ledger?: AllowanceLedger
 }
 
 export interface ConsumeOptions {
   /** false (shadow mode) never denies, but still records usage. */
   enforce?: boolean
-  /** Collapses repeat consumes into one unit — e.g. the AI route and its
-   *  deterministic fallback are one generation, not two. Stage 4. */
+  /**
+   * Collapses repeat consumes into one unit — e.g. the AI route and its
+   * deterministic fallback are one generation, not two. SERVER-MINTED ONLY:
+   * a client-supplied key would buy unlimited free units.
+   */
   dedupeKey?: string
+  /**
+   * Accepted for the callers that already pass it, and deliberately unused: a
+   * dedupe key lives on the window's own row, so it expires exactly when the
+   * window does. A second, shorter expiry would create a gap in which the same
+   * outcome could be charged twice inside one window — which is the only thing
+   * dedupeKey exists to prevent.
+   */
   dedupeWindowMs?: number
+  /** @internal Tests only — pins the instant the window is derived from. */
+  now?: Date
 }
 
 export interface ConsumeResult {
@@ -61,6 +89,11 @@ export interface ConsumeResult {
   /** Present only for 'window' consumes that actually recorded a unit; pass to
    *  refundAllowance() when the work it paid for never started. */
   ticketId?: string
+  /** True when the ledger itself failed and the consume failed OPEN. */
+  degraded?: boolean
+  /** Why a consume was refused. 'limit' for a tier cap, 'follow-up' for the
+   *  bounded correction allowance riding an already-charged outcome. */
+  reason?: 'limit' | 'follow-up'
 }
 
 // ─── Window buckets ──────────────────────────────────────────────────────────
@@ -104,6 +137,74 @@ export function windowBucket(
     key: `W${mondayKey}`,
     resetsAt: localDayWindowForKey(nextMondayKey, tzOffset).start.toISOString(),
   }
+}
+
+// ─── Whose day is it? ────────────────────────────────────────────────────────
+
+const TZ_CLAMP = 840 // ±14h, matching lib/dayWindow.ts
+const tzCache = new Map<string, { tz: number; at: number }>()
+const TZ_TTL_MS = 60_000
+
+/**
+ * The offset a windowed bucket is keyed on, read from the member's own record.
+ *
+ * Deliberately NOT taken from the request. `UserProgress.timezoneOffset` is
+ * populated opportunistically by lib/captureUserTimezone.ts from genuinely
+ * reported offsets on other routes, so by the time someone reaches an AI
+ * feature it is almost always set. Missing reads as 0 (UTC), which is what
+ * every other reader in the app defaults to.
+ *
+ * Memoised for 60s because it is stable and stale-safe — the cost of being one
+ * minute behind a member who just crossed a timezone is that their boundary
+ * moves once. Tier and role are deliberately NOT cached anywhere: a billing
+ * upgrade has to take effect on the very next request.
+ */
+export async function windowTzOffset(userId: string): Promise<number> {
+  const hit = tzCache.get(userId)
+  if (hit && Date.now() - hit.at < TZ_TTL_MS) return hit.tz
+  let tz = 0
+  try {
+    await dbConnect()
+    const doc = await UserProgress.findOne({ userId })
+      .select('timezoneOffset')
+      .lean<{ timezoneOffset?: number } | null>()
+    const raw = doc?.timezoneOffset
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      tz = Math.max(-TZ_CLAMP, Math.min(TZ_CLAMP, raw))
+    }
+  } catch {
+    // An infra blip must not stop a member using a feature they are entitled
+    // to. UTC is the same default every other reader falls back to.
+    tz = 0
+  }
+  if (tzCache.size > 5000) tzCache.clear()
+  tzCache.set(userId, { tz, at: Date.now() })
+  return tz
+}
+
+/** @internal Tests only — the memo would otherwise leak between cases. */
+export function __clearTzCache(): void {
+  tzCache.clear()
+}
+
+/** @internal Tests only — seeds the memo so no database read is attempted. */
+export function __primeTzCache(userId: string, tz: number): void {
+  tzCache.set(userId, { tz, at: Date.now() })
+}
+
+/**
+ * How many bounded FOLLOW-UPS a windowed outcome may carry.
+ *
+ * A follow-up is a second dispatch that refines the SAME outcome — correcting
+ * "6 tacos" on an estimate the member already spent their allowance on. It
+ * increments a separate counter, never `used`.
+ *
+ * Without this a free member gets one estimate a day and no way to fix it,
+ * which is a broken product rather than a paywall: the correction is how the
+ * feature works. Bounded because "refine it again" is still a vision call.
+ */
+export const FOLLOW_UP_LIMITS: Partial<Record<Feature, number>> = {
+  'ai-food-estimate': 6,
 }
 
 // ─── Inventory counts ────────────────────────────────────────────────────────
@@ -173,15 +274,18 @@ async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
   const spec = FREE_LIMITS[feature]
 
   if (spec.kind === 'window') {
-    // ── STAGE 4 SEAM ────────────────────────────────────────────────────────
-    // The windowed counters (1 AI food estimate/day, 3 workout
-    // generations/week) need their own persisted ledger keyed on
-    // (userId, feature, windowBucket().key) plus the dedupe + refund machinery
-    // that ConsumeOptions/refundAllowance() describe. Until that lands this
-    // reports 0 used, so a windowed feature reads as fully available and
-    // NOTHING is gated on it — the same safe failure as the kill-switch being
-    // off. No route calls requireQuota() on a windowed feature yet.
-    return 0
+    // Read-only: never upserts, so opening the dashboard cannot open a window
+    // or burn a unit. `used` is already net of refunds (a refund decrements it
+    // and increments `refunds` separately), so it is reported as-is.
+    const { key } = await windowFor(feature, ctx)
+    if (!key) return 0
+    try {
+      const row = await ledgerFor(ctx).read({ userId: ctx.userId, feature, bucketKey: key })
+      return row?.used ?? 0
+    } catch (err) {
+      console.error(`[allowances] ledger read failed for ${feature}:`, err)
+      return 0
+    }
   }
 
   const counter =
@@ -203,13 +307,33 @@ async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
   }
 }
 
+function ledgerFor(ctx: AllowanceCtx): AllowanceLedger {
+  return ctx.ledger ?? mongoAllowanceLedger
+}
+
+/**
+ * The bucket a windowed feature lands in for this member, right now.
+ *
+ * Resolves the offset from the member's record for 'window' features (see
+ * AllowanceCtx.tzOffset) and from the caller's hint otherwise — inventory and
+ * milestone allowances have a 'lifetime' window, where the offset is unused.
+ */
+async function windowFor(
+  feature: Feature,
+  ctx: AllowanceCtx,
+  now: Date = new Date()
+): Promise<{ key: string | null; resetsAt: string | null }> {
+  const spec = FREE_LIMITS[feature]
+  const tz = spec.kind === 'window' ? await windowTzOffset(ctx.userId) : (ctx.tzOffset ?? 0)
+  return windowBucket(spec.window, tz, now)
+}
+
 /** Read-only. Never mutates. Used by GET /api/me/entitlements and soft peeks. */
 export async function peekAllowance(
   feature: Feature,
   ctx: AllowanceCtx
 ): Promise<AllowanceState> {
-  const spec = FREE_LIMITS[feature]
-  const { resetsAt } = windowBucket(spec.window, ctx.tzOffset)
+  const { resetsAt } = await windowFor(feature, ctx)
   return stateFor(feature, await usedFor(feature, ctx), resetsAt)
 }
 
@@ -217,7 +341,8 @@ export async function peekAllowance(
  * Reserve one unit.
  *   'inventory' → a live count; nothing is written.
  *   'milestone' → reads the existing progress number; nothing is written.
- *   'window'    → increments the (userId, feature, bucketKey) counter (stage 4).
+ *   'window'    → atomically increments the (userId, feature, bucketKey) row in
+ *                 models/AllowanceUsage.ts and decides from what came back.
  *
  * `enforce: false` NEVER denies but still records usage (shadow mode), which is
  * what makes launch day safe: the numbers accrue with zero visible change.
@@ -233,22 +358,133 @@ export async function consumeAllowance(
   ctx: AllowanceCtx,
   opts: ConsumeOptions = {}
 ): Promise<ConsumeResult> {
-  const state = await peekAllowance(feature, ctx)
-  const withinLimit = state.used < state.limit
+  if (FREE_LIMITS[feature].kind !== 'window') {
+    const state = await peekAllowance(feature, ctx)
+    const withinLimit = state.used < state.limit
+    return {
+      allowed: opts.enforce ? withinLimit : true,
+      state,
+      ...(withinLimit ? {} : { reason: 'limit' as const }),
+    }
+  }
+  return consumeWindow(feature, ctx, opts, 'used')
+}
+
+/**
+ * Spend one bounded FOLLOW-UP against an outcome already charged in this
+ * window — the correction on an estimate, not a new estimate.
+ *
+ * Increments a separate counter, so `used` and therefore `remaining` are
+ * untouched: the member's one scan for the day stays spent exactly once, no
+ * matter how many times they refine it. The caller is responsible for proving
+ * the follow-up really does belong to a charged outcome — that proof is the
+ * signed ticket in lib/allowanceTicket.ts, never a client-supplied id.
+ */
+export async function consumeFollowUp(
+  feature: Feature,
+  ctx: AllowanceCtx,
+  opts: ConsumeOptions = {}
+): Promise<ConsumeResult> {
+  if (FREE_LIMITS[feature].kind !== 'window') {
+    return { allowed: true, state: await peekAllowance(feature, ctx) }
+  }
+  return consumeWindow(feature, ctx, opts, 'followUps')
+}
+
+/**
+ * The atomic consume.
+ *
+ * ORDER IS THE WHOLE POINT: increment first, decide from what came back. A
+ * peek-then-compare would let two requests arriving together against a limit of
+ * 1 both read 0 and both spend — a double-tapped button is enough. Charging
+ * first means the two racing calls see 1 and 2, and exactly one of them is
+ * within the limit.
+ *
+ * A denied consume deliberately does NOT give its unit back. `used` therefore
+ * counts ATTEMPTS once enforcement is on: `remaining` still clamps to 0, the
+ * denial still stands, and an inflated count is a free abuse signal. Reversing
+ * it would cost a second write and buy nothing.
+ */
+async function consumeWindow(
+  feature: Feature,
+  ctx: AllowanceCtx,
+  opts: ConsumeOptions,
+  field: 'used' | 'followUps'
+): Promise<ConsumeResult> {
+  const spec = FREE_LIMITS[feature]
+  const { key, resetsAt } = await windowFor(feature, ctx, opts.now ?? new Date())
+  const enforce = opts.enforce === true
+
+  if (!key || !resetsAt) return { allowed: true, state: stateFor(feature, 0, resetsAt) }
+
+  let counted: LedgerCounts
+  let ticketId: string | undefined
+  try {
+    const res = await ledgerFor(ctx).charge({
+      userId: ctx.userId,
+      feature,
+      bucketKey: key,
+      resetsAt: new Date(resetsAt),
+      shadow: !enforce,
+      field,
+      dedupeKey: opts.dedupeKey,
+    })
+    counted = res
+    ticketId = res.ticketId
+  } catch (err) {
+    // FAIL OPEN. A metering outage must never take a feature away from someone
+    // who is entitled to it — the gate is a product boundary, not a security
+    // one. Same posture as every other counter in this module.
+    console.error(`[allowances] ledger charge failed for ${feature}:`, err)
+    return {
+      allowed: true,
+      degraded: true,
+      state: stateFor(feature, 0, resetsAt),
+    }
+  }
+
+  // The parent state is always reported from `used`: a follow-up must not make
+  // the member's remaining scans look different from what they are.
+  const state = stateFor(feature, counted.used, resetsAt)
+
+  if (field === 'followUps') {
+    const cap = FOLLOW_UP_LIMITS[feature] ?? 0
+    const withinCap = counted.followUps <= cap
+    return {
+      allowed: enforce ? withinCap : true,
+      state,
+      ...(withinCap ? {} : { reason: 'follow-up' as const }),
+      ...(ticketId ? { ticketId } : {}),
+    }
+  }
+
+  const withinLimit = counted.used <= spec.limit
   return {
-    allowed: opts.enforce ? withinLimit : true,
+    allowed: enforce ? withinLimit : true,
     state,
+    ...(withinLimit ? {} : { reason: 'limit' as const }),
+    ...(ticketId ? { ticketId } : {}),
   }
 }
 
 /**
- * Give back a unit consumed for work that never started (e.g. the AI run failed
- * to dispatch). No-op for inventory/milestone, which write nothing. Idempotent
- * by ticketId.
+ * Give back a unit consumed for work that never started — the graph refused the
+ * trigger, so nothing was queued and nothing was billed. Idempotent by
+ * ticketId, and guarded so it can never drive a counter below zero.
  *
- * STAGE 4 SEAM — becomes real alongside the windowed ledger. Present now so the
- * call sites that need it can be written against a stable name.
+ * REFUND ONLY WHAT THE SERVER KNOWS DID NOT HAPPEN. A run that was queued and
+ * then failed, timed out, or came back unusable is not refundable: the graph
+ * ran and the money is gone, and those outcomes are only observable on the
+ * client, where a "that didn't work" report is a forgeable free-refill button.
+ * The remedy for a bad-but-billed result is the bounded follow-up, not a
+ * refund.
+ *
+ * No-op for inventory/milestone, which write nothing.
  */
-export async function refundAllowance(ticketId: string): Promise<void> {
-  void ticketId
+export async function refundAllowance(
+  ticketId: string,
+  ledger: AllowanceLedger = mongoAllowanceLedger
+): Promise<void> {
+  if (!ticketId) return
+  await ledger.giveBack(ticketId)
 }

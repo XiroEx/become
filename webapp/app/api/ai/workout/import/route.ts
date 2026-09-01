@@ -21,6 +21,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
+import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -41,7 +42,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing text' }, { status: 400 })
   }
 
+  // Extraction is still a generation as far as the graph (and the bill) is
+  // concerned, so it draws on the same weekly allowance.
+  const allow = await requireAiAllowance(gate.user, 'workout-generation')
+  if (!allow.ok) return allow.response
+
   const trig = await triggerOwnedRun(gate.user, 'workoutImportText', { text })
-  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  await allow.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }
