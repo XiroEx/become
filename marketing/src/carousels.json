@@ -262,5 +262,123 @@
       "Reflect on who you become",
       "Repeat tomorrow"
     ]
+  },
+  {
+    "id": "CarouselNext1",
+    "deck": "next",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 5,
+    "variant": "cover",
+    "pillar": "nutrition",
+    "kicker": "Live September 1",
+    "headline": [
+      "BECOME",
+      "WHAT'S",
+      "NEXT."
+    ],
+    "lead": "The strongest version of you is built, not found.",
+    "steps": [
+      "Coach-built programs",
+      "Photo plate logging",
+      "A weekly recap"
+    ],
+    "image": "carousel/next/dash.png",
+    "stats": [
+      {
+        "value": "25",
+        "label": "Day streak"
+      },
+      {
+        "value": "2/4",
+        "label": "This week"
+      },
+      {
+        "value": "Lv 3",
+        "label": "Mind"
+      }
+    ]
+  },
+  {
+    "id": "CarouselNext2",
+    "deck": "next",
+    "slug": "02-programs",
+    "index": 2,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "training",
+    "kicker": "One · Programs",
+    "headline": [
+      "PROGRAMS."
+    ],
+    "lead": "Pick a coach-built program and the week arrives already written.",
+    "bullets": [
+      "Programs run in phases, with a named day for each session.",
+      "Your week fills in: training days, rest days, today's work.",
+      "Generate a session from your focus, level and equipment."
+    ],
+    "image": "carousel/next/programs.png"
+  },
+  {
+    "id": "CarouselNext3",
+    "deck": "next",
+    "slug": "03-plate",
+    "index": 3,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Two · Plate",
+    "headline": [
+      "SNAP IT."
+    ],
+    "lead": "The plate comes back itemized, and nothing logs until you add it.",
+    "bullets": [
+      "One plate, eight items, 977 calories, line by line.",
+      "Every line is marked High or Medium confidence.",
+      "Wrong count? Say it in words: \"it was 6 tacos.\""
+    ],
+    "image": "carousel/fuel/snap.png"
+  },
+  {
+    "id": "CarouselNext4",
+    "deck": "next",
+    "slug": "04-recap",
+    "index": 4,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "progress",
+    "kicker": "Three · Recap",
+    "headline": [
+      "RECAP."
+    ],
+    "lead": "Each week comes back as one card, written from what you did.",
+    "bullets": [
+      "Mind, Fuel and Training on one strip, a dot per day.",
+      "The week gets a headline: 8 personal records, a new high.",
+      "Mind 5 sessions, food 7 of 7, training 6 against 4."
+    ],
+    "image": "carousel/next/recap.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselNext5",
+    "deck": "next",
+    "slug": "05-cta",
+    "index": 5,
+    "total": 5,
+    "variant": "cta",
+    "pillar": "nutrition",
+    "kicker": "Free today",
+    "headline": [
+      "START",
+      "TODAY."
+    ],
+    "lead": "Day one is one workout, one meal, one check-in.",
+    "image": "carousel/practice/streaks.png",
+    "steps": [
+      "Coach-built programs",
+      "Photo plate logging",
+      "A weekly recap"
+    ]
   }
 ]
