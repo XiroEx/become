@@ -16,7 +16,7 @@ import {Brand, Grain, Grid, PillarLine, UrlLockup, fitLines} from './campaignCol
  * lockup rather than a button.
  */
 
-export type SlideVariant = 'cover' | 'detail' | 'cta';
+export type SlideVariant = 'cover' | 'detail' | 'trio' | 'cta';
 export type CarouselPillar = 'training' | 'mindset' | 'nutrition' | 'progress';
 
 export type Slide = {
@@ -37,6 +37,10 @@ export type Slide = {
   /** COVER only — the hook's numbers, set at poster scale in the top-right. */
   stats?: {value: string; label: string}[];
   image: string;
+  /** COVER only — a second phone, in front and lower, for a hero moment (e.g. LIVE mode). */
+  image2?: string;
+  /** TRIO only — [left, center, right] screens; center sits in front. */
+  images?: string[];
   /** Override when a crop is squatter than a phone and needs more width to carry. */
   phoneWidth?: number;
 };
@@ -237,6 +241,9 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
     <AbsoluteFill style={base}>
       <Grid />
       <Phone image={slide.image} width={560} style={{right: -70, top: 590, transform: 'rotate(5deg)'}} />
+      {slide.image2 ? (
+        <Phone image={slide.image2} width={410} style={{right: 100, top: 780, zIndex: 4}} />
+      ) : null}
       {slide.stats ? (
         <div style={{position: 'absolute', right: M, top: 150, zIndex: 3}}>
           <StatStack stats={slide.stats} accent={accent} />
@@ -247,12 +254,11 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
           position: 'absolute',
           left: M,
           top: 196,
-          bottom: 250,
+          bottom: 160,
           width: 620,
           zIndex: 3,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
         }}
       >
         <div>
@@ -262,7 +268,10 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
           </div>
           <div style={{marginTop: 32, width: 520, fontSize: 32, lineHeight: 1.34, color: muted}}>{slide.lead}</div>
         </div>
-        {slide.steps ? <StepList steps={slide.steps} accent={accent} /> : null}
+        {/* The list floats in the middle of what is left, not pinned to the footer. */}
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+          {slide.steps ? <StepList steps={slide.steps} accent={accent} size={28} /> : null}
+        </div>
       </div>
       <Chrome slide={slide} accent={accent} pillar="left" />
       <Grain />
@@ -288,12 +297,11 @@ const Detail: React.FC<SlideProps> = ({slide}) => {
           position: 'absolute',
           left: M,
           top: 196,
-          bottom: 150,
+          bottom: 170,
           width: 500,
           zIndex: 3,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
         }}
       >
         <div>
@@ -302,13 +310,15 @@ const Detail: React.FC<SlideProps> = ({slide}) => {
             <Headline lines={slide.headline} maxWidth={500} baseSize={150} />
           </div>
         </div>
-        {/* The lead carries a hairline under it so the column reads as two measured
-            gaps rather than one dead field between the headline and the bullets. */}
-        <div style={{width: 470}}>
-          <div style={{fontSize: 33, lineHeight: 1.36, color: muted}}>{slide.lead}</div>
-          <div style={{marginTop: 40, width: 470, height: 1, background: 'rgba(247,247,245,0.16)'}} />
+        {/* Lead + bullets travel as one group, vertically centered in the space under
+            the headline, so the list never crowds the footer or leaves a dead field. */}
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 52}}>
+          <div style={{width: 470}}>
+            <div style={{fontSize: 33, lineHeight: 1.36, color: muted}}>{slide.lead}</div>
+            <div style={{marginTop: 36, width: 470, height: 1, background: 'rgba(247,247,245,0.16)'}} />
+          </div>
+          <Bullets items={slide.bullets ?? []} accent={accent} width={430} size={36} gap={40} />
         </div>
-        <Bullets items={slide.bullets ?? []} accent={accent} width={430} size={36} gap={46} />
       </div>
       <Chrome slide={slide} accent={accent} />
       <Grain />
@@ -334,7 +344,6 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
           zIndex: 3,
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
         }}
       >
         <div>
@@ -346,7 +355,9 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
         </div>
         {/* Recap the three ways, so the ask lands on top of the thing just learned
             rather than on an empty field. */}
-        {slide.steps ? <StepList steps={slide.steps} accent={accent} size={30} gap={24} /> : null}
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+          {slide.steps ? <StepList steps={slide.steps} accent={accent} size={30} gap={24} /> : null}
+        </div>
         {/* The ask, once, at poster scale. Chrome drops its small lockup here so the
             frame never carries the URL twice. */}
         <div>
@@ -360,7 +371,47 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
   );
 };
 
-const variants: Record<SlideVariant, React.FC<SlideProps>> = {cover: Cover, detail: Detail, cta: Cta};
+// ── TRIO ─────────────────────────────────────────────────────────────────────
+// Three real screens fanned across the lower half, the payoff screen in front; the
+// text block sits above them and a scrim brings the frame back to ink under the
+// footer so JOIN BECOME never fights a screenshot.
+const Trio: React.FC<SlideProps> = ({slide}) => {
+  const accent = colors[slide.pillar];
+  const [left, center, right] = slide.images ?? [slide.image, slide.image, slide.image];
+  return (
+    <AbsoluteFill style={base}>
+      <Grid />
+      <Phone image={left} width={330} style={{left: 64, top: 740, transform: 'rotate(-4deg)', zIndex: 2}} />
+      <Phone image={right} width={330} style={{left: 686, top: 740, transform: 'rotate(4deg)', zIndex: 2}} />
+      <Phone image={center} width={400} style={{left: 340, top: 680, zIndex: 3}} />
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 420,
+          background: `linear-gradient(to bottom, rgba(8,8,10,0) 0%, rgba(8,8,10,0.86) 55%, ${ink} 64%)`,
+          zIndex: 4,
+        }}
+      />
+      <div style={{position: 'absolute', left: M, top: 196, width: 940, zIndex: 3}}>
+        <Kicker text={slide.kicker} color={accent} />
+        <div style={{marginTop: 22}}>
+          <Headline lines={slide.headline} maxWidth={460} baseSize={150} />
+        </div>
+        <div style={{marginTop: 26, width: 920, fontSize: 31, lineHeight: 1.34, color: muted}}>{slide.lead}</div>
+        <div style={{marginTop: 34}}>
+          <Bullets items={slide.bullets ?? []} accent={accent} width={920} size={30} gap={14} />
+        </div>
+      </div>
+      <Chrome slide={slide} accent={accent} pillar="left" />
+      <Grain />
+    </AbsoluteFill>
+  );
+};
+
+const variants: Record<SlideVariant, React.FC<SlideProps>> = {cover: Cover, detail: Detail, trio: Trio, cta: Cta};
 
 export const CarouselSlide: React.FC<SlideProps> = (props) => {
   const Variant = variants[props.slide.variant];

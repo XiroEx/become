@@ -153,7 +153,8 @@
         "value": "21.4K",
         "label": "Last session"
       }
-    ]
+    ],
+    "image2": "carousel/practice/live.png"
   },
   {
     "id": "CarouselPractice2",
@@ -201,7 +202,7 @@
     "slug": "04-reflect",
     "index": 4,
     "total": 6,
-    "variant": "detail",
+    "variant": "trio",
     "pillar": "mindset",
     "kicker": "Three · Reflect",
     "headline": [
@@ -210,10 +211,15 @@
     "lead": "A few minutes a day on the part of this that actually decides it.",
     "bullets": [
       "One short session a day: check in, name a win, lock it in.",
-      "Today's session is already chosen, one of fifty on the path.",
-      "Levels, chapters and new systems open as the sessions add up."
+      "Finish it, bank the XP, and the next chapter opens.",
+      "Then the Training Grounds: State Shift, Vision, Discipline."
     ],
-    "image": "carousel/practice/mind.png"
+    "image": "carousel/practice/decided.png",
+    "images": [
+      "carousel/practice/mind.png",
+      "carousel/practice/decided.png",
+      "carousel/practice/grounds.png"
+    ]
   },
   {
     "id": "CarouselPractice5",
@@ -229,11 +235,11 @@
     ],
     "lead": "Perfect weeks are not the point. Coming back the next day is.",
     "bullets": [
-      "Every session you finish stays on the list, months deep.",
-      "A workout, a meal or a check-in keeps the streak alive.",
-      "A weekly target you can see, and rest days count toward it."
+      "Any activity keeps the day streak alive: a workout, a meal, a check-in.",
+      "A workout streak counts rest days, as long as the week stays on track.",
+      "Three in a row makes a streak, and a freeze covers the day you miss."
     ],
-    "image": "carousel/practice/history.png"
+    "image": "carousel/practice/streaks.png"
   },
   {
     "id": "CarouselPractice6",
