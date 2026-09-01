@@ -117,5 +117,144 @@
       "Say it in words",
       "Find it in search"
     ]
+  },
+  {
+    "id": "CarouselPractice1",
+    "deck": "practice",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 6,
+    "variant": "cover",
+    "pillar": "nutrition",
+    "kicker": "The Practice",
+    "headline": [
+      "TRAIN. EAT.",
+      "REFLECT.",
+      "REPEAT."
+    ],
+    "lead": "Body, mind, and routine working together, every day.",
+    "steps": [
+      "Train your body",
+      "Eat and track it",
+      "Reflect on who you become",
+      "Repeat tomorrow"
+    ],
+    "image": "carousel/practice/log.png",
+    "stats": [
+      {
+        "value": "28",
+        "label": "Workouts"
+      },
+      {
+        "value": "395.3K",
+        "label": "Lbs lifted"
+      },
+      {
+        "value": "21.4K",
+        "label": "Last session"
+      }
+    ]
+  },
+  {
+    "id": "CarouselPractice2",
+    "deck": "practice",
+    "slug": "02-train",
+    "index": 2,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "training",
+    "kicker": "One · Train",
+    "headline": [
+      "TRAIN."
+    ],
+    "lead": "The work is written before you walk in: sets, reps, and the rest between them.",
+    "bullets": [
+      "Coach-built programs in phases, a named day for every session.",
+      "Generate a session from your focus, level and equipment.",
+      "Log set by set, last time's weight in view, new PRs flagged."
+    ],
+    "image": "carousel/practice/program.png"
+  },
+  {
+    "id": "CarouselPractice3",
+    "deck": "practice",
+    "slug": "03-eat",
+    "index": 3,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Two · Eat",
+    "headline": [
+      "EAT."
+    ],
+    "lead": "Eat whatever you want. Track it however you want.",
+    "bullets": [
+      "Snap the plate and it comes back itemized, line by line.",
+      "No photo? Describe the meal in your own words instead.",
+      "Barcode, search, saved foods and recents, one tap each."
+    ],
+    "image": "carousel/practice/find.png"
+  },
+  {
+    "id": "CarouselPractice4",
+    "deck": "practice",
+    "slug": "04-reflect",
+    "index": 4,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "mindset",
+    "kicker": "Three · Reflect",
+    "headline": [
+      "REFLECT."
+    ],
+    "lead": "A few minutes a day on the part of this that actually decides it.",
+    "bullets": [
+      "One short session a day: check in, name a win, lock it in.",
+      "Today's session is already chosen, one of fifty on the path.",
+      "Levels, chapters and new systems open as the sessions add up."
+    ],
+    "image": "carousel/practice/mind.png"
+  },
+  {
+    "id": "CarouselPractice5",
+    "deck": "practice",
+    "slug": "05-repeat",
+    "index": 5,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "progress",
+    "kicker": "Four · Repeat",
+    "headline": [
+      "REPEAT."
+    ],
+    "lead": "Perfect weeks are not the point. Coming back the next day is.",
+    "bullets": [
+      "Every session you finish stays on the list, months deep.",
+      "A workout, a meal or a check-in keeps the streak alive.",
+      "A weekly target you can see, and rest days count toward it."
+    ],
+    "image": "carousel/practice/history.png"
+  },
+  {
+    "id": "CarouselPractice6",
+    "deck": "practice",
+    "slug": "06-cta",
+    "index": 6,
+    "total": 6,
+    "variant": "cta",
+    "pillar": "nutrition",
+    "kicker": "Free today",
+    "headline": [
+      "START THE",
+      "PRACTICE."
+    ],
+    "lead": "One loop a day, and it takes far less work than you think.",
+    "image": "carousel/practice/hub.png",
+    "steps": [
+      "Train your body",
+      "Eat and track it",
+      "Reflect on who you become",
+      "Repeat tomorrow"
+    ]
   }
 ]
