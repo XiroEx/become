@@ -928,11 +928,29 @@ export type TokenScope = 'ai-tools'
 verifyAuth(request, { allowScopes: AI_TOOL_SCOPES })
 ```
 
-| Token | Everywhere | `GET /api/ai/context` | `GET /api/auth/me` |
+| Token | Everywhere | The five tool-surface GETs | `GET /api/auth/me` |
 | --- | --- | --- | --- |
 | no `scope` claim (every ordinary session) | accepted | accepted | accepted (rolls) |
 | `scope: 'ai-tools'` | **401** | accepted | **401** |
 | any other `scope` | 401 | 401 | 401 |
+
+The allowlist is not a judgement call — it is exactly what the live `become-ai`
+graph calls. Its `become-freeform-runner` node gives the model four MCP tools
+with `toolCredentials: Authorization: Bearer {{state.data.input.userToken}}`,
+which the mcp-gateway `become/data` namespace forwards unchanged:
+
+| MCP tool | Become endpoint |
+| --- | --- |
+| `become_get_context` | `GET /api/ai/context` |
+| `become_get_progress` | `GET /api/progress?detailed=1` |
+| `become_get_nutrition` | `GET /api/nutrition/summary?period=week\|month` |
+| `become_get_mind` | `GET /api/mind/progress` + `GET /api/mind/wins?limit=5` |
+
+Allowlisting only `/api/ai/context` 401s the other four, and the graph degrades
+to an ungrounded reply instead of erroring — the coach quietly loses its
+grounding and nothing reports it. The opt-in is **GET-only**: `/api/progress`
+and `/api/mind/wins` each export a POST beside the allowlisted GET, and neither
+opts in. The token reads; it never writes.
 
 Two supporting guarantees:
 
@@ -944,9 +962,10 @@ Two supporting guarantees:
   route that was never allowlisted leaves a breadcrumb in the RedRun logs
   instead of failing silently.
 
-`GET /api/ai/context` is the only opted-in route. Widening that list is a
-deliberate review step — `webapp/tests/unit/auth/token-scope.test.ts` fails if
-any other route starts accepting a scoped token.
+Widening that list is a deliberate review step, and it means re-reading the live
+graph rather than guessing — `webapp/tests/unit/auth/token-scope.test.ts` fails
+if any other route starts accepting a scoped token, if one of the five stops,
+or if either shared POST starts.
 
 ---
 

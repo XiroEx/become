@@ -6,14 +6,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
-import { verifyAuth, type TokenScope, type VerifyAuthOptions } from '@/lib/auth'
+import { verifyAuth, AI_TOOL_SCOPES, type TokenScope, type VerifyAuthOptions } from '@/lib/auth'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import { assembleUserContext } from './userContext'
 import { triggerBecomeTask, type BecomeTask, type RunBecomeOptions } from './becomeGraph'
 import { recordRunOwner } from './runOwnership'
 
-/** The ONLY scope the AI tool surface accepts. Keep this list one entry long. */
-export const AI_TOOL_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
+/** The ONLY scope the AI tool surface accepts. Defined in lib/auth so a plain
+ *  data route can opt in without importing the graph client. */
+export { AI_TOOL_SCOPES }
 
 /**
  * Mint a SHORT-LIVED (15 min) token scoped to this user for the graph to call
@@ -21,7 +22,28 @@ export const AI_TOOL_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
  * because it rides in the webhook body, which lands in run state (Redis ~1h).
  * The `scope` claim is ENFORCED server-side by verifyAuth's default-deny: this
  * token is rejected by every route except the ones that opt in via
- * `allowScopes` — today that is exactly `GET /api/ai/context`.
+ * `allowScopes`.
+ *
+ * ─── WHAT THIS TOKEN ACTUALLY REACHES (verified against the live graph) ─────
+ *
+ * The `become-freeform-runner` node hands the Gemini neuron four MCP tools with
+ * `toolCredentials: Authorization: Bearer {{state.data.input.userToken}}`. They
+ * resolve to the mcp-gateway `become/data` namespace, which forwards the header
+ * UNCHANGED to five Become GET routes:
+ *
+ *   | MCP tool               | Become endpoint                       |
+ *   |------------------------|---------------------------------------|
+ *   | become_get_context     | GET /api/ai/context                   |
+ *   | become_get_progress    | GET /api/progress?detailed=1          |
+ *   | become_get_nutrition   | GET /api/nutrition/summary?period=... |
+ *   | become_get_mind        | GET /api/mind/progress                |
+ *   | become_get_mind        | GET /api/mind/wins?limit=5            |
+ *
+ * Those five GET handlers are the allowlist, and allowlisting only
+ * /api/ai/context would have 401'd the other four the moment it deployed —
+ * silently, since the graph degrades to an ungrounded reply rather than
+ * failing. The list is read-only by construction: the POST handlers that share
+ * /api/progress and /api/mind/wins deliberately do NOT opt in.
  */
 export async function mintToolToken(userId: string, email?: string): Promise<string | undefined> {
   if (!userId) return undefined

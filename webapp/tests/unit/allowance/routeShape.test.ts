@@ -204,7 +204,35 @@ test('a relaunch inherits every guard the first report had to pass', () => {
   assert.match(src, /decideFlag\(/, 'the daily/new-account admission control it used to skip')
   assert.match(src, /findOneAndUpdate\(/, 'the atomic Food claim it used to skip')
   assert.match(src, /requireSpendCap\(/, 'the spend ceiling')
-  assert.match(src, /verificationBudgetFor\(flag\.rounds\)/, 'the reduced relaunch budget')
+  assert.match(src, /verificationBudgetFor\(rounds\)/, 'the reduced relaunch budget')
+})
+
+test('a round is spent by a DISPATCH, never by an attempt', () => {
+  // `rounds` used to be incremented before the decideFlag throttle, the lost-
+  // claim branch and the spend-cap refusal — all three of which dispatch
+  // nothing. Two throttled resends therefore exhausted a bounded, permanently
+  // exhaustible resource: roundsExhausted() then 409s forever, escalatedAt is
+  // stamped, and /flags/mine flips canAddEvidence to false for good. This path
+  // is behind NEITHER kill-switch, so it is live for every user.
+  const src = read('app/api/nutrition/flags/[id]/evidence/route.ts')
+
+  const increment = src.search(/roundsSoFar \+ 1/)
+  assert.ok(increment !== -1, 'the increment must be a single named step')
+
+  const cap = src.search(/requireSpendCap\(/)
+  const claim = src.search(/findOneAndUpdate\(/)
+  const throttle = src.search(/decision\.action !== 'dispatch'/)
+
+  assert.ok(increment > cap, 'the round must be spent AFTER the spend ceiling passes')
+  assert.ok(increment > claim, 'the round must be spent AFTER the Food claim is won')
+  assert.ok(increment > throttle, 'the round must be spent AFTER the throttle branch returns')
+
+  // And the old unconditional bump must be gone for good.
+  assert.doesNotMatch(
+    src,
+    /flag\.rounds = \(flag\.rounds \?\? 1\) \+ 1/,
+    'an unconditional increment is the bug this replaces',
+  )
 })
 
 test('the relaunch no longer clears the concurrency lock', () => {

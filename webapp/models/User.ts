@@ -91,6 +91,12 @@ export interface IUserSubscription {
   paymentFailedAt?: Date | null;
   /** Last webhook event applied. Guards out-of-order webhook delivery. */
   lastEventId?: string | null;
+  /** `event.created` (epoch SECONDS) of the last event applied — STRIPE's clock,
+   *  which is the only thing an incoming `event.created` may be compared
+   *  against. Comparing it to `updatedAt` (ours) dropped every event in a burst
+   *  but the first, because delivery latency is always positive. See
+   *  lib/billing/apply.ts#isStaleEvent. */
+  lastEventCreated?: number | null;
   updatedAt?: Date;
 }
 
@@ -183,6 +189,7 @@ const UserSubscriptionSchema = new Schema<IUserSubscription>({
   mode: { type: String, enum: ['test', 'live', null], default: null },
   paymentFailedAt: { type: Date, default: null },
   lastEventId: { type: String, default: null },
+  lastEventCreated: { type: Number, default: null },
   updatedAt: { type: Date },
 }, { _id: false });
 

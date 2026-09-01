@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAuth } from '@/lib/auth'
+import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import DailyWin from '@/models/DailyWin'
 import {
@@ -10,7 +10,10 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await verifyAuth(request)
+    // Read-only, so the become-ai graph's short-lived ai-tools token may reach
+    // it — the other half of `become_get_mind`. The POST below does NOT opt in:
+    // the token reads, it never writes.
+    const auth = await verifyAuth(request, { allowScopes: AI_TOOL_SCOPES })
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     await dbConnect()

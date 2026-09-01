@@ -10,7 +10,18 @@
 //   • a token with NO scope claim is a full session and works everywhere (all
 //     existing sessions keep working — that is the blast-radius assertion);
 //   • a token WITH a scope is rejected unless the route named that exact scope;
-//   • exactly one route opts in (GET /api/ai/context).
+//   • exactly five GET handlers opt in, and they are the ones the LIVE
+//     become-ai graph calls — verified against the graph's freeform runner
+//     node, whose four MCP tools carry
+//     `Authorization: Bearer {{state.data.input.userToken}}` into the
+//     mcp-gateway `become/data` namespace:
+//         become_get_context   -> GET /api/ai/context
+//         become_get_progress  -> GET /api/progress?detailed=1
+//         become_get_nutrition -> GET /api/nutrition/summary?period=week|month
+//         become_get_mind      -> GET /api/mind/progress + GET /api/mind/wins
+//     Allowlisting only /api/ai/context would have 401'd the other four on
+//     deploy, and the graph degrades to an ungrounded reply rather than
+//     erroring, so nothing would have reported it.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -150,12 +161,23 @@ test('GET /api/ai/run/<id> rejects an ai-tools token', async () => {
   assert.equal(res.status, 401)
 })
 
-// ── The allowlist must stay exactly one route wide ──────────────────────────
+// ── The allowlist is exactly the graph's tool surface, and no wider ─────────
 
-test('/api/ai/context is the route that opts in', () => {
-  const src = readFileSync(path.join(APP_API, 'ai', 'context', 'route.ts'), 'utf8')
-  assert.match(src, /allowScopes/)
-  assert.match(src, /AI_TOOL_SCOPES/)
+/** Route files the become-ai tool loop legitimately reaches, GET-only. */
+const ALLOWLISTED = [
+  ['ai', 'context'],
+  ['progress'],
+  ['nutrition', 'summary'],
+  ['mind', 'progress'],
+  ['mind', 'wins'],
+].map((segments) => path.join(...segments, 'route.ts'))
+
+test('every tool-surface route opts in', () => {
+  for (const rel of ALLOWLISTED) {
+    const src = readFileSync(path.join(APP_API, rel), 'utf8')
+    assert.match(src, /allowScopes/, `${rel} must opt in`)
+    assert.match(src, /AI_TOOL_SCOPES/, `${rel} must use the shared constant`)
+  }
 })
 
 test('no OTHER route may accept a scoped token', () => {
@@ -172,7 +194,58 @@ test('no OTHER route may accept a scoped token', () => {
   walk(APP_API)
   assert.deepEqual(
     optedIn.sort(),
-    [path.join('ai', 'context', 'route.ts')],
-    'widening the ai-tools allowlist needs a deliberate review — update this test with it',
+    [...ALLOWLISTED].sort(),
+    'widening the ai-tools allowlist needs a deliberate review against what the live become-ai graph calls — update this test with it',
   )
+})
+
+test('the opt-in is READ-only: the POSTs sharing those files still reject it', async () => {
+  // /api/progress and /api/mind/wins each export a POST beside the allowlisted
+  // GET. The file-level scan above cannot tell them apart, so pin the handlers.
+  const progress = await import('../../../app/api/progress/route')
+  assert.equal(
+    (await progress.POST(req('/api/progress', `Bearer ${await toolToken()}`, 'POST'))).status,
+    401,
+    'a read token must not be able to write progress',
+  )
+
+  const wins = await import('../../../app/api/mind/wins/route')
+  assert.equal(
+    (await wins.POST(req('/api/mind/wins', `Bearer ${await toolToken()}`, 'POST'))).status,
+    401,
+    'a read token must not be able to write a win',
+  )
+})
+
+/** Split a route file into one slice per exported handler, keyed by method. */
+function handlerBodies(src: string): Record<string, string> {
+  const re = /export async function (GET|POST|PUT|PATCH|DELETE)\b/g
+  const starts: Array<{ method: string; at: number }> = []
+  for (let m = re.exec(src); m; m = re.exec(src)) starts.push({ method: m[1], at: m.index })
+
+  const out: Record<string, string> = {}
+  starts.forEach(({ method, at }, i) => {
+    out[method] = src.slice(at, starts[i + 1]?.at ?? src.length)
+  })
+  return out
+}
+
+test('the opt-in sits in the GET handler of every allowlisted route', () => {
+  // The file-level scan cannot see WHICH handler opted in. These routes are a
+  // read surface for the graph; a token that could POST would be a different
+  // and much larger grant. Asserted structurally so it holds with no database.
+  for (const rel of ALLOWLISTED) {
+    const bodies = handlerBodies(readFileSync(path.join(APP_API, rel), 'utf8'))
+    assert.ok(bodies.GET, `${rel} should export a GET`)
+    assert.match(bodies.GET, /allowScopes/, `${rel}: the GET must be the opted-in handler`)
+
+    for (const [method, body] of Object.entries(bodies)) {
+      if (method === 'GET') continue
+      assert.doesNotMatch(
+        body,
+        /allowScopes/,
+        `${rel}: ${method} must not accept a scoped token — the ai-tools token reads, it never writes`,
+      )
+    }
+  }
 })

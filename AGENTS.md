@@ -404,6 +404,21 @@ import of `lib/subscription.ts` in the whole billing layer, so if the tier model
 moves that is the single line to change. It also drops out-of-order events
 (Stripe delivers unordered) and never clears `grandfathered`.
 
+**Ordering compares Stripe's clock to Stripe's clock, never to ours.**
+`isStaleEvent` reads the incoming `event.created` against
+`subscription.lastEventCreated` — the `created` of the last event applied. It
+must never be compared against `subscription.updatedAt`, which is OUR wall clock
+at write time: delivery plus processing latency is always positive, so every
+event created at or before the previous write instant reads as stale, and Stripe
+emits these in bursts inside one or two seconds. Only the FIRST event of a burst
+would ever be applied. `invoice.payment_failed` and `customer.subscription.updated
+→ past_due` arrive together, so whichever landed second was dropped and the
+member kept Plus through the whole dunning period plus the 3-day grace. Equal
+timestamps are deliberately NOT stale: `created` is second-granularity, so order
+inside one second is unknowable and every event in the burst carries real state.
+Rows written before `lastEventCreated` existed have none, which reads as
+"nothing to be older than" and applies — correct for the migration.
+
 It runs **regardless of `ENTITLEMENTS_ENFORCED`**: the kill-switch governs
 whether tier is enforced, not whether money is real.
 

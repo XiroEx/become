@@ -28,8 +28,13 @@ test('re-uploading evidence re-arms escalation', () => {
   // — the very case this whole flow exists for.
   const src = read('app/api/nutrition/flags/[id]/evidence/route.ts')
   assert.match(src, /flag\.escalatedAt = undefined/)
-  assert.match(src, /flag\.rounds = \(flag\.rounds \?\? 1\) \+ 1/)
   assert.match(src, /flag\.status = 'open'/)
+  // The round counter still advances, but only where a dispatch is certain —
+  // see 'a round is spent by a DISPATCH, never by an attempt' in
+  // tests/unit/allowance/routeShape.test.ts. Bumping it beside the fields above
+  // let a throttled or claim-losing resend burn one of the three rounds for no
+  // work, and two of those exhausted the report permanently.
+  assert.match(src, /const rounds = roundsSoFar \+ 1/)
 })
 
 test('re-uploading clears the verification cooldown — and ONLY the cooldown', () => {
@@ -52,7 +57,7 @@ test('re-uploading clears the verification cooldown — and ONLY the cooldown', 
   assert.match(src, /verifyFood\(String\(flag\.foodId\)/, 'the relaunch still re-runs verification')
   assert.match(
     src,
-    /budget:\s*verificationBudgetFor\(flag\.rounds\)/,
+    /budget:\s*verificationBudgetFor\(rounds\)/,
     'on a reduced budget — a relaunch drops the grounded search, which is the metered cost',
   )
 })

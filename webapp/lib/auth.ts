@@ -11,6 +11,18 @@ import { getRuntimeConfig } from './runtimeConfig'
 export type TokenScope = 'ai-tools'
 export const TOKEN_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
 
+/**
+ * The opt-in a Become read endpoint passes to `verifyAuth` when the become-ai
+ * graph's tool loop legitimately reaches it. Declared HERE rather than in
+ * lib/ai/routeHelpers so an ordinary data route can opt in without importing
+ * the graph client; routeHelpers re-exports it, so there is one definition.
+ *
+ * The list of routes that use it is fixed by what the LIVE graph calls, not by
+ * taste — see the table in lib/ai/routeHelpers.mintToolToken. Adding one is a
+ * deliberate review step that tests/unit/auth/token-scope.test.ts enforces.
+ */
+export const AI_TOOL_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
+
 export interface JWTPayload {
   userId: string
   email: string

@@ -64,10 +64,31 @@ test('favorite writes workoutLogs.$[elem].favorite, matched by sessionId + kind:
   const patchFn = readPatchHandler()
 
   assert.match(patchFn, /body\.favorite !== undefined/, 'must branch on body.favorite explicitly (undefined vs false matters)')
+
+  // ONE derived boolean drives both the quota gate and the write. `body` is
+  // unvalidated JSON, so a gate reading `body.favorite === true` beside a write
+  // doing `!!body.favorite` was a bypass: PATCH {"favorite": 1} skipped
+  // requireQuota and still starred the session. The two must not be able to
+  // disagree about what "favorite" means.
   assert.match(
     patchFn,
-    /set\['workoutLogs\.\$\[elem\]\.favorite'\]\s*=\s*!!body\.favorite/,
-    'must coerce to boolean the same way skipped does',
+    /const wantsFavorite = body\.favorite !== undefined && !!body\.favorite/,
+    'the coercion must be derived once',
+  )
+  assert.match(
+    patchFn,
+    /set\['workoutLogs\.\$\[elem\]\.favorite'\]\s*=\s*wantsFavorite/,
+    'the write must use the derived boolean, not re-coerce the raw body',
+  )
+  assert.match(
+    patchFn,
+    /if \(wantsFavorite\) \{\s*\n\s*const gate = await requireQuota\(request, 'custom-sessions'\)/,
+    'the quota gate must read the SAME derived boolean the write does',
+  )
+  assert.doesNotMatch(
+    patchFn,
+    /body\.favorite === true/,
+    'a truthiness check on the raw body is the bypass this replaces',
   )
 
   // Same arrayFilters clause skipped/title/date already share — favorite must

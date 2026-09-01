@@ -4,15 +4,17 @@ import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
-import { verifyAuth } from '@/lib/auth'
+import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication
-    const authResult = await verifyAuth(request)
-    
+    // Verify authentication. Read-only, so the become-ai graph's short-lived
+    // ai-tools token may reach it — this is the `become_get_progress` tool
+    // surface (GET /api/progress?detailed=1). The POST below does NOT opt in.
+    const authResult = await verifyAuth(request, { allowScopes: AI_TOOL_SCOPES })
+
     if (!authResult.success) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

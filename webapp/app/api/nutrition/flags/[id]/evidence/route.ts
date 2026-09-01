@@ -52,6 +52,11 @@ const DAY_MS = 24 * 60 * 60 * 1000
  *   5. a spend ceiling; and
  *   6. a reduced budget, so the relaunch keeps the photo read and drops the
  *      search.
+ *
+ * A round is spent by a DISPATCH, never by an attempt. Every guard above can
+ * end the request having queued nothing, and `rounds` is a bounded resource
+ * whose exhaustion is permanent — so it is incremented at the single point
+ * where a dispatch is certain, after (4) and (5) have both passed.
  */
 export async function POST(
   request: NextRequest,
@@ -167,20 +172,29 @@ export async function POST(
       flag.note = body.note.trim().slice(0, 500)
     }
     flag.status = 'open'
-    flag.rounds = (flag.rounds ?? 1) + 1
     flag.seenAt = undefined
     flag.escalatedAt = undefined
     flag.resolution = undefined
     flag.resolvedAt = undefined
     await flag.save()
 
-    const roundsRemaining = Math.max(0, MAX_VERIFICATION_ROUNDS - flag.rounds)
+    // `rounds` is NOT bumped here. A round is spent by a DISPATCH, not by an
+    // attempt: a relaunch that decideFlag throttles (3/day for an account under
+    // a week old), that loses the atomic Food claim, or that the spend ceiling
+    // refuses has dispatched nothing. Charging those burned two of the three
+    // automatic rounds for no work, after which roundsExhausted() returned 409
+    // forever, escalatedAt was stamped, and /flags/mine flipped canAddEvidence
+    // to false permanently — a temporary throttle turned into permanent
+    // exhaustion plus a pointless human escalation. It is bumped at step 6,
+    // once a dispatch is certain.
+    const roundsSoFar = flag.rounds ?? 1
+    let roundsRemaining = Math.max(0, MAX_VERIFICATION_ROUNDS - roundsSoFar)
 
     if (decision.action !== 'dispatch') {
       return NextResponse.json(
         {
           ok: true,
-          rounds: flag.rounds,
+          rounds: roundsSoFar,
           roundsRemaining,
           photoCount: merged.length,
           queued: decision.action === 'queue',
@@ -226,7 +240,7 @@ export async function POST(
       return NextResponse.json(
         {
           ok: true,
-          rounds: flag.rounds,
+          rounds: roundsSoFar,
           roundsRemaining,
           photoCount: merged.length,
           message: 'Thanks — this food is already being checked.',
@@ -246,11 +260,21 @@ export async function POST(
       return cap.response
     }
 
-    // ── 6. Dispatch on a reduced budget ─────────────────────────────────────
+    // ── 6. The round is spent HERE, and only here ───────────────────────────
+    // Every way out above dispatched nothing, so none of them may consume one
+    // of the three automatic rounds. Best-effort like the other side writes on
+    // this path: a failed stamp means the round is not counted, which errs
+    // toward the member getting another look rather than losing one.
+    const rounds = roundsSoFar + 1
+    flag.rounds = rounds
+    roundsRemaining = Math.max(0, MAX_VERIFICATION_ROUNDS - rounds)
+    await FoodFlag.updateOne({ _id: flag._id }, { $set: { rounds } }).catch(() => {})
+
+    // ── 7. Dispatch on a reduced budget ─────────────────────────────────────
     // Best effort and deliberately not awaited: the member should not sit on a
     // spinner through a vision read and a review.
     verifyFood(String(flag.foodId), {
-      budget: verificationBudgetFor(flag.rounds),
+      budget: verificationBudgetFor(rounds),
       userPhotoUrl: merged[0],
       reportedKinds: flag.kinds ?? (flag.kind ? [flag.kind] : []),
       reportedNote: flag.note,
@@ -259,7 +283,7 @@ export async function POST(
     })
 
     return NextResponse.json(
-      { ok: true, rounds: flag.rounds, roundsRemaining, photoCount: merged.length },
+      { ok: true, rounds, roundsRemaining, photoCount: merged.length },
       { status: 202 },
     )
   } catch (error) {

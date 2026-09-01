@@ -176,13 +176,92 @@ test('grandfathered survives every event and is never in a patch', async () => {
 
 // ─── ordering ────────────────────────────────────────────────────────────────
 
-test('isStaleEvent compares Stripe seconds against our stored millis', () => {
-  const stored = at(0)
-  assert.equal(isStaleEvent(secondsAt(-1), stored), true)
-  assert.equal(isStaleEvent(secondsAt(1), stored), false)
-  assert.equal(isStaleEvent(secondsAt(-1), null), false, 'nothing stored yet — apply it')
-  assert.equal(isStaleEvent(secondsAt(-1), undefined), false)
-  assert.equal(isStaleEvent(0, stored), true)
+test('isStaleEvent compares Stripe seconds against STRIPE seconds', () => {
+  const stored = secondsAt(0)
+  assert.equal(isStaleEvent(stored - 1, stored), true)
+  assert.equal(isStaleEvent(stored + 1, stored), false)
+  assert.equal(isStaleEvent(stored - 1, null), false, 'nothing applied yet — apply it')
+  assert.equal(isStaleEvent(stored - 1, undefined), false)
+  // Same second is NOT stale: `created` is second-granularity, so order inside
+  // one second is unknowable and every event in the burst carries real state.
+  assert.equal(isStaleEvent(stored, stored), false)
+})
+
+test('isStaleEvent never reads OUR write clock — the burst-drop regression', () => {
+  // Stripe emits checkout/subscription events in bursts: several events sharing
+  // one `created` second, delivered and processed a beat later. After the first
+  // is applied, the stored Stripe clock is that second.
+  const burst = secondsAt(0)
+  const ourWriteInstant = at(0).getTime() + 2000 // wall clock, ~2s after `created`
+
+  // The sibling — same created second, delivered second — must still apply.
+  assert.equal(isStaleEvent(burst, burst), false, 'a burst sibling must still apply')
+
+  // The old comparison put OUR write instant (millis) on the right-hand side.
+  // Delivery plus processing latency is always positive, so that same sibling
+  // read as stale: only the FIRST event of any burst was ever applied.
+  assert.ok(burst * 1000 < ourWriteInstant, 'the old comparison really did drop it')
+
+  // A millis value can never sneak back in as the comparand undetected — it is
+  // ~1000x larger than any `created` second, so everything reads stale.
+  assert.equal(isStaleEvent(burst, ourWriteInstant), true)
+  assert.notEqual(ourWriteInstant, burst, 'the two clocks are not interchangeable')
+})
+
+test('payment_failed and past_due in the SAME second both apply', async () => {
+  // The exact pair Stripe emits together during dunning. Under the old
+  // comparison whichever landed second was dropped, so past_due never reached
+  // the user document about half the time and the member kept Plus through the
+  // whole dunning period plus the 3-day grace.
+  const burst = secondsAt(0)
+  const h = harness({
+    tier: 'plus',
+    subscription: { status: 'active', mode: 'test', lastEventCreated: burst, updatedAt: at(0) },
+  })
+
+  const result = await applyBillingOutcome(
+    { ...subscriptionOutcome({ status: 'past_due' }), eventCreated: burst } as BillingOutcome,
+    h.deps,
+    'evt_burst_2',
+  )
+
+  assert.equal(result.applied, true, 'the second event of a burst must not be dropped')
+  if (!result.applied) return
+  assert.equal(result.tier, 'free')
+  assert.equal(h.writes[0].patch['subscription.status'], 'past_due')
+  assert.equal(h.writes[0].patch['subscription.lastEventCreated'], burst)
+})
+
+test('every branch stamps lastEventCreated, or ordering degrades to never-stale', async () => {
+  const created = secondsAt(0)
+  const linkOnly = harness({ tier: 'free', subscription: null })
+  await applyBillingOutcome(
+    {
+      kind: 'link',
+      ref: { by: 'userId', userId: 'user_1' },
+      customerId: 'cus_test_1',
+      subscriptionId: undefined,
+      mode: 'test',
+      eventCreated: created,
+    } as BillingOutcome,
+    linkOnly.deps,
+    'evt_link',
+  )
+  assert.equal(linkOnly.writes[0].patch['subscription.lastEventCreated'], created)
+
+  const failed = harness({ tier: 'plus', subscription: { status: 'active', mode: 'test' } })
+  await applyBillingOutcome(
+    {
+      kind: 'payment_failed',
+      ref: { by: 'userId', userId: 'user_1' },
+      subscriptionId: 'sub_test_1',
+      mode: 'test',
+      eventCreated: created,
+    } as BillingOutcome,
+    failed.deps,
+    'evt_failed',
+  )
+  assert.equal(failed.writes[0].patch['subscription.lastEventCreated'], created)
 })
 
 test('an out-of-order event is dropped with ZERO writes', async () => {
@@ -190,7 +269,7 @@ test('an out-of-order event is dropped with ZERO writes', async () => {
   // resubscribed. Applying it would cancel a live subscription.
   const h = harness({
     tier: 'plus',
-    subscription: { status: 'active', updatedAt: at(0), mode: 'test' },
+    subscription: { status: 'active', lastEventCreated: secondsAt(0), updatedAt: at(0), mode: 'test' },
   })
   const result = await applyBillingOutcome(
     { ...subscriptionOutcome({ status: 'canceled' }), eventCreated: secondsAt(-2) } as BillingOutcome,
@@ -200,6 +279,20 @@ test('an out-of-order event is dropped with ZERO writes', async () => {
   assert.deepEqual(result, { applied: false, reason: 'stale_event' })
   assert.equal(h.writes.length, 0, 'a stale event must not write anything at all')
   assert.equal(h.tierChanges.length, 0)
+})
+
+test('a fresh document with only updatedAt set is NOT treated as ordered state', async () => {
+  // Migration reality: every existing subscription row has updatedAt and no
+  // lastEventCreated. Those must all apply, not silently drop.
+  const h = harness({
+    tier: 'free',
+    subscription: { status: 'active', mode: 'test', updatedAt: at(10) },
+  })
+  const result = await applyBillingOutcome(
+    { ...subscriptionOutcome({ status: 'canceled', currentPeriodEnd: at(-1) }), eventCreated: secondsAt(-5) } as BillingOutcome,
+    h.deps,
+  )
+  assert.equal(result.applied, true, 'no stored Stripe clock means nothing to be older than')
 })
 
 // ─── mode fence ──────────────────────────────────────────────────────────────

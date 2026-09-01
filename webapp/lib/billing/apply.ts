@@ -64,22 +64,46 @@ export type ApplyResult =
     }
 
 /**
- * Is this event older than the state already on the document?
+ * Is this event older than the event already applied to the document?
  *
- * `eventCreated` is Stripe's epoch-SECONDS timestamp; `updatedAt` is when we
- * last wrote. A strictly-older event is a late redelivery of something already
- * superseded — applying it would resurrect a cancelled subscription.
+ * BOTH sides are Stripe's own epoch-SECONDS clock: the incoming `event.created`
+ * against `subscription.lastEventCreated`, the `created` of the last event we
+ * applied. That is the whole point of storing it.
+ *
+ * It used to compare `event.created` against `subscription.updatedAt` — OUR
+ * wall clock at the moment we wrote. Delivery plus processing latency is always
+ * positive, so every event created at or before the previous write instant read
+ * as stale, and Stripe emits these in bursts within the same second or two:
+ * only the FIRST event of a burst was ever applied. `invoice.payment_failed`
+ * and `customer.subscription.updated → past_due` arrive together, so whichever
+ * landed second was dropped and the member kept Plus through the whole dunning
+ * period.
+ *
+ * Equal timestamps are NOT stale. Stripe's `created` is second-granularity, so
+ * order within one second is unknowable — and every event in that burst carries
+ * real state. Only a STRICTLY older event is a late redelivery of something
+ * already superseded, which is what would resurrect a cancelled subscription.
  */
-export function isStaleEvent(eventCreated: number, updatedAt: Date | null | undefined): boolean {
-  if (!updatedAt) return false
-  const stored = new Date(updatedAt).getTime()
-  if (!Number.isFinite(stored)) return false
-  return eventCreated * 1000 < stored
+export function isStaleEvent(
+  eventCreated: number,
+  lastEventCreated: number | null | undefined,
+): boolean {
+  if (typeof lastEventCreated !== 'number' || !Number.isFinite(lastEventCreated)) return false
+  return eventCreated < lastEventCreated
+}
+
+/** The ordering stamp every branch writes: Stripe's clock, not ours. */
+function orderingPatch(eventId: string | undefined, eventCreated: number): Record<string, unknown> {
+  return {
+    ...(eventId ? { 'subscription.lastEventId': eventId } : {}),
+    ...(Number.isFinite(eventCreated) ? { 'subscription.lastEventCreated': eventCreated } : {}),
+  }
 }
 
 function subscriptionPatch(
   state: SubscriptionState,
   eventId: string | undefined,
+  eventCreated: number,
   now: Date,
 ): Record<string, unknown> {
   return {
@@ -91,7 +115,7 @@ function subscriptionPatch(
     'subscription.plan': state.plan ?? null,
     'subscription.mode': state.mode,
     'subscription.updatedAt': now,
-    ...(eventId ? { 'subscription.lastEventId': eventId } : {}),
+    ...orderingPatch(eventId, eventCreated),
   }
 }
 
@@ -127,7 +151,7 @@ export async function applyBillingOutcome(
   const existing = await deps.loadExisting(userId)
   const existingSub = existing?.subscription ?? null
 
-  if (isStaleEvent(outcome.eventCreated, existingSub?.updatedAt)) {
+  if (isStaleEvent(outcome.eventCreated, existingSub?.lastEventCreated)) {
     return { applied: false, reason: 'stale_event' }
   }
 
@@ -159,7 +183,7 @@ export async function applyBillingOutcome(
           : {}),
         'subscription.mode': outcome.mode,
         'subscription.updatedAt': now,
-        ...(eventId ? { 'subscription.lastEventId': eventId } : {}),
+        ...orderingPatch(eventId, outcome.eventCreated),
       }
 
       if (outcome.subscriptionId && deps.retrieveSubscription) {
@@ -172,13 +196,15 @@ export async function applyBillingOutcome(
           nextState = null
         }
       }
-      if (nextState) patch = { ...patch, ...subscriptionPatch(nextState, eventId, now) }
+      if (nextState) {
+        patch = { ...patch, ...subscriptionPatch(nextState, eventId, outcome.eventCreated, now) }
+      }
       break
     }
 
     case 'subscription': {
       nextState = outcome.state
-      patch = subscriptionPatch(nextState, eventId, now)
+      patch = subscriptionPatch(nextState, eventId, outcome.eventCreated, now)
       if (outcome.customerId) {
         patch[`subscription.${customerIdField(nextState.mode)}`] = outcome.customerId
       }
@@ -191,7 +217,7 @@ export async function applyBillingOutcome(
         'subscription.paymentFailedAt': now,
         'subscription.mode': outcome.mode,
         'subscription.updatedAt': now,
-        ...(eventId ? { 'subscription.lastEventId': eventId } : {}),
+        ...orderingPatch(eventId, outcome.eventCreated),
       }
       break
     }
