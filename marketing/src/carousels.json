@@ -13,7 +13,7 @@
       "THE",
       "WORK"
     ],
-    "lead": "Tracking food is this easy: a whole day, logged from two photos.",
+    "lead": "Tracking food is this easy: a whole day logged, protein goal hit.",
     "steps": [
       "Snap the plate",
       "Say it in words",
@@ -22,16 +22,16 @@
     "image": "carousel/fuel/day.png",
     "stats": [
       {
-        "value": "2,229",
+        "value": "2,131",
         "label": "Calories"
       },
       {
-        "value": "187g",
+        "value": "235g",
         "label": "Protein"
       },
       {
-        "value": "2",
-        "label": "Photos"
+        "value": "180 lbs",
+        "label": "On track"
       }
     ]
   },
