@@ -12,6 +12,7 @@ import {
 } from '@/lib/entitlements'
 import { peekAllowance } from '@/lib/allowances'
 import { readTzOffset } from '@/lib/dayWindow'
+import { getBillingConfig, priceIdForPlan } from '@/lib/billing/config'
 
 // GET /api/me/entitlements?tz=<offset>
 //
@@ -44,6 +45,9 @@ export async function GET(request: NextRequest) {
 
   const { role, tier, grandfathered, subscription } = await loadUserEntitlement(auth.userId)
   const enforced = entitlementsEnforced()
+  // Never throws and needs no network — an unconfigured install resolves to
+  // false, which is exactly the state the app ships in.
+  const billing = await getBillingConfig()
   const tzOffset = readTzOffset(new URL(request.url).searchParams)
 
   const entries = await Promise.all(
@@ -86,10 +90,13 @@ export async function GET(request: NextRequest) {
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd ?? false,
         }
       : null,
-    // Whether a checkout can actually be started. Owned by the billing work;
-    // false until that lands, which is what makes the upgrade CTA render its
-    // "coming soon" state instead of a dead link.
-    checkoutAvailable: false,
+    // Whether a checkout can actually be started: a secret key AND at least one
+    // price. Either missing and the upgrade CTA renders its "coming soon" state
+    // instead of a dead link — which is what launch day looks like, since the
+    // billing block is not in BECOME_RUNTIME_CONFIG yet.
+    checkoutAvailable:
+      billing.configured
+      && Boolean(priceIdForPlan(billing, 'monthly') || priceIdForPlan(billing, 'annual')),
     features: Object.fromEntries(entries) as Record<Feature, FeatureEntitlement>,
   })
 }

@@ -2,6 +2,7 @@
 // by a client component or bundled into browser code.
 import { MongoClient } from 'mongodb'
 import { SecretsClient } from '@redbtn/redsecrets'
+import { resolveStripeMode, type StripeMode } from './billing/mode'
 
 const APP_NAME = 'become'
 const RUNTIME_SECRET_NAME = 'BECOME_RUNTIME_CONFIG'
@@ -42,6 +43,22 @@ export interface RuntimeConfig {
   push: { publicKey?: string; privateKey?: string; email?: string }
   admin: { bootstrapToken?: string; cronSecret?: string; adminKey?: string }
   external: { usdaApiKey?: string; giphyApiKey?: string }
+  /**
+   * Stripe. EVERY field is optional and resolved with optional(), never
+   * required(): an unconfigured billing section must mean "checkout is not
+   * available yet", not "getRuntimeConfig() throws". A throw here 401s every
+   * authenticated route while AuthGuard still renders the page, so the app
+   * looks fine and every list is silently empty.
+   *
+   * `stripeMode` is the one field always present — it defaults to 'test'.
+   */
+  billing: {
+    stripeSecretKey?: string
+    stripeWebhookSecret?: string
+    stripePricePlusMonthly?: string
+    stripePricePlusAnnual?: string
+    stripeMode: StripeMode
+  }
 }
 
 type RuntimePayload = Partial<{
@@ -54,6 +71,7 @@ type RuntimePayload = Partial<{
   push: RuntimeConfig['push']
   admin: RuntimeConfig['admin']
   external: RuntimeConfig['external']
+  billing: Partial<RuntimeConfig['billing']>
 }>
 
 export class RuntimeConfigError extends Error {
@@ -196,6 +214,9 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
   const push = payload.push ?? {}
   const admin = payload.admin ?? {}
   const external = payload.external ?? {}
+  const billing = payload.billing ?? {}
+
+  const stripeSecretKey = optional(billing.stripeSecretKey, localEnv('STRIPE_SECRET_KEY'))
 
   return {
     auth: {
@@ -242,6 +263,23 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
     external: {
       usdaApiKey: optional(external.usdaApiKey, localEnv('USDA_API_KEY')),
       giphyApiKey: optional(external.giphyApiKey, localEnv('GIPHY_API_KEY')),
+    },
+    billing: {
+      stripeSecretKey,
+      stripeWebhookSecret: optional(billing.stripeWebhookSecret, localEnv('STRIPE_WEBHOOK_SECRET')),
+      stripePricePlusMonthly: optional(
+        billing.stripePricePlusMonthly,
+        localEnv('STRIPE_PRICE_PLUS_MONTHLY'),
+      ),
+      stripePricePlusAnnual: optional(
+        billing.stripePricePlusAnnual,
+        localEnv('STRIPE_PRICE_PLUS_ANNUAL'),
+      ),
+      // The key wins over the declaration — see resolveStripeMode.
+      stripeMode: resolveStripeMode(
+        billing.stripeMode ?? localEnv('STRIPE_MODE'),
+        stripeSecretKey,
+      ),
     },
   }
 }

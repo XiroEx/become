@@ -6,8 +6,14 @@ export type UserRole = 'user' | 'trainer' | 'admin';
  *  implemented; legacy 'premium'/'pro' rows are promoted by
  *  scripts/migrate-tiers.mjs and read as 'free' until they are. */
 export type Tier = 'free' | 'plus';
+/** Mirrors Stripe's subscription statuses, plus 'none' for "never subscribed".
+ *  'incomplete_expired' and 'paused' are real statuses Stripe emits — they are
+ *  listed because the mongoose enum below REJECTS anything absent from it, and
+ *  a rejected write means the webhook 500s and Stripe retries the same event
+ *  forever. Both derive to `free` (deriveTier's default branch). */
 export type SubscriptionStatus =
-  | 'none' | 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete' | 'unpaid';
+  | 'none' | 'trialing' | 'active' | 'past_due' | 'canceled'
+  | 'incomplete' | 'incomplete_expired' | 'unpaid' | 'paused';
 export type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_performance' | 'general_health';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type BiologicalSex = 'male' | 'female' | 'prefer_not_to_say';
@@ -72,6 +78,17 @@ export interface IUserSubscription {
   stripeTestCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   priceId?: string | null;
+  /** Which configured price this maps to. Cosmetic — the UI's plan label. May
+   *  be absent for an unrecognised price; `status` is what decides tier. */
+  plan?: 'monthly' | 'annual' | null;
+  /** Which Stripe account wrote this state. Production and beta share ONE
+   *  database, so without it a test-mode event on beta is indistinguishable
+   *  from a live one and would overwrite a real subscription. See
+   *  lib/billing/mode.ts#canApplyMode. */
+  mode?: 'test' | 'live' | null;
+  /** Stamped by invoice.payment_failed, for dunning copy only. It does NOT set
+   *  tier — the customer.subscription.updated → past_due event does that. */
+  paymentFailedAt?: Date | null;
   /** Last webhook event applied. Guards out-of-order webhook delivery. */
   lastEventId?: string | null;
   updatedAt?: Date;
@@ -150,7 +167,10 @@ const UserProfileSchema = new Schema({
 const UserSubscriptionSchema = new Schema<IUserSubscription>({
   status: {
     type: String,
-    enum: ['none', 'trialing', 'active', 'past_due', 'canceled', 'incomplete', 'unpaid'],
+    enum: [
+      'none', 'trialing', 'active', 'past_due', 'canceled',
+      'incomplete', 'incomplete_expired', 'unpaid', 'paused',
+    ],
     default: 'none',
   },
   currentPeriodEnd: { type: Date, default: null },
@@ -159,6 +179,9 @@ const UserSubscriptionSchema = new Schema<IUserSubscription>({
   stripeTestCustomerId: { type: String, default: null },
   stripeSubscriptionId: { type: String, default: null },
   priceId: { type: String, default: null },
+  plan: { type: String, enum: ['monthly', 'annual', null], default: null },
+  mode: { type: String, enum: ['test', 'live', null], default: null },
+  paymentFailedAt: { type: Date, default: null },
   lastEventId: { type: String, default: null },
   updatedAt: { type: Date },
 }, { _id: false });
@@ -224,6 +247,13 @@ UserSchema.index(
 UserSchema.index(
   { 'subscription.stripeTestCustomerId': 1 },
   { partialFilterExpression: { 'subscription.stripeTestCustomerId': { $type: 'string' } } }
+)
+// invoice.payment_failed carries a subscription, not always a resolvable
+// customer — this is the fallback lookup path for it. Partial for the same
+// reason as the two above: the field defaults to null on every user.
+UserSchema.index(
+  { 'subscription.stripeSubscriptionId': 1 },
+  { partialFilterExpression: { 'subscription.stripeSubscriptionId': { $type: 'string' } } }
 )
 // Admin/ops: "who is on what".
 UserSchema.index({ tier: 1, grandfathered: 1 })

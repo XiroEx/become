@@ -314,6 +314,106 @@ Rules that are easy to get wrong:
   `lib/nutrition/aiEngine.ts`, threaded from `runStore`'s HTTP status. Check it
   BEFORE `PlateUnavailableError` or a paywall reads as an outage.
 
+### Billing (Stripe)
+
+Every value is **optional**, and the app is fully functional with none of them
+set: `/api/billing/checkout` and `/api/billing/portal` answer
+`503 billing_not_configured`, `/api/billing/status` answers `200` with
+`configured: false`, and `UpgradeSheet` renders its coming-soon note instead of
+a CTA. That is the state Become ships in.
+
+| redsecrets `billing.*` | local env (dev only) | notes |
+|---|---|---|
+| `stripeSecretKey` | `STRIPE_SECRET_KEY` | `sk_test_…` / `sk_live_…` |
+| `stripeWebhookSecret` | `STRIPE_WEBHOOK_SECRET` | `whsec_…`, one per endpoint |
+| `stripePricePlusMonthly` | `STRIPE_PRICE_PLUS_MONTHLY` | `price_…` |
+| `stripePricePlusAnnual` | `STRIPE_PRICE_PLUS_ANNUAL` | `price_…` |
+| `stripeMode` | `STRIPE_MODE` | `test`\|`live`; **the key prefix wins** |
+
+**Setting these as RedRun env vars does nothing.** `localEnv()` in
+`lib/runtimeConfig.ts` returns `undefined` whenever `NODE_ENV === 'production'`
+(which `next start` sets), so production reads `billing.*` from the
+`BECOME_RUNTIME_CONFIG` secret in redsecrets (`redshared`) or not at all. A
+deploy that sets RedRun env vars and expects checkout to switch on stays
+silently unconfigured.
+
+Every field resolves through `optional()`, **never `required()`**. One
+`required()` in that block turns "billing isn't set up yet" into
+`getRuntimeConfig()` throwing, which 401s every authenticated route while
+`AuthGuard` still renders the page — the app looks fine and every list is empty.
+`tests/unit/billing/billingConfig.test.ts` exists to catch exactly that.
+
+#### The mode fence (read before touching `lib/billing/`)
+
+Production and beta are two workspaces on **one MongoDB**. If prod runs live and
+beta runs test, both webhooks write the same `user.subscription`. Three
+mechanisms keep them apart and none of them is optional:
+
+- `reduceStripeEvent` drops any event whose `livemode` disagrees with the
+  configured mode, before anything can reach a user document.
+- Customer ids are **mode-specific fields** (`stripeCustomerId` for live,
+  `stripeTestCustomerId` for test) — a member can legitimately hold both.
+- `canApplyMode()`: a **test-mode event never overwrites live state**. Real
+  money wins; the reverse is allowed.
+
+The visible consequence is deliberate: a live subscriber who also test-subscribes
+on beta sees beta's changes rejected as `mode_downgrade_blocked`. That reads as
+"beta is broken" and is not. Do not fix it by dropping the guard.
+
+#### Stripe API shapes that moved (both fail silently)
+
+Verified against the installed SDK, not from memory:
+
+- `Subscription.current_period_end` **no longer exists** — it is
+  `subscription.items.data[i].current_period_end`.
+- `Invoice.subscription` **no longer exists** — it is
+  `invoice.parent.subscription_details.subscription`.
+
+Read the old field and you store `undefined`. Because a `canceled` sub keeps Plus
+only while `now < currentPeriodEnd`, an undefined period end downgrades someone
+the moment they cancel — after they have paid for the month.
+`lib/billing/subscriptionState.ts` is the only place either shape is read, and
+both are pinned by fixtures.
+
+Also: **never pass `apiVersion`** to the constructor. `StripeConfig` types it as
+the literal `LatestApiVersion`, so a hardcoded date string breaks `tsc` on the
+next SDK bump. The SDK's pinned version is correct by construction.
+
+#### The webhook
+
+`POST /api/billing/webhook`, unauthenticated by design — the signature IS the
+auth, and `middleware.ts` only matches `/dashboard/:path*` so nothing intercepts
+it. Order is load-bearing:
+
+1. **`await request.text()`, never `request.json()`.** Re-serializing changes the
+   bytes the HMAC covers and every delivery 400s. A webhook that "just stopped
+   verifying" is almost always this.
+2. Verify → reduce → **then** claim. Claiming before verification would let an
+   unsigned POST burn a real event id and suppress the genuine delivery.
+3. `models/StripeEvent.ts` + its unique index on `eventId` is the idempotency
+   mechanism: the insert IS the claim and E11000 IS "already seen". On a handler
+   throw the claim is **released** and the route 500s so Stripe's retry can
+   re-claim — leaving the row behind makes every retry a silent no-op and the
+   event is lost forever.
+4. An unhandled type answers **200**. A 4xx makes Stripe retry an event we will
+   never act on.
+
+`applyBillingOutcome` writes `subscription.*` **and** the derived `tier` in one
+`$set`, with `deriveTier` **injected** — `lib/billing/mongoDeps.ts` holds the one
+import of `lib/subscription.ts` in the whole billing layer, so if the tier model
+moves that is the single line to change. It also drops out-of-order events
+(Stripe delivers unordered) and never clears `grandfathered`.
+
+It runs **regardless of `ENTITLEMENTS_ENFORCED`**: the kill-switch governs
+whether tier is enforced, not whether money is real.
+
+Endpoints to register in the Stripe dashboard, one webhook secret each:
+`https://become.redbtn.io/api/billing/webhook` (live) and
+`https://become-beta.redbtn.io/api/billing/webhook` (test). The **billing portal
+also needs a configuration saved in the dashboard** or
+`billingPortal.sessions.create` fails — mapped to `503
+billing_portal_not_configured` so it does not read as a code bug.
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"
