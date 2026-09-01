@@ -7,8 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
 import { PROTOCOL_CATALOG } from '@/lib/mind/suggestedProtocols'
 import dbConnect from '@/lib/mongodb'
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest) {
 
   // NOTE: no dot in the task name — the global-state registry rejects dotted keys
   // on create, so this task is registered as `mindSuggestActions`.
-  const trig = await triggerBecomeTask('mindSuggestActions', {
+  const trig = await triggerOwnedRun(gate.user, 'mindSuggestActions', {
     ...ctx,
     candidates,
     user: { ...ground, ...mindHistory },

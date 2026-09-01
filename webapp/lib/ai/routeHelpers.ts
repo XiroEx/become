@@ -6,23 +6,29 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
-import { verifyAuth } from '@/lib/auth'
+import { verifyAuth, type TokenScope, type VerifyAuthOptions } from '@/lib/auth'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import { assembleUserContext } from './userContext'
+import { triggerBecomeTask, type BecomeTask, type RunBecomeOptions } from './becomeGraph'
+import { recordRunOwner } from './runOwnership'
+
+/** The ONLY scope the AI tool surface accepts. Keep this list one entry long. */
+export const AI_TOOL_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
 
 /**
  * Mint a SHORT-LIVED (15 min) token scoped to this user for the graph to call
  * back into Become on the user's behalf (MCP/data tools). Deliberately short
  * because it rides in the webhook body, which lands in run state (Redis ~1h).
- * It verifies through the normal verifyAuth (userId) and only ever reaches GET
- * data endpoints via the become MCP tools, so it's effectively read-scoped; the
- * `scope` claim is there for future server-side enforcement.
+ * The `scope` claim is ENFORCED server-side by verifyAuth's default-deny: this
+ * token is rejected by every route except the ones that opt in via
+ * `allowScopes` — today that is exactly `GET /api/ai/context`.
  */
 export async function mintToolToken(userId: string, email?: string): Promise<string | undefined> {
   if (!userId) return undefined
   try {
     const { auth } = await getRuntimeConfig()
-    return jwt.sign({ userId, email, scope: 'ai-tools' }, auth.jwtSecret, { expiresIn: '15m' })
+    const scope: TokenScope = 'ai-tools'
+    return jwt.sign({ userId, email, scope }, auth.jwtSecret, { expiresIn: '15m' })
   } catch {
     return undefined
   }
@@ -31,17 +37,53 @@ export async function mintToolToken(userId: string, email?: string): Promise<str
 export interface AiUser {
   userId: string
   email?: string
+  /** undefined = full session; 'ai-tools' = graph tool call on the user's behalf. */
+  scope?: TokenScope
 }
 
 /** Auth gate for every AI route. Returns null + a 401 response when unauthed. */
 export async function requireAiUser(
   request: NextRequest,
+  options: VerifyAuthOptions = {},
 ): Promise<{ user: AiUser } | { user: null; res: NextResponse }> {
-  const auth = await verifyAuth(request)
+  const auth = await verifyAuth(request, options)
   if (!auth.success || !auth.userId) {
     return { user: null, res: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
-  return { user: { userId: auth.userId, email: auth.email } }
+  return { user: { userId: auth.userId, email: auth.email, scope: auth.scope } }
+}
+
+export type TriggerOwnedRunResult = { ok: true; runId: string } | { ok: false; error: string }
+
+/**
+ * Trigger a graph run AND bind it to the caller, so GET /api/ai/run/<id> can
+ * prove ownership. Every /api/ai route that hands a runId to the client MUST
+ * use this instead of triggerBecomeTask — a run with no ownership row is a run
+ * nobody can poll.
+ *
+ * `withUserToken: true` mints the short-lived ai-tools token for the graph's
+ * callback tools; keeping mintToolToken behind this flag means it is called
+ * from exactly one place.
+ */
+export async function triggerOwnedRun(
+  user: AiUser,
+  task: BecomeTask,
+  context: string | Record<string, unknown>,
+  opts: Omit<RunBecomeOptions, 'userToken'> & { withUserToken?: boolean } = {},
+): Promise<TriggerOwnedRunResult> {
+  const { withUserToken, ...rest } = opts
+  const userToken = withUserToken ? await mintToolToken(user.userId, user.email) : undefined
+  const trig = await triggerBecomeTask(task, context, {
+    ...rest,
+    ...(userToken ? { userToken } : {}),
+  })
+  if (!trig.ok) return trig
+  if (!(await recordRunOwner(trig.runId, user.userId, task))) {
+    // Untracked run = unpollable run. Fail like a trigger failure so the route's
+    // existing else-branch serves its deterministic fallback.
+    return { ok: false, error: 'run_ownership_write_failed' }
+  }
+  return trig
 }
 
 /** Clamp a chat history to the last N turns and strip it to {role,text}. */

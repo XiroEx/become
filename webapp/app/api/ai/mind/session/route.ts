@@ -6,8 +6,7 @@
 // and falls back to the deterministic composer whenever ok is false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
 
 export const dynamic = 'force-dynamic'
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
   // the session's structure itself.
   const blueprint = body.blueprint && typeof body.blueprint === 'object' ? body.blueprint : undefined
 
-  const trig = await triggerBecomeTask('mind.composeSession', {
+  const trig = await triggerOwnedRun(gate.user, 'mind.composeSession', {
     ...ctx,
     ...(blueprint ? { blueprint } : {}),
     user: { ...ground, ...mindHistory },

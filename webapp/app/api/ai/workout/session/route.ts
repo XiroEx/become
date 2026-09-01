@@ -5,8 +5,7 @@
 // The caller falls back to its deterministic quick-session generator on ok:false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -23,7 +22,7 @@ export async function POST(request: NextRequest) {
   }
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask('workout.generateSession', {
+  const trig = await triggerOwnedRun(gate.user, 'workout.generateSession', {
     prompt: asText(body.prompt, 600),
     focus: asText(body.focus, 120),
     duration: typeof body.duration === 'number' ? body.duration : asText(body.duration, 40),

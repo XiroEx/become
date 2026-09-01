@@ -20,8 +20,7 @@
 // Schema, so treat as its own change, not a quick tweak here).
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing text' }, { status: 400 })
   }
 
-  const trig = await triggerBecomeTask('workoutImportText', { text })
+  const trig = await triggerOwnedRun(gate.user, 'workoutImportText', { text })
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
   return NextResponse.json({ ok: false, fallback: true })
 }

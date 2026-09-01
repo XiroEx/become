@@ -5,8 +5,7 @@
 // PlateEstimate. Image is base64-only server-side; the bearer/secret stay server-side.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -30,7 +29,8 @@ export async function POST(request: NextRequest) {
   const note = typeof body.note === 'string' ? body.note.slice(0, 500) : ''
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask(
+  const trig = await triggerOwnedRun(
+    gate.user,
     'nutrition.plateEstimate',
     { user: grounding, ...(note.trim() ? { note } : {}) },
     { image },

@@ -7,12 +7,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { assembleUserContext } from '@/lib/ai/userContext'
-import { requireAiUser } from '@/lib/ai/routeHelpers'
+import { requireAiUser, AI_TOOL_SCOPES } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const gate = await requireAiUser(request)
+  // The ONE route an ai-tools token may reach: it is the `become_get_context`
+  // tool surface, read-only, and already strictly scoped to the token's userId.
+  // Every other route rejects that scope by default (see lib/auth.verifyAuth).
+  const gate = await requireAiUser(request, { allowScopes: AI_TOOL_SCOPES })
   if (!gate.user) return gate.res
   const context = await assembleUserContext(gate.user.userId)
   return NextResponse.json({ ok: true, context })

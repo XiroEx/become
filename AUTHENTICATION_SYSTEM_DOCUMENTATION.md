@@ -631,61 +631,44 @@ Set-Cookie: auth_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax
 
 ---
 
-### POST /api/auth/login (Legacy)
+### POST /api/auth/login — RETIRED (410 Gone)
 
-**Purpose**: Direct login without password (development/testing)
+**Status**: Retired. It minted a full 30-day session JWT for **any** existing
+email address with zero proof of ownership — no password, no magic link. Use
+the magic-link flow (`POST /api/auth/send-link`) instead.
 
-**Status**: Legacy endpoint, should be replaced with magic link flow
+**Logic**: none. The handler takes no request, touches no database, and returns
+the same response to every caller, authenticated or not.
 
-**Request Body**:
+**Response** (`410`, `Cache-Control: no-store`):
 ```typescript
 {
-  email: string
+  error: 'This endpoint has been retired. Become uses passwordless magic-link sign-in.',
+  code: 'legacy_auth_disabled',
+  use: '/api/auth/send-link'
 }
 ```
 
-**Logic**:
-1. Find or create user with email
-2. Generate JWT
-3. Return token
-
-**Response**:
-```typescript
-{
-  token: string,
-  user: { id: string, name: string, email: string }
-}
-```
+Never a `token`, never a `user`. `GET`/`PUT`/`PATCH`/`DELETE` get Next.js's
+automatic `405`, since the route exports only `POST`.
 
 ---
 
-### POST /api/auth/register (Legacy)
+### POST /api/auth/register — RETIRED (410 Gone)
 
-**Purpose**: Direct registration without password
+**Status**: Retired. It created an account and minted a full session JWT from a
+bare `name` + `email`, so anyone could register an address they did not control
+and be signed in as it. Registration now happens through the magic-link verify
+step (`POST /api/auth/verify-link` creates the user on first use).
 
-**Status**: Legacy endpoint, should be replaced with magic link flow
+**Logic**: none — identical to `/api/auth/login` above.
 
-**Request Body**:
-```typescript
-{
-  name: string,
-  email: string
-}
-```
+**Response** (`410`, `Cache-Control: no-store`): the same body as
+`/api/auth/login`, with no `token` and no `user`.
 
-**Logic**:
-1. Check if user exists
-2. Create new user
-3. Generate JWT
-4. Return token
-
-**Response**:
-```typescript
-{
-  token: string,
-  user: { id: string, name: string, email: string }
-}
-```
+Both handlers share `lib/legacyAuthGone.ts`, and
+`webapp/tests/unit/auth/legacy-auth-routes.test.ts` guards against a caller
+being re-added.
 
 ---
 
@@ -924,6 +907,46 @@ interface JWTPayload {
   email: string
 }
 ```
+
+---
+
+### Token Scopes (default-deny)
+
+**File**: `webapp/lib/auth.ts`
+
+Not every token is a session. `lib/ai/routeHelpers.mintToolToken` mints a
+15-minute token carrying `scope: 'ai-tools'`, which rides in the become-ai
+webhook body so the graph can read this user's data back out of Become.
+
+That claim is **enforced**, not decorative:
+
+```typescript
+export type TokenScope = 'ai-tools'
+
+// A token with NO scope claim is a full session and is accepted everywhere.
+// A token WITH a scope is accepted ONLY where the route named that exact scope.
+verifyAuth(request, { allowScopes: AI_TOOL_SCOPES })
+```
+
+| Token | Everywhere | `GET /api/ai/context` | `GET /api/auth/me` |
+| --- | --- | --- | --- |
+| no `scope` claim (every ordinary session) | accepted | accepted | accepted (rolls) |
+| `scope: 'ai-tools'` | **401** | accepted | **401** |
+| any other `scope` | 401 | 401 | 401 |
+
+Two supporting guarantees:
+
+- `signToken` builds its claim set explicitly (`userId`, `email`, `role`), so a
+  scoped payload can never be laundered into a fresh 30-day session by the
+  sliding refresh in `/api/auth/me`. That route also rejects a scoped token
+  outright, because it reads the token directly rather than via `verifyAuth`.
+- A rejected scope is logged with the method and path, so a graph pointed at a
+  route that was never allowlisted leaves a breadcrumb in the RedRun logs
+  instead of failing silently.
+
+`GET /api/ai/context` is the only opted-in route. Widening that list is a
+deliberate review step — `webapp/tests/unit/auth/token-scope.test.ts` fails if
+any other route starts accepting a scoped token.
 
 ---
 

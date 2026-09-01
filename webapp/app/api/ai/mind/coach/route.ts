@@ -4,8 +4,7 @@
 // full consultant chat: this is a single punchy reply for in-session prompts.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText, userGrounding, mintToolToken } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -26,12 +25,13 @@ export async function POST(request: NextRequest) {
   const message = asText(body.message)
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
-  const trig = await triggerBecomeTask(
+  const trig = await triggerOwnedRun(
+    gate.user,
     'mind.coachReply',
     { message, history: trimHistory(body.history, 4), user: await userGrounding(gate.user.userId, body) },
     {
       conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
-      userToken: await mintToolToken(gate.user.userId, gate.user.email),
+      withUserToken: true,
     },
   )
 

@@ -6,8 +6,7 @@
 // ASYNC: returns a runId the client polls; the run result is a PlateEstimate.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask('nutrition.describeEstimate', {
+  const trig = await triggerOwnedRun(gate.user, 'nutrition.describeEstimate', {
     ...(description.trim() ? { description } : {}),
     ...(correction.trim() ? { correction } : {}),
     ...(priorEstimate ? { priorEstimate } : {}),

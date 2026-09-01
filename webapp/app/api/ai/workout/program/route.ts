@@ -6,8 +6,7 @@
 // The caller keeps its deterministic builder as the fallback on ok:false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask('workout.generateProgram', {
+  const trig = await triggerOwnedRun(gate.user, 'workout.generateProgram', {
     goal: asText(body.goal, 400),
     daysPerWeek: typeof body.daysPerWeek === 'number' ? body.daysPerWeek : asText(body.daysPerWeek, 20),
     weeks: typeof body.weeks === 'number' ? body.weeks : asText(body.weeks, 20),

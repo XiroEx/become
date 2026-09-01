@@ -6,8 +6,7 @@
 // flow whenever ok is false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
     userGrounding(gate.user.userId, body),
     assembleMindHistory(gate.user.userId, system),
   ])
-  const trig = await triggerBecomeTask('mind.generateFlow', {
+  const trig = await triggerOwnedRun(gate.user, 'mind.generateFlow', {
     system,
     topic,
     intent: asText(body.intent, 200),

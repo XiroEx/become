@@ -5,8 +5,8 @@
 // unavailable, so the chat never dead-ends.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask, type BecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText, userGrounding, mintToolToken } from '@/lib/ai/routeHelpers'
+import { type BecomeTask } from '@/lib/ai/becomeGraph'
+import { requireAiUser, triggerOwnedRun, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -51,9 +51,9 @@ export async function POST(request: NextRequest) {
     user: await userGrounding(gate.user.userId, body),
   }
 
-  const trig = await triggerBecomeTask(task, context, {
+  const trig = await triggerOwnedRun(gate.user, task, context, {
     conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
-    userToken: await mintToolToken(gate.user.userId, gate.user.email),
+    withUserToken: true,
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
