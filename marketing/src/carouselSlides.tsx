@@ -236,7 +236,7 @@ const Cover: React.FC<SlideProps> = ({slide}) => {
   return (
     <AbsoluteFill style={base}>
       <Grid />
-      <Phone image={slide.image} width={450} style={{right: -55, bottom: -150, transform: 'rotate(5deg)'}} />
+      <Phone image={slide.image} width={560} style={{right: -70, top: 590, transform: 'rotate(5deg)'}} />
       {slide.stats ? (
         <div style={{position: 'absolute', right: M, top: 150, zIndex: 3}}>
           <StatStack stats={slide.stats} accent={accent} />
@@ -323,7 +323,7 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
   return (
     <AbsoluteFill style={base}>
       <Grid />
-      <Phone image={slide.image} width={420} style={{right: -55, bottom: -170, transform: 'rotate(5deg)'}} />
+      <Phone image={slide.image} width={530} style={{right: -70, top: 580, transform: 'rotate(4deg)'}} />
       <div
         style={{
           position: 'absolute',
@@ -351,7 +351,7 @@ const Cta: React.FC<SlideProps> = ({slide}) => {
             frame never carries the URL twice. */}
         <div>
           <div style={{width: 120, height: 4, background: accent, marginBottom: 34}} />
-          <JoinLockup accent={accent} size={50} />
+          <JoinLockup accent={accent} size={46} />
         </div>
       </div>
       <Chrome slide={slide} accent={accent} showJoin={false} pillar="left" />
