@@ -21,7 +21,7 @@ type EntryMode = "choose" | "scratch" | "import";
 export default function NewProgramClient() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [requiresTier, setRequiresTier] = useState<string>('premium');
+  const [requiresTier, setRequiresTier] = useState<string>('plus');
   const [entryMode, setEntryMode] = useState<EntryMode>("choose");
   const [imported, setImported] = useState<ImportedProgram | null>(null);
 

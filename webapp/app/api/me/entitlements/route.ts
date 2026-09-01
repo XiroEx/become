@@ -2,31 +2,94 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import {
   loadUserEntitlement,
-  hasFeature,
+  featureAccess,
+  entitlementsEnforced,
   FEATURE_MIN_TIER,
+  FEATURES,
   type Feature,
+  type Tier,
+  type AllowanceWindow,
 } from '@/lib/entitlements'
+import { peekAllowance } from '@/lib/allowances'
+import { readTzOffset } from '@/lib/dayWindow'
 
-// GET: returns the current user's role/tier and a per-feature entitlement map.
-// Useful for client-side feature gates (e.g. show upsell vs. show form).
+// GET /api/me/entitlements?tz=<offset>
+//
+// The one place a client reads plan state from: role, tier, whether enforcement
+// is even on, and a per-feature block carrying BOTH questions the UI has to
+// answer — may I touch this at all (`allowed`), and may I create another one
+// right now (`canCreate`).
+//
+// Clients read `canCreate`; they must never recompute it from limit/used,
+// because the kill-switch and the admin bypass both live in this calculation.
+//
+// Never mutates: pure peeks, so opening the dashboard cannot burn an allowance.
+
+export interface FeatureEntitlement {
+  allowed: boolean
+  canCreate: boolean
+  requiresTier: Tier
+  limit: number | null
+  used: number
+  remaining: number | null
+  resetsAt: string | null
+  window: AllowanceWindow
+}
+
 export async function GET(request: NextRequest) {
   const auth = await verifyAuth(request)
   if (!auth.success || !auth.userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { role, tier } = await loadUserEntitlement(auth.userId)
+  const { role, tier, grandfathered, subscription } = await loadUserEntitlement(auth.userId)
+  const enforced = entitlementsEnforced()
+  const tzOffset = readTzOffset(new URL(request.url).searchParams)
 
-  const features = (Object.keys(FEATURE_MIN_TIER) as Feature[]).reduce(
-    (acc, feature) => {
-      acc[feature] = {
-        allowed: hasFeature(role, tier, feature),
-        requiresTier: FEATURE_MIN_TIER[feature],
-      }
-      return acc
-    },
-    {} as Record<Feature, { allowed: boolean; requiresTier: string }>
+  const entries = await Promise.all(
+    FEATURES.map(async (feature): Promise<[Feature, FeatureEntitlement]> => {
+      const access = featureAccess(role, tier, feature)
+      const state = await peekAllowance(feature, { userId: auth.userId!, tzOffset })
+      const uncapped = access === 'full'
+
+      // When enforcement is OFF the answer to both questions is always yes —
+      // that is the whole point of the switch — but used/remaining stay REAL so
+      // the shadow-mode numbers are usable telemetry before the flip.
+      const allowed = !enforced || access !== 'none'
+      const canCreate = !enforced || (access !== 'none' && (uncapped || state.remaining > 0))
+
+      return [
+        feature,
+        {
+          allowed,
+          canCreate,
+          requiresTier: FEATURE_MIN_TIER[feature],
+          limit: uncapped ? null : state.limit,
+          used: state.used,
+          remaining: uncapped ? null : state.remaining,
+          resetsAt: state.resetsAt,
+          window: state.window,
+        },
+      ]
+    })
   )
 
-  return NextResponse.json({ role, tier, features })
+  return NextResponse.json({
+    role,
+    tier,
+    enforced,
+    grandfathered,
+    subscription: subscription
+      ? {
+          status: subscription.status,
+          currentPeriodEnd: subscription.currentPeriodEnd ?? null,
+          cancelAtPeriodEnd: subscription.cancelAtPeriodEnd ?? false,
+        }
+      : null,
+    // Whether a checkout can actually be started. Owned by the billing work;
+    // false until that lands, which is what makes the upgrade CTA render its
+    // "coming soon" state instead of a dead link.
+    checkoutAvailable: false,
+    features: Object.fromEntries(entries) as Record<Feature, FeatureEntitlement>,
+  })
 }

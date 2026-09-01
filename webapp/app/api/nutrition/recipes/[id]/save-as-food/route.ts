@@ -5,6 +5,7 @@ import Recipe from '@/models/Recipe'
 import Food from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { importManualFood, flattenFoodForResponse } from '@/lib/foodImport'
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         })
       }
     }
+
+    // Past the idempotent branch, so this call really does mint a Food:
+    // quota-gate it. Placed here so a member at 3/3 re-tapping Save on a
+    // recipe they already saved is never refused.
+    const quota = await requireQuota(request, 'custom-foods')
+    if (!quota.ok) return quota.response
 
     // Recipe totals are ALREADY per-serving, so 1 serving of the food = 1
     // serving of the recipe — no division needed (unlike meals).

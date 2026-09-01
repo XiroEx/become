@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Food, { IFood } from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { searchUSDA } from '@/lib/usda'
 import { stemMatch } from '@/lib/nutrition/foodMatch'
 import {
@@ -677,6 +678,11 @@ async function backgroundImportExternals(
 
 // ---------------------------------------------------------------------------
 // POST: Create a custom food in our DB
+//
+// Quota-gated (free tier: 3 owned foods with source:'manual', counted live).
+// NOTE this is the only "create a custom food" surface — POST
+// /api/nutrition/foods/import materialises a USDA/OFF search hit so it can be
+// LOGGED and must stay ungated, or free members lose food logging entirely.
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -685,6 +691,9 @@ export async function POST(request: NextRequest) {
     if (!authResult.success) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const quota = await requireQuota(request, 'custom-foods')
+    if (!quota.ok) return quota.response
 
     const body = await request.json()
 

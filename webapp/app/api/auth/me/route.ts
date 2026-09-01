@@ -42,7 +42,10 @@ export async function GET(req: NextRequest) {
 
     await dbConnect()
     const user = await User.findById(payload.userId)
-      .select('email name role trainerId savedPrograms profile onboardingCompleted createdAt updatedAt')
+      // tier/grandfathered/subscription ride along so the Expo sibling — which
+      // consumes the same MeResponse contract — can render plan state without a
+      // second round trip.
+      .select('email name role tier grandfathered subscription.status subscription.currentPeriodEnd subscription.cancelAtPeriodEnd trainerId savedPrograms profile onboardingCompleted createdAt updatedAt')
       .lean()
     if (!user) return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 })
 

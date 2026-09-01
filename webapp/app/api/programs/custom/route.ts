@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import ProgramModel from '@/models/Program'
 import { verifyAuth } from '@/lib/auth'
-import { requireFeature } from '@/lib/entitlements'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises'
 
 // GET: list user's own custom programs (no tier gate so downgraded users
@@ -44,11 +44,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: create a custom program. Gated by 'custom-programs' feature.
+// POST: create a custom program. Quota-gated by 'custom-programs' — free tier
+// gets 3 programs they OWN, counted live, so deleting one frees a slot
+// (DELETE stays ungated for exactly that reason). Enrolling in or saving a
+// coach program is a different thing entirely and is never capped.
 // Forces isCustom: true and createdBy: userId regardless of body input.
 export async function POST(request: NextRequest) {
   try {
-    const gate = await requireFeature(request, 'custom-programs')
+    const gate = await requireQuota(request, 'custom-programs')
     if (!gate.ok) return gate.response
 
     await dbConnect()

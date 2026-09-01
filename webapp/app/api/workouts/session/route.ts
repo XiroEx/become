@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/session?id=<sessionId> — the full quick (kind:'quick') log
@@ -142,6 +143,16 @@ export async function PATCH(request: NextRequest) {
     }
     if (body.title !== undefined && (typeof body.title !== 'string' || !body.title.trim())) {
       return NextResponse.json({ error: 'title must not be empty' }, { status: 400 })
+    }
+
+    // A STARRED quick session is what "custom session" means for the free
+    // allowance: the SessionBuilder's output only becomes a durable, reusable
+    // artifact once it is starred. The workout log itself is history and is
+    // never capped — see handleQuickSessionSave. UNstarring is always free, so
+    // a member at 3/3 always has a way back under the cap.
+    if (body.favorite === true) {
+      const gate = await requireQuota(request, 'custom-sessions')
+      if (!gate.ok) return gate.response
     }
 
     const set: Record<string, unknown> = {}

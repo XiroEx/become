@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
-import { requireFeature } from '@/lib/entitlements'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 
 // GET: list user's own meals + public/verified meals.
@@ -87,10 +87,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: create a meal template
+// POST: create a meal template. Quota-gated (free tier: 3 saved meals, counted
+// live so deleting one frees a slot). PATCH on an existing meal stays on
+// requireFeature and DELETE stays ungated.
 export async function POST(request: NextRequest) {
   try {
-    const gate = await requireFeature(request, 'custom-meals')
+    const gate = await requireQuota(request, 'custom-meals')
     if (!gate.ok) return gate.response
     const authResult = { success: true as const, userId: gate.userId, role: gate.role }
 

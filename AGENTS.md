@@ -196,6 +196,40 @@ EMAIL_PASS           # SMTP password
 EMAIL_FROM           # From address (defaults to EMAIL_USER)
 ```
 
+### Entitlements
+```
+ENTITLEMENTS_ENFORCED     # "false" (default) | "true"
+```
+The free/plus paywall kill-switch. Read per request straight off `process.env`
+(`entitlementsEnforced()` in `lib/entitlements.ts`) and NOT through
+`lib/runtimeConfig.ts` — that module ignores `process.env` entirely when
+`NODE_ENV === 'production'`, which `next start` sets, so routing it there would
+make the switch permanently read as unset. It is not a secret, so it belongs in
+the RedRun workspace `appConfig.env` (runtime env), never a build arg.
+
+- **OFF (default)** — no user-visible gating at all; allowance usage is still
+  counted, so the real distribution is known before the flip (shadow mode).
+- **ON** — gates and the free-tier allowances enforce for `tier: 'free'`.
+  `role: 'admin'` bypasses everything either way.
+
+Two ordering rules, both non-optional:
+1. **Run `webapp/scripts/migrate-tiers.mjs --prod --apply` before flipping it.**
+   The `Tier` enum collapsed to `free|plus`, so an admin PATCH (which uses
+   `runValidators`) throws on any user still holding a legacy `premium`/`pro`
+   value, and every un-migrated member reads as `free`.
+2. Beta and production **share one database**, so a beta-only flip enforces for
+   beta traffic only, but the shadow counts it writes are the same rows
+   production reads. Flip beta briefly with a named test account, then
+   production — do not soak.
+
+Two guards to keep in mind when adding a gate:
+- `requireFeature` = "may this member TOUCH this feature" and deliberately
+  passes for a capped free member, so they can still edit and DELETE what they
+  own (deleting is the only way back under an inventory cap).
+- `requireQuota` (`lib/entitlementGuards.ts`) = "may they CREATE another one".
+  Every create path uses this one. A create path left on `requireFeature` is
+  silently ungated.
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"

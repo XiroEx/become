@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
+import { requireFeature } from '@/lib/entitlements'
 import dbConnect from '@/lib/mongodb'
 import MindProgress from '@/models/MindProgress'
 import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
+
+// Vision is BINARY, not counted: FREE_LIMITS['vision'].limit is 0, so
+// featureAccess() resolves 'none' for a free member and requireFeature 403s.
+// GET stays open on purpose — the teaser wants the real data shape, and a
+// member who reached chapter 2 before the gate existed must still be able to
+// read the vision they already wrote.
 
 const DAY_MS = 86_400_000
 
@@ -41,8 +48,9 @@ export async function GET(request: NextRequest) {
 // idempotent per local day (replaces today's entry). Keeps a 90-day trail.
 export async function PATCH(request: NextRequest) {
   try {
-    const auth = await verifyAuth(request)
-    if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const gate = await requireFeature(request, 'vision')
+    if (!gate.ok) return gate.response
+    const auth = { success: true as const, userId: gate.userId }
 
     const body = await request.json().catch(() => ({}))
     if (body.action !== 'align') {
@@ -74,8 +82,9 @@ export async function PATCH(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await verifyAuth(request)
-    if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const gate = await requireFeature(request, 'vision')
+    if (!gate.ok) return gate.response
+    const auth = { success: true as const, userId: gate.userId }
 
     const body = await request.json()
     const { habits, mind, body: bodyText, relationships, environment, identityStatement } = body as {

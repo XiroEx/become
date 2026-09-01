@@ -6,6 +6,7 @@ import Recipe, { IRecipeIngredient } from '@/models/Recipe'
 import Food from '@/models/Food'
 import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 
 // POST /api/nutrition/recipes/[id]/to-meal — convert a Recipe into a Meal
 // (a loggable group of foods). Copies ingredients → items (per-serving
@@ -31,6 +32,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!isOwner && !recipe.isPublic) {
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
+
+    // This mints a Meal, so it is a custom-meal create like POST /api/meals.
+    // Left ungated it would be a free bypass of the 3-meal allowance.
+    const gate = await requireQuota(request, 'custom-meals')
+    if (!gate.ok) return gate.response
 
     const items = (recipe.ingredients || []).map((ing: IRecipeIngredient) => {
       const amt = ing.amount && ing.amount > 0 ? ing.amount : 1

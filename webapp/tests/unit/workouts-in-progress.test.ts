@@ -129,11 +129,16 @@ test('the in-progress lookup requires startedAt, not just completed:false + wind
   )
 })
 
+// Both slices below must clear the insert branch's $push, which now sits ~4.1k
+// into the function: the free-tier star check (peekQuota on 'custom-sessions')
+// lives between the update and the insert.
+const QUICK_SAVE_SLICE = 6000
+
 test('handleQuickSessionSave: a plan-only insert (started: false) omits startedAt entirely', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'route.ts'), 'utf8')
   const start = src.indexOf('async function handleQuickSessionSave')
   assert.ok(start !== -1)
-  const fn = src.slice(start, start + 4500)
+  const fn = src.slice(start, start + QUICK_SAVE_SLICE)
 
   const pushIdx = fn.indexOf('$push: {')
   assert.ok(pushIdx !== -1, 'could not locate the insert $push')
@@ -149,7 +154,7 @@ test('handleQuickSessionSave: an update only stamps startedAt on explicit starte
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'app', 'api', 'workouts', 'route.ts'), 'utf8')
   const start = src.indexOf('async function handleQuickSessionSave')
   assert.ok(start !== -1)
-  const fn = src.slice(start, start + 4500)
+  const fn = src.slice(start, start + QUICK_SAVE_SLICE)
 
   const setIdx = fn.indexOf('$set: {')
   const pushIdx = fn.indexOf('$push: {')
