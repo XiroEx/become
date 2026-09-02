@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
-import { verifyToken, signToken, authCookie } from '../../../../lib/auth'
+import { verifyToken, signToken, authCookie, type JWTPayload } from '../../../../lib/auth'
 import type { MeResponse } from '../../../../lib/sharedApiTypes'
 
 export async function GET(req: NextRequest) {
@@ -25,15 +25,27 @@ export async function GET(req: NextRequest) {
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
     }
 
-    let payload: { userId: string; email: string; role?: string }
+    let payload: JWTPayload
     try {
       payload = await verifyToken(token)
     } catch {
       return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
     }
+
+    // A scoped token (e.g. the 15-min ai-tools token) is NOT a session and must
+    // never be exchanged for a fresh 30-day one by the sliding refresh below.
+    // This route reads the token directly rather than through verifyAuth, so it
+    // does not inherit verifyAuth's default-deny — hence the explicit check.
+    if (payload.scope) {
+      return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 })
+    }
+
     await dbConnect()
     const user = await User.findById(payload.userId)
-      .select('email name role trainerId savedPrograms profile onboardingCompleted createdAt updatedAt')
+      // tier/grandfathered/subscription ride along so the Expo sibling — which
+      // consumes the same MeResponse contract — can render plan state without a
+      // second round trip.
+      .select('email name role tier grandfathered subscription.status subscription.currentPeriodEnd subscription.cancelAtPeriodEnd trainerId savedPrograms profile onboardingCompleted createdAt updatedAt')
       .lean()
     if (!user) return new Response(JSON.stringify({ message: 'Not found' }), { status: 404 })
 

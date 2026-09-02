@@ -5,8 +5,9 @@
 // unavailable, so the chat never dead-ends.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask, type BecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText, userGrounding, mintToolToken } from '@/lib/ai/routeHelpers'
+import { type BecomeTask } from '@/lib/ai/becomeGraph'
+import { requireAiUser, triggerOwnedRun, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -44,6 +45,13 @@ export async function POST(request: NextRequest) {
   const message = asText(body.message)
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
+  // Coach chat carries no price, so this is a spend ceiling rather than a
+  // paywall: identical for free and plus, refused as 429 (never a 403 the
+  // upgrade sheet could be raised from), and not enforced until
+  // ALLOWANCE_ABUSE_CAPS_ENFORCED is set. It counts from day one either way.
+  const cap = await requireSpendCap(gate.user.userId, 'coach-message')
+  if (!cap.ok) return cap.response
+
   // Server-assembled per-user context (push) merged with any client-sent grounding.
   const context = {
     message,
@@ -51,11 +59,12 @@ export async function POST(request: NextRequest) {
     user: await userGrounding(gate.user.userId, body),
   }
 
-  const trig = await triggerBecomeTask(task, context, {
+  const trig = await triggerOwnedRun(gate.user, task, context, {
     conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
-    userToken: await mintToolToken(gate.user.userId, gate.user.email),
+    withUserToken: true,
   })
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, reply: FALLBACK[domain] ?? FALLBACK.mindset, fallback: true })
 }

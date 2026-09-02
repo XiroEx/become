@@ -5,6 +5,7 @@ import User from '@/models/User'
 import UserProgress, { IWorkoutLog } from '@/models/UserProgress'
 import MindProgress from '@/models/MindProgress'
 import { verifyAdmin } from '@/lib/adminAuth'
+import { TIERS, type Tier } from '@/lib/entitlements'
 
 // GET /api/admin/users/[id]
 export async function GET(
@@ -129,6 +130,26 @@ export async function PATCH(
 
     if (body.onboardingCompleted !== undefined) {
       update.onboardingCompleted = Boolean(body.onboardingCompleted)
+    }
+
+    // Tier is DERIVED state. Exactly three writers are allowed: this admin
+    // route, scripts/migrate-tiers.mjs, and the billing webhook. No other route
+    // may $set it — deriving a tier on a request path would grandfather members
+    // automatically. Note the findByIdAndUpdate below runs validators, so a
+    // PATCH against a user still holding a legacy 'premium'/'pro' tier throws
+    // until the migration has run.
+    if (body.tier !== undefined) {
+      if (!TIERS.includes(body.tier as Tier)) {
+        return NextResponse.json(
+          { error: 'Invalid tier. Must be free or plus' },
+          { status: 400 }
+        )
+      }
+      update.tier = body.tier
+    }
+
+    if (body.grandfathered !== undefined) {
+      update.grandfathered = Boolean(body.grandfathered)
     }
 
     if (body.name !== undefined) {

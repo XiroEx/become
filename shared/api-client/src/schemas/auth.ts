@@ -9,12 +9,26 @@ export const UserProfileSchema = z
   })
   .passthrough();
 
+/** Billing state, as GET /api/auth/me projects it. Deliberately partial: the
+ *  route selects only the three fields a client renders. */
+export const UserSubscriptionSchema = z
+  .object({
+    status: z.string().optional(),
+    currentPeriodEnd: z.string().nullish(),
+    cancelAtPeriodEnd: z.boolean().optional(),
+  })
+  .passthrough();
+
 export const UserSchema = z
   .object({
     _id: z.string(),
     email: z.string().email(),
     name: z.string().optional().nullable(),
     role: z.string().optional(),
+    /** 'free' | 'plus'. Optional because legacy rows may not carry it. */
+    tier: z.string().optional(),
+    grandfathered: z.boolean().optional(),
+    subscription: UserSubscriptionSchema.optional().nullable(),
     trainerId: z.string().optional().nullable(),
     savedPrograms: z.array(z.string()).optional(),
     profile: UserProfileSchema.optional().nullable(),

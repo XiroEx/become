@@ -30,6 +30,8 @@ import { logPlanAvailability, localDateStr } from "@/lib/quickSession/logPlanDat
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 import ShareButton from "@/components/share/ShareButton";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -127,6 +129,9 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
   const router = useRouter();
 
   const [error, setError] = useState<string | null>(null);
+  // A tier/allowance refusal, kept as the whole payload so the upgrade sheet
+  // can name the real limit rather than a hand-written string.
+  const [gate, setGate] = useState<GatePayload | null>(null);
 
   // My Sessions (recent quick logs)
   const [recentQuick, setRecentQuick] = useState<WorkoutLog[]>([]);
@@ -205,6 +210,13 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
           // Async run: POST returns a runId, runAiTask polls until the session lands.
           const r = await runAiTask("/api/ai/workout/session", { focus: FOCUS_DEFS[focus].label });
           if (genId !== activeGenRef.current) return; // stale
+          // Refused by a gate — do NOT fall through to the deterministic route,
+          // which shares the same allowance and would refuse it again.
+          if (r.gate) {
+            setGate(r.gate);
+            setGenerating(false);
+            return;
+          }
           const aiSession = r.result as AiSessionResponse["session"] | undefined;
           if (r.ok && aiSession) {
             const resolved = await resolveAiSession(aiSession, focus, headers);
@@ -232,6 +244,11 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         if (genId !== activeGenRef.current) return;
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          const g = gateFrom(res.status, data);
+          if (g) {
+            setGate(g);
+            return;
+          }
           setError(data.error || "Couldn't build that session. Try again.");
           return;
         }
@@ -291,6 +308,11 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          const g = gateFrom(res.status, data);
+          if (g) {
+            setGate(g);
+            return;
+          }
           setError(data.error || "Couldn't rebuild that session. Try again.");
           return;
         }
@@ -562,6 +584,8 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
               </section>
             </div>
           </motion.div>
+
+          <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
         </>
       )}
     </AnimatePresence>

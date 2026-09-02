@@ -5,6 +5,7 @@ import Recipe from '@/models/Recipe'
 import Food from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { importManualFood, flattenFoodForResponse } from '@/lib/foodImport'
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
 
+    // Past the idempotent branch, so this call really does mint a Food:
+    // quota-gate it. Placed here so a member at 3/3 re-tapping Save on a
+    // recipe they already saved is never refused.
+    const quota = await requireQuota(request, 'custom-foods')
+    if (!quota.ok) return quota.response
+
     // Recipe totals are ALREADY per-serving, so 1 serving of the food = 1
     // serving of the recipe — no division needed (unlike meals).
     const t = recipe.totalsPerServing
@@ -91,6 +98,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }],
       },
       auth.userId,
+      // A gated create surface: stamp authoredBy so this row counts against
+      // the quota checked just above (models/Food.ts#authoredBy).
+      { authored: true },
     )
     const foodDoc = result.food
     const foodId = (foodDoc as { _id: mongoose.Types.ObjectId })._id

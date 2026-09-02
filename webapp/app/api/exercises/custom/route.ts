@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/auth";
 import { requireFeature } from "@/lib/entitlements";
+import { requireQuota } from "@/lib/entitlementGuards";
 import connectDB from "@/lib/mongodb";
 import Exercise, { IExerciseDefinition } from "@/models/Exercise";
 import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
@@ -54,8 +55,13 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/exercises/custom ───────────────────────────────────────────────
 
+// CREATE is quota-gated (free tier: 3 owned custom exercises, counted live).
+// Every other verb on a custom exercise — PATCH, DELETE, submit, video, trim —
+// stays on requireFeature so a member sitting at 3/3 can still fix, re-record
+// and delete what they already have. Capping edits would lock them out of
+// their own data with no way back under the cap.
 export async function POST(req: NextRequest) {
-  const gate = await requireFeature(req, "custom-exercises");
+  const gate = await requireQuota(req, "custom-exercises");
   if (!gate.ok) return gate.response;
   const auth = { userId: gate.userId };
 

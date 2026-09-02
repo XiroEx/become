@@ -5,8 +5,8 @@
 // The caller falls back to its deterministic quick-session generator on ok:false.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
+import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -22,8 +22,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
+  // The deterministic generator at /api/generate/session is NOT metered and is
+  // where this degrades to, so a member at their weekly limit still gets a
+  // session — just not an AI-written one.
+  const allow = await requireAiAllowance(gate.user, 'workout-generation')
+  if (!allow.ok) return allow.response
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask('workout.generateSession', {
+  const trig = await triggerOwnedRun(gate.user, 'workout.generateSession', {
     prompt: asText(body.prompt, 600),
     focus: asText(body.focus, 120),
     duration: typeof body.duration === 'number' ? body.duration : asText(body.duration, 40),
@@ -32,6 +38,7 @@ export async function POST(request: NextRequest) {
     user: grounding,
   })
 
-  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  await allow.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

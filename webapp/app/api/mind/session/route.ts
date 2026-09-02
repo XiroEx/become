@@ -17,6 +17,46 @@ import {
   getLevelProgress, chapterFromSessions, sessionsIntoChapter,
   mainSessionAvailable, MAIN_SESSION_COOLDOWN_MS, CHAPTERS, getUnlockedSystems,
 } from '@/lib/mindXP'
+import {
+  loadUserEntitlement, featureAccess, entitlementsEnforced, gateResponse,
+  defaultMessage, FREE_LIMITS,
+} from '@/lib/entitlements'
+
+// Free tier gets main sessions 1-10; session 11 is locked. The count is the
+// EXISTING milestone MindProgress.mainSessionCount, so nothing new is written
+// and the check is naturally idempotent. 10 is also SESSIONS_PER_CHAPTER, so
+// the wall lands exactly on the Chapter 1 → Chapter 2 boundary — the same
+// moment Vision would unlock.
+const MIND_FREE_SESSIONS = FREE_LIMITS['mind-sessions'].limit
+
+/**
+ * Has this member run out of free Mind sessions? Returns the 403 to send, or
+ * null to continue. Cheap enough to run on both the PUT (session start) and the
+ * POST (completion): blocking only at the payoff would walk someone through a
+ * whole session before refusing it.
+ */
+async function mindSessionGate(userId: string): Promise<NextResponse | null> {
+  // Switch check first: with enforcement off this costs nothing at all, which
+  // is what makes shipping it dark free.
+  if (!entitlementsEnforced()) return null
+  const { role, tier } = await loadUserEntitlement(userId)
+  if (featureAccess(role, tier, 'mind-sessions') === 'full') return null
+
+  const prog = await MindProgress.findOne({ userId })
+    .select('mainSessionCount')
+    .lean<{ mainSessionCount?: number } | null>()
+  if ((prog?.mainSessionCount ?? 0) < MIND_FREE_SESSIONS) return null
+
+  return gateResponse({
+    error: defaultMessage('mind-sessions'),
+    requiresTier: 'plus',
+    feature: 'mind-sessions',
+    limit: MIND_FREE_SESSIONS,
+    remaining: 0,
+    resetsAt: null,
+    window: 'lifetime',
+  })
+}
 
 // A completed MAIN session grants this much LEVEL XP (level is uncapped, fed by
 // main + arsenal). Main sessions are gated to one per 20h and each counts toward
@@ -90,17 +130,32 @@ export async function GET(request: NextRequest) {
     await dbConnect()
     const doc = await MindSession.findOne({ userId: auth.userId, dateKey }).lean()
     const streak = await streakFor(auth.userId!, dateKey)
+
+    // Plan state, so the hub can draw the lock BEFORE Begin rather than letting
+    // the member start a session the POST will refuse. Always reported (the
+    // fields are just null/false when unenforced or uncapped) so the client has
+    // one shape to read, and the entitlement is not even loaded while the
+    // switch is off.
+    let mindCapped = false
+    if (entitlementsEnforced()) {
+      const ent = await loadUserEntitlement(auth.userId!)
+      mindCapped = featureAccess(ent.role, ent.tier, 'mind-sessions') !== 'full'
+    }
     // Recency for session spacing (breath cooldown + modality variety) + the 20h
     // main-session cooldown that decides whether the hub shows the main session
     // or Training Grounds.
     const prog = await MindProgress.findOne({ userId: auth.userId })
-      .select('lastBreathAt recentKinds lastMainSessionAt activeSession')
+      .select('lastBreathAt recentKinds lastMainSessionAt activeSession mainSessionCount')
       .lean<{
         lastBreathAt?: Date
         recentKinds?: string[]
         lastMainSessionAt?: Date
+        mainSessionCount?: number
         activeSession?: ActiveSessionStamp & { seed: number; plan: unknown }
       } | null>()
+
+    const sessionsUsed = prog?.mainSessionCount ?? 0
+    const mindLocked = mindCapped && sessionsUsed >= MIND_FREE_SESSIONS
 
     // Hand back the unfinished session rather than composing a new one, unless
     // the day rolled over or the member logged something it was built from.
@@ -130,6 +185,13 @@ export async function GET(request: NextRequest) {
       // Non-null when there is a session in progress to pick up where it left off.
       resume,
       resumeDropped: stale ?? null,
+      // Plan lock. Orthogonal to mainSessionAvailable (the 20h cooldown):
+      // `locked` never lifts on its own, the cooldown always does.
+      locked: mindLocked,
+      lockReason: mindLocked ? ('tier' as const) : null,
+      requiresTier: mindLocked ? ('plus' as const) : null,
+      sessionsUsed,
+      sessionsLimit: mindCapped ? MIND_FREE_SESSIONS : null,
     })
   } catch (err) {
     console.error('GET /api/mind/session error:', err)
@@ -150,6 +212,10 @@ export async function POST(request: NextRequest) {
       : []
 
     await dbConnect()
+
+    const locked = await mindSessionGate(auth.userId!)
+    if (locked) return locked
+
     const now = Date.now()
 
     // Read progress BEFORE the write so we can detect the 20h cooldown, the
@@ -287,6 +353,13 @@ export async function PUT(request: NextRequest) {
     }
 
     await dbConnect()
+
+    // Gate the START, not just the completion — this PUT is the first write of
+    // a composed session (MindJourney), so refusing here is what stops a locked
+    // member being walked through a whole session for nothing.
+    const locked = await mindSessionGate(auth.userId)
+    if (locked) return locked
+
     const dateKey = localDateKey(null, readTzOffsetFromBody(body))
     const now = await activityNow(auth.userId)
 

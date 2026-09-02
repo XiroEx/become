@@ -28,6 +28,8 @@ import { runAiTask } from '@/lib/ai/runClient'
 import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
 
 interface LevelProgress { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
 
@@ -125,6 +127,10 @@ export default function MindJourney() {
   // refetch; suggFetching drives the "tuning…" hint ONLY during a real fetch.
   const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(null)
   const [suggFetching, setSuggFetching] = useState(false)
+  // Free members get main sessions 1-10; the server reports the wall on GET so
+  // the lock is drawn BEFORE Begin rather than after a whole session.
+  const [sessionLock, setSessionLock] = useState<{ limit: number } | null>(null)
+  const [gate, setGate] = useState<GatePayload | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -166,6 +172,9 @@ export default function MindJourney() {
         if (s.resume?.plan && typeof s.resume?.seed === 'number') {
           setResumable({ seed: s.resume.seed, plan: s.resume.plan as MindSessionPlan })
         }
+        setSessionLock(
+          s.locked === true && typeof s.sessionsLimit === 'number' ? { limit: s.sessionsLimit } : null,
+        )
       }
       if (stateRes.ok) {
         const st = await stateRes.json()
@@ -484,7 +493,34 @@ export default function MindJourney() {
       {/* The next move — always the instant (deterministic) session; if an
           AI-composed plan is cached it's used transparently. Never blocks on
           generation (that happens in the background on app open). */}
-      {available && effectivePlan ? (
+      {sessionLock ? (
+        // Out of free main sessions. Distinct from the 20h cooldown below,
+        // which lifts on its own — this one never does, so it says so and
+        // offers the only thing that changes it.
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <button
+            onClick={() => setGate(syntheticGate('mind-sessions'))}
+            className="group w-full rounded-3xl border border-dashed border-zinc-200 bg-zinc-50 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
+          >
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-zinc-400" />
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                Session {sessionLock.limit + 1}
+              </p>
+            </div>
+            <h2 className="mt-2 text-2xl font-extrabold text-zinc-700 dark:text-zinc-200">
+              You&apos;ve finished your first {sessionLock.limit} sessions
+            </h2>
+            <p className="mt-2 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+              Every chapter after this one, plus Vision, comes with Plus.
+            </p>
+            <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3.5 text-base font-bold text-white transition-transform group-active:scale-95 dark:bg-white dark:text-zinc-900">
+              See Plus
+              <ArrowRight className="h-5 w-5" />
+            </span>
+          </button>
+        </motion.div>
+      ) : available && effectivePlan ? (
         // Main session available (first ever, or 20h since the last one).
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
@@ -550,6 +586,8 @@ export default function MindJourney() {
         </div>
       )}
       </div>
+
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
     </PageTransition>
   )
 }

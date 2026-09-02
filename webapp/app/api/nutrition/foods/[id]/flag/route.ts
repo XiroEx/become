@@ -6,6 +6,7 @@ import Food from '@/models/Food'
 import FoodFlag from '@/models/FoodFlag'
 import User from '@/models/User'
 import { decideFlag, ownFlagPhotoUrl, CLAIM_TTL_MS, type FlagContext } from '@/lib/nutrition/flagPolicy'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 /** More than this on one report is someone testing the upload, not evidence. */
 const MAX_PHOTOS = 6
@@ -196,6 +197,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         status: 'attached',
         message: 'Thanks — this food is already being checked.',
       })
+    }
+
+    // Spend ceiling, charged HERE rather than at route entry: the attach,
+    // queue and lost-CAS paths above all dispatch nothing, and charging them
+    // would spend a member's ceiling on work that never happens.
+    const cap = await requireSpendCap(auth.userId!, 'food-verification')
+    if (!cap.ok) {
+      // Release the claim, or the food is wedged as unverifiable until the TTL.
+      await Food.updateOne(
+        { _id: foodId },
+        { $set: { 'verification.state': 'unverified' }, $unset: { 'verification.claimedAt': '' } },
+      ).catch(() => {})
+      return cap.response
     }
 
     // Dispatch and do NOT await: the pipeline runs a grounded search and a

@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Food, { IFood } from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { searchUSDA } from '@/lib/usda'
 import { stemMatch } from '@/lib/nutrition/foodMatch'
 import {
@@ -677,6 +678,17 @@ async function backgroundImportExternals(
 
 // ---------------------------------------------------------------------------
 // POST: Create a custom food in our DB
+//
+// Quota-gated (free tier: 3 authored foods, counted live). The count reads
+// `Food.authoredBy`, which ONLY the gated create surfaces stamp — this route
+// and the two save-as-food routes.
+//
+// It cannot read `{ source: 'manual', createdBy }` instead: POST
+// /api/nutrition/foods/import also accepts `source: 'manual'`, and it plus the
+// barcode scanner's live-OpenFoodFacts path materialise a search hit through
+// importManualFood so it can be LOGGED. Both must stay ungated or free members
+// lose food logging entirely, so both would otherwise be a way around this
+// quota AND a way to burn it on rows the member never authored.
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -686,6 +698,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const quota = await requireQuota(request, 'custom-foods')
+    if (!quota.ok) return quota.response
+
     const body = await request.json()
 
     if (!body.name || !body.category) {
@@ -694,7 +709,10 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const { food, created } = await importManualFood(body, authResult.userId)
+    // `authored: true` is what makes the row count against the quota checked
+    // above. It is passed here, never read from `body` — a client that could
+    // omit it would create uncounted foods forever.
+    const { food, created } = await importManualFood(body, authResult.userId, { authored: true })
 
     // Admins may upgrade isVerified / isFirstClass / usageCount
     const isAdmin = authResult.role === 'admin'

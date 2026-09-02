@@ -3,7 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import MealLog from '@/models/MealLog'
 import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
-import { hasFeature, loadUserEntitlement } from '@/lib/entitlements'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { bustTilesCache } from '@/lib/redis'
 import mongoose from 'mongoose'
 
@@ -54,14 +54,13 @@ export async function POST(request: NextRequest) {
     await dbConnect()
 
     // Saving a reusable meal is the gated half; combining the day's rows is not.
+    // Goes through requireQuota rather than a hand-rolled hasFeature check so
+    // this path honours the ENTITLEMENTS_ENFORCED kill-switch and the 3-meal
+    // free allowance like every other create route — a raw hasFeature call here
+    // was the one gate that bypassed the switch entirely.
     if (saveAsMeal) {
-      const { role, tier } = await loadUserEntitlement(auth.userId)
-      if (!hasFeature(role, tier, 'custom-meals')) {
-        return NextResponse.json(
-          { error: 'Saving a meal requires Plus', requiresTier: 'plus' },
-          { status: 403 },
-        )
-      }
+      const gate = await requireQuota(request, 'custom-meals')
+      if (!gate.ok) return gate.response
     }
 
     const logIds = [...new Set(picks.map(p => String(p.logId)))]

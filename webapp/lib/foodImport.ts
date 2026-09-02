@@ -1010,9 +1010,26 @@ export interface ManualFoodInput {
   }
 }
 
+export interface ManualFoodOptions {
+  /**
+   * The caller is a GATED "create a custom food" surface and this really is
+   * the member authoring an item — stamp `authoredBy` so it counts against
+   * their custom-foods allowance (models/Food.ts#authoredBy).
+   *
+   * Off by default and NEVER read from the request body: this function also
+   * materialises USDA/OpenFoodFacts hits (POST /api/nutrition/foods/import
+   * with `source: 'manual'`, and the barcode scanner's live-OFF path), which
+   * are ungated on purpose so free members keep food logging. If a client
+   * could set it, it could also unset it on the gated path and mint unlimited
+   * uncounted foods.
+   */
+  authored?: boolean
+}
+
 export async function importManualFood(
   input: ManualFoodInput,
   createdBy?: mongoose.Types.ObjectId | string,
+  opts: ManualFoodOptions = {},
 ): Promise<{ food: IFood; created: boolean }> {
   if (!input.name) throw new Error('name is required')
 
@@ -1112,6 +1129,12 @@ export async function importManualFood(
     imageUrl: input.imageUrl,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
+    // Only stamped on the branch that actually mints a row, and only for a
+    // gated create surface. Both dedupe branches above return early with
+    // `created: false`, so re-saving a food that already exists never claims
+    // an allowance slot for something the member did not create.
+    authoredBy:
+      opts.authored && createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
     needsReview: automaticReview.needsReview,
     reviewFlag: automaticReview.reviewFlag,
     groupKey: baseGroupKey(input.name) || undefined,

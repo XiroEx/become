@@ -18,6 +18,8 @@ import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/stor
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
 import { setUnitLabel } from "@/lib/workout/tracking";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 interface SearchExercise {
   slug: string;
@@ -76,6 +78,8 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
   const [creating, setCreating] = useState(false);
   const [creatingError, setCreatingError] = useState<string | null>(null);
+  // Out of free custom-exercise slots — the upgrade sheet, not inline red text.
+  const [gate, setGate] = useState<GatePayload | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES);
   // Log-or-plan (no playthrough): past/today date → logged done, future → planned.
@@ -310,6 +314,11 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
       });
       const data = (await res.json()) as { exercise?: SearchExercise; error?: string };
       if (!res.ok || !data.exercise) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setGate(g);
+          return;
+        }
         setCreatingError(data.error || "Failed to create exercise");
         return;
       }
@@ -377,6 +386,7 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
 
   return (
     <div className={className}>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       {/* Imported exercises that couldn't be matched to the library — the user
           adds them by hand via the search box below, same as any other exercise. */}
       {unresolved.length > 0 && (

@@ -94,16 +94,27 @@ test('handleQuickSessionSave only sets favorite on the FIRST insert for a sessio
   const src = readSource('app/api/workouts/route.ts')
   const start = src.indexOf('async function handleQuickSessionSave')
   assert.ok(start !== -1, 'could not locate handleQuickSessionSave')
-  const fn = src.slice(start, start + 4000)
+  // Wide enough to reach the insert branch's $push, which sits ~4.1k in now
+  // that the free-tier star check lives between the update and the insert.
+  const fn = src.slice(start, start + 6000)
 
   assert.match(fn, /favorite\s*}\s*=\s*body/, 'must destructure favorite from the request body')
 
   const setIdx = fn.indexOf('$set: {')
   const pushIdx = fn.indexOf('$push: {')
   assert.ok(setIdx !== -1 && pushIdx !== -1 && setIdx < pushIdx, 'expected update $set before insert $push')
-  const updateClause = fn.slice(setIdx, pushIdx)
+  // Scoped to the $set OBJECT (which ends where findOneAndUpdate's options
+  // begin), not to everything before $push: the free-tier star check now sits
+  // between the update and the insert, so the wider slice would read its
+  // "favorite" mentions as the update branch touching the flag.
+  const filtersIdx = fn.indexOf('arrayFilters:', setIdx)
+  assert.ok(filtersIdx !== -1 && filtersIdx < pushIdx, 'expected findOneAndUpdate options after $set')
+  const updateClause = fn.slice(setIdx, filtersIdx)
   const insertClause = fn.slice(pushIdx, pushIdx + 800)
 
   assert.doesNotMatch(updateClause, /favorite/, 'the update-if-exists branch must never touch favorite')
-  assert.match(insertClause, /\.\.\.\(favorite === true && \{ favorite: true \}\)/, 'the insert branch must carry a truthy favorite')
+  // `carryFavorite` is `favorite === true` minus a star the free-tier cap
+  // soft-dropped — a workout save is never refused, only the star is.
+  assert.match(fn, /let carryFavorite = favorite === true/, 'the insert branch must start from a truthy favorite')
+  assert.match(insertClause, /\.\.\.\(carryFavorite && \{ favorite: true \}\)/, 'the insert branch must carry a truthy favorite')
 })

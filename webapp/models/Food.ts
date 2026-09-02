@@ -162,7 +162,36 @@ export interface IFood {
   imageUrl?: string
 
   usageCount: number
+  /**
+   * Whoever first caused this row to exist — INCLUDING a USDA/OpenFoodFacts
+   * catalogue row materialised on their behalf. Provenance, not ownership of
+   * an authored item. Do not count allowances on this: see `authoredBy`.
+   */
   createdBy?: Types.ObjectId
+
+  /**
+   * The member who DELIBERATELY authored this food, set only by the three
+   * gated create surfaces (POST /api/nutrition/foods, meal save-as-food,
+   * recipe save-as-food) via `importManualFood(..., { authored: true })`.
+   *
+   * It exists because `{ source: 'manual', createdBy }` is not ownership.
+   * `importManualFood` hardcodes `source: 'manual'` and is also how
+   * POST /api/nutrition/foods/import and the barcode scanner materialise a
+   * live OpenFoodFacts hit so it can be LOGGED — both ungated, both
+   * attributing `createdBy` to the caller. Counting those made the free
+   * custom-foods allowance fail in both directions at once: a member at 3/3
+   * could mint a fourth row through /foods/import, while ordinary food logging
+   * silently ate the whole 3-slot cap with rows they never knowingly created
+   * and could not find to delete — and "delete one to free a slot" is the only
+   * escape hatch an inventory cap has.
+   *
+   * Rows written before this field existed have none, so they read as
+   * un-authored. That is the safe direction and costs nothing real: every
+   * pre-launch member is grandfathered to Plus (uncapped) by
+   * scripts/migrate-tiers.mjs, so the cap only ever applies to accounts
+   * created after this shipped, which have no legacy rows.
+   */
+  authoredBy?: Types.ObjectId
 
   /** When this Food was minted from a Recipe (recipe → "save as food"), the
    *  source recipe id — so the Food links back to the recipe it came from. */
@@ -310,6 +339,7 @@ const FoodSchema = new Schema<IFood>({
 
   usageCount: { type: Number, default: 0 },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  authoredBy: { type: Schema.Types.ObjectId, ref: 'User' },
   recipeId: { type: Schema.Types.ObjectId, ref: 'Recipe' },
 
   needsReview: { type: Boolean, default: false },
@@ -356,6 +386,10 @@ FoodSchema.index({ 'reviewFlag.owner': 1, needsReview: 1, updatedAt: -1 })
 // Variant-merging passes filter by groupKey; sparse so manual foods
 // without a groupKey don't bloat the index.
 FoodSchema.index({ groupKey: 1 }, { sparse: true })
+// The free-tier custom-foods allowance is a live count of this field
+// (lib/allowances.ts). Sparse — only deliberately authored foods carry it, so
+// the index stays a rounding error next to the global catalogue.
+FoodSchema.index({ authoredBy: 1 }, { sparse: true })
 // Variant-level externalId: when merging USDA Foundation/SR Legacy variants
 // into a single Food doc, each variant carries its own fdcId so re-imports
 // can find the parent quickly. Sparse — only USDA-source variants populate it.

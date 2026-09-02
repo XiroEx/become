@@ -2,7 +2,18 @@ import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 
 export type UserRole = 'user' | 'trainer' | 'admin';
-export type Tier = 'free' | 'plus' | 'premium' | 'pro';
+/** Collapsed from free|plus|premium|pro. A 'coach' tier is planned but not
+ *  implemented; legacy 'premium'/'pro' rows are promoted by
+ *  scripts/migrate-tiers.mjs and read as 'free' until they are. */
+export type Tier = 'free' | 'plus';
+/** Mirrors Stripe's subscription statuses, plus 'none' for "never subscribed".
+ *  'incomplete_expired' and 'paused' are real statuses Stripe emits — they are
+ *  listed because the mongoose enum below REJECTS anything absent from it, and
+ *  a rejected write means the webhook 500s and Stripe retries the same event
+ *  forever. Both derive to `free` (deriveTier's default branch). */
+export type SubscriptionStatus =
+  | 'none' | 'trialing' | 'active' | 'past_due' | 'canceled'
+  | 'incomplete' | 'incomplete_expired' | 'unpaid' | 'paused';
 export type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_performance' | 'general_health';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type BiologicalSex = 'male' | 'female' | 'prefer_not_to_say';
@@ -57,13 +68,55 @@ export interface IUserProfile {
   planPromoteMode?: PlanPromoteMode;
 }
 
+export interface IUserSubscription {
+  status: SubscriptionStatus;
+  /** End of the paid period. Used only to expire a stale 'active' and to honor
+   *  a 'canceled' sub through the period the member already paid for. */
+  currentPeriodEnd?: Date | null;
+  cancelAtPeriodEnd?: boolean;
+  stripeCustomerId?: string | null;
+  stripeTestCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  priceId?: string | null;
+  /** Which configured price this maps to. Cosmetic — the UI's plan label. May
+   *  be absent for an unrecognised price; `status` is what decides tier. */
+  plan?: 'monthly' | 'annual' | null;
+  /** Which Stripe account wrote this state. Production and beta share ONE
+   *  database, so without it a test-mode event on beta is indistinguishable
+   *  from a live one and would overwrite a real subscription. See
+   *  lib/billing/mode.ts#canApplyMode. */
+  mode?: 'test' | 'live' | null;
+  /** Stamped by invoice.payment_failed, for dunning copy only. It does NOT set
+   *  tier — the customer.subscription.updated → past_due event does that. */
+  paymentFailedAt?: Date | null;
+  /** Last webhook event applied. Guards out-of-order webhook delivery. */
+  lastEventId?: string | null;
+  /** `event.created` (epoch SECONDS) of the last event applied — STRIPE's clock,
+   *  which is the only thing an incoming `event.created` may be compared
+   *  against. Comparing it to `updatedAt` (ours) dropped every event in a burst
+   *  but the first, because delivery latency is always positive. See
+   *  lib/billing/apply.ts#isStaleEvent. */
+  lastEventCreated?: number | null;
+  updatedAt?: Date;
+}
+
 export interface IUser {
   _id?: string
   email: string
   password: string
   name: string
   role: UserRole
+  /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
+   *  billing webhook may write this — never derived at request time, because
+   *  that would grandfather members automatically. Readers use
+   *  loadUserEntitlement(), which reads this stored value. */
   tier: Tier
+  /** Raw billing truth. Separate from `tier` on purpose: tier is the
+   *  projection, this is the source. past_due deliberately does NOT project to
+   *  plus. See lib/subscription.ts#deriveTier. */
+  subscription?: IUserSubscription
+  /** Legacy member promoted by the offline migration, not by a payment. */
+  grandfathered?: boolean
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
   savedFoods?: ISavedFood[];
@@ -117,6 +170,29 @@ const UserProfileSchema = new Schema({
   planPromoteMode: { type: String, enum: ['manual', 'auto'], default: 'manual' },
 }, { _id: false });
 
+const UserSubscriptionSchema = new Schema<IUserSubscription>({
+  status: {
+    type: String,
+    enum: [
+      'none', 'trialing', 'active', 'past_due', 'canceled',
+      'incomplete', 'incomplete_expired', 'unpaid', 'paused',
+    ],
+    default: 'none',
+  },
+  currentPeriodEnd: { type: Date, default: null },
+  cancelAtPeriodEnd: { type: Boolean, default: false },
+  stripeCustomerId: { type: String, default: null },
+  stripeTestCustomerId: { type: String, default: null },
+  stripeSubscriptionId: { type: String, default: null },
+  priceId: { type: String, default: null },
+  plan: { type: String, enum: ['monthly', 'annual', null], default: null },
+  mode: { type: String, enum: ['test', 'live', null], default: null },
+  paymentFailedAt: { type: Date, default: null },
+  lastEventId: { type: String, default: null },
+  lastEventCreated: { type: Number, default: null },
+  updatedAt: { type: Date },
+}, { _id: false });
+
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   email: {
     type: String,
@@ -136,7 +212,22 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
     trim: true,
   },
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
-  tier: { type: String, enum: ['free', 'plus', 'premium', 'pro'], default: 'pro' },
+  // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
+  // offline, by scripts/migrate-tiers.mjs — never automatically at request
+  // time. Legacy 'premium'/'pro' values still on disk are not rejected on read
+  // (Mongoose only validates writes) and read as 'free' until migrated.
+  //
+  // WRITES ARE THE TRAP, AND THEY SHIP WITH THE ENUM, NOT WITH THE
+  // KILL-SWITCH. save() validates every INITIALIZED path, so touching ANY
+  // field on a hydrated legacy user throws `tier: 'pro' is not a valid enum
+  // value` — an admin PATCH with runValidators, and (verified against mongoose
+  // 9.6.3) a plain save() too. Run scripts/migrate-tiers.mjs BEFORE the
+  // deploy, not merely before flipping ENTITLEMENTS_ENFORCED, and pass
+  // { validateModifiedOnly: true } on any save() of a pre-existing user
+  // document (see lib/authBridge.ts).
+  tier: { type: String, enum: ['free', 'plus'], default: 'free' },
+  subscription: { type: UserSubscriptionSchema, default: undefined },
+  grandfathered: { type: Boolean, default: false },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
   savedFoods: [SavedFoodSchema],
@@ -160,6 +251,26 @@ UserSchema.index(
   { authId: 1 },
   { unique: true, partialFilterExpression: { authId: { $type: 'string' } } }
 )
+// Webhook lookup by Stripe customer. PARTIAL for the same reason authId is:
+// every user defaults the field to null, so a sparse index would still index
+// them all and a unique constraint would E11000 on the second signup.
+UserSchema.index(
+  { 'subscription.stripeCustomerId': 1 },
+  { partialFilterExpression: { 'subscription.stripeCustomerId': { $type: 'string' } } }
+)
+UserSchema.index(
+  { 'subscription.stripeTestCustomerId': 1 },
+  { partialFilterExpression: { 'subscription.stripeTestCustomerId': { $type: 'string' } } }
+)
+// invoice.payment_failed carries a subscription, not always a resolvable
+// customer — this is the fallback lookup path for it. Partial for the same
+// reason as the two above: the field defaults to null on every user.
+UserSchema.index(
+  { 'subscription.stripeSubscriptionId': 1 },
+  { partialFilterExpression: { 'subscription.stripeSubscriptionId': { $type: 'string' } } }
+)
+// Admin/ops: "who is on what".
+UserSchema.index({ tier: 1, grandfathered: 1 })
 
 // Hash password before saving
 UserSchema.pre('save', async function() {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
+import { peekQuota, type GatePayload } from '@/lib/entitlementGuards'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
@@ -775,11 +776,26 @@ async function handleQuickSessionSave(
   ) as QuickProgressDoc | null
 
   let wasAlreadyComplete = false
+  // A star carried in on the insert (repeating an already-starred session)
+  // would otherwise slip past the PATCH toggle's quota gate. The check here is
+  // SOFT on purpose: a workout save must NEVER fail — logging is history, and
+  // history is not a paid feature. At the cap the session still saves and only
+  // the star is dropped, with `favoriteDenied` telling the client why so it can
+  // raise the upsell.
+  let favoriteDenied: GatePayload | null = null
 
   if (docBefore) {
     const oldLog = docBefore.workoutLogs?.find((log) => log.sessionId === sessionId)
     wasAlreadyComplete = oldLog?.completed === true
   } else {
+    let carryFavorite = favorite === true
+    if (carryFavorite) {
+      const q = await peekQuota(payload.userId, 'custom-sessions')
+      if (!q.allowed) {
+        carryFavorite = false
+        favoriteDenied = q.gate
+      }
+    }
     // First save for this session — insert only if still absent (guards a
     // concurrent double-save from inserting two logs for the same sessionId).
     await UserProgress.updateOne(
@@ -802,7 +818,7 @@ async function handleQuickSessionSave(
             ...(started !== false && { startedAt: workoutDate }),
             activeSeconds: activeSeconds ?? 0,
             ...(notes && { notes }),
-            ...(favorite === true && { favorite: true }),
+            ...(carryFavorite && { favorite: true }),
             exercises,
           },
         },
@@ -841,6 +857,9 @@ async function handleQuickSessionSave(
   return NextResponse.json({
     message: 'Quick session saved successfully',
     completed,
+    // Present only when the star was soft-dropped at the free cap. The save
+    // itself succeeded — this is an upsell hook, not an error.
+    ...(favoriteDenied && { favoriteDenied }),
     ...(newPRsAchieved.length > 0 && { newPRsAchieved }),
     ...(streakResult && {
       streak: {
