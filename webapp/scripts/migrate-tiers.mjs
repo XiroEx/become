@@ -22,9 +22,13 @@ const dotenv = require('dotenv')
 // Idempotent — a second run matches nothing, because the $set writes the very
 // field the selector excludes.
 //
-// RUN IT BEFORE FLIPPING ENFORCEMENT, and before any admin PATCH touches a
-// legacy user: the collapsed enum makes runValidators throw on a stale
-// 'premium'/'pro' value.
+// RUN IT BEFORE THE DEPLOY — not merely before flipping enforcement. The
+// collapsed enum ships with the BUILD, and Mongoose validates every
+// initialized path on save(), so from the moment the new code is live any
+// write to a hydrated legacy user throws `tier: 'pro' is not a valid enum
+// value`. That includes the authId/avatar backfill on the first Google or
+// passkey sign-in (lib/authBridge.ts), which would then fail on every retry,
+// and any admin PATCH with runValidators.
 //
 //   DRY RUN:  node scripts/migrate-tiers.mjs
 //   APPLY:    node scripts/migrate-tiers.mjs --apply

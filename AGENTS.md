@@ -213,10 +213,21 @@ the RedRun workspace `appConfig.env` (runtime env), never a build arg.
   `role: 'admin'` bypasses everything either way.
 
 Two ordering rules, both non-optional:
-1. **Run `webapp/scripts/migrate-tiers.mjs --prod --apply` before flipping it.**
-   The `Tier` enum collapsed to `free|plus`, so an admin PATCH (which uses
-   `runValidators`) throws on any user still holding a legacy `premium`/`pro`
-   value, and every un-migrated member reads as `free`.
+1. **Run `webapp/scripts/migrate-tiers.mjs --prod --apply` BEFORE THE DEPLOY**,
+   as a hard pre-deploy step — not before flipping the switch, which is too
+   late. The `Tier` enum collapsed to `free|plus` and **the enum ships with the
+   build, not with the kill-switch**. Mongoose validates every INITIALIZED path
+   on `save()`, so once the new code is live, any write to a hydrated user
+   still holding a legacy `premium`/`pro` value throws
+   `ValidationError: tier: 'pro' is not a valid enum value` — including an
+   admin PATCH (`runValidators`) and the authId/avatar backfill that
+   `lib/authBridge.ts` performs on a member's first Google or passkey sign-in.
+   That backfill failing means the sign-in itself fails (Google →
+   `/login?error=google`, passkey → 400) and keeps failing on every retry.
+   `authBridge` therefore also saves with `{ validateModifiedOnly: true }`, so
+   the code survives a legacy row that the migration missed or that a restore
+   reintroduces. Both halves are required: the migration fixes the data, the
+   option fixes the code.
 2. Beta and production **share one database**, so a beta-only flip enforces for
    beta traffic only, but the shadow counts it writes are the same rows
    production reads. Flip beta briefly with a named test account, then
@@ -233,7 +244,21 @@ Two guards to keep in mind when adding a gate:
 #### Counted allowances (the ledger)
 
 Inventory allowances ("3 custom exercises") are a live count of rows the member
-owns. Windowed ones — **1 AI food estimate per day, 3 workout generations per
+owns — and "owns" has to mean AUTHORED, not merely "their id is on the row".
+Custom foods counts `Food.authoredBy`, a field only the three gated create
+surfaces stamp (`importManualFood(..., { authored: true })`), never
+`{ source: 'manual', createdBy }`. `importManualFood` hardcodes
+`source: 'manual'` and is also how `POST /api/nutrition/foods/import` (which
+accepts `source: 'manual'` outright, and is `FoodSearchModal`'s routine
+fallback) and the barcode scanner materialise a USDA/OpenFoodFacts hit so it
+can be LOGGED. Both are ungated on purpose — gating them takes food logging
+away from free members entirely — so counting their rows was a fail-open bypass
+AND an over-count at the same time: a member at 3/3 could mint a fourth through
+`/foods/import`, while ordinary logging ate all three slots with rows they
+never knowingly created and so could not delete to free one. The flag is an
+argument, never a body field: a client that could set it could also unset it.
+
+Windowed ones — **1 AI food estimate per day, 3 workout generations per
 week** — have nothing to count, because what is spent is a graph dispatch that
 leaves no row behind. `models/AllowanceUsage.ts` is that row: one document per
 `(userId, feature, bucketKey)`, with a **unique** index on exactly those three.
@@ -313,6 +338,16 @@ Rules that are easy to get wrong:
 - Nutrition AI refusals arrive as `EntitlementRequiredError` from
   `lib/nutrition/aiEngine.ts`, threaded from `runStore`'s HTTP status. Check it
   BEFORE `PlateUnavailableError` or a paywall reads as an outage.
+- **The follow-up ticket is a round trip, and half of it is client code.** The
+  route mints it into the success body as `allowance.ticket`; `runStore.start`
+  captures it onto the run record, `runAiTask` carries it on `AiTaskResult`,
+  the estimator hands it out as `PlateEstimate.allowanceTicket`, and
+  `SnapPlateModal` sends it back as `allowanceTicket` on a CORRECTION only. Any
+  break in that chain compiles, passes the route-shape greps, and silently
+  turns the correction into a second scan — so a free member's first "it was 6
+  tacos, not 3" is refused. Never attach the last ticket to a fresh estimate:
+  that makes a new outcome ride the previous charge, the same leak reversed.
+  `tests/unit/allowance/followUpTicket.test.ts` drives the whole chain.
 
 ### Billing (Stripe)
 

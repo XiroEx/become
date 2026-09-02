@@ -227,7 +227,17 @@ const INVENTORY_COUNTS: Partial<Record<Feature, (userId: string) => Promise<numb
 
   'custom-meals': (userId) => Meal.countDocuments({ createdBy: userId }),
 
-  'custom-foods': (userId) => Food.countDocuments({ source: 'manual', createdBy: userId }),
+  // `authoredBy`, NOT `{ source: 'manual', createdBy }`. importManualFood
+  // hardcodes source:'manual' and attributes createdBy to the caller, and two
+  // deliberately UNGATED routes go through it — POST /api/nutrition/foods/import
+  // (which accepts source:'manual' outright, and is FoodSearchModal's routine
+  // fallback when a USDA/OFF hit can't be re-fetched) and the barcode
+  // scanner's live-OpenFoodFacts materialisation. Counting those rows made the
+  // cap fail open (create a 4th food via /foods/import) and closed at the same
+  // time (ordinary logging ate all 3 slots with rows the member never
+  // knowingly created, so they could not delete one to free a slot). Only the
+  // three gated create surfaces stamp authoredBy. See models/Food.ts.
+  'custom-foods': (userId) => Food.countDocuments({ authoredBy: userId }),
 
   // A "custom session" is a STARRED quick session: the SessionBuilder's output
   // only becomes a durable, reusable artifact when the member stars it. The

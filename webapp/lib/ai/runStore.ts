@@ -33,6 +33,20 @@ export interface RunRecord {
   httpStatus?: number
   /** The verbatim 403 body when an entitlement gate refused the run. */
   gate?: GatePayload
+  /**
+   * The signed follow-up ticket the route minted for THIS outcome
+   * (`allowance.ticket` in the POST body). Hand it back as `allowanceTicket`
+   * on a request that REFINES this outcome — a plate correction — and the
+   * server spends a bounded follow-up instead of a fresh unit. Without it a
+   * free member gets one estimate a day and their first "it was 6 tacos, not
+   * 3" is refused with an upgrade sheet.
+   *
+   * Only ever attached to a correction of the run it came from. Blanket-
+   * attaching the last ticket to every call would make a genuinely NEW
+   * estimate ride the previous one's charge, which is the same bug pointed the
+   * other way.
+   */
+  allowanceTicket?: string
   startedAt: number
   updatedAt: number
   /** Surface-specific payload (e.g. conversation key, focus) for reattachment. */
@@ -144,7 +158,18 @@ class RunStore {
     body: Record<string, unknown>,
     opts: { kind: string; label: string; meta?: Record<string, unknown>; silent?: boolean },
   ): Promise<string | null> {
-    let started: { runId?: string; ok?: boolean; reply?: string; text?: string; result?: unknown; unavailable?: boolean; fallback?: boolean } | null = null
+    let started: {
+      runId?: string
+      ok?: boolean
+      reply?: string
+      text?: string
+      result?: unknown
+      unavailable?: boolean
+      fallback?: boolean
+      /** lib/ai/allowance.ts#AllowanceEnvelope — read structurally, since
+       *  that module is server-only (it imports mongoose transitively). */
+      allowance?: { ticket?: string }
+    } | null = null
     let httpStatus = 0
     try {
       const res = await fetch(endpoint, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
@@ -176,6 +201,14 @@ class RunStore {
     }
 
     if (!started) return null
+
+    // The follow-up ticket rides the POST body, so it has to be captured HERE
+    // — the poll response never carries it, and by the time the result lands
+    // the body is gone.
+    const allowanceTicket = typeof started.allowance?.ticket === 'string'
+      ? started.allowance.ticket
+      : undefined
+
     // Immediate response (vision stub / fallback / inline result) → store as terminal.
     if (!started.runId) {
       const id = `imm_${now}_${Math.floor(now % 100000)}`
@@ -185,6 +218,7 @@ class RunStore {
         result: started.result, text: started.text ?? started.reply,
         error: started.ok ? undefined : (started.unavailable ? 'unavailable' : 'fallback'),
         startedAt: now, updatedAt: now, meta: opts.meta, silent: opts.silent,
+        allowanceTicket,
       })
       this.emit()
       return id
@@ -193,6 +227,7 @@ class RunStore {
     const rec: RunRecord = {
       runId: started.runId, endpoint, kind: opts.kind, label: opts.label,
       status: 'pending', startedAt: now, updatedAt: now, meta: opts.meta, silent: opts.silent,
+      allowanceTicket,
     }
     this.runs.set(rec.runId, rec)
     this.emit()

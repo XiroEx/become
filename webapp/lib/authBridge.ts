@@ -45,7 +45,17 @@ export async function bridgeToBecomeSession(identity: BridgeIdentity): Promise<B
       let dirty = false
       if (identity.authId && !user.authId) { user.authId = identity.authId; dirty = true }
       if (identity.avatarUrl && !user.avatarUrl) { user.avatarUrl = identity.avatarUrl; dirty = true }
-      if (dirty) await user.save()
+      // validateModifiedOnly IS THE SIGN-IN. save() validates every INITIALIZED
+      // path, not just the ones this function touched, so a member still
+      // holding the pre-collapse tier ('pro'/'premium' — no longer in the
+      // enum) would fail validation on a write that only backfills authId.
+      // The backfill would then never persist and the same sign-in would fail
+      // again on every attempt: Google redirects to /login?error=google,
+      // passkey answers 400. That is not behind ENTITLEMENTS_ENFORCED — it
+      // lands the moment the enum ships. scripts/migrate-tiers.mjs is the
+      // pre-deploy fix for the data; this is the fix for the code, and it has
+      // to hold for a row restored from an old backup long after.
+      if (dirty) await user.save({ validateModifiedOnly: true })
     }
   }
 

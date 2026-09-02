@@ -106,6 +106,9 @@ export async function POST(
           }],
         },
         auth.userId,
+        // A gated create surface: stamp authoredBy so this row counts against
+        // the quota checked just above (models/Food.ts#authoredBy).
+        { authored: true },
       )
       foodDoc = result.food
       created = result.created

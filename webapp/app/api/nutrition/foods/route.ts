@@ -679,10 +679,16 @@ async function backgroundImportExternals(
 // ---------------------------------------------------------------------------
 // POST: Create a custom food in our DB
 //
-// Quota-gated (free tier: 3 owned foods with source:'manual', counted live).
-// NOTE this is the only "create a custom food" surface — POST
-// /api/nutrition/foods/import materialises a USDA/OFF search hit so it can be
-// LOGGED and must stay ungated, or free members lose food logging entirely.
+// Quota-gated (free tier: 3 authored foods, counted live). The count reads
+// `Food.authoredBy`, which ONLY the gated create surfaces stamp — this route
+// and the two save-as-food routes.
+//
+// It cannot read `{ source: 'manual', createdBy }` instead: POST
+// /api/nutrition/foods/import also accepts `source: 'manual'`, and it plus the
+// barcode scanner's live-OpenFoodFacts path materialise a search hit through
+// importManualFood so it can be LOGGED. Both must stay ungated or free members
+// lose food logging entirely, so both would otherwise be a way around this
+// quota AND a way to burn it on rows the member never authored.
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -703,7 +709,10 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const { food, created } = await importManualFood(body, authResult.userId)
+    // `authored: true` is what makes the row count against the quota checked
+    // above. It is passed here, never read from `body` — a client that could
+    // omit it would create uncounted foods forever.
+    const { food, created } = await importManualFood(body, authResult.userId, { authored: true })
 
     // Admins may upgrade isVerified / isFirstClass / usageCount
     const isAdmin = authResult.role === 'admin'

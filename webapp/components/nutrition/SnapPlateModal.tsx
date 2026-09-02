@@ -602,6 +602,13 @@ export default function SnapPlateModal({
   // note). Kept in a ref so it survives into the background persist without
   // re-running the persist callback, and is saved to history as the scan note.
   const noteRef = useRef('')
+  // The signed follow-up ticket that came back with the estimate on screen.
+  // Handed back on a CORRECTION so "it was 6 tacos, not 3" spends a bounded
+  // follow-up instead of a whole second scan — otherwise a free member's one
+  // estimate a day cannot be fixed at all, which breaks the feature rather
+  // than pricing it. Server-minted, verified server-side (owner + feature +
+  // window), and a ref rather than state because it never affects rendering.
+  const allowanceTicketRef = useRef<string | undefined>(undefined)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [addMoreOpen, setAddMoreOpen] = useState(false)
   // A gate refused the estimate (or the meal save) — the upgrade sheet's input.
@@ -617,7 +624,7 @@ export default function SnapPlateModal({
   // sync-to-prop effect (modal state follows open/initialPhase/initialImage).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false); noteRef.current = '' }
+    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false); noteRef.current = ''; allowanceTicketRef.current = undefined }
     else {
       setSelectedTag(tag) // default to the page's time-of-day meal on open
       // Re-opening a saved estimate links its record so edits/logs update it;
@@ -762,8 +769,13 @@ export default function SnapPlateModal({
     failHint?: string,
   ) => {
     setState({ phase: 'loading', loadingMsg })
+    // A new outcome — the previous estimate's ticket must not ride along.
+    allowanceTicketRef.current = undefined
     try {
       const estimate = await make()
+      // Keep the ticket this estimate was issued with, so a correction of it
+      // costs a follow-up rather than tomorrow's scan.
+      allowanceTicketRef.current = estimate.allowanceTicket
       if (!estimate.items || estimate.items.length === 0) {
         setState({ phase: 'error', message: failMsg, hint: failHint })
         return
@@ -819,16 +831,25 @@ export default function SnapPlateModal({
     const c = correction.trim()
     if (!c) return
     setState({ phase: 'loading', loadingMsg: 'Applying correction…' })
+    // The ticket proving the estimate being refined was already charged. Only
+    // this path sends one; a fresh estimate must never present it.
+    const ticket = allowanceTicketRef.current
     try {
       let estimate: PlateEstimate
       if (imageThumb.startsWith('data:')) {
-        estimate = await plateEstimator.estimate(imageThumb, { userId: '' }, c)
+        estimate = await plateEstimator.estimate(imageThumb, { userId: '' }, c, ticket)
       } else {
         const prior: EstimatedPlateItem[] = priorItems
           .filter((it) => !it.removed)
           .map(({ name, estimatedServing, nutrition, confidence }) => ({ name, estimatedServing, nutrition, confidence }))
-        estimate = await plateEstimator.estimateFromText({ priorEstimate: prior, correction: c }, { userId: '' })
+        estimate = await plateEstimator.estimateFromText(
+          { priorEstimate: prior, correction: c, allowanceTicket: ticket },
+          { userId: '' },
+        )
       }
+      // A correction is charged in the same window, so it comes back with a
+      // ticket of its own — keep it so the NEXT correction is a follow-up too.
+      allowanceTicketRef.current = estimate.allowanceTicket ?? ticket
       if (!estimate.items || estimate.items.length === 0) {
         // The model answered and could not act on the wording. Rephrasing helps.
         setState({ phase: 'review', items: priorItems, imageThumb })

@@ -215,9 +215,16 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
   // offline, by scripts/migrate-tiers.mjs — never automatically at request
   // time. Legacy 'premium'/'pro' values still on disk are not rejected on read
-  // (Mongoose only validates writes) and read as 'free' until migrated; an
-  // admin PATCH with runValidators WILL throw on one, so run the migration
-  // before flipping ENTITLEMENTS_ENFORCED.
+  // (Mongoose only validates writes) and read as 'free' until migrated.
+  //
+  // WRITES ARE THE TRAP, AND THEY SHIP WITH THE ENUM, NOT WITH THE
+  // KILL-SWITCH. save() validates every INITIALIZED path, so touching ANY
+  // field on a hydrated legacy user throws `tier: 'pro' is not a valid enum
+  // value` — an admin PATCH with runValidators, and (verified against mongoose
+  // 9.6.3) a plain save() too. Run scripts/migrate-tiers.mjs BEFORE the
+  // deploy, not merely before flipping ENTITLEMENTS_ENFORCED, and pass
+  // { validateModifiedOnly: true } on any save() of a pre-existing user
+  // document (see lib/authBridge.ts).
   tier: { type: String, enum: ['free', 'plus'], default: 'free' },
   subscription: { type: UserSubscriptionSchema, default: undefined },
   grandfathered: { type: Boolean, default: false },

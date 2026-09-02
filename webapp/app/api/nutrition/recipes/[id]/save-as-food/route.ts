@@ -98,6 +98,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }],
       },
       auth.userId,
+      // A gated create surface: stamp authoredBy so this row counts against
+      // the quota checked just above (models/Food.ts#authoredBy).
+      { authored: true },
     )
     const foodDoc = result.food
     const foodId = (foodDoc as { _id: mongoose.Types.ObjectId })._id

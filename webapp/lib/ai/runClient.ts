@@ -20,6 +20,10 @@ export interface AiTaskResult {
    *  run. Callers raise the upgrade sheet from this instead of retrying or
    *  falling through to a deterministic path that will be refused too. */
   gate?: GatePayload
+  /** The signed follow-up ticket minted for THIS outcome. Send it back as
+   *  `allowanceTicket` when refining this same outcome (a correction), so the
+   *  refinement spends a bounded follow-up rather than a fresh unit. */
+  allowanceTicket?: string
 }
 
 // Friendly labels for the global "generating…" indicator, by endpoint.
@@ -72,5 +76,6 @@ export async function runAiTask(
     fallback: rec.error === 'fallback',
     error: rec.status === 'done' ? undefined : rec.error,
     gate: rec.gate,
+    allowanceTicket: rec.allowanceTicket,
   }
 }

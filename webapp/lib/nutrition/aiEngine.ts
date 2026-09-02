@@ -59,15 +59,24 @@ export class EntitlementRequiredError extends Error {
 // ── PlateEstimator ───────────────────────────────────────────────────────────
 
 class PlateEstimatorImpl implements PlateEstimator {
-  async estimate(imageBase64: string, ctx: NutritionAIContext, note?: string): Promise<PlateEstimate> {
+  async estimate(
+    imageBase64: string,
+    ctx: NutritionAIContext,
+    note?: string,
+    allowanceTicket?: string,
+  ): Promise<PlateEstimate> {
     // Async run: POST returns a runId, runAiTask polls until the estimate lands.
     const r = await runAiTask('/api/ai/nutrition/plate', {
       image: imageBase64,
       grounding: ctx,
       ...(note && note.trim() ? { note } : {}),
+      // Present only when this call CORRECTS an estimate the member already
+      // paid for. The route verifies it (owner, feature and window all have to
+      // match) before it will spend a follow-up instead of a fresh unit.
+      ...(allowanceTicket ? { allowanceTicket } : {}),
     })
     const est = r.result as PlateEstimate | undefined
-    if (r.ok && est && Array.isArray(est.items)) return est
+    if (r.ok && est && Array.isArray(est.items)) return withTicket(est, r.allowanceTicket)
     // A gate refused it — a price, not an outage. Checked FIRST.
     if (r.error === 'entitlement' && r.gate) throw new EntitlementRequiredError(r.gate)
     // unavailable / failure → one error type for callers.
@@ -80,12 +89,25 @@ class PlateEstimatorImpl implements PlateEstimator {
       correction: input.correction,
       priorEstimate: input.priorEstimate,
       grounding: ctx,
+      ...(input.allowanceTicket ? { allowanceTicket: input.allowanceTicket } : {}),
     })
     const est = r.result as PlateEstimate | undefined
-    if (r.ok && est && Array.isArray(est.items)) return est
+    if (r.ok && est && Array.isArray(est.items)) return withTicket(est, r.allowanceTicket)
     if (r.error === 'entitlement' && r.gate) throw new EntitlementRequiredError(r.gate)
     throw new PlateUnavailableError()
   }
+}
+
+/**
+ * Carry the follow-up ticket the ROUTE minted out on the estimate it belongs
+ * to, so the correction that refines this estimate can present it.
+ *
+ * Attached to the outcome rather than remembered in a module-level "last
+ * ticket": a ticket handed to a genuinely new estimate would make that new
+ * scan ride the previous one's charge, which is the same leak in reverse.
+ */
+function withTicket(est: PlateEstimate, ticket: string | undefined): PlateEstimate {
+  return ticket ? { ...est, allowanceTicket: ticket } : est
 }
 
 // ── ProductFinder ────────────────────────────────────────────────────────────

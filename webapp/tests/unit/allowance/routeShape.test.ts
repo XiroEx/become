@@ -176,6 +176,14 @@ test('ceiling routes add nothing to the body', () => {
 test('the estimate doors accept a follow-up ticket', () => {
   // Without this a free member gets one scan a day and no way to correct it,
   // which breaks the feature rather than pricing it.
+  //
+  // THIS ASSERTION ALONE IS NOT COVERAGE. The door being open proves nothing
+  // about anyone walking through it: the server half shipped complete and
+  // unreachable once already, because runStore discarded the `allowance` the
+  // route returned and no client ever sent a ticket back. The client round
+  // trip is exercised in tests/unit/allowance/followUpTicket.test.ts — if this
+  // file is the only place `allowanceTicket` appears outside the routes, the
+  // feature is dead code again.
   for (const [file, feature] of PRICED.filter(([, f]) => f === 'ai-food-estimate')) {
     assert.match(read(file), /followUpTicket:\s*body\.allowanceTicket/, `${file} (${feature})`)
   }
