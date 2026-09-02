@@ -380,5 +380,157 @@
       "Photo plate logging",
       "A weekly recap"
     ]
+  },
+  {
+    "id": "CarouselMind1",
+    "deck": "mind",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 6,
+    "variant": "cover",
+    "pillar": "mindset",
+    "kicker": "Mindset",
+    "headline": [
+      "THE MIND IS",
+      "THE MUSCLE."
+    ],
+    "lead": "Train the part of you that decides whether to keep going.",
+    "steps": [
+      "Fifty sessions, five chapters",
+      "Three minutes a day",
+      "Seven tools in the Grounds",
+      "One mindset across all three"
+    ],
+    "image": "carousel/mind/checkin.png",
+    "stats": [
+      {
+        "value": "9/50",
+        "label": "Sessions"
+      },
+      {
+        "value": "Lv 3",
+        "label": "Mind"
+      },
+      {
+        "value": "Ch.1",
+        "label": "Reset"
+      }
+    ],
+    "image2": "carousel/practice/mind.png"
+  },
+  {
+    "id": "CarouselMind2",
+    "deck": "mind",
+    "slug": "02-path",
+    "index": 2,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "mindset",
+    "kicker": "One · The path",
+    "headline": [
+      "THE PATH."
+    ],
+    "lead": "Fifty sessions in five chapters. Ten to a chapter, one a day.",
+    "bullets": [
+      "Reset, then Foundation: get out of your own way, then see where you're going.",
+      "Edge, then Defense: build the habits, then protect them.",
+      "Architect: design the world around you."
+    ],
+    "image": "carousel/mind/path.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselMind3",
+    "deck": "mind",
+    "slug": "03-session",
+    "index": 3,
+    "total": 6,
+    "variant": "trio",
+    "pillar": "mindset",
+    "kicker": "Two · The session",
+    "headline": [
+      "THE SESSION."
+    ],
+    "lead": "Three minutes a day, shaped by how you actually feel.",
+    "bullets": [
+      "It opens with one honest tap on where you really are.",
+      "Four moves, about three minutes, built around that tap.",
+      "It writes back what it saw, and banks 20 XP."
+    ],
+    "image": "carousel/practice/decided.png",
+    "images": [
+      "carousel/mind/checkin.png",
+      "carousel/mind/win.png",
+      "carousel/practice/decided.png"
+    ]
+  },
+  {
+    "id": "CarouselMind4",
+    "deck": "mind",
+    "slug": "04-grounds",
+    "index": 4,
+    "total": 6,
+    "variant": "trio",
+    "pillar": "mindset",
+    "kicker": "Three · Training Grounds",
+    "headline": [
+      "TRAINING",
+      "GROUNDS."
+    ],
+    "lead": "Seven tools that open chapter by chapter, after the session.",
+    "bullets": [
+      "State Shift resets you in under three minutes.",
+      "Self-Image and Mission: who you're becoming, and why.",
+      "Vision, Discipline, Anti-Sabotage and Social follow by chapter."
+    ],
+    "image": "carousel/mind/grounds.png",
+    "images": [
+      "carousel/mind/state-shift.png",
+      "carousel/mind/grounds.png",
+      "carousel/mind/self-image.png"
+    ]
+  },
+  {
+    "id": "CarouselMind5",
+    "deck": "mind",
+    "slug": "05-everything",
+    "index": 5,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "progress",
+    "kicker": "Four · Everything",
+    "headline": [
+      "EVERYTHING."
+    ],
+    "lead": "Mindset is not a tab. It runs through the whole app.",
+    "bullets": [
+      "Your mood check-in seeds the session. A rough day opens differently.",
+      "The Becoming reads Mind, Fuel and Training as one story: then, now, next.",
+      "Mind is one of the three pillars of the super streak."
+    ],
+    "image": "carousel/next/dash.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselMind6",
+    "deck": "mind",
+    "slug": "06-cta",
+    "index": 6,
+    "total": 6,
+    "variant": "cta",
+    "pillar": "mindset",
+    "kicker": "Free today",
+    "headline": [
+      "TRAIN",
+      "THE MIND."
+    ],
+    "lead": "Session one is one honest tap and three minutes away.",
+    "image": "carousel/practice/mind.png",
+    "steps": [
+      "Fifty sessions, five chapters",
+      "Three minutes a day",
+      "Seven tools in the Grounds",
+      "One mindset across all three"
+    ]
   }
 ]

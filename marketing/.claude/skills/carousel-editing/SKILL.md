@@ -144,9 +144,8 @@ In the order they decide the outcome.
 ### 3. Captures without writes
 
 **Check for:**
-- A session minted through the app's own flow: `marketing/scripts/capture/redeem-session.mjs`
+- A session minted through the app's own flow: `marketing/scripts/capture/redeem-session.cjs`
   after a POST to `/api/auth/send-link`, redeemed by the returned sessionId. The magic-link
-  collection lives in the app database, not the auth database; `marketing/scripts/capture/mint-session.mjs`
   documents the direct-insert route and why it 400s against the wrong database.
 - Every capture through `marketing/scripts/capture/shoot.cjs`: 390px wide at DPR 2, the GET-only
   route guard on, fixed chrome hidden. Pages stamp records on load (the check-in "shown" POST,
