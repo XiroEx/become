@@ -21,6 +21,8 @@ import { BackButton } from '@/components/ui/BackButton'
 import { stashQuickSession, stashQuickSessionWithId, quickSessionOverviewHref } from '@/lib/quickSession/store'
 import { isFocusKey, type DraftExercise } from '@/lib/quickSession/types'
 import { shouldAutoOpenBuilder } from '@/lib/quickSession/hubLinks'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 type TabKey = 'exercises' | 'sessions' | 'programs'
 
@@ -32,6 +34,15 @@ const TABS: { key: TabKey; label: string; icon: typeof Dumbbell }[] = [
 
 function isTabKey(value: string | null): value is TabKey {
   return value === 'exercises' || value === 'sessions' || value === 'programs'
+}
+
+/**
+ * An entitlement refusal, or null when the response failed for an ordinary
+ * reason (or did not fail at all). Reads the body only on a failure, so the
+ * happy path is untouched.
+ */
+async function refusal(res: Response): Promise<GatePayload | null> {
+  return res.ok ? null : gateFrom(res.status, await res.json().catch(() => null))
 }
 
 // ─── Sessions tab ──────────────────────────────────────────────────────────────
@@ -223,15 +234,22 @@ function SessionsTab() {
   const [importedDraft, setImportedDraft] = useState<ComponentProps<typeof SessionBuilder>['initialDraft']>(undefined)
   const [opening, setOpening] = useState<string | null>(null)
   const [togglingFavorite, setTogglingFavorite] = useState<string | null>(null)
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const { toast, showToast } = useToast(2200)
 
   // Star/unstar a session from the list. Optimistic (the list is the whole
   // point of "quick access"), with a rollback + toast if the PATCH fails.
+  //
+  // Starring is capped on free; UNSTARRING never is, so a gate refusal here
+  // always means "your saved-session slots are full". That gets the same
+  // rollback but an upsell rather than a bare "failed" toast, and is checked
+  // before the generic throw so it never reaches the catch.
   async function toggleFavorite(e: React.MouseEvent, log: SessionLog) {
     e.stopPropagation()
     const id = log.sessionId
     if (!id || togglingFavorite) return
     const next = !log.favorite
+    const undo = () => setSessions((p) => p.map((s) => (s.sessionId === id ? { ...s, favorite: !next } : s)))
     setTogglingFavorite(id)
     setSessions((prev) => prev.map((s) => (s.sessionId === id ? { ...s, favorite: next } : s)))
     try {
@@ -241,9 +259,11 @@ function SessionsTab() {
         headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body: JSON.stringify({ id, favorite: next }),
       })
+      const g = await refusal(res)
+      if (g) { undo(); setGate(g); return }
       if (!res.ok) throw new Error('favorite toggle failed')
     } catch {
-      setSessions((prev) => prev.map((s) => (s.sessionId === id ? { ...s, favorite: !next } : s)))
+      undo()
       showToast('Failed to update favorite', 'error')
     } finally {
       setTogglingFavorite(null)
@@ -342,6 +362,12 @@ function SessionsTab() {
         headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body: JSON.stringify({ focus: log.focus || 'full_body' }),
       })
+      const g = await refusal(res)
+      if (g) {
+        setGate(g)
+        setOpening(null)
+        return
+      }
       if (!res.ok) throw new Error('generate failed')
       const data = (await res.json()) as { session?: import('@/lib/quickSession/types').DraftSession }
       if (!data.session) throw new Error('no session')
@@ -559,6 +585,7 @@ function SessionsTab() {
         </>
       )}
       <Toast toast={toast} />
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
     </div>
   )
 }

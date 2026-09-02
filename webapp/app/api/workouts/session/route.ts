@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/session?id=<sessionId> — the full quick (kind:'quick') log
@@ -144,6 +145,23 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'title must not be empty' }, { status: 400 })
     }
 
+    // ONE boolean decides both the gate and the write. `body` is unvalidated
+    // JSON — the `favorite?: boolean` annotation is erased at compile time — so
+    // reading `=== true` for the gate while writing `!!body.favorite` left a
+    // one-character bypass: `{"favorite": 1}` skipped requireQuota and still
+    // starred the session. Derive it once and there is no shape to disagree on.
+    const wantsFavorite = body.favorite !== undefined && !!body.favorite
+
+    // A STARRED quick session is what "custom session" means for the free
+    // allowance: the SessionBuilder's output only becomes a durable, reusable
+    // artifact once it is starred. The workout log itself is history and is
+    // never capped — see handleQuickSessionSave. UNstarring is always free, so
+    // a member at 3/3 always has a way back under the cap.
+    if (wantsFavorite) {
+      const gate = await requireQuota(request, 'custom-sessions')
+      if (!gate.ok) return gate.response
+    }
+
     const set: Record<string, unknown> = {}
     if (body.date !== undefined) {
       const raw = /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? `${body.date}T12:00:00` : body.date
@@ -166,7 +184,7 @@ export async function PATCH(request: NextRequest) {
       set['workoutLogs.$[elem].title'] = body.title.trim()
     }
     if (body.favorite !== undefined) {
-      set['workoutLogs.$[elem].favorite'] = !!body.favorite
+      set['workoutLogs.$[elem].favorite'] = wantsFavorite
     }
     set.updatedAt = new Date()
 

@@ -141,3 +141,56 @@ export function canClaim(ctx: Pick<FlagContext, 'now' | 'foodState' | 'claimedAt
   // Held, but only if the holder is still alive.
   return !isClaimLive(ctx)
 }
+
+// ─── Relaunch budget ─────────────────────────────────────────────────────────
+
+/**
+ * How many verification rounds one report may ever trigger: the first run plus
+ * two re-runs with better photos.
+ *
+ * Before this existed the loop was UNBOUNDED. `POST /flags/[id]/evidence`
+ * incremented `rounds` with no ceiling anywhere in the codebase, cleared the
+ * re-verify cooldown, skipped decideFlag() entirely and never took the atomic
+ * claim — while `/flags/mine` advertised "Still wrong? Send better photos"
+ * forever. Report → settled → resend → settled → resend spent up to three
+ * dispatches a turn, including the grounded web search, with none of the limits
+ * this module exists to enforce. Hitting the ceiling now escalates to a human,
+ * which is the outcome the member actually wanted.
+ */
+export const MAX_VERIFICATION_ROUNDS = 3
+
+export interface VerificationBudget {
+  /** May this round read the reporter's panel photo? (one vision dispatch) */
+  allowLabelRead: boolean
+  /** May this round fire the GROUNDED SEARCH — the expensive dispatch? */
+  allowSearch: boolean
+  /** The reviewer always runs; it is what produces the verdict. */
+  allowReview: true
+  /** Hard ceiling on graph dispatches, so a fourth one added later cannot escape. */
+  maxDispatches: number
+}
+
+/**
+ * What round N of a report is allowed to spend.
+ *
+ * Round 1 gets everything. A RELAUNCH drops the search and keeps the photo
+ * read, because the member's new photo is the only genuinely new information
+ * in the system — the web has not changed in the minutes since the last search,
+ * and gatherEvidence() (OpenFoodFacts, USDA, the photo; deterministic, zero AI
+ * cost) still runs in full. So a relaunch keeps its value and sheds the
+ * order-of-magnitude cost.
+ */
+export function verificationBudgetFor(round: number): VerificationBudget {
+  const first = !Number.isFinite(round) || round <= 1
+  return {
+    allowLabelRead: true,
+    allowSearch: first,
+    allowReview: true,
+    maxDispatches: first ? 3 : 2,
+  }
+}
+
+/** Has this report used every automatic round it is going to get? */
+export function roundsExhausted(rounds: number | undefined): boolean {
+  return (rounds ?? 1) >= MAX_VERIFICATION_ROUNDS
+}

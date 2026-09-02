@@ -16,6 +16,9 @@ import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/stor
 import { draftProgramToProgramBody } from "@/lib/quickSession/generate";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES, type AiExerciseIn } from "@/lib/ai/resolveExercises";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -141,8 +144,13 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [upgradeNotice, setUpgradeNotice] = useState<string | null>(null);
+  // A refusal that money fixes, held as the full 403 payload so the sheet can
+  // show the real limit, remaining and reset — not a bare string.
+  const [gate, setGate] = useState<GatePayload | null>(null);
   const [saved, setSaved] = useState<boolean>(false);
+
+  const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
+    useEntitlements();
 
   // Reset preview/error state when the sheet opens/closes.
   useEffect(() => {
@@ -150,7 +158,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setSession(null);
     setProgram(null);
     setError(null);
-    setUpgradeNotice(null);
+    setGate(null);
     setSaved(false);
     setLoading(false);
     setSaving(false);
@@ -163,10 +171,26 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setSession(null);
     setProgram(null);
     setError(null);
-    setUpgradeNotice(null);
+    setGate(null);
     setSaved(false);
     setAiUsed(false);
   }, []);
+
+  /**
+   * Handle a refused response. Returns true when it WAS a gate (the caller must
+   * stop): falling through to the deterministic route after an AI refusal would
+   * just be refused again, and the member would watch two failures for one tap.
+   */
+  const handleGate = useCallback(
+    (status: number, body: unknown): boolean => {
+      const g = gateFrom(status, body);
+      if (!g) return false;
+      setGate(g);
+      void refreshEntitlements();
+      return true;
+    },
+    [refreshEntitlements],
+  );
 
   const toggleEquipment = useCallback((value: string) => {
     setEquipment((prev) =>
@@ -194,6 +218,12 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
           equipment: equipmentStr,
           level: difficulty,
         });
+        if (r.gate) {
+          setGate(r.gate);
+          void refreshEntitlements();
+          setLoading(false);
+          return;
+        }
         const aiSession = r.result as AiSessionResponse["session"] | undefined;
         if (r.ok && aiSession?.exercises?.length) {
           const { exercises, matched } = await resolveAiExercises(aiSession.exercises, headers);
@@ -231,6 +261,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+        if (handleGate(res.status, data)) return;
         setError(data.error || "Could not generate a session. Try again.");
         return;
       }
@@ -241,7 +272,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [focus, difficulty, equipment, exerciseCount, includeCardio, useAi, aiPrompt]);
+  }, [focus, difficulty, equipment, exerciseCount, includeCardio, useAi, aiPrompt, handleGate, refreshEntitlements]);
 
   const startSession = useCallback(() => {
     if (!session) return;
@@ -255,7 +286,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   const generateProgram = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setUpgradeNotice(null);
+    setGate(null);
     setSaved(false);
     setAiUsed(false);
     const headers = authHeaders();
@@ -274,6 +305,12 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
           level: difficulty,
           equipment: equipmentStr,
         });
+        if (r.gate) {
+          setGate(r.gate);
+          void refreshEntitlements();
+          setLoading(false);
+          return;
+        }
         {
           const p = r.result as AiProgramResponse["program"] | undefined;
           if (r.ok && p?.days?.length) {
@@ -338,6 +375,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+        if (handleGate(res.status, data)) return;
         setError(data.error || "Could not generate a program. Try again.");
         return;
       }
@@ -349,13 +387,13 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [focus, difficulty, equipment, daysPerWeek, weeks, exercisesPerDay, useAi, aiPrompt]);
+  }, [focus, difficulty, equipment, daysPerWeek, weeks, exercisesPerDay, useAi, aiPrompt, handleGate, refreshEntitlements]);
 
   const saveProgram = useCallback(async () => {
     if (!program) return;
     setSaving(true);
     setError(null);
-    setUpgradeNotice(null);
+    setGate(null);
     try {
       const body = draftProgramToProgramBody(program, difficulty);
       const res = await fetch("/api/programs/custom", {
@@ -371,24 +409,29 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
         return;
       }
       const data = (await res.json().catch(() => ({}))) as ErrorResponse;
-      if (res.status === 402 || res.status === 403) {
-        setUpgradeNotice(
-          data.error || "Saving generated programs requires a premium plan.",
-        );
-      } else {
-        setError(data.error || "Could not save the program. Try again.");
-      }
+      if (handleGate(res.status, data)) return;
+      setError(data.error || "Could not save the program. Try again.");
     } catch {
       setError("Network error. Try again.");
     } finally {
       setSaving(false);
     }
-  }, [program, difficulty, router, onClose]);
+  }, [program, difficulty, router, onClose, handleGate]);
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   const chipBase =
     "rounded-full px-3 py-1.5 text-sm font-medium transition-colors border";
+
+  // "1/3 this week" under Generate. Session and program share one weekly
+  // allowance, so the same line sits under both buttons. Nothing renders while
+  // enforcement is off, or for anyone uncapped.
+  const generationsLeft = (() => {
+    if (!entitlements?.enforced) return null;
+    const g = entitlementFor("workout-generation");
+    if (!g || g.limit === null) return null;
+    return `${Math.min(g.used, g.limit)}/${g.limit} this week`;
+  })();
 
   return (
     <AnimatePresence>
@@ -624,6 +667,12 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                       : "Generate session"}
                   </button>
 
+                  {generationsLeft && (
+                    <p className="-mt-1 text-center text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                      {generationsLeft}
+                    </p>
+                  )}
+
                   {/* Session preview */}
                   {session && (
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
@@ -767,6 +816,12 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                       : "Generate program"}
                   </button>
 
+                  {generationsLeft && (
+                    <p className="-mt-1 text-center text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                      {generationsLeft}
+                    </p>
+                  )}
+
                   {/* Program preview */}
                   {program && (
                     <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
@@ -831,12 +886,6 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                           );
                         })}
                       </div>
-
-                      {upgradeNotice && (
-                        <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
-                          {upgradeNotice}
-                        </div>
-                      )}
 
                       {saved && (
                         <div className="mt-3 rounded-xl border border-green-300 bg-green-50 px-3 py-2.5 text-sm text-green-800 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-300">
@@ -928,6 +977,8 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
               </div>
             </div>
           </motion.div>
+
+          <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
         </>
       )}
     </AnimatePresence>

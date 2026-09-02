@@ -5,8 +5,8 @@
 // (NutritionConsultant), distinct from the general /api/ai/consultant chat.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, trimHistory, asText, userGrounding, mintToolToken } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, trimHistory, asText, userGrounding } from '@/lib/ai/routeHelpers'
+import { requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -27,15 +27,21 @@ export async function POST(request: NextRequest) {
   const message = asText(body.message)
   if (!message.trim()) return NextResponse.json({ error: 'Empty message' }, { status: 400 })
 
-  const trig = await triggerBecomeTask(
+  // Spend ceiling, not a paywall — see the note in /api/ai/consultant.
+  const cap = await requireSpendCap(gate.user.userId, 'coach-message')
+  if (!cap.ok) return cap.response
+
+  const trig = await triggerOwnedRun(
+    gate.user,
     'nutrition.consultant',
     { message, history: trimHistory(body.history), user: await userGrounding(gate.user.userId, body) },
     {
       conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
-      userToken: await mintToolToken(gate.user.userId, gate.user.email),
+      withUserToken: true,
     },
   )
 
   if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  await cap.refund()
   return NextResponse.json({ ok: false, reply: FALLBACK, fallback: true })
 }

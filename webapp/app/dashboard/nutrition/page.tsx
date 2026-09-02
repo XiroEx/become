@@ -30,6 +30,7 @@ import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 import { invalidateMindSession } from '@/lib/mind/sessionCache'
 import { buildDayOccurrences } from '@/lib/nutrition/dayOrder'
 import { findLogForTag as findLogForTagPure } from '@/lib/nutrition/logTagMatch'
+import { useEntitlements } from '@/hooks/useEntitlements'
 import { createMealTag } from '@/hooks/useMealSchedule'
 import { defaultTagAt, minutesOfDay, sortMinutesForTag, type TagWindow } from '@/lib/nutrition/mealSchedule'
 import { nutritionGoalLine, type Direction as GoalDirection, type PaceStatus } from '@/lib/nutrition/goalLine'
@@ -187,10 +188,15 @@ function NutritionPageInner() {
   // this meal" on a logged meal group) rather than the smart tag-append.
   const [addToLogId, setAddToLogId] = useState<string | null>(null)
   const { toast, showToast } = useToast(4000)
-  // Saving a reusable meal needs `custom-meals`; multi-add does not. Fetched
-  // rather than assumed so a free member sees "Log 3 items" instead of an
-  // "Add to meal" that the server would reject.
-  const [canSaveMeals, setCanSaveMeals] = useState(false)
+  // Saving a reusable meal needs a free `custom-meals` slot; multi-add never
+  // does. Read (not assumed) so a capped member sees "Log 3 items" instead of
+  // an "Add to meal" the server would refuse — and canCreate, not allowed,
+  // because a member at 3/3 may still edit and delete the meals they have.
+  const { data: entitlements, feature: entitlementFor } = useEntitlements()
+  const canSaveMeals =
+    !entitlements ||
+    entitlements.enforced === false ||
+    entitlementFor('custom-meals')?.canCreate !== false
   // "+ Add tag" inline input state
   const [showAddTagInput, setShowAddTagInput] = useState(false)
   const [newTagInput, setNewTagInput] = useState('')
@@ -295,18 +301,6 @@ function NutritionPageInner() {
   }, [])
 
   // ── Fetchers ───────────────────────────────────────────────────────────────
-
-  const fetchEntitlements = useCallback(async () => {
-    try {
-      const res = await fetch('/api/me/entitlements', { headers: getHeaders() })
-      if (!res.ok) return
-      const data = await res.json()
-      setCanSaveMeals(Boolean(data?.features?.['custom-meals']?.allowed))
-    } catch {
-      // Leave it false: the worst case is multi-add without meal saving, which
-      // still logs everything they picked.
-    }
-  }, [getHeaders])
 
   const fetchMealLogs = useCallback(async () => {
     try {
@@ -441,11 +435,11 @@ function NutritionPageInner() {
   useEffect(() => {
     async function init() {
       if (!didInitialLoad.current) setLoading(true)
-      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchEntitlements(), fetchSchedule(), fetchGoalWeight()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchSchedule(), fetchGoalWeight()])
       if (!didInitialLoad.current) { setLoading(false); didInitialLoad.current = true }
     }
     init()
-  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchEntitlements, fetchSchedule, fetchGoalWeight])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchSchedule, fetchGoalWeight])
 
   // Re-open a saved scan to edit (?scan=<id> from the Scan history "Edit"):
   // fetch it and open the plate review pre-loaded with its items.

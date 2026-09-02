@@ -5,6 +5,7 @@ import Meal from '@/models/Meal'
 import Food from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { importManualFood, flattenFoodForResponse } from '@/lib/foodImport'
 import { estimatedGramsPerServing, estimatedMlPerServing } from '@/lib/recipeMath'
 
@@ -71,6 +72,13 @@ export async function POST(
     let foodDoc = existing
     let created = false
     if (!foodDoc) {
+      // Quota-gated only on the branch that actually mints a Food. Checking
+      // before the `existing` lookup would refuse a member at 3/3 who is just
+      // re-tapping Save on a food they already own — a no-op that costs
+      // nothing.
+      const quota = await requireQuota(request, 'custom-foods')
+      if (!quota.ok) return quota.response
+
       // Bridge values: prefer the user's explicit override stored on
       // meal.recipe.gramsPerServing / mlPerServing (UNITS_AND_SERVINGS_PLAN
       // §10.8). When the override is absent we fall back to the
@@ -98,6 +106,9 @@ export async function POST(
           }],
         },
         auth.userId,
+        // A gated create surface: stamp authoredBy so this row counts against
+        // the quota checked just above (models/Food.ts#authoredBy).
+        { authored: true },
       )
       foodDoc = result.food
       created = result.created

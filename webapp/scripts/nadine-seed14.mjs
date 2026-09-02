@@ -36,7 +36,9 @@ await db.collection('users').insertOne({
   // Admin ONLY so the Mind section is reachable locally — on production this is
   // exactly the gate that hides Mindset from her.
   role: 'admin',
-  tier: 'pro',
+  // Raw-driver insert, so it bypasses schema validation — a legacy 'pro' here
+  // would seed an invalid tier the collapsed enum no longer accepts.
+  tier: 'plus',
   onboardingCompleted: true,
   profile: {
     fitnessGoals: ['lose_weight', 'general_health'],

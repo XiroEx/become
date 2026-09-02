@@ -21,6 +21,7 @@ import ProgramNudgeModal, {
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
+import PlanCard from '@/components/dashboard/PlanCard'
 import MoodGatewayBanner from '@/components/dashboard/MoodGatewayBanner'
 import BecomingDoor from '@/components/dashboard/BecomingDoor'
 import type { GoalProgress } from '@/lib/goals/progress'
@@ -810,6 +811,11 @@ export default function DashboardClient() {
             claimed "110 mood entries · Last 7 days" (110 was all-time). */}
         <MindsetCard summary={mindSummary} todaysMood={todaysMood} />
       </div>
+
+      {/* Plan + remaining allowances. Renders NOTHING while
+          ENTITLEMENTS_ENFORCED is off, which is what keeps launch day a
+          zero-change deploy — see components/dashboard/PlanCard.tsx. */}
+      <PlanCard />
 
       {/* Quick Links — 2×2 on every width so the row costs half the height it
           used to (four stacked full-width cards). Card primitive, hover swap on

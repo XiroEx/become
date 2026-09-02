@@ -196,6 +196,274 @@ EMAIL_PASS           # SMTP password
 EMAIL_FROM           # From address (defaults to EMAIL_USER)
 ```
 
+### Entitlements
+```
+ENTITLEMENTS_ENFORCED     # "false" (default) | "true"
+```
+The free/plus paywall kill-switch. Read per request straight off `process.env`
+(`entitlementsEnforced()` in `lib/entitlements.ts`) and NOT through
+`lib/runtimeConfig.ts` — that module ignores `process.env` entirely when
+`NODE_ENV === 'production'`, which `next start` sets, so routing it there would
+make the switch permanently read as unset. It is not a secret, so it belongs in
+the RedRun workspace `appConfig.env` (runtime env), never a build arg.
+
+- **OFF (default)** — no user-visible gating at all; allowance usage is still
+  counted, so the real distribution is known before the flip (shadow mode).
+- **ON** — gates and the free-tier allowances enforce for `tier: 'free'`.
+  `role: 'admin'` bypasses everything either way.
+
+Two ordering rules, both non-optional:
+1. **Run `webapp/scripts/migrate-tiers.mjs --prod --apply` BEFORE THE DEPLOY**,
+   as a hard pre-deploy step — not before flipping the switch, which is too
+   late. The `Tier` enum collapsed to `free|plus` and **the enum ships with the
+   build, not with the kill-switch**. Mongoose validates every INITIALIZED path
+   on `save()`, so once the new code is live, any write to a hydrated user
+   still holding a legacy `premium`/`pro` value throws
+   `ValidationError: tier: 'pro' is not a valid enum value` — including an
+   admin PATCH (`runValidators`) and the authId/avatar backfill that
+   `lib/authBridge.ts` performs on a member's first Google or passkey sign-in.
+   That backfill failing means the sign-in itself fails (Google →
+   `/login?error=google`, passkey → 400) and keeps failing on every retry.
+   `authBridge` therefore also saves with `{ validateModifiedOnly: true }`, so
+   the code survives a legacy row that the migration missed or that a restore
+   reintroduces. Both halves are required: the migration fixes the data, the
+   option fixes the code.
+2. Beta and production **share one database**, so a beta-only flip enforces for
+   beta traffic only, but the shadow counts it writes are the same rows
+   production reads. Flip beta briefly with a named test account, then
+   production — do not soak.
+
+Two guards to keep in mind when adding a gate:
+- `requireFeature` = "may this member TOUCH this feature" and deliberately
+  passes for a capped free member, so they can still edit and DELETE what they
+  own (deleting is the only way back under an inventory cap).
+- `requireQuota` (`lib/entitlementGuards.ts`) = "may they CREATE another one".
+  Every create path uses this one. A create path left on `requireFeature` is
+  silently ungated.
+
+#### Counted allowances (the ledger)
+
+Inventory allowances ("3 custom exercises") are a live count of rows the member
+owns — and "owns" has to mean AUTHORED, not merely "their id is on the row".
+Custom foods counts `Food.authoredBy`, a field only the three gated create
+surfaces stamp (`importManualFood(..., { authored: true })`), never
+`{ source: 'manual', createdBy }`. `importManualFood` hardcodes
+`source: 'manual'` and is also how `POST /api/nutrition/foods/import` (which
+accepts `source: 'manual'` outright, and is `FoodSearchModal`'s routine
+fallback) and the barcode scanner materialise a USDA/OpenFoodFacts hit so it
+can be LOGGED. Both are ungated on purpose — gating them takes food logging
+away from free members entirely — so counting their rows was a fail-open bypass
+AND an over-count at the same time: a member at 3/3 could mint a fourth through
+`/foods/import`, while ordinary logging ate all three slots with rows they
+never knowingly created and so could not delete to free one. The flag is an
+argument, never a body field: a client that could set it could also unset it.
+
+Windowed ones — **1 AI food estimate per day, 3 workout generations per
+week** — have nothing to count, because what is spent is a graph dispatch that
+leaves no row behind. `models/AllowanceUsage.ts` is that row: one document per
+`(userId, feature, bucketKey)`, with a **unique** index on exactly those three.
+
+That index is the mechanism, not a nicety. `lib/allowanceLedger.ts` increments
+first (`findOneAndUpdate` + `$inc` + `new: true`) and the decision reads the
+value the increment RETURNED. A peek-then-compare would let two requests
+arriving together against a limit of 1 both read 0 and both spend — a
+double-tapped button is enough. Two rules fall out of it:
+
+- **E11000 means two opposite things.** An upsert can lose the insert race (retry
+  once — it is a plain `$inc` now, and without the retry the loser of the first
+  claim of the day gets a 500 under load only), or the dedupe filter excluded a
+  row that already holds this outcome's key (do NOT retry — that bills twice for
+  one estimate). `chargeWithRetry` handles both and is unit-tested for it.
+- **A denied claim does not decrement.** `used` counts attempts once enforcement
+  is on; `remaining` still clamps to 0 and the inflation is a free abuse signal.
+  Spend analysis should read `used` (already net of refunds), never `used +
+  refunds`.
+
+The bucket is the **member's local day/week**, from `windowBucket()` in
+`lib/allowances.ts`, and the offset comes from `UserProgress.timezoneOffset` —
+**never from the request**. A client-supplied `tz` is a window-minting oracle
+(a different offset per call = a fresh allowance each time), and it also has to
+agree with what `GET /api/me/entitlements` reports.
+
+Refund ONLY when the server knows nothing was queued — `triggerOwnedRun`
+returned `ok: false`. A run that started and then failed is not refundable: the
+graph ran, and "it didn't work" is a claim only the client can make.
+
+`/api/ai/*` routes call `requireAiAllowance` / `requireSpendCap`
+(`lib/ai/allowance.ts`) in a fixed order: **auth → validate body → charge →
+trigger → refund on trigger failure**. Validating first keeps a typo free;
+charging before the trigger makes the allowance a gate rather than a meter.
+`tests/unit/allowance/inventory.test.ts` fails the build if a new `/api/ai` POST
+route ships without one, and pins `app/api/generate/*` as permanently unmetered
+— those are the deterministic fallback every AI route degrades to, so metering
+them would turn a soft paywall into a dead end for exactly the people who hit
+the cap.
+
+```
+ALLOWANCE_ABUSE_CAPS_ENFORCED   # "false" (default) | "true"
+```
+A **second, separate** switch for `lib/spendCaps.ts` — ceilings on the AI
+surfaces that carry no price (coach replies, Mind composition, food
+verification). They exist because those dispatch with no user in the loop
+(`lib/mind/precompose.ts` on app open, `MindJourney`'s suggestions effect, the
+food-flag relaunch), braked only by localStorage, which is per device and gone
+with any storage wipe. They are **not** a paywall: identical for free and plus,
+refused as **429** so `gateFrom` cannot raise the upgrade sheet from one, and
+set an order of magnitude above a real session. Default OFF so launch day has
+zero user-visible gating; the counts accrue regardless, so the distribution is
+known before it is ever turned on.
+
+#### The client side of a gate
+
+Four pieces, and nothing else should exist:
+
+| Piece | Job |
+|---|---|
+| `hooks/useEntitlements.ts` | The ONLY caller of `GET /api/me/entitlements`. Module-level snapshot + 60s TTL + a localStorage seed, so a screen with three gated components makes one request. |
+| `lib/entitlementsClient.ts` | Client-safe types and copy, plus `gateFrom(status, body)` — the one 403 parser. `lib/entitlements.ts` imports mongoose, so a component may only take TYPES from it. |
+| `components/UpgradeSheet.tsx` | The one upsell. Renders `gate.error` verbatim; the server owns the wording. |
+| `components/TierGate.tsx` | Wraps a whole surface a free member may see but not use (Vision). |
+
+Rules that are easy to get wrong:
+- **Read `canCreate`, never `allowed`.** `allowed` is true for a capped free
+  member on purpose (that is what lets them edit and delete their own rows), so
+  a create button wired to `allowed` is silently ungated.
+- **Every tier surface must bail on `enforced === false`.** That single check is
+  what makes the whole epic ship dark, and it is asserted in
+  `tests/unit/entitlements/uiSurfaces.test.tsx`.
+- `gateFrom` only accepts a 403 carrying BOTH `feature` and `requiresTier`, so
+  an ownership or role 403 still falls through to the caller's normal error.
+- UI locks are explanatory. The client fails OPEN (network blip → no lock); the
+  server is the gate.
+- Nutrition AI refusals arrive as `EntitlementRequiredError` from
+  `lib/nutrition/aiEngine.ts`, threaded from `runStore`'s HTTP status. Check it
+  BEFORE `PlateUnavailableError` or a paywall reads as an outage.
+- **The follow-up ticket is a round trip, and half of it is client code.** The
+  route mints it into the success body as `allowance.ticket`; `runStore.start`
+  captures it onto the run record, `runAiTask` carries it on `AiTaskResult`,
+  the estimator hands it out as `PlateEstimate.allowanceTicket`, and
+  `SnapPlateModal` sends it back as `allowanceTicket` on a CORRECTION only. Any
+  break in that chain compiles, passes the route-shape greps, and silently
+  turns the correction into a second scan — so a free member's first "it was 6
+  tacos, not 3" is refused. Never attach the last ticket to a fresh estimate:
+  that makes a new outcome ride the previous charge, the same leak reversed.
+  `tests/unit/allowance/followUpTicket.test.ts` drives the whole chain.
+
+### Billing (Stripe)
+
+Every value is **optional**, and the app is fully functional with none of them
+set: `/api/billing/checkout` and `/api/billing/portal` answer
+`503 billing_not_configured`, `/api/billing/status` answers `200` with
+`configured: false`, and `UpgradeSheet` renders its coming-soon note instead of
+a CTA. That is the state Become ships in.
+
+| redsecrets `billing.*` | local env (dev only) | notes |
+|---|---|---|
+| `stripeSecretKey` | `STRIPE_SECRET_KEY` | `sk_test_…` / `sk_live_…` |
+| `stripeWebhookSecret` | `STRIPE_WEBHOOK_SECRET` | `whsec_…`, one per endpoint |
+| `stripePricePlusMonthly` | `STRIPE_PRICE_PLUS_MONTHLY` | `price_…` |
+| `stripePricePlusAnnual` | `STRIPE_PRICE_PLUS_ANNUAL` | `price_…` |
+| `stripeMode` | `STRIPE_MODE` | `test`\|`live`; **the key prefix wins** |
+
+**Setting these as RedRun env vars does nothing.** `localEnv()` in
+`lib/runtimeConfig.ts` returns `undefined` whenever `NODE_ENV === 'production'`
+(which `next start` sets), so production reads `billing.*` from the
+`BECOME_RUNTIME_CONFIG` secret in redsecrets (`redshared`) or not at all. A
+deploy that sets RedRun env vars and expects checkout to switch on stays
+silently unconfigured.
+
+Every field resolves through `optional()`, **never `required()`**. One
+`required()` in that block turns "billing isn't set up yet" into
+`getRuntimeConfig()` throwing, which 401s every authenticated route while
+`AuthGuard` still renders the page — the app looks fine and every list is empty.
+`tests/unit/billing/billingConfig.test.ts` exists to catch exactly that.
+
+#### The mode fence (read before touching `lib/billing/`)
+
+Production and beta are two workspaces on **one MongoDB**. If prod runs live and
+beta runs test, both webhooks write the same `user.subscription`. Three
+mechanisms keep them apart and none of them is optional:
+
+- `reduceStripeEvent` drops any event whose `livemode` disagrees with the
+  configured mode, before anything can reach a user document.
+- Customer ids are **mode-specific fields** (`stripeCustomerId` for live,
+  `stripeTestCustomerId` for test) — a member can legitimately hold both.
+- `canApplyMode()`: a **test-mode event never overwrites live state**. Real
+  money wins; the reverse is allowed.
+
+The visible consequence is deliberate: a live subscriber who also test-subscribes
+on beta sees beta's changes rejected as `mode_downgrade_blocked`. That reads as
+"beta is broken" and is not. Do not fix it by dropping the guard.
+
+#### Stripe API shapes that moved (both fail silently)
+
+Verified against the installed SDK, not from memory:
+
+- `Subscription.current_period_end` **no longer exists** — it is
+  `subscription.items.data[i].current_period_end`.
+- `Invoice.subscription` **no longer exists** — it is
+  `invoice.parent.subscription_details.subscription`.
+
+Read the old field and you store `undefined`. Because a `canceled` sub keeps Plus
+only while `now < currentPeriodEnd`, an undefined period end downgrades someone
+the moment they cancel — after they have paid for the month.
+`lib/billing/subscriptionState.ts` is the only place either shape is read, and
+both are pinned by fixtures.
+
+Also: **never pass `apiVersion`** to the constructor. `StripeConfig` types it as
+the literal `LatestApiVersion`, so a hardcoded date string breaks `tsc` on the
+next SDK bump. The SDK's pinned version is correct by construction.
+
+#### The webhook
+
+`POST /api/billing/webhook`, unauthenticated by design — the signature IS the
+auth, and `middleware.ts` only matches `/dashboard/:path*` so nothing intercepts
+it. Order is load-bearing:
+
+1. **`await request.text()`, never `request.json()`.** Re-serializing changes the
+   bytes the HMAC covers and every delivery 400s. A webhook that "just stopped
+   verifying" is almost always this.
+2. Verify → reduce → **then** claim. Claiming before verification would let an
+   unsigned POST burn a real event id and suppress the genuine delivery.
+3. `models/StripeEvent.ts` + its unique index on `eventId` is the idempotency
+   mechanism: the insert IS the claim and E11000 IS "already seen". On a handler
+   throw the claim is **released** and the route 500s so Stripe's retry can
+   re-claim — leaving the row behind makes every retry a silent no-op and the
+   event is lost forever.
+4. An unhandled type answers **200**. A 4xx makes Stripe retry an event we will
+   never act on.
+
+`applyBillingOutcome` writes `subscription.*` **and** the derived `tier` in one
+`$set`, with `deriveTier` **injected** — `lib/billing/mongoDeps.ts` holds the one
+import of `lib/subscription.ts` in the whole billing layer, so if the tier model
+moves that is the single line to change. It also drops out-of-order events
+(Stripe delivers unordered) and never clears `grandfathered`.
+
+**Ordering compares Stripe's clock to Stripe's clock, never to ours.**
+`isStaleEvent` reads the incoming `event.created` against
+`subscription.lastEventCreated` — the `created` of the last event applied. It
+must never be compared against `subscription.updatedAt`, which is OUR wall clock
+at write time: delivery plus processing latency is always positive, so every
+event created at or before the previous write instant reads as stale, and Stripe
+emits these in bursts inside one or two seconds. Only the FIRST event of a burst
+would ever be applied. `invoice.payment_failed` and `customer.subscription.updated
+→ past_due` arrive together, so whichever landed second was dropped and the
+member kept Plus through the whole dunning period plus the 3-day grace. Equal
+timestamps are deliberately NOT stale: `created` is second-granularity, so order
+inside one second is unknowable and every event in the burst carries real state.
+Rows written before `lastEventCreated` existed have none, which reads as
+"nothing to be older than" and applies — correct for the migration.
+
+It runs **regardless of `ENTITLEMENTS_ENFORCED`**: the kill-switch governs
+whether tier is enforced, not whether money is real.
+
+Endpoints to register in the Stripe dashboard, one webhook secret each:
+`https://become.redbtn.io/api/billing/webhook` (live) and
+`https://become-beta.redbtn.io/api/billing/webhook` (test). The **billing portal
+also needs a configuration saved in the dashboard** or
+`billingPortal.sessions.create` fails — mapped to `503
+billing_portal_not_configured` so it does not read as a code bug.
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"
@@ -244,6 +512,8 @@ Rules:
 - **`main`** — production, protected
 - **`beta`** — integration branch, PRs merge here first
 - **`agent/<hostname>-<feature>`** — one isolated feature branch per task (e.g. `agent/alphaSystem-landing-rework`), PR to `beta`, delete after merge. Never a shared long-lived `agent/<hostname>` branch — concurrent agents collide on it.
+- **Start every task from a fresh base.** Run `git fetch origin --prune` first and branch from `origin/beta` — never from a local `beta`/`main` or a leftover checkout state. Remote-node checkouts (board/Discord agents) go stale between runs; a stale base produces PRs full of phantom conflicts and reverts. If a fetch fails with a `.lock` error, remove the stale lock file under `.git/` and retry — do not proceed on the stale base.
+- **If a push is rejected (non-fast-forward): fetch, then rebase your feature branch onto its upstream and push again.** Never force-push `beta` or `main`, and never resolve a rejection by discarding commits that exist on the remote.
 - Never commit directly to `main` or `beta`
 - You have **explicit standing permission** to merge feature branch → `beta` → `main` as part of the normal deploy flow. Do not pause to re-ask each time; the user has already authorized this pipeline.
 
