@@ -94,7 +94,6 @@ export async function POST(request: NextRequest) {
   try {
     const gate = await requireQuota(request, 'custom-meals')
     if (!gate.ok) return gate.response
-    const authResult = { success: true as const, userId: gate.userId, role: gate.role }
 
     const body = await request.json()
     if (!body.name || typeof body.name !== 'string') {
@@ -110,7 +109,9 @@ export async function POST(request: NextRequest) {
     const itemsInput: MealItemInput[] = body.items
     const items = await resolveItemsFromInput(itemsInput)
 
-    const isAdmin = authResult.role === 'admin'
+    // gate.role is loaded from the User row by loadUserEntitlement(), not read
+    // off the token claim, so a demoted admin cannot mint a verified meal.
+    const isAdmin = gate.role === 'admin'
 
     const meal = await Meal.create({
       name: body.name,
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
       recipe: body.recipe,
       tags: Array.isArray(body.tags) ? body.tags : [],
       defaultTag: typeof body.defaultTag === 'string' && body.defaultTag ? body.defaultTag.toLowerCase() : undefined,
-      createdBy: authResult.userId,
+      createdBy: gate.userId,
       isPublic: !!body.isPublic,
       // Only admins may mark meals verified at creation time.
       isVerified: isAdmin && !!body.isVerified,

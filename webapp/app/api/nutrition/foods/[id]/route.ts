@@ -3,8 +3,10 @@ import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
 import { clearFoodReferences } from '@/lib/nutrition/foodReferenceCleanup'
+import { pickFoodFields } from '@/lib/nutrition/foodFields'
 
 // ---------------------------------------------------------------------------
 // GET: Fetch a single Food by id (or slug). Returns full doc + variants.
@@ -65,7 +67,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Food not found' }, { status: 404 })
     }
 
-    const isAdmin = authResult.role === 'admin'
+    // The admin claim on the token is confirmed against the database — a
+    // demoted admin must lose this immediately, not when their token expires.
+    const isAdmin = await isVerifiedAdmin(authResult)
     const isOwner = food.createdBy?.toString() === authResult.userId
 
     if (!isAdmin && !isOwner) {
@@ -107,7 +111,9 @@ export async function PATCH(
       return NextResponse.json({ error: 'Food not found' }, { status: 404 })
     }
 
-    const isAdmin = authResult.role === 'admin'
+    // The admin claim on the token is confirmed against the database — a
+    // demoted admin must lose this immediately, not when their token expires.
+    const isAdmin = await isVerifiedAdmin(authResult)
     const isOwner = food.createdBy?.toString() === authResult.userId
 
     if (!isAdmin && !isOwner) {
@@ -116,19 +122,16 @@ export async function PATCH(
 
     const body = await request.json()
 
-    // Admins can set verification/usage flags; regular users cannot
-    if (!isAdmin) {
-      delete body.isVerified
-      delete body.isFirstClass
-      delete body.usageCount
-      delete body.createdBy
-      delete body.source
-      delete body.externalId
-      delete body.externalDataType
-      delete body.slug
+    // ALLOWLIST, not a deny-list — see lib/nutrition/foodFields.ts. The
+    // deny-list this replaces never learned about `authoredBy`, which is the
+    // live count behind the free custom-foods allowance, so an owner could
+    // clear it off their own row and mint an extra slot on demand.
+    const update = pickFoodFields(body, isAdmin)
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400 })
     }
 
-    const updated = await Food.findByIdAndUpdate(id, { $set: body }, { new: true })
+    const updated = await Food.findByIdAndUpdate(id, { $set: update }, { new: true })
     return NextResponse.json({ success: true, food: updated })
   } catch (error) {
     console.error('Error updating food:', error)

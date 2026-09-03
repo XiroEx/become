@@ -75,6 +75,36 @@ export async function signToken(payload: JWTPayload): Promise<string> {
   return jwt.sign(claims, auth.jwtSecret, { expiresIn: SESSION_EXPIRY })
 }
 
+/**
+ * The claims a REFRESHED session gets, given the token being presented and the
+ * User row it belongs to.
+ *
+ * The database wins on every claim that can change. GET /api/auth/me used to
+ * re-mint `role: payload.role` — the role from the token it was handed — inside
+ * the very handler that had just loaded the user. A demoted admin therefore
+ * refreshed their own stale claim into a brand new 30-day token on every app
+ * open, so revoking admin never took effect. (The mirror image was true too:
+ * a promotion needed a fresh login.)
+ *
+ * `userId` deliberately still comes from the verified payload: it is the
+ * identity the token proved and the key the row was loaded by, so it cannot
+ * disagree, and taking it from the row would silently retarget the session if a
+ * caller ever passed the wrong document in.
+ *
+ * Pure, so the rule is testable without a database — see
+ * tests/unit/security/admin-revocation.test.ts.
+ */
+export function refreshedSessionClaims(
+  payload: JWTPayload,
+  dbUser: { email?: string; role?: string } | null | undefined,
+): JWTPayload {
+  return {
+    userId: payload.userId,
+    email: dbUser?.email ?? payload.email,
+    role: dbUser?.role,
+  }
+}
+
 /** Build the Set-Cookie header value for the auth cookie (rolling Max-Age). */
 export function authCookie(token: string): string {
   const secure = process.env.NODE_ENV === 'production' ? 'Secure;' : ''

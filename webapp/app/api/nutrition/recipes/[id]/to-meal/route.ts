@@ -7,10 +7,16 @@ import Food from '@/models/Food'
 import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
+import { recipeConvertMode, convertDeletesSource } from '@/lib/nutrition/recipeConvert'
 
 // POST /api/nutrition/recipes/[id]/to-meal — convert a Recipe into a Meal
 // (a loggable group of foods). Copies ingredients → items (per-serving
-// nutrition) and keeps the recipe metadata. The original recipe is left intact.
+// nutrition) and keeps the recipe metadata.
+//
+// For the OWNER this is a MOVE: the meal replaces the recipe. For anyone else
+// looking at a PUBLIC recipe it is a COPY and deletes nothing — see
+// lib/nutrition/recipeConvert.ts for why. The mode is reported back in the
+// response so the client never has to guess whether the source survived.
 
 const r1 = (n: number) => Math.round(n * 10) / 10
 
@@ -20,16 +26,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!auth.success || !auth.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    await dbConnect()
-
+    // Validate the id BEFORE opening a connection — a malformed id can never
+    // reach the database, and the 400 branch stays testable without one.
     const { id } = await params
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid recipe id' }, { status: 400 })
     }
+    await dbConnect()
     const recipe = await Recipe.findById(id)
     if (!recipe) return NextResponse.json({ error: 'Recipe not found' }, { status: 404 })
-    const isOwner = recipe.createdBy?.toString() === auth.userId
-    if (!isOwner && !recipe.isPublic) {
+    // Ownership decides whether anything is DESTROYED, and it is resolved once,
+    // here, before the meal is minted. `isPublic` grants a copy, never a move.
+    const mode = recipeConvertMode(recipe, auth.userId)
+    if (mode === 'forbidden') {
       return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
     }
 
@@ -80,14 +89,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       usageCount: 0,
     })
 
-    // "Turn into" = MOVE, not copy. Remove the source recipe now that the meal
-    // exists (only after a successful create). Clear the recipe back-pointer on
-    // any Food minted from it (kept — foods are independent) and drop its image.
-    await Food.updateMany({ recipeId: recipe._id }, { $unset: { recipeId: 1 } }).catch(() => null)
-    await Recipe.deleteOne({ _id: recipe._id })
-    await RecipeImage.deleteOne({ recipeId: recipe._id }).catch(() => null)
+    // For the OWNER, "turn into" = MOVE: remove the source recipe now that the
+    // meal exists (only after a successful create). Clear the recipe
+    // back-pointer on any Food minted from it (kept — foods are independent)
+    // and drop its image.
+    //
+    // For a non-owner this block MUST NOT run. Deleting here on a public recipe
+    // destroyed another member's data; that is the bug this branch exists to
+    // close, so it is keyed on the ownership decision above and never on read
+    // access.
+    if (convertDeletesSource(mode)) {
+      await Food.updateMany({ recipeId: recipe._id }, { $unset: { recipeId: 1 } }).catch(() => null)
+      await Recipe.deleteOne({ _id: recipe._id })
+      await RecipeImage.deleteOne({ recipeId: recipe._id }).catch(() => null)
+    }
 
-    return NextResponse.json({ success: true, meal }, { status: 201 })
+    return NextResponse.json({ success: true, meal, mode }, { status: 201 })
   } catch (error) {
     console.error('Error converting recipe to meal:', error)
     const msg = error instanceof Error ? error.message : 'Failed to convert recipe to meal'

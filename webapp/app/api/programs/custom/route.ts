@@ -4,6 +4,7 @@ import ProgramModel from '@/models/Program'
 import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
 import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises'
+import { pickCustomProgramFields } from '@/lib/programFields'
 
 // GET: list user's own custom programs (no tier gate so downgraded users
 // can still see what they made).
@@ -48,7 +49,12 @@ export async function GET(request: NextRequest) {
 // gets 3 programs they OWN, counted live, so deleting one frees a slot
 // (DELETE stays ungated for exactly that reason). Enrolling in or saving a
 // coach program is a different thing entirely and is never capped.
-// Forces isCustom: true and createdBy: userId regardless of body input.
+//
+// The body is ALLOWLISTED through pickCustomProgramFields before it goes near
+// the model — see lib/programFields.ts. Spreading the body used to persist a
+// client-supplied `sharedWith`, which let a plain free member push their
+// program into someone else's list and walk straight around the trainer/admin
+// gate on POST /api/programs/[programId]/share.
 export async function POST(request: NextRequest) {
   try {
     const gate = await requireQuota(request, 'custom-programs')
@@ -67,22 +73,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate program_id from name if not provided.
-    if (!dehydrated.program_id) {
-      dehydrated.program_id = dehydrated.name
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .substring(0, 50)
-    }
-
-    // Force a unique custom-scoped id to avoid collisions with shared catalog.
+    // The id is SERVER-MINTED. A client-supplied program_id is only ever a seed
+    // for the slug, and is normalised exactly like the name-derived one, so no
+    // raw body string lands in the stored id. The custom- prefix and timestamp
+    // keep it from colliding with the shared catalog.
+    const seedSource =
+      typeof dehydrated.program_id === 'string' && dehydrated.program_id.trim()
+        ? dehydrated.program_id
+        : dehydrated.name
+    const seed = String(seedSource)
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .substring(0, 50)
     const userSuffix = gate.userId.slice(-6)
-    dehydrated.program_id = `custom-${userSuffix}-${dehydrated.program_id}-${Date.now().toString(36)}`
+    const programId = `custom-${userSuffix}-${seed}-${Date.now().toString(36)}`
 
-    // Server-controlled fields — ignore body.
+    // Allowlist first, THEN pin the server-controlled fields. Nothing else the
+    // caller sent reaches the model — not sharedWith, not createdBy, not the
+    // cover fields, not program_id (minted above).
     const created = await ProgramModel.create({
-      ...dehydrated,
+      ...pickCustomProgramFields(dehydrated),
+      program_id: programId,
       isCustom: true,
       createdBy: gate.userId,
     })

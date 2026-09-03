@@ -4,6 +4,7 @@ import ProgramModel from '@/models/Program'
 import { verifyAuth } from '@/lib/auth'
 import { requireFeature } from '@/lib/entitlements'
 import { hydrateProgram, dehydrateProgram } from '@/lib/hydrateExercises'
+import { CUSTOM_PROGRAM_INPUT_FIELDS } from '@/lib/programFields'
 
 interface RouteParams {
   params: Promise<{ programId: string }>
@@ -62,18 +63,10 @@ async function updateCustomProgram(
   const body = await request.json()
   const dehydrated = await dehydrateProgram(body)
 
-  const allowedKeys = [
-    'name',
-    'description',
-    'duration_weeks',
-    'training_days_per_week',
-    'goal',
-    'target_user',
-    'equipment',
-    'tags',
-    'phases',
-  ] as const
-  for (const key of allowedKeys) {
+  // The SAME allowlist the create path uses (lib/programFields.ts). Keeping one
+  // list means a newly added privileged Program field — the way `sharedWith`
+  // was added — cannot be writable on one of the two routes and not the other.
+  for (const key of CUSTOM_PROGRAM_INPUT_FIELDS) {
     const value = dehydrated[key]
     if (value !== undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
