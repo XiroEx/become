@@ -7,6 +7,7 @@ import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
 import { clearFoodReferences } from '@/lib/nutrition/foodReferenceCleanup'
 import { pickFoodFields } from '@/lib/nutrition/foodFields'
+import { isFoodOwner } from '@/lib/nutrition/foodOwnership'
 
 // ---------------------------------------------------------------------------
 // GET: Fetch a single Food by id (or slug). Returns full doc + variants.
@@ -70,7 +71,10 @@ export async function DELETE(
     // The admin claim on the token is confirmed against the database — a
     // demoted admin must lose this immediately, not when their token expires.
     const isAdmin = await isVerifiedAdmin(authResult)
-    const isOwner = food.createdBy?.toString() === authResult.userId
+    // EITHER id — see lib/nutrition/foodOwnership.ts. The custom-foods slot is
+    // charged on `authoredBy`, so authorising on `createdBy` alone could charge
+    // a member for a row only someone else could delete.
+    const isOwner = isFoodOwner(food, authResult.userId)
 
     if (!isAdmin && !isOwner) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -114,7 +118,10 @@ export async function PATCH(
     // The admin claim on the token is confirmed against the database — a
     // demoted admin must lose this immediately, not when their token expires.
     const isAdmin = await isVerifiedAdmin(authResult)
-    const isOwner = food.createdBy?.toString() === authResult.userId
+    // EITHER id — see lib/nutrition/foodOwnership.ts. The custom-foods slot is
+    // charged on `authoredBy`, so authorising on `createdBy` alone could charge
+    // a member for a row only someone else could delete.
+    const isOwner = isFoodOwner(food, authResult.userId)
 
     if (!isAdmin && !isOwner) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

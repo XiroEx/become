@@ -129,12 +129,18 @@ test('authorship is stamped only on the branch that really mints a row', () => {
 // ─── The escape hatch still works ────────────────────────────────────────────
 
 test('an authored food is deletable by its author', () => {
-  // An inventory cap is only humane because deleting frees a slot. authoredBy
-  // is only ever set alongside createdBy for the same member, which is the
-  // field the delete route checks ownership on.
+  // An inventory cap is only humane because deleting frees a slot, so the
+  // member the slot is CHARGED to must be able to delete the row.
+  //
+  // On a healthy row authoredBy is set alongside createdBy for the same member,
+  // and that is what the invariant used to rest on — the delete route
+  // authorised on createdBy alone. It was not enough: authoredBy was writable
+  // from the PATCH body until the allowlist landed, so rows exist in production
+  // whose two ids name different people, and their delete answered 403.
+  // Ownership is now EITHER id — see lib/nutrition/foodOwnership.ts.
   const src = read('lib/foodImport.ts')
   assert.match(src, /createdBy:\s*createdBy \? new mongoose\.Types\.ObjectId/)
-  assert.match(read('app/api/nutrition/foods/[id]/route.ts'), /food\.createdBy\?\.toString\(\) === authResult\.userId/)
+  assert.match(read('app/api/nutrition/foods/[id]/route.ts'), /isFoodOwner\(food, authResult\.userId\)/)
 })
 
 // ─── The model ───────────────────────────────────────────────────────────────

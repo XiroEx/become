@@ -12,6 +12,12 @@ import {
   type AllowanceLedger,
   type LedgerCounts,
 } from '@/lib/allowanceLedger'
+import {
+  mongoInventoryClaims,
+  type InventoryClaimStore,
+  type OpenClaim,
+} from '@/lib/inventoryClaims'
+import { afterResponse } from '@/lib/afterResponse'
 
 /**
  * ─── Free-tier allowance accounting ──────────────────────────────────────────
@@ -19,9 +25,11 @@ import {
  * Three kinds, because "3 of these" means three different things:
  *
  *   'inventory' — a LIVE count of rows the member owns (3 custom exercises).
- *                 Nothing is written; DELETING ONE FREES A SLOT. That is the
- *                 escape hatch that keeps a capped member from being locked
- *                 out of their own data.
+ *                 Nothing durable is written; DELETING ONE FREES A SLOT. That
+ *                 is the escape hatch that keeps a capped member from being
+ *                 locked out of their own data. A count is a READ, so a create
+ *                 also takes a short-lived claim (lib/inventoryClaims.ts) that
+ *                 orders concurrent creates — see consumeInventory().
  *   'milestone' — a monotonic progress number already stored elsewhere
  *                 (MindProgress.mainSessionCount). Read-only, idempotent.
  *   'window'    — a counter inside a local day / ISO week bucket
@@ -60,6 +68,13 @@ export interface AllowanceCtx {
   tzOffset?: number
   /** @internal Test seam. Production always uses the Mongo ledger. */
   ledger?: AllowanceLedger
+  /** @internal Test seam. Production always uses the Mongo claim store. */
+  claims?: InventoryClaimStore
+  /**
+   * @internal Test seam. Production always counts the member's real rows
+   * through INVENTORY_COUNTS / MILESTONE_COUNTS.
+   */
+  countRows?: (feature: Feature, userId: string) => Promise<number>
 }
 
 export interface ConsumeOptions {
@@ -94,6 +109,15 @@ export interface ConsumeResult {
   /** Why a consume was refused. 'limit' for a tier cap, 'follow-up' for the
    *  bounded correction allowance riding an already-charged outcome. */
   reason?: 'limit' | 'follow-up'
+  /**
+   * @internal The in-flight claim an 'inventory' consume took, released
+   * AUTOMATICALLY after the response (lib/afterResponse.ts).
+   *
+   * Exposed for tests, which have no response to run after. A ROUTE MUST NOT
+   * CALL IT: releasing before the row is committed reopens the read-then-write
+   * race the claim exists to close.
+   */
+  releaseClaim?: () => Promise<void>
 }
 
 // ─── Window buckets ──────────────────────────────────────────────────────────
@@ -298,15 +322,18 @@ async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
     }
   }
 
-  const counter =
-    spec.kind === 'inventory' ? INVENTORY_COUNTS[feature] : MILESTONE_COUNTS[feature]
+  const counter = ctx.countRows
+    ? (userId: string) => ctx.countRows!(feature, userId)
+    : spec.kind === 'inventory'
+      ? INVENTORY_COUNTS[feature]
+      : MILESTONE_COUNTS[feature]
 
   // Features with limit 0 (vision, share-programs) are binary, not counted —
   // featureAccess() already resolves them to 'none', so there is nothing to
   // count and no counter registered.
   if (!counter) return 0
 
-  await dbConnect()
+  if (!ctx.countRows) await dbConnect()
   try {
     return await counter(ctx.userId)
   } catch (err) {
@@ -319,6 +346,10 @@ async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
 
 function ledgerFor(ctx: AllowanceCtx): AllowanceLedger {
   return ctx.ledger ?? mongoAllowanceLedger
+}
+
+function claimsFor(ctx: AllowanceCtx): InventoryClaimStore {
+  return ctx.claims ?? mongoInventoryClaims
 }
 
 /**
@@ -349,7 +380,8 @@ export async function peekAllowance(
 
 /**
  * Reserve one unit.
- *   'inventory' → a live count; nothing is written.
+ *   'inventory' → takes an in-flight claim, THEN counts the member's rows, and
+ *                 decides from both. Nothing durable is written.
  *   'milestone' → reads the existing progress number; nothing is written.
  *   'window'    → atomically increments the (userId, feature, bucketKey) row in
  *                 models/AllowanceUsage.ts and decides from what came back.
@@ -368,7 +400,12 @@ export async function consumeAllowance(
   ctx: AllowanceCtx,
   opts: ConsumeOptions = {}
 ): Promise<ConsumeResult> {
-  if (FREE_LIMITS[feature].kind !== 'window') {
+  const kind = FREE_LIMITS[feature].kind
+  if (kind === 'inventory') return consumeInventory(feature, ctx, opts)
+
+  if (kind !== 'window') {
+    // 'milestone' — a number someone else already wrote (MindProgress). There
+    // is no create for two requests to race, so a read is the whole decision.
     const state = await peekAllowance(feature, ctx)
     const withinLimit = state.used < state.limit
     return {
@@ -378,6 +415,74 @@ export async function consumeAllowance(
     }
   }
   return consumeWindow(feature, ctx, opts, 'used')
+}
+
+/**
+ * The inventory consume: CLAIM FIRST, COUNT SECOND, DECIDE FROM BOTH.
+ *
+ * This used to be `peekAllowance()` — countDocuments, compare, return — and the
+ * route created the row afterwards with nothing in between. Ten concurrent
+ * POSTs from a free member at 0/3 therefore returned 201 ten times, on
+ * production, from zero, on every counted cap; a delete-then-burst loop made it
+ * unbounded. The count is not the bug (it is what makes deleting free a slot);
+ * taking the DECISION from an unserialised read is.
+ *
+ * `rank` is this claim's position among the claims in flight, so
+ * `live + rank - 1` is "rows that exist, or are being created ahead of me". Two
+ * racers get ranks 1 and 2 and exactly one of them fits under the limit.
+ * lib/inventoryClaims.ts carries the proof that the two reads jointly miss
+ * nothing; the ordering here is the load-bearing half of it.
+ *
+ * FAILS OPEN, like every other counter in this module: if the claim store is
+ * unreachable the consume behaves exactly as it did before this existed. The
+ * gate is a product boundary, not a security one, and a metering outage must
+ * not take a feature away from someone entitled to it.
+ */
+async function consumeInventory(
+  feature: Feature,
+  ctx: AllowanceCtx,
+  opts: ConsumeOptions
+): Promise<ConsumeResult> {
+  const spec = FREE_LIMITS[feature]
+  const enforce = opts.enforce === true
+
+  // Binary features (limit 0: vision, share-programs) count nothing and have no
+  // create to serialise — featureAccess() has already resolved them to 'none'.
+  if (!INVENTORY_COUNTS[feature] && !ctx.countRows) {
+    return {
+      allowed: enforce ? 0 < spec.limit : true,
+      state: stateFor(feature, 0, null),
+      ...(0 < spec.limit ? {} : { reason: 'limit' as const }),
+    }
+  }
+
+  let claim: OpenClaim | null = null
+  try {
+    claim = await claimsFor(ctx).open(ctx.userId, feature, opts.now ?? new Date())
+  } catch (err) {
+    console.error(`[allowances] inventory claim failed for ${feature}:`, err)
+  }
+
+  // AFTER the claim, never before: a count taken first could miss a competing
+  // create that had not committed yet AND rank behind nothing, which is exactly
+  // the hole this closes.
+  const live = await usedFor(feature, ctx)
+  const used = live + (claim?.rank ?? 1) - 1
+  const state = stateFor(feature, used, null)
+  const withinLimit = used < spec.limit
+
+  // Released once the response is out, so it outlives the create it guards and
+  // no route has to remember anything. Where there is no request scope (a test,
+  // a script) the claim goes stale on its own — see lib/inventoryClaims.ts.
+  const release = claim ? () => claim!.release() : undefined
+  if (release) afterResponse(release)
+
+  return {
+    allowed: enforce ? withinLimit : true,
+    state,
+    ...(withinLimit ? {} : { reason: 'limit' as const }),
+    ...(release ? { releaseClaim: release } : { degraded: true }),
+  }
 }
 
 /**

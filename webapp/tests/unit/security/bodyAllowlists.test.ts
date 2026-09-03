@@ -26,7 +26,9 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
+  ADMIN_PROGRAM_INPUT_FIELDS,
   CUSTOM_PROGRAM_INPUT_FIELDS,
+  pickAdminProgramFields,
   pickCustomProgramFields,
   rejectedProgramFields,
 } from '../../../lib/programFields'
@@ -44,6 +46,20 @@ import {
 
 const ROOT = path.join(__dirname, '../../..')
 const readSource = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
+
+/** Every .ts under app/api, comments stripped, as (repo-relative path, code). */
+function walkApi(visit: (rel: string, code: string) => void, dir = path.join(ROOT, 'app/api')) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) { walkApi(visit, full); continue }
+    if (!entry.name.endsWith('.ts')) continue
+    const code = fs
+      .readFileSync(full, 'utf8')
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    visit(path.relative(ROOT, full), code)
+  }
+}
 
 // ── The program allowlist ───────────────────────────────────────────────────
 
@@ -290,27 +306,104 @@ test('no member-facing route spreads a request body into a model write', () => {
   const EXEMPT = new Set(['app/api/exercises/route.ts'])
   const offenders: string[] = []
 
-  function walk(dir: string) {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name)
-      if (entry.isDirectory()) { walk(full); continue }
-      if (!entry.name.endsWith('.ts')) continue
-      const rel = path.relative(ROOT, full)
-      if (EXEMPT.has(rel)) continue
-      const code = fs
-        .readFileSync(full, 'utf8')
-        .replace(/\/\/[^\n]*/g, '')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-      if (
-        /\.\.\.body\b/.test(code) ||
-        /Object\.assign\([A-Za-z_$][\w$]*,\s*body\)/.test(code) ||
-        /\$set:\s*body\b/.test(code)
-      ) {
-        offenders.push(rel)
-      }
+  walkApi((rel, code) => {
+    if (EXEMPT.has(rel)) return
+    if (
+      /\.\.\.body\b/.test(code) ||
+      /Object\.assign\([A-Za-z_$][\w$]*,\s*body\)/.test(code) ||
+      /\$set:\s*body\b/.test(code)
+    ) {
+      offenders.push(rel)
     }
-  }
-  walk(path.join(ROOT, 'app/api'))
+  })
 
   assert.deepEqual(offenders, [], `unvalidated body spread in: ${offenders.join(', ')}`)
+})
+
+
+// ── The same class, found by the sweep: the ADMIN catalog create ───────────
+//
+// POST /api/programs was the last whole-body model write in the tree, behind a
+// two-name deny-list:
+//
+//     delete body.isCustom
+//     delete body.createdBy
+//     const dehydrated = await dehydrateProgram(body)
+//     await ProgramModel.create(dehydrated)
+//
+// requireAdmin-gated and database-confirmed, so it was never an escalation —
+// but it is the identical shape, and the shape is what keeps coming back. It
+// already let `sharedWith` through.
+
+test('the admin catalog create is the member list plus a chosen program_id', () => {
+  assert.deepEqual(
+    [...ADMIN_PROGRAM_INPUT_FIELDS],
+    [...CUSTOM_PROGRAM_INPUT_FIELDS, 'program_id'],
+  )
+})
+
+test('an admin cannot plant a program in a stranger\'s list from the create body', () => {
+  const hostile = {
+    name: 'Catalog Program',
+    program_id: 'jon-don-signature',
+    phases: [],
+    sharedWith: ['64b0000000000000000000aa'],
+    createdBy: '64b0000000000000000000bb',
+    isCustom: true,
+    _id: '64b0000000000000000000cc',
+    coverImage: 'https://example.com/x.png',
+  }
+  assert.deepEqual(
+    Object.keys(pickAdminProgramFields(hostile)).sort(),
+    ['name', 'phases', 'program_id'],
+  )
+})
+
+test('everything the admin ProgramCreator submits still lands', () => {
+  // app/dashboard/admin/programs/_editors/ProgramCreator.tsx formData.
+  const body = {
+    name: 'Catalog',
+    description: 'x',
+    duration_weeks: 4,
+    training_days_per_week: 4,
+    goal: 'strength',
+    target_user: 'Intermediate',
+    equipment: ['barbell'],
+    phases: [{ phase: 'A', weeks: '1-4', focus: 'base', workouts: [] }],
+  }
+  assert.deepEqual(pickAdminProgramFields(body), body)
+})
+
+test('the admin create route no longer strips two names off a whole body', () => {
+  const src = readSource('app/api/programs/route.ts')
+  const code = src.replace(/\/\/[^\n]*/g, '')
+  assert.doesNotMatch(code, /delete body\./)
+  assert.match(code, /dehydrateProgram\(pickAdminProgramFields\(body\)\)/)
+})
+
+// ── The net, widened by what the sweep actually found ──────────────────────
+
+test('no route under app/api sanitises a body with a deny-list', () => {
+  // `delete body.<privileged>` is the exact shape that failed twice: once for
+  // `sharedWith` on the program create, once for `authoredBy` on the food
+  // PATCH. Both times the list was written before the field existed. There is
+  // no safe version of it, so none may exist.
+  const offenders: string[] = []
+  walkApi((rel, code) => {
+    if (/delete\s+(body|payload|updates|data)\.[A-Za-z_$]/.test(code)) offenders.push(rel)
+  })
+  assert.deepEqual(offenders, [], `body deny-list in: ${offenders.join(', ')}`)
+})
+
+test('every model create built from an identifier goes through an allowlist', () => {
+  // `Model.create(objectLiteral)` is explicit and fine. `Model.create(thing)`
+  // is only fine when `thing` came out of a picker — otherwise it is a whole
+  // request body again under a different name.
+  const offenders: string[] = []
+  walkApi((rel, code) => {
+    const creates = code.match(/\.create\(\s*([a-z][\w$]*)\s*[,)]/g) ?? []
+    if (creates.length === 0) return
+    if (!/pick[A-Za-z]*Fields\(/.test(code)) offenders.push(`${rel} (${creates.join(' ')})`)
+  })
+  assert.deepEqual(offenders, [], `unallowlisted model create in: ${offenders.join(', ')}`)
 })

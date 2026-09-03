@@ -4,6 +4,7 @@ import ProgramModel from '@/models/Program';
 import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises';
 import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
+import { pickAdminProgramFields } from '@/lib/programFields';
 
 // GET all programs (any authed user — read-only browsing)
 export async function GET(request: NextRequest) {
@@ -42,13 +43,13 @@ export async function POST(request: NextRequest) {
     await dbConnect();
     const body = await request.json();
 
-    // Strip ownership/custom flags so an admin can't plant a program into
-    // another user's "My Programs" list by stuffing the request body.
-    delete body.isCustom;
-    delete body.createdBy;
-
-    // Convert exercise names to slugs for DB storage
-    const dehydrated = await dehydrateProgram(body);
+    // ALLOWLIST, not a deny-list — see lib/programFields.ts. This route used to
+    // strip `isCustom` and `createdBy` and create the model from everything
+    // else, which is how `sharedWith` (the grant that plants a program in
+    // another member's "My Programs" list) reached the sibling custom-create
+    // path. Admin-gated, so it was never an escalation; it is the same shape,
+    // and the shape is what keeps coming back.
+    const dehydrated = await dehydrateProgram(pickAdminProgramFields(body));
 
     // Generate program_id from name if not provided
     if (!dehydrated.program_id) {

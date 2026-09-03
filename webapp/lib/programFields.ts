@@ -39,6 +39,46 @@ export const CUSTOM_PROGRAM_INPUT_FIELDS = [
 export type CustomProgramInputField = (typeof CUSTOM_PROGRAM_INPUT_FIELDS)[number]
 
 /**
+ * The same list for the ADMIN catalog create (POST /api/programs), plus the one
+ * field that route legitimately accepts: a chosen `program_id` (it mints a slug
+ * from the name when none is sent).
+ *
+ * That route is `requireAdmin`-gated and database-confirmed, so nothing here is
+ * a privilege escalation — it is the same SHAPE of defect, and it was left
+ * standing after the custom-program create was fixed:
+ *
+ *     delete body.isCustom
+ *     delete body.createdBy
+ *     const dehydrated = await dehydrateProgram(body)   // still the body
+ *     await ProgramModel.create(dehydrated)
+ *
+ * A two-name deny-list in front of a whole-body create. `sharedWith` was
+ * already through it, and the next privileged Program field would be too. The
+ * point of an allowlist is that it does not depend on anyone remembering.
+ */
+export const ADMIN_PROGRAM_INPUT_FIELDS = [
+  ...CUSTOM_PROGRAM_INPUT_FIELDS,
+  'program_id',
+] as const
+
+export type AdminProgramInputField = (typeof ADMIN_PROGRAM_INPUT_FIELDS)[number]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function pickAdminProgramFields<T extends Record<string, any>>(
+  input: T | null | undefined,
+): Partial<Pick<T, AdminProgramInputField & keyof T>> {
+  const out: Record<string, unknown> = {}
+  if (!input || typeof input !== 'object') {
+    return out as Partial<Pick<T, AdminProgramInputField & keyof T>>
+  }
+  for (const key of ADMIN_PROGRAM_INPUT_FIELDS) {
+    const value = input[key]
+    if (value !== undefined) out[key] = value
+  }
+  return out as Partial<Pick<T, AdminProgramInputField & keyof T>>
+}
+
+/**
  * Copy across only the allowlisted keys. `undefined` values are dropped so a
  * caller cannot use the picker to blank a field it did not send, and so the
  * result is safe to spread over an existing document.

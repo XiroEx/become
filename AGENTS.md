@@ -258,6 +258,29 @@ AND an over-count at the same time: a member at 3/3 could mint a fourth through
 never knowingly created and so could not delete to free one. The flag is an
 argument, never a body field: a client that could set it could also unset it.
 
+Because the slot is charged on `authoredBy`, **ownership for a food PATCH or
+DELETE is EITHER id** (`lib/nutrition/foodOwnership.ts`), not `createdBy` alone.
+An inventory cap is only humane because deleting frees a slot, so a row billed
+to one member and deletable only by another is a lockout with no self-service
+way out — and rows shaped exactly like that exist, from the window in which
+`authoredBy` was writable from the PATCH body. Whoever the slot is charged to
+can always delete the row and get the slot back.
+
+A live count is a READ, and a create route that reads a count, compares it to
+the limit and then writes a row serialises nothing in between: ten concurrent
+`POST /api/nutrition/foods` from a free member at 0/3 landed ten rows, on
+production, on every counted cap. So a create also takes an in-flight CLAIM
+(`lib/inventoryClaims.ts`, `models/InventoryClaim.ts`) and the order is the
+mechanism: **claim first, count second, decide from `live + rank`.** A claim is
+released only AFTER the row is committed — automatically, from
+`lib/afterResponse.ts`, so no route has to remember and none may call
+`releaseClaim` itself — which is what makes the two reads jointly complete: a
+competing create is either already in the count or still in the array, never
+neither. Nothing here is durable, so there is no counter to drift and DELETING
+STILL FREES A SLOT IMMEDIATELY; a claim whose release is lost simply stops
+counting after 30s, because a stuck claim would lock a member out and an
+over-admitted row would not.
+
 Windowed ones — **1 AI food estimate per day, 3 workout generations per
 week** — have nothing to count, because what is spent is a graph dispatch that
 leaves no row behind. `models/AllowanceUsage.ts` is that row: one document per
