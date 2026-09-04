@@ -99,3 +99,46 @@ export function findDuplicateOf<T extends Pick<AuditableExercise, 'slug' | 'name
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+export type ExerciseIssueType = 'noVideo' | 'noInstructions' | 'noPrimaryMuscles' | 'duplicate';
+
+export interface ExerciseIssue {
+  type: ExerciseIssueType;
+  message: string;
+}
+
+/**
+ * The specific, human-readable reasons an exercise trips the Duplicates /
+ * No Video / Broken audit tabs — the "why is it broken" an admin can't see
+ * from a single boolean. `isBrokenExercise` stays an AND (no instructions
+ * *and* no muscles) so the "Broken" tab count doesn't change; this reports
+ * each missing field independently so one out of the two still shows up
+ * here even when it's not enough to flip the tab count.
+ *
+ * `duplicateNames`, if given, is the name(s) of other exercises this one's
+ * normalized name collides with (see `findDuplicateGroups`) — the caller
+ * looks that up against the full catalog since a single exercise's fields
+ * alone can't reveal it.
+ */
+export function describeExerciseIssues(
+  ex: Pick<AuditableExercise, 'videoUrl' | 'instructions' | 'primaryMuscles'>,
+  duplicateNames: string[] = []
+): ExerciseIssue[] {
+  const issues: ExerciseIssue[] = [];
+  if (isMissingVideo(ex)) {
+    issues.push({ type: 'noVideo', message: 'No video attached' });
+  }
+  if (!ex.instructions || ex.instructions.length === 0) {
+    issues.push({ type: 'noInstructions', message: 'No step-by-step instructions' });
+  }
+  if (!ex.primaryMuscles || ex.primaryMuscles.length === 0) {
+    issues.push({ type: 'noPrimaryMuscles', message: 'No primary muscle group set' });
+  }
+  if (duplicateNames.length > 0) {
+    issues.push({
+      type: 'duplicate',
+      message: `Name matches another exercise: ${duplicateNames.join(', ')}`,
+    });
+  }
+  return issues;
+}
