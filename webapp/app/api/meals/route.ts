@@ -4,6 +4,7 @@ import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
+import { createStrict } from '@/lib/strictCreate'
 
 // GET: list user's own meals + public/verified meals.
 // Query params: q, tag, mine=true, limit, offset
@@ -113,7 +114,9 @@ export async function POST(request: NextRequest) {
     // off the token claim, so a demoted admin cannot mint a verified meal.
     const isAdmin = gate.role === 'admin'
 
-    const meal = await Meal.create({
+    // createStrict, not Model.create: an unknown top-level key is a dropped
+    // field, and the field this route pins is ownership. See lib/strictCreate.ts.
+    const meal = await createStrict(Meal, {
       name: body.name,
       description: body.description,
       imageUrl: body.imageUrl,

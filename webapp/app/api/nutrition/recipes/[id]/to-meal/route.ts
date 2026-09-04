@@ -8,6 +8,7 @@ import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
 import { recipeConvertMode, convertDeletesSource } from '@/lib/nutrition/recipeConvert'
+import { createStrict } from '@/lib/strictCreate'
 
 // POST /api/nutrition/recipes/[id]/to-meal — convert a Recipe into a Meal
 // (a loggable group of foods). Copies ingredients → items (per-serving
@@ -70,7 +71,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const totalNutrition = computeTotalNutrition(items as unknown as IMealItem[])
 
-    const meal = await Meal.create({
+    // createStrict: ownership is pinned here, and a create that loses the
+    // owner field is exactly the defect this guards. See lib/strictCreate.ts.
+    const meal = await createStrict(Meal, {
       name: recipe.name,
       description: recipe.description,
       imageUrl: recipe.imageUrl,

@@ -5,6 +5,7 @@ import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
 import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises'
 import { pickCustomProgramFields } from '@/lib/programFields'
+import { createStrict } from '@/lib/strictCreate'
 
 // GET: list user's own custom programs (no tier gate so downgraded users
 // can still see what they made).
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     // Allowlist first, THEN pin the server-controlled fields. Nothing else the
     // caller sent reaches the model — not sharedWith, not createdBy, not the
     // cover fields, not program_id (minted above).
-    const created = await ProgramModel.create({
+    const created = await createStrict(ProgramModel, {
       ...pickCustomProgramFields(dehydrated),
       program_id: programId,
       isCustom: true,

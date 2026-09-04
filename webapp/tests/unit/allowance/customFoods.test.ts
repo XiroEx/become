@@ -120,10 +120,13 @@ test('authorship is stamped only on the branch that really mints a row', () => {
   // those stamped authoredBy, re-saving a food that already exists — someone
   // else's, even — would claim a slot for a row the member did not create.
   const src = read('lib/foodImport.ts')
-  const create = src.indexOf('const food = await Food.create({', src.indexOf('export async function importManualFood'))
+  // The create goes through createStrict (lib/strictCreate.ts) — a key that is
+  // not a schema path throws instead of being silently dropped, which is how
+  // the combine route lost `createdBy` on every meal it saved.
+  const create = src.indexOf('const food = await createStrict<IFood>(Food, {', src.indexOf('export async function importManualFood'))
   assert.ok(create > 0)
   const stamp = src.indexOf('authoredBy:', create)
-  assert.ok(stamp > create, 'authoredBy must be written inside Food.create, after both dedupe returns')
+  assert.ok(stamp > create, 'authoredBy must be written inside the create, after both dedupe returns')
 })
 
 // ─── The escape hatch still works ────────────────────────────────────────────

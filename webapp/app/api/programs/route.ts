@@ -5,6 +5,7 @@ import { hydratePrograms, dehydrateProgram } from '@/lib/hydrateExercises';
 import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
 import { pickAdminProgramFields } from '@/lib/programFields';
+import { createStrict } from '@/lib/strictCreate';
 
 // GET all programs (any authed user — read-only browsing)
 export async function GET(request: NextRequest) {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       dehydrated.program_id = `${dehydrated.program_id}-${Date.now().toString(36)}`;
     }
 
-    const program = await ProgramModel.create(dehydrated);
+    const program = await createStrict(ProgramModel, dehydrated);
     return NextResponse.json(program, { status: 201 });
   } catch (error) {
     console.error('Error creating program:', error);

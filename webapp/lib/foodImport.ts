@@ -14,6 +14,7 @@ import {
 } from '@/lib/foodReview'
 import { plausibleOffKcal } from '@/lib/offEnergy'
 import { assessFoodImportQuality, foodQualityErrorMessage } from '@/lib/nutrition/foodQuality'
+import { createStrict } from '@/lib/strictCreate'
 
 const VALID_CATEGORIES: FoodCategory[] = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -510,7 +511,7 @@ export async function importFromUSDA(
     variants: [variant],
   } as FoodForReview, { origin: 'import' })
 
-  const food = await Food.create({
+  const food = await createStrict<IFood>(Food, {
     name: finalName,
     slug,
     brand: mapped.brand,
@@ -938,7 +939,7 @@ export async function importFromOpenFoodFacts(
     variants: [variant],
   } as FoodForReview, { origin: 'import' })
 
-  const food = await Food.create({
+  const food = await createStrict<IFood>(Food, {
     name: off.product_name,
     slug,
     brand: off.brands || undefined,
@@ -1113,7 +1114,7 @@ export async function importManualFood(
     variants,
   } as FoodForReview, { origin: 'rules' })
 
-  const food = await Food.create({
+  const food = await createStrict<IFood>(Food, {
     name: input.name,
     slug,
     brand: input.brand,

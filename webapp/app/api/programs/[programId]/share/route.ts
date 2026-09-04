@@ -3,6 +3,18 @@
 // show up in the member's "My Programs" list (see GET /api/programs/custom)
 // and lets them enroll in / view it (see the sharedWith checks added to
 // GET /api/programs/[programId] and POST /api/programs/enroll).
+//
+// ROLE-GATED, NOT TIER-GATED, and deliberately so. `requireTrainerOrAdmin` is
+// the whole gate: sharing pushes a program into someone else's library, which
+// is a staff capability, not something a member buys. There used to be a
+// 'share-programs' entry in FEATURE_MIN_TIER / FREE_LIMITS that no route ever
+// consulted, so GET /api/me/entitlements advertised a Plus feature that the
+// role check refused to a Plus member and handed to a free-tier trainer. The
+// entry is gone (see lib/entitlements.ts). Do not add an entitlement gate here
+// without ALSO deciding what happens to a free-tier trainer — and do not drop
+// the role check to make the advertised feature true, because `sharedWith` is
+// the grant that plants a program in another member's list and only staff may
+// write it (see lib/programFields.ts).
 import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'

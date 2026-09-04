@@ -30,12 +30,24 @@ export const DEFAULT_TIER: Tier = 'free'
 /**
  * The tier at which a feature becomes UNCAPPED. A free member may still get a
  * nonzero allowance below it — see FREE_LIMITS.
+ *
+ * EVERY ENTRY HERE MUST BE ENFORCED BY A ROUTE. This map is what
+ * GET /api/me/entitlements advertises, so an entry no gate consults is a
+ * promise the app does not keep. `share-programs` was one: it appeared here,
+ * in FREE_LIMITS and in the client copy, and nothing anywhere called a guard
+ * with it. It is gone, and it is not coming back as a tier feature, because
+ * sharing is a ROLE capability, not a tier one — POST
+ * /api/programs/[programId]/share is `requireTrainerOrAdmin`, staff only, and
+ * that is the whole gate. Advertising it as Plus was wrong in both directions
+ * at once: a Plus member was told they had sharing and was still refused by
+ * the role check, and a free-tier TRAINER was told they did not and shared
+ * anyway. tests/unit/entitlements/enforcementCoverage.test.ts fails the build
+ * if a feature is advertised here without a route that gates on it.
  */
 export const FEATURE_MIN_TIER = {
   'custom-meals': 'plus',
   'custom-exercises': 'plus',
   'custom-programs': 'plus',
-  'share-programs': 'plus',
   'custom-foods': 'plus',
   'custom-sessions': 'plus',
   'workout-generation': 'plus',
@@ -73,7 +85,6 @@ export const FREE_LIMITS = {
   'custom-foods': { limit: 3, kind: 'inventory', window: 'lifetime' },
   'mind-sessions': { limit: 10, kind: 'milestone', window: 'lifetime' },
   vision: { limit: 0, kind: 'inventory', window: 'lifetime' },
-  'share-programs': { limit: 0, kind: 'inventory', window: 'lifetime' },
 } as const satisfies Record<Feature, FreeLimit>
 
 // ─── Access ──────────────────────────────────────────────────────────────────
@@ -144,7 +155,6 @@ const GATE_MESSAGES: Record<Feature, string> = {
   'custom-programs': `You've built all ${FREE_LIMITS['custom-programs'].limit} of your free programs.`,
   'custom-foods': `You've saved all ${FREE_LIMITS['custom-foods'].limit} of your free custom foods.`,
   'custom-sessions': `You've starred all ${FREE_LIMITS['custom-sessions'].limit} of your free sessions.`,
-  'share-programs': 'Sharing programs is a Plus feature.',
   'workout-generation': `You've used all ${FREE_LIMITS['workout-generation'].limit} of your free workout generations this week.`,
   'ai-food-estimate': "You've used your free AI food scan for today.",
   'mind-sessions': `You've finished your first ${FREE_LIMITS['mind-sessions'].limit} Mind sessions.`,
@@ -160,8 +170,35 @@ export function defaultMessage(feature: Feature): string {
 export interface UserEntitlement {
   role: UserRole
   tier: Tier
+  /** RAW, straight off the row. Report it through reportedGrandfathered(). */
   grandfathered: boolean
   subscription: IUserSubscription | null
+}
+
+/**
+ * What a client may be told about `grandfathered` — and it is NOT "you have
+ * access".
+ *
+ * Grandfathering is a WRITER-SIDE promise. The tier derivation in
+ * lib/subscription.ts maps `grandfathered: true` to Plus, but it runs where
+ * tier is WRITTEN (the billing webhook, scripts/migrate-tiers.mjs), never on
+ * the request path: the gates read `tier` and nothing else, deliberately, so
+ * that nobody is promoted silently at read time. The invariant that makes the
+ * flag LOOK like a grant — grandfathered rows are already `tier: 'plus'` —
+ * holds only because the migration set both in one `$set`. Do NOT "fix" this by deriving tier in
+ * loadUserEntitlement — that would grandfather members automatically, which is
+ * exactly what the offline script exists to do deliberately. The test file
+ * next to this one fails the build if the read path ever derives a tier.
+ *
+ * So the flag is reported as what it actually is: the REASON this member holds
+ * Plus, not a claim of access on its own. A row carrying `grandfathered: true`
+ * with `tier: 'free'` is being gated as free — whatever the flag says — and
+ * telling the client otherwise would put "Thanks for being here early" on a
+ * screen full of locks. That state should be impossible; loadUserEntitlement
+ * logs it if it is ever seen.
+ */
+export function reportedGrandfathered(tier: Tier, grandfathered: boolean): boolean {
+  return grandfathered === true && tier === 'plus'
 }
 
 /**
@@ -185,10 +222,26 @@ export async function loadUserEntitlement(userId: string): Promise<UserEntitleme
       grandfathered?: boolean
       subscription?: IUserSubscription
     } | null>()
+  const tier: Tier = user?.tier === 'plus' ? 'plus' : DEFAULT_TIER
+  const grandfathered = user?.grandfathered === true
+
+  // Should be impossible: scripts/migrate-tiers.mjs is the only writer of
+  // `grandfathered` and it sets `tier: 'plus'` in the same $set, and the
+  // billing webhook never clears it. If the two ever disagree the member is
+  // being gated as FREE — the request path reads tier alone, on purpose — so
+  // this is a silent downgrade of someone we promised not to charge. Cheap
+  // enough to check on a row already in hand; loud enough to find.
+  if (grandfathered && tier !== 'plus') {
+    console.error(
+      `[entitlements] impossible state: user ${userId} is grandfathered but tier='${user?.tier ?? '(absent)'}' — ` +
+        'gated as free. Re-run scripts/migrate-tiers.mjs or set tier explicitly.',
+    )
+  }
+
   return {
     role: (user?.role as UserRole) || 'user',
-    tier: user?.tier === 'plus' ? 'plus' : DEFAULT_TIER,
-    grandfathered: user?.grandfathered === true,
+    tier,
+    grandfathered,
     subscription: user?.subscription ?? null,
   }
 }

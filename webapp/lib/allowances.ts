@@ -360,7 +360,7 @@ async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
       ? INVENTORY_COUNTS[feature]
       : MILESTONE_COUNTS[feature]
 
-  // Features with limit 0 (vision, share-programs) are binary, not counted —
+  // Features with limit 0 (vision) are binary, not counted —
   // featureAccess() already resolves them to 'none', so there is nothing to
   // count and no counter registered.
   if (!counter) return 0
@@ -577,7 +577,7 @@ async function consumeInventory(
   const spec = FREE_LIMITS[feature]
   const enforce = opts.enforce === true
 
-  // Binary features (limit 0: vision, share-programs) count nothing and have no
+  // Binary features (limit 0: vision) count nothing and have no
   // create to serialise — featureAccess() has already resolved them to 'none'.
   if (!INVENTORY_COUNTS[feature] && !ctx.countRows) {
     return {

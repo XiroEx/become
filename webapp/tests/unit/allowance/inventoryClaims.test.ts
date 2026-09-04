@@ -277,8 +277,8 @@ test('the number the member is shown is unchanged when nothing is racing', async
 
 // ─── Binary features (limit 0) are untouched ─────────────────────────────────
 
-test('vision and share-programs still refuse without taking a claim', async () => {
-  for (const feature of ['vision', 'share-programs'] as const) {
+test('vision still refuses without taking a claim', async () => {
+  for (const feature of ['vision'] as const) {
     let opened = 0
     const ctx: AllowanceCtx = {
       userId: USER,
