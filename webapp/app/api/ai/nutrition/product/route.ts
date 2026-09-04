@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
 
   const text = asText(body.text, 300)
   const image = typeof body.image === 'string' ? body.image : ''
+  // What was wrong with the last read of this label. Only a request carrying
+  // one can spend a follow-up rather than a fresh scan.
+  const note = asText(body.note, 500)
   if (!text.trim() && !image) return NextResponse.json({ error: 'Missing query' }, { status: 400 })
 
   // Label-photo lookup is a vision call on the same daily allowance as the
@@ -32,6 +35,7 @@ export async function POST(request: NextRequest) {
   // as one.
   const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
     followUpTicket: body.allowanceTicket,
+    refines: Boolean(note.trim()),
   })
   if (!allow.ok) return allow.response
 
@@ -39,11 +43,11 @@ export async function POST(request: NextRequest) {
   const trig = await triggerOwnedRun(
     gate.user,
     'nutrition.productFind',
-    { text, user: grounding },
+    { text, ...(note.trim() ? { note } : {}), user: grounding },
     image ? { image } : {},
   )
 
-  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
   await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })
 }

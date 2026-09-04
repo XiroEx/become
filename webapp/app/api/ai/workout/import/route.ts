@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   if (!allow.ok) return allow.response
 
   const trig = await triggerOwnedRun(gate.user, 'workoutImportText', { text })
-  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
   await allow.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

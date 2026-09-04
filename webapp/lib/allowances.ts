@@ -11,6 +11,7 @@ import {
   mongoAllowanceLedger,
   type AllowanceLedger,
   type LedgerCounts,
+  type WindowAnchor,
 } from '@/lib/allowanceLedger'
 import {
   mongoInventoryClaims,
@@ -352,21 +353,120 @@ function claimsFor(ctx: AllowanceCtx): InventoryClaimStore {
   return ctx.claims ?? mongoInventoryClaims
 }
 
+export interface Bucket {
+  key: string | null
+  resetsAt: string | null
+}
+
+/**
+ * ─── The clock-change rule ───────────────────────────────────────────────────
+ *
+ * ONE WINDOW PER ELAPSED WINDOW, however the member's clock moves.
+ *
+ * windowTzOffset() deliberately ignores a request's `tz`, but the offset it
+ * reads is itself client-written (POST /api/workouts → lib/captureUserTimezone),
+ * and the offset picks the local DATE the bucket is keyed on. Legitimate
+ * offsets span 26 hours, so a member sitting on a spent allowance could report
+ * a zone far enough east to land on tomorrow's date and mint a second window —
+ * proven live, repeatable, and immune to validating the offset (every value
+ * used was a real one).
+ *
+ * So the offset no longer decides alone. The member's own ledger says which
+ * window they are in and when it ends, and:
+ *
+ *   • while that window is still open in REAL time, a clock change cannot
+ *     leave it early — this is the whole exploit, closed;
+ *   • once it has elapsed, a clock change cannot walk BACK into it — moving
+ *     west must not re-charge a bucket that is already spent, or hand a
+ *     follow-up ticket a bucketKey that no longer matches.
+ *
+ * Neither direction costs an honest traveller anything: they keep exactly one
+ * window per window, their in-flight correction ticket stays valid across the
+ * change (so one outcome is never charged twice), and their boundary follows
+ * their new zone from the next window on.
+ *
+ * `resetsAt` is reported as the instant a NEW window can actually open, which
+ * is the honest answer in both branches and is what the client counts down to.
+ */
+export function anchorBucket(base: Bucket, anchor: WindowAnchor | null, now: Date): Bucket {
+  if (!anchor || !base.key || !base.resetsAt) return base
+
+  const anchorResetsAt = anchor.resetsAt.toISOString()
+
+  // (1) The window they are in has not ended yet — they stay in it, whatever
+  //     their clock now says.
+  if (now.getTime() < anchor.resetsAt.getTime()) {
+    return { key: anchor.bucketKey, resetsAt: anchorResetsAt }
+  }
+
+  // (2) It has ended, but the offset points at that same window or an older
+  //     one (they moved west). Hold them there until the clock genuinely rolls
+  //     them forward — `base.resetsAt` is that instant, and it is later than
+  //     the anchor's by construction.
+  //     Day keys ('2026-09-03') and week keys ('W2026-08-31') both sort
+  //     lexicographically within their own window kind, which is the only
+  //     comparison ever made here.
+  if (base.key <= anchor.bucketKey) {
+    return { key: anchor.bucketKey, resetsAt: base.resetsAt }
+  }
+
+  return base
+}
+
 /**
  * The bucket a windowed feature lands in for this member, right now.
  *
  * Resolves the offset from the member's record for 'window' features (see
  * AllowanceCtx.tzOffset) and from the caller's hint otherwise — inventory and
  * milestone allowances have a 'lifetime' window, where the offset is unused.
+ *
+ * For windowed features the offset-derived bucket is then ANCHORED to the
+ * window the member is already in (see anchorBucket). peekAllowance() goes
+ * through here too, so GET /api/me/entitlements and the gate can never disagree
+ * about which window it is.
  */
 async function windowFor(
   feature: Feature,
   ctx: AllowanceCtx,
   now: Date = new Date()
-): Promise<{ key: string | null; resetsAt: string | null }> {
+): Promise<Bucket> {
   const spec = FREE_LIMITS[feature]
-  const tz = spec.kind === 'window' ? await windowTzOffset(ctx.userId) : (ctx.tzOffset ?? 0)
-  return windowBucket(spec.window, tz, now)
+  if (spec.kind !== 'window') return windowBucket(spec.window, ctx.tzOffset ?? 0, now)
+
+  const base = windowBucket(spec.window, await windowTzOffset(ctx.userId), now)
+  return anchorBucket(base, await latestWindow(feature, ctx), now)
+}
+
+/** The member's newest window for this feature, or null when the ledger cannot
+ *  say. Fails OPEN like every other read in this module: no anchor means the
+ *  offset decides, exactly as it did before the anchor existed. */
+async function latestWindow(feature: Feature, ctx: AllowanceCtx): Promise<WindowAnchor | null> {
+  const ledger = ledgerFor(ctx)
+  if (!ledger.latest) return null
+  try {
+    return await ledger.latest({ userId: ctx.userId, feature })
+  } catch (err) {
+    console.error(`[allowances] window anchor read failed for ${feature}:`, err)
+    return null
+  }
+}
+
+/**
+ * The bucket a WINDOWED feature is currently charged in for this member —
+ * anchored exactly as a consume would be.
+ *
+ * Exported for the follow-up ticket (lib/ai/allowance.ts), which names the
+ * window its parent unit was charged in: minting that from the raw offset
+ * instead would hand out a key the ledger never used the moment the anchor and
+ * the clock disagree. Null for inventory/milestone features, which have no
+ * window.
+ */
+export async function currentWindowKey(
+  feature: Feature,
+  ctx: AllowanceCtx
+): Promise<string | null> {
+  if (FREE_LIMITS[feature].kind !== 'window') return null
+  return (await windowFor(feature, ctx)).key
 }
 
 /** Read-only. Never mutates. Used by GET /api/me/entitlements and soft peeks. */

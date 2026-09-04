@@ -34,8 +34,14 @@ export async function POST(request: NextRequest) {
   // different door. A CORRECTION carries the ticket the estimate handed back
   // and spends a bounded follow-up instead of a fresh scan: without that, a
   // free member gets one estimate a day and no way to fix it.
+  //
+  // A correction is a correction only if it is one: it fixes a PRIOR estimate
+  // and does not describe a new meal. A ticket presented beside a fresh
+  // `description` is a new outcome riding a previous charge — which is exactly
+  // how a replayed ticket bought a day's worth of estimates.
   const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
     followUpTicket: body.allowanceTicket,
+    refines: Boolean(correction.trim()) && !description.trim() && Array.isArray(body.priorEstimate),
   })
   if (!allow.ok) return allow.response
 
@@ -47,7 +53,7 @@ export async function POST(request: NextRequest) {
     user: grounding,
   })
 
-  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
   await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })
 }
