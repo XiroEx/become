@@ -65,7 +65,6 @@ test('featureAccess splits free into limited (has an allowance) and none', () =>
   assert.equal(featureAccess('user', 'free', 'mind-sessions'), 'limited')
   // Binary features — no free allowance at all.
   assert.equal(featureAccess('user', 'free', 'vision'), 'none')
-  assert.equal(featureAccess('user', 'free', 'share-programs'), 'none')
 })
 
 // ─── allowances ──────────────────────────────────────────────────────────────
@@ -81,7 +80,6 @@ test('FREE_LIMITS covers every feature with the agreed numbers', () => {
     'custom-foods': 3,
     'mind-sessions': 10,
     vision: 0,
-    'share-programs': 0,
   }
   for (const feature of FEATURES) {
     assert.ok(FREE_LIMITS[feature], `no FREE_LIMITS entry for ${feature}`)

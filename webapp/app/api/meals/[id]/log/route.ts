@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import Meal, { IMealItem } from '@/models/Meal'
 import MealLog from '@/models/MealLog'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
 
@@ -41,7 +42,10 @@ export async function POST(
     }
 
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Only reached for a meal that is neither public nor verified nor the
+    // caller's, so it is an admin-only widening — confirmed against the
+    // database. Ordinary members never get here and never pay for the read.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!meal.isPublic && !meal.isVerified && !isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Meal not found' }, { status: 404 })
     }

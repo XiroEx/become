@@ -11,7 +11,14 @@ import {
   mongoAllowanceLedger,
   type AllowanceLedger,
   type LedgerCounts,
+  type WindowAnchor,
 } from '@/lib/allowanceLedger'
+import {
+  mongoInventoryClaims,
+  type InventoryClaimStore,
+  type OpenClaim,
+} from '@/lib/inventoryClaims'
+import { afterResponse } from '@/lib/afterResponse'
 
 /**
  * ─── Free-tier allowance accounting ──────────────────────────────────────────
@@ -19,11 +26,13 @@ import {
  * Three kinds, because "3 of these" means three different things:
  *
  *   'inventory' — a LIVE count of rows the member owns (3 custom exercises).
- *                 Nothing is written; DELETING ONE FREES A SLOT. That is the
- *                 escape hatch that keeps a capped member from being locked
- *                 out of their own data.
+ *                 Nothing durable is written; DELETING ONE FREES A SLOT. That
+ *                 is the escape hatch that keeps a capped member from being
+ *                 locked out of their own data. A count is a READ, so a create
+ *                 also takes a short-lived claim (lib/inventoryClaims.ts) that
+ *                 orders concurrent creates — see consumeInventory().
  *   'milestone' — a monotonic progress number already stored elsewhere
- *                 (MindProgress.mainSessionCount). Read-only, idempotent.
+ *                 (MindProgress.completedMainSessions). Read-only, idempotent.
  *   'window'    — a counter inside a local day / ISO week bucket
  *                 (1 AI food estimate/day, 3 generations/week). This is the
  *                 only kind that needs its own persisted ledger.
@@ -60,6 +69,13 @@ export interface AllowanceCtx {
   tzOffset?: number
   /** @internal Test seam. Production always uses the Mongo ledger. */
   ledger?: AllowanceLedger
+  /** @internal Test seam. Production always uses the Mongo claim store. */
+  claims?: InventoryClaimStore
+  /**
+   * @internal Test seam. Production always counts the member's real rows
+   * through INVENTORY_COUNTS / MILESTONE_COUNTS.
+   */
+  countRows?: (feature: Feature, userId: string) => Promise<number>
 }
 
 export interface ConsumeOptions {
@@ -94,6 +110,15 @@ export interface ConsumeResult {
   /** Why a consume was refused. 'limit' for a tier cap, 'follow-up' for the
    *  bounded correction allowance riding an already-charged outcome. */
   reason?: 'limit' | 'follow-up'
+  /**
+   * @internal The in-flight claim an 'inventory' consume took, released
+   * AUTOMATICALLY after the response (lib/afterResponse.ts).
+   *
+   * Exposed for tests, which have no response to run after. A ROUTE MUST NOT
+   * CALL IT: releasing before the row is committed reopens the read-then-write
+   * race the claim exists to close.
+   */
+  releaseClaim?: () => Promise<void>
 }
 
 // ─── Window buckets ──────────────────────────────────────────────────────────
@@ -255,11 +280,32 @@ const INVENTORY_COUNTS: Partial<Record<Feature, (userId: string) => Promise<numb
 }
 
 const MILESTONE_COUNTS: Partial<Record<Feature, (userId: string) => Promise<number>>> = {
+  // `completedMainSessions`, NEVER `mainSessionCount`.
+  //
+  // mainSessionCount is CHAPTER PROGRESS measured in sessions, and it carries a
+  // head start nobody sat through: the Mind intake maps 'building' to chapter 2
+  // and 'leveling_up' to chapter 3, POST /api/mind/progress/levelup advances a
+  // chapter on a self-declaration, an admin can set one outright — and
+  // /api/mind/progress then PERSISTS max(count, (chapter - 1) * 10) so the
+  // chapter survives the round trip. Reading it here meant a brand-new free
+  // member was 10/10 (or 20/10) before their first session and was refused it
+  // with "You've finished your first 10 Mind sessions", and a self-declared
+  // level-up burned 9 more phantom sessions on top. Both reproduced on
+  // production against fresh accounts.
+  //
+  // completedMainSessions is only ever incremented by a counted completion in
+  // POST /api/mind/session, so it counts sessions that actually happened —
+  // whatever the member answered at intake. See models/MindProgress.ts.
+  //
+  // Absent on documents written before it existed, where it reads as 0: nobody
+  // is ever locked out by the migration, and a long-standing member simply gets
+  // their 10 free sessions counted from here. scripts/backfill-mind-session-count.mjs
+  // restores the real number for those rows and is a pre-deploy step.
   'mind-sessions': async (userId) => {
     const prog = await MindProgress.findOne({ userId })
-      .select('mainSessionCount')
-      .lean<{ mainSessionCount?: number } | null>()
-    return prog?.mainSessionCount ?? 0
+      .select('completedMainSessions')
+      .lean<{ completedMainSessions?: number } | null>()
+    return prog?.completedMainSessions ?? 0
   },
 }
 
@@ -269,11 +315,21 @@ function stateFor(
   resetsAt: string | null
 ): AllowanceState {
   const spec = FREE_LIMITS[feature]
+  // A 'milestone' allowance reads a monotonic number someone else owns, so it
+  // runs far past the limit in normal use — a member with 20 completed Mind
+  // sessions reported `used: 20, limit: 10`, and a meter rendering used/limit
+  // draws that at 200%. Clamp what is REPORTED; the DECISION is unchanged,
+  // because every reader compares `used < limit` and min(used, limit) < limit
+  // is false exactly when used >= limit.
+  //
+  // Deliberately NOT applied to 'window': there `used` counts attempts once
+  // enforcement is on, and the overshoot is a free abuse signal.
+  const reported = spec.kind === 'milestone' ? Math.min(used, spec.limit) : used
   return {
     feature,
     limit: spec.limit,
-    used,
-    remaining: Math.max(0, spec.limit - used),
+    used: reported,
+    remaining: Math.max(0, spec.limit - reported),
     resetsAt,
     window: spec.window,
     kind: spec.kind,
@@ -298,15 +354,18 @@ async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
     }
   }
 
-  const counter =
-    spec.kind === 'inventory' ? INVENTORY_COUNTS[feature] : MILESTONE_COUNTS[feature]
+  const counter = ctx.countRows
+    ? (userId: string) => ctx.countRows!(feature, userId)
+    : spec.kind === 'inventory'
+      ? INVENTORY_COUNTS[feature]
+      : MILESTONE_COUNTS[feature]
 
-  // Features with limit 0 (vision, share-programs) are binary, not counted —
+  // Features with limit 0 (vision) are binary, not counted —
   // featureAccess() already resolves them to 'none', so there is nothing to
   // count and no counter registered.
   if (!counter) return 0
 
-  await dbConnect()
+  if (!ctx.countRows) await dbConnect()
   try {
     return await counter(ctx.userId)
   } catch (err) {
@@ -321,21 +380,124 @@ function ledgerFor(ctx: AllowanceCtx): AllowanceLedger {
   return ctx.ledger ?? mongoAllowanceLedger
 }
 
+function claimsFor(ctx: AllowanceCtx): InventoryClaimStore {
+  return ctx.claims ?? mongoInventoryClaims
+}
+
+export interface Bucket {
+  key: string | null
+  resetsAt: string | null
+}
+
+/**
+ * ─── The clock-change rule ───────────────────────────────────────────────────
+ *
+ * ONE WINDOW PER ELAPSED WINDOW, however the member's clock moves.
+ *
+ * windowTzOffset() deliberately ignores a request's `tz`, but the offset it
+ * reads is itself client-written (POST /api/workouts → lib/captureUserTimezone),
+ * and the offset picks the local DATE the bucket is keyed on. Legitimate
+ * offsets span 26 hours, so a member sitting on a spent allowance could report
+ * a zone far enough east to land on tomorrow's date and mint a second window —
+ * proven live, repeatable, and immune to validating the offset (every value
+ * used was a real one).
+ *
+ * So the offset no longer decides alone. The member's own ledger says which
+ * window they are in and when it ends, and:
+ *
+ *   • while that window is still open in REAL time, a clock change cannot
+ *     leave it early — this is the whole exploit, closed;
+ *   • once it has elapsed, a clock change cannot walk BACK into it — moving
+ *     west must not re-charge a bucket that is already spent, or hand a
+ *     follow-up ticket a bucketKey that no longer matches.
+ *
+ * Neither direction costs an honest traveller anything: they keep exactly one
+ * window per window, their in-flight correction ticket stays valid across the
+ * change (so one outcome is never charged twice), and their boundary follows
+ * their new zone from the next window on.
+ *
+ * `resetsAt` is reported as the instant a NEW window can actually open, which
+ * is the honest answer in both branches and is what the client counts down to.
+ */
+export function anchorBucket(base: Bucket, anchor: WindowAnchor | null, now: Date): Bucket {
+  if (!anchor || !base.key || !base.resetsAt) return base
+
+  const anchorResetsAt = anchor.resetsAt.toISOString()
+
+  // (1) The window they are in has not ended yet — they stay in it, whatever
+  //     their clock now says.
+  if (now.getTime() < anchor.resetsAt.getTime()) {
+    return { key: anchor.bucketKey, resetsAt: anchorResetsAt }
+  }
+
+  // (2) It has ended, but the offset points at that same window or an older
+  //     one (they moved west). Hold them there until the clock genuinely rolls
+  //     them forward — `base.resetsAt` is that instant, and it is later than
+  //     the anchor's by construction.
+  //     Day keys ('2026-09-03') and week keys ('W2026-08-31') both sort
+  //     lexicographically within their own window kind, which is the only
+  //     comparison ever made here.
+  if (base.key <= anchor.bucketKey) {
+    return { key: anchor.bucketKey, resetsAt: base.resetsAt }
+  }
+
+  return base
+}
+
 /**
  * The bucket a windowed feature lands in for this member, right now.
  *
  * Resolves the offset from the member's record for 'window' features (see
  * AllowanceCtx.tzOffset) and from the caller's hint otherwise — inventory and
  * milestone allowances have a 'lifetime' window, where the offset is unused.
+ *
+ * For windowed features the offset-derived bucket is then ANCHORED to the
+ * window the member is already in (see anchorBucket). peekAllowance() goes
+ * through here too, so GET /api/me/entitlements and the gate can never disagree
+ * about which window it is.
  */
 async function windowFor(
   feature: Feature,
   ctx: AllowanceCtx,
   now: Date = new Date()
-): Promise<{ key: string | null; resetsAt: string | null }> {
+): Promise<Bucket> {
   const spec = FREE_LIMITS[feature]
-  const tz = spec.kind === 'window' ? await windowTzOffset(ctx.userId) : (ctx.tzOffset ?? 0)
-  return windowBucket(spec.window, tz, now)
+  if (spec.kind !== 'window') return windowBucket(spec.window, ctx.tzOffset ?? 0, now)
+
+  const base = windowBucket(spec.window, await windowTzOffset(ctx.userId), now)
+  return anchorBucket(base, await latestWindow(feature, ctx), now)
+}
+
+/** The member's newest window for this feature, or null when the ledger cannot
+ *  say. Fails OPEN like every other read in this module: no anchor means the
+ *  offset decides, exactly as it did before the anchor existed. */
+async function latestWindow(feature: Feature, ctx: AllowanceCtx): Promise<WindowAnchor | null> {
+  const ledger = ledgerFor(ctx)
+  if (!ledger.latest) return null
+  try {
+    return await ledger.latest({ userId: ctx.userId, feature })
+  } catch (err) {
+    console.error(`[allowances] window anchor read failed for ${feature}:`, err)
+    return null
+  }
+}
+
+/**
+ * The bucket a WINDOWED feature is currently charged in for this member —
+ * anchored exactly as a consume would be.
+ *
+ * Exported for the follow-up ticket (lib/ai/allowance.ts), which names the
+ * window its parent unit was charged in: minting that from the raw offset
+ * instead would hand out a key the ledger never used the moment the anchor and
+ * the clock disagree. Null for inventory/milestone features, which have no
+ * window.
+ */
+export async function currentWindowKey(
+  feature: Feature,
+  ctx: AllowanceCtx
+): Promise<string | null> {
+  if (FREE_LIMITS[feature].kind !== 'window') return null
+  return (await windowFor(feature, ctx)).key
 }
 
 /** Read-only. Never mutates. Used by GET /api/me/entitlements and soft peeks. */
@@ -349,7 +511,8 @@ export async function peekAllowance(
 
 /**
  * Reserve one unit.
- *   'inventory' → a live count; nothing is written.
+ *   'inventory' → takes an in-flight claim, THEN counts the member's rows, and
+ *                 decides from both. Nothing durable is written.
  *   'milestone' → reads the existing progress number; nothing is written.
  *   'window'    → atomically increments the (userId, feature, bucketKey) row in
  *                 models/AllowanceUsage.ts and decides from what came back.
@@ -368,7 +531,12 @@ export async function consumeAllowance(
   ctx: AllowanceCtx,
   opts: ConsumeOptions = {}
 ): Promise<ConsumeResult> {
-  if (FREE_LIMITS[feature].kind !== 'window') {
+  const kind = FREE_LIMITS[feature].kind
+  if (kind === 'inventory') return consumeInventory(feature, ctx, opts)
+
+  if (kind !== 'window') {
+    // 'milestone' — a number someone else already wrote (MindProgress). There
+    // is no create for two requests to race, so a read is the whole decision.
     const state = await peekAllowance(feature, ctx)
     const withinLimit = state.used < state.limit
     return {
@@ -378,6 +546,74 @@ export async function consumeAllowance(
     }
   }
   return consumeWindow(feature, ctx, opts, 'used')
+}
+
+/**
+ * The inventory consume: CLAIM FIRST, COUNT SECOND, DECIDE FROM BOTH.
+ *
+ * This used to be `peekAllowance()` — countDocuments, compare, return — and the
+ * route created the row afterwards with nothing in between. Ten concurrent
+ * POSTs from a free member at 0/3 therefore returned 201 ten times, on
+ * production, from zero, on every counted cap; a delete-then-burst loop made it
+ * unbounded. The count is not the bug (it is what makes deleting free a slot);
+ * taking the DECISION from an unserialised read is.
+ *
+ * `rank` is this claim's position among the claims in flight, so
+ * `live + rank - 1` is "rows that exist, or are being created ahead of me". Two
+ * racers get ranks 1 and 2 and exactly one of them fits under the limit.
+ * lib/inventoryClaims.ts carries the proof that the two reads jointly miss
+ * nothing; the ordering here is the load-bearing half of it.
+ *
+ * FAILS OPEN, like every other counter in this module: if the claim store is
+ * unreachable the consume behaves exactly as it did before this existed. The
+ * gate is a product boundary, not a security one, and a metering outage must
+ * not take a feature away from someone entitled to it.
+ */
+async function consumeInventory(
+  feature: Feature,
+  ctx: AllowanceCtx,
+  opts: ConsumeOptions
+): Promise<ConsumeResult> {
+  const spec = FREE_LIMITS[feature]
+  const enforce = opts.enforce === true
+
+  // Binary features (limit 0: vision) count nothing and have no
+  // create to serialise — featureAccess() has already resolved them to 'none'.
+  if (!INVENTORY_COUNTS[feature] && !ctx.countRows) {
+    return {
+      allowed: enforce ? 0 < spec.limit : true,
+      state: stateFor(feature, 0, null),
+      ...(0 < spec.limit ? {} : { reason: 'limit' as const }),
+    }
+  }
+
+  let claim: OpenClaim | null = null
+  try {
+    claim = await claimsFor(ctx).open(ctx.userId, feature, opts.now ?? new Date())
+  } catch (err) {
+    console.error(`[allowances] inventory claim failed for ${feature}:`, err)
+  }
+
+  // AFTER the claim, never before: a count taken first could miss a competing
+  // create that had not committed yet AND rank behind nothing, which is exactly
+  // the hole this closes.
+  const live = await usedFor(feature, ctx)
+  const used = live + (claim?.rank ?? 1) - 1
+  const state = stateFor(feature, used, null)
+  const withinLimit = used < spec.limit
+
+  // Released once the response is out, so it outlives the create it guards and
+  // no route has to remember anything. Where there is no request scope (a test,
+  // a script) the claim goes stale on its own — see lib/inventoryClaims.ts.
+  const release = claim ? () => claim!.release() : undefined
+  if (release) afterResponse(release)
+
+  return {
+    allowed: enforce ? withinLimit : true,
+    state,
+    ...(withinLimit ? {} : { reason: 'limit' as const }),
+    ...(release ? { releaseClaim: release } : { degraded: true }),
+  }
 }
 
 /**

@@ -120,21 +120,30 @@ test('authorship is stamped only on the branch that really mints a row', () => {
   // those stamped authoredBy, re-saving a food that already exists — someone
   // else's, even — would claim a slot for a row the member did not create.
   const src = read('lib/foodImport.ts')
-  const create = src.indexOf('const food = await Food.create({', src.indexOf('export async function importManualFood'))
+  // The create goes through createStrict (lib/strictCreate.ts) — a key that is
+  // not a schema path throws instead of being silently dropped, which is how
+  // the combine route lost `createdBy` on every meal it saved.
+  const create = src.indexOf('const food = await createStrict<IFood>(Food, {', src.indexOf('export async function importManualFood'))
   assert.ok(create > 0)
   const stamp = src.indexOf('authoredBy:', create)
-  assert.ok(stamp > create, 'authoredBy must be written inside Food.create, after both dedupe returns')
+  assert.ok(stamp > create, 'authoredBy must be written inside the create, after both dedupe returns')
 })
 
 // ─── The escape hatch still works ────────────────────────────────────────────
 
 test('an authored food is deletable by its author', () => {
-  // An inventory cap is only humane because deleting frees a slot. authoredBy
-  // is only ever set alongside createdBy for the same member, which is the
-  // field the delete route checks ownership on.
+  // An inventory cap is only humane because deleting frees a slot, so the
+  // member the slot is CHARGED to must be able to delete the row.
+  //
+  // On a healthy row authoredBy is set alongside createdBy for the same member,
+  // and that is what the invariant used to rest on — the delete route
+  // authorised on createdBy alone. It was not enough: authoredBy was writable
+  // from the PATCH body until the allowlist landed, so rows exist in production
+  // whose two ids name different people, and their delete answered 403.
+  // Ownership is now EITHER id — see lib/nutrition/foodOwnership.ts.
   const src = read('lib/foodImport.ts')
   assert.match(src, /createdBy:\s*createdBy \? new mongoose\.Types\.ObjectId/)
-  assert.match(read('app/api/nutrition/foods/[id]/route.ts'), /food\.createdBy\?\.toString\(\) === authResult\.userId/)
+  assert.match(read('app/api/nutrition/foods/[id]/route.ts'), /isFoodOwner\(food, authResult\.userId\)/)
 })
 
 // ─── The model ───────────────────────────────────────────────────────────────

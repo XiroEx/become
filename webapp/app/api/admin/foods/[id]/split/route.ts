@@ -14,7 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
-import Food, { IFoodVariant } from '@/models/Food'
+import Food, { IFood, IFoodVariant } from '@/models/Food'
+import { createStrict } from '@/lib/strictCreate'
 import { verifyAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
 import { generateUniqueFoodSlug } from '@/lib/foodSlug'
@@ -117,7 +118,7 @@ export async function POST(
       variants: [newVariant],
     } as FoodForReview, { origin: 'rules' })
 
-    const newFood = await Food.create({
+    const newFood = await createStrict<IFood>(Food, {
       name: newName,
       slug: newSlug,
       brand: source.brand,

@@ -1,4 +1,4 @@
-import { windowBucket, windowTzOffset } from '@/lib/allowances'
+import { anchorBucket, windowBucket, windowTzOffset } from '@/lib/allowances'
 import { mongoAllowanceLedger, type AllowanceLedger } from '@/lib/allowanceLedger'
 import type { UserRole } from '@/lib/roles'
 
@@ -138,11 +138,18 @@ export async function chargeSpendCap(
 
   if (opts.role === 'admin') return unlimited(0, null)
 
-  const tz = await windowTzOffset(userId)
-  const { key: bucketKey, resetsAt } = windowBucket(cap.window, tz, opts.now ?? new Date())
-  if (!bucketKey || !resetsAt) return unlimited(0, resetsAt)
-
+  const now = opts.now ?? new Date()
   const ledger = opts.ledger ?? mongoAllowanceLedger
+  const tz = await windowTzOffset(userId)
+  // Anchored for the same reason a priced allowance is: the offset behind this
+  // is client-written, so a ceiling that followed it could be re-opened by
+  // reporting a different timezone. See lib/allowances.ts#anchorBucket.
+  const { key: bucketKey, resetsAt } = anchorBucket(
+    windowBucket(cap.window, tz, now),
+    await ceilingAnchor(ledger, userId, key),
+    now
+  )
+  if (!bucketKey || !resetsAt) return unlimited(0, resetsAt)
   try {
     const res = await ledger.charge({
       userId,
@@ -166,6 +173,20 @@ export async function chargeSpendCap(
     // Fail OPEN: a metering outage must not take the coach offline.
     console.error(`[spendCaps] charge failed for ${key}:`, err)
     return { ...unlimited(0, resetsAt), degraded: true }
+  }
+}
+
+async function ceilingAnchor(
+  ledger: AllowanceLedger,
+  userId: string,
+  key: SpendCapKey
+) {
+  if (!ledger.latest) return null
+  try {
+    return await ledger.latest({ userId, feature: spendCapLedgerKey(key) })
+  } catch (err) {
+    console.error(`[spendCaps] window anchor read failed for ${key}:`, err)
+    return null
   }
 }
 

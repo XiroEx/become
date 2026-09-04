@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     user: grounding,
   })
 
-  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
   await allow.refund()
   return NextResponse.json({ ok: false, fallback: true })
 }

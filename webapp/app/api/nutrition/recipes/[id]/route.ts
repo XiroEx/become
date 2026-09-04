@@ -4,6 +4,7 @@ import Recipe from '@/models/Recipe'
 import Food from '@/models/Food'
 import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
+import { pickRecipeFields } from '@/lib/nutrition/recipeFields'
 
 // GET: Get a single recipe by ID
 export async function GET(
@@ -91,8 +92,9 @@ export async function PUT(
       }
     }
 
-    // Update fields
-    Object.assign(recipe, body)
+    // Update fields — through the same allowlist the create path uses. A blind
+    // Object.assign let the body rewrite createdBy, usageCount and savedFoodId.
+    Object.assign(recipe, pickRecipeFields(body))
     await recipe.save()
 
     return NextResponse.json({ success: true, recipe })
