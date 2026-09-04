@@ -20,6 +20,15 @@ interface ExerciseListItem {
   videoUrl?: string | null
 }
 
+type IssueFilter = '' | 'duplicate' | 'noVideo' | 'broken'
+
+const ISSUE_TABS: { key: IssueFilter; label: string }[] = [
+  { key: '', label: 'All' },
+  { key: 'duplicate', label: 'Duplicates' },
+  { key: 'noVideo', label: 'No Video' },
+  { key: 'broken', label: 'Broken' },
+]
+
 const CATEGORIES = [
   '',
   'strength',
@@ -82,12 +91,22 @@ export default function AdminExercisesPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pendingReviewCount, setPendingReviewCount] = useState(0)
+  const [issue, setIssue] = useState<IssueFilter>('')
+  const [issueCounts, setIssueCounts] = useState<{ duplicate: number; noVideo: number; broken: number }>({
+    duplicate: 0,
+    noVideo: 0,
+    broken: 0,
+  })
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     fetch('/api/admin/exercises/review', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => (res.ok ? res.json() : null))
       .then(data => { if (data) setPendingReviewCount(data.submissions?.length ?? 0) })
+      .catch(() => {})
+    fetch('/api/admin/exercises/audit-counts', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (data) setIssueCounts(data) })
       .catch(() => {})
   }, [])
 
@@ -115,6 +134,7 @@ export default function AdminExercisesPage() {
         if (search) params.set('q', search)
         if (category) params.set('category', category)
         if (movement) params.set('movement', movement)
+        if (issue) params.set('issue', issue)
         const res = await fetch(`/api/exercises?${params.toString()}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
@@ -136,7 +156,7 @@ export default function AdminExercisesPage() {
     return () => {
       cancelled = true
     }
-  }, [page, search, category, movement])
+  }, [page, search, category, movement, issue])
 
   useEffect(() => {
     if (!toast) return
@@ -276,6 +296,38 @@ export default function AdminExercisesPage() {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {ISSUE_TABS.map((tab) => {
+          const count = tab.key ? issueCounts[tab.key] : null
+          const active = issue === tab.key
+          return (
+            <button
+              key={tab.key || 'all'}
+              onClick={() => {
+                setIssue(tab.key)
+                setPage(1)
+              }}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {tab.label}
+              {count !== null && count > 0 && (
+                <span
+                  className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
+                    active ? 'bg-white/20' : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {loading ? (
