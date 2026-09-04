@@ -5,12 +5,23 @@ import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
+import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, type AuditableExercise } from '@/lib/exerciseAudit';
+
+interface AuditRow extends AuditableExercise {
+  category?: string;
+  movementPatterns?: string[];
+  bodyRegion?: string;
+}
+
+const ISSUE_TYPES = ['duplicate', 'noVideo', 'broken'] as const;
+type IssueType = (typeof ISSUE_TYPES)[number];
 
 // GET /api/exercises
 //   ?q=<text>           — text/regex search across name/aliases
 //   &category=<cat>     — filter by category
 //   &movement=<pattern> — filter by movement pattern
 //   &bodyRegion=<r>     — filter by body region
+//   &issue=duplicate|noVideo|broken — admin data-quality filter (lib/exerciseAudit.ts)
 //   &page=1&limit=50    — pagination
 export async function GET(request: NextRequest) {
   try {
@@ -26,18 +37,60 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category')?.trim() ?? '';
     const movement = searchParams.get('movement')?.trim() ?? '';
     const bodyRegion = searchParams.get('bodyRegion')?.trim() ?? '';
+    const issueParam = searchParams.get('issue')?.trim() ?? '';
+    const issue = (ISSUE_TYPES as readonly string[]).includes(issueParam) ? (issueParam as IssueType) : null;
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)));
+
+    if (issue) {
+      // Duplicate/broken/no-video detection has to see the whole visible
+      // catalog to cross-reference names against each other, not just one
+      // paginated page — so this branch fetches everything, flags in
+      // memory, then paginates the flagged subset. The catalog is a few
+      // hundred rows, not millions.
+      const all = await Exercise.find(
+        visibleExerciseFilter(auth.userId),
+        { slug: 1, name: 1, category: 1, movementPatterns: 1, bodyRegion: 1, videoUrl: 1, instructions: 1, primaryMuscles: 1 }
+      ).lean<AuditRow[]>();
+
+      const flaggedSlugs = issue === 'duplicate'
+        ? findDuplicateSlugs(all)
+        : new Set(all.filter(issue === 'noVideo' ? isMissingVideo : isBrokenExercise).map((e) => e.slug));
+
+      const qLower = q.toLowerCase();
+      const flagged = all
+        .filter((e) => {
+          if (!flaggedSlugs.has(e.slug)) return false;
+          if (q && !e.name.toLowerCase().includes(qLower) && !e.slug.toLowerCase().includes(qLower)) return false;
+          if (category && e.category !== category) return false;
+          if (movement && !(e.movementPatterns ?? []).includes(movement)) return false;
+          if (bodyRegion && e.bodyRegion !== bodyRegion) return false;
+          return true;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const total = flagged.length;
+      const skip = (page - 1) * limit;
+      const exercises = flagged.slice(skip, skip + limit);
+
+      return NextResponse.json({
+        exercises,
+        total,
+        page,
+        pages: Math.max(1, Math.ceil(total / limit)),
+      });
+    }
 
     // Catalog exercises + this user's own customs + any custom exercise an
     // admin has approved as universal — never someone else's unreviewed one.
     const clauses: Record<string, unknown>[] = [visibleExerciseFilter(auth.userId)];
     if (q) {
+      const pattern = escapeRegExp(q);
       clauses.push({
         $or: [
-          { name: { $regex: q, $options: 'i' } },
-          { slug: { $regex: q, $options: 'i' } },
-          { aliases: { $elemMatch: { $regex: q, $options: 'i' } } },
+          { name: { $regex: pattern, $options: 'i' } },
+          { slug: { $regex: pattern, $options: 'i' } },
+          { aliases: { $elemMatch: { $regex: pattern, $options: 'i' } } },
         ],
       });
     }

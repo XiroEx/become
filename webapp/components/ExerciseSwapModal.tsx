@@ -44,6 +44,21 @@ interface AlternativeExercise {
   videoUrl?: string | null;
 }
 
+interface CatalogSearchResult {
+  slug: string;
+  name: string;
+  trackingType: string;
+  equipment?: string[];
+  primaryMuscles?: string[];
+  movementPatterns?: string[];
+  category?: string;
+  bodyRegion?: string;
+  role?: string;
+  difficulty?: string;
+  videoUrl?: string | null;
+  isCustom?: boolean;
+}
+
 interface SourceExercise {
   slug: string;
   name: string;
@@ -310,6 +325,64 @@ export default function ExerciseSwapModal({
     }
   }, [isOpen, fetchAlternatives, exerciseSlug]);
 
+  // Full-catalog name search, merged into the scored alternatives below. The
+  // alternatives list is a similarity-scored shortlist relative to the
+  // exercise being replaced (movement pattern, muscles, equipment, etc.) — an
+  // exact-name match that scores too low (or was never fetched at all)
+  // couldn't be found by typing its name, which is exactly what pushed
+  // members to create duplicate custom exercises the real one already
+  // covered. This fetches the same full-catalog endpoint the "Add exercise"
+  // flow already uses, so a search here can never come up empty just because
+  // a candidate wasn't "similar enough".
+  const [catalogMatches, setCatalogMatches] = useState<AlternativeExercise[] | null>(null);
+  const catalogSeq = useRef(0);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setCatalogMatches(null);
+      return;
+    }
+    const mySeq = ++catalogSeq.current;
+    const timer = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=30`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (mySeq !== catalogSeq.current) return;
+        if (!res.ok) { setCatalogMatches([]); return; }
+        const data = (await res.json()) as { exercises?: CatalogSearchResult[] };
+        if (mySeq !== catalogSeq.current) return;
+        const excluded = new Set([exerciseSlugRef.current, ...workoutSlugsRef.current]);
+        const mapped: AlternativeExercise[] = (data.exercises ?? [])
+          .filter((e) => !excluded.has(e.slug))
+          .map((e) => ({
+            slug: e.slug,
+            name: e.name,
+            score: 0,
+            reasons: ["Matches your search"],
+            equipment: e.equipment ?? [],
+            primaryMuscles: e.primaryMuscles ?? [],
+            movementPatterns: e.movementPatterns ?? [],
+            difficulty: e.difficulty ?? "intermediate",
+            category: e.category ?? "strength",
+            bodyRegion: e.bodyRegion ?? "full_body",
+            role: e.role ?? "accessory",
+            trackingType: e.trackingType,
+            isExplicitAlternative: false,
+            isCustom: e.isCustom ?? false,
+            videoUrl: e.videoUrl ?? null,
+          }));
+        setCatalogMatches(mapped);
+      } catch {
+        if (mySeq === catalogSeq.current) setCatalogMatches([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Fetch variations when a card is expanded (cached per slug)
   useEffect(() => {
     if (!selectedSlug || variationsCache[selectedSlug] !== undefined) return;
@@ -345,12 +418,29 @@ export default function ExerciseSwapModal({
     }
   }, [searchQuery, filters]);
 
+  // Merge the similarity-scored shortlist with any full-catalog name match
+  // not already in it, so a search never comes up empty just because the
+  // target exercise wasn't "similar enough" to score into the top 30.
+  const searchCandidates = useMemo(() => {
+    if (!catalogMatches) return alternatives;
+    const bySlug = new Map(alternatives.map((alt) => [alt.slug, alt]));
+    for (const match of catalogMatches) {
+      if (!bySlug.has(match.slug)) bySlug.set(match.slug, match);
+    }
+    return [...bySlug.values()];
+  }, [alternatives, catalogMatches]);
+
   // Filter & search
-  const filteredAlternatives = alternatives.filter((alt) => {
+  const filteredAlternatives = searchCandidates.filter((alt) => {
     // Search query
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      // A full-catalog match was already matched server-side (name or
+      // alias) — don't re-run the client substring check against it, since
+      // an alias match wouldn't necessarily contain `q` in the name field.
+      const isCatalogMatch = catalogMatches?.some((m) => m.slug === alt.slug) ?? false;
       if (
+        !isCatalogMatch &&
         !alt.name.toLowerCase().includes(q) &&
         !alt.equipment.some((e) => formatEquipment(e).toLowerCase().includes(q)) &&
         !alt.primaryMuscles.some((m) => formatMuscle(m).toLowerCase().includes(q))
@@ -383,10 +473,10 @@ export default function ExerciseSwapModal({
   });
 
   // Collect unique values for filter options
-  const equipmentOptions = [...new Set(alternatives.flatMap((a) => a.equipment))].sort();
-  const bodyRegionOptions = [...new Set(alternatives.map((a) => a.bodyRegion))].sort();
-  const difficultyOptions = [...new Set(alternatives.map((a) => a.difficulty))].sort();
-  const categoryOptions = [...new Set(alternatives.map((a) => a.category))].sort();
+  const equipmentOptions = [...new Set(searchCandidates.flatMap((a) => a.equipment))].sort();
+  const bodyRegionOptions = [...new Set(searchCandidates.map((a) => a.bodyRegion))].sort();
+  const difficultyOptions = [...new Set(searchCandidates.map((a) => a.difficulty))].sort();
+  const categoryOptions = [...new Set(searchCandidates.map((a) => a.category))].sort();
 
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
@@ -714,7 +804,7 @@ export default function ExerciseSwapModal({
 
                 {!loading && !error && (
                   <CollapsibleSection
-                    title="Top Suggestions"
+                    title={searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions"}
                     items={filteredAlternatives}
                     key={sectionResetKey}
                     keyFor={(alt) => alt.slug}

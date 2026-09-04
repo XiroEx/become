@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, bodyRegion: 1, category: 1,
       role: 1, defaultSets: 1, defaultReps: 1, tags: 1, videoUrl: 1, thumbnailUrl: 1,
       videoWidth: 1, videoHeight: 1, videoFraming: 1, videoTrim: 1, createdBy: 1,
-      submittedAt: 1, createdAt: 1 }
+      submittedAt: 1, createdAt: 1, reviewNote: 1 }
   ).sort({ submittedAt: 1 }).lean()
 
   const creatorIds = [...new Set(exercises.map((e) => e.createdBy).filter(Boolean))] as string[]
