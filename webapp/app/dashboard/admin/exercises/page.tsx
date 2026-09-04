@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Search, Video, VideoOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Video, VideoOff, AlertTriangle } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import { describeExerciseIssues, type ExerciseIssue } from '@/lib/exerciseAudit'
 
 interface ExerciseListItem {
   _id?: string
@@ -18,9 +19,26 @@ interface ExerciseListItem {
   movementPatterns?: string[]
   isActive?: boolean
   videoUrl?: string | null
+  instructions?: string[]
 }
 
 type IssueFilter = '' | 'duplicate' | 'noVideo' | 'broken'
+
+/**
+ * Row-level "why is this flagged" reasons, computed from the fields the
+ * list already fetched — no extra request. On the Duplicates tab every row
+ * is a duplicate by definition (that's what put it in the response), but
+ * the list doesn't know the colliding name without a full-catalog
+ * cross-reference (that's what /api/admin/exercises/[slug]/issues is for,
+ * shown on the edit page instead).
+ */
+function rowIssues(ex: ExerciseListItem, activeIssueTab: IssueFilter): ExerciseIssue[] {
+  const issues = describeExerciseIssues(ex)
+  if (activeIssueTab === 'duplicate' && !issues.some((i) => i.type === 'duplicate')) {
+    issues.push({ type: 'duplicate', message: 'Duplicate name — matches another exercise in the catalog' })
+  }
+  return issues
+}
 
 const ISSUE_TABS: { key: IssueFilter; label: string }[] = [
   { key: '', label: 'All' },
@@ -342,7 +360,9 @@ export default function AdminExercisesPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          {exercises.map((ex, i) => (
+          {exercises.map((ex, i) => {
+            const issues = rowIssues(ex, issue)
+            return (
             <div
               key={ex.slug}
               className={`flex items-center gap-3 px-3 py-3 ${
@@ -396,6 +416,19 @@ export default function AdminExercisesPage() {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                {issues.length > 0 && (
+                  <button
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/admin/exercises/${encodeURIComponent(ex.slug)}/edit`
+                      )
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
+                    title={`Flagged: ${issues.map((iss) => iss.message).join('; ')} — click to edit`}
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     router.push(
@@ -416,7 +449,8 @@ export default function AdminExercisesPage() {
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

@@ -19,6 +19,7 @@ import {
   findDuplicateSlugs,
   findDuplicateOf,
   escapeRegExp,
+  describeExerciseIssues,
 } from '../../lib/exerciseAudit'
 
 const ROOT = path.join(__dirname, '../..')
@@ -131,6 +132,49 @@ test('escapeRegExp neutralizes regex metacharacters so a $regex query cannot thr
   assert.ok(new RegExp(escaped, 'i').test(raw))
 })
 
+// ─── describeExerciseIssues ─────────────────────────────────────────────────
+//
+// Card follow-up: "I see that they are broken but why are they broken...
+// Put a clickable hazard that shows why." isBrokenExercise/isMissingVideo
+// only ever gave a yes/no per tab — this reports the specific field(s) an
+// admin needs to go fix, independently of whether the combination is enough
+// to trip the "Broken" tab's AND.
+
+test('describeExerciseIssues lists every missing field independently', () => {
+  const issues = describeExerciseIssues({ videoUrl: null, instructions: [], primaryMuscles: [] })
+  const types = issues.map((i) => i.type)
+  assert.ok(types.includes('noVideo'))
+  assert.ok(types.includes('noInstructions'))
+  assert.ok(types.includes('noPrimaryMuscles'))
+})
+
+test('describeExerciseIssues reports a single missing field even when that alone would not trip isBrokenExercise', () => {
+  // instructions present, muscles missing: isBrokenExercise is false (AND),
+  // but the admin still needs to know muscles are unset.
+  const withInstructions = { videoUrl: 'https://x/y.mp4', instructions: ['Step 1'], primaryMuscles: [] }
+  assert.equal(isBrokenExercise(withInstructions), false)
+  const issues = describeExerciseIssues(withInstructions)
+  assert.deepEqual(issues.map((i) => i.type), ['noPrimaryMuscles'])
+})
+
+test('describeExerciseIssues is empty for a fully filled-out exercise', () => {
+  const issues = describeExerciseIssues({
+    videoUrl: 'https://x/y.mp4',
+    instructions: ['Step 1'],
+    primaryMuscles: ['quads'],
+  })
+  assert.deepEqual(issues, [])
+})
+
+test('describeExerciseIssues surfaces the colliding name(s) only when given duplicateNames', () => {
+  const clean = { videoUrl: 'https://x/y.mp4', instructions: ['Step 1'], primaryMuscles: ['quads'] }
+  assert.deepEqual(describeExerciseIssues(clean), [])
+  const flagged = describeExerciseIssues(clean, ['Leg Extension'])
+  assert.equal(flagged.length, 1)
+  assert.equal(flagged[0].type, 'duplicate')
+  assert.match(flagged[0].message, /Leg Extension/)
+})
+
 // ─── Wiring: the fixes are actually plugged in ─────────────────────────────
 
 test('GET /api/exercises/search escapes user input before building $regex', () => {
@@ -150,6 +194,25 @@ test('GET /api/exercises supports an admin issue=duplicate|noVideo|broken filter
   assert.match(src, /findDuplicateSlugs/)
   assert.match(src, /isMissingVideo/)
   assert.match(src, /isBrokenExercise/)
+})
+
+test('GET /api/admin/exercises/[slug]/issues is admin-gated and computes duplicate names from the full catalog', () => {
+  const src = readSource('app/api/admin/exercises/[slug]/issues/route.ts')
+  assert.match(src, /requireAdmin\(/)
+  assert.match(src, /describeExerciseIssues\(/)
+  assert.match(src, /findDuplicateGroups\(/)
+})
+
+test('EditExerciseClient fetches and renders the clickable issues hazard', () => {
+  const src = readSource('app/dashboard/admin/exercises/[slug]/edit/EditExerciseClient.tsx')
+  assert.match(src, /\/api\/admin\/exercises\/\$\{encodeURIComponent\(slug\)\}\/issues/)
+  assert.match(src, /setIssuesOpen/, 'the hazard banner must be clickable to reveal the reasons')
+})
+
+test('Admin exercises list surfaces a hazard icon for rows with audit issues', () => {
+  const src = readSource('app/dashboard/admin/exercises/page.tsx')
+  assert.match(src, /describeExerciseIssues/)
+  assert.match(src, /AlertTriangle/)
 })
 
 test('ExerciseSwapModal queries the full catalog, not just the pre-scored alternatives list', () => {
