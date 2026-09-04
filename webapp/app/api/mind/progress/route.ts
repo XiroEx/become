@@ -66,6 +66,15 @@ export async function GET(request: NextRequest) {
     // levelXp = cumulative XP that drives the LEVEL (uncapped). Seed it once from
     // the user's existing xp + xpBank so they don't drop to level 1. mainSessionCount
     // gates chapters (10 per) — seed it so an existing chapter is preserved.
+    //
+    // THAT SEED IS WHY mainSessionCount IS NOT A SESSION COUNT. The intake maps
+    // 'building' → chapter 2 and 'leveling_up' → chapter 3, and a self-declared
+    // level-up advances one more, so this line writes 10, 20 or 30 for a member
+    // who has completed nothing. It is correct for the chapter arc (the head
+    // start is the intended product) and catastrophic for anything metering
+    // sessions: the free-tier allowance read it and refused brand-new members
+    // their FIRST session. The allowance now reads completedMainSessions, which
+    // only POST /api/mind/session increments — see lib/allowances.ts.
     const rawLevelXp = (progress?.levelXp as number) ?? 0
     const rawCount = (progress?.mainSessionCount as number) ?? 0
     const levelXp = rawLevelXp > 0 ? rawLevelXp : xp + xpBank

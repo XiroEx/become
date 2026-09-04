@@ -19,14 +19,20 @@ import {
 } from '@/lib/mindXP'
 import {
   loadUserEntitlement, featureAccess, entitlementsEnforced, gateResponse,
-  defaultMessage, FREE_LIMITS,
+  FREE_LIMITS,
 } from '@/lib/entitlements'
+import { peekQuota } from '@/lib/entitlementGuards'
 
 // Free tier gets main sessions 1-10; session 11 is locked. The count is the
-// EXISTING milestone MindProgress.mainSessionCount, so nothing new is written
-// and the check is naturally idempotent. 10 is also SESSIONS_PER_CHAPTER, so
-// the wall lands exactly on the Chapter 1 → Chapter 2 boundary — the same
-// moment Vision would unlock.
+// EXISTING milestone MindProgress.completedMainSessions, so nothing new is
+// written and the check is naturally idempotent. 10 is also
+// SESSIONS_PER_CHAPTER, so the wall lands exactly on the Chapter 1 → Chapter 2
+// boundary — the same moment Vision would unlock.
+//
+// It counts COMPLETED sessions, never mainSessionCount: that one is chapter
+// progress and carries the intake / self-declare / admin head start, which put
+// a brand-new free member at 10/10 before their first session. See
+// lib/allowances.ts#MILESTONE_COUNTS.
 const MIND_FREE_SESSIONS = FREE_LIMITS['mind-sessions'].limit
 
 /**
@@ -34,28 +40,18 @@ const MIND_FREE_SESSIONS = FREE_LIMITS['mind-sessions'].limit
  * null to continue. Cheap enough to run on both the PUT (session start) and the
  * POST (completion): blocking only at the payoff would walk someone through a
  * whole session before refusing it.
+ *
+ * Goes through peekQuota so the milestone count, the admin/plus bypass and the
+ * 403 body are defined in exactly one place — a second hand-rolled copy is how
+ * this gate came to read a different number from the one
+ * GET /api/me/entitlements reports.
  */
 async function mindSessionGate(userId: string): Promise<NextResponse | null> {
   // Switch check first: with enforcement off this costs nothing at all, which
   // is what makes shipping it dark free.
   if (!entitlementsEnforced()) return null
-  const { role, tier } = await loadUserEntitlement(userId)
-  if (featureAccess(role, tier, 'mind-sessions') === 'full') return null
-
-  const prog = await MindProgress.findOne({ userId })
-    .select('mainSessionCount')
-    .lean<{ mainSessionCount?: number } | null>()
-  if ((prog?.mainSessionCount ?? 0) < MIND_FREE_SESSIONS) return null
-
-  return gateResponse({
-    error: defaultMessage('mind-sessions'),
-    requiresTier: 'plus',
-    feature: 'mind-sessions',
-    limit: MIND_FREE_SESSIONS,
-    remaining: 0,
-    resetsAt: null,
-    window: 'lifetime',
-  })
+  const { allowed, gate } = await peekQuota(userId, 'mind-sessions')
+  return allowed || !gate ? null : gateResponse(gate)
 }
 
 // A completed MAIN session grants this much LEVEL XP (level is uncapped, fed by
@@ -145,16 +141,19 @@ export async function GET(request: NextRequest) {
     // main-session cooldown that decides whether the hub shows the main session
     // or Training Grounds.
     const prog = await MindProgress.findOne({ userId: auth.userId })
-      .select('lastBreathAt recentKinds lastMainSessionAt activeSession mainSessionCount')
+      .select('lastBreathAt recentKinds lastMainSessionAt activeSession completedMainSessions')
       .lean<{
         lastBreathAt?: Date
         recentKinds?: string[]
         lastMainSessionAt?: Date
-        mainSessionCount?: number
+        completedMainSessions?: number
         activeSession?: ActiveSessionStamp & { seed: number; plan: unknown }
       } | null>()
 
-    const sessionsUsed = prog?.mainSessionCount ?? 0
+    // The meter the hub draws, and the same number the gate decides on. Clamped
+    // to the limit for the same reason GET /api/me/entitlements clamps it: this
+    // is rendered as used/limit, and a long-time member is legitimately past it.
+    const sessionsUsed = Math.min(prog?.completedMainSessions ?? 0, MIND_FREE_SESSIONS)
     const mindLocked = mindCapped && sessionsUsed >= MIND_FREE_SESSIONS
 
     // Hand back the unfinished session rather than composing a new one, unless
@@ -221,8 +220,8 @@ export async function POST(request: NextRequest) {
     // Read progress BEFORE the write so we can detect the 20h cooldown, the
     // level-up crossing, and the chapter advance.
     const before = await MindProgress.findOne({ userId: auth.userId })
-      .select('levelXp mainSessionCount lastMainSessionAt chapter xpBank chapterHistory')
-      .lean<{ levelXp?: number; mainSessionCount?: number; lastMainSessionAt?: Date; chapter?: number; xpBank?: number } | null>()
+      .select('levelXp mainSessionCount completedMainSessions lastMainSessionAt chapter xpBank chapterHistory')
+      .lean<{ levelXp?: number; mainSessionCount?: number; completedMainSessions?: number; lastMainSessionAt?: Date; chapter?: number; xpBank?: number } | null>()
 
     const prevLevelXp = before?.levelXp ?? 0
     const prevCount = before?.mainSessionCount ?? 0
@@ -254,7 +253,12 @@ export async function POST(request: NextRequest) {
     // Grant LEVEL xp (and bank toward the Becoming score). A counted main session
     // also increments the chapter-gating session count + stamps the cooldown.
     const inc: Record<string, number> = { levelXp: grantXp, xpBank: grantXp }
+    // TWO counters, deliberately. mainSessionCount is chapter progress and may
+    // legitimately be seeded from a chapter head start; completedMainSessions is
+    // the count of sessions that actually happened, and is the ONLY one the
+    // free-tier allowance reads. This line is the only thing that increments it.
     if (counted) inc.mainSessionCount = 1
+    if (counted) inc.completedMainSessions = 1
     if (counted) recencySet.lastMainSessionAt = new Date(now)
 
     const newCount = counted ? prevCount + 1 : prevCount

@@ -241,6 +241,44 @@ Two guards to keep in mind when adding a gate:
   Every create path uses this one. A create path left on `requireFeature` is
   silently ungated.
 
+And a third rule, which is where both Mind paywalls were walked past:
+**the gate belongs on the route that SPENDS, not only on the friendly route in
+front of it.** `mind-sessions` was enforced on `/api/mind/session` while
+`POST /api/ai/mind/session` — the route that dispatches the composer — carried
+only `requireSpendCap`, and a member locked at 10/10 still got a `runId`.
+`vision` was enforced on `/api/mind/vision` while
+`POST /api/mind/journal { system: 'vision' }` (every protocol the Vision
+workspace saves) and `POST /api/ai/mind/flow { system: 'vision' }` were open.
+`requireAiFeature` (`lib/ai/allowance.ts`) is that guard for an `/api/ai` route;
+a spend ceiling can never stand in for it, being identical for free and plus,
+429 rather than 403, and off in production.
+
+#### The Mind session counters (there are two, on purpose)
+
+`MindProgress.mainSessionCount` is **chapter progress measured in sessions**,
+not a session count. The intake maps "I'm building momentum" → chapter 2 and
+"I'm ready for the next level" → chapter 3, a self-declared level-up
+(`POST /api/mind/progress/levelup`) advances one, an admin can set one, and
+`GET /api/mind/progress` then PERSISTS
+`max(count, (chapter - 1) * SESSIONS_PER_CHAPTER)` so the chapter survives the
+round trip. The head start is the intended product.
+
+`MindProgress.completedMainSessions` is the number of main sessions the member
+actually finished — only a counted completion in `POST /api/mind/session`
+increments it — and it is **the only one the `mind-sessions` allowance may
+read**. Reading the other one put a brand-new free member at 10/10 before their
+first session and refused it with "You've finished your first 10 Mind
+sessions"; a self-declared level-up then burned 9 more phantom sessions.
+
+Rows written before that field existed have none, which reads as 0 and fails
+open (nobody is locked out). **Run
+`webapp/scripts/backfill-mind-session-count.mjs --prod --apply` before the
+deploy**, alongside `migrate-tiers.mjs`: it seeds each row with
+`min(mainSessionCount, days that member completed a session on)` — the head
+start is the difference between those two bounds — and only fills rows where
+the field is absent, so a second run is a no-op and live increments are never
+clobbered.
+
 #### Counted allowances (the ledger)
 
 Inventory allowances ("3 custom exercises") are a live count of rows the member

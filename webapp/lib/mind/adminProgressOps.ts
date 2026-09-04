@@ -31,8 +31,12 @@ export function resetUpdate(now: Date = new Date()): Required<ProgressUpdate> {
       xpBank: 0,
       // Drives LEVEL.
       levelXp: 0,
-      // Drives CHAPTER.
+      // Drives CHAPTER (and legitimately carries a head start — see the model).
       mainSessionCount: 0,
+      // The truthful "sessions actually completed" counter the free-tier
+      // allowance reads. A reset that left it behind would hand the member a
+      // brand-new journey with their Mind sessions still spent.
+      completedMainSessions: 0,
       // Stops /api/mind/progress re-seeding xp from the user's evolutionScore on
       // the next read. Without this a full reset bounced straight back off level 1.
       xpSeeded: true,
@@ -52,7 +56,12 @@ export function resetUpdate(now: Date = new Date()): Required<ProgressUpdate> {
 }
 
 /** Set the chapter, including the session count that actually unlocks it, and
- *  drop tool intros for anything no longer unlocked. */
+ *  drop tool intros for anything no longer unlocked.
+ *
+ *  Deliberately does NOT touch `completedMainSessions`: moving someone's chapter
+ *  is a progress decision, and it must neither grant nor burn the free Mind
+ *  sessions they are entitled to. That separation is the whole point of the two
+ *  counters — see models/MindProgress.ts. */
 export function chapterUpdate(
   requested: number,
   currentIntroduced?: string[],

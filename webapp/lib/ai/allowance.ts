@@ -3,7 +3,7 @@ import type { AiUser } from './routeHelpers'
 import { requireQuotaForUser } from '@/lib/entitlementGuards'
 import { refundAllowance, currentWindowKey, FOLLOW_UP_LIMITS } from '@/lib/allowances'
 import type { AllowanceLedger } from '@/lib/allowanceLedger'
-import { loadUserEntitlement, type Feature } from '@/lib/entitlements'
+import { loadUserEntitlement, FREE_LIMITS, type Feature } from '@/lib/entitlements'
 import { mintAllowanceTicket, readAllowanceTicket } from '@/lib/allowanceTicket'
 import { mongoRunChargeStore, type RunChargeStore } from '@/lib/ai/runCharge'
 import { chargeSpendCap, refundSpendCap, type SpendCapKey } from '@/lib/spendCaps'
@@ -38,6 +38,15 @@ import { chargeSpendCap, refundSpendCap, type SpendCapKey } from '@/lib/spendCap
  * killed before it executes can be given back. withAllowance() does that at the
  * same moment it mints the next ticket, because that is the one place where the
  * charge and the runId are both in hand.
+ *
+ * RULE 6 — THE GATE GOES WHERE THE MONEY IS SPENT. A guard on the friendly
+ * route in front of a dispatch is not a gate on the dispatch: the mind-sessions
+ * wall lived only on /api/mind/session, so a free member locked at 10/10 still
+ * POSTed /api/ai/mind/session and got a runId back — the composer ran, on our
+ * bill, for someone the paywall had already refused. Same shape for Vision:
+ * requireFeature('vision') sat on /api/mind/vision while /api/ai/mind/flow
+ * { system: 'vision' } dispatched for a member whose entitlements said
+ * vision { allowed: false }. requireAiFeature() below is that missing half.
  */
 
 export interface AllowanceEnvelope {
@@ -202,6 +211,51 @@ export async function requireSpendCap(
 
   const ticketId = res.ticketId
   return { ok: true, refund: ticketId ? () => refundSpendCap(ticketId) : noRefund }
+}
+
+/**
+ * Features that carry no per-window ledger, so asking "may this member use it?"
+ * is a READ and can be asked as many times as we like.
+ *
+ * A windowed feature is deliberately unrepresentable here: 'ai-food-estimate'
+ * and 'workout-generation' SPEND a unit when they are checked, so they must go
+ * through requireAiAllowance(), which owns the refund and the follow-up ticket.
+ * Routing one through this helper would charge it with nothing able to give it
+ * back — hence the type, rather than a runtime check that ships first and is
+ * discovered later.
+ */
+export type NonWindowFeature = {
+  [K in Feature]: (typeof FREE_LIMITS)[K]['kind'] extends 'window' ? never : K
+}[Feature]
+
+export interface AiFeatureOk { ok: true }
+export type AiFeatureGate = AiFeatureOk | { ok: false; response: NextResponse }
+
+/**
+ * Gate a DISPATCH on the feature it belongs to.
+ *
+ * The paywall has to sit where the money is spent, not only on the friendlier
+ * route in front of it (RULE 6). Every /api/ai route that composes a paid
+ * surface takes this in addition to whatever ceiling it charges: the ceiling is
+ * an abuse brake that is off in production, and a 429 must never read as an
+ * upsell.
+ *
+ * Nothing is written and nothing is spent — an inventory or milestone allowance
+ * is a count of rows the member already owns — so it is safe on a route that
+ * may be retried, and safe to ask before a ceiling is charged. It is asked
+ * FIRST for exactly that reason: a member the paywall has refused should not
+ * also burn a ceiling unit finding that out.
+ *
+ * Refusals are the canonical 403 (`feature` + `requiresTier`), which is what
+ * lib/entitlementsClient.ts#gateFrom parses into the upgrade sheet, so a locked
+ * surface raises the upsell instead of looking like an outage.
+ */
+export async function requireAiFeature(
+  user: AiUser,
+  feature: NonWindowFeature
+): Promise<AiFeatureGate> {
+  const gate = await requireQuotaForUser(user.userId, feature, { email: user.email })
+  return gate.ok ? { ok: true } : { ok: false, response: gate.response }
 }
 
 /**

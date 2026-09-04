@@ -32,7 +32,7 @@ import { afterResponse } from '@/lib/afterResponse'
  *                 also takes a short-lived claim (lib/inventoryClaims.ts) that
  *                 orders concurrent creates — see consumeInventory().
  *   'milestone' — a monotonic progress number already stored elsewhere
- *                 (MindProgress.mainSessionCount). Read-only, idempotent.
+ *                 (MindProgress.completedMainSessions). Read-only, idempotent.
  *   'window'    — a counter inside a local day / ISO week bucket
  *                 (1 AI food estimate/day, 3 generations/week). This is the
  *                 only kind that needs its own persisted ledger.
@@ -280,11 +280,32 @@ const INVENTORY_COUNTS: Partial<Record<Feature, (userId: string) => Promise<numb
 }
 
 const MILESTONE_COUNTS: Partial<Record<Feature, (userId: string) => Promise<number>>> = {
+  // `completedMainSessions`, NEVER `mainSessionCount`.
+  //
+  // mainSessionCount is CHAPTER PROGRESS measured in sessions, and it carries a
+  // head start nobody sat through: the Mind intake maps 'building' to chapter 2
+  // and 'leveling_up' to chapter 3, POST /api/mind/progress/levelup advances a
+  // chapter on a self-declaration, an admin can set one outright — and
+  // /api/mind/progress then PERSISTS max(count, (chapter - 1) * 10) so the
+  // chapter survives the round trip. Reading it here meant a brand-new free
+  // member was 10/10 (or 20/10) before their first session and was refused it
+  // with "You've finished your first 10 Mind sessions", and a self-declared
+  // level-up burned 9 more phantom sessions on top. Both reproduced on
+  // production against fresh accounts.
+  //
+  // completedMainSessions is only ever incremented by a counted completion in
+  // POST /api/mind/session, so it counts sessions that actually happened —
+  // whatever the member answered at intake. See models/MindProgress.ts.
+  //
+  // Absent on documents written before it existed, where it reads as 0: nobody
+  // is ever locked out by the migration, and a long-standing member simply gets
+  // their 10 free sessions counted from here. scripts/backfill-mind-session-count.mjs
+  // restores the real number for those rows and is a pre-deploy step.
   'mind-sessions': async (userId) => {
     const prog = await MindProgress.findOne({ userId })
-      .select('mainSessionCount')
-      .lean<{ mainSessionCount?: number } | null>()
-    return prog?.mainSessionCount ?? 0
+      .select('completedMainSessions')
+      .lean<{ completedMainSessions?: number } | null>()
+    return prog?.completedMainSessions ?? 0
   },
 }
 
@@ -294,11 +315,21 @@ function stateFor(
   resetsAt: string | null
 ): AllowanceState {
   const spec = FREE_LIMITS[feature]
+  // A 'milestone' allowance reads a monotonic number someone else owns, so it
+  // runs far past the limit in normal use — a member with 20 completed Mind
+  // sessions reported `used: 20, limit: 10`, and a meter rendering used/limit
+  // draws that at 200%. Clamp what is REPORTED; the DECISION is unchanged,
+  // because every reader compares `used < limit` and min(used, limit) < limit
+  // is false exactly when used >= limit.
+  //
+  // Deliberately NOT applied to 'window': there `used` counts attempts once
+  // enforcement is on, and the overshoot is a free abuse signal.
+  const reported = spec.kind === 'milestone' ? Math.min(used, spec.limit) : used
   return {
     feature,
     limit: spec.limit,
-    used,
-    remaining: Math.max(0, spec.limit - used),
+    used: reported,
+    remaining: Math.max(0, spec.limit - reported),
     resetsAt,
     window: spec.window,
     kind: spec.kind,
