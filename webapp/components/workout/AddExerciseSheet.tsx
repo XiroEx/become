@@ -172,6 +172,7 @@ export default function AddExerciseSheet({
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=8`, { headers: authHeaders() })
+        if (!res.ok) { if (mine === seq.current) setResults([]); return }
         const data = (await res.json()) as { exercises?: SearchExercise[] }
         if (mine === seq.current) setResults(data.exercises ?? [])
       } catch {

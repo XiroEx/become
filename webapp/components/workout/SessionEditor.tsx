@@ -83,6 +83,7 @@ export default function SessionEditor({
         const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=8`, {
           headers: authHeaders(),
         })
+        if (!res.ok) { if (seq === searchSeq.current) setResults([]); return }
         const data = (await res.json()) as { exercises?: SearchExercise[] }
         if (seq === searchSeq.current) setResults(data.exercises ?? [])
       } catch {
