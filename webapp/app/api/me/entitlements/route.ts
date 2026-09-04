@@ -6,6 +6,7 @@ import {
   entitlementsEnforced,
   FEATURE_MIN_TIER,
   FEATURES,
+  reportedGrandfathered,
   type Feature,
   type Tier,
   type AllowanceWindow,
@@ -82,7 +83,9 @@ export async function GET(request: NextRequest) {
     role,
     tier,
     enforced,
-    grandfathered,
+    // The REASON this member holds Plus, never a grant on its own — the gates
+    // read `tier` and nothing else. See reportedGrandfathered().
+    grandfathered: reportedGrandfathered(tier, grandfathered),
     subscription: subscription
       ? {
           status: subscription.status,

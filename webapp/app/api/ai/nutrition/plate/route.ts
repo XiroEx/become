@@ -33,8 +33,13 @@ export async function POST(request: NextRequest) {
   // the trigger (the allowance gates the dispatch, it does not merely count
   // it). Photo, upload and "describe it" share ONE daily allowance, which is
   // why all three routes name the same feature.
+  //
+  // A ticket only rides a request that is SHAPED like a correction: the same
+  // plate, re-read with a note saying what was wrong. A photo arriving with no
+  // note is a new scan however valid the ticket beside it is.
   const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
     followUpTicket: body.allowanceTicket,
+    refines: Boolean(note.trim()),
   })
   if (!allow.ok) return allow.response
 
@@ -46,7 +51,7 @@ export async function POST(request: NextRequest) {
     { image },
   )
 
-  if (trig.ok) return NextResponse.json(withAllowance({ ok: true, runId: trig.runId }, allow))
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
   // couldn't even trigger → nothing was queued, so give the unit back.
   await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })

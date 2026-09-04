@@ -112,3 +112,57 @@ export async function requireTrainerOrAdmin(request: NextRequest): Promise<Requi
   }
   return { ok: true, userId: result.userId, email: result.email, role: result.role as 'trainer' | 'admin' }
 }
+
+// ---------------------------------------------------------------------------
+// Confirming an admin CLAIM against the database
+// ---------------------------------------------------------------------------
+//
+// The JWT `role` claim is a CACHE, never a source of truth. It is minted at
+// login and rolled by GET /api/auth/me, so before the fix that route re-minted
+// `role: payload.role` — the claim from the token it was handed — and a demoted
+// admin kept admin for as long as they kept refreshing, i.e. forever. Revoking
+// admin had no effect at all.
+//
+// /api/auth/me now mints from the database user, so the claim goes stale within
+// one refresh. That is necessary but not sufficient: a token already in the
+// wild still carries the old claim until it is refreshed or expires (30 days).
+// So every route that WIDENS what a caller may do on the strength of that claim
+// confirms it here, against the database, the same way requireAdmin does.
+//
+// The claim is still used, but only as a fast NEGATIVE: a token that does not
+// even assert admin cannot be one, so ordinary members — the hot path — never
+// pay for a database round trip. Only a token that CLAIMS admin is checked, and
+// a check that cannot be completed fails closed.
+
+export interface AdminClaimSubject {
+  userId?: string
+  role?: string
+}
+
+/**
+ * Pure: does the presented token even ASSERT admin? A fast negative only —
+ * never sufficient on its own, which is why it is not exported as "isAdmin".
+ */
+export function claimsAdmin(auth: AdminClaimSubject | null | undefined): boolean {
+  return !!auth && auth.role === 'admin' && typeof auth.userId === 'string' && auth.userId.length > 0
+}
+
+/**
+ * "Is this caller an admin RIGHT NOW?" — the claim, confirmed against the
+ * database. Use this anywhere a route branches on `authResult.role === 'admin'`
+ * to let the caller read, edit or delete something that is not theirs.
+ *
+ * Returns false (fails closed) for a stale claim, a deleted user, or a database
+ * error.
+ */
+export async function isVerifiedAdmin(auth: AdminClaimSubject | null | undefined): Promise<boolean> {
+  if (!claimsAdmin(auth)) return false
+  try {
+    await connectDB()
+    const user = await User.findById(auth!.userId).select('role').lean<{ role?: string } | null>()
+    return user?.role === 'admin'
+  } catch (error) {
+    console.error('isVerifiedAdmin error:', error)
+    return false
+  }
+}

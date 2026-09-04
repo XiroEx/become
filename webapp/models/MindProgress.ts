@@ -29,8 +29,27 @@ export interface IMindProgress extends Document {
    *  drives the user's LEVEL (uncapped). Separate from `xp` (legacy progression)
    *  and from `chapter`. Seeded from xp+xpBank for pre-existing users. */
   levelXp: number
-  /** Count of completed MAIN sessions — gates chapters (10 per chapter). */
+  /** CHAPTER PROGRESS, in units of main sessions — gates chapters (10 per
+   *  chapter). It is NOT a session count and must never be read as one: it
+   *  legitimately carries a head start nobody sat through. The Mind intake maps
+   *  "I'm building momentum" to chapter 2 and "I'm ready for the next level" to
+   *  chapter 3, an admin can set a chapter outright, and a self-declared
+   *  level-up advances one — and /api/mind/progress then back-fills this to
+   *  (chapter - 1) * SESSIONS_PER_CHAPTER so the chapter survives the round
+   *  trip. Read `completedMainSessions` for "how many sessions has this member
+   *  actually done". */
   mainSessionCount: number
+  /** Main sessions this member has ACTUALLY completed.
+   *
+   *  Only ever incremented by a counted completion in POST /api/mind/session,
+   *  never seeded from a chapter, so it is the one number a paywall may read.
+   *  The 'mind-sessions' free allowance counts exactly this (lib/allowances.ts).
+   *
+   *  It used to read `mainSessionCount`, and the head start above made that
+   *  catastrophic: a brand-new free member who answered "I'm building momentum"
+   *  at intake was 10/10 before their first session and was refused it with
+   *  "You've finished your first 10 Mind sessions." */
+  completedMainSessions: number
   /** True once the one-time evolutionScore → xp seeding has been considered.
    *  Without this the seeding re-fired every time `xp` hit 0, which meant an
    *  admin reset was partly undone on the very next page load (xp came back,
@@ -109,6 +128,7 @@ const MindProgressSchema = new Schema<IMindProgress>(
     xpBank: { type: Number, default: 0, min: 0 },
     levelXp: { type: Number, default: 0, min: 0 },
     mainSessionCount: { type: Number, default: 0, min: 0 },
+    completedMainSessions: { type: Number, default: 0, min: 0 },
     xpSeeded: { type: Boolean },
     lastMainSessionAt: { type: Date },
     activeSession: {

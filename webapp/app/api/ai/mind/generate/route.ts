@@ -7,12 +7,17 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
-import { requireSpendCap } from '@/lib/ai/allowance'
+import { requireAiFeature, requireSpendCap } from '@/lib/ai/allowance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
 
 const ALLOWED = new Set(['identity', 'affirmation', 'vision', 'mission', 'reframe'])
+
+/** The kinds that ARE the Vision feature. 'identity' is deliberately absent:
+ *  the identity statement is also the Self-Image tool, which is chapter 1 and
+ *  free, so gating it would take a free surface away. */
+const VISION_KINDS = new Set(['vision'])
 
 export async function POST(request: NextRequest) {
   const gate = await requireAiUser(request)
@@ -27,6 +32,13 @@ export async function POST(request: NextRequest) {
 
   const kind = String(body.kind ?? 'identity')
   if (!ALLOWED.has(kind)) return NextResponse.json({ error: 'Unknown kind' }, { status: 400 })
+
+  // Writing someone's vision for them is the Vision feature, whichever door it
+  // is asked through — see /api/ai/mind/flow.
+  if (VISION_KINDS.has(kind)) {
+    const tier = await requireAiFeature(gate.user, 'vision')
+    if (!tier.ok) return tier.response
+  }
 
   // Spend ceiling on Mind composition — see /api/ai/mind/session.
   const cap = await requireSpendCap(gate.user.userId, 'mind-composition')

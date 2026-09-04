@@ -195,6 +195,37 @@ test('the ticket is verified server-side, never trusted as sent', () => {
   assert.match(src, /claims\.userId !== userId/, 'a ticket for another member must be refused')
   assert.match(src, /claims\.feature !== feature/, 'a cheap ticket must not unlock an expensive feature')
   assert.match(src, /claims\.bucketKey ===/, 'a stale ticket must not span a window reset')
+  assert.match(
+    src,
+    /claimFollowUp\(\{\s*runId: claims\.runId/,
+    'the ticket must be spent against the OUTCOME it names, once',
+  )
+  assert.match(src, /if \(!opts\.refines\) return null/, 'a new outcome must never ride a previous charge')
+})
+
+test('a ticket only rides a request the ROUTE says is a refinement', () => {
+  // The client asserting "this is a correction" by attaching a ticket is not
+  // evidence of anything — that is exactly how a replayed ticket bought a day
+  // of estimates. Each door derives it from its own body, server-side.
+  const rules: Array<[string, RegExp]> = [
+    // The same plate, re-read with a note saying what was wrong.
+    ['app/api/ai/nutrition/plate/route.ts', /refines: Boolean\(note\.trim\(\)\)/],
+    // A correction of a PRIOR estimate that does not describe a new meal.
+    [
+      'app/api/ai/nutrition/describe/route.ts',
+      /refines: Boolean\(correction\.trim\(\)\) && !description\.trim\(\) && Array\.isArray\(body\.priorEstimate\)/,
+    ],
+    ['app/api/ai/nutrition/product/route.ts', /refines: Boolean\(note\.trim\(\)\)/],
+  ]
+  for (const [file, rule] of rules) {
+    const src = read(file)
+    assert.match(src, rule, `${file} must decide for itself whether this is a refinement`)
+    // And it must be decided at the charge, not somewhere further down.
+    assert.ok(
+      src.indexOf('refines:') < src.indexOf('triggerOwnedRun('),
+      `${file} decides too late to gate the dispatch`,
+    )
+  }
 })
 
 test('the ticket is a signed, scoped, short-lived token', () => {

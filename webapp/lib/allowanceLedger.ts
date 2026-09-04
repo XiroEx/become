@@ -65,11 +65,26 @@ export interface ChargeResult extends LedgerCounts {
   ticketId?: string
 }
 
+export interface WindowAnchor {
+  bucketKey: string
+  resetsAt: Date
+}
+
 export interface AllowanceLedger {
   charge(q: ChargeQuery): Promise<ChargeResult>
   read(q: { userId: string; feature: string; bucketKey: string }): Promise<LedgerCounts | null>
   /** Guarded, idempotent decrement. A ticket already honoured is a no-op. */
   giveBack(ticketId: string): Promise<void>
+  /**
+   * The most recent window this member has a row in, and when it rolls over.
+   *
+   * This is what makes the bucket resistant to a clock change — see
+   * lib/allowances.ts#anchorWindow. OPTIONAL so that a ledger fake written
+   * before it existed still satisfies the interface; a ledger that cannot
+   * answer simply gets the unanchored bucket, which is the pre-existing
+   * behaviour.
+   */
+  latest?(q: { userId: string; feature: string }): Promise<WindowAnchor | null>
 }
 
 export interface LedgerRow extends LedgerCounts {
@@ -235,6 +250,21 @@ export const mongoAllowanceLedger: AllowanceLedger = {
   async charge(q: ChargeQuery): Promise<ChargeResult> {
     await dbConnect()
     return chargeWithRetry(mongoOps, q)
+  },
+
+  async latest(q): Promise<WindowAnchor | null> {
+    await dbConnect()
+    // {userId, resetsAt: -1} is an index on the collection, so this is the
+    // member's newest row for the feature in one hit.
+    const doc = await AllowanceUsage.findOne({
+      userId: new Types.ObjectId(q.userId),
+      feature: q.feature,
+    })
+      .sort({ resetsAt: -1 })
+      .select('bucketKey resetsAt')
+      .lean<{ bucketKey?: string; resetsAt?: Date } | null>()
+    if (!doc?.bucketKey || !doc.resetsAt) return null
+    return { bucketKey: doc.bucketKey, resetsAt: new Date(doc.resetsAt) }
   },
 
   async read(q): Promise<LedgerCounts | null> {

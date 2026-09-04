@@ -1,7 +1,13 @@
 import { NextRequest } from 'next/server'
 import dbConnect from '../../../../lib/mongodb'
 import User from '../../../../models/User'
-import { verifyToken, signToken, authCookie, type JWTPayload } from '../../../../lib/auth'
+import {
+  verifyToken,
+  signToken,
+  authCookie,
+  refreshedSessionClaims,
+  type JWTPayload,
+} from '../../../../lib/auth'
 import type { MeResponse } from '../../../../lib/sharedApiTypes'
 
 export async function GET(req: NextRequest) {
@@ -56,11 +62,17 @@ export async function GET(req: NextRequest) {
     // the client can sync localStorage — not just on the cookie path. `void
     // fromCookie` keeps the parsed flag without affecting behavior.
     void fromCookie
-    const refreshed = await signToken({
-      userId: payload.userId,
-      email: payload.email,
-      role: payload.role,
-    })
+
+    // Every claim on the refreshed token comes from the DATABASE row loaded
+    // above, never from the token being presented. Re-minting `role:
+    // payload.role` made admin irrevocable: a demoted admin refreshed their own
+    // stale claim back into a new 30-day token on every app open, so the
+    // privilege outlived the demotion indefinitely. Reading `user` is free here
+    // — this handler already loaded it. It also makes PROMOTION take effect on
+    // the next refresh instead of requiring a fresh login.
+    const refreshed = await signToken(
+      refreshedSessionClaims(payload, user as unknown as { email?: string; role?: string }),
+    )
 
     // The response shape is the shared MeResponse contract — webapp and the Expo
     // sibling consume the same zod schema (see shared/api-client/src/schemas/auth.ts).

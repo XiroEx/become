@@ -43,6 +43,10 @@ export interface EntitlementsSnapshot {
   /** The kill-switch. FALSE means the app must look exactly as it did before
    *  any of this shipped — every lock, counter and plan card stays unrendered. */
   enforced: boolean
+  /** WHY this member is on Plus, not a grant. The server reports it as false
+   *  on any row that is not `tier: 'plus'`, because the gates read tier alone
+   *  — see reportedGrandfathered() in lib/entitlements.ts. Never branch on it
+   *  outside a `tier !== 'free'` branch. */
   grandfathered: boolean
   subscription: SubscriptionSnapshot | null
   checkoutAvailable: boolean
@@ -63,7 +67,6 @@ const FEATURE_NOUN: Record<Feature, { label: string; plural: boolean }> = {
   'custom-programs': { label: 'Custom programs', plural: true },
   'custom-foods': { label: 'Custom foods', plural: true },
   'custom-sessions': { label: 'Starred sessions', plural: true },
-  'share-programs': { label: 'Sharing programs', plural: false },
   'workout-generation': { label: 'Unlimited workout generation', plural: false },
   'ai-food-estimate': { label: 'Unlimited AI food scans', plural: true },
   'mind-sessions': { label: 'The rest of the Mind path', plural: false },
@@ -77,7 +80,6 @@ export const FEATURE_LABELS: Record<Feature, string> = {
   'custom-programs': 'Programs',
   'custom-foods': 'Custom foods',
   'custom-sessions': 'Starred sessions',
-  'share-programs': 'Program sharing',
   'workout-generation': 'Workout generations',
   'ai-food-estimate': 'AI food scans',
   'mind-sessions': 'Mind sessions',

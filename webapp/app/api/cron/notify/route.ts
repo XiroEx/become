@@ -404,11 +404,15 @@ export async function GET(request: NextRequest) {
       // Respect the 20h main-session cooldown — nudging toward a locked session
       // would send them to Training Grounds, not the session.
       const mind = await MindProgress.findOne({ userId: progress.userId })
-        .select('lastMainSessionAt mainSessionCount')
-        .lean<{ lastMainSessionAt?: Date; mainSessionCount?: number } | null>()
+        .select('lastMainSessionAt completedMainSessions')
+        .lean<{ lastMainSessionAt?: Date; completedMainSessions?: number } | null>()
       if (!mainSessionAvailable(mind?.lastMainSessionAt, now.getTime())) continue
 
-      const started = (mind?.mainSessionCount ?? 0) > 0
+      // "Have they ever done one?" is a question about sessions, so it reads the
+      // session counter. mainSessionCount is chapter progress and is seeded from
+      // the intake answer, so it told someone who had never opened a session
+      // that "today's module is ready".
+      const started = (mind?.completedMainSessions ?? 0) > 0
       await deliver(t.mindReminder, String(progress.userId), {
         title: started ? "Today's mindset module is ready 🧠" : 'Start your first session 🧠',
         body: started

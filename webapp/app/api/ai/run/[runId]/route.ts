@@ -6,11 +6,18 @@
 // Ownership is recorded at trigger time (lib/ai/runOwnership); an unknown run
 // and someone else's run are indistinguishable from the outside: identical
 // body, identical status. The read-back PAT stays server-side.
+//
+// It NEVER charges (it is hit ~90 times per generation), but it is the first
+// place the server can see that a run was accepted and then killed before it
+// executed — so it is where that unit is given back. A refund only ever
+// decrements, is claimed once per run, and is decided from the RUN RECORD, not
+// from anything the caller said.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchBecomeRun } from '@/lib/ai/becomeGraph'
 import { requireAiUser } from '@/lib/ai/routeHelpers'
 import { userOwnsRun } from '@/lib/ai/runOwnership'
+import { refundIfSkipped } from '@/lib/ai/runCharge'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,5 +39,8 @@ export async function GET(
   }
 
   const snap = await fetchBecomeRun(runId)
+  // Accepted, then reaped before executing a single node: the generation the
+  // member paid for never happened. A run that RAN and failed is not refunded.
+  if (snap.skipped) await refundIfSkipped(runId, gate.user.userId)
   return NextResponse.json(snap)
 }

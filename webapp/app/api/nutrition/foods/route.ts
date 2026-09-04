@@ -5,6 +5,7 @@ import Food, { IFood } from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { searchUSDA } from '@/lib/usda'
 import { stemMatch } from '@/lib/nutrition/foodMatch'
 import {
@@ -714,8 +715,10 @@ export async function POST(request: NextRequest) {
     // omit it would create uncounted foods forever.
     const { food, created } = await importManualFood(body, authResult.userId, { authored: true })
 
-    // Admins may upgrade isVerified / isFirstClass / usageCount
-    const isAdmin = authResult.role === 'admin'
+    // Admins may upgrade isVerified / isFirstClass / usageCount. Confirmed
+    // against the database: the token claim alone would let a demoted admin keep
+    // minting first-class catalog rows for the life of their session.
+    const isAdmin = await isVerifiedAdmin(authResult)
     if (isAdmin) {
       const updates: Record<string, unknown> = {}
       if (typeof body.isVerified === 'boolean') updates.isVerified = body.isVerified

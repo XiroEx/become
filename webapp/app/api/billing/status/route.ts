@@ -8,6 +8,7 @@ import { getBillingConfig, type BillingConfig } from '@/lib/billing/config'
 import { describeStripeError, getStripe } from '@/lib/billing/stripeClient'
 import { applyBillingOutcome } from '@/lib/billing/apply'
 import { mongoApplyDeps } from '@/lib/billing/mongoDeps'
+import { reportedGrandfathered } from '@/lib/entitlements'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -112,7 +113,12 @@ export async function GET(request: NextRequest) {
       plan: sub?.plan ?? null,
       currentPeriodEnd: sub?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
-      grandfathered: user?.grandfathered === true,
+      // Same rule as GET /api/me/entitlements: the flag describes why this
+      // member is on Plus, and says nothing on a row that is not.
+      grandfathered: reportedGrandfathered(
+        user?.tier === 'plus' ? 'plus' : 'free',
+        user?.grandfathered === true,
+      ),
       managed,
     },
   })
