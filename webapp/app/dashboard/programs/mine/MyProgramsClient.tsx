@@ -134,7 +134,11 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
       {embedded ? (
         <div className="mb-4 flex justify-end">
           <button
-            onClick={() => (canCreate ? setShowCreate(true) : setGate(syntheticGate("custom-programs")))}
+            onClick={() =>
+              canCreate
+                ? setShowCreate(true)
+                : setGate(syntheticGate("custom-programs", "plus", feature("custom-programs")))
+            }
             data-tour="programs-create"
             className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
@@ -169,7 +173,7 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
             </Link>
           ) : (
             <button
-              onClick={() => setGate(syntheticGate("custom-programs"))}
+              onClick={() => setGate(syntheticGate("custom-programs", "plus", feature("custom-programs")))}
               data-tour="programs-create"
               className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
             >

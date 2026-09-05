@@ -139,8 +139,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
     !entitlements ||
     entitlements.enforced === false ||
     entitlementFor("custom-exercises")?.canCreate !== false;
+  // The entitlement rides along so the sheet can say "3 of 3" and "delete one
+  // to free a slot" — this is the PROACTIVE path, where no 403 supplied them.
   const openCreate = () =>
-    canCreate ? setShowForm(true) : setGate(syntheticGate("custom-exercises"));
+    canCreate
+      ? setShowForm(true)
+      : setGate(syntheticGate("custom-exercises", "plus", entitlementFor("custom-exercises")));
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
   const [search, setSearch] = useState("");
