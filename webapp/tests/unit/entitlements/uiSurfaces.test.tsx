@@ -17,7 +17,11 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
-import UpgradeSheet from '../../../components/UpgradeSheet'
+import UpgradeSheet, {
+  CheckoutAction,
+  checkoutRefusalState,
+  dismissLabel,
+} from '../../../components/UpgradeSheet'
 import {
   allowanceLine,
   featureHeadline,
@@ -217,7 +221,7 @@ test('UpgradeSheet issues no request and shows no dead link before billing exist
   )
   assert.match(
     src,
-    /checkout === 'ready' \|\| checkout === 'starting' \?/,
+    /state === 'ready' \|\| state === 'starting'/,
     'the CTA renders for a live checkout and nothing else',
   )
   assert.match(src, /Upgrades aren&apos;t open yet/, 'the coming-soon copy must exist')
@@ -225,6 +229,163 @@ test('UpgradeSheet issues no request and shows no dead link before billing exist
   assert.doesNotMatch(src, /email you/i, 'never promise a mail we cannot send')
   // The alert() that used to stand in for this is gone for good.
   assert.doesNotMatch(src, /alert\(/)
+})
+
+// ─── A refused checkout is not an absent one ─────────────────────────────────
+//
+// POST /api/billing/checkout answers with six distinct refusals. The sheet used
+// to collapse every one of them — plus a dropped connection — into
+// setCheckout('unavailable'), which renders "Upgrades aren't open yet." So a
+// member whose CARD FAILED, and a member who hit a one-second Stripe blip, were
+// both told the product is not for sale. Nothing re-probes after a refusal, so
+// that impression is the last one the sheet ever gives.
+//
+// Rendered per branch rather than driven through the component: the repo has no
+// DOM test environment, and a state only reachable through an effect and a fetch
+// is a state no test can see. That is why this shipped.
+
+const COMING_SOON = /Upgrades aren&#x27;t open yet/
+const BUY_CTA = /Upgrade to Plus/
+
+const action = (state: ReturnType<typeof checkoutRefusalState>, portalState: 'idle' | 'opening' | 'failed' = 'idle') =>
+  renderToStaticMarkup(
+    <CheckoutAction
+      state={state}
+      tierName="Plus"
+      portalState={portalState}
+      onStart={() => {}}
+      onOpenPortal={() => {}}
+    />,
+  )
+
+test('every refusal the checkout route can answer maps to its own state', () => {
+  // 503 / 404 are the ONLY "there is nothing to buy yet" answers.
+  assert.equal(checkoutRefusalState(503, { error: 'billing_not_configured' }), 'unavailable')
+  assert.equal(checkoutRefusalState(503, null), 'unavailable', 'a 503 with no body still reads')
+  assert.equal(checkoutRefusalState(404, null), 'unavailable', 'the route may not exist yet')
+
+  assert.equal(
+    checkoutRefusalState(409, { error: 'fix_payment_method', status: 'past_due', portal: '/api/billing/portal' }),
+    'fix-payment',
+  )
+  assert.equal(checkoutRefusalState(409, { error: 'already_subscribed' }), 'already-plus')
+  assert.equal(checkoutRefusalState(409, { error: 'already_plus', reason: 'grandfathered' }), 'already-plus')
+
+  // Everything else is transient. None of these may read as "not for sale".
+  assert.equal(checkoutRefusalState(502, { error: 'checkout_failed' }), 'error')
+  assert.equal(checkoutRefusalState(500, null), 'error', 'a proxy 500 with no JSON')
+  assert.equal(checkoutRefusalState(400, { error: 'invalid_plan' }), 'error')
+  assert.equal(checkoutRefusalState(401, { error: 'Unauthorized' }), 'error')
+  assert.equal(checkoutRefusalState(409, { error: 'something_new' }), 'error', 'unknown 409')
+})
+
+test('a failed card is not told the product is unavailable', () => {
+  // The 409 the route answers when the member is past_due/unpaid/incomplete.
+  const html = action(
+    checkoutRefusalState(409, { error: 'fix_payment_method', portal: '/api/billing/portal' }),
+  )
+  assert.doesNotMatch(html, COMING_SOON, 'a broken card is not a closed shop')
+  assert.doesNotMatch(html, BUY_CTA, 'a second subscription is exactly what the route refused')
+  assert.match(html, /payment method needs updating/i)
+  assert.match(html, /Update payment method/, 'the exit is the billing portal')
+})
+
+test('a 503 IS the coming-soon note', () => {
+  // The state Become ships in. This branch is the one the old code gave to
+  // everything, and it is correct for exactly this.
+  const html = action(checkoutRefusalState(503, { error: 'billing_not_configured' }))
+  assert.match(html, COMING_SOON)
+  assert.doesNotMatch(html, BUY_CTA, 'no purchase CTA when checkout cannot work — the P0')
+  assert.doesNotMatch(html, /Update payment method/)
+})
+
+test('a member who already has Plus is offered the way out, not a second bill', () => {
+  const html = action(checkoutRefusalState(409, { error: 'already_plus', reason: 'admin' }))
+  assert.match(html, /already have Plus/)
+  assert.doesNotMatch(html, BUY_CTA)
+  assert.doesNotMatch(html, COMING_SOON)
+  // ...and the dismiss button stops saying "Not now", which implies a purchase
+  // still to come.
+  assert.equal(dismissLabel(checkoutRefusalState(409, { error: 'already_plus' })), 'Close')
+})
+
+test('a Stripe blip offers a retry, never a closed shop', () => {
+  const html = action(checkoutRefusalState(502, { error: 'checkout_failed' }))
+  assert.doesNotMatch(html, COMING_SOON, 'sticky for the life of the sheet — never from a blip')
+  assert.match(html, /Try again/, 'a transient failure must be retryable in place')
+  assert.match(html, /nothing was charged/i)
+})
+
+test('the live CTA and the availability spinner still render only for their own states', () => {
+  assert.match(action('ready'), BUY_CTA)
+  assert.doesNotMatch(action('ready'), COMING_SOON)
+  assert.match(action('checking'), /Checking availability/)
+  assert.doesNotMatch(action('checking'), BUY_CTA)
+  // 'starting' is the CTA mid-flight: still a button, disabled.
+  assert.match(action('starting'), /disabled=""/)
+})
+
+test('the dismiss label admits when there is nothing to come back for', () => {
+  assert.equal(dismissLabel('ready'), 'Not now')
+  assert.equal(dismissLabel('checking'), 'Not now')
+  assert.equal(dismissLabel('starting'), 'Not now')
+  assert.equal(dismissLabel('unavailable'), 'Close')
+  assert.equal(dismissLabel('fix-payment'), 'Close')
+  assert.equal(dismissLabel('error'), 'Close')
+})
+
+test('the portal button waits on the request and says so when it fails', () => {
+  assert.match(action('fix-payment', 'opening'), /disabled=""/)
+  assert.match(action('fix-payment', 'failed'), /Billing didn&#x27;t open just now/)
+  assert.doesNotMatch(action('fix-payment', 'failed'), COMING_SOON)
+})
+
+test('checkout is posted the field the route actually reads', () => {
+  // The sheet posted `{ feature, tier }`; the route reads `plan` and nothing
+  // else, so it fell through to its monthly default and the annual price could
+  // never be bought from the app. The plan is now explicit — and the TODO names
+  // the selector that is still missing, because inventing price copy here is
+  // forbidden while no prices exist.
+  const src = readSource('components/UpgradeSheet.tsx')
+  assert.match(src, /JSON\.stringify\(\{ plan: CHECKOUT_PLAN \}\)/, 'must send `plan`')
+  assert.doesNotMatch(
+    src,
+    /body: JSON\.stringify\(\{ feature/,
+    'the route reads nothing out of feature/tier',
+  )
+  assert.match(src, /TODO\(plan-selector\)/, 'the unreachable annual plan must stay named')
+  // No amount, discount, trial length or date. The server owns every one of
+  // those words; a currency symbol or a "/mo" here is a promise nothing keeps.
+  assert.doesNotMatch(src, /\$\d|\d+\s*%\s*off|\/\s*mo\b|free trial|\d+-day/i)
+})
+
+test('the fix-payment exit follows the path the route sent', () => {
+  const src = readSource('components/UpgradeSheet.tsx')
+  assert.match(
+    src,
+    /setPortalPath\(readString\(body, 'portal'\)/,
+    'the 409 carries the portal path; follow it rather than assuming one',
+  )
+})
+
+test('the client handles the codes the checkout route actually returns', () => {
+  // The seam this closes: the route was hardened to answer distinct codes in one
+  // PR while the sheet was rewritten to ignore them in another, and neither
+  // could see the other. Read both sides here so a rename on either side fails.
+  const route = readSource('app/api/billing/checkout/route.ts')
+  const sheet = readSource('components/UpgradeSheet.tsx')
+  for (const code of [
+    'billing_not_configured',
+    'fix_payment_method',
+    'already_subscribed',
+    'already_plus',
+  ]) {
+    // `billing_not_configured` is answered by the shared billingNotConfigured()
+    // helper, so it is asserted against that module instead of the route body.
+    const src = code === 'billing_not_configured' ? readSource('lib/billing/config.ts') : route
+    assert.match(src, new RegExp(code), `the server must still answer ${code}`)
+    assert.match(sheet, new RegExp(code), `the sheet must still distinguish ${code}`)
+  }
 })
 
 // ─── The kill-switch contract ────────────────────────────────────────────────
