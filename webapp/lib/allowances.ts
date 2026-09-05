@@ -336,14 +336,14 @@ function stateFor(
   }
 }
 
-async function usedFor(feature: Feature, ctx: AllowanceCtx): Promise<number> {
+async function usedFor(feature: Feature, ctx: AllowanceCtx, now?: Date): Promise<number> {
   const spec = FREE_LIMITS[feature]
 
   if (spec.kind === 'window') {
     // Read-only: never upserts, so opening the dashboard cannot open a window
     // or burn a unit. `used` is already net of refunds (a refund decrements it
     // and increments `refunds` separately), so it is reported as-is.
-    const { key } = await windowFor(feature, ctx)
+    const { key } = await windowFor(feature, ctx, now)
     if (!key) return 0
     try {
       const row = await ledgerFor(ctx).read({ userId: ctx.userId, feature, bucketKey: key })
@@ -491,22 +491,30 @@ async function latestWindow(feature: Feature, ctx: AllowanceCtx): Promise<Window
  * instead would hand out a key the ledger never used the moment the anchor and
  * the clock disagree. Null for inventory/milestone features, which have no
  * window.
+ *
+ * `now` defaults to the real clock. It is an argument so a caller that pins
+ * the instant of a consume can pin the read of the same window too — otherwise
+ * the two halves of "which window is this" disagree by however far the wall
+ * clock has moved, which is not something a test can wait out.
  */
 export async function currentWindowKey(
   feature: Feature,
-  ctx: AllowanceCtx
+  ctx: AllowanceCtx,
+  now?: Date
 ): Promise<string | null> {
   if (FREE_LIMITS[feature].kind !== 'window') return null
-  return (await windowFor(feature, ctx)).key
+  return (await windowFor(feature, ctx, now)).key
 }
 
-/** Read-only. Never mutates. Used by GET /api/me/entitlements and soft peeks. */
+/** Read-only. Never mutates. Used by GET /api/me/entitlements and soft peeks.
+ *  `now` defaults to the real clock — see currentWindowKey for why it exists. */
 export async function peekAllowance(
   feature: Feature,
-  ctx: AllowanceCtx
+  ctx: AllowanceCtx,
+  now?: Date
 ): Promise<AllowanceState> {
-  const { resetsAt } = await windowFor(feature, ctx)
-  return stateFor(feature, await usedFor(feature, ctx), resetsAt)
+  const { resetsAt } = await windowFor(feature, ctx, now)
+  return stateFor(feature, await usedFor(feature, ctx, now), resetsAt)
 }
 
 /**
@@ -537,7 +545,7 @@ export async function consumeAllowance(
   if (kind !== 'window') {
     // 'milestone' — a number someone else already wrote (MindProgress). There
     // is no create for two requests to race, so a read is the whole decision.
-    const state = await peekAllowance(feature, ctx)
+    const state = await peekAllowance(feature, ctx, opts.now)
     const withinLimit = state.used < state.limit
     return {
       allowed: opts.enforce ? withinLimit : true,
@@ -597,6 +605,9 @@ async function consumeInventory(
   // AFTER the claim, never before: a count taken first could miss a competing
   // create that had not committed yet AND rank behind nothing, which is exactly
   // the hole this closes.
+  // No `now`: inventory allowances have a 'lifetime' window, so there is no
+  // bucket for a clock to move. Also pinned by shape in
+  // tests/unit/allowance/inventoryClaims.ts — claim first, count second.
   const live = await usedFor(feature, ctx)
   const used = live + (claim?.rank ?? 1) - 1
   const state = stateFor(feature, used, null)
@@ -632,7 +643,7 @@ export async function consumeFollowUp(
   opts: ConsumeOptions = {}
 ): Promise<ConsumeResult> {
   if (FREE_LIMITS[feature].kind !== 'window') {
-    return { allowed: true, state: await peekAllowance(feature, ctx) }
+    return { allowed: true, state: await peekAllowance(feature, ctx, opts.now) }
   }
   return consumeWindow(feature, ctx, opts, 'followUps')
 }

@@ -171,6 +171,17 @@ async function getSecretsClient(): Promise<SecretsClient | null> {
 }
 
 async function readRuntimePayload(): Promise<RuntimePayload> {
+  // A test run resolves NOTHING from the shared secret store.
+  //
+  // The bootstrap below fires in non-production as soon as REDSECRETS_MONGODB_URI
+  // is present alongside any of SECRETS_ENCRYPTION_KEY / ENCRYPTION_KEY /
+  // JWT_SECRET — and the test script always sets JWT_SECRET. So in a shell that
+  // exports REDSECRETS_MONGODB_URI (developers here do), the payload's
+  // MONGODB_URI silently outranked the loopback database the script pins, and
+  // the suite ran against whatever that payload named. A test never needs a
+  // secret; returning {} makes the script's own env the only source.
+  if (process.env.NODE_ENV === 'test') return {}
+
   const hasStoreBootstrap = Boolean(
     isProduction()
       ? process.env.REDSECRETS_MONGODB_URI && process.env.SECRETS_ENCRYPTION_KEY
