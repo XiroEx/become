@@ -1163,10 +1163,9 @@ export default function SnapPlateModal({
           void refreshEntitlements()
           return false
         }
-        if (res.status === 402 || res.status === 403) {
-          showToast('Saving meals needs a Plus plan.', 'error')
-          return false
-        }
+        // No invented plan requirement here. gateFrom() has already had its
+        // look; anything still 402/403 is an ownership or role refusal, and it
+        // gets the server's own words like every other error.
         showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save meal.", 'error')
         return false
       }
@@ -1457,7 +1456,9 @@ export default function SnapPlateModal({
                   mealsAtCap={
                     !!entitlements?.enforced && entitlementFor('custom-meals')?.canCreate === false
                   }
-                  onCappedSave={() => setGate(syntheticGate('custom-meals'))}
+                  onCappedSave={() =>
+                    setGate(syntheticGate('custom-meals', 'plus', entitlementFor('custom-meals')))
+                  }
                 />
               )}
             </motion.div>

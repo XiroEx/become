@@ -10,11 +10,11 @@ import { useState } from 'react'
 import { ChevronRight, Sparkles } from 'lucide-react'
 import { useEntitlements } from '@/hooks/useEntitlements'
 import UpgradeSheet from '@/components/UpgradeSheet'
-import { syntheticGate, tierLabel, type GatePayload } from '@/lib/entitlementsClient'
+import { planGate, tierLabel, type SheetGate } from '@/lib/entitlementsClient'
 
 export default function PlanRow() {
   const { data } = useEntitlements()
-  const [gate, setGate] = useState<GatePayload | null>(null)
+  const [gate, setGate] = useState<SheetGate | null>(null)
 
   if (!data || data.enforced === false) return null
 
@@ -24,9 +24,7 @@ export default function PlanRow() {
     <>
       <button
         type="button"
-        onClick={() =>
-          setGate(syntheticGate('custom-programs', 'plus', 'Everything in Become, with no limits.'))
-        }
+        onClick={() => setGate(planGate('Everything in Become, with no limits.'))}
         className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60"
       >
         <span className="flex items-center gap-3">

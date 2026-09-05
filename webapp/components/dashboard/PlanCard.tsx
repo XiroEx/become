@@ -18,11 +18,11 @@ import { useEntitlements } from '@/hooks/useEntitlements'
 import UpgradeSheet from '@/components/UpgradeSheet'
 import {
   FEATURE_LABELS,
-  syntheticGate,
+  planGate,
   tierLabel,
   type Feature,
   type FeatureEntitlement,
-  type GatePayload,
+  type SheetGate,
 } from '@/lib/entitlementsClient'
 
 /** The four a member feels, in the order they meet them. */
@@ -65,14 +65,18 @@ function Meter({ ent, label, suffix }: { ent: FeatureEntitlement; label: string;
 
 export default function PlanCard() {
   const { data } = useEntitlements()
-  const [gate, setGate] = useState<GatePayload | null>(null)
+  const [gate, setGate] = useState<SheetGate | null>(null)
 
   if (!data || data.enforced === false) return null
 
   const isPlus = data.tier !== 'free'
-  const renews = data.subscription?.currentPeriodEnd
+  const periodEnd = data.subscription?.currentPeriodEnd
     ? new Date(data.subscription.currentPeriodEnd)
     : null
+  // A cancelled subscription keeps Plus until the period end and then STOPS.
+  // Calling that date "Renews" tells someone who has already cancelled that
+  // they are about to be charged again.
+  const endsInstead = data.subscription?.cancelAtPeriodEnd === true
 
   if (isPlus) {
     return (
@@ -87,8 +91,8 @@ export default function PlanCard() {
           <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
             {data.grandfathered
               ? 'Thanks for being here early'
-              : renews && !Number.isNaN(renews.getTime())
-                ? `Renews ${renews.toLocaleDateString()}`
+              : periodEnd && !Number.isNaN(periodEnd.getTime())
+                ? `${endsInstead ? 'Ends' : 'Renews'} ${periodEnd.toLocaleDateString()}`
                 : 'No limits on anything'}
           </p>
         </div>
@@ -109,7 +113,7 @@ export default function PlanCard() {
           <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Free plan</h2>
           <button
             type="button"
-            onClick={() => setGate(syntheticGate('custom-programs', 'plus', 'Everything below, with no limits.'))}
+            onClick={() => setGate(planGate('Everything below, with no limits.'))}
             className="shrink-0 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400"
           >
             See Plus

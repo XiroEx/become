@@ -8,10 +8,13 @@
 // (`gate.requiresTier`), so a member can never be shown a number or a plan name
 // that disagrees with the rule that actually refused them.
 //
-// Billing is stage 5. Until GET /api/billing/status exists this probes it,
-// takes any non-2xx / malformed answer as "not configured", and swaps the CTA
-// for a coming-soon note IN PLACE. It never renders a link that goes nowhere,
-// and it never assumes a route exists.
+// Billing may not be configured at all — that is the state Become ships in.
+// The CTA is therefore rendered ONLY once checkout is known to be live: the
+// snapshot's `checkoutAvailable` answers it for free, and only an unknown
+// answer costs a probe of GET /api/billing/status. Anything else (a 404, a
+// 503, `configured: false`, a malformed body) is a coming-soon note in the
+// CTA's place. It never renders a button that cannot work, and it never
+// assumes a route exists.
 
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -22,14 +25,14 @@ import {
   featureHeadline,
   PLUS_BENEFITS,
   tierLabel,
-  type GatePayload,
+  type SheetGate,
 } from '@/lib/entitlementsClient'
 
 export interface UpgradeSheetProps {
   open: boolean
   onClose: () => void
-  /** The verbatim 403 body (or a syntheticGate for a teaser). */
-  gate: GatePayload | null
+  /** The verbatim 403 body, a syntheticGate for a teaser, or a planGate. */
+  gate: SheetGate | null
 }
 
 type CheckoutState = 'checking' | 'ready' | 'unavailable' | 'starting'
@@ -45,10 +48,6 @@ function authHeaders(): HeadersInit {
 export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps) {
   const { data } = useEntitlements()
   const [checkout, setCheckout] = useState<CheckoutState>('checking')
-  // Which gate the coming-soon note is showing for. Keyed on the gate rather
-  // than a boolean reset in an effect, so a NEW gate starts clean for free.
-  const [soonFor, setSoonFor] = useState<GatePayload | null>(null)
-  const showSoon = soonFor !== null && soonFor === gate
 
   // Probe billing only while the sheet is actually open — a closed sheet must
   // not cost a request, and the answer can change between openings. The probe
@@ -60,6 +59,13 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
 
     if (data?.checkoutAvailable === true) {
       setCheckout('ready')
+      return
+    }
+    // The snapshot already said no. Probing would only confirm it, and every
+    // millisecond of `checking` in between is a millisecond in which the sheet
+    // could show something it will have to take away.
+    if (data?.checkoutAvailable === false) {
+      setCheckout('unavailable')
       return
     }
     setCheckout('checking')
@@ -91,10 +97,9 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
 
   const startCheckout = useCallback(async () => {
     if (!gate) return
-    if (checkout !== 'ready') {
-      setSoonFor(gate)
-      return
-    }
+    // Belt and braces: the CTA is not rendered outside 'ready', so this is only
+    // reachable by a race with the probe.
+    if (checkout !== 'ready') return
     setCheckout('starting')
     try {
       const res = await fetch('/api/billing/checkout', {
@@ -111,11 +116,10 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
         window.location.assign(url)
         return
       }
+      // Checkout answered but gave us nowhere to go — same story as a 503.
       setCheckout('unavailable')
-      setSoonFor(gate)
     } catch {
       setCheckout('unavailable')
-      setSoonFor(gate)
     }
   }, [gate, checkout])
 
@@ -198,11 +202,11 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
                 ))}
               </div>
 
-              {showSoon ? (
-                <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
-                  Upgrades go live shortly — we&apos;ll email you the moment they do.
-                </div>
-              ) : (
+              {/* The CTA exists ONLY when checkout is known to work. A
+                  gradient "Upgrade to Plus" that answers 503 is worse than no
+                  button at all, and it is what a member saw in every state
+                  including this one until the tap that swapped it. */}
+              {checkout === 'ready' || checkout === 'starting' ? (
                 <button
                   type="button"
                   onClick={startCheckout}
@@ -216,6 +220,21 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
                   )}
                   Upgrade to {tierLabel(gate.requiresTier)}
                 </button>
+              ) : checkout === 'checking' ? (
+                <div
+                  aria-live="polite"
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 px-6 py-3.5 text-sm font-medium text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking availability&hellip;
+                </div>
+              ) : (
+                // No email is captured anywhere, so nothing here may promise
+                // one. What IS true is the part a capped member is worried
+                // about: their work is not going anywhere.
+                <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+                  Upgrades aren&apos;t open yet. Everything you&apos;ve made stays yours.
+                </div>
               )}
 
               <button
@@ -223,7 +242,7 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
                 onClick={onClose}
                 className="mt-3 w-full rounded-2xl px-4 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
               >
-                Not now
+                {checkout === 'unavailable' ? 'Close' : 'Not now'}
               </button>
             </div>
           </motion.div>
