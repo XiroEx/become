@@ -130,7 +130,7 @@ test('claimsAdmin is true only for a well-formed admin claim', () => {
 test('isVerifiedAdmin short-circuits a non-admin claim without touching Mongo', async () => {
   // The hot path: no database round trip is added for ordinary members. If this
   // ever started connecting it would hang here (no Mongo in the unit env).
-  process.env.MONGODB_URI ||= 'mongodb://127.0.0.1:27017/become-unit-test'
+  process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/become-unit-test'
   const started = Date.now()
   assert.equal(await isVerifiedAdmin({ userId: 'u1', role: 'user' }), false)
   assert.equal(await isVerifiedAdmin(null), false)

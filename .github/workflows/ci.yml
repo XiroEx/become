@@ -28,6 +28,22 @@ jobs:
       run:
         working-directory: webapp
 
+    # A real MongoDB, so a test is allowed to exercise Mongo semantics —
+    # strict-mode drops, unique-index E11000s, validators — instead of every
+    # such test having to fake the driver. Loopback and disposable: the runner
+    # is destroyed with the job. No test may EVER point anywhere else; that is
+    # enforced by webapp/tests/unit/_guard.ts, not by convention.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +83,12 @@ jobs:
 
       - name: Unit tests
         run: npm test
+        env:
+          # `test:unit` pins this same value inline, so this line changes
+          # nothing today. It is here so the pin is visible at the job level: if
+          # the script's inline assignment is ever dropped, the fallback is
+          # still the loopback service above and never an inherited remote.
+          MONGODB_URI: mongodb://127.0.0.1:27017/become-test
 
       # Runs last: it is the slowest and the least likely to be the thing you
       # broke, so failing fast on the two above gets you a useful answer sooner.
