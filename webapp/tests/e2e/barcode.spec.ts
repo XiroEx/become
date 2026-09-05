@@ -3,7 +3,9 @@
  * Covers: API lookup (hit + miss), scanner UI open/close, manual-entry flow,
  * unknown-barcode error banner.
  *
- * Runs against production: https://become.redbtn.io
+ * Target: PLAYWRIGHT_BASE_URL, default http://localhost:3000. It used to
+ * hardcode https://become.redbtn.io, so it ran against production even when
+ * the rest of the suite was pointed elsewhere.
  *
  * Camera is unavailable in headless Playwright — the scanner component handles
  * this by entering error state and auto-showing the manual-entry panel, which
@@ -13,8 +15,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test'
 import fs from 'fs'
 import path from 'path'
-
-const BASE_URL = 'https://become.redbtn.io'
+import { BASE_URL } from './base-url'
 const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN || ''
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots')
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })

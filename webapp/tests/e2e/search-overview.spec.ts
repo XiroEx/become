@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { BASE_URL, signToken } from './test-auth'
+import { BASE_URL, E2E_USER, signToken } from './test-auth'
 
 /**
  * The empty-box landing view must RENDER, not crash.
@@ -10,7 +10,9 @@ import { BASE_URL, signToken } from './test-auth'
  * couldn't load". A unit test on shapes would not have caught that; only opening
  * the sheet does.
  */
-const USER = { id: '69324119a28a8ac3b78750b9', email: 'jondon27500@gmail.com' }
+// Was pinned to the coach's live account. This asserts that the sheet RENDERS,
+// which is true of any authenticated member, so it runs as the e2e account.
+const USER = E2E_USER
 
 test('the default view renders sections and does not crash', async ({ page, context }) => {
   const token = signToken(USER.id, USER.email, 'user')
