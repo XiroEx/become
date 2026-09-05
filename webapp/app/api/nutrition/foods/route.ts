@@ -710,15 +710,26 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    // Confirmed against the database: the token claim alone would let a demoted
+    // admin keep minting first-class catalog rows for the life of their
+    // session. Resolved before the import because it also decides whether
+    // `body.barcode` is honoured.
+    const isAdmin = await isVerifiedAdmin(authResult)
+
     // `authored: true` is what makes the row count against the quota checked
     // above. It is passed here, never read from `body` — a client that could
     // omit it would create uncounted foods forever.
-    const { food, created } = await importManualFood(body, authResult.userId, { authored: true })
+    //
+    // `trustedBarcode` is the same idea for `body.barcode`: the barcode is a
+    // unique global key that GET /api/nutrition/foods/barcode resolves ahead of
+    // OpenFoodFacts and USDA, so a member who could set it here would own every
+    // scan of that real product. Dropped for members, kept for admins.
+    const { food, created } = await importManualFood(body, authResult.userId, {
+      authored: true,
+      trustedBarcode: isAdmin,
+    })
 
-    // Admins may upgrade isVerified / isFirstClass / usageCount. Confirmed
-    // against the database: the token claim alone would let a demoted admin keep
-    // minting first-class catalog rows for the life of their session.
-    const isAdmin = await isVerifiedAdmin(authResult)
+    // Admins may upgrade isVerified / isFirstClass / usageCount.
     if (isAdmin) {
       const updates: Record<string, unknown> = {}
       if (typeof body.isVerified === 'boolean') updates.isVerified = body.isVerified
