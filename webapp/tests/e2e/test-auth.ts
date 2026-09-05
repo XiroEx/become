@@ -36,24 +36,11 @@ if (!JWT_SECRET) {
 
 // ─── Test users ───────────────────────────────────────────────────────────────
 
-export const TEST_USER = {
-  id: '693adca9073978ec812b601a',
-  email: 'george8794@gmail.com',
-  role: 'user' as const,
-}
-
-// Match production token shape. AuthGuard intentionally rejects tokens without
-// an expiry claim, so an "evergreen" test token only produces a login-page
-// screenshot while making the harness look authenticated.
-export const AUTH_TOKEN: string = jwt.sign(
-  { userId: TEST_USER.id, email: TEST_USER.email, role: TEST_USER.role },
-  JWT_SECRET,
-  { expiresIn: '7d' },
-)
-
 /**
- * The dedicated end-to-end account. Destructive fixtures (resetting onboarding,
- * overwriting nutrition goals) must target THIS user and never a real member.
+ * The dedicated end-to-end account. Every spec authenticates as this user
+ * unless it is told otherwise — the suite skips and unskips workouts, enrols
+ * programs, rewrites schedules and resets onboarding, and none of that may
+ * happen to a person.
  */
 export const E2E_USER = {
   id: '69ee5d9a0a303c1b8a6f4457',
@@ -69,10 +56,55 @@ export const E2E_AUTH_TOKEN: string = jwt.sign(
   { expiresIn: '7d' },
 )
 
-/** Defaults to production. Point at a local server with
- *  PLAYWRIGHT_BASE_URL=http://localhost:3000 to verify a change BEFORE it
- *  ships — the same variable playwright.config.ts already honours. */
-export const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://become.redbtn.io'
+/**
+ * A real person's account. It used to be the DEFAULT of `TEST_USER`, so the
+ * thirteen specs importing `TEST_USER` / `AUTH_TOKEN` drove a browser through
+ * George's live data — schedule-sync.spec.ts skipped and unskipped his
+ * workouts, calendar.spec.ts POSTed to /api/programs/enroll and /api/schedule
+ * on him. Reaching it is now a deliberate act.
+ */
+const HUMAN_USER = {
+  id: '693adca9073978ec812b601a',
+  email: 'george8794@gmail.com',
+  role: 'user' as const,
+}
+
+const HUMAN_OPT_IN = 'E2E_ALLOW_HUMAN_ACCOUNT'
+
+/** Opt-in only, and it has to be exactly "1" so a stray truthy value cannot
+ *  enable it by accident. */
+export const usingHumanAccount: boolean = process.env[HUMAN_OPT_IN] === '1'
+
+/**
+ * The account the suite runs as. The dedicated e2e user by default; the human
+ * account only under `E2E_ALLOW_HUMAN_ACCOUNT=1`, which exists for reproducing
+ * a report that genuinely depends on that member's data and nothing else.
+ */
+export const TEST_USER = usingHumanAccount ? HUMAN_USER : E2E_USER
+
+// Match production token shape. AuthGuard intentionally rejects tokens without
+// an expiry claim, so an "evergreen" test token only produces a login-page
+// screenshot while making the harness look authenticated.
+export const AUTH_TOKEN: string = usingHumanAccount
+  ? jwt.sign(
+      { userId: HUMAN_USER.id, email: HUMAN_USER.email, role: HUMAN_USER.role },
+      JWT_SECRET,
+      { expiresIn: '7d' },
+    )
+  : E2E_AUTH_TOKEN
+
+if (usingHumanAccount) {
+  console.warn(
+    `[test-auth] ${HUMAN_OPT_IN}=1 — running as ${HUMAN_USER.email}. ` +
+      'Destructive specs will mutate a real member\'s data.',
+  )
+}
+
+/** Defaults to http://localhost:3000, and REFUSES a production-backed host
+ *  without PLAYWRIGHT_ALLOW_PROD=1. Resolved in one place so a spec importing
+ *  only this module still gets the fence. */
+export { BASE_URL } from './base-url'
+import { BASE_URL } from './base-url'
 
 /**
  * Mint a token for an arbitrary test user.
@@ -93,6 +125,13 @@ export function signToken(userId: string, email: string, role = 'user'): string 
  * when BOOTSTRAP_TOKEN is available; otherwise falls back to the admin-key
  * reset endpoint, which only flips onboardingCompleted. The secret never
  * leaves this module.
+ *
+ * NOTE (reported, not changed here — the route is out of this change's scope):
+ * that fallback sends `x-admin-key: JWT_SECRET`, i.e.
+ * /api/admin/reset-onboarding accepts the app's TOKEN-SIGNING SECRET as an
+ * admin API key. One value therefore both mints sessions and unlocks an admin
+ * endpoint, so the blast radius of leaking it is doubled and it cannot be
+ * rotated independently. It wants a separate ADMIN_API_KEY.
  */
 export async function resetOnboarding(userId: string): Promise<void> {
   const bootstrap = process.env.BOOTSTRAP_TOKEN
@@ -156,6 +195,12 @@ export async function dismissTutorials(page: Page): Promise<void> {
 /**
  * Injects auth token into cookies + localStorage and navigates to /dashboard.
  * Handles onboarding redirect and daily check-in modal automatically.
+ *
+ * The default is AUTH_TOKEN, which is the dedicated E2E_USER account unless
+ * E2E_ALLOW_HUMAN_ACCOUNT=1. It is deliberately NOT hardcoded to
+ * E2E_AUTH_TOKEN: several specs authenticate here and then call the API with
+ * AUTH_TOKEN, so pinning one side would have the browser acting as one member
+ * while the fetches act as another — the worst of both accounts.
  */
 export async function authenticate(
   page: Page,

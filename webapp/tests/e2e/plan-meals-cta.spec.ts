@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { BASE_URL, signToken } from './test-auth'
+import { BASE_URL, E2E_USER, signToken } from './test-auth'
 
 /**
  * "Schedule meals" has three states, and WHERE it sits carries the meaning:
@@ -22,7 +22,9 @@ import { BASE_URL, signToken } from './test-auth'
  *    always accepted a plan dated today — you had to detour through the Meal
  *    Plan tile to reach it.
  */
-const USER = { id: '69324119a28a8ac3b78750b9', email: 'jondon27500@gmail.com' }
+// Was pinned to the coach's live account. Placement of the CTA is the same for
+// every member, so it runs as the e2e account.
+const USER = E2E_USER
 
 test('the schedule CTA survives the swipe to a future day', async ({ page, context }) => {
   const token = signToken(USER.id, USER.email, 'user')
