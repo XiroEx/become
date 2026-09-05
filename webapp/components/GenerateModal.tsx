@@ -147,6 +147,10 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   // A refusal that money fixes, held as the full 403 payload so the sheet can
   // show the real limit, remaining and reset — not a bare string.
   const [gate, setGate] = useState<GatePayload | null>(null);
+  // An AI refusal that did NOT stop the member getting what they came for:
+  // the deterministic builder ran instead. Non-blocking on purpose — it sits
+  // beside a real result, so it must never raise the upgrade sheet over it.
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const [saved, setSaved] = useState<boolean>(false);
 
   const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
@@ -159,6 +163,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setProgram(null);
     setError(null);
     setGate(null);
+    setFallbackNote(null);
     setSaved(false);
     setLoading(false);
     setSaving(false);
@@ -172,14 +177,21 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setProgram(null);
     setError(null);
     setGate(null);
+    setFallbackNote(null);
     setSaved(false);
     setAiUsed(false);
   }, []);
 
   /**
-   * Handle a refused response. Returns true when it WAS a gate (the caller must
-   * stop): falling through to the deterministic route after an AI refusal would
-   * just be refused again, and the member would watch two failures for one tap.
+   * Handle a refusal from a route that has no fallback behind it — saving a
+   * program, and the deterministic generators themselves. Returns true when it
+   * WAS a gate, meaning the caller has nothing left to try and the upgrade
+   * sheet is the honest answer.
+   *
+   * This is NOT the path an AI-generation refusal takes. /api/generate/session
+   * and /api/generate/program are deliberately unmetered — they are the
+   * fallback every AI route degrades to — so an AI gate falls THROUGH to them
+   * and surfaces as `fallbackNote`, not as a wall.
    */
   const handleGate = useCallback(
     (status: number, body: unknown): boolean => {
@@ -203,6 +215,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   const generateSession = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setFallbackNote(null);
     setAiUsed(false);
     const headers = authHeaders();
 
@@ -218,11 +231,15 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
           equipment: equipmentStr,
           level: difficulty,
         });
+        // Out of AI generations for the week. The member is NOT stuck: the
+        // deterministic builder below is unmetered by design, so say what
+        // happened and keep going rather than handing back an upgrade wall and
+        // no session.
         if (r.gate) {
-          setGate(r.gate);
+          setFallbackNote(
+            `${r.gate.error} Built you a standard session instead — switch AI off below to keep generating without using one.`,
+          );
           void refreshEntitlements();
-          setLoading(false);
-          return;
         }
         const aiSession = r.result as AiSessionResponse["session"] | undefined;
         if (r.ok && aiSession?.exercises?.length) {
@@ -287,6 +304,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setLoading(true);
     setError(null);
     setGate(null);
+    setFallbackNote(null);
     setSaved(false);
     setAiUsed(false);
     const headers = authHeaders();
@@ -305,11 +323,13 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
           level: difficulty,
           equipment: equipmentStr,
         });
+        // Same weekly allowance as a session, same answer: note it and fall
+        // through to the unmetered deterministic builder.
         if (r.gate) {
-          setGate(r.gate);
+          setFallbackNote(
+            `${r.gate.error} Built you a standard program instead — switch AI off below to keep generating without using one.`,
+          );
           void refreshEntitlements();
-          setLoading(false);
-          return;
         }
         {
           const p = r.result as AiProgramResponse["program"] | undefined;
@@ -394,6 +414,7 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
     setSaving(true);
     setError(null);
     setGate(null);
+    setFallbackNote(null);
     try {
       const body = draftProgramToProgramBody(program, difficulty);
       const res = await fetch("/api/programs/custom", {
@@ -919,6 +940,16 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* AI allowance spent, but a session/program was still built.
+                  Deliberately not the upgrade sheet: there IS a result on
+                  screen and a modal over it would read as a failure. */}
+              {fallbackNote && (
+                <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{fallbackNote}</span>
                 </div>
               )}
 

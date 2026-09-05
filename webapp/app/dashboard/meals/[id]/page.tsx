@@ -19,6 +19,7 @@ import type { IMeal, IMealItem, IMealRecipe } from '@/models/Meal'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 import { useMealSchedule } from '@/hooks/useMealSchedule'
+import { invalidateEntitlements } from '@/hooks/useEntitlements'
 
 
 interface MealResponse extends Omit<IMeal, '_id' | 'createdBy'> {
@@ -154,6 +155,12 @@ export default function MealDetailPage({ params }: { params: Promise<{ id: strin
         headers: getHeaders(),
       })
       if (res.ok) {
+        // Deleting a saved meal frees a `custom-meals` slot server-side at
+        // once. Mark the entitlements snapshot stale so the next gated surface
+        // re-reads instead of showing the lock this delete just cleared for up
+        // to the 60s TTL. Invalidate rather than refresh: this page renders no
+        // gate and must not start fetching entitlements on its own.
+        invalidateEntitlements()
         router.push('/dashboard/meals')
       } else {
         showToast('Failed to delete meal.', 'error')

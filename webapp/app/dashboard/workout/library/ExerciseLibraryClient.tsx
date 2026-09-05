@@ -246,6 +246,10 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       setExercises(prev => prev.filter(e => e.slug !== slug));
       if (expandedSlug === slug) setExpandedSlug(null);
       if (editingSlug === slug) setEditingSlug(null);
+      // A delete frees an inventory slot server-side straight away. Re-read the
+      // snapshot now, or the 60s TTL keeps the create button locked at a cap
+      // the member just cleared — and deleting is the only way back under one.
+      void refreshEntitlements();
     } finally {
       setDeletingSlug(null);
     }
