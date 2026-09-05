@@ -43,7 +43,7 @@ export async function GET(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE: Remove a Food (only by creator or admin)
+// DELETE: Remove a Food (only by its owner or an admin — see foodOwnership)
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
@@ -71,9 +71,12 @@ export async function DELETE(
     // The admin claim on the token is confirmed against the database — a
     // demoted admin must lose this immediately, not when their token expires.
     const isAdmin = await isVerifiedAdmin(authResult)
-    // EITHER id — see lib/nutrition/foodOwnership.ts. The custom-foods slot is
-    // charged on `authoredBy`, so authorising on `createdBy` alone could charge
-    // a member for a row only someone else could delete.
+    // See lib/nutrition/foodOwnership.ts. `authoredBy` (the id the custom-foods
+    // slot is charged on) OR `createdBy` on a `source: 'manual'` row. NOT
+    // `createdBy` on its own: the food search route's background import stamps
+    // it with whoever's search pulled a USDA/OpenFoodFacts row in, which would
+    // hand that member edit and delete on shared catalogue data — and DELETE
+    // here runs clearFoodReferences over every member's logs.
     const isOwner = isFoodOwner(food, authResult.userId)
 
     if (!isAdmin && !isOwner) {
@@ -90,7 +93,7 @@ export async function DELETE(
 }
 
 // ---------------------------------------------------------------------------
-// PATCH: Update a Food (only by creator or admin)
+// PATCH: Update a Food (only by its owner or an admin — see foodOwnership)
 // ---------------------------------------------------------------------------
 
 export async function PATCH(
@@ -118,9 +121,12 @@ export async function PATCH(
     // The admin claim on the token is confirmed against the database — a
     // demoted admin must lose this immediately, not when their token expires.
     const isAdmin = await isVerifiedAdmin(authResult)
-    // EITHER id — see lib/nutrition/foodOwnership.ts. The custom-foods slot is
-    // charged on `authoredBy`, so authorising on `createdBy` alone could charge
-    // a member for a row only someone else could delete.
+    // See lib/nutrition/foodOwnership.ts. `authoredBy` (the id the custom-foods
+    // slot is charged on) OR `createdBy` on a `source: 'manual'` row. NOT
+    // `createdBy` on its own: the food search route's background import stamps
+    // it with whoever's search pulled a USDA/OpenFoodFacts row in, which would
+    // hand that member edit and delete on shared catalogue data — and DELETE
+    // here runs clearFoodReferences over every member's logs.
     const isOwner = isFoodOwner(food, authResult.userId)
 
     if (!isAdmin && !isOwner) {
