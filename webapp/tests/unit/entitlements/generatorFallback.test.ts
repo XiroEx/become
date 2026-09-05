@@ -130,6 +130,15 @@ const DELETE_SURFACES: { rel: string; anchor: string; call: RegExp }[] = [
     anchor: 'handleDelete',
     call: /invalidateEntitlements\(\)/,
   },
+  // DELETE /api/nutrition/foods/[id] is the one that frees a `custom-foods`
+  // slot. The favorites delete on the meals page unbookmarks and frees nothing,
+  // so this page is the only food surface that owes the invalidate — and, like
+  // the meal page, it renders no gate, so it invalidates rather than refetches.
+  {
+    rel: 'app/dashboard/foods/[id]/page.tsx',
+    anchor: 'handleDelete',
+    call: /invalidateEntitlements\(\)/,
+  },
 ]
 
 for (const { rel, anchor, call } of DELETE_SURFACES) {
@@ -145,11 +154,15 @@ for (const { rel, anchor, call } of DELETE_SURFACES) {
   })
 }
 
-test('the meal pages take no gating UI along with the invalidate', () => {
+test('the meal and food pages take no gating UI along with the invalidate', () => {
   // invalidateEntitlements is fetch-free precisely so a page with no plan UI
   // can call it. Importing the hook itself, or the upgrade sheet, would make a
   // delete handler the reason a gate appears on a page that had none.
-  for (const rel of ['app/dashboard/meals/page.tsx', 'app/dashboard/meals/[id]/page.tsx']) {
+  for (const rel of [
+    'app/dashboard/meals/page.tsx',
+    'app/dashboard/meals/[id]/page.tsx',
+    'app/dashboard/foods/[id]/page.tsx',
+  ]) {
     const src = readSource(rel)
     // The CALL, not the module path — `invalidateEntitlements` is imported
     // from the same file and that import is the whole point.
