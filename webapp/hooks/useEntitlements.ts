@@ -123,8 +123,10 @@ async function load(force: boolean): Promise<EntitlementsSnapshot | null> {
 export interface UseEntitlements {
   data: EntitlementsSnapshot | null
   loading: boolean
-  /** Refetch now. Call after a 403, and after a successful create so the
-   *  counters the member is watching actually move. */
+  /** Refetch now. Call after a 403, and after a successful create or DELETE so
+   *  the counters the member is watching actually move. A delete frees an
+   *  inventory slot immediately; without this the lock survives it for up to
+   *  the TTL. Surfaces that do not hold the hook use `invalidateEntitlements`. */
   refresh: () => Promise<void>
   feature: (f: Feature) => FeatureEntitlement | null
 }
@@ -173,6 +175,28 @@ export function useEntitlements(): UseEntitlements {
   )
 
   return { data, loading, refresh, feature }
+}
+
+/**
+ * Mark the snapshot STALE without dropping it and without fetching.
+ *
+ * This is the delete-side counterpart to `refresh`. Deleting a row frees an
+ * inventory slot server-side immediately, but the 60s TTL means the client
+ * keeps answering `canCreate: false` from the snapshot it took while the member
+ * was still at the cap — the lock outlives the thing that cleared it, and the
+ * only way out (delete one) looks like it did nothing.
+ *
+ * It invalidates rather than refetches on purpose, so a page that renders no
+ * gate at all (the meal pages) can call it from a delete handler without
+ * suddenly issuing entitlement requests or mounting gate UI. The next real
+ * reader — a mount, or an explicit `refresh` — picks up the truth.
+ *
+ * Components that already hold the hook AND stay mounted through the delete
+ * should call `refresh` instead: they need the lock to clear on screen now, not
+ * on the next mount.
+ */
+export function invalidateEntitlements(): void {
+  fetchedAt = 0
 }
 
 /** Drop the in-memory snapshot. Called on an identity change; exported for tests. */
