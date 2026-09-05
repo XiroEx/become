@@ -192,11 +192,17 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
    * and /api/generate/program are deliberately unmetered — they are the
    * fallback every AI route degrades to — so an AI gate falls THROUGH to them
    * and surfaces as `fallbackNote`, not as a wall.
+   *
+   * Clearing the note here is what makes the two mutually exclusive: reaching
+   * this point means the deterministic builder did NOT hand back a result, so
+   * the note's promise of one is already false and the modal sheet would be
+   * covering nothing.
    */
   const handleGate = useCallback(
     (status: number, body: unknown): boolean => {
       const g = gateFrom(status, body);
       if (!g) return false;
+      setFallbackNote(null);
       setGate(g);
       void refreshEntitlements();
       return true;
@@ -215,6 +221,9 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
   const generateSession = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // A sheet raised by the PREVIOUS attempt must not survive into this one,
+    // or the member reopens it over a session they just generated.
+    setGate(null);
     setFallbackNote(null);
     setAiUsed(false);
     const headers = authHeaders();
@@ -278,13 +287,24 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+        // The note was written before this attempt, on the strength of it
+        // always working. It didn't, so retract it: an amber "built you a
+        // standard session instead" beside a red failure and an empty preview
+        // is the modal telling the member about a session that does not exist.
+        setFallbackNote(null);
         if (handleGate(res.status, data)) return;
         setError(data.error || "Could not generate a session. Try again.");
         return;
       }
       const data = (await res.json()) as SessionResponse;
+      if (!data?.session) {
+        setFallbackNote(null);
+        setError("Could not generate a session. Try again.");
+        return;
+      }
       setSession(data.session);
     } catch {
+      setFallbackNote(null);
       setError("Network error. Try again.");
     } finally {
       setLoading(false);
@@ -395,14 +415,23 @@ export default function GenerateModal({ open, onClose }: GenerateModalProps) {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+        // Same retraction as the session tab: nothing was built, so the note
+        // that says something was must go with it.
+        setFallbackNote(null);
         if (handleGate(res.status, data)) return;
         setError(data.error || "Could not generate a program. Try again.");
         return;
       }
       const data = (await res.json()) as ProgramResponse;
+      if (!data?.program) {
+        setFallbackNote(null);
+        setError("Could not generate a program. Try again.");
+        return;
+      }
       setProgram(data.program);
       setExpandedDay(0);
     } catch {
+      setFallbackNote(null);
       setError("Network error. Try again.");
     } finally {
       setLoading(false);

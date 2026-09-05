@@ -147,6 +147,9 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       : setGate(syntheticGate("custom-exercises", "plus", entitlementFor("custom-exercises")));
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
+  // A refused delete (someone else's row, a stale slug, a network blip). Not a
+  // gate: an inventory cap never blocks a delete, so this is never an upsell.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(EXERCISES_PAGE);
   // Which row's dropdown is open — collapsed rows just show name + subtitle;
@@ -241,12 +244,22 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
 
   const handleDelete = async (slug: string) => {
     setDeletingSlug(slug);
+    setDeleteError(null);
     try {
       const token = localStorage.getItem("token");
-      await fetch(`/api/exercises/custom?slug=${encodeURIComponent(slug)}`, {
+      const res = await fetch(`/api/exercises/custom?slug=${encodeURIComponent(slug)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      // A refused delete leaves the row on the server. Dropping it from the
+      // list anyway showed the member a delete that never happened, and the
+      // re-read below then returned the same count: the item vanished, the
+      // lock stayed, and nothing said why.
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.error || "Could not delete that exercise. Try again.");
+        return;
+      }
       setExercises(prev => prev.filter(e => e.slug !== slug));
       if (expandedSlug === slug) setExpandedSlug(null);
       if (editingSlug === slug) setEditingSlug(null);
@@ -254,6 +267,8 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       // snapshot now, or the 60s TTL keeps the create button locked at a cap
       // the member just cleared — and deleting is the only way back under one.
       void refreshEntitlements();
+    } catch {
+      setDeleteError("Network error. Try again.");
     } finally {
       setDeletingSlug(null);
     }
@@ -567,6 +582,14 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* A delete that did not happen. Plain error, never the upgrade sheet —
+          deleting is the way back under a cap, so it is never a paywall. */}
+      {deleteError && (
+        <div className="mb-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+          {deleteError}
         </div>
       )}
 

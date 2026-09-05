@@ -18,6 +18,19 @@
 //    lock outlives the delete that cleared it — and deleting is the only way
 //    back under an inventory cap, so the one action that helps looks inert.
 //
+// 3. The note that reports the degrade is written BEFORE the deterministic
+//    build it describes. That is fine while the build works and a lie the
+//    moment it doesn't: a capped member whose /api/generate/session call 500s
+//    saw an amber "Built you a standard session instead" above a red "Could
+//    not generate a session", with no session anywhere. So every exit from the
+//    deterministic block that is not a result must retract the note — which
+//    also makes the note and the upgrade sheet mutually exclusive, since the
+//    sheet is only ever raised from those same exits.
+//
+// 4. A delete whose response is never checked is the same class of lie: the
+//    row leaves the list, the refresh returns the identical count, and the
+//    member watches an item vanish while the lock stays put.
+//
 // Source scans: these modules are React components wired to fetch and
 // localStorage, and the property under test is structural.
 
@@ -41,7 +54,33 @@ function gateBranch(src: string): string {
   assert.fail('unbalanced braces in the gate branch')
 }
 
+/** A `const <name> = ...` declaration, brace-matched to its closing `}`. */
+function declBody(src: string, name: string): string {
+  const at = src.indexOf(`const ${name} = `)
+  assert.ok(at > 0, `expected a \`const ${name}\` declaration`)
+  let depth = 0
+  for (let i = src.indexOf('{', at); i < src.length; i++) {
+    if (src[i] === '{') depth++
+    else if (src[i] === '}' && --depth === 0) return src.slice(at, i + 1)
+  }
+  assert.fail(`unbalanced braces in ${name}`)
+}
+
+/** Everything from the unmetered /api/generate/* call to the end of `name`. */
+function deterministicBlock(src: string, name: string): string {
+  const body = declBody(src, name)
+  const at = body.search(/['"`]\/api\/generate\//)
+  assert.ok(at > 0, `${name}: no deterministic /api/generate call`)
+  return body.slice(at)
+}
+
 const MODALS = ['components/GenerateModal.tsx', 'components/QuickSessionModal.tsx']
+
+/** The generate entry points, per modal. */
+const GENERATORS: Record<string, string[]> = {
+  'components/GenerateModal.tsx': ['generateSession', 'generateProgram'],
+  'components/QuickSessionModal.tsx': ['generateFor'],
+}
 
 // ─── 1. A gate degrades to the free generator ────────────────────────────────
 
@@ -169,4 +208,105 @@ test('the meal and food pages take no gating UI along with the invalidate', () =
     assert.doesNotMatch(src, /useEntitlements\(/, `${rel} must not subscribe to entitlements`)
     assert.doesNotMatch(src, /UpgradeSheet/, `${rel} must not render the upgrade sheet`)
   }
+})
+
+// ─── 3. The note may not outlive the fallback it describes ───────────────────
+
+for (const rel of MODALS) {
+  for (const name of GENERATORS[rel]) {
+    test(`${rel}: ${name} retracts the note when the deterministic build fails`, () => {
+      const block = deterministicBlock(readSource(rel), name)
+
+      // Split on every error exit: each chunk BEFORE one has to contain the
+      // retraction, so no path reaches an error banner with the note still up.
+      const parts = block.split('setError(')
+      assert.ok(parts.length > 1, `${rel}: ${name} has no error path to check`)
+      for (let i = 0; i < parts.length - 1; i++) {
+        assert.match(
+          parts[i],
+          /setFallbackNote\(null\)/,
+          `${rel}: ${name} surfaces an error without retracting the note — the ` +
+            'member is told a standard session was built and shown none',
+        )
+      }
+    })
+
+    test(`${rel}: ${name} clears a stale upgrade sheet on entry`, () => {
+      const body = declBody(readSource(rel), name)
+      const beforeFirstAwait = body.slice(0, body.indexOf('await'))
+      assert.match(
+        beforeFirstAwait,
+        /setGate\(null\)/,
+        `${rel}: ${name} must drop the previous attempt's sheet before starting, ` +
+          'or it reappears over a session this attempt produced',
+      )
+    })
+  }
+
+  test(`${rel} never raises the upgrade sheet while the note stands`, () => {
+    const src = readSource(rel)
+    // Every raise — `setGate(<something that is not null>)`. Resetting to null
+    // (on entry, on the sheet's own close) is not a raise.
+    const raises = /setGate\(\s*(?!null)/g
+    let m: RegExpExecArray | null
+    let seen = 0
+    while ((m = raises.exec(src))) {
+      seen++
+      assert.match(
+        src.slice(Math.max(0, m.index - 300), m.index),
+        /setFallbackNote\(null\)/,
+        `${rel}: the sheet is modal — raising it over a live fallback note ` +
+          'covers the result the note says the member got',
+      )
+    }
+    assert.ok(seen > 0, `${rel}: no gate is ever raised — is the sheet still wired up?`)
+  })
+}
+
+// ─── 4. A delete that was refused is not a delete ────────────────────────────
+
+const CHECKED_DELETES = [
+  'app/dashboard/workout/library/ExerciseLibraryClient.tsx',
+  'app/dashboard/programs/mine/MyProgramsClient.tsx',
+]
+
+for (const rel of CHECKED_DELETES) {
+  test(`${rel}: a refused delete keeps the row and reports itself`, () => {
+    const body = declBody(readSource(rel), 'handleDelete')
+
+    const checkAt = body.search(/!res\.ok/)
+    assert.ok(checkAt > 0, `${rel}: handleDelete must check the response`)
+
+    const removeAt = body.indexOf('prev.filter')
+    assert.ok(removeAt > 0, `${rel}: handleDelete must drop the row from the list`)
+    assert.ok(
+      removeAt > checkAt,
+      `${rel}: the row may only leave the list once the server confirms it left ` +
+        'the database',
+    )
+
+    const refreshAt = body.indexOf('refreshEntitlements()')
+    assert.ok(refreshAt > 0, `${rel}: handleDelete must re-read the snapshot`)
+    assert.ok(
+      refreshAt > checkAt,
+      `${rel}: a refused delete frees no slot, so the re-read returns the same ` +
+        'count — a pointless request that leaves the lock unexplained',
+    )
+
+    // Something has to say so. Whichever error channel the page already owns.
+    assert.match(
+      body,
+      /set(Delete)?Error\(|throw new Error\(/,
+      `${rel}: a refused delete must surface as an error`,
+    )
+  })
+}
+
+test('the exercise library renders its delete error', () => {
+  // A state field nothing reads is the same silence with extra steps.
+  assert.match(
+    readSource('app/dashboard/workout/library/ExerciseLibraryClient.tsx'),
+    /\{deleteError && \(/,
+    'setDeleteError with no banner behind it tells the member nothing',
+  )
 })
