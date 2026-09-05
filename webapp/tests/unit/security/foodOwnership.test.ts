@@ -281,6 +281,69 @@ test('authoredBy is still unwritable from a body, for members and admins alike',
   }
 })
 
+// ─── …and so does the CLIENT, or it offers buttons the server refuses ────────
+
+const FOOD_PAGE = 'app/dashboard/foods/[id]/page.tsx'
+
+test('the food detail page authorises through foodOwnership, not on createdBy', () => {
+  // The route was fixed and this page was not, so it kept computing
+  // `String(food.createdBy) === currentUserId` — the OLD rule. Every USDA row a
+  // member's own search materialised then showed them Edit and Delete, and both
+  // 403'd. A client predicate that disagrees with the server is not cosmetic:
+  // it is the app promising something the API will refuse.
+  const src = read(FOOD_PAGE)
+  const code = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+
+  assert.match(
+    code,
+    /import \{ isFoodOwner \} from '@\/lib\/nutrition\/foodOwnership'/,
+    'the page must ask the same function the route asks, not a second copy of the rule',
+  )
+  assert.match(code, /isFoodOwner\(food, currentUserId\)/, 'the predicate must be the shared one')
+  assert.doesNotMatch(
+    code,
+    /String\(food\??\.createdBy\) === currentUserId/,
+    'a bare createdBy check shows Edit/Delete on catalogue rows the server 403s',
+  )
+})
+
+test('admin stays a separate disjunct on the page, exactly as on the route', () => {
+  // lib/nutrition/foodOwnership.ts is explicit that a role question does not
+  // belong inside an ownership predicate. The page mirrors the route's shape:
+  // `isVerifiedAdmin || isFoodOwner` there, `isAdmin || isOwner` here.
+  const src = read(FOOD_PAGE)
+  assert.match(src, /const canMutate = isAdmin \|\| isOwner/, 'admin must widen, never be folded in')
+  // The role is read off the DATABASE row /api/auth/me returns, not off the
+  // token's claim, so a demoted admin loses the controls on their next load.
+  assert.match(src, /setIsAdmin\(\(data\.user\?\.role \|\| data\.role\) === 'admin'\)/)
+  // Every mutating surface reads the widened answer, not the raw ownership one.
+  const after = src.slice(src.indexOf('const canMutate'))
+  assert.equal((after.match(/\{canMutate &&/g) ?? []).length, 3, 'all three owner-only surfaces')
+  assert.doesNotMatch(after, /\{isOwner &&/, 'no surface may be left on the un-widened predicate')
+})
+
+test('the payload the page reads actually carries the fields the predicate needs', () => {
+  // The rule is unanswerable from `createdBy` alone, so the serializer has to
+  // send the other two. Drop either and `isFoodOwner` fails CLOSED (source is
+  // not 'manual', authoredBy is undefined) and the real owner silently loses
+  // Edit and Delete on their own custom food.
+  const flatten = read('lib/foodImport.ts')
+  const at = flatten.indexOf('export function flattenFoodForResponse')
+  assert.ok(at > 0, 'no flattenFoodForResponse')
+  const body = flatten.slice(at, at + 2600)
+  assert.match(body, /authoredBy: food\.authoredBy/, 'the primary ownership key must be serialized')
+  assert.match(body, /source: food\.source/, 'createdBy means nothing without source')
+
+  // …and the page's own view of that response declares them, or TypeScript
+  // narrows them away before the predicate ever sees them.
+  const page = read(FOOD_PAGE)
+  const iface = page.slice(page.indexOf('interface FoodResponse'))
+  const fields = iface.slice(0, iface.indexOf('\n}'))
+  for (const field of ['source?: string', 'authoredBy?: string']) {
+    assert.ok(fields.includes(field), `FoodResponse must declare ${field}`)
+  }
+})
+
 // ─── The general rule, across every counted cap ──────────────────────────────
 
 test('every inventory allowance counts the field its delete authorises on', () => {
