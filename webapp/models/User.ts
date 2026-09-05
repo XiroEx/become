@@ -253,22 +253,45 @@ UserSchema.index(
 )
 // Webhook lookup by Stripe customer. PARTIAL for the same reason authId is:
 // every user defaults the field to null, so a sparse index would still index
-// them all and a unique constraint would E11000 on the second signup.
+// them all and a unique constraint would E11000 on the second signup. The
+// partial filter excludes those nulls, which is what makes UNIQUE safe here.
+//
+// And unique is not a nicety: findUserIdByRef() resolves an event with a single
+// findOne() on these fields. Two users holding one customer id means the
+// webhook updates whichever document Mongo happens to return — one member's
+// payment silently granting or revoking another's access, with nothing in the
+// logs to say so. Unique makes that state unrepresentable instead of
+// undetectable. (Zero subscription documents exist today, so the build is free.)
 UserSchema.index(
   { 'subscription.stripeCustomerId': 1 },
-  { partialFilterExpression: { 'subscription.stripeCustomerId': { $type: 'string' } } }
+  { unique: true, partialFilterExpression: { 'subscription.stripeCustomerId': { $type: 'string' } } }
 )
 UserSchema.index(
   { 'subscription.stripeTestCustomerId': 1 },
-  { partialFilterExpression: { 'subscription.stripeTestCustomerId': { $type: 'string' } } }
+  { unique: true, partialFilterExpression: { 'subscription.stripeTestCustomerId': { $type: 'string' } } }
 )
 // invoice.payment_failed carries a subscription, not always a resolvable
-// customer — this is the fallback lookup path for it. Partial for the same
-// reason as the two above: the field defaults to null on every user.
+// customer — this is the fallback lookup path for it. Partial + unique for the
+// same reasons as the two above.
 UserSchema.index(
   { 'subscription.stripeSubscriptionId': 1 },
-  { partialFilterExpression: { 'subscription.stripeSubscriptionId': { $type: 'string' } } }
+  { unique: true, partialFilterExpression: { 'subscription.stripeSubscriptionId': { $type: 'string' } } }
 )
+// ONE-TIME, BEFORE THE FIRST DEPLOY THAT CARRIES THIS FILE: if the three
+// indexes above already exist as NON-unique (they were created that way), Mongo
+// refuses to redefine them in place. autoIndex's createIndex comes back
+// IndexKeySpecsConflict (86), Mongoose reports it on the model's 'error' event,
+// nothing crashes, and the constraint silently does not exist. Drop them once
+// and let autoIndex rebuild them:
+//
+//   db.users.dropIndex('subscription.stripeCustomerId_1')
+//   db.users.dropIndex('subscription.stripeTestCustomerId_1')
+//   db.users.dropIndex('subscription.stripeSubscriptionId_1')
+//
+// Safe while there are zero subscription documents, which is the state today.
+// Once money is flowing, a drop leaves the webhook's lookup on a collection
+// scan for as long as the rebuild takes.
+
 // Admin/ops: "who is on what".
 UserSchema.index({ tier: 1, grandfathered: 1 })
 

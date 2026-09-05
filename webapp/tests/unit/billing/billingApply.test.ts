@@ -232,7 +232,9 @@ test('payment_failed and past_due in the SAME second both apply', async () => {
   assert.equal(h.writes[0].patch['subscription.lastEventCreated'], burst)
 })
 
-test('every branch stamps lastEventCreated, or ordering degrades to never-stale', async () => {
+test('a state-carrying branch stamps lastEventCreated; payment_failed must NOT', async () => {
+  // The stamp is what "an older event has already been superseded" means, so
+  // every branch that CHANGES subscription state has to leave one.
   const created = secondsAt(0)
   const linkOnly = harness({ tier: 'free', subscription: null })
   await applyBillingOutcome(
@@ -249,6 +251,16 @@ test('every branch stamps lastEventCreated, or ordering degrades to never-stale'
   )
   assert.equal(linkOnly.writes[0].patch['subscription.lastEventCreated'], created)
 
+  const subscribed = harness({ tier: 'free', subscription: null })
+  await applyBillingOutcome(subscriptionOutcome(), subscribed.deps, 'evt_sub')
+  assert.equal(subscribed.writes[0].patch['subscription.lastEventCreated'], secondsAt(0))
+
+  // invoice.payment_failed is the exception, and it is the whole point. It is a
+  // notification: it changes no state, so it must not become the ordering floor.
+  // Stripe emits it alongside customer.subscription.updated -> past_due, and when
+  // this one's `created` was the later of the two, stamping it here made the
+  // past_due event read as stale and vanish - the member kept Plus through the
+  // entire retry window.
   const failed = harness({ tier: 'plus', subscription: { status: 'active', mode: 'test' } })
   await applyBillingOutcome(
     {
@@ -261,7 +273,10 @@ test('every branch stamps lastEventCreated, or ordering degrades to never-stale'
     failed.deps,
     'evt_failed',
   )
-  assert.equal(failed.writes[0].patch['subscription.lastEventCreated'], created)
+  const patch = failed.writes[0].patch
+  assert.equal(patch['subscription.lastEventCreated'], undefined, 'a notice is not an ordering floor')
+  assert.equal(patch['subscription.lastEventId'], undefined)
+  assert.ok(patch['subscription.paymentFailedAt'] instanceof Date, 'but it still stamps the notice')
 })
 
 test('an out-of-order event is dropped with ZERO writes', async () => {
@@ -379,7 +394,11 @@ test('a checkout link stores the ids even when the subscription cannot be read',
   const patch = h.writes[0].patch
   assert.equal(patch['subscription.stripeTestCustomerId'], 'cus_test_1')
   assert.equal(patch['subscription.stripeSubscriptionId'], 'sub_test_1')
-  assert.equal(patch.tier, 'free', 'no state read means no tier granted yet')
+  // No state read means no tier WRITTEN at all - not even the one the row
+  // already had. Re-asserting a snapshot is how a concurrent, better-informed
+  // event gets reverted; the subscription events supply the tier moments later.
+  assert.equal(patch.tier, undefined, 'no state read means no tier write')
+  assert.equal(result.applied && result.tier, 'free', 'still REPORTED, just not written')
 })
 
 test('a checkout link upgrades to full state when the subscription resolves', async () => {
@@ -421,9 +440,13 @@ test('a checkout link upgrades to full state when the subscription resolves', as
 
 // ─── payment_failed ──────────────────────────────────────────────────────────
 
-test('a failed payment stamps the timestamp but does NOT change tier', async () => {
+test('a failed payment stamps the timestamp and writes NO tier at all', async () => {
   // The downgrade is customer.subscription.updated → past_due. Doing it here
   // too would race that event and cut off someone whose retry succeeded.
+  //
+  // But the old code did something subtler and worse than downgrading: it wrote
+  // the tier it derived from the row it had just READ. The row still said
+  // `active`, so it wrote 'plus' - a fact about the past, dressed as a decision.
   const h = harness({
     tier: 'plus',
     subscription: { status: 'active', currentPeriodEnd: at(20), mode: 'test' },
@@ -444,6 +467,185 @@ test('a failed payment stamps the timestamp but does NOT change tier', async () 
   const patch = h.writes[0].patch
   assert.ok(patch['subscription.paymentFailedAt'] instanceof Date)
   assert.equal(patch['subscription.status'], undefined, 'status is not this branch to set')
-  assert.equal(patch.tier, 'plus', 'still active until Stripe says otherwise')
+  assert.equal(patch.tier, undefined, 'a notification may not write a tier - even the same one')
+  assert.deepEqual(
+    Object.keys(patch).sort(),
+    ['subscription.mode', 'subscription.paymentFailedAt', 'subscription.updatedAt'],
+    'and it writes nothing else either',
+  )
   assert.equal(h.tierChanges.length, 0)
+})
+
+test('the dunning pair: payment_failed landing LAST cannot undo the past_due downgrade', async () => {
+  // The exact concurrency Stripe produces. Both events are created in the same
+  // second and both handlers read the document while it still says `active`:
+  //
+  //   customer.subscription.updated → past_due   derives 'free', writes it
+  //   invoice.payment_failed                     derives from its own stale read
+  //
+  // Whichever lands second is the one that decides what is in the database. The
+  // fix is not to order them - they are concurrent - but to make the second one
+  // harmless, by giving it nothing to say about tier.
+  const burst = secondsAt(0)
+  const beforeEither: ExistingBillingState = {
+    tier: 'plus',
+    subscription: {
+      status: 'active',
+      currentPeriodEnd: at(20),
+      mode: 'test',
+      stripeSubscriptionId: 'sub_test_1',
+    },
+  }
+
+  const pastDue = harness(beforeEither)
+  const downgrade = await applyBillingOutcome(
+    { ...subscriptionOutcome({ status: 'past_due' }), eventCreated: burst } as BillingOutcome,
+    pastDue.deps,
+    'evt_updated',
+  )
+  assert.equal(downgrade.applied && downgrade.tier, 'free')
+  assert.equal(pastDue.writes[0].patch.tier, 'free')
+
+  // Same starting snapshot - that IS the race - and this one lands afterwards.
+  const failed = harness(beforeEither)
+  const notice = await applyBillingOutcome(
+    {
+      kind: 'payment_failed',
+      ref: { by: 'userId', userId: 'user_1' },
+      subscriptionId: 'sub_test_1',
+      mode: 'test',
+      eventCreated: burst,
+    },
+    failed.deps,
+    'evt_invoice',
+  )
+
+  assert.equal(notice.applied, true)
+  const late = failed.writes[0].patch
+  assert.equal(late.tier, undefined, 'the late write must not resurrect plus')
+  assert.equal(late['subscription.status'], undefined)
+
+  // Merge them in the order that used to lose, and past_due's decision survives.
+  const merged = { ...pastDue.writes[0].patch, ...late }
+  assert.equal(merged.tier, 'free', 'a member in dunning does not keep Plus')
+  assert.equal(merged['subscription.status'], 'past_due')
+})
+
+test('payment_failed does not advance the ordering floor past its sibling', async () => {
+  // The other half of the same pair: when the invoice event carries the LATER
+  // `created` of the two, stamping it here made the past_due event that arrived
+  // a moment later read as strictly older - and it was dropped with zero writes.
+  const h = harness({
+    tier: 'plus',
+    subscription: { status: 'active', mode: 'test', stripeSubscriptionId: 'sub_test_1' },
+  })
+  await applyBillingOutcome(
+    {
+      kind: 'payment_failed',
+      ref: { by: 'userId', userId: 'user_1' },
+      subscriptionId: 'sub_test_1',
+      mode: 'test',
+      eventCreated: secondsAt(0) + 1, // the later of the pair
+    },
+    h.deps,
+    'evt_invoice',
+  )
+
+  const stamped = h.writes[0].patch['subscription.lastEventCreated'] as number | undefined
+  assert.equal(stamped, undefined)
+  // Nothing was stamped, so the sibling created a second earlier still applies.
+  assert.equal(isStaleEvent(secondsAt(0), stamped), false)
+})
+
+// ─── a second subscription on one customer ─────────────────────────────
+
+test('a DIFFERENT subscription cannot speak for an active one', async () => {
+  // Checkout used to let a past_due member buy again (past_due derives to free,
+  // so the CTA was showing), leaving two live subscriptions on one customer.
+  // When dunning finally killed the first, its terminal event would land here
+  // and downgrade a member the second one is billing every month.
+  const h = harness({
+    tier: 'plus',
+    subscription: {
+      status: 'active',
+      mode: 'test',
+      currentPeriodEnd: at(20),
+      stripeSubscriptionId: 'sub_the_one_paying',
+    },
+  })
+  const result = await applyBillingOutcome(
+    subscriptionOutcome({ status: 'canceled', stripeSubscriptionId: 'sub_the_dead_one' }),
+    h.deps,
+  )
+
+  assert.deepEqual(result, { applied: false, reason: 'other_subscription' })
+  assert.equal(h.writes.length, 0)
+})
+
+test('but a re-subscribe after a cancellation DOES apply', async () => {
+  // Scoped to active|trialing on purpose: once the stored subscription is no
+  // longer live, a new id is the member coming back, not a stray sibling.
+  const h = harness({
+    tier: 'free',
+    subscription: {
+      status: 'canceled',
+      mode: 'test',
+      currentPeriodEnd: at(-1),
+      stripeSubscriptionId: 'sub_old',
+    },
+  })
+  const result = await applyBillingOutcome(
+    subscriptionOutcome({ stripeSubscriptionId: 'sub_new' }),
+    h.deps,
+  )
+
+  assert.equal(result.applied && result.tier, 'plus')
+  assert.equal(h.writes[0].patch['subscription.stripeSubscriptionId'], 'sub_new')
+})
+
+test('the SAME subscription updating itself is never mistaken for a sibling', async () => {
+  const h = harness({
+    tier: 'plus',
+    subscription: {
+      status: 'active',
+      mode: 'test',
+      currentPeriodEnd: at(20),
+      stripeSubscriptionId: 'sub_test_1',
+    },
+  })
+  const result = await applyBillingOutcome(subscriptionOutcome({ status: 'past_due' }), h.deps)
+  assert.equal(result.applied && result.tier, 'free')
+})
+
+// ─── the ordering guard is handed to the store ─────────────────────────
+
+test('every write carries the event clock, so the store can re-assert ordering', async () => {
+  // The stale check in applyBillingOutcome is a READ. Between it and the write,
+  // a second delivery can complete; the loser would then overwrite newer state
+  // with older. mongoDeps re-asserts the comparison inside the update filter,
+  // which it can only do if the clock reaches it.
+  const guards: Array<{ eventCreated: number } | undefined> = []
+  const h = harness(
+    { tier: 'free', subscription: null },
+    {
+      writeSubscription: async (_userId, _patch, guard) => {
+        guards.push(guard)
+      },
+    },
+  )
+
+  await applyBillingOutcome(subscriptionOutcome(), h.deps, 'evt_1')
+  await applyBillingOutcome(
+    {
+      kind: 'payment_failed',
+      ref: { by: 'userId', userId: 'user_1' },
+      subscriptionId: 'sub_test_1',
+      mode: 'test',
+      eventCreated: secondsAt(1),
+    },
+    h.deps,
+    'evt_2',
+  )
+
+  assert.deepEqual(guards, [{ eventCreated: secondsAt(0) }, { eventCreated: secondsAt(1) }])
 })

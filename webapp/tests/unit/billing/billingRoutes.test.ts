@@ -22,6 +22,8 @@ const WEBHOOK = 'app/api/billing/webhook/route.ts'
 const CHECKOUT = 'app/api/billing/checkout/route.ts'
 const PORTAL = 'app/api/billing/portal/route.ts'
 const STATUS = 'app/api/billing/status/route.ts'
+const MONGO_DEPS = 'lib/billing/mongoDeps.ts'
+const USER_MODEL = 'models/User.ts'
 
 test('the webhook reads the RAW body and never re-parses it', () => {
   const src = read(WEBHOOK)
@@ -119,4 +121,73 @@ test('deriveTier is imported in exactly one place in billing', () => {
     .filter((f) => /from ['"]@\/lib\/subscription['"]/.test(fs.readFileSync(path.join(dir, f), 'utf8')))
 
   assert.deepEqual(importers, ['mongoDeps.ts'])
+})
+
+
+// ─── refusals: every one of these is a bill somebody pays twice ──────────────
+
+test('checkout refuses a member who is already paying in this mode', () => {
+  const src = read(CHECKOUT)
+  assert.match(src, /already_subscribed/)
+  assert.match(src, /sameMode/, 'a live subscriber must still be able to test on beta')
+})
+
+test('checkout refuses a member mid-dunning and points at the portal', () => {
+  // past_due / unpaid / incomplete all derive to `free`, so the upgrade CTA is
+  // showing and nothing about the member LOOKS subscribed. Letting them buy
+  // opens a SECOND live subscription on one Stripe customer: both bill, and the
+  // first one's terminal event downgrades someone the second is charging.
+  const src = read(CHECKOUT)
+  assert.match(src, /fix_payment_method/)
+  for (const status of ['past_due', 'unpaid', 'incomplete']) {
+    assert.match(src, new RegExp(`'${status}'`), `${status} must be refused`)
+  }
+  assert.match(src, /billing\/portal/, 'the way out of a failed payment is a card, not a purchase')
+})
+
+test('checkout refuses to sell Plus to someone who already has it', () => {
+  // 64 of 66 members are grandfathered, and deriveTier pins admins to plus.
+  const src = read(CHECKOUT)
+  assert.match(src, /already_plus/)
+  assert.match(src, /grandfathered/)
+  assert.match(src, /role === 'admin'/)
+})
+
+// ─── the mode fence is written in exactly one place ──────────────────────────
+
+test('the customer-id write never touches subscription.mode', () => {
+  // `subscription.mode` is subscription STATE, owned by apply.ts, and it is the
+  // field canApplyMode() reads to refuse a test event against live state.
+  // Writing it from the checkout path meant merely OPENING checkout on beta
+  // flipped a live subscriber to 'test' - after which beta's webhooks could
+  // cancel a real, paying subscription.
+  const src = read(MONGO_DEPS)
+  assert.doesNotMatch(src, /'subscription\.mode'/, 'only apply.ts writes the mode')
+})
+
+test('the subscription write re-asserts the ordering check in its filter', () => {
+  // The check in apply.ts is a read; between it and the write another delivery
+  // can land, and the loser would overwrite newer state with older.
+  const src = read(MONGO_DEPS)
+  assert.match(src, /'subscription\.lastEventCreated': \{ \$lte: eventCreated \}/)
+  assert.match(src, /matchedCount === 0/, 'a guard miss is a skip, never a throw')
+  assert.doesNotMatch(src, /throw new Error\('stale/, 'a newer event already applied is not an error')
+})
+
+test('the Stripe id indexes are unique, or the webhook updates whoever Mongo returns first', () => {
+  // findUserIdByRef resolves an event with one findOne on these fields. Two
+  // users sharing a customer id means one member's payment silently grants or
+  // revokes another's access, with nothing in the logs to say so. The partial
+  // filter already excludes the nulls every signup writes, so unique is safe.
+  const src = read(USER_MODEL)
+  for (const field of [
+    'subscription.stripeCustomerId',
+    'subscription.stripeTestCustomerId',
+    'subscription.stripeSubscriptionId',
+  ]) {
+    const declaration = new RegExp(
+      `\\{ '${field.replace(/\./g, '\\.')}': 1 \\},\\s*\\{ unique: true, partialFilterExpression`,
+    )
+    assert.match(src, declaration, `${field} must be a UNIQUE partial index`)
+  }
 })

@@ -25,6 +25,17 @@ export interface DeriveTierInput {
  * Request-path readers use loadUserEntitlement(), which reads the stored tier.
  * Deriving on read would grandfather people automatically, which is forbidden;
  * lib/entitlements.ts deliberately does not import this module.
+ *
+ * THE CLOCK IS THE GAP. Two branches below change their answer with time alone
+ * — a `canceled` sub once its period end passes, an `active` one once the grace
+ * expires — and no Stripe event fires at that instant. A subscription cancelled
+ * immediately (no `cancel_at_period_end`) is the sharp case: `deleted` is the
+ * LAST event Stripe will ever send for it, so nothing re-runs this and the
+ * member holds Plus indefinitely, unpaid.
+ *
+ * `scripts/resweep-subscription-tiers.mjs` is that missing writer: idempotent,
+ * dry-run by default, calls THIS function rather than restating its rules. It is
+ * deliberately not scheduled — run it by hand, or schedule it from the platform.
  */
 export function deriveTier(input: DeriveTierInput): Tier {
   const now = (input.now ?? new Date()).getTime()
