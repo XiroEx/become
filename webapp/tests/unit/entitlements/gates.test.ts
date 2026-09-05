@@ -340,12 +340,25 @@ test('onboardingCompleted is validated the same way', async () => {
 
 // ── tier and grandfathered move together ─────────────────────────────────────
 
-test('demoting to free clears grandfathered when the body is silent about it', async () => {
+test('demoting to free never clears grandfathered implicitly — it is refused', async () => {
+  // This used to answer 200 and quietly `$set` grandfathered:false. That flag
+  // is a promise made to a founding member, and the billing layer goes to
+  // deliberate trouble never to clear it (applyBillingOutcome keeps it out of
+  // every patch, so no payment event can take it back). An admin edit that
+  // erases it as a side effect of changing something else contradicts that.
   reset({ _id: TARGET_ID, tier: 'plus', grandfathered: true })
+  const res = await patch({ tier: 'free' })
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /grandfathered: false/)
+  assert.equal(lastSet, null, 'nothing may be written, least of all the flag')
+})
+
+test('demoting a member who was never grandfathered is untouched by that rule', async () => {
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: false })
   const res = await patch({ tier: 'free' })
   assert.equal(res.status, 200)
   assert.equal(lastSet?.tier, 'free')
-  assert.equal(lastSet?.grandfathered, false, 'the flag must not survive the demotion')
+  assert.equal(lastSet?.grandfathered, undefined, 'a field nobody asked about is not written')
 })
 
 test('tier:free + grandfathered:true is refused rather than silently corrected', async () => {
@@ -390,6 +403,63 @@ test('a legacy tier row cannot be handed the flag', async () => {
   assert.equal(lastSet, null)
 })
 
+// ── ...but ONLY on a patch that touches them ─────────────────────────────────
+//
+// The coherence rule guards against MINTING the impossible row. Run on every
+// PATCH it also convicts rows that already carry it — and those exist, written
+// before the pair was validated together. An admin then has no way to complete
+// any unrelated action on exactly the members most likely to need one.
+
+test('an unrelated field is writable on a row that is already incoherent', async () => {
+  // The reported case: "reset onboarding" on a member stored as free +
+  // grandfathered answered 400 with a complaint about grandfathering.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  const res = await patch({ onboardingCompleted: false })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.onboardingCompleted, false)
+  assert.equal(lastSet?.tier, undefined, 'an unrelated patch writes neither half of the pair')
+  assert.equal(lastSet?.grandfathered, undefined)
+})
+
+test('role and name are writable on an incoherent row too', async () => {
+  for (const body of [{ role: 'trainer' }, { name: 'Renamed Member' }]) {
+    reset({ _id: TARGET_ID, role: 'user', tier: 'free', grandfathered: true })
+    const res = await patch(body)
+    assert.equal(res.status, 200, `${JSON.stringify(body)} must not be blocked by the tier pair`)
+  }
+})
+
+test('the audit line still reports the incoherent pair it left alone', async () => {
+  // Not writing the pair is not the same as pretending it is coherent. The
+  // line is what an operator reads when the row is finally investigated.
+  reset({ _id: TARGET_ID, role: 'user', tier: 'free', grandfathered: true })
+  const res = await patch({ onboardingCompleted: true })
+  assert.equal(res.status, 200)
+  const entry = auditLines[0][1] as Record<string, unknown>
+  assert.deepEqual(entry.before, { role: 'user', tier: 'free', grandfathered: true })
+  assert.deepEqual(entry.after, { role: 'user', tier: 'free', grandfathered: true })
+})
+
+test('touching either half of the pair still enforces coherence on that same row', async () => {
+  // The narrowing must not become a bypass: the moment the patch names tier or
+  // grandfathered, the rule is back.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  assert.equal((await patch({ grandfathered: true })).status, 400)
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  assert.equal((await patch({ tier: 'free' })).status, 400)
+
+  // And the way OUT of the incoherent row is still open, from both sides.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  const promoted = await patch({ tier: 'plus' })
+  assert.equal(promoted.status, 200, 'honouring the promise must be one PATCH away')
+  assert.equal(promoted.json && (promoted.json.user as Record<string, unknown>).tier, 'plus')
+
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  const cleared = await patch({ grandfathered: false })
+  assert.equal(cleared.status, 200, 'and so must retracting it deliberately')
+  assert.equal(lastSet?.grandfathered, false)
+})
+
 // ── The remaining hardening ──────────────────────────────────────────────────
 
 test('an admin cannot change their own role', async () => {
@@ -418,7 +488,10 @@ test('malformed JSON is a 400, not a 500', async () => {
 
 test('every accepted write emits an audit line with the actor and the old values', async () => {
   reset({ _id: TARGET_ID, role: 'user', tier: 'plus', grandfathered: true })
-  const res = await patch({ tier: 'free' })
+  // Clearing the promise is spelled out, which is the only way this write is
+  // accepted at all — and the audit line still has to carry the BEFORE values,
+  // because that line is the whole record of who took the promise away.
+  const res = await patch({ tier: 'free', grandfathered: false })
   assert.equal(res.status, 200)
   assert.equal(auditLines.length, 1, 'exactly one [admin-audit] line per write')
 

@@ -649,3 +649,70 @@ test('every write carries the event clock, so the store can re-assert ordering',
 
   assert.deepEqual(guards, [{ eventCreated: secondsAt(0) }, { eventCreated: secondsAt(1) }])
 })
+
+// ─── a refused write is reported as one ────────────────────────────────
+
+test('a store that refuses the write is NOT reported as applied', async () => {
+  // The store's guard re-asserts the ordering check inside the update filter,
+  // so it can legitimately match nothing: a newer event landed between the READ
+  // above and this write. That skip is correct. What was wrong is that the
+  // store returned void either way, so applyBillingOutcome could not tell the
+  // two apart — it fired onTierChanged and answered `applied: true`, and the
+  // webhook logged `applied tier=plus` for a write Mongo had just rejected. An
+  // operator debugging a tier dispute reads that line and believes it.
+  const h = harness(
+    { tier: 'free', subscription: { status: 'none', mode: 'test' } },
+    { writeSubscription: async () => ({ applied: false, reason: 'newer_state' }) },
+  )
+
+  const result = await applyBillingOutcome(subscriptionOutcome(), h.deps, 'evt_late')
+
+  assert.deepEqual(result, { applied: false, reason: 'skipped_newer_state' })
+  assert.equal(h.tierChanges.length, 0, 'no tier moved, so no cache may be busted')
+})
+
+test('the skip has its own reason, distinct from the stale-event read', async () => {
+  // Same meaning, one layer down — and worth telling apart in the log: either
+  // the read caught it (stale_event) or the write filter did.
+  const h = harness(
+    { tier: 'plus', subscription: { status: 'active', mode: 'test' } },
+    { writeSubscription: async () => ({ applied: false, reason: 'newer_state' }) },
+  )
+  const result = await applyBillingOutcome(subscriptionOutcome({ status: 'canceled' }), h.deps)
+  assert.equal(result.applied, false)
+  if (result.applied) return
+  assert.equal(result.reason, 'skipped_newer_state')
+})
+
+test('a document that vanished mid-write reports user_not_found', async () => {
+  const h = harness(
+    { tier: 'free', subscription: null },
+    { writeSubscription: async () => ({ applied: false, reason: 'user_gone' }) },
+  )
+  const result = await applyBillingOutcome(subscriptionOutcome(), h.deps)
+  assert.deepEqual(result, { applied: false, reason: 'user_not_found' })
+  assert.equal(h.tierChanges.length, 0)
+})
+
+test('a store that reports nothing still counts as applied', async () => {
+  // Reporting is opt-in: the in-memory stubs throughout this file return void,
+  // and a store that does not guard its write has nothing to report. Only an
+  // explicit `applied: false` may turn into a skip.
+  const h = harness({ tier: 'free', subscription: null })
+  const result = await applyBillingOutcome(subscriptionOutcome(), h.deps, 'evt_ok')
+  assert.equal(result.applied, true)
+  assert.equal(h.writes.length, 1)
+  assert.deepEqual(h.tierChanges, [{ userId: 'user_1', tier: 'plus' }])
+})
+
+test('an applied write is still reported as applied when the store confirms it', async () => {
+  const h = harness(
+    { tier: 'free', subscription: null },
+    { writeSubscription: async () => ({ applied: true }) },
+  )
+  const result = await applyBillingOutcome(subscriptionOutcome(), h.deps, 'evt_ok')
+  assert.equal(result.applied, true)
+  if (!result.applied) return
+  assert.equal(result.tier, 'plus')
+  assert.deepEqual(h.tierChanges, [{ userId: 'user_1', tier: 'plus' }])
+})

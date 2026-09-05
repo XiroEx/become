@@ -216,28 +216,44 @@ export async function PATCH(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // `tier: 'free'` + `grandfathered: true` is the row loadUserEntitlement logs
-    // as a bug: the member is gated as free while every surface tells them
-    // "thanks for being here early". It is only impossible because the writers
-    // set both halves together, so this route has to as well.
-    //
-    // Setting tier to free clears the flag, unless the body names it explicitly
-    // — and if it explicitly asks for the incoherent pair, that is a 400 rather
-    // than a silent correction.
-    if (update.tier === 'free' && body.grandfathered === undefined) {
-      update.grandfathered = false
-    }
-
     const resolvedTier = (update.tier as string | undefined) ?? existing.tier ?? 'free'
     const resolvedGrandfathered = update.grandfathered !== undefined
       ? update.grandfathered as boolean
       : existing.grandfathered ?? false
 
-    if (resolvedGrandfathered && resolvedTier !== 'plus') {
+    // `tier: 'free'` + `grandfathered: true` is the row loadUserEntitlement logs
+    // as a bug: the member is gated as free while every surface tells them
+    // "thanks for being here early". It is only impossible because the writers
+    // set both halves together, so this route has to as well.
+    //
+    // SCOPED TO PATCHES THAT ACTUALLY TOUCH THE PAIR. Run unconditionally, this
+    // check turns an already-incoherent row into a dead end: an admin clicking
+    // "reset onboarding" on a member stored as {tier:'free', grandfathered:true}
+    // — a state that should be impossible but exists historically — was answered
+    // with a 400 about grandfathering, and no unrelated admin action on that
+    // member could ever complete. This route is not the place to discover a
+    // pre-existing row; it is the place to stop MINTING one.
+    const touchesTierPair = update.tier !== undefined || update.grandfathered !== undefined
+
+    if (touchesTierPair && resolvedGrandfathered && resolvedTier !== 'plus') {
+      // Two different mistakes, and they need different sentences.
+      //
+      // If the body never named `grandfathered`, the admin is demoting a
+      // grandfathered member and has said nothing about the promise attached to
+      // them. This used to answer 200 and quietly `$set` the flag to false — the
+      // one thing the billing layer goes out of its way never to do
+      // (applyBillingOutcome keeps `grandfathered` out of every patch precisely
+      // so no payment event can take it back). A founding-member promise is not
+      // a side effect of another edit; clearing it has to be typed out.
+      const implicitClear = body.grandfathered === undefined
       return NextResponse.json(
         {
-          error: `grandfathered requires tier 'plus' (resolved tier: '${resolvedTier}'). ` +
-            'Set tier and grandfathered together.',
+          error: implicitClear
+            ? `This member is grandfathered, and setting tier '${resolvedTier}' would clear ` +
+              'that promise. It is never cleared implicitly — pass grandfathered: false in the ' +
+              'same body if that is really what you mean.'
+            : `grandfathered requires tier 'plus' (resolved tier: '${resolvedTier}'). ` +
+              'Set tier and grandfathered together.',
         },
         { status: 400 }
       )
