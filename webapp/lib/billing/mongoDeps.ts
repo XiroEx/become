@@ -58,6 +58,11 @@ export async function loadExistingBillingState(
   }
 }
 
+/** Mongo's duplicate-key code. Same test lib/inventoryClaims.ts uses. */
+function isDuplicateKey(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { code?: number }).code === 11000
+}
+
 /**
  * Guarded customer-id write. Matches ONLY a document whose mode-specific field
  * is still empty, so a concurrent second writer modifies nothing and is told so.
@@ -79,15 +84,40 @@ export async function writeCustomerIdIfAbsent(
   await dbConnect()
   const field = `subscription.${customerIdField(mode)}`
 
-  const result = await User.updateOne(
-    {
-      _id: userId,
-      $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }],
-    },
-    { $set: { [field]: customerId } },
-  )
+  let modified = 0
+  try {
+    const result = await User.updateOne(
+      {
+        _id: userId,
+        $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }],
+      },
+      { $set: { [field]: customerId } },
+    )
+    modified = result.modifiedCount
+  } catch (err) {
+    if (!isDuplicateKey(err)) throw err
+    // All three Stripe-id indexes are UNIQUE (partial, so the nulls every
+    // signup writes are excluded) — that is what stops one member's payment
+    // silently granting another's access. The cost is that this `$set` can now
+    // FAIL, and unhandled it surfaces as `checkout_failed` (502) on an upgrade
+    // button, which reads as an outage.
+    //
+    // It is the same shape as the race this function already models, so it gets
+    // the same answer: fall through to the re-read below and use whatever the
+    // document actually holds. `modified` stays 0, so nothing claims a win.
+    modified = 0
 
-  if (result.modifiedCount > 0) return { id: customerId, won: true }
+    // Re-read is the retry (cf. openWithRetry in lib/inventoryClaims.ts). If it
+    // finds nothing, the colliding id lives on a DIFFERENT member's document
+    // and handing it back would point this checkout at their Stripe customer —
+    // exactly the crossover the unique index exists to prevent. Better a 502
+    // than a session opened against somebody else's billing.
+    const winner = await readCustomerId(userId, mode)
+    if (!winner) throw err
+    return { id: winner, won: false }
+  }
+
+  if (modified > 0) return { id: customerId, won: true }
 
   // Lost the race (or the field was already set). Re-read and use the winner.
   const stored = await readCustomerId(userId, mode)
@@ -143,15 +173,27 @@ export function mongoApplyDeps(cfg: BillingConfig): ApplyDeps {
           : { _id: userId }
 
       const result = await User.updateOne(filter, { $set: patch })
+      if (result.matchedCount > 0) return { applied: true }
 
-      // Not an error. A miss means a strictly newer event already landed, which
-      // is the same outcome as the stale-event branch: skip, keep the newer
-      // state, and let the webhook answer 200 so Stripe stops retrying.
-      if (result.matchedCount === 0 && typeof eventCreated === 'number') {
+      // Not an error, but it MUST be reported. A miss means nothing was
+      // written, and a caller told nothing assumes it landed: apply.ts fired
+      // onTierChanged and returned `applied: true`, so the webhook logged
+      // `applied tier=plus` for a write Mongo had just refused. An operator
+      // reading that line while a member argues about their tier is reading a
+      // lie. The SKIP is right — keep the newer state, answer 200 so Stripe
+      // stops retrying — only the silence was wrong.
+      const guarded = typeof eventCreated === 'number' && Number.isFinite(eventCreated)
+      if (guarded) {
         console.warn(
           `[billing] write skipped for ${userId}: a newer event is already applied`,
         )
+        return { applied: false, reason: 'newer_state' }
       }
+
+      // No guard, no match: the document is gone (deleted between the read and
+      // this write). Nothing to keep, and nothing to retry.
+      console.warn(`[billing] write skipped for ${userId}: no such user`)
+      return { applied: false, reason: 'user_gone' }
     },
     async retrieveSubscription(id) {
       const stripe = await getStripe()

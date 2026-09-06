@@ -38,6 +38,19 @@ export interface ExistingBillingState {
   tier?: Tier
 }
 
+/**
+ * What a store reports back about the write it was asked to make.
+ *
+ * `void` is still allowed and means "this store does not report", which is
+ * taken as applied — the in-memory stubs the unit tests inject never refuse a
+ * write. A store that DOES guard (mongoDeps re-asserts the ordering check in
+ * its update filter) has to say so, because a skip that is not reported becomes
+ * an `applied: true` result and a log line claiming a tier was written.
+ */
+export type WriteOutcome =
+  | { applied: true }
+  | { applied: false; reason: 'newer_state' | 'user_gone' }
+
 export interface ApplyDeps {
   /** Needed to name the plan behind a price id when the 'link' branch resolves
    *  a subscription itself. Also carries the mode this apply is running in. */
@@ -50,12 +63,15 @@ export interface ApplyDeps {
    * The check above is a read; between it and this write another delivery can
    * land, and the loser would then overwrite the newer state. A store that
    * ignores the guard is still correct, just racy — which is why it is optional.
+   *
+   * A store that DOES enforce the guard must return the WriteOutcome, so a
+   * refused write is reported as one instead of being counted as applied.
    */
   writeSubscription(
     userId: string,
     patch: Record<string, unknown>,
     guard?: { eventCreated: number },
-  ): Promise<void>
+  ): Promise<WriteOutcome | void>
   /**
    * Resolve the subscription a completed checkout created. Optional: without it
    * the 'link' branch stores the ids and waits for
@@ -81,6 +97,11 @@ export type ApplyResult =
       reason:
         | 'user_not_found'
         | 'stale_event'
+        // The guarded write matched nothing: between the ordering READ above
+        // and the write itself, a newer event landed. Same meaning as
+        // 'stale_event', discovered one layer down — and a distinct reason so
+        // the webhook log says which of the two it was.
+        | 'skipped_newer_state'
         | 'mode_downgrade_blocked'
         | 'other_subscription'
         | 'ignored'
@@ -302,7 +323,22 @@ export async function applyBillingOutcome(
   const writesTier = nextState !== null
   if (writesTier) patch.tier = tier
 
-  await deps.writeSubscription(userId, patch, { eventCreated: outcome.eventCreated })
+  const write = await deps.writeSubscription(userId, patch, {
+    eventCreated: outcome.eventCreated,
+  })
+
+  // A store that guards its write can refuse it, and everything after this
+  // point is a claim about a document that was NOT modified. Firing
+  // onTierChanged would bust a cache for a tier change that never happened;
+  // returning `applied: true` put `applied tier=plus` in the webhook log for a
+  // write Mongo rejected, which is the single most misleading line an operator
+  // can read while debugging a tier dispute. Report the skip.
+  if (write && write.applied === false) {
+    return {
+      applied: false,
+      reason: write.reason === 'user_gone' ? 'user_not_found' : 'skipped_newer_state',
+    }
+  }
 
   if (writesTier && existing?.tier !== tier && deps.onTierChanged) {
     await deps.onTierChanged(userId, tier)

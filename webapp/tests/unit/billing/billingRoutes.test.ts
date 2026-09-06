@@ -153,6 +153,35 @@ test('checkout refuses to sell Plus to someone who already has it', () => {
   assert.match(src, /role === 'admin'/)
 })
 
+test('checkout reads grandfathered through reportedGrandfathered, never raw', () => {
+  // The gates read `tier` and nothing else, so a grandfathered row stored on
+  // the free tier is BEING GATED AS FREE and is correctly shown an upgrade CTA.
+  // Reading the raw flag here refused the purchase behind that CTA with
+  // already_plus, leaving that member no way to pay for what they are denied.
+  // Every other surface that reports the flag already goes through this helper.
+  const src = read(CHECKOUT)
+  assert.match(src, /reportedGrandfathered\(/)
+  assert.doesNotMatch(
+    src,
+    /user\.grandfathered === true \|\|/,
+    'the raw flag must not decide the refusal on its own',
+  )
+  // ...which needs the tier in the projection, or the helper is fed a guess.
+  assert.match(src, /\.select\(['"][^'"]*\btier\b/)
+})
+
+test('the already_plus refusal is mode-scoped like every other refusal here', () => {
+  // Unscoped, no admin and none of the 64 grandfathered members can run a TEST
+  // checkout on beta — which is the entire team, so nobody is left who can walk
+  // the Stripe flow end to end before billing is switched on. A test session
+  // spends nothing and writes only stripeTestCustomerId, which live never reads.
+  const src = read(CHECKOUT)
+  const guard = src.slice(src.indexOf('holdsPlusWithoutPaying'))
+  assert.match(guard, /cfg\.mode === 'live'/, 'live mode must still refuse')
+  // The other two 409s were already mode-scoped; this asserts all three are.
+  assert.equal((src.match(/sameMode/g) ?? []).length >= 3, true)
+})
+
 // ─── the mode fence is written in exactly one place ──────────────────────────
 
 test('the customer-id write never touches subscription.mode', () => {
@@ -170,8 +199,37 @@ test('the subscription write re-asserts the ordering check in its filter', () =>
   // can land, and the loser would overwrite newer state with older.
   const src = read(MONGO_DEPS)
   assert.match(src, /'subscription\.lastEventCreated': \{ \$lte: eventCreated \}/)
-  assert.match(src, /matchedCount === 0/, 'a guard miss is a skip, never a throw')
+  assert.match(src, /matchedCount > 0/, 'a guard miss is a skip, never a throw')
   assert.doesNotMatch(src, /throw new Error\('stale/, 'a newer event already applied is not an error')
+})
+
+test('the subscription write REPORTS a skip instead of returning silently', () => {
+  // A skip that returns void is indistinguishable from a write that landed, so
+  // apply.ts fired onTierChanged and the webhook logged `applied tier=plus` for
+  // a write Mongo had just refused. The skip is right; the silence was not.
+  const src = read(MONGO_DEPS)
+  assert.match(src, /return \{ applied: true \}/)
+  assert.match(src, /applied: false, reason: 'newer_state'/)
+})
+
+test('the customer-id write survives a duplicate key instead of 502-ing', () => {
+  // The three Stripe-id indexes are UNIQUE now (PR #1148). That makes this $set
+  // able to fail, and unhandled it surfaces as checkout_failed on an upgrade
+  // button. It is the same shape as the race this function already models, so
+  // it takes the same catch/retry treatment lib/inventoryClaims.ts uses.
+  const src = read(MONGO_DEPS)
+  assert.match(src, /isDuplicateKey/)
+  assert.match(src, /code\?: number \}\)\.code === 11000/)
+  const fn = src.slice(
+    src.indexOf('export async function writeCustomerIdIfAbsent'),
+    src.indexOf('export async function readCustomerId'),
+  )
+  assert.match(fn, /if \(!isDuplicateKey\(err\)\) throw err/, 'only E11000 is recoverable here')
+  assert.match(fn, /readCustomerId\(userId, mode\)/, 're-read is the retry')
+  // ...and if the re-read finds nothing, the colliding id is on ANOTHER
+  // member's document. Handing it back would open this checkout against their
+  // Stripe customer, which is the crossover the unique index exists to stop.
+  assert.match(fn, /if \(!winner\) throw err/)
 })
 
 test('the Stripe id indexes are unique, or the webhook updates whoever Mongo returns first', () => {
