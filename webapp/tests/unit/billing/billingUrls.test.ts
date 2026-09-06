@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingUrls.test.ts
+// Run with: npm run test:file tests/unit/billing/billingUrls.test.ts
 //
 // One test here guards a bug that only appears AFTER a real payment.
 //

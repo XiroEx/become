@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/gates.test.ts
+// Run with: npm run test:file tests/unit/entitlements/gates.test.ts
 //
 // Route tests need a live Mongo + auth context this suite does not stand up
 // (same rationale as the other route tests here), so this is a source scan. It

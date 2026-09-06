@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/security/foodOwnership.test.ts
+// Run with: npm run test:file tests/unit/security/foodOwnership.test.ts
 //
 // THE SHARED FOOD CATALOGUE WAS WRITABLE BY WHOEVER SEARCHED FOR A FOOD FIRST.
 //

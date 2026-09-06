@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/foodReviewBridge.test.ts
+// Run with: npm run test:file tests/unit/foodReviewBridge.test.ts
 //
 // The bridge_conflict rule. It used to flag any gram-native variant whose
 // gramsPerServing differed from its servingSize, which is the NORMAL shape of

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/aiGateThreading.test.ts
+// Run with: npm run test:file tests/unit/entitlements/aiGateThreading.test.ts
 //
 // The subtlest failure in this whole area, and the reason it gets its own file.
 //

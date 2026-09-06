@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mind/mindPageGate.test.ts
+// Run with: npm run test:file tests/unit/mind/mindPageGate.test.ts
 //
 // Regression guard for the Mindset FeatureGuard removal — a new user (role
 // "user", not "admin") was seeing the "Coming Soon" lock screen on

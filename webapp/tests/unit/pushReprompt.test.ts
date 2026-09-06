@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/pushReprompt.test.ts
+// Run with: npm run test:file tests/unit/pushReprompt.test.ts
 //
 // The pure decision logic behind the "notifications are blocked" reminder in
 // components/NotificationOptIn.tsx. Browsers give JS no way to re-open the

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/auth/legacy-auth-routes.test.ts
+// Run with: npm run test:file tests/unit/auth/legacy-auth-routes.test.ts
 //
 // POST /api/auth/login and POST /api/auth/register used to mint a full session
 // JWT with zero proof of address ownership — login returned a token for ANY

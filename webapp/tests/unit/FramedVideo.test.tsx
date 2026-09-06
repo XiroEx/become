@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/FramedVideo.test.tsx
+// Run with: npm run test:file tests/unit/FramedVideo.test.tsx
 //
 // Workout demo videos must never play with sound. Locks in that every
 // FramedVideo render carries the native `muted` attribute regardless of

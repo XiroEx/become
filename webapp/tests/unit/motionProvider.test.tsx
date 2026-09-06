@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/motionProvider.test.tsx
+// Run with: npm run test:file tests/unit/motionProvider.test.tsx
 //
 // Root-level Framer Motion defaults (see components/MotionProvider.tsx):
 // reduced-motion opt-out for every motion.* component in the app, plus a

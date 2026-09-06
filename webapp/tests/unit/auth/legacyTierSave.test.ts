@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/auth/legacyTierSave.test.ts
+// Run with: npm run test:file tests/unit/auth/legacyTierSave.test.ts
 //
 // THE ENUM SHIPS WITH THE BUILD, NOT WITH THE KILL-SWITCH.
 //

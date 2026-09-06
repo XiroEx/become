@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseVideoClear.test.ts
+// Run with: npm run test:file tests/unit/exerciseVideoClear.test.ts
 //
 // The reported bug: in the admin exercise form, deleting the Primary Media
 // "Video URL" and hitting Save reported success, but the old video was still

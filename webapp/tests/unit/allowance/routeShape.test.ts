@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/routeShape.test.ts
+// Run with: npm run test:file tests/unit/allowance/routeShape.test.ts
 //
 // ORDER, inside each metered route. Route tests need a live Mongo and an auth
 // context this suite does not stand up (same rationale as

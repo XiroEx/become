@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/model.test.ts
+// Run with: npm run test:file tests/unit/allowance/model.test.ts
 //
 // The schema, in process, with no database.
 //

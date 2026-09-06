@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/community/communityPageGate.test.ts
+// Run with: npm run test:file tests/unit/community/communityPageGate.test.ts
 //
 // Regression guard for gating the Community tab to admins only. Community,
 // Groups, and Events are all reachable from the "Community" bottom-nav tab

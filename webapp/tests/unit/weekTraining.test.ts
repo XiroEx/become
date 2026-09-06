@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/weekTraining.test.ts
+// Run with: npm run test:file tests/unit/weekTraining.test.ts
 //
 // The "this week" half of the Training screen. The rules that matter are the
 // ones that decide whether a number is honest: only completed sets count, only

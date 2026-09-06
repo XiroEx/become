@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/collapsibleSection.test.tsx
+// Run with: npm run test:file tests/unit/collapsibleSection.test.tsx
 //
 // Expand/collapse and "show more" reveals used to snap items in/out instantly;
 // they now animate through Framer Motion (fade+height for the section,

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/customExerciseEdit.test.ts
+// Run with: npm run test:file tests/unit/customExerciseEdit.test.ts
 //
 // Custom exercises could be deleted from the My Exercises library but not
 // edited — the only way to fix a typo'd name or a wrong tracking type was to

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/reopen-and-edit.test.ts
+// Run with: npm run test:file tests/unit/quickSession/reopen-and-edit.test.ts
 //
 // Covers the "saved session opens a random unrelated session" bug and the edit
 // path that fixes it:

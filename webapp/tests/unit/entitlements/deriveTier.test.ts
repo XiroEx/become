@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/deriveTier.test.ts
+// Run with: npm run test:file tests/unit/entitlements/deriveTier.test.ts
 //
 // deriveTier is the single definition of "what tier does this billing state
 // mean". It is pure, so it is the cheapest place to pin the product rules that

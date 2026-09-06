@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/addExerciseSheet.test.tsx
+// Run with: npm run test:file tests/unit/addExerciseSheet.test.tsx
 //
 // The sheet's "Suggested" list is populated by an effect (a fetch to
 // /api/exercises/alternatives), which does not run under sync SSR — so this

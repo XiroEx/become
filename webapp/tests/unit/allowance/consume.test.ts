@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/consume.test.ts
+// Run with: npm run test:file tests/unit/allowance/consume.test.ts
 //
 // The policy layer: given what the ledger returned, is this claim allowed?
 //

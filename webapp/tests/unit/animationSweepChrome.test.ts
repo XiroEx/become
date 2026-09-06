@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/animationSweepChrome.test.ts
+// Run with: npm run test:file tests/unit/animationSweepChrome.test.ts
 //
 // BottomNav and TopNav both call next/navigation hooks (usePathname/useRouter)
 // that require an App Router context react-dom/server can't provide outside

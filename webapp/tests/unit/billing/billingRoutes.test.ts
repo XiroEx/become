@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingRoutes.test.ts
+// Run with: npm run test:file tests/unit/billing/billingRoutes.test.ts
 //
 // Source-text assertions (the repo idiom — see tests/unit/customExerciseRole.test.ts).
 // Booting a Next route handler here would need a request, a database and a

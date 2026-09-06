@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/editFoodModalTagSave.test.tsx
+// Run with: npm run test:file tests/unit/editFoodModalTagSave.test.tsx
 //
 // REGRESSION — "Changing tags doesn't offer the ability to save for logged
 // foods."

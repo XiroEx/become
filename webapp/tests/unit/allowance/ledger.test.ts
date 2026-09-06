@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/ledger.test.ts
+// Run with: npm run test:file tests/unit/allowance/ledger.test.ts
 //
 // The charge rule, tested without a database.
 //

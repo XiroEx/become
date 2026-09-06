@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/security/recipeToMeal.test.ts
+// Run with: npm run test:file tests/unit/security/recipeToMeal.test.ts
 //
 // REGRESSION: POST /api/nutrition/recipes/[id]/to-meal DELETED ANOTHER
 // MEMBER'S RECIPE.

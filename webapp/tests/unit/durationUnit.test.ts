@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/durationUnit.test.ts
+// Run with: npm run test:file tests/unit/durationUnit.test.ts
 //
 // "You should be able to switch between minutes or seconds. Think about it 5
 // minutes on a treadmill in seconds is crazyyyyyy." — the duration a member

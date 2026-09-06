@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/importSession.test.ts
+// Run with: npm run test:file tests/unit/importSession.test.ts
 //
 // normalizeImportedSession() flattens the same AI extraction importProgram.ts
 // normalizes into a single quick session (no days/phases). resolveImportedSession()

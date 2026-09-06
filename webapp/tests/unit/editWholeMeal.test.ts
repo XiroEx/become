@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/editWholeMeal.test.ts
+// Run with: npm run test:file tests/unit/editWholeMeal.test.ts
 //
 // A logged meal (MealLog with >1 item, e.g. a saved "Coffee & Whey") had no
 // way to edit itself as a unit. The only edit affordance lived on individual

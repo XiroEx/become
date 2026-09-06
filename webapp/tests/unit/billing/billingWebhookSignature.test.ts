@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingWebhookSignature.test.ts
+// Run with: npm run test:file tests/unit/billing/billingWebhookSignature.test.ts
 //
 // The webhook has no verifyAuth — the signature IS the auth. That makes these
 // the access-control tests for a route that will happily be POSTed to by

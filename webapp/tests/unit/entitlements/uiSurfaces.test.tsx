@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/uiSurfaces.test.tsx
+// Run with: npm run test:file tests/unit/entitlements/uiSurfaces.test.tsx
 //
 // The launch-day contract, asserted where it can actually be broken.
 //

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dayMarkerConvention.test.ts
+// Run with: npm run test:file tests/unit/dayMarkerConvention.test.ts
 //
 // Become stores two kinds of date and they must never be compared to each other:
 //

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/favorite-route.test.ts
+// Run with: npm run test:file tests/unit/quickSession/favorite-route.test.ts
 //
 // "Add favorites for sessions": a quick session on the Sessions list can be
 // starred for quick access. Favorite is threaded through the same

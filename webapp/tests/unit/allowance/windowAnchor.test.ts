@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/windowAnchor.test.ts
+// Run with: npm run test:file tests/unit/allowance/windowAnchor.test.ts
 //
 // THE DAILY WINDOW IS NOT THE CLIENT'S TO CHOOSE.
 //

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/parseModelJson.test.ts
+// Run with: npm run test:file tests/unit/parseModelJson.test.ts
 //
 // Pinned to the real failure: run_1786492759812_jxx2hd, 2026-08-11. The reviewer
 // returned a correct verdict and it was thrown away because of the closing

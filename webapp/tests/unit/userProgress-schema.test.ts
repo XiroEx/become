@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/userProgress-schema.test.ts
+// Run with: npm run test:file tests/unit/userProgress-schema.test.ts
 //
 // Schema-level assertions for the persistent ExercisePR subdocument added to
 // UserProgress. These do NOT touch a database — they instantiate the Mongoose

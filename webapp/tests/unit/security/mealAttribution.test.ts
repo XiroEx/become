@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/security/mealAttribution.test.ts
+// Run with: npm run test:file tests/unit/security/mealAttribution.test.ts
 //
 // THE COMBINE ATTRIBUTION BUG.
 //

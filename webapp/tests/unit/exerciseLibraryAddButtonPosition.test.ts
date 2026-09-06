@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseLibraryAddButtonPosition.test.ts
+// Run with: npm run test:file tests/unit/exerciseLibraryAddButtonPosition.test.ts
 //
 // The card: on the embedded "My Workout" Exercises tab, the "+ Add" button
 // sat in its own row above the search bar, leaving a chunk of empty vertical

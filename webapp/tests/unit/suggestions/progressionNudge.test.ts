@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/progressionNudge.test.ts
+// Run with: npm run test:file tests/unit/suggestions/progressionNudge.test.ts
 //
 // Covers the precise double-progression nudge:
 //   - progressionIncrement (barbell +5, dumbbell +2.5/side)

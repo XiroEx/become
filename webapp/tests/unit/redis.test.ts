@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/redis.test.ts
+// Run with: npm run test:file tests/unit/redis.test.ts
 //
 // Fail-soft behavior of the Redis cache helpers. We never touch a real Redis:
 // every test injects a fake CacheClient (the helpers accept an injectable

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/evidence.test.ts
+// Run with: npm run test:file tests/unit/evidence.test.ts
 //
 // Evidence gathering is deliberately deterministic and decides nothing. These
 // cover the pure parts and, more importantly, pin the two real records that

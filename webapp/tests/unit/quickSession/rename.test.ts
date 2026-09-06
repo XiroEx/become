@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/rename.test.ts
+// Run with: npm run test:file tests/unit/quickSession/rename.test.ts
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

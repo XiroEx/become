@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/enforcementSwitch.test.ts
+// Run with: npm run test:file tests/unit/entitlements/enforcementSwitch.test.ts
 //
 // ENTITLEMENTS_ENFORCED is the launch-day safety net: off (the default) means
 // zero user-visible gating while allowance usage still accrues, so the real

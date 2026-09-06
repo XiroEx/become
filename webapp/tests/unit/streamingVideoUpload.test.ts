@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/streamingVideoUpload.test.ts
+// Run with: npm run test:file tests/unit/streamingVideoUpload.test.ts
 //
 // The reported bug: video uploads failed with "Network error during upload"
 // (an `xhr.onerror` — a connection-level failure, never fired for an actual

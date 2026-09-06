@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/dismiss-route.test.ts
+// Run with: npm run test:file tests/unit/suggestions/dismiss-route.test.ts
 //
 // Exercises auth + body-validation branches of POST /api/suggestions/dismiss
 // without MongoDB. The 200 success path (which depends on dbConnect +

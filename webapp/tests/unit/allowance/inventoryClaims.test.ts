@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/inventoryClaims.test.ts
+// Run with: npm run test:file tests/unit/allowance/inventoryClaims.test.ts
 //
 // THE COUNTED CAPS WERE A READ-THEN-WRITE RACE.
 //

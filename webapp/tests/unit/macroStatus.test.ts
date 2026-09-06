@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/macroStatus.test.ts
+// Run with: npm run test:file tests/unit/macroStatus.test.ts
 //
 // Before this, every surface did `current > goal ? red : normal`:
 //   • one gram over a 335g carb target looked as alarming as 200g over

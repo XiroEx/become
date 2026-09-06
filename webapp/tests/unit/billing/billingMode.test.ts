@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingMode.test.ts
+// Run with: npm run test:file tests/unit/billing/billingMode.test.ts
 //
 // Production and beta are two RedRun workspaces on ONE MongoDB. If beta runs
 // Stripe in test mode and production runs live, both webhooks write the same

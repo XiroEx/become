@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/security/bodyAllowlists.test.ts
+// Run with: npm run test:file tests/unit/security/bodyAllowlists.test.ts
 //
 // REGRESSION: a free `role: 'user'` account shared a program with a stranger.
 //

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/grandfathered.test.ts
+// Run with: npm run test:file tests/unit/entitlements/grandfathered.test.ts
 //
 // `grandfathered` is not a grant, and the payload must not read like one.
 //

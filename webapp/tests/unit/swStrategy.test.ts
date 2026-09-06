@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/swStrategy.test.ts
+// Run with: npm run test:file tests/unit/swStrategy.test.ts
 //
 // Pins the service-worker routing decision table (lib/swStrategy.ts). public/sw.js
 // mirrors this logic inline (it can't be imported here — it's browser-only plain

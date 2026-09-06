@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/plan-not-started.test.ts
+// Run with: npm run test:file tests/unit/quickSession/plan-not-started.test.ts
 //
 // Bug: planning a quick session for today (Workout Overview → "Plan it") made
 // the dashboard show it as "ACTIVE · <title> / Get back into the workout" —

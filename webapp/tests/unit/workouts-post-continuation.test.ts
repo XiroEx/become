@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workouts-post-continuation.test.ts
+// Run with: npm run test:file tests/unit/workouts-post-continuation.test.ts
 //
 // POST /api/workouts used to match "the log to continue" by a today's-local-
 // calendar-day date window. A workout opened at 11:58pm got its first

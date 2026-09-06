@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseVariationPicker.test.ts
+// Run with: npm run test:file tests/unit/exerciseVariationPicker.test.ts
 //
 // The "Swap Exercise" modal already grouped equipment/style variants (Machine
 // Chest Press / Dumbbell Bench Press / ...) behind a "N variations" chip

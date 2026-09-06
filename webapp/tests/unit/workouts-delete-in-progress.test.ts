@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workouts-delete-in-progress.test.ts
+// Run with: npm run test:file tests/unit/workouts-delete-in-progress.test.ts
 //
 // Exercises auth + validation branches of DELETE /api/workouts — the
 // hold-to-delete primitive behind the Resume pill — without MongoDB. The

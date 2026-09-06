@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/favorite-session-ui.test.ts
+// Run with: npm run test:file tests/unit/quickSession/favorite-session-ui.test.ts
 //
 // "Add favorites for sessions" — source guards for the parts that don't touch
 // a live DB and aren't covered by favorite-route.test.ts: the schema field,

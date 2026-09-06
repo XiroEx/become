@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/migrateTiers.test.ts
+// Run with: npm run test:file tests/unit/entitlements/migrateTiers.test.ts
 //
 // scripts/migrate-tiers.mjs is a one-shot, run-once-against-production script,
 // so it gets read far less often than it gets trusted. A source scan is the

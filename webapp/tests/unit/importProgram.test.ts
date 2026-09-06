@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/importProgram.test.ts
+// Run with: npm run test:file tests/unit/importProgram.test.ts
 //
 // normalizeImportedProgram() is the seam between the AI's best-effort JSON
 // (workoutImportText / workoutImportPhoto — a small model, prone to missing
