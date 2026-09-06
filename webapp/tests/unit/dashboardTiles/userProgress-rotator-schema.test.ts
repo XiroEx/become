@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/userProgress-rotator-schema.test.ts
+// Run with: npm run test:file tests/unit/dashboardTiles/userProgress-rotator-schema.test.ts
 //
 // Schema-level assertions for the pinnedTiles + tileLastShownAt fields added
 // to UserProgress. No DB — uses Mongoose validateSync + toObject for stable

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/tzCapture.test.ts
+// Run with: npm run test:file tests/unit/allowance/tzCapture.test.ts
 //
 // THE MEMBER'S TIMEZONE IS A PAYWALL INPUT, AND IT ARRIVES IN A REQUEST BODY.
 //

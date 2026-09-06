@@ -81,7 +81,7 @@ export default function NewProgramClient() {
 
             <button
               type="button"
-              onClick={() => setGate(syntheticGate('custom-programs', requiresTier))}
+              onClick={() => setGate(syntheticGate('custom-programs', requiresTier, ent))}
               className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:from-purple-700 hover:to-indigo-700"
             >
               <Lock className="h-4 w-4" />

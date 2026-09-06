@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/rename-route.test.ts
+// Run with: npm run test:file tests/unit/quickSession/rename-route.test.ts
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -20,7 +20,7 @@ async function authedHeader(): Promise<string> {
   // Keep the focused one-file command self-contained; the full test script
   // supplies its own test-only runtime configuration.
   process.env.JWT_SECRET ||= 'unit-test-placeholder'
-  process.env.MONGODB_URI ||= 'mongodb://127.0.0.1:27017/become-unit-test'
+  process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/become-unit-test'
   const token = await signToken({ userId: 'rename-test-user', email: 'rename@example.com' })
   return `Bearer ${token}`
 }

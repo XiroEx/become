@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/logPlanDate.test.ts
+// Run with: npm run test:file tests/unit/quickSession/logPlanDate.test.ts
 //
 // Locks the calendar rule behind "log workouts for previous days, schedule
 // for future days, and both for today": a past date can only be logged, a

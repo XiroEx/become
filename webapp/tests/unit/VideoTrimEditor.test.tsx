@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/VideoTrimEditor.test.tsx
+// Run with: npm run test:file tests/unit/VideoTrimEditor.test.tsx
 //
 // Smoke coverage for the collapsed header state (the only state
 // renderToStaticMarkup can exercise, since the panel opens via client-side

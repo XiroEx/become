@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/scanLogAgainDate.test.ts
+// Run with: npm run test:file tests/unit/scanLogAgainDate.test.ts
 //
 // Bug report: "There's no way to log a historical estimate, and Log again
 // never lets you pick a time or tag." Estimate history's "Log again" used to

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/strengthTargets.test.ts
+// Run with: npm run test:file tests/unit/strengthTargets.test.ts
 //
 // The target model exists because the old one (flat +5%, frozen at goal
 // creation) produced targets members had already beaten and rates that made no

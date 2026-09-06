@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mealSchedule.test.ts
+// Run with: npm run test:file tests/unit/mealSchedule.test.ts
 //
 // Windows are minutes from local midnight, and a window whose end is <= its
 // start WRAPS past midnight. Every bug this file guards against is some form of

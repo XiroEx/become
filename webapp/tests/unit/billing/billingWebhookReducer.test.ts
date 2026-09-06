@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingWebhookReducer.test.ts
+// Run with: npm run test:file tests/unit/billing/billingWebhookReducer.test.ts
 //
 // Two of these tests exist because of API shapes that moved and fail SILENTLY:
 //

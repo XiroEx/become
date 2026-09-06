@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/windowAnchor.test.ts
+// Run with: npm run test:file tests/unit/allowance/windowAnchor.test.ts
 //
 // THE DAILY WINDOW IS NOT THE CLIENT'S TO CHOOSE.
 //
@@ -128,17 +128,23 @@ test('a clock change cannot mint a second daily estimate', async () => {
 test('and /api/me/entitlements reports the same window the gate uses', async () => {
   // Two answers to "which day is it" is how a member reads 1/1 remaining while
   // the gate reads 0/1 — the peek goes through the same anchor.
+  //
+  // The peek is handed the SAME `now` as the consume. Reading the real clock
+  // here instead made this test a time bomb: it passed only while wall-clock
+  // sat inside the fixture's window and has been red since 2026-09-04T04:00Z.
   const l = fakeLedger()
   const now = new Date('2026-09-04T01:00:00Z')
   await consumeAllowance('ai-food-estimate', ctxFor(l, EDT), { enforce: true, now })
 
   moveClock(NZ)
-  const peek = await peekAllowance('ai-food-estimate', { userId: USER, ledger: l.ledger })
+  const peek = await peekAllowance('ai-food-estimate', { userId: USER, ledger: l.ledger }, now)
   assert.equal(peek.used, 1)
   assert.equal(peek.remaining, 0)
 })
 
 test('the follow-up ticket minted before the change still names the current window', async () => {
+  // Same fixed clock as the consume, for the same reason as above.
+  //
   // The ticket carries the bucketKey its parent unit was charged in. If the
   // bucket followed the clock, a member who crossed a zone mid-correction
   // would have their correction charged as a second estimate — the same
@@ -146,11 +152,12 @@ test('the follow-up ticket minted before the change still names the current wind
   const l = fakeLedger()
   const now = new Date('2026-09-04T01:00:00Z')
   await consumeAllowance('ai-food-estimate', ctxFor(l, EDT), { enforce: true, now })
-  const atMint = await currentWindowKey('ai-food-estimate', { userId: USER, ledger: l.ledger })
+  const atMint = await currentWindowKey('ai-food-estimate', { userId: USER, ledger: l.ledger }, now)
 
   moveClock(NZ)
-  const afterMove = await currentWindowKey('ai-food-estimate', { userId: USER, ledger: l.ledger })
+  const afterMove = await currentWindowKey('ai-food-estimate', { userId: USER, ledger: l.ledger }, now)
   assert.equal(afterMove, atMint)
+  assert.equal(atMint, '2026-09-03', 'and it is the window the consume actually charged')
 })
 
 // ─── The honest traveller ────────────────────────────────────────────────────

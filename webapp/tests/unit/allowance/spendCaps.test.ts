@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/spendCaps.test.ts
+// Run with: npm run test:file tests/unit/allowance/spendCaps.test.ts
 //
 // Spend ceilings are NOT the paywall, and every difference matters.
 //

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/scheduleMealsItemNames.test.tsx
+// Run with: npm run test:file tests/unit/scheduleMealsItemNames.test.tsx
 //
 // REGRESSION — "Each item in a meal that's scheduled is just named that meal
 // for some reason."

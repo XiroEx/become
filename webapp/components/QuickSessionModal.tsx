@@ -32,6 +32,7 @@ import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExer
 import ShareButton from "@/components/share/ShareButton";
 import UpgradeSheet from "@/components/UpgradeSheet";
 import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
+import { invalidateEntitlements } from "@/hooks/useEntitlements";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,10 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
   // A tier/allowance refusal, kept as the whole payload so the upgrade sheet
   // can name the real limit rather than a hand-written string.
   const [gate, setGate] = useState<GatePayload | null>(null);
+  // An AI refusal the member walked away from WITH a session: the unmetered
+  // deterministic builder ran instead. Shown inline, never as the upgrade
+  // sheet — there is a preview underneath it.
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
 
   // My Sessions (recent quick logs)
   const [recentQuick, setRecentQuick] = useState<WorkoutLog[]>([]);
@@ -153,6 +158,7 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
   useEffect(() => {
     if (!open) {
       setError(null);
+      setFallbackNote(null);
       setRecentQuick([]);
       setSelectedFocus(null);
       setPreview(null);
@@ -186,10 +192,23 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
     };
   }, [open]);
 
+  // Raise the upgrade sheet for a refusal money fixes. It drops the fallback
+  // note first, and that is the point: the note says a session IS on screen,
+  // so a modal sheet over one would read as a failure. Every caller reaches
+  // here only after failing to produce a session, which makes the two states
+  // mutually exclusive rather than merely unlikely to coincide.
+  const raiseGate = useCallback((g: GatePayload) => {
+    setFallbackNote(null);
+    setGate(g);
+  }, []);
+
   // ── Generate a preview for a focus (does NOT start it) ──
   const generateFor = useCallback(
     async (focus: FocusKey) => {
       setError(null);
+      // A sheet left over from the last attempt must not survive into this one.
+      setGate(null);
+      setFallbackNote(null);
       setSelectedFocus(focus);
       setPreview(null);
       setAiUsed(false);
@@ -210,12 +229,16 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
           // Async run: POST returns a runId, runAiTask polls until the session lands.
           const r = await runAiTask("/api/ai/workout/session", { focus: FOCUS_DEFS[focus].label });
           if (genId !== activeGenRef.current) return; // stale
-          // Refused by a gate — do NOT fall through to the deterministic route,
-          // which shares the same allowance and would refuse it again.
+          // Out of AI generations for the week. Fall THROUGH to the
+          // deterministic route: /api/generate/session is unmetered by design
+          // (it is the fallback every AI route degrades to), so the member
+          // still gets a session and the refusal is a note rather than a dead
+          // end. Refetching is left to the next entitlements reader.
           if (r.gate) {
-            setGate(r.gate);
-            setGenerating(false);
-            return;
+            setFallbackNote(
+              `${r.gate.error} Built you a standard session instead — switch AI off to keep generating without using one.`,
+            );
+            invalidateEntitlements();
           }
           const aiSession = r.result as AiSessionResponse["session"] | undefined;
           if (r.ok && aiSession) {
@@ -244,9 +267,14 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         if (genId !== activeGenRef.current) return;
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          // The note was written a moment ago, on the assumption that this call
+          // always works. It didn't, so retract it rather than leave an amber
+          // "built you a standard session instead" above a red error and an
+          // empty preview.
+          setFallbackNote(null);
           const g = gateFrom(res.status, data);
           if (g) {
-            setGate(g);
+            raiseGate(g);
             return;
           }
           setError(data.error || "Couldn't build that session. Try again.");
@@ -254,15 +282,21 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         }
         const data = (await res.json()) as GenerateSessionResponse;
         if (genId !== activeGenRef.current) return;
+        if (!data?.session) {
+          setFallbackNote(null);
+          setError("Couldn't build that session. Try again.");
+          return;
+        }
         setPreview(data.session);
       } catch {
         if (genId !== activeGenRef.current) return;
+        setFallbackNote(null);
         setError("Network error. Try again.");
       } finally {
         if (genId === activeGenRef.current) setGenerating(false);
       }
     },
-    [useAi],
+    [useAi, raiseGate],
   );
 
   // ── Start the previewed session ──
@@ -310,7 +344,7 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
           const g = gateFrom(res.status, data);
           if (g) {
-            setGate(g);
+            raiseGate(g);
             return;
           }
           setError(data.error || "Couldn't rebuild that session. Try again.");
@@ -326,7 +360,7 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         setRepeating(false);
       }
     },
-    [router, onClose, date],
+    [router, onClose, date, raiseGate],
   );
 
   const busy = generating || repeating;
@@ -387,6 +421,15 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
             <div className="space-y-6 px-5 pt-2">
               {/* Inline error */}
               {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+
+              {/* AI allowance spent, session built anyway. Non-blocking on
+                  purpose: a modal over a working preview reads as a failure. */}
+              {fallbackNote && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{fallbackNote}</span>
+                </div>
+              )}
 
               {/* ── 1. My Sessions ── */}
               <section>

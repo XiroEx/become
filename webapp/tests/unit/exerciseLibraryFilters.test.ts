@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseLibraryFilters.test.ts
+// Run with: npm run test:file tests/unit/exerciseLibraryFilters.test.ts
 //
 // The My Exercises library only ever had a free-text search — no way to sort
 // by recency/name, or filter down to a body part or a compound/secondary/

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardLayout/validateLayout.test.ts
+// Run with: npm run test:file tests/unit/dashboardLayout/validateLayout.test.ts
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateLayoutPayload } from '../../../lib/dashboardLayout/validateLayout'

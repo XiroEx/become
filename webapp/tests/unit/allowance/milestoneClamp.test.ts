@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/milestoneClamp.test.ts
+// Run with: npm run test:file tests/unit/allowance/milestoneClamp.test.ts
 //
 // WHAT A MILESTONE ALLOWANCE REPORTS vs WHAT IT DECIDES.
 //

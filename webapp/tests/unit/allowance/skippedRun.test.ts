@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/skippedRun.test.ts
+// Run with: npm run test:file tests/unit/allowance/skippedRun.test.ts
 //
 // AN ALLOWANCE UNIT IS SPENT ON A GENERATION THAT RAN.
 //

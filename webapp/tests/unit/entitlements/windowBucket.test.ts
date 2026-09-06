@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/windowBucket.test.ts
+// Run with: npm run test:file tests/unit/entitlements/windowBucket.test.ts
 //
 // Day and week allowance buckets are LOCAL-KEY STRINGS, never Dates. Bucketing
 // a "1 per day" allowance on a raw Date is the day-marker trap documented in

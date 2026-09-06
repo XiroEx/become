@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/favorite-route.test.ts
+// Run with: npm run test:file tests/unit/quickSession/favorite-route.test.ts
 //
 // "Add favorites for sessions": a quick session on the Sessions list can be
 // starred for quick access. Favorite is threaded through the same
@@ -26,7 +26,7 @@ function patchRequest(body: unknown, authHeader?: string): NextRequest {
 
 async function authedHeader(): Promise<string> {
   process.env.JWT_SECRET ||= 'unit-test-placeholder'
-  process.env.MONGODB_URI ||= 'mongodb://127.0.0.1:27017/become-unit-test'
+  process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/become-unit-test'
   const token = await signToken({ userId: 'favorite-test-user', email: 'favorite@example.com' })
   return `Bearer ${token}`
 }

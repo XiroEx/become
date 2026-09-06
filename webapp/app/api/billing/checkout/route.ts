@@ -14,7 +14,8 @@ import { describeStripeError, getStripe } from '@/lib/billing/stripeClient'
 import { ensureStripeCustomer } from '@/lib/billing/customer'
 import { readCustomerId, writeCustomerIdIfAbsent } from '@/lib/billing/mongoDeps'
 import { checkoutCancelUrl, checkoutSuccessUrl } from '@/lib/billing/urls'
-import type { IUserSubscription } from '@/models/User'
+import { reportedGrandfathered } from '@/lib/entitlements'
+import type { IUserSubscription, UserRole } from '@/models/User'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,13 @@ export const dynamic = 'force-dynamic'
  *
  * Every refusal is a distinct status the client already distinguishes:
  *   401 unauthenticated · 400 invalid_plan · 503 billing_not_configured
- *   409 already_subscribed · 502 checkout_failed
+ *   409 already_subscribed · 409 fix_payment_method · 409 already_plus
+ *   502 checkout_failed
+ *
+ * The three 409s are all "you cannot buy this", for three different reasons,
+ * and each one is a bill somebody would otherwise pay twice. All three are
+ * MODE-SCOPED: a refusal that ignores the mode also refuses the test-mode
+ * checkout beta exists to rehearse.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -54,8 +61,15 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
     const user = await User.findById(auth.userId)
-      .select('email name subscription')
-      .lean<{ email?: string; name?: string; subscription?: IUserSubscription } | null>()
+      .select('email name role tier grandfathered subscription')
+      .lean<{
+        email?: string
+        name?: string
+        role?: UserRole
+        tier?: string
+        grandfathered?: boolean
+        subscription?: IUserSubscription
+      } | null>()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     // Already paying IN THIS MODE. Checking the mode matters: a live subscriber
@@ -65,6 +79,55 @@ export async function POST(request: NextRequest) {
     const sameMode = !sub?.mode || sub.mode === cfg.mode
     if (sameMode && (sub?.status === 'active' || sub?.status === 'trialing')) {
       return NextResponse.json({ error: 'already_subscribed' }, { status: 409 })
+    }
+
+    // Mid-dunning. This one LOOKS like a member who should be allowed to buy —
+    // past_due/unpaid/incomplete all derive to `free`, so the upgrade CTA is
+    // showing and nothing above stops them — and letting them through opens a
+    // SECOND live subscription on the same Stripe customer. Both then bill; and
+    // when dunning finally gives up on the first, its terminal event downgrades
+    // a member the second one is charging every month. The way out of a failed
+    // payment is a working card, which is the portal, not another purchase.
+    if (
+      sameMode &&
+      (sub?.status === 'past_due' || sub?.status === 'unpaid' || sub?.status === 'incomplete')
+    ) {
+      return NextResponse.json(
+        { error: 'fix_payment_method', status: sub.status, portal: '/api/billing/portal' },
+        { status: 409 },
+      )
+    }
+
+    // Nothing to sell: they already hold Plus for a reason no payment improves.
+    // `grandfathered` is the founding-members promise the tier migration wrote
+    // (64 of 66 members today), and `admin` is pinned to Plus by deriveTier.
+    // Charging either is taking money for access the account already has.
+    //
+    // The flag is read THROUGH reportedGrandfathered, the same way
+    // GET /api/me/entitlements and GET /api/billing/status read it, because the
+    // raw flag is not a claim of access — the gates read `tier` and nothing
+    // else. A row that is grandfathered but stored on the free tier is being
+    // gated as free, so every surface correctly shows it an upgrade CTA; the raw
+    // flag here then refused the purchase behind that CTA with `already_plus`
+    // and left the member with no way to pay for what they are being denied.
+    const grandfathered = reportedGrandfathered(
+      user.tier === 'plus' ? 'plus' : 'free',
+      user.grandfathered === true,
+    )
+    const holdsPlusWithoutPaying = grandfathered || user.role === 'admin'
+
+    // ...and the refusal is MODE-SCOPED, for the same reason every other guard
+    // in this file is. Unscoped, no admin and none of the 64 grandfathered
+    // members could run a TEST checkout on beta, which is the whole team: there
+    // was nobody left who could walk the Stripe flow end to end before billing
+    // is switched on. A test-mode session spends no money and writes only
+    // `subscription.stripeTestCustomerId`, which live state never reads.
+    // Live mode still refuses — that is where the double-charge lives.
+    if (holdsPlusWithoutPaying && cfg.mode === 'live') {
+      return NextResponse.json(
+        { error: 'already_plus', reason: user.role === 'admin' ? 'admin' : 'grandfathered' },
+        { status: 409 },
+      )
     }
 
     const appChannel = IS_BETA ? 'beta' : 'prod'

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/mindVisionGates.test.ts
+// Run with: npm run test:file tests/unit/entitlements/mindVisionGates.test.ts
 //
 // THE GATE HAS TO BE WHERE THE MONEY IS SPENT.
 //

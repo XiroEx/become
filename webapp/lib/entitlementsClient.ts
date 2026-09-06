@@ -61,23 +61,39 @@ export function tierLabel(tier: Tier | string): string {
   return t.charAt(0).toUpperCase() + t.slice(1)
 }
 
-const FEATURE_NOUN: Record<Feature, { label: string; plural: boolean }> = {
-  'custom-meals': { label: 'Saved meals', plural: true },
-  'custom-exercises': { label: 'Custom exercises', plural: true },
-  'custom-programs': { label: 'Custom programs', plural: true },
-  'custom-foods': { label: 'Custom foods', plural: true },
-  'custom-sessions': { label: 'Starred sessions', plural: true },
-  'workout-generation': { label: 'Unlimited workout generation', plural: false },
-  'ai-food-estimate': { label: 'Unlimited AI food scans', plural: true },
-  'mind-sessions': { label: 'The rest of the Mind path', plural: false },
-  vision: { label: 'Vision', plural: false },
+// Two nouns per feature and one number for both, because the sheet says the
+// feature's name twice and they are not the same sentence.
+//
+//  • `headline` is what Plus SELLS. Every capped feature reads "Unlimited ...",
+//    because what is bought is the removal of the cap, not the feature: a free
+//    member plainly HAS saved meals, so "Saved meals are a Plus feature" sat
+//    directly above "You've saved all 3 of your free meals" and contradicted
+//    it. The two windowed features already read this way; the inventory five
+//    now match them.
+//  • `noun` is what the feature IS, for the body line of a client-raised gate.
+//
+// `plural` governs both (they agree in every row) and lives HERE rather than
+// beside FEATURE_LABELS, whose plurals are the meter row's and differ — a
+// member reads "Workout generations 1/3 this week" but "Workout generation is
+// included with Plus". Splitting the label from its own verb is what produced
+// "Custom exercises is included with Plus."
+const FEATURE_NOUN: Record<Feature, { headline: string; noun: string; plural: boolean }> = {
+  'custom-meals': { headline: 'Unlimited saved meals', noun: 'Saved meals', plural: true },
+  'custom-exercises': { headline: 'Unlimited custom exercises', noun: 'Custom exercises', plural: true },
+  'custom-programs': { headline: 'Unlimited custom programs', noun: 'Custom programs', plural: true },
+  'custom-foods': { headline: 'Unlimited custom foods', noun: 'Custom foods', plural: true },
+  'custom-sessions': { headline: 'Unlimited starred sessions', noun: 'Starred sessions', plural: true },
+  'workout-generation': { headline: 'Unlimited workout generation', noun: 'Workout generation', plural: false },
+  'ai-food-estimate': { headline: 'Unlimited AI food scans', noun: 'AI food scans', plural: true },
+  'mind-sessions': { headline: 'The rest of the Mind path', noun: 'The rest of the Mind path', plural: false },
+  vision: { headline: 'Vision', noun: 'Vision', plural: false },
 }
 
 /** Short label for a meter row / lock badge. */
 export const FEATURE_LABELS: Record<Feature, string> = {
   'custom-meals': 'Saved meals',
   'custom-exercises': 'Custom exercises',
-  'custom-programs': 'Programs',
+  'custom-programs': 'Custom programs',
   'custom-foods': 'Custom foods',
   'custom-sessions': 'Starred sessions',
   'workout-generation': 'Workout generations',
@@ -89,11 +105,17 @@ export const FEATURE_LABELS: Record<Feature, string> = {
 /**
  * The sheet headline. Derived from `requiresTier` rather than hard-coding
  * "Plus", so a later tier needs no copy edit here.
+ *
+ * `feature` is optional because the PLAN ENTRY POINTS — the dashboard plan
+ * card's "See Plus", the profile's Plan row — refuse nothing and name no
+ * feature. They used to pass `custom-programs` purely to obtain a sheet, so
+ * "See Plus" was headlined "Custom programs are a Plus feature"; now they pass
+ * nothing and get a headline about the tier itself.
  */
-export function featureHeadline(feature: Feature, requiresTier: Tier): string {
-  const noun = FEATURE_NOUN[feature]
-  if (!noun) return `Upgrade to ${tierLabel(requiresTier)}`
-  return `${noun.label} ${noun.plural ? 'are' : 'is'} a ${tierLabel(requiresTier)} feature`
+export function featureHeadline(feature: Feature | undefined, requiresTier: Tier): string {
+  const noun = feature ? FEATURE_NOUN[feature] : undefined
+  if (!noun) return `What ${tierLabel(requiresTier)} unlocks`
+  return `${noun.headline} ${noun.plural ? 'are' : 'is'} a ${tierLabel(requiresTier)} feature`
 }
 
 /** Three things a member gets for upgrading. Rendered as check rows. */
@@ -120,11 +142,33 @@ export function formatResetsAt(
   return new Date(t).toLocaleDateString()
 }
 
+/**
+ * What UpgradeSheet renders: a server gate, a client teaser for one feature, or
+ * a PLAN OVERVIEW that names no feature at all. Identical to the server's
+ * GatePayload except that `feature` may be absent — see featureHeadline().
+ */
+export interface SheetGate extends Omit<GatePayload, 'feature'> {
+  feature?: Feature
+}
+
 /** The allowance line under the sheet body. Null when there is nothing to say. */
-export function allowanceLine(gate: GatePayload): string | null {
+export function allowanceLine(gate: SheetGate): string | null {
   if (gate.limit == null || !Number.isFinite(gate.limit) || gate.limit <= 0) return null
   if (gate.window === 'lifetime') {
-    return `You're using all ${gate.limit} of your free slots. Delete one to free a slot, or upgrade for unlimited.`
+    const remaining = gate.remaining ?? 0
+    if (remaining > 0) return `${remaining} of ${gate.limit} left.`
+    // At the cap. The way back is NOT the same for all three of these, and the
+    // window alone cannot tell them apart:
+    //   • an inventory cap is escaped by DELETING a row you own;
+    //   • starred sessions are escaped by UNSTARRING one — there is nothing to
+    //     delete, the session is not yours;
+    //   • mind-sessions is a MILESTONE. Nothing can be deleted or unstarred and
+    //     the stop never lifts, so promising a slot back would be a lie.
+    if (gate.feature === 'mind-sessions') {
+      return `You've finished all ${gate.limit} of your free sessions.`
+    }
+    const back = gate.feature === 'custom-sessions' ? 'Unstar one' : 'Delete one'
+    return `You're using all ${gate.limit} of your free slots. ${back} to free a slot, or upgrade for unlimited.`
   }
   const remaining = gate.remaining ?? 0
   const when = formatResetsAt(gate.resetsAt, gate.window)
@@ -159,19 +203,49 @@ export function gateFrom(status: number, body: unknown): GatePayload | null {
   }
 }
 
+/** The half of a FeatureEntitlement a gate carries. The hook's own type is
+ *  assignable to it, so a caller passes what it already read. */
+export type AllowanceFacts = Pick<
+  FeatureEntitlement,
+  'limit' | 'remaining' | 'resetsAt' | 'window'
+>
+
 /**
- * A gate the CLIENT raises for a surface no request was made from — the plan
- * card's "See Plus", a locked teaser tile. Same shape as a server gate so the
- * sheet has exactly one input.
+ * A gate the CLIENT raises for a surface no request was made from — a locked
+ * create button, a teaser tile. Same shape as a server gate so the sheet has
+ * exactly one input.
+ *
+ * Pass the entitlement the caller already holds. Without it the gate carries no
+ * limit, allowanceLine() returns null, and the member is refused with no cap
+ * and no way out — on the PROACTIVE path, which is the one most free members
+ * meet (the locked button, before any request is ever made).
  */
 export function syntheticGate(
   feature: Feature,
   requiresTier: Tier = 'plus',
-  message?: string,
+  allowance?: AllowanceFacts | null,
 ): GatePayload {
+  const noun = FEATURE_NOUN[feature]
   return {
-    error: message ?? `${FEATURE_LABELS[feature] ?? 'This'} is included with ${tierLabel(requiresTier)}.`,
+    // Noun and verb from the same row, so they cannot disagree. Reading the
+    // label out of FEATURE_LABELS and the verb out of nowhere is how this
+    // produced "Custom exercises is included with Plus."
+    error: noun
+      ? `${noun.noun} ${noun.plural ? 'are' : 'is'} included with ${tierLabel(requiresTier)}.`
+      : `This is included with ${tierLabel(requiresTier)}.`,
     feature,
     requiresTier,
+    ...(typeof allowance?.limit === 'number' ? { limit: allowance.limit } : {}),
+    ...(typeof allowance?.remaining === 'number' ? { remaining: allowance.remaining } : {}),
+    ...(allowance ? { resetsAt: allowance.resetsAt, window: allowance.window } : {}),
   }
+}
+
+/**
+ * The gate the PLAN ENTRY POINTS raise — the dashboard plan card's "See Plus",
+ * the profile's Plan row. Nothing was refused and no single feature is being
+ * asked for, so it carries no `feature` and the sheet headlines the tier.
+ */
+export function planGate(message: string, requiresTier: Tier = 'plus'): SheetGate {
+  return { error: message, requiresTier }
 }

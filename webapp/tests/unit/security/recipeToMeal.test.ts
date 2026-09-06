@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/security/recipeToMeal.test.ts
+// Run with: npm run test:file tests/unit/security/recipeToMeal.test.ts
 //
 // REGRESSION: POST /api/nutrition/recipes/[id]/to-meal DELETED ANOTHER
 // MEMBER'S RECIPE.
@@ -110,7 +110,7 @@ function convertRequest(authHeader?: string): NextRequest {
 
 async function authedHeader(): Promise<string> {
   process.env.JWT_SECRET ||= 'unit-test-placeholder'
-  process.env.MONGODB_URI ||= 'mongodb://127.0.0.1:27017/become-unit-test'
+  process.env.MONGODB_URI = 'mongodb://127.0.0.1:27017/become-unit-test'
   return `Bearer ${await signToken({ userId: 'convert-test-user', email: 'c@example.com' })}`
 }
 

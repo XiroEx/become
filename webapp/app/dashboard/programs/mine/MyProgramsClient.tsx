@@ -45,7 +45,7 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
 
   // One shared entitlements snapshot (this used to be a bespoke fetch of the
   // same endpoint). Sharing is still a ROLE question, not a tier one.
-  const { data: entitlements, feature } = useEntitlements();
+  const { data: entitlements, feature, refresh: refreshEntitlements } = useEntitlements();
   const canShare = entitlements?.role === "trainer" || entitlements?.role === "admin";
   const canCreate =
     !entitlements ||
@@ -95,6 +95,10 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
         throw new Error(data.error || 'Failed to delete');
       }
       setPrograms(prev => prev.filter(p => p.program_id !== programId));
+      // The slot is free the moment the row is gone. Re-read now, or the 60s
+      // snapshot keeps the Create button locked at a cap the member just
+      // cleared — and deleting is the only way back under an inventory limit.
+      void refreshEntitlements();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
@@ -130,7 +134,11 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
       {embedded ? (
         <div className="mb-4 flex justify-end">
           <button
-            onClick={() => (canCreate ? setShowCreate(true) : setGate(syntheticGate("custom-programs")))}
+            onClick={() =>
+              canCreate
+                ? setShowCreate(true)
+                : setGate(syntheticGate("custom-programs", "plus", feature("custom-programs")))
+            }
             data-tour="programs-create"
             className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
@@ -165,7 +173,7 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
             </Link>
           ) : (
             <button
-              onClick={() => setGate(syntheticGate("custom-programs"))}
+              onClick={() => setGate(syntheticGate("custom-programs", "plus", feature("custom-programs")))}
               data-tour="programs-create"
               className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
             >

@@ -7,6 +7,7 @@ import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { requireQuota } from '@/lib/entitlementGuards'
 import { importManualFood, flattenFoodForResponse } from '@/lib/foodImport'
+import { isFoodOwner } from '@/lib/nutrition/foodOwnership'
 
 // ---------------------------------------------------------------------------
 // POST /api/nutrition/recipes/[id]/save-as-food
@@ -107,7 +108,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Link both ways. Only write back to the recipe when the caller owns it, so
     // a non-owner saving a public recipe can't clobber the owner's link.
-    await Food.updateOne({ _id: foodId }, { $set: { recipeId: recipe._id } })
+    //
+    // And only write to the FOOD when the caller owns that too. `importManualFood`
+    // used to dedupe manual rows on `{ slug, source: 'manual' }` with no owner
+    // scope, so the second member to save a "Turkey Chili" was handed the first
+    // member's document and this line re-pointed a stranger's `recipeId` at
+    // their own recipe. The dedupe is owner-scoped now
+    // (lib/foodImport.ts), so this is belt-and-braces — but the guard is what
+    // makes it safe to change that dedupe again later.
+    if (isFoodOwner(foodDoc, auth.userId)) {
+      await Food.updateOne({ _id: foodId }, { $set: { recipeId: recipe._id } })
+    }
     if (isOwner) {
       recipe.savedFoodId = foodId
       await recipe.save()

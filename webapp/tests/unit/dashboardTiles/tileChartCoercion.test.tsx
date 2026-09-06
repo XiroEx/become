@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/tileChartCoercion.test.tsx
+// Run with: npm run test:file tests/unit/dashboardTiles/tileChartCoercion.test.tsx
 //
 // Regression: /api/dashboard/tiles serialises DataPoint.t as an ISO STRING over
 // JSON, but LineTileChart/BarTileChart are typed for Date. They previously

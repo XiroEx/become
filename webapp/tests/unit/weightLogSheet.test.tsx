@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/weightLogSheet.test.tsx
+// Run with: npm run test:file tests/unit/weightLogSheet.test.tsx
 //
 // The weight button used to live at the bottom of the Training Log
 // (Progress) page, opening this same bottom sheet in place of an inline

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/nadine-fixes.test.ts
+// Run with: npm run test:file tests/unit/nadine-fixes.test.ts
 //
 // The four remaining items from the Nadine persona run.
 

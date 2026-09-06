@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/auth/token-scope.test.ts
+// Run with: npm run test:file tests/unit/auth/token-scope.test.ts
 //
 // Token SCOPE enforcement. Before this, `mintToolToken`'s 15-minute
 // `scope: 'ai-tools'` claim was decorative: verifyAuth never read it, so that

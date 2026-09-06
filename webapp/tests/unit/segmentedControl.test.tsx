@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/segmentedControl.test.tsx
+// Run with: npm run test:file tests/unit/segmentedControl.test.tsx
 //
 // The active-segment highlight used to be an instant bg-color swap; it's now a
 // single `layoutId`-tracked pill that Framer Motion slides between segments.

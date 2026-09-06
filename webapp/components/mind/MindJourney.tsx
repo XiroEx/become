@@ -499,7 +499,20 @@ export default function MindJourney() {
         // offers the only thing that changes it.
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
-            onClick={() => setGate(syntheticGate('mind-sessions'))}
+            onClick={() =>
+              // sessionLock IS the server's own answer (locked + sessionsLimit
+              // off GET /api/mind/session), so the sheet can state the cap
+              // instead of refusing with no number. mind-sessions is a
+              // milestone: at the cap, remaining is 0 and stays 0.
+              setGate(
+                syntheticGate('mind-sessions', 'plus', {
+                  limit: sessionLock.limit,
+                  remaining: 0,
+                  resetsAt: null,
+                  window: 'lifetime',
+                }),
+              )
+            }
             className="group w-full rounded-3xl border border-dashed border-zinc-200 bg-zinc-50 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
           >
             <div className="flex items-center gap-2">

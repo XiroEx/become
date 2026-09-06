@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/pinned-tiles-route.test.ts
+// Run with: npm run test:file tests/unit/dashboardTiles/pinned-tiles-route.test.ts
 //
 // Auth + body-validation branches of PATCH /api/dashboard/pinned-tiles.
 // The 200 path touches MongoDB and is covered by helper tests + Playwright.

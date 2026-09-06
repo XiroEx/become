@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/rowServing.test.ts
+// Run with: npm run test:file tests/unit/rowServing.test.ts
 //
 // The reported row, verbatim:
 //

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/gates.test.ts
+// Run with: npm run test:file tests/unit/entitlements/gates.test.ts
 //
 // Route tests need a live Mongo + auth context this suite does not stand up
 // (same rationale as the other route tests here), so this is a source scan. It
@@ -54,7 +54,11 @@ test('the admin route validates tier against TIERS and also accepts grandfathere
   const src = readSource('app/api/admin/users/[id]/route.ts')
   assert.match(src, /TIERS\.includes\(body\.tier/)
   assert.match(src, /update\.tier = body\.tier/)
-  assert.match(src, /update\.grandfathered = Boolean\(body\.grandfathered\)/)
+  assert.match(src, /update\.grandfathered = body\.grandfathered/)
+  // Boolean() coercion is what made `{"grandfathered":"false"}` set the flag
+  // TRUE. Neither of the two access-deciding booleans may be coerced.
+  assert.doesNotMatch(src, /Boolean\(body\.grandfathered\)/)
+  assert.doesNotMatch(src, /Boolean\(body\.onboardingCompleted\)/)
 })
 
 // ─── Create paths are quota-gated ────────────────────────────────────────────
@@ -202,4 +206,305 @@ test('Mind sessions 1-10 are gated on both the start and the completion', () => 
   assert.match(get, /locked: mindLocked/)
   assert.match(get, /sessionsUsed/)
   assert.match(get, /sessionsLimit/)
+})
+
+// ─── PATCH /api/admin/users/[id] — the two access-deciding fields ────────────
+//
+// This is the ONE route allowed to write `tier`, `grandfathered` and `role`, so
+// its input validation is the whole perimeter. Both defects it carried were
+// silent:
+//
+//   - `Boolean(body.grandfathered)` made the JSON body {"grandfathered":"false"}
+//     set the flag TRUE, because every non-empty string is truthy. A field that
+//     decides who we promised never to charge cannot be coerced.
+//   - `tier` and `grandfathered` were writable independently, which mints
+//     `tier:'free' + grandfathered:true` — the row loadUserEntitlement logs as a
+//     bug, because it gates a member as free while telling them they are
+//     grandfathered.
+//
+// The handler's own branches run before any query, but verifyAdmin and the
+// read-before-write do not, so the data-plane modules are stubbed here.
+// require.cache is keyed by resolved filename and `@/lib/...` resolves to the
+// same file as the relative path, so the stubs are what the route receives.
+
+type UserRow = { _id: string; role?: string; tier?: string; grandfathered?: boolean }
+
+const ACTOR_ID = 'deadbeefdeadbeefdeadbeef'
+const TARGET_ID = '69ee5d9a0a303c1b8a6f4457'
+
+let adminResult: Record<string, unknown> = { success: true, userId: ACTOR_ID, email: 'admin@become.io' }
+let currentRow: UserRow | null = null
+let lastSet: Record<string, unknown> | null = null
+let auditLines: unknown[][] = []
+
+function stub(rel: string, exports: Record<string, unknown>) {
+  const filename = require.resolve(path.join(ROOT, rel))
+  require.cache[filename] = { id: filename, filename, loaded: true, exports } as unknown as NodeModule
+}
+
+// Chainable enough for `.select(...).lean()`.
+function chain(value: unknown) {
+  const link: Record<string, unknown> = {}
+  link.select = () => link
+  link.lean = async () => value
+  link.then = (resolve: (v: unknown) => unknown) => Promise.resolve(value).then(resolve)
+  return link
+}
+
+const FakeUser = {
+  findById: () => chain(currentRow),
+  findByIdAndUpdate: (_id: string, doc: { $set: Record<string, unknown> }) => {
+    lastSet = doc.$set
+    return chain({ ...(currentRow ?? {}), ...doc.$set })
+  },
+  findByIdAndDelete: () => chain(null),
+}
+
+stub('lib/adminAuth.ts', { verifyAdmin: async () => adminResult })
+stub('lib/mongodb.ts', { __esModule: true, default: async () => undefined })
+stub('models/User.ts', { __esModule: true, default: FakeUser })
+stub('models/UserProgress.ts', {
+  __esModule: true,
+  default: { findOne: () => chain(null), deleteOne: async () => undefined },
+})
+stub('models/MindProgress.ts', { __esModule: true, default: { findOne: () => chain(null) } })
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const adminUserRoute = require(path.join(ROOT, 'app/api/admin/users/[id]/route.ts')) as {
+  PATCH: (req: unknown, ctx: { params: Promise<{ id: string }> }) => Promise<Response>
+}
+
+async function patch(body: unknown, targetId: string = TARGET_ID) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { NextRequest } = require('next/server') as typeof import('next/server')
+  const req = new NextRequest(`http://localhost/api/admin/users/${targetId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  })
+  lastSet = null
+  auditLines = []
+  const originalInfo = console.info
+  console.info = (...args: unknown[]) => {
+    if (args[0] === '[admin-audit]') auditLines.push(args)
+    else originalInfo(...args)
+  }
+  try {
+    const res = await adminUserRoute.PATCH(req, { params: Promise.resolve({ id: targetId }) })
+    return { status: res.status, json: await res.json() as Record<string, unknown> }
+  } finally {
+    console.info = originalInfo
+  }
+}
+
+function reset(row: UserRow) {
+  adminResult = { success: true, userId: ACTOR_ID, email: 'admin@become.io' }
+  currentRow = row
+}
+
+// ── Booleans are booleans ────────────────────────────────────────────────────
+
+test('grandfathered rejects a non-boolean instead of coercing it', async () => {
+  // The exact reported defect: "false" is a non-empty string, so Boolean()
+  // returned true and the PATCH granted the flag it was asked to remove.
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: true })
+  const res = await patch({ grandfathered: 'false' })
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /grandfathered must be a boolean/)
+  assert.equal(lastSet, null, 'a rejected body must not reach the database')
+})
+
+test('grandfathered rejects other truthy non-booleans too', async () => {
+  for (const value of [1, 'true', 'yes', {}, []]) {
+    reset({ _id: TARGET_ID, tier: 'plus', grandfathered: false })
+    const res = await patch({ grandfathered: value })
+    assert.equal(res.status, 400, `grandfathered: ${JSON.stringify(value)} must be refused`)
+  }
+})
+
+test('grandfathered accepts a real boolean', async () => {
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: false })
+  const res = await patch({ grandfathered: true })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.grandfathered, true)
+})
+
+test('onboardingCompleted is validated the same way', async () => {
+  reset({ _id: TARGET_ID, tier: 'free' })
+  assert.equal((await patch({ onboardingCompleted: 'false' })).status, 400)
+  reset({ _id: TARGET_ID, tier: 'free' })
+  const ok = await patch({ onboardingCompleted: false })
+  assert.equal(ok.status, 200)
+  assert.equal(lastSet?.onboardingCompleted, false)
+})
+
+// ── tier and grandfathered move together ─────────────────────────────────────
+
+test('demoting to free never clears grandfathered implicitly — it is refused', async () => {
+  // This used to answer 200 and quietly `$set` grandfathered:false. That flag
+  // is a promise made to a founding member, and the billing layer goes to
+  // deliberate trouble never to clear it (applyBillingOutcome keeps it out of
+  // every patch, so no payment event can take it back). An admin edit that
+  // erases it as a side effect of changing something else contradicts that.
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: true })
+  const res = await patch({ tier: 'free' })
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /grandfathered: false/)
+  assert.equal(lastSet, null, 'nothing may be written, least of all the flag')
+})
+
+test('demoting a member who was never grandfathered is untouched by that rule', async () => {
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: false })
+  const res = await patch({ tier: 'free' })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.tier, 'free')
+  assert.equal(lastSet?.grandfathered, undefined, 'a field nobody asked about is not written')
+})
+
+test('tier:free + grandfathered:true is refused rather than silently corrected', async () => {
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: true })
+  const res = await patch({ tier: 'free', grandfathered: true })
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /grandfathered requires tier 'plus'/)
+  assert.equal(lastSet, null)
+})
+
+test('grandfathered:true alone is refused when the stored tier is not plus', async () => {
+  // Same impossible row, reached from the other side: only one field is in the
+  // body, so the check has to resolve against what is already stored.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: false })
+  const res = await patch({ grandfathered: true })
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /resolved tier: 'free'/)
+  assert.equal(lastSet, null)
+})
+
+test('grandfathered:true alongside tier:plus is the coherent pair and passes', async () => {
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: false })
+  const res = await patch({ tier: 'plus', grandfathered: true })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.tier, 'plus')
+  assert.equal(lastSet?.grandfathered, true)
+})
+
+test('the body may still clear the flag explicitly while demoting', async () => {
+  reset({ _id: TARGET_ID, tier: 'plus', grandfathered: true })
+  const res = await patch({ tier: 'free', grandfathered: false })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.grandfathered, false)
+})
+
+test('a legacy tier row cannot be handed the flag', async () => {
+  // migrate-tiers.mjs has not run for this row; 'pro' is not plus, so the pair
+  // is incoherent and the write is refused rather than half-applied.
+  reset({ _id: TARGET_ID, tier: 'pro', grandfathered: false })
+  const res = await patch({ grandfathered: true })
+  assert.equal(res.status, 400)
+  assert.equal(lastSet, null)
+})
+
+// ── ...but ONLY on a patch that touches them ─────────────────────────────────
+//
+// The coherence rule guards against MINTING the impossible row. Run on every
+// PATCH it also convicts rows that already carry it — and those exist, written
+// before the pair was validated together. An admin then has no way to complete
+// any unrelated action on exactly the members most likely to need one.
+
+test('an unrelated field is writable on a row that is already incoherent', async () => {
+  // The reported case: "reset onboarding" on a member stored as free +
+  // grandfathered answered 400 with a complaint about grandfathering.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  const res = await patch({ onboardingCompleted: false })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.onboardingCompleted, false)
+  assert.equal(lastSet?.tier, undefined, 'an unrelated patch writes neither half of the pair')
+  assert.equal(lastSet?.grandfathered, undefined)
+})
+
+test('role and name are writable on an incoherent row too', async () => {
+  for (const body of [{ role: 'trainer' }, { name: 'Renamed Member' }]) {
+    reset({ _id: TARGET_ID, role: 'user', tier: 'free', grandfathered: true })
+    const res = await patch(body)
+    assert.equal(res.status, 200, `${JSON.stringify(body)} must not be blocked by the tier pair`)
+  }
+})
+
+test('the audit line still reports the incoherent pair it left alone', async () => {
+  // Not writing the pair is not the same as pretending it is coherent. The
+  // line is what an operator reads when the row is finally investigated.
+  reset({ _id: TARGET_ID, role: 'user', tier: 'free', grandfathered: true })
+  const res = await patch({ onboardingCompleted: true })
+  assert.equal(res.status, 200)
+  const entry = auditLines[0][1] as Record<string, unknown>
+  assert.deepEqual(entry.before, { role: 'user', tier: 'free', grandfathered: true })
+  assert.deepEqual(entry.after, { role: 'user', tier: 'free', grandfathered: true })
+})
+
+test('touching either half of the pair still enforces coherence on that same row', async () => {
+  // The narrowing must not become a bypass: the moment the patch names tier or
+  // grandfathered, the rule is back.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  assert.equal((await patch({ grandfathered: true })).status, 400)
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  assert.equal((await patch({ tier: 'free' })).status, 400)
+
+  // And the way OUT of the incoherent row is still open, from both sides.
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  const promoted = await patch({ tier: 'plus' })
+  assert.equal(promoted.status, 200, 'honouring the promise must be one PATCH away')
+  assert.equal(promoted.json && (promoted.json.user as Record<string, unknown>).tier, 'plus')
+
+  reset({ _id: TARGET_ID, tier: 'free', grandfathered: true })
+  const cleared = await patch({ grandfathered: false })
+  assert.equal(cleared.status, 200, 'and so must retracting it deliberately')
+  assert.equal(lastSet?.grandfathered, false)
+})
+
+// ── The remaining hardening ──────────────────────────────────────────────────
+
+test('an admin cannot change their own role', async () => {
+  // DELETE already refuses self-deletion; without the same guard here the last
+  // admin can demote themselves and no route is left that could undo it.
+  reset({ _id: ACTOR_ID, role: 'admin', tier: 'plus' })
+  const res = await patch({ role: 'user' }, ACTOR_ID)
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /Cannot change your own role/)
+  assert.equal(lastSet, null)
+})
+
+test('another admin may still be demoted', async () => {
+  reset({ _id: TARGET_ID, role: 'admin', tier: 'plus' })
+  const res = await patch({ role: 'user' })
+  assert.equal(res.status, 200)
+  assert.equal(lastSet?.role, 'user')
+})
+
+test('malformed JSON is a 400, not a 500', async () => {
+  reset({ _id: TARGET_ID, tier: 'free' })
+  const res = await patch('not-json{{{')
+  assert.equal(res.status, 400)
+  assert.match(String(res.json.error), /Invalid JSON body/)
+})
+
+test('every accepted write emits an audit line with the actor and the old values', async () => {
+  reset({ _id: TARGET_ID, role: 'user', tier: 'plus', grandfathered: true })
+  // Clearing the promise is spelled out, which is the only way this write is
+  // accepted at all — and the audit line still has to carry the BEFORE values,
+  // because that line is the whole record of who took the promise away.
+  const res = await patch({ tier: 'free', grandfathered: false })
+  assert.equal(res.status, 200)
+  assert.equal(auditLines.length, 1, 'exactly one [admin-audit] line per write')
+
+  const entry = auditLines[0][1] as Record<string, unknown>
+  assert.equal(entry.actorId, ACTOR_ID)
+  assert.equal(entry.targetId, TARGET_ID)
+  assert.deepEqual(entry.fields, ['tier', 'grandfathered'])
+  assert.deepEqual(entry.before, { role: 'user', tier: 'plus', grandfathered: true })
+  assert.deepEqual(entry.after, { role: 'user', tier: 'free', grandfathered: false })
+})
+
+test('a refused write leaves no audit line', async () => {
+  reset({ _id: TARGET_ID, tier: 'free' })
+  await patch({ grandfathered: true })
+  assert.equal(auditLines.length, 0)
 })

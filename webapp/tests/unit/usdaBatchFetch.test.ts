@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/usdaBatchFetch.test.ts
+// Run with: npm run test:file tests/unit/usdaBatchFetch.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fetchUSDAFoodsBatch, MAX_PER_BATCH } from '../../lib/usdaBatchFetch'

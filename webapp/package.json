@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "npm run dev:db && next dev",
-    "dev:db": "docker compose -f ../db/compose.yml up -d",
+    "dev:db": "docker compose -f ../db/compose.yml up -d --wait",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "gen-test-token": "node scripts/gen-test-token.mjs",
-    "test:unit": "NODE_ENV=test JWT_SECRET=become-unit-test-secret MONGODB_URI=mongodb://127.0.0.1:27017/become-test tsx --test tests/unit/*.test.ts tests/unit/*.test.tsx tests/unit/**/*.test.ts tests/unit/**/*.test.tsx",
+    "test:file": "env -u REDSECRETS_MONGODB_URI -u AUTH_MONGODB_URI -u BECOME_REWARD_MONGODB_URI -u SECRETS_ENCRYPTION_KEY -u ENCRYPTION_KEY NODE_ENV=test JWT_SECRET=become-unit-test-secret MONGODB_URI=mongodb://127.0.0.1:27017/become-test tsx --test --import ./tests/unit/_guard.ts",
+    "test:unit": "npm run --silent test:file 'tests/unit/*.test.ts' 'tests/unit/*.test.tsx' 'tests/unit/**/*.test.ts' 'tests/unit/**/*.test.tsx'",
     "test:e2e": "playwright test",
     "test": "npm run test:unit",
     "food-review:reconcile": "tsx scripts/reconcile-food-review-flags.ts"

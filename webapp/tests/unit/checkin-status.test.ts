@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/checkin-status.test.ts
+// Run with: npm run test:file tests/unit/checkin-status.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {

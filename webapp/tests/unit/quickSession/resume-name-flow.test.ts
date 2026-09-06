@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/resume-name-flow.test.ts
+// Run with: npm run test:file tests/unit/quickSession/resume-name-flow.test.ts
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

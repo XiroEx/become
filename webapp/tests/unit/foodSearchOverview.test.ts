@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/foodSearchOverview.test.ts
+// Run with: npm run test:file tests/unit/foodSearchOverview.test.ts
 //
 // The empty-box landing view. It used to dump the member's entire saved-foods
 // list under a "FOODS" banner — byte for byte the Foods filter, minus the

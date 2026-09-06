@@ -113,7 +113,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid user ID' }, { status: 400 })
     }
 
-    const body = await request.json() as Record<string, unknown>
+    // A malformed body is the caller's mistake, not ours. Left to throw it
+    // lands in the catch below and answers 500, which reads as an outage.
+    let body: Record<string, unknown>
+    try {
+      body = await request.json() as Record<string, unknown>
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'Body must be a JSON object' }, { status: 400 })
+    }
 
     // Build the update payload — only allow specific fields
     const update: Record<string, unknown> = {}
@@ -125,19 +136,40 @@ export async function PATCH(
           { status: 400 }
         )
       }
+      // Same self-guard DELETE carries. Without it the last admin can demote
+      // themselves and lock everyone out of the admin surface, with no route
+      // left that could put the role back.
+      if (adminResult.userId === id) {
+        return NextResponse.json(
+          { error: 'Cannot change your own role' },
+          { status: 400 }
+        )
+      }
       update.role = body.role
     }
 
     if (body.onboardingCompleted !== undefined) {
-      update.onboardingCompleted = Boolean(body.onboardingCompleted)
+      if (typeof body.onboardingCompleted !== 'boolean') {
+        return NextResponse.json(
+          { error: 'onboardingCompleted must be a boolean' },
+          { status: 400 }
+        )
+      }
+      update.onboardingCompleted = body.onboardingCompleted
     }
 
     // Tier is DERIVED state. Exactly three writers are allowed: this admin
     // route, scripts/migrate-tiers.mjs, and the billing webhook. No other route
     // may $set it — deriving a tier on a request path would grandfather members
-    // automatically. Note the findByIdAndUpdate below runs validators, so a
-    // PATCH against a user still holding a legacy 'premium'/'pro' tier throws
-    // until the migration has run.
+    // automatically.
+    //
+    // findByIdAndUpdate's `runValidators` are UPDATE validators: they validate
+    // only the paths present in the `$set`, never the rest of the document. So
+    // a PATCH against a user still holding a legacy 'premium'/'pro' tier does
+    // NOT throw here — it silently leaves the legacy value in place unless this
+    // request happens to overwrite `tier` itself. (A `save()` on a hydrated
+    // document is the one that throws, because Mongoose validates every
+    // initialized path; that is what scripts/migrate-tiers.mjs exists to fix.)
     if (body.tier !== undefined) {
       if (!TIERS.includes(body.tier as Tier)) {
         return NextResponse.json(
@@ -148,8 +180,17 @@ export async function PATCH(
       update.tier = body.tier
     }
 
+    // Boolean(), not a type check, is how `{"grandfathered":"false"}` used to
+    // set the flag TRUE — every non-empty string is truthy. This field decides
+    // who we promised never to charge, so it takes an actual boolean or nothing.
     if (body.grandfathered !== undefined) {
-      update.grandfathered = Boolean(body.grandfathered)
+      if (typeof body.grandfathered !== 'boolean') {
+        return NextResponse.json(
+          { error: 'grandfathered must be a boolean' },
+          { status: 400 }
+        )
+      }
+      update.grandfathered = body.grandfathered
     }
 
     if (body.name !== undefined) {
@@ -164,6 +205,81 @@ export async function PATCH(
     }
 
     await connectDB()
+
+    // Read before write: the coherence rule below needs the tier this PATCH is
+    // NOT setting, and the audit line needs the values being overwritten.
+    const existing = await User.findById(id)
+      .select('role tier grandfathered')
+      .lean<{ role?: string; tier?: string; grandfathered?: boolean } | null>()
+
+    if (!existing) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    const resolvedTier = (update.tier as string | undefined) ?? existing.tier ?? 'free'
+    const resolvedGrandfathered = update.grandfathered !== undefined
+      ? update.grandfathered as boolean
+      : existing.grandfathered ?? false
+
+    // `tier: 'free'` + `grandfathered: true` is the row loadUserEntitlement logs
+    // as a bug: the member is gated as free while every surface tells them
+    // "thanks for being here early". It is only impossible because the writers
+    // set both halves together, so this route has to as well.
+    //
+    // SCOPED TO PATCHES THAT ACTUALLY TOUCH THE PAIR. Run unconditionally, this
+    // check turns an already-incoherent row into a dead end: an admin clicking
+    // "reset onboarding" on a member stored as {tier:'free', grandfathered:true}
+    // — a state that should be impossible but exists historically — was answered
+    // with a 400 about grandfathering, and no unrelated admin action on that
+    // member could ever complete. This route is not the place to discover a
+    // pre-existing row; it is the place to stop MINTING one.
+    const touchesTierPair = update.tier !== undefined || update.grandfathered !== undefined
+
+    if (touchesTierPair && resolvedGrandfathered && resolvedTier !== 'plus') {
+      // Two different mistakes, and they need different sentences.
+      //
+      // If the body never named `grandfathered`, the admin is demoting a
+      // grandfathered member and has said nothing about the promise attached to
+      // them. This used to answer 200 and quietly `$set` the flag to false — the
+      // one thing the billing layer goes out of its way never to do
+      // (applyBillingOutcome keeps `grandfathered` out of every patch precisely
+      // so no payment event can take it back). A founding-member promise is not
+      // a side effect of another edit; clearing it has to be typed out.
+      const implicitClear = body.grandfathered === undefined
+      return NextResponse.json(
+        {
+          error: implicitClear
+            ? `This member is grandfathered, and setting tier '${resolvedTier}' would clear ` +
+              'that promise. It is never cleared implicitly — pass grandfathered: false in the ' +
+              'same body if that is really what you mean.'
+            : `grandfathered requires tier 'plus' (resolved tier: '${resolvedTier}'). ` +
+              'Set tier and grandfathered together.',
+        },
+        { status: 400 }
+      )
+    }
+
+    // Audit trail for the fields that decide access and who pays. No collection
+    // — RedRun retains container logs, and a durable one is a bigger change than
+    // this needs.
+    console.info('[admin-audit]', {
+      action: 'admin.user.patch',
+      actorId: adminResult.userId,
+      actorEmail: adminResult.email ?? null,
+      targetId: id,
+      fields: Object.keys(update),
+      before: {
+        role: existing.role ?? null,
+        tier: existing.tier ?? null,
+        grandfathered: existing.grandfathered ?? null,
+      },
+      after: {
+        role: update.role ?? existing.role ?? null,
+        tier: resolvedTier,
+        grandfathered: resolvedGrandfathered,
+      },
+      at: new Date().toISOString(),
+    })
 
     const updatedUser = await User.findByIdAndUpdate(
       id,

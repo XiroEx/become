@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseAudit.test.ts
+// Run with: npm run test:file tests/unit/exerciseAudit.test.ts
 //
 // Card: "Exercises not showing up when adding an exercise, or swapping."
 // A member searching "Leg ex" during a workout couldn't find the existing

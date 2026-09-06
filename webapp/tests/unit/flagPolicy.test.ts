@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/flagPolicy.test.ts
+// Run with: npm run test:file tests/unit/flagPolicy.test.ts
 //
 // Admission policy for food flags. Every rule here exists to bound how many
 // GROUNDED SEARCHES get fired, since that is the metered cost in the

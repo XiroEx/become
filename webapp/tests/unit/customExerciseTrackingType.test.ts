@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/customExerciseTrackingType.test.ts
+// Run with: npm run test:file tests/unit/customExerciseTrackingType.test.ts
 //
 // Every surface that can create a brand-new exercise on the spot — the
 // "Create X" affordance in the live-workout / track-view add-exercise sheet,

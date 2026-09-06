@@ -27,10 +27,23 @@
  * Never writable through this route, by anyone:
  *   authoredBy   — the allowance ledger; only a gated create surface stamps it.
  *   recipeId     — the recipe → food link, owned by save-as-food.
+ *   barcode      — a GLOBAL key, not a property of your row. See below.
  *   verification / reviewFlag / needsReview / hiddenFromSearch / groupKey
  *                — owned by the verification and review pipelines, which have
  *                  their own provenance rules about who may overwrite what.
  *   _id, __v, createdAt, updatedAt — Mongo's.
+ *
+ * BARCODE was on the member list and had to come off. `barcode` is unique and
+ * sparse (models/Food.ts) and it is the FIRST thing
+ * GET /api/nutrition/foods/barcode resolves — `Food.findOne({ barcode })`, with
+ * no check on `source`, ahead of OpenFoodFacts and USDA. So a member who could
+ * write it could stamp a real UPC onto a row they control and every scan of
+ * that product, for every member, would return their row instead of the real
+ * product. It is not editable data; it is a claim on a namespace nobody here
+ * owns. Barcodes are set ONLY by the server-sourced paths: an OFF/USDA import,
+ * or the scanner materialising the code it just resolved against the live
+ * OpenFoodFacts API. Admins curate them on their own surface,
+ * PATCH /api/admin/foods/[id], which has its own allowlist.
  */
 export const MEMBER_FOOD_INPUT_FIELDS = [
   'name',
@@ -38,7 +51,6 @@ export const MEMBER_FOOD_INPUT_FIELDS = [
   'category',
   'aliases',
   'variants',
-  'barcode',
   'imageUrl',
 ] as const
 

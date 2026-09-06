@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/planPaceConnectedToCalories.test.ts
+// Run with: npm run test:file tests/unit/planPaceConnectedToCalories.test.ts
 //
 // The Plan card's pace picker (0.5/1/1.5 lb a week) wrote to Goal.target.paceKgPerWeek
 // and only ever fed the ETA text on that same card — the Nutrition Goals page's

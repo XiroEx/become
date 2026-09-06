@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/tz-capture.test.ts
+// Run with: npm run test:file tests/unit/tz-capture.test.ts
 //
 // Regression coverage for the "workout reminder fires at ~3am local" bug.
 // Root cause: a workout-save request with no `tz` in its body had its offset

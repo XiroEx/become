@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseVideoStaleIndex.test.ts
+// Run with: npm run test:file tests/unit/exerciseVideoStaleIndex.test.ts
 //
 // The reported bug: uploading (or removing) an exercise video failed with
 //   "Plan executor error during findAndModify :: caused by :: E11000

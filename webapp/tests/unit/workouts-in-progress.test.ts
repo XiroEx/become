@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workouts-in-progress.test.ts
+// Run with: npm run test:file tests/unit/workouts-in-progress.test.ts
 //
 // GET /api/workouts/in-progress drives the dashboard's "get back into the
 // workout" pill. It used to scope an open log to the caller's local

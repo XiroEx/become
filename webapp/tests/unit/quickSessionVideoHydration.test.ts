@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSessionVideoHydration.test.ts
+// Run with: npm run test:file tests/unit/quickSessionVideoHydration.test.ts
 //
 // The reported bug: a quick/custom session (built via the builder, the
 // generator, or the new paste/upload import — lib/quickSession/importSession.ts)

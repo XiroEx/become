@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/followUpTicket.test.ts
+// Run with: npm run test:file tests/unit/allowance/followUpTicket.test.ts
 //
 // THE CLIENT HALF OF THE FOLLOW-UP, EXERCISED RATHER THAN GREPPED.
 //

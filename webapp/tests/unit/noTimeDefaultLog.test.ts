@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/noTimeDefaultLog.test.ts
+// Run with: npm run test:file tests/unit/noTimeDefaultLog.test.ts
 //
 // "No time" is the default for a freshly-opened logging flow: unless a member
 // deliberately picks a clock time, a logged food should carry `untimed: true`

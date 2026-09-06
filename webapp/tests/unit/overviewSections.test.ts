@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/overviewSections.test.ts
+// Run with: npm run test:file tests/unit/overviewSections.test.ts
 //
 // Two reported bugs in the food picker's default view:
 //

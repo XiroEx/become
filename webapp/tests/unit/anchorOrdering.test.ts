@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/anchorOrdering.test.ts
+// Run with: npm run test:file tests/unit/anchorOrdering.test.ts
 //
 // Ordering entries logged WITHOUT a time, stated by the product owner as:
 //

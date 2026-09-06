@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/PlannedTooltip.test.tsx
+// Run with: npm run test:file tests/unit/PlannedTooltip.test.tsx
 //
 // The floater that answers "where do those numbers land if I include the
 // planned items" for the calorie ring and macro bars. Content only — the

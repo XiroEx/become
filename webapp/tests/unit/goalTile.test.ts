@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/goalTile.test.ts
+// Run with: npm run test:file tests/unit/goalTile.test.ts
 //
 // The Goal tile used to show `currentWeek / totalWeeks` captioned "Annual
 // goal". These pin down what it says now, for the goals members actually set.

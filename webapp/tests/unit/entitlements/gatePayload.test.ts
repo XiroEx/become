@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/gatePayload.test.ts
+// Run with: npm run test:file tests/unit/entitlements/gatePayload.test.ts
 //
 // Every gate in the app answers with one shape, so the client has exactly one
 // branch to render an upsell from. If a route invents its own 403 body the

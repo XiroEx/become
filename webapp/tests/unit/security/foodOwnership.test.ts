@@ -1,4 +1,21 @@
-// Run with: npx tsx --test tests/unit/security/foodOwnership.test.ts
+// Run with: npm run test:file tests/unit/security/foodOwnership.test.ts
+//
+// THE SHARED FOOD CATALOGUE WAS WRITABLE BY WHOEVER SEARCHED FOR A FOOD FIRST.
+//
+// `createdBy` was treated as ownership, and `createdBy` is stamped with the
+// CALLER every time a USDA or OpenFoodFacts row is materialised — including by
+// the food search route's own background import, which passes the searching
+// member's id. Search "chicken breast", and the USDA rows land attributed to
+// you; you may then PATCH them (the allowlist permits `variants`, so calories
+// can be set to 0 on a row the whole app logs against) or DELETE them, which
+// runs `clearFoodReferences` and $unsets `foodId` from every other member's
+// MealLogs, MealPlans, Meals, Recipes, PlateScans and savedFoods. Nothing
+// checked `source`, tier, or whether anyone else referenced the row.
+//
+// Ownership is now `authoredBy`, OR `createdBy` on a `source: 'manual'` row —
+// a row a person entered, not one a catalogue mirror produced. The rest of this
+// file is the older half of the same story, and the invariant that constrains
+// any answer to it.
 //
 // THE COUNT AND THE OWNERSHIP CHECK READ DIFFERENT FIELDS.
 //
@@ -31,7 +48,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { foodOwnerIds, isFoodOwner } from '../../../lib/nutrition/foodOwnership'
-import { pickFoodFields } from '../../../lib/nutrition/foodFields'
+import { MEMBER_FOOD_INPUT_FIELDS, pickFoodFields } from '../../../lib/nutrition/foodFields'
 import { FREE_LIMITS } from '../../../lib/entitlements'
 
 const ROOT = path.join(__dirname, '../../..')
@@ -43,20 +60,23 @@ const ATTACKER = '65f0000000000000000000bb'
 // ─── The predicate ───────────────────────────────────────────────────────────
 
 test('the creator owns their food', () => {
-  assert.equal(isFoodOwner({ createdBy: VICTIM, authoredBy: VICTIM }, VICTIM), true)
+  assert.equal(
+    isFoodOwner({ createdBy: VICTIM, authoredBy: VICTIM, source: 'manual' }, VICTIM),
+    true,
+  )
 })
 
 test('THE LOCKOUT: the member the slot is charged to can always delete the row', () => {
   // The shape three PATCHes left behind: charged to the victim, created by the
   // attacker. Before the fix this row answered 403 to its own payer forever.
-  const damaged = { createdBy: ATTACKER, authoredBy: VICTIM }
+  const damaged = { createdBy: ATTACKER, authoredBy: VICTIM, source: 'manual' }
 
   assert.equal(isFoodOwner(damaged, VICTIM), true, 'the victim must be able to free their slot')
   assert.equal(isFoodOwner(damaged, ATTACKER), true, 'the creator keeps the rights they had')
 })
 
 test('a stranger owns nothing', () => {
-  const food = { createdBy: ATTACKER, authoredBy: ATTACKER }
+  const food = { createdBy: ATTACKER, authoredBy: ATTACKER, source: 'manual' }
   assert.equal(isFoodOwner(food, VICTIM), false)
   assert.equal(isFoodOwner(food, '65f0000000000000000000cc'), false)
 })
@@ -79,9 +99,160 @@ test('ids compare by value, whatever shape mongoose hands back', () => {
   // A hydrated document gives ObjectIds, .lean() can give strings, and a
   // populated path gives an object with a toString(). All three must match.
   const asObjectId = { toString: () => VICTIM }
-  assert.equal(isFoodOwner({ createdBy: asObjectId }, VICTIM), true)
+  assert.equal(isFoodOwner({ createdBy: asObjectId, source: 'manual' }, VICTIM), true)
   assert.equal(isFoodOwner({ authoredBy: asObjectId }, VICTIM), true)
-  assert.deepEqual(foodOwnerIds({ createdBy: asObjectId, authoredBy: VICTIM }), [VICTIM])
+  assert.deepEqual(
+    foodOwnerIds({ createdBy: asObjectId, authoredBy: VICTIM, source: 'manual' }),
+    [VICTIM],
+  )
+})
+
+// ─── THE CATALOGUE IS NOT YOURS BECAUSE YOU SEARCHED FOR IT ──────────────────
+//
+// `createdBy` alone WAS ownership, and `createdBy` is stamped on every
+// catalogue row a member's request materialises — `importFromUSDA` and
+// `importFromOpenFoodFacts` both take it, and the food search route hands them
+// the SEARCHING member's id from its background import:
+//
+//     after(() => backgroundImportExternals(paged, authResult.userId, …))
+//
+// So member A types "chicken breast", the USDA rows land with `createdBy: A`,
+// and A now holds PATCH and DELETE on rows the entire app logs against. PATCH
+// permits `variants`, so every calorie figure is theirs to set. DELETE runs
+// `clearFoodReferences`, which $unsets `foodId` from every OTHER member's
+// MealLogs, MealPlans, Meals, Recipes, PlateScans and savedFoods. Every member,
+// every tier, no kill-switch in front of it.
+
+const IMPORTER = '65f0000000000000000000dd'
+
+test('THE HIJACK: searching for a food does not make its catalogue row yours', () => {
+  // Exactly what backgroundImportExternals writes: provenance, no authorship.
+  for (const source of ['usda', 'openfoodfacts']) {
+    const catalogueRow = { createdBy: IMPORTER, source }
+    assert.equal(
+      isFoodOwner(catalogueRow, IMPORTER),
+      false,
+      `a ${source} row is shared data — the member whose search pulled it in may not rewrite or delete it`,
+    )
+    assert.deepEqual(foodOwnerIds(catalogueRow), [], 'a mirrored catalogue row is owned by nobody')
+  }
+})
+
+test('a member still owns the manual row they entered', () => {
+  // The two ungated materialisation paths (POST /foods/import with
+  // source:'manual', the barcode scanner's live-OFF fallback) write
+  // `source: 'manual'` with no authoredBy. Those are still the member's own
+  // rows and must stay editable and deletable, or the fix trades one lockout
+  // for another.
+  assert.equal(isFoodOwner({ createdBy: IMPORTER, source: 'manual' }, IMPORTER), true)
+})
+
+test('THE INVARIANT SURVIVES: the charged member can delete any row shape', () => {
+  // The slot is charged on authoredBy, so authoredBy grants ownership
+  // UNCONDITIONALLY — the manual-source qualifier applies to createdBy alone.
+  // In practice authoredBy is only ever stamped by importManualFood, which
+  // hardcodes source:'manual', so the qualifier can never strand a payer; the
+  // unconditional branch is what guarantees it even on a mangled row.
+  const shapes = [
+    { authoredBy: VICTIM, createdBy: VICTIM, source: 'manual' },   // healthy
+    { authoredBy: VICTIM, createdBy: ATTACKER, source: 'manual' }, // the PATCH damage
+    { authoredBy: VICTIM },                                        // no source (partial projection)
+    { authoredBy: VICTIM, source: 'usda' },                        // should not exist; still deletable
+  ]
+  for (const shape of shapes) {
+    assert.equal(isFoodOwner(shape, VICTIM), true, JSON.stringify(shape))
+  }
+})
+
+test('a missing source fails CLOSED for createdBy', () => {
+  // `source` is required on the schema, so a document read for a mutation
+  // always carries it. A projection that drops it must not silently widen
+  // ownership back out over the whole catalogue.
+  assert.equal(isFoodOwner({ createdBy: IMPORTER }, IMPORTER), false)
+  assert.equal(isFoodOwner({ createdBy: IMPORTER, source: undefined }, IMPORTER), false)
+  assert.equal(isFoodOwner({ createdBy: IMPORTER, source: 'Manual' }, IMPORTER), false)
+})
+
+// ─── Barcode squatting ───────────────────────────────────────────────────────
+//
+// `barcode` is unique+sparse and is the FIRST thing
+// GET /api/nutrition/foods/barcode resolves — `Food.findOne({ barcode })`,
+// ahead of OpenFoodFacts and USDA and with no check on `source`. It was on the
+// member PATCH allowlist, and POST /api/nutrition/foods/import accepted
+// `{ source: 'manual', data: { barcode } }` verbatim, so a member could stamp a
+// real UPC onto a row they controlled and own every scan of that product, for
+// every member.
+
+test('a member cannot set a barcode through the food PATCH', () => {
+  assert.deepEqual(pickFoodFields({ name: 'Rice', barcode: '0049000000443' }, false), {
+    name: 'Rice',
+  })
+  assert.ok(
+    !(MEMBER_FOOD_INPUT_FIELDS as readonly string[]).includes('barcode'),
+    'barcode is a claim on a global namespace, not a property of your row',
+  )
+})
+
+test('a client-supplied barcode is only honoured when the SERVER resolved it', () => {
+  const importSrc = read('lib/foodImport.ts')
+  assert.match(importSrc, /trustedBarcode\?:\s*boolean/, 'the trust flag lives on the options arg')
+  assert.match(
+    importSrc,
+    /const barcode = opts\.trustedBarcode \? input\.barcode : undefined/,
+    'an untrusted barcode must be dropped before BOTH the dedupe lookup and the create',
+  )
+
+  // …and never read back off `input` afterwards.
+  const fnAt = importSrc.indexOf('export async function importManualFood')
+  const body = importSrc.slice(fnAt).replace(/\/\/[^\n]*/g, '')
+  const resolveAt = body.indexOf('const barcode =')
+  const afterResolve = body.slice(body.indexOf('\n', resolveAt))
+  assert.ok(
+    !/input\.barcode/.test(afterResolve),
+    'input.barcode must not be used again once the trusted value is resolved',
+  )
+
+  // The flag is an argument, never a body field — same reason as `authored`.
+  const inputAt = importSrc.indexOf('export interface ManualFoodInput')
+  const inputBlock = importSrc.slice(inputAt, importSrc.indexOf('export interface ManualFoodOptions'))
+  assert.ok(!/trustedBarcode/.test(inputBlock))
+
+  // Only the scanner trusts it outright: it persists the code the live
+  // OpenFoodFacts API just answered for. The two body-driven routes hand it the
+  // database-confirmed admin check instead.
+  assert.match(read('app/api/nutrition/foods/barcode/route.ts'), /trustedBarcode:\s*true/)
+  const importRoute = read('app/api/nutrition/foods/import/route.ts')
+  assert.match(importRoute, /const trustedBarcode = await isVerifiedAdmin\(authResult\)/)
+  assert.match(importRoute, /importManualFood\(data, authResult\.userId, \{ trustedBarcode \}\)/)
+  assert.match(read('app/api/nutrition/foods/route.ts'), /trustedBarcode:\s*isAdmin/)
+})
+
+// ─── Cross-member manual dedupe ──────────────────────────────────────────────
+
+test('the manual dedupe hands back only rows the caller created or authored', () => {
+  // `Food.findOne({ slug: base, source: 'manual' })` was unscoped, so the second
+  // member to save a "Protein Shake" silently received the FIRST member's
+  // document: `created: false`, so no slot charged and no authoredBy stamped —
+  // a food they could not edit or delete, owned by someone who could delete it
+  // out from under their meal logs.
+  const src = read('lib/foodImport.ts').replace(/\/\/[^\n]*/g, '')
+  const fnAt = src.indexOf('export async function importManualFood')
+  assert.ok(fnAt > 0)
+  const body = src.slice(fnAt)
+  assert.doesNotMatch(
+    body,
+    /findOne\(\{ slug: base, source: 'manual' \}\)/,
+    "an unscoped slug dedupe hands one member another member's row",
+  )
+  assert.match(body, /\$or: \[\{ createdBy: ownerId \}, \{ authoredBy: ownerId \}\]/)
+})
+
+test('recipe save-as-food only writes recipeId onto a food the caller owns', () => {
+  const src = read('app/api/nutrition/recipes/[id]/save-as-food/route.ts').replace(/\/\/[^\n]*/g, '')
+  assert.match(src, /isFoodOwner\(foodDoc, auth\.userId\)/)
+  const guardAt = src.indexOf('isFoodOwner(foodDoc, auth.userId)')
+  const setAt = src.indexOf('$set: { recipeId: recipe._id }')
+  assert.ok(guardAt > 0 && setAt > guardAt, 'the recipeId write must sit inside the ownership guard')
 })
 
 // ─── The routes ask the one predicate ────────────────────────────────────────
@@ -110,6 +281,69 @@ test('authoredBy is still unwritable from a body, for members and admins alike',
   }
 })
 
+// ─── …and so does the CLIENT, or it offers buttons the server refuses ────────
+
+const FOOD_PAGE = 'app/dashboard/foods/[id]/page.tsx'
+
+test('the food detail page authorises through foodOwnership, not on createdBy', () => {
+  // The route was fixed and this page was not, so it kept computing
+  // `String(food.createdBy) === currentUserId` — the OLD rule. Every USDA row a
+  // member's own search materialised then showed them Edit and Delete, and both
+  // 403'd. A client predicate that disagrees with the server is not cosmetic:
+  // it is the app promising something the API will refuse.
+  const src = read(FOOD_PAGE)
+  const code = src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+
+  assert.match(
+    code,
+    /import \{ isFoodOwner \} from '@\/lib\/nutrition\/foodOwnership'/,
+    'the page must ask the same function the route asks, not a second copy of the rule',
+  )
+  assert.match(code, /isFoodOwner\(food, currentUserId\)/, 'the predicate must be the shared one')
+  assert.doesNotMatch(
+    code,
+    /String\(food\??\.createdBy\) === currentUserId/,
+    'a bare createdBy check shows Edit/Delete on catalogue rows the server 403s',
+  )
+})
+
+test('admin stays a separate disjunct on the page, exactly as on the route', () => {
+  // lib/nutrition/foodOwnership.ts is explicit that a role question does not
+  // belong inside an ownership predicate. The page mirrors the route's shape:
+  // `isVerifiedAdmin || isFoodOwner` there, `isAdmin || isOwner` here.
+  const src = read(FOOD_PAGE)
+  assert.match(src, /const canMutate = isAdmin \|\| isOwner/, 'admin must widen, never be folded in')
+  // The role is read off the DATABASE row /api/auth/me returns, not off the
+  // token's claim, so a demoted admin loses the controls on their next load.
+  assert.match(src, /setIsAdmin\(\(data\.user\?\.role \|\| data\.role\) === 'admin'\)/)
+  // Every mutating surface reads the widened answer, not the raw ownership one.
+  const after = src.slice(src.indexOf('const canMutate'))
+  assert.equal((after.match(/\{canMutate &&/g) ?? []).length, 3, 'all three owner-only surfaces')
+  assert.doesNotMatch(after, /\{isOwner &&/, 'no surface may be left on the un-widened predicate')
+})
+
+test('the payload the page reads actually carries the fields the predicate needs', () => {
+  // The rule is unanswerable from `createdBy` alone, so the serializer has to
+  // send the other two. Drop either and `isFoodOwner` fails CLOSED (source is
+  // not 'manual', authoredBy is undefined) and the real owner silently loses
+  // Edit and Delete on their own custom food.
+  const flatten = read('lib/foodImport.ts')
+  const at = flatten.indexOf('export function flattenFoodForResponse')
+  assert.ok(at > 0, 'no flattenFoodForResponse')
+  const body = flatten.slice(at, at + 2600)
+  assert.match(body, /authoredBy: food\.authoredBy/, 'the primary ownership key must be serialized')
+  assert.match(body, /source: food\.source/, 'createdBy means nothing without source')
+
+  // …and the page's own view of that response declares them, or TypeScript
+  // narrows them away before the predicate ever sees them.
+  const page = read(FOOD_PAGE)
+  const iface = page.slice(page.indexOf('interface FoodResponse'))
+  const fields = iface.slice(0, iface.indexOf('\n}'))
+  for (const field of ['source?: string', 'authoredBy?: string']) {
+    assert.ok(fields.includes(field), `FoodResponse must declare ${field}`)
+  }
+})
+
 // ─── The general rule, across every counted cap ──────────────────────────────
 
 test('every inventory allowance counts the field its delete authorises on', () => {
@@ -120,7 +354,7 @@ test('every inventory allowance counts the field its delete authorises on', () =
     'custom-programs': { countedOn: 'createdBy', ownedBy: 'createdBy' },
     'custom-exercises': { countedOn: 'createdBy', ownedBy: 'createdBy' },
     'custom-meals': { countedOn: 'createdBy', ownedBy: 'createdBy' },
-    'custom-foods': { countedOn: 'authoredBy', ownedBy: 'createdBy OR authoredBy' },
+    'custom-foods': { countedOn: 'authoredBy', ownedBy: "authoredBy OR (createdBy AND source==='manual')" },
     'custom-sessions': { countedOn: 'the member\'s own workoutLogs', ownedBy: 'the same subdocument' },
   }
 

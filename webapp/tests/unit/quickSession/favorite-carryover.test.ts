@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/favorite-carryover.test.ts
+// Run with: npm run test:file tests/unit/quickSession/favorite-carryover.test.ts
 //
 // Bug: the Sessions list showed two rows for the same workout name (e.g. two
 // "Basketball Shootaround" entries) where only one carried the star — because

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/fatigueFlag.test.ts
+// Run with: npm run test:file tests/unit/suggestions/fatigueFlag.test.ts
 //
 // Covers the fatigue-flag source:
 //   - evaluateFatigueFlag (no recent workout, same muscle, different muscle,
