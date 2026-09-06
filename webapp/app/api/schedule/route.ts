@@ -92,8 +92,9 @@ export async function GET(request: NextRequest) {
 
       // No upcoming slots. If every session is resolved (completed or firmly
       // skipped), the program is done — mark it complete so it stops showing
-      // "continue" with an empty calendar. Otherwise there's fell-behind (missed)
-      // work to catch up on → reflow only that, respecting skips.
+      // "continue" with an empty calendar. Otherwise there's outstanding
+      // (missed) work — leave it dated where it actually fell due (reflow only
+      // lays out sessions that never got a slot at all; see reflowStuckSchedule).
       if (completed + skipped >= nonRest.length) {
         await UserProgress.updateOne(
           { userId: payload.userId, 'activePrograms.programId': schedule.programId },
