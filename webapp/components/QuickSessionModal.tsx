@@ -192,10 +192,22 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
     };
   }, [open]);
 
+  // Raise the upgrade sheet for a refusal money fixes. It drops the fallback
+  // note first, and that is the point: the note says a session IS on screen,
+  // so a modal sheet over one would read as a failure. Every caller reaches
+  // here only after failing to produce a session, which makes the two states
+  // mutually exclusive rather than merely unlikely to coincide.
+  const raiseGate = useCallback((g: GatePayload) => {
+    setFallbackNote(null);
+    setGate(g);
+  }, []);
+
   // ── Generate a preview for a focus (does NOT start it) ──
   const generateFor = useCallback(
     async (focus: FocusKey) => {
       setError(null);
+      // A sheet left over from the last attempt must not survive into this one.
+      setGate(null);
       setFallbackNote(null);
       setSelectedFocus(focus);
       setPreview(null);
@@ -255,9 +267,14 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         if (genId !== activeGenRef.current) return;
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          // The note was written a moment ago, on the assumption that this call
+          // always works. It didn't, so retract it rather than leave an amber
+          // "built you a standard session instead" above a red error and an
+          // empty preview.
+          setFallbackNote(null);
           const g = gateFrom(res.status, data);
           if (g) {
-            setGate(g);
+            raiseGate(g);
             return;
           }
           setError(data.error || "Couldn't build that session. Try again.");
@@ -265,15 +282,21 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         }
         const data = (await res.json()) as GenerateSessionResponse;
         if (genId !== activeGenRef.current) return;
+        if (!data?.session) {
+          setFallbackNote(null);
+          setError("Couldn't build that session. Try again.");
+          return;
+        }
         setPreview(data.session);
       } catch {
         if (genId !== activeGenRef.current) return;
+        setFallbackNote(null);
         setError("Network error. Try again.");
       } finally {
         if (genId === activeGenRef.current) setGenerating(false);
       }
     },
-    [useAi],
+    [useAi, raiseGate],
   );
 
   // ── Start the previewed session ──
@@ -321,7 +344,7 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
           const g = gateFrom(res.status, data);
           if (g) {
-            setGate(g);
+            raiseGate(g);
             return;
           }
           setError(data.error || "Couldn't rebuild that session. Try again.");
@@ -337,7 +360,7 @@ export default function QuickSessionModal({ open, onClose, date }: QuickSessionM
         setRepeating(false);
       }
     },
-    [router, onClose, date],
+    [router, onClose, date, raiseGate],
   );
 
   const busy = generating || repeating;
