@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/generatorFallback.test.ts
+// Run with: npm run test:file tests/unit/entitlements/generatorFallback.test.ts
 //
 // Two ways a paywall stops being a paywall and starts being a wall, both of
 // them client-side and both of them invisible to tsc.

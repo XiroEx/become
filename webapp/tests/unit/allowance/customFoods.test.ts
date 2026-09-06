@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/customFoods.test.ts
+// Run with: npm run test:file tests/unit/allowance/customFoods.test.ts
 //
 // WHO ACTUALLY OWNS A "CUSTOM FOOD".
 //

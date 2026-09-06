@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/consistencyHeatmap.test.ts
+// Run with: npm run test:file tests/unit/metrics/consistencyHeatmap.test.ts
 //
 // Covers the consistency-heatmap metric:
 //   - utcDayStart / countCompletedSets helpers

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/inventory.test.ts
+// Run with: npm run test:file tests/unit/allowance/inventory.test.ts
 //
 // THE REGRESSION GUARD. This is the test that stops the NEXT AI route from
 // shipping unmetered.

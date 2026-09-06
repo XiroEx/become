@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dayOrder.test.ts
+// Run with: npm run test:file tests/unit/dayOrder.test.ts
 //
 // The product owner stated the requirement as: "If I eat breakfast, then a
 // snack, then lunch, then another snack, there should be 2 snack items on the

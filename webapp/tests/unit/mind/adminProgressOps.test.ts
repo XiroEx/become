@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mind/adminProgressOps.test.ts
+// Run with: npm run test:file tests/unit/mind/adminProgressOps.test.ts
 //
 // The admin reset silently did nothing, because level and chapter are DERIVED:
 //   chapter = max(storedChapter, chapterFromSessions(mainSessionCount))

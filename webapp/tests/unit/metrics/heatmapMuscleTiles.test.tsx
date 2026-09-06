@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/heatmapMuscleTiles.test.tsx
+// Run with: npm run test:file tests/unit/metrics/heatmapMuscleTiles.test.tsx
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToStaticMarkup } from 'react-dom/server'

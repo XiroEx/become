@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/MacroBar.test.tsx
+// Run with: npm run test:file tests/unit/MacroBar.test.tsx
 //
 // Fiber counts toward total carbohydrate on the label, so a member eating a
 // high-fiber meal could cross the carb goal on fiber alone and see the bar

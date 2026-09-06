@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mind/autoStart.test.ts
+// Run with: npm run test:file tests/unit/mind/autoStart.test.ts
 //
 // The home dashboard's Mindset tile links to /dashboard/mind?start=1 and
 // promises to "jump straight into today's session" — not just onto the page.

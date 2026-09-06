@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingEventStore.test.ts
+// Run with: npm run test:file tests/unit/billing/billingEventStore.test.ts
 //
 // Stripe retries any delivery that did not answer 2xx, and occasionally
 // redelivers one that did. Without a claim, a retried

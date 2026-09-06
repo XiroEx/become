@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/macroManualPercent.test.ts
+// Run with: npm run test:file tests/unit/macroManualPercent.test.ts
 //
 // This repo does not carry jsdom/testing-library. Keep the client wiring pinned
 // with the same source-level regression style used by the other Nutrition

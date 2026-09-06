@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/SuggestionCard.test.tsx
+// Run with: npm run test:file tests/unit/suggestions/SuggestionCard.test.tsx
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToStaticMarkup } from 'react-dom/server'

@@ -1,13 +1,17 @@
 // PRELOADED BEFORE EVERY UNIT TEST (`--import ./tests/unit/_guard.ts`).
 //
-// A unit test may create, mutate and drop collections. `npm run test:unit`
-// pins MONGODB_URI to a loopback `become-test` database, but nothing stopped a
+// A unit test may create, mutate and drop collections. `npm run test:unit` pins
+// MONGODB_URI to a loopback `become-test` database, but nothing stopped a
 // developer from running one file directly —
 //
-//     npx tsx --test tests/unit/nutrition/foods.test.ts
+//     npx tsx --test tests/unit/nutrition/foods.test.ts     ← NOT THIS
 //
 // — where the shell's own MONGODB_URI is inherited. On this fleet that value
-// comes from ~/.env via ~/.bashrc and names a REMOTE host.
+// comes from ~/.env via ~/.bashrc and names a REMOTE host. Every test file's
+// header therefore documents `npm run test:file <path>`, which is the same
+// pinned, guarded environment as the full suite with the globs swapped for one
+// path. `test:unit` is defined in terms of `test:file` so the two can never
+// drift apart: there is one env prefix in package.json, not two.
 //
 // So the target is checked rather than assumed: loopback host, and a database
 // whose name ends in `-test`. Both, every time, before a single test module is
@@ -49,13 +53,19 @@ function refuse(varName: string, why: string): never {
   throw new Error(
     `[tests] refusing to run: ${varName} ${why}. Unit tests write to and drop `
       + 'collections, so they may only point at a loopback host and a database '
-      + 'whose name ends in "-test". Use `npm run test:unit`, which pins '
-      + `mongodb://127.0.0.1:27017/become-test, or set ${varName} yourself before `
-      + 'running a file directly.',
+      + 'whose name ends in "-test". Use `npm run test:unit` for the suite or '
+      + '`npm run test:file <path>` for one file — both pin '
+      + `mongodb://127.0.0.1:27017/become-test — or set ${varName} yourself `
+      + 'before running a file directly.',
   )
 }
 
-function requireLocalTestTarget(varName: string, opts: { needsTestDb: boolean }): void {
+/**
+ * Refuse unless `process.env[varName]` is absent, or names a loopback host (and
+ * a `-test` database when asked). Exported so the rule itself can be tested —
+ * a guard nobody exercises is a guard nobody notices has stopped working.
+ */
+export function requireLocalTestTarget(varName: string, opts: { needsTestDb: boolean }): void {
   const uri = process.env[varName]
   if (!uri) return // nothing configured, nothing to point at the wrong place
 
@@ -75,4 +85,25 @@ requireLocalTestTarget('MONGODB_URI', { needsTestDb: true })
 // there is always `redshared`, so only the host is checked.
 requireLocalTestTarget('REDSECRETS_MONGODB_URI', { needsTestDb: false })
 
-export {}
+// The remaining doors, and they are doors for the same reason: under
+// NODE_ENV=test `readRuntimePayload()` returns `{}`, so every field in
+// lib/runtimeConfig.ts falls through to `localEnv(...)` — the raw environment
+// is the ONLY source. These two are then dialled directly:
+//
+//   AUTH_MONGODB_URI          → lib/redauth.ts, `createRedAuth({ mongoUri })`
+//   BECOME_REWARD_MONGODB_URI → lib/reward/redreward.ts, `createRedReward({ mongoUri })`
+//
+// Both are separate DATABASES holding real member identity and inventory, and
+// both were outside the guard while ~/.env exported them. No test reaches
+// getRedAuth() or getRedReward() today, which is exactly the wrong reason to
+// leave them uncovered — the first passkey, Google-auth or rewards route test
+// is the one that finds out, and by then it has already connected. `test:file`
+// unsets both; this refuses if a direct run reinstates them.
+//
+// Held to the same rule as MONGODB_URI, `-test` suffix included: these
+// databases carry the redAuth `users` collection and the reward ledger, and a
+// test that touches them will create and drop collections there too.
+requireLocalTestTarget('AUTH_MONGODB_URI', { needsTestDb: true })
+requireLocalTestTarget('BECOME_REWARD_MONGODB_URI', { needsTestDb: true })
+
+

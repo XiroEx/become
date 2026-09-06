@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/security/admin-revocation.test.ts
+// Run with: npm run test:file tests/unit/security/admin-revocation.test.ts
 //
 // REGRESSION: revoking admin never took effect.
 //

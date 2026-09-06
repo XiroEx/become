@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/tierModel.test.ts
+// Run with: npm run test:file tests/unit/entitlements/tierModel.test.ts
 //
 // The tier model collapsed from free|plus|premium|pro to free|plus, and the
 // two fail-OPEN defaults that came with the old model (User.tier defaulting to

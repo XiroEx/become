@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/portionBasis.test.ts
+// Run with: npm run test:file tests/unit/portionBasis.test.ts
 //
 // The bug this pins, with the real record that produced it:
 //

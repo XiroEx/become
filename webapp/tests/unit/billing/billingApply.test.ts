@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingApply.test.ts
+// Run with: npm run test:file tests/unit/billing/billingApply.test.ts
 //
 // applyBillingOutcome is where an event becomes a write, and every guard in it
 // protects against a failure that is invisible until someone complains:

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/foodRowShape.test.ts
+// Run with: npm run test:file tests/unit/foodRowShape.test.ts
 //
 // Every endpoint that feeds the search sheet must return the FLATTENED row shape.
 //

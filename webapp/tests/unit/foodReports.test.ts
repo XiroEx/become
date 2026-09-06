@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/foodReports.test.ts
+// Run with: npm run test:file tests/unit/foodReports.test.ts
 //
 // The member-facing half of food reports. A report that came back "no change"
 // used to end silently on our side — which is the worst of the three outcomes,

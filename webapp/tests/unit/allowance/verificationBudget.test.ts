@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/allowance/verificationBudget.test.ts
+// Run with: npm run test:file tests/unit/allowance/verificationBudget.test.ts
 //
 // The food-flag relaunch loop was the largest uncapped spend surface in the
 // app, and none of it was monetization-specific.

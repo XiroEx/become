@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workoutSessions/validateFavoriteOrder.test.ts
+// Run with: npm run test:file tests/unit/workoutSessions/validateFavoriteOrder.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateFavoriteOrderPayload } from '../../../lib/workoutSessions/validateFavoriteOrder'

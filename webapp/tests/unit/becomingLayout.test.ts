@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/becomingLayout.test.ts
+// Run with: npm run test:file tests/unit/becomingLayout.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { layoutWeeks, boundsOf, fitScale, neighbourFor, swipeDirection, nearestCard, cardSize, scrubTarget, exitEdge, horizonDelta, peakIndexes } from '../../lib/becoming/layout'

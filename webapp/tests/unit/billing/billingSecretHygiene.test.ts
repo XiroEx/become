@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingSecretHygiene.test.ts
+// Run with: npm run test:file tests/unit/billing/billingSecretHygiene.test.ts
 //
 // A repo guard, not a unit test. A Stripe secret key committed to a private
 // repo is still a compromised key — it is in every clone, every CI cache and

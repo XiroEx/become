@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/nutritionMacros.test.ts
+// Run with: npm run test:file tests/unit/nutritionMacros.test.ts
 //
 // Macro splits used to be: protein from g/lb, fat a flat 25%, carbs whatever was
 // left. Carbs absorbed the entire remainder, so a 6'5" member on a surplus was

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/goalCoherence.test.ts
+// Run with: npm run test:file tests/unit/goalCoherence.test.ts
 //
 // Pinned to the real row that produced "the math ain't mathing": 2,214 cal
 // stored against 232p/174c/77f, which is 2,317 cal of macros.

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingConfig.test.ts
+// Run with: npm run test:file tests/unit/billing/billingConfig.test.ts
 //
 // The first test in this file is the reason the file exists.
 //

@@ -312,12 +312,20 @@ never knowingly created and so could not delete to free one. The flag is an
 argument, never a body field: a client that could set it could also unset it.
 
 Because the slot is charged on `authoredBy`, **ownership for a food PATCH or
-DELETE is EITHER id** (`lib/nutrition/foodOwnership.ts`), not `createdBy` alone.
-An inventory cap is only humane because deleting frees a slot, so a row billed
-to one member and deletable only by another is a lockout with no self-service
-way out — and rows shaped exactly like that exist, from the window in which
-`authoredBy` was writable from the PATCH body. Whoever the slot is charged to
-can always delete the row and get the slot back.
+DELETE is `authoredBy`, OR `createdBy` together with `source: 'manual'`**
+(`lib/nutrition/foodOwnership.ts`). `createdBy` ALONE is not ownership, and
+treating it as such was a real hole: it is stamped on whoever first caused a
+USDA or OpenFoodFacts row to be materialised, which is simply whoever searched
+for it, so any member could rewrite or delete a shared catalogue row that every
+other member's logs referenced. The `source` qualifier is what separates a row
+a member actually authored from one their search happened to import.
+
+`authoredBy` stays unconditional on purpose. An inventory cap is only humane
+because deleting frees a slot, so a row billed to one member and deletable only
+by another is a lockout with no self-service way out — and rows shaped exactly
+like that exist, from the window in which `authoredBy` was writable from the
+PATCH body. Whoever the slot is charged to can always delete the row and get the
+slot back, and no qualifier may ever be added to that branch.
 
 And a count only works if the row actually CARRIES the field being counted.
 `POST /api/meal-logs/combine` saved its reusable meal as

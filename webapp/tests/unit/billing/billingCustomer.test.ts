@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/billing/billingCustomer.test.ts
+// Run with: npm run test:file tests/unit/billing/billingCustomer.test.ts
 //
 // Two Stripe customers on one member is a genuine mess: the subscription lands
 // on one, the portal opens the other, and the member cannot cancel the thing

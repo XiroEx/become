@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workoutSessions/sortFavoritesFirst.test.ts
+// Run with: npm run test:file tests/unit/workoutSessions/sortFavoritesFirst.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { moveInArray, sortFavoritesFirst } from '../../../app/dashboard/workout/hub/HubClient'

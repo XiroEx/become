@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mind/sessionAllowance.test.ts
+// Run with: npm run test:file tests/unit/mind/sessionAllowance.test.ts
 //
 // WHICH NUMBER THE MIND PAYWALL COUNTS.
 //

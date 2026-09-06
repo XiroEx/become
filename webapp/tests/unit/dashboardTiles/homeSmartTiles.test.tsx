@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/homeSmartTiles.test.tsx
+// Run with: npm run test:file tests/unit/dashboardTiles/homeSmartTiles.test.tsx
 //
 // Three new home-dashboard smart tiles, all "jump straight in, not just
 // onto the page": Mindset begins today's session, Nutrition opens the food

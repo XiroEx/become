@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/logTagMatch.test.ts
+// Run with: npm run test:file tests/unit/logTagMatch.test.ts
 //
 // The reported bug: "I ate popcorn and added it to Bed and it logged under a
 // Meal that I already had logged for Bed, instead of logging under Bed as

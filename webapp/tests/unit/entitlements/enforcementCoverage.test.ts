@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/entitlements/enforcementCoverage.test.ts
+// Run with: npm run test:file tests/unit/entitlements/enforcementCoverage.test.ts
 //
 // AN ADVERTISED FEATURE MUST BE AN ENFORCED FEATURE.
 //

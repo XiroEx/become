@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workoutSessions/favorite-order-route.test.ts
+// Run with: npm run test:file tests/unit/workoutSessions/favorite-order-route.test.ts
 //
 // Auth + body-validation branches of PATCH /api/workouts/favorite-order.
 // The 200 path touches MongoDB and is covered by the validator tests + Playwright.

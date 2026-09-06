@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/plateScanRounding.test.ts
+// Run with: npm run test:file tests/unit/plateScanRounding.test.ts
 //
 // Pinned to the real 2026-08-13 report: a Joyburst Protein Coffee scanned from a
 // photo logged as 0 cal next to 32.5 g of protein — a row that contradicts

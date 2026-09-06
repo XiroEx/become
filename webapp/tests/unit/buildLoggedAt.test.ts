@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/buildLoggedAt.test.ts
+// Run with: npm run test:file tests/unit/buildLoggedAt.test.ts
 //
 // Time grafting is where day-marker bugs breed, so this pins the behaviour that
 // the ordered day view now depends on.

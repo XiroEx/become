@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/escalateFlag.test.ts
+// Run with: npm run test:file tests/unit/escalateFlag.test.ts
 //
 // When the machine confirms a record the member's photo contradicts, that is
 // not a settled question — it is one the machine cannot settle, because our row

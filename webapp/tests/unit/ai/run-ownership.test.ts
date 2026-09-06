@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/ai/run-ownership.test.ts
+// Run with: npm run test:file tests/unit/ai/run-ownership.test.ts
 //
 // GET /api/ai/run/<runId> used to hand ANY run to ANY authenticated user; the
 // only control was that runIds are "unguessable" — which they are not, since
