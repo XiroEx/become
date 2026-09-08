@@ -324,7 +324,36 @@ export default function AddExerciseSheet({
                   <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
                 </button>
               ))}
-              {q.length >= 2 && !searching && merged.length === 0 && !showCreateForm && (
+              {q.length < 2 && anchorSlug && (
+                <div data-testid="add-exercise-suggested">
+                  {suggested.length > 0 ? (
+                    <>
+                      <p className={`px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Suggested</p>
+                      {suggested.map(s => (
+                        <button
+                          key={s.slug}
+                          onClick={() => choose(s)}
+                          data-testid="add-exercise-suggested-result"
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
+                        >
+                          <span className="truncate font-medium">{s.name}</span>
+                          <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
+                        </button>
+                      ))}
+                    </>
+                  ) : loadingSuggested ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className={`h-4 w-4 animate-spin ${muted}`} />
+                    </div>
+                  ) : (
+                    <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>
+                  )}
+                </div>
+              )}
+              {q.length < 2 && !anchorSlug && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
+              {/* Always available, not just when a search comes up empty — a
+                  misspelling shouldn't be the only way to reach this. */}
+              {!showCreateForm && (
                 <button
                   onClick={() => {
                     setCustomForm(prev => ({ ...prev, name: query.trim() }))
@@ -335,7 +364,7 @@ export default function AddExerciseSheet({
                 >
                   <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
                   <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                    Create &ldquo;{query.trim()}&rdquo; as a new exercise
+                    {query.trim() ? <>Create &ldquo;{query.trim()}&rdquo; as a new exercise</> : 'Create an exercise'}
                   </span>
                 </button>
               )}
@@ -370,33 +399,6 @@ export default function AddExerciseSheet({
                   </button>
                 </div>
               )}
-              {q.length < 2 && anchorSlug && (
-                <div data-testid="add-exercise-suggested">
-                  {suggested.length > 0 ? (
-                    <>
-                      <p className={`px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Suggested</p>
-                      {suggested.map(s => (
-                        <button
-                          key={s.slug}
-                          onClick={() => choose(s)}
-                          data-testid="add-exercise-suggested-result"
-                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
-                        >
-                          <span className="truncate font-medium">{s.name}</span>
-                          <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
-                        </button>
-                      ))}
-                    </>
-                  ) : loadingSuggested ? (
-                    <div className="flex justify-center py-6">
-                      <Loader2 className={`h-4 w-4 animate-spin ${muted}`} />
-                    </div>
-                  ) : (
-                    <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>
-                  )}
-                </div>
-              )}
-              {q.length < 2 && !anchorSlug && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
             </div>
           </>
         ) : (
