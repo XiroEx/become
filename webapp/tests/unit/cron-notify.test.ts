@@ -7,6 +7,7 @@ import {
   isActiveProgramForSchedule,
   localDateKeyForUser,
   localHourForUser,
+  MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION,
 } from '../../lib/notifications/cronNotify'
 
 test('localHourForUser returns null when timezone offset is missing', () => {
@@ -181,4 +182,25 @@ test('the check-in reminder is rate-limited to once per local day', () => {
   )
   assert.match(block, /lastPushSentAt\?\.checkInReminder/)
   assert.match(block, /lastPushSentAt\.checkInReminder': now/)
+})
+
+// ─── Streak-at-risk minimum streak ─────────────────────────────────────────
+//
+// Context: a brand-new member's very first logged day already sets
+// streakDays to 1, so the at-risk sweep (23-47h after that log) fired
+// "Don't break your 1-day streak" before the member had anything a product
+// milestone would call a streak (STREAK_MILESTONES starts at 3). Gate the
+// notification on the same 3-day floor.
+
+test('a 1-day streak does not qualify for the at-risk notification', () => {
+  assert.equal(MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION, 3)
+})
+
+test('the streak-at-risk query is gated on the minimum streak, not any streak', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('1. Streak at-risk'),
+    CRON_ROUTE.indexOf('2. Workout reminder'),
+  )
+  assert.match(block, /streakDays: \{ \$gte: MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION \}/)
+  assert.doesNotMatch(block, /streakDays: \{ \$gte: 1 \}/)
 })

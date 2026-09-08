@@ -135,3 +135,7 @@ export const REENGAGEMENT_END_HOUR = 18
 export const CHECK_IN_REMINDER_START_HOUR = 12
 export const CHECK_IN_REMINDER_END_HOUR = 16
 export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'
+/** A 1- or 2-day streak isn't an "actual streak" yet by product definition —
+ *  the first milestone in STREAK_MILESTONES is 3 days — so nagging a member
+ *  to protect it before then reads as a bug, not motivation. */
+export const MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION = 3
