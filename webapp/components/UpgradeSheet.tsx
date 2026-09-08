@@ -28,8 +28,18 @@
 // it is the whole fix.
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, Check, CreditCard, Loader2, Lock, RefreshCw, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  CreditCard,
+  Loader2,
+  Lock,
+  RefreshCw,
+  X,
+} from 'lucide-react'
 import { useEntitlements } from '@/hooks/useEntitlements'
 import {
   allowanceLine,
@@ -59,7 +69,12 @@ export interface UpgradeSheetProps {
  * be a second one, and a failure worth retrying. Only 'unavailable' means "not
  * for sale yet".
  */
-type CheckoutState =
+// Exported so app/dashboard/plan can drive the SAME state machine rather than
+// growing a second, divergent one. That page renders a CTA per plan, so it owns
+// its own buttons — but the refusal mapping (checkoutRefusalState), the states
+// themselves and every non-CTA branch (CheckoutAction) are this file's, and
+// there is exactly one place where "a card failed" stops meaning "not for sale".
+export type CheckoutState =
   | 'checking'
   | 'ready'
   | 'starting'
@@ -79,14 +94,16 @@ type PortalState = 'idle' | 'opening' | 'failed'
  * `{ feature, tier }`, a body the route reads NOTHING from, and an implicit
  * default is exactly what made that invisible.
  *
- * TODO(plan-selector): monthly is the only plan reachable from the app. The
- * route accepts 'annual' and priceIdForPlan() will resolve
- * `billing.stripePricePlusAnnual`, so the annual price can be fully configured
- * and still never be bought. The missing piece is a plan selector in this sheet,
- * and it cannot be built yet: no prices exist (both `stripePricePlus*` values
- * are unset today) and every amount a selector would show has to come from the
- * server — this file must never name one. Wire the selector when the prices are
- * live, and pass its choice here.
+ * TODO(plan-selector): monthly is still the only plan THIS SHEET can start, and
+ * that is now deliberate rather than a gap. The sheet is the reactive surface —
+ * it appears mid-task, on top of whatever the member was doing, and asking them
+ * to compare billing periods there is asking the wrong question at the wrong
+ * moment. The annual plan is reachable from /dashboard/plan, which this sheet
+ * links to below, and that page posts its own `plan`. If a selector is ever
+ * wanted here too, pass its choice in place of this constant.
+ *
+ * This file still must never name an AMOUNT. Prices live in one place
+ * (PLAN_PRICING in lib/planCopy.ts) and are rendered on the plan page only.
  */
 const CHECKOUT_PLAN: BillingPlan = 'monthly'
 
@@ -485,6 +502,20 @@ export default function UpgradeSheet({ open, onClose, gate }: UpgradeSheetProps)
                 onStart={startCheckout}
                 onOpenPortal={openPortal}
               />
+
+              {/* The sheet answers one refusal. Someone who wants the whole
+                  picture — what is capped, what is free forever, what it costs
+                  — needs the plan page, and this is the only way to it from a
+                  gate. Closing on the way out so the sheet is not left sitting
+                  over the page it navigated to. */}
+              <Link
+                href="/dashboard/plan"
+                onClick={onClose}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                See everything in {tierName}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
 
               <button
                 type="button"

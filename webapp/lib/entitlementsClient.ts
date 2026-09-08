@@ -10,9 +10,15 @@
 // only the framing around it (headline, benefit rows, reset phrasing), so a
 // copy change on one side can never contradict the other.
 
-import type { Feature, Tier, GatePayload, AllowanceWindow } from '@/lib/entitlements'
+import type {
+  AllowanceKind,
+  AllowanceWindow,
+  Feature,
+  GatePayload,
+  Tier,
+} from '@/lib/entitlements'
 
-export type { Feature, Tier, GatePayload, AllowanceWindow }
+export type { AllowanceKind, AllowanceWindow, Feature, GatePayload, Tier }
 
 // ─── The GET /api/me/entitlements shape ──────────────────────────────────────
 
@@ -242,9 +248,16 @@ export function syntheticGate(
 }
 
 /**
- * The gate the PLAN ENTRY POINTS raise — the dashboard plan card's "See Plus",
- * the profile's Plan row. Nothing was refused and no single feature is being
- * asked for, so it carries no `feature` and the sheet headlines the tier.
+ * A sheet that names NO feature — nothing was refused and no single feature is
+ * being asked for, so it carries no `feature` and the sheet headlines the tier
+ * (see featureHeadline).
+ *
+ * Its two original callers — the dashboard plan card's "See Plus" and the
+ * profile's Plan row — now LINK to /dashboard/plan instead, because a member
+ * asking "what is Plus?" wants the page that answers it, not a sheet with three
+ * bullet points. This stays because the featureless shape is still legitimate
+ * and still the sheet's contract; reach for it only if a surface genuinely has
+ * a tier to sell and no feature to name.
  */
 export function planGate(message: string, requiresTier: Tier = 'plus'): SheetGate {
   return { error: message, requiresTier }
