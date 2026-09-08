@@ -156,6 +156,14 @@ test('training suggestion: tight week, lost week, near lift, consistency', () =>
   assert.equal(suggestTraining({ target: null, thisWeek: 0, remainingThisWeek: 0, chancesLeft: 0, weekLost: false, avgLast4: null, lifts: [] }).key, 'training.set-days')
 })
 
+test('training consistency nudge links to the training tab of settings, not profile', () => {
+  const s = suggestTraining({ target: 5, thisWeek: 1, remainingThisWeek: 4, chancesLeft: 5, weekLost: false, avgLast4: 2, lifts: [] })
+  assert.equal(s.key, 'training.consistency')
+  // Regression: this used to be a bare '/dashboard/settings', which lands on
+  // the Profile tab — the weekly training number lives under Training.
+  assert.equal(s.url, '/dashboard/settings?tab=training#weekly-availability')
+})
+
 test('nudge pick: actionable only, warn first, no repeat inside cooldown', () => {
   const warn = { key: 'nutrition.behind', title: 'b', sub: '', severity: 'warn' as const, url: '/' }
   const nudge = { key: 'training.week-tight', title: 't', sub: '', severity: 'nudge' as const, url: '/' }

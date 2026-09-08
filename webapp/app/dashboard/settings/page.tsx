@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
@@ -113,9 +114,25 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageInner />
+    </Suspense>
+  )
+}
+
+function SettingsPageInner() {
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'profile' | 'training' | 'settings'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'training' | 'settings'>(() => {
+    const t = searchParams?.get('tab')
+    return t === 'training' || t === 'settings' ? t : 'profile'
+  })
+  // Deep link from the Becoming training suggestion (`?tab=training#weekly-availability`):
+  // the target field pulses once so it's found, not just landed on.
+  const [highlightWeekly, setHighlightWeekly] = useState(false)
+  const weeklyAvailabilityRef = useRef<HTMLDivElement>(null)
   const { toast, showToast } = useToast()
 
   // Form state
@@ -237,6 +254,21 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchProfile()
   }, [fetchProfile])
+
+  useEffect(() => {
+    if (loading || typeof window === 'undefined') return
+    if (window.location.hash !== '#weekly-availability') return
+    setActiveTab('training')
+    setHighlightWeekly(true)
+    const timer = setTimeout(() => setHighlightWeekly(false), 3000)
+    return () => clearTimeout(timer)
+  }, [loading])
+
+  useEffect(() => {
+    if (activeTab === 'training' && highlightWeekly) {
+      weeklyAvailabilityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [activeTab, highlightWeekly])
 
   // ─── Notifications ────────────────────────────────────────────────────────
 
@@ -881,7 +913,11 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
-            <div>
+            <div
+              id="weekly-availability"
+              ref={weeklyAvailabilityRef}
+              className={`rounded-xl ${highlightWeekly ? 'settings-highlight-pulse' : ''}`}
+            >
               <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Weekly Availability</label>
               <div className="flex items-center gap-4">
                 <button
