@@ -398,6 +398,12 @@ test('every tier surface bails out when enforcement is off', () => {
     'components/dashboard/PlanCard.tsx',
     'components/profile/PlanRow.tsx',
     'components/TierGate.tsx',
+    // The plan comparison page. It is the loudest tier surface in the app — it
+    // NAMES the tiers and PRICES them — so it is the one that must not appear
+    // by accident. It does not `return null` (a route that renders nothing is a
+    // blank screen); it returns a neutral card that mentions no tier, no cap
+    // and no amount, which the test below pins.
+    'app/dashboard/plan/PlanPageClient.tsx',
   ]) {
     const src = readSource(file)
     assert.match(
@@ -405,6 +411,37 @@ test('every tier surface bails out when enforcement is off', () => {
       /data\.enforced === false/,
       `${file} must render nothing while ENTITLEMENTS_ENFORCED is off`,
     )
+  }
+})
+
+test('the plan page presents no tiers at all while enforcement is off', () => {
+  // "Renders nothing" for a whole ROUTE means "presents no plan", not "paints a
+  // white screen". The bail branch must therefore be checked for what it does
+  // NOT say: no tier name, no price, no cap, no CTA.
+  const src = readSource('app/dashboard/plan/PlanPageClient.tsx')
+  const at = src.indexOf('if (data.enforced === false)')
+  assert.ok(at > 0, 'the kill-switch branch must exist')
+  // Up to the closing of that branch — the next `const isPlus` is the enforced
+  // half of the component and is deliberately excluded.
+  const branch = src.slice(at, src.indexOf('const isPlus', at))
+  assert.ok(branch.length > 0)
+  assert.doesNotMatch(branch, /\$\d/, 'no price while the switch is off')
+  assert.doesNotMatch(branch, /PlanPricing|PlanComparison|CheckoutAction/, 'no tier UI either')
+  assert.doesNotMatch(branch, /\bPlus\b|tierLabel/, 'the tier must not be named')
+
+  // ...and the bail happens BEFORE any of that is rendered, not around it.
+  assert.ok(at < src.indexOf('<PlanComparison'), 'the bail must precede the comparison')
+  assert.ok(at < src.indexOf('<PlanPricing'), 'the bail must precede the prices')
+})
+
+test('the plan entry points link to the page rather than raising a sheet', () => {
+  // "See Plus" used to open the upgrade sheet, which is the REACTIVE surface —
+  // it answers a refusal, and nothing is refused from a plan card. Both entry
+  // points now go to the page that actually explains the plan.
+  for (const file of ['components/dashboard/PlanCard.tsx', 'components/profile/PlanRow.tsx']) {
+    const src = readSource(file)
+    assert.match(src, /["']\/dashboard\/plan["']/, `${file} must link to the plan page`)
+    assert.doesNotMatch(src, /<UpgradeSheet/, `${file} must not mount a second upsell`)
   }
 })
 

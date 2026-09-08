@@ -440,14 +440,58 @@ promised not to charge is being charged.
 
 #### The client side of a gate
 
-Four pieces, and nothing else should exist:
+Five pieces, and nothing else should exist:
 
 | Piece | Job |
 |---|---|
 | `hooks/useEntitlements.ts` | The ONLY caller of `GET /api/me/entitlements`. Module-level snapshot + 60s TTL + a localStorage seed, so a screen with three gated components makes one request. |
 | `lib/entitlementsClient.ts` | Client-safe types and copy, plus `gateFrom(status, body)` — the one 403 parser. `lib/entitlements.ts` imports mongoose, so a component may only take TYPES from it. |
-| `components/UpgradeSheet.tsx` | The one upsell. Renders `gate.error` verbatim; the server owns the wording. |
+| `components/UpgradeSheet.tsx` | The REACTIVE upsell: it appears because something was refused, and answers that one refusal. Renders `gate.error` verbatim; the server owns the wording. Names no amount, ever. |
 | `components/TierGate.tsx` | Wraps a whole surface a free member may see but not use (Vision). |
+| `app/dashboard/plan` | The PROACTIVE one: the whole plan, side by side, and the only place prices are shown. |
+
+#### The plan page (`app/dashboard/plan`)
+
+The sheet answers "why was I stopped?"; this answers "what is this and what
+does it cost?". Before it existed the only way to learn either was to be told
+no first, so `PlanCard`'s "See Plus" and the profile's `PlanRow` now LINK here
+rather than raising a featureless sheet, and the sheet itself carries a "See
+everything in Plus" link back.
+
+Three things about it are structural rather than cosmetic:
+
+- **`page.tsx` is a SERVER component and the client half takes props.**
+  `FREE_LIMITS` / `FEATURE_MIN_TIER` are the source of truth for every cell in
+  the table, and they live in `lib/entitlements.ts`, which imports mongoose. So
+  the page reads them on the server and hands down plain rows. Nothing on the
+  page is typed out by hand: add a feature to `FEATURE_MIN_TIER` and it appears,
+  with its real allowance, on the next build.
+- **Prices live in exactly one constant**, `PLAN_PRICING` in `lib/planCopy.ts`
+  ($14.99/month, $119.99/year). Every derived figure — the $59.89 saving, the
+  33%, the $10.00 a month — is recomputed from those two in
+  `tests/unit/entitlements/planPage.test.tsx`, so editing one number and not the
+  others fails the build. **They must match the Stripe prices**
+  (`billing.stripePricePlus*`); nothing reads an amount back off Stripe.
+- **The free-forever list names the route that serves each claim**, and the same
+  test asserts that route calls no entitlement guard (bar a cap the entry names
+  itself, e.g. logging a workout is free while STARRING it is `custom-sessions`).
+  It is `enforcementCoverage.test.ts` read backwards: that one fails when a
+  feature is advertised and enforced by nothing, this one when a surface is
+  advertised as free and has quietly grown a gate.
+
+The CTA obeys the same rule as the sheet, one step further: a button is drawn
+only when checkout is known to work AND **that billing period has a price**.
+`checkoutAvailable` on the entitlements snapshot is a single bit for "monthly OR
+annual", which is enough for the sheet (it only sells monthly) and not enough
+here, so the page probes `GET /api/billing/status` for `plans.{monthly,annual}`.
+Everything else — the state union, `checkoutRefusalState`, and every non-CTA
+branch (`CheckoutAction`) — is imported from `UpgradeSheet.tsx`, so there is one
+place in the app where "your card failed" stops meaning "not for sale".
+
+With enforcement off the page does not `return null` (a route that renders
+nothing is a blank screen); it returns a neutral card that names no tier, no cap
+and no amount, and `uiSurfaces.test.tsx` pins that branch for what it must NOT
+contain.
 
 Rules that are easy to get wrong:
 - **Read `canCreate`, never `allowed`.** `allowed` is true for a capped free

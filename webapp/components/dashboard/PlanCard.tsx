@@ -11,18 +11,15 @@
 // six exist in the API response and are deliberately not drawn: a wall of
 // meters reads as a paywall, four reads as a plan.
 
-import { useState } from 'react'
+import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
 import { Card } from '@/components/ui'
 import { useEntitlements } from '@/hooks/useEntitlements'
-import UpgradeSheet from '@/components/UpgradeSheet'
 import {
   FEATURE_LABELS,
-  planGate,
   tierLabel,
   type Feature,
   type FeatureEntitlement,
-  type SheetGate,
 } from '@/lib/entitlementsClient'
 
 /** The four a member feels, in the order they meet them. */
@@ -65,7 +62,6 @@ function Meter({ ent, label, suffix }: { ent: FeatureEntitlement; label: string;
 
 export default function PlanCard() {
   const { data } = useEntitlements()
-  const [gate, setGate] = useState<SheetGate | null>(null)
 
   if (!data || data.enforced === false) return null
 
@@ -80,7 +76,12 @@ export default function PlanCard() {
 
   if (isPlus) {
     return (
-      <Card variant="compact" className="flex items-center gap-2.5">
+      <Card
+        as={Link}
+        href="/dashboard/plan"
+        variant="compact"
+        className="flex items-center gap-2.5 transition hover:border-zinc-300 dark:hover:border-zinc-700"
+      >
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
           <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
         </div>
@@ -107,31 +108,30 @@ export default function PlanCard() {
   })).filter((r) => r.ent !== null && r.ent.limit !== null && r.ent.limit > 0)
 
   return (
-    <>
-      <Card>
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Free plan</h2>
-          <button
-            type="button"
-            onClick={() => setGate(planGate('Everything below, with no limits.'))}
-            className="shrink-0 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400"
-          >
-            See Plus
-          </button>
-        </div>
-        <div className="space-y-2.5">
-          {rows.map((r) => (
-            <Meter
-              key={r.feature}
-              ent={r.ent!}
-              label={FEATURE_LABELS[r.feature]}
-              suffix={r.suffix}
-            />
-          ))}
-        </div>
-      </Card>
-
-      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
-    </>
+    <Card>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-white">Free plan</h2>
+        {/* The full picture — what is capped, what is free forever, what Plus
+            costs — lives on one page now. This used to raise the upgrade sheet,
+            which is the REACTIVE surface: it answers a refusal, and nothing was
+            refused here. */}
+        <Link
+          href="/dashboard/plan"
+          className="shrink-0 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400"
+        >
+          See Plus
+        </Link>
+      </div>
+      <div className="space-y-2.5">
+        {rows.map((r) => (
+          <Meter
+            key={r.feature}
+            ent={r.ent!}
+            label={FEATURE_LABELS[r.feature]}
+            suffix={r.suffix}
+          />
+        ))}
+      </div>
+    </Card>
   )
 }
