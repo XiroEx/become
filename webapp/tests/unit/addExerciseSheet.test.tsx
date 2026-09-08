@@ -49,3 +49,30 @@ test('AddExerciseSheet: the bottom drawer has a taller default minimum height', 
   )
   assert.match(html, /min-h-\[60vh\]/)
 })
+
+// Card: "There also needs to be a create an exercise button at the bottom.
+// Me miss spelling a word shouldn't be the only way I able to create an
+// exercise." Before, the button only rendered once a typed query came back
+// with zero results — so a create-your-own path required first proving the
+// catalog didn't have it. It's now always present, empty query or not.
+test('AddExerciseSheet: "Create an exercise" is present with no query typed at all', () => {
+  const html = renderToStaticMarkup(
+    <AddExerciseSheet open onClose={noop} onAdd={noop} />,
+  )
+  assert.match(html, /data-testid="add-exercise-create-open"/)
+  assert.match(html, /Create an exercise/)
+})
+
+test('AddExerciseSheet: "Create an exercise" is present alongside the Suggested list too', () => {
+  const html = renderToStaticMarkup(
+    <AddExerciseSheet
+      open
+      onClose={noop}
+      onAdd={noop}
+      anchorName="Flat Bench Press"
+      anchorSlug="flat-bench-press"
+    />,
+  )
+  assert.match(html, /data-testid="add-exercise-suggested"/)
+  assert.match(html, /data-testid="add-exercise-create-open"/)
+})
