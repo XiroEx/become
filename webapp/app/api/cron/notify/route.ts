@@ -31,6 +31,7 @@ import {
   MIND_REMINDER_END_HOUR,
   CHECK_IN_REMINDER_START_HOUR,
   CHECK_IN_REMINDER_END_HOUR,
+  MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION,
 } from '@/lib/notifications/cronNotify'
 import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
 
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
   const streakRateLimitCutoff = new Date(now.getTime() - 20 * 60 * 60 * 1000)
 
   const atRiskUsers = await UserProgress.find({
-    streakDays: { $gte: 1 },
+    streakDays: { $gte: MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION },
     lastActivityDate: { $gte: atRiskExpiry, $lte: atRiskCutoff },
     'notificationPrefs.streakAtRisk': { $ne: false },
     $or: [
