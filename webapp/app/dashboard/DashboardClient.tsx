@@ -18,6 +18,7 @@ import ProgramNudgeModal, {
   type NudgeState,
   shouldShowNudge,
   recordNudgeDismiss,
+  recordNudgeDismissForever,
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
@@ -117,6 +118,9 @@ export default function DashboardClient() {
   const [showNudge, setShowNudge] = useState(false)
   // Queued like the check-in — waits its turn behind the onboarding tour.
   const [nudgeDue, setNudgeDue] = useState(false)
+  // How many times the nudge has already been dismissed — drives whether the
+  // "don't show this again" opt-out is offered on this showing.
+  const [nudgeDismissCount, setNudgeDismissCount] = useState(0)
   const [layout, setLayout] = useState<DashboardTile[] | null>(
     () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
   )
@@ -355,7 +359,10 @@ export default function DashboardClient() {
       try {
         const raw = localStorage.getItem(NUDGE_KEY)
         const state: NudgeState | null = raw ? JSON.parse(raw) : null
-        if (shouldShowNudge(state)) setNudgeDue(true)
+        if (shouldShowNudge(state)) {
+          setNudgeDue(true)
+          setNudgeDismissCount(state?.dismissCount ?? 0)
+        }
       } catch {
         setNudgeDue(true) // on parse error, just show it
       }
@@ -386,6 +393,15 @@ export default function DashboardClient() {
       const raw = localStorage.getItem(NUDGE_KEY)
       const current: NudgeState | null = raw ? JSON.parse(raw) : null
       localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismiss(current)))
+    } catch {}
+  }
+
+  function handleNudgeDismissForever() {
+    setShowNudge(false)
+    try {
+      const raw = localStorage.getItem(NUDGE_KEY)
+      const current: NudgeState | null = raw ? JSON.parse(raw) : null
+      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismissForever(current)))
     } catch {}
   }
 
@@ -641,7 +657,9 @@ export default function DashboardClient() {
       <ProgramNudgeModal
         open={showNudge}
         fitnessGoal={fitnessGoal ?? null}
+        dismissCount={nudgeDismissCount}
         onExplore={handleNudgeDismiss}
+        onDismissForever={handleNudgeDismissForever}
       />
 
       <WeightLogSheet

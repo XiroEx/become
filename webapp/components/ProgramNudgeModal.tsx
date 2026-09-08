@@ -12,10 +12,17 @@ export const NUDGE_KEY = "become_program_nudge"
 export interface NudgeState {
   dismissCount: number
   lastDismissedAt: string
+  dontShowAgain?: boolean
 }
+
+// Below this many prior dismissals, the modal offers a permanent opt-out —
+// i.e. it starts appearing on the 3rd showing (after 2 dismissals already
+// happened).
+export const DONT_SHOW_AGAIN_THRESHOLD = 2
 
 export function shouldShowNudge(state: NudgeState | null): boolean {
   if (!state) return true
+  if (state.dontShowAgain) return false
   const daysSince =
     (Date.now() - new Date(state.lastDismissedAt).getTime()) / 86_400_000
   // 1 day → 2 days → 4 days → 8 days → 16 days (capped)
@@ -27,6 +34,14 @@ export function recordNudgeDismiss(current: NudgeState | null): NudgeState {
   return {
     dismissCount: (current?.dismissCount ?? 0) + 1,
     lastDismissedAt: new Date().toISOString(),
+  }
+}
+
+export function recordNudgeDismissForever(current: NudgeState | null): NudgeState {
+  return {
+    dismissCount: current?.dismissCount ?? 0,
+    lastDismissedAt: new Date().toISOString(),
+    dontShowAgain: true,
   }
 }
 
@@ -72,10 +87,18 @@ const DEFAULT_COPY = {
 interface Props {
   open: boolean
   fitnessGoal?: FitnessGoal | null
+  dismissCount?: number
   onExplore: () => void  // "Explore first" — dismiss with backoff
+  onDismissForever: () => void  // "Don't show this again" — permanent opt-out
 }
 
-export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Props) {
+export default function ProgramNudgeModal({
+  open,
+  fitnessGoal,
+  dismissCount = 0,
+  onExplore,
+  onDismissForever,
+}: Props) {
   useLockScroll(open)
 
   const copy = fitnessGoal ? (GOAL_COPY[fitnessGoal] ?? DEFAULT_COPY) : DEFAULT_COPY
@@ -143,6 +166,18 @@ export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Prop
             <p className="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-600">
               You can always start a program later from Workout
             </p>
+
+            {/* Permanent opt-out — only offered once the nudge has already
+                been dismissed a couple of times, so a first-time member
+                isn't invited to suppress something they haven't seen yet. */}
+            {dismissCount >= DONT_SHOW_AGAIN_THRESHOLD && (
+              <button
+                onClick={onDismissForever}
+                className="mt-3 w-full text-center text-xs font-medium text-zinc-400 underline underline-offset-2 transition-colors hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
+              >
+                Don’t show this again
+              </button>
+            )}
           </motion.div>
         </motion.div>
       )}
