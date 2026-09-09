@@ -27,8 +27,8 @@ test('GET /api/exercises/variations selects and returns trackingType for the sou
   const src = readSource('app/api/exercises/variations/route.ts')
   assert.match(
     src,
-    /\.select\('slug name equipment laterality difficulty trackingType[^']*'\)/,
-    'the source exercise query must project trackingType, or the picker cannot tell a timed variant from a reps variant',
+    /const VARIATION_FIELDS =\s*\n?\s*'[^']*\btrackingType\b[^']*'/,
+    'the shared projection must include trackingType, or the picker cannot tell a timed variant from a reps variant',
   )
   assert.match(
     src,
@@ -37,10 +37,30 @@ test('GET /api/exercises/variations selects and returns trackingType for the sou
   )
 })
 
-test('GET /api/exercises/variations selects trackingType for algorithmic and explicit variants', () => {
+test('GET /api/exercises/variations projects the same fields for source, candidates and explicit variants', () => {
   const src = readSource('app/api/exercises/variations/route.ts')
-  const matches = [...src.matchAll(/\.select\('slug name equipment laterality difficulty trackingType'\)/g)]
-  assert.equal(matches.length, 2, 'both the algorithmic-match query and the explicit-variations query must project trackingType')
+  // One named projection used by every query, so the source lookup and the
+  // variant lookups can never drift into selecting different shapes.
+  const selects = [...src.matchAll(/\.select\(([^)]*)\)/g)].map((m) => m[1])
+  assert.equal(selects.length, 3, 'source, candidate pool and explicit variations')
+  for (const projection of selects) {
+    assert.match(projection, /VARIATION_FIELDS/, `projection ${projection} must use the shared field list`)
+  }
+})
+
+test('GET /api/exercises/variations is authenticated and visibility-scoped', () => {
+  // A custom exercise is owner-private until an admin approves it. This route
+  // had no auth and no visibility filter, so it served one member's private
+  // customs to any caller — and matching on names widens what it returns.
+  const src = readSource('app/api/exercises/variations/route.ts')
+  assert.match(src, /verifyAuth\(request\)/, 'the route must identify the caller')
+  assert.match(src, /if \(!auth\.success\)[\s\S]{0,120}status: 401/, 'an unauthenticated caller must get a 401')
+  const visibilityCalls = [...src.matchAll(/visibleExerciseFilter\(auth\.userId\)/g)]
+  assert.equal(
+    visibilityCalls.length, 2,
+    'the source lookup and the explicit-variations lookup must both be visibility-scoped '
+      + '(the candidate pool gets it from buildVariationCandidateQuery)',
+  )
 })
 
 test('ExerciseVariation interface exported by the variations route declares trackingType', () => {
