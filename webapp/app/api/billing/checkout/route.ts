@@ -154,8 +154,14 @@ export async function POST(request: NextRequest) {
         // Copied onto the subscription, so every later subscription event and
         // every invoice snapshot can attribute itself without a customer lookup.
         subscription_data: { metadata: { userId: auth.userId, plan, appChannel } },
-        success_url: checkoutSuccessUrl(),
-        cancel_url: checkoutCancelUrl(),
+        // ORIGIN-AWARE. The app answers on both become.redbtn.io and
+        // becomeurbest.com, and a session belongs to ONE host — so returning a
+        // becomeurbest.com buyer to NEXT_PUBLIC_APP_URL lands them signed out
+        // and middleware.ts bounces them to /login moments after being charged.
+        // The headers are validated against an allow-list inside; an unknown
+        // host falls back rather than being reflected.
+        success_url: checkoutSuccessUrl(request.headers),
+        cancel_url: checkoutCancelUrl(request.headers),
       },
       {
         // A 1-minute bucket collapses a double-click into one session without

@@ -20,6 +20,13 @@
  *   7. Whichever subscription an active row already names owns that row. A
  *      second subscription on the same customer is ignored until the first is
  *      no longer active.
+ *   8. A REVOKE (full refund, or any dispute) ends access immediately — it is
+ *      the one branch that deliberately CLEARS `currentPeriodEnd`, because the
+ *      "they paid through this period" rule does not apply to a period whose
+ *      money went back. It writes first and cancels the Stripe subscription
+ *      second, and the terminal event that cancel produces may not re-extend
+ *      what it just ended. See revokedState / clampRevokedPeriodEnd /
+ *      cancelRevokedSubscription below; all three are one mechanism.
  */
 
 import type Stripe from 'stripe'
@@ -27,7 +34,7 @@ import type { Tier } from '@/lib/entitlements'
 import type { IUserSubscription, UserRole } from '@/models/User'
 import { canApplyMode, customerIdField, type StripeMode } from './mode'
 import type { BillingConfig } from './config'
-import { normalizeSubscription, type SubscriptionState } from './subscriptionState'
+import { normalizeStatus, normalizeSubscription, type SubscriptionState } from './subscriptionState'
 import type { BillingOutcome, UserRef } from './webhookEvents'
 
 /** What the store hands back about the member we are about to write. */
@@ -78,6 +85,12 @@ export interface ApplyDeps {
    * customer.subscription.created to supply the state.
    */
   retrieveSubscription?(id: string): Promise<Stripe.Subscription>
+  /**
+   * Cancel the subscription a refund or dispute has revoked, so Stripe stops
+   * billing a member we have just cut off. Optional: without it the document is
+   * still revoked and only the Stripe side is left for an operator.
+   */
+  cancelSubscription?(id: string): Promise<void>
   /** lib/subscription.ts#deriveTier. Injected so billing owns ONE import of it. */
   deriveTier(input: {
     subscription?: IUserSubscription | null
@@ -104,6 +117,10 @@ export type ApplyResult =
         | 'skipped_newer_state'
         | 'mode_downgrade_blocked'
         | 'other_subscription'
+        // A refund or dispute landed on a member who holds no subscription
+        // state. Nothing to take away, and writing 'canceled' over 'none' would
+        // invent a subscription they never had.
+        | 'nothing_to_revoke'
         | 'ignored'
     }
 
@@ -160,6 +177,105 @@ function subscriptionPatch(
     'subscription.mode': state.mode,
     'subscription.updatedAt': now,
     ...orderingPatch(eventId, eventCreated),
+  }
+}
+
+/**
+ * What a member holds after the money went back: nothing.
+ *
+ * Built from the row rather than from the event, because neither
+ * `charge.refunded` nor `charge.dispute.created` says one word about the
+ * subscription — they are events about a charge.
+ *
+ * `currentPeriodEnd` is CLEARED, and that is the whole point. deriveTier keeps
+ * a `canceled` member on Plus while `now < currentPeriodEnd`, which is the
+ * "they already paid through this month" rule — and a refund is precisely the
+ * case where they did not. Left in place on an annual plan it is twelve months
+ * of free access on top of the $119.99 handed back.
+ */
+function revokedState(existing: IUserSubscription, mode: StripeMode): SubscriptionState {
+  return {
+    status: 'canceled',
+    plan: existing.plan ?? undefined,
+    currentPeriodEnd: undefined,
+    cancelAtPeriodEnd: false,
+    stripeSubscriptionId: existing.stripeSubscriptionId ?? undefined,
+    stripePriceId: existing.priceId ?? undefined,
+    mode,
+  }
+}
+
+/**
+ * A terminal event may not RE-EXTEND access that has already been revoked.
+ *
+ * Revoking cancels the Stripe subscription, and Stripe answers that with
+ * `customer.subscription.deleted` — which carries the item's
+ * `current_period_end`, a date in the FUTURE, because it is the end of the
+ * period the member had been billed for. Applied as-is it writes that date back
+ * over the null the revoke just stored, and deriveTier puts the refunded member
+ * straight back on Plus for exactly the period their money was returned for.
+ * The revoke would appear to work and then quietly undo itself seconds later.
+ *
+ * The rule is deliberately narrow: only when the row is ALREADY `canceled` with
+ * no period end, and the incoming terminal state names the SAME subscription.
+ * An ordinary cancel-at-period-end never matches, because that row is still
+ * `active` with a real period end when `deleted` arrives; nor does a genuine
+ * re-subscribe, which arrives `active`.
+ */
+function clampRevokedPeriodEnd(
+  state: SubscriptionState,
+  existing: IUserSubscription | null,
+): SubscriptionState {
+  if (state.status !== 'canceled') return state
+  if (!existing || existing.status !== 'canceled' || existing.currentPeriodEnd) return state
+  if (
+    existing.stripeSubscriptionId &&
+    state.stripeSubscriptionId &&
+    existing.stripeSubscriptionId !== state.stripeSubscriptionId
+  ) {
+    return state
+  }
+  return { ...state, currentPeriodEnd: undefined }
+}
+
+/**
+ * Stop Stripe billing a subscription we have just revoked.
+ *
+ * Runs AFTER the document write, and the order is load-bearing. Cancelling
+ * first makes Stripe emit `customer.subscription.deleted` with a LATER
+ * `event.created` than the refund we are handling; if that delivery wins the
+ * race, the ordering guard in writeSubscription refuses our own revoke as
+ * stale and the member keeps Plus. Writing first means the revoke is already
+ * the floor, and the `deleted` that follows is clamped above.
+ *
+ * A failure is logged and NEVER thrown. The document is already revoked, which
+ * is the half that controls access; a subscription Stripe still bills is money
+ * moving the wrong way and an operator can end it in the dashboard. Throwing
+ * would 500 the webhook and make Stripe retry an event whose access half
+ * already succeeded — every few hours for three days, if the cancel is failing
+ * for a permanent reason.
+ */
+async function cancelRevokedSubscription(
+  subscriptionId: string | null | undefined,
+  reason: string,
+  deps: ApplyDeps,
+): Promise<void> {
+  if (!subscriptionId || !deps.cancelSubscription) return
+  try {
+    // Already terminal in Stripe? Nothing to do — and this is the COMMON path,
+    // not an edge case: an operator issuing a refund has usually cancelled the
+    // subscription first, in the same sitting.
+    if (deps.retrieveSubscription) {
+      const current = await deps.retrieveSubscription(subscriptionId)
+      const status = normalizeStatus(current?.status)
+      if (status === 'canceled' || status === 'incomplete_expired') return
+    }
+    await deps.cancelSubscription(subscriptionId)
+  } catch (error) {
+    console.error(
+      `[billing] ${reason} revoke: could not cancel ${subscriptionId}; access is revoked but Stripe may still bill:`,
+      (error as Error)?.name ?? 'unknown',
+    )
   }
 }
 
@@ -269,7 +385,9 @@ export async function applyBillingOutcome(
     }
 
     case 'subscription': {
-      nextState = outcome.state
+      // The clamp is what keeps our OWN cancel — the one a revoke performs —
+      // from handing the refunded period straight back.
+      nextState = clampRevokedPeriodEnd(outcome.state, existingSub)
       patch = subscriptionPatch(nextState, eventId, outcome.eventCreated, now)
       if (outcome.customerId) {
         patch[`subscription.${customerIdField(nextState.mode)}`] = outcome.customerId
@@ -300,6 +418,23 @@ export async function applyBillingOutcome(
         'subscription.paymentFailedAt': now,
         'subscription.mode': outcome.mode,
         'subscription.updatedAt': now,
+      }
+      break
+    }
+
+    case 'revoke': {
+      // Nothing to revoke. A charge can be refunded on a member who never held
+      // a subscription — findUserIdByRef matched them by a customer id from an
+      // abandoned checkout — and stamping 'canceled' over 'none' would invent a
+      // subscription they never had, then report a tier change for it.
+      if (!existingSub || existingSub.status === 'none') {
+        return { applied: false, reason: 'nothing_to_revoke' }
+      }
+
+      nextState = revokedState(existingSub, outcome.mode)
+      patch = subscriptionPatch(nextState, eventId, outcome.eventCreated, now)
+      if (outcome.customerId) {
+        patch[`subscription.${customerIdField(outcome.mode)}`] = outcome.customerId
       }
       break
     }
@@ -338,6 +473,12 @@ export async function applyBillingOutcome(
       applied: false,
       reason: write.reason === 'user_gone' ? 'user_not_found' : 'skipped_newer_state',
     }
+  }
+
+  // The write landed, so the revoke is now the ordering floor and it is safe to
+  // let Stripe emit the `deleted` this cancel produces. Only ever after.
+  if (outcome.kind === 'revoke') {
+    await cancelRevokedSubscription(existingSub?.stripeSubscriptionId, outcome.reason, deps)
   }
 
   if (writesTier && existing?.tier !== tier && deps.onTierChanged) {

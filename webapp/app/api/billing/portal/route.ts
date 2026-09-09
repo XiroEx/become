@@ -40,7 +40,9 @@ export async function POST(request: NextRequest) {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: portalReturnUrl(),
+      // Same origin rule as checkout: send them back to the host they are
+      // actually signed in on, validated against the allow-list.
+      return_url: portalReturnUrl(request.headers),
     })
 
     return NextResponse.json({ url: session.url })
