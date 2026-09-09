@@ -4,15 +4,15 @@
 // The variation picker (components/ExerciseVariationPicker.tsx, surfaced in
 // the swap modal, quick Add-Exercise sheet, and both program builders) groups
 // an exercise with its siblings two ways: algorithmically (exact movement
-// pattern + primary muscle superset + body region — see
-// app/api/exercises/variations/route.ts) and explicitly, via each
-// exercise's `variations[]` field. The algorithm alone misses real-world
-// grip/equipment variants whose classification differs just enough to break
-// an exact match — e.g. a close-grip press is tagged primaryMuscles
-// [triceps, chest] while the flat press it's a grip variant of is tagged
-// [chest] only, or a variant carries a second movement pattern (Tricep Dip
-// is elbow_extension + horizontal_push, not elbow_extension alone). Those
-// need an explicit link. This file is that curation, split in two:
+// pattern set + at least one shared primary muscle + same body region — see
+// app/api/exercises/variations/route.ts and lib/exerciseVariationMatch.ts)
+// and explicitly, via each exercise's `variations[]` field. Even with the
+// overlap-based match, a variant that carries an extra movement pattern
+// still misses (Tricep Dip is elbow_extension + horizontal_push, not
+// elbow_extension alone, so it never lands in the single-pattern pushdown/
+// extension cluster), and a variant that doesn't exist in the catalog yet
+// obviously can't be found algorithmically at all. Those need an explicit
+// link. This file is that curation, split in two:
 //
 //   VARIATION_LINK_FIXES — additive cross-links between exercises already in
 //   the catalog, plus alias cleanup where a grip variant graduates from
@@ -163,6 +163,44 @@ export const VARIATION_LINK_FIXES: VariationLinkFix[] = [
     reason: 'reciprocal link for tricep-dip',
     addVariations: ['tricep-dip'],
   },
+
+  // ── Shoulders: "Cable Lateral Raise" was alias text on Dumbbell Lateral
+  //    Raise, not its own exercise — same pattern as Close Grip Lat Pulldown ──
+  {
+    slug: 'dumbbell-lateral-raise',
+    reason: 'link the new cable lateral raise variant; the "Cable Lateral Raise" alias now points to its own exercise',
+    addVariations: ['cable-lateral-raise'],
+    removeAliases: ['Cable Lateral Raise'],
+  },
+  {
+    slug: 'lateral-raise-machine',
+    reason: 'reciprocal link for the new cable-lateral-raise variant',
+    addVariations: ['cable-lateral-raise'],
+  },
+
+  // ── Hamstrings: leg curl family was missing the standing variant ────────
+  {
+    slug: 'lying-leg-curl',
+    reason: 'reciprocal link for the new standing-leg-curl variant',
+    addVariations: ['standing-leg-curl'],
+  },
+  {
+    slug: 'seated-leg-curl',
+    reason: 'reciprocal link for the new standing-leg-curl variant',
+    addVariations: ['standing-leg-curl'],
+  },
+
+  // ── Calves: seated/standing calf raise were the only two on file ────────
+  {
+    slug: 'seated-calf-raise',
+    reason: 'reciprocal link for the new leg-press-calf-raise variant',
+    addVariations: ['leg-press-calf-raise'],
+  },
+  {
+    slug: 'standing-calf-raise',
+    reason: 'reciprocal link for the new leg-press-calf-raise variant',
+    addVariations: ['leg-press-calf-raise'],
+  },
 ]
 
 // ─── New exercises: grip/equipment variants the catalog was missing ────────
@@ -308,6 +346,66 @@ export const NEW_VARIATION_EXERCISES: NewExercise[] = [
     defaultSets: 3,
     defaultReps: '10-12',
     variations: ['lat-pulldown', 'wide-grip-lat-pulldown', 'close-grip-lat-pulldown', 'underhand-grip-lat-pulldown', 'pull-up'],
+  },
+  {
+    ...baseDefaults,
+    slug: 'cable-lateral-raise',
+    name: 'Cable Lateral Raise',
+    aliases: ['Cable Side Raise'],
+    mechanics: 'isolation' as MechanicsType,
+    role: 'accessory' as ExerciseRole,
+    laterality: 'bilateral' as Laterality,
+    difficulty: 'intermediate' as Difficulty,
+    movementPatterns: ['shoulder_abduction'],
+    primaryMuscles: ['side_delts'],
+    secondaryMuscles: ['traps'],
+    equipment: ['cable'],
+    trackingType: 'reps_weight' as TrackingType,
+    tags: ['shoulder', 'isolation', 'cable'],
+    bodyRegion: 'upper_body' as BodyRegion,
+    defaultSets: 3,
+    defaultReps: '12-15',
+    variations: ['dumbbell-lateral-raise', 'lateral-raise-machine'],
+  },
+  {
+    ...baseDefaults,
+    slug: 'standing-leg-curl',
+    name: 'Standing Leg Curl',
+    aliases: ['Standing Hamstring Curl'],
+    mechanics: 'isolation' as MechanicsType,
+    role: 'accessory' as ExerciseRole,
+    laterality: 'unilateral' as Laterality,
+    difficulty: 'beginner' as Difficulty,
+    movementPatterns: ['knee_flexion'],
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: [],
+    equipment: ['leg_curl'],
+    trackingType: 'reps_weight' as TrackingType,
+    tags: ['hinge_accessory', 'isolation', 'machine'],
+    bodyRegion: 'lower_body' as BodyRegion,
+    defaultSets: 3,
+    defaultReps: '10-15',
+    variations: ['lying-leg-curl', 'seated-leg-curl'],
+  },
+  {
+    ...baseDefaults,
+    slug: 'leg-press-calf-raise',
+    name: 'Leg Press Calf Raise',
+    aliases: ['Calf Press on Leg Press'],
+    mechanics: 'isolation' as MechanicsType,
+    role: 'accessory' as ExerciseRole,
+    laterality: 'bilateral' as Laterality,
+    difficulty: 'beginner' as Difficulty,
+    movementPatterns: ['ankle_flexion'],
+    primaryMuscles: ['calves'],
+    secondaryMuscles: [],
+    equipment: ['leg_press'],
+    trackingType: 'reps_weight' as TrackingType,
+    tags: ['calves', 'isolation', 'machine'],
+    bodyRegion: 'lower_body' as BodyRegion,
+    defaultSets: 3,
+    defaultReps: '15-20',
+    variations: ['seated-calf-raise', 'standing-calf-raise'],
   },
 ]
 

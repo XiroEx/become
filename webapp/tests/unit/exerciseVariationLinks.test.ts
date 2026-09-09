@@ -165,6 +165,8 @@ test('VARIATION_LINK_FIXES: every referenced slug is either a known existing exe
     'machine-chest-press', 'lat-pulldown', 'dumbbell-underhand-row', 'barbell-row',
     'dumbbell-row', 'cable-row', 'tricep-dip', 'cable-tricep-pushdown',
     'overhead-tricep-extension', 'skull-crusher', 'tricep-cable-kickback', 'pull-up',
+    'dumbbell-lateral-raise', 'lateral-raise-machine', 'lying-leg-curl', 'seated-leg-curl',
+    'seated-calf-raise', 'standing-calf-raise',
   ])
   const newSlugs = new Set(NEW_VARIATION_EXERCISES.map((e) => e.slug))
   const fixSlugs = new Set(VARIATION_LINK_FIXES.map((f) => f.slug))
@@ -220,6 +222,8 @@ test('NEW_VARIATION_EXERCISES: variations never self-reference', () => {
 test('NEW_VARIATION_EXERCISES: every variation slug resolves to a known existing or sibling new exercise', () => {
   const KNOWN_EXISTING_SLUGS = new Set([
     'machine-chest-press', 'dumbbell-bench-press', 'barbell-bench-press', 'lat-pulldown', 'pull-up',
+    'dumbbell-lateral-raise', 'lateral-raise-machine', 'lying-leg-curl', 'seated-leg-curl',
+    'seated-calf-raise', 'standing-calf-raise',
   ])
   const newSlugs = new Set(NEW_VARIATION_EXERCISES.map((e) => e.slug))
   for (const e of NEW_VARIATION_EXERCISES) {

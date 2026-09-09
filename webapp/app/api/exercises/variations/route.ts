@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Exercise from '@/models/Exercise'
+import { buildAlgorithmicVariationQuery } from '@/lib/exerciseVariationMatch'
 
 export interface ExerciseVariation {
   slug: string
@@ -14,7 +15,9 @@ export interface ExerciseVariation {
 // GET /api/exercises/variations?slug=xxx
 // Returns the exercise itself + all exercises that are variations of it:
 //   - same movementPatterns (exact match)
-//   - same primary muscles (all source muscles present)
+//   - at least one shared primary muscle (overlap, not containment — see
+//     lib/exerciseVariationMatch.ts for why containment silently broke this
+//     one-directionally)
 //   - same bodyRegion
 //   - plus any explicitly linked via the variations[] field
 export async function GET(request: NextRequest) {
@@ -34,15 +37,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
   }
 
-  // Algorithmic: same movement patterns (exact count + same elements) + source muscles present + same region
+  // Algorithmic: same movement patterns (exact count + same elements) + at least one shared primary muscle + same region
   const algVariants = source.movementPatterns.length > 0
-    ? await Exercise.find({
-        slug: { $ne: slug },
-        isActive: true,
-        bodyRegion: source.bodyRegion,
-        movementPatterns: { $size: source.movementPatterns.length, $all: source.movementPatterns },
-        primaryMuscles: { $all: source.primaryMuscles },
-      })
+    ? await Exercise.find(buildAlgorithmicVariationQuery(slug, source))
         .select('slug name equipment laterality difficulty trackingType')
         .lean()
     : []
