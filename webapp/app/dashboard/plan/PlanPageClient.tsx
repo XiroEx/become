@@ -33,8 +33,14 @@ import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { Card } from '@/components/ui'
+import LegalLinks from '@/components/legal/LegalLinks'
 import { useEntitlements } from '@/hooks/useEntitlements'
 import { getToken } from '@/lib/clientAuth'
+// The automatic-renewal wording is NOT written here. New York GBL 527-a wants
+// it in visual proximity to the request for consent, and the request for
+// consent is the button below — but it also has to be the same words the Terms
+// commit to, so both read one array in lib/legal.
+import { renewalLine } from '@/lib/legal'
 import {
   CheckoutAction,
   checkoutRefusalState,
@@ -272,15 +278,28 @@ export function PlanPricing({
       )
     }
     return (
-      <button
-        type="button"
-        onClick={() => onStart(plan)}
-        disabled={checkout === 'starting'}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-all hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60"
-      >
-        {checkout === 'starting' && <Loader2 className="h-4 w-4 animate-spin" />}
-        {PLAN_CTA_LABEL[plan]}
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => onStart(plan)}
+          disabled={checkout === 'starting'}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-all hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60"
+        >
+          {checkout === 'starting' && <Loader2 className="h-4 w-4 animate-spin" />}
+          {PLAN_CTA_LABEL[plan]}
+        </button>
+        {/* Directly under the button, per plan, and never collapsed into one
+            shared line at the bottom of the card: "visual proximity to the
+            request for consent" is the whole requirement, and the two periods
+            renew on different terms. */}
+        <p className="mt-2 text-[11px] leading-snug text-zinc-600 dark:text-zinc-300">
+          {renewalLine(plan)}{' '}
+          <Link href="/terms#plans" className="font-medium underline underline-offset-2">
+            Full terms
+          </Link>
+          .
+        </p>
+      </>
     )
   }
 
@@ -687,6 +706,8 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
       <PlanComparison rows={rows} mindTotalSessions={mindTotalSessions} snapshot={data} />
 
       <FreeForever />
+
+      <LegalLinks className="pt-1" />
     </PageTransition>
   )
 }

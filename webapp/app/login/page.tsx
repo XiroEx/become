@@ -6,6 +6,7 @@ import AuthForm from '../../components/AuthForm'
 import Header from '../../components/Header'
 import Link from 'next/link'
 import PageTransition from '../../components/PageTransition'
+import LegalLinks from '../../components/legal/LegalLinks'
 import { getAuthPageCopy } from '../../lib/authPageMode'
 
 function LoginContent() {
@@ -28,6 +29,21 @@ function LoginContent() {
               {copy.toggleLabel}
             </Link>
           </p>
+          {/* Registering here IS the moment of agreement, so the terms have to
+              be reachable from this screen and not only from the footer of a
+              landing page the member may never have seen. */}
+          <p className="mt-4 border-t border-zinc-200 pt-4 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            By continuing you agree to the{' '}
+            <Link href="/terms" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+              Terms of Service
+            </Link>{' '}
+            and the{' '}
+            <Link href="/privacy" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+          <LegalLinks className="mt-3" />
         </main>
       </PageTransition>
     </div>
