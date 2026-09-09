@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NotificationOptIn from '@/components/NotificationOptIn'
+import LegalLinks from '@/components/legal/LegalLinks'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart from '@/components/ProgressChart'
@@ -884,6 +885,11 @@ export default function DashboardClient() {
           </Card>
         ))}
       </div>
+
+      {/* The in-app footer. Apple wants the privacy policy reachable from
+          inside the app, not only from a marketing page a member installing to
+          the home screen never returns to. */}
+      <LegalLinks className="pt-2" showCopyright />
     </PageTransition>
     <NotificationOptIn />
     </>
