@@ -1067,10 +1067,17 @@ export default function BecomeLanding() {
           <div className={styles.footerRow}>
             <BrandMark compact />
             <p>Training · Nutrition · Mind — one app.</p>
+            {/* The legal row is not optional decoration: an App Store review
+                and CalOPPA both look for a privacy link reachable from the
+                home page without signing in. Kept in the same row as the rest
+                so it wraps rather than growing a second footer on a phone. */}
             <div className={styles.footerLinks}>
               <Link href="/login">Sign in</Link>
               <Link href="/login?register">Register</Link>
               <Link href="/information">Info</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/support">Support</Link>
             </div>
           </div>
         </div>

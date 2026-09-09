@@ -10,13 +10,29 @@
 import type Stripe from 'stripe'
 import type { BillingConfig } from './config'
 import type { StripeMode } from './mode'
-import { normalizeSubscription, refId, subscriptionRefFromInvoice, type SubscriptionState } from './subscriptionState'
+import {
+  chargeIdFromDispute,
+  isFullRefund,
+  normalizeSubscription,
+  refId,
+  subscriptionRefFromInvoice,
+  type SubscriptionState,
+} from './subscriptionState'
 
 /** How to find the member this event is about. */
 export type UserRef =
   | { by: 'userId'; userId: string }
   | { by: 'customerId'; customerId: string; mode: StripeMode }
   | { by: 'subscriptionId'; subscriptionId: string; mode: StripeMode }
+  /**
+   * A charge id, and the ONLY ref that cannot be resolved by a database read
+   * alone. A dispute names a charge and nothing else — `Dispute.charge` is a
+   * bare id in a webhook payload, and `Charge.invoice` no longer exists in the
+   * v22 SDK — so the customer has to be fetched from Stripe before the usual
+   * customer-id lookup can run. `findUserIdByRef` owns that hop, which keeps
+   * this reducer pure.
+   */
+  | { by: 'chargeId'; chargeId: string; mode: StripeMode }
 
 export type BillingOutcome =
   | { kind: 'ignored'; reason: string }
@@ -42,12 +58,37 @@ export type BillingOutcome =
       mode: StripeMode
       eventCreated: number
     }
+  /**
+   * The money came back. End access now, and cancel the subscription behind it.
+   *
+   * Distinct from 'subscription' because it carries no Stripe subscription
+   * state at all — a refund and a dispute are both events about a CHARGE, and
+   * Stripe says nothing about the subscription in either. What the member is
+   * left holding is worked out in apply.ts from the row we already have.
+   */
+  | {
+      kind: 'revoke'
+      ref: UserRef
+      customerId?: string
+      mode: StripeMode
+      /** Logged, never stored: `models/User.ts` owns the subscription schema and
+       *  a `$set` on a path it does not declare is dropped by strict mode. */
+      reason: 'refund' | 'dispute'
+      eventCreated: number
+    }
 
 /**
  * The types the Stripe dashboard endpoint should be subscribed to.
  * `customer.subscription.created` shares a branch with `.updated`: Stripe emits
  * it for every new subscription, and ignoring it delays activation until the
  * first unrelated update.
+ *
+ * `charge.refunded` and `charge.dispute.created` are the money-BACK half, and
+ * without them a refunded or disputed member kept Plus indefinitely unless an
+ * operator remembered to cancel the subscription by hand as well. The exposure
+ * on an annual plan is the full year of access on top of the refunded $119.99;
+ * on a dispute it is a free year plus the fee Stripe keeps whichever way the
+ * dispute goes.
  */
 export const HANDLED_EVENT_TYPES = [
   'checkout.session.completed',
@@ -55,6 +96,8 @@ export const HANDLED_EVENT_TYPES = [
   'customer.subscription.updated',
   'customer.subscription.deleted',
   'invoice.payment_failed',
+  'charge.refunded',
+  'charge.dispute.created',
 ] as const
 
 function metadataUserId(metadata: Stripe.Metadata | null | undefined): string | undefined {
@@ -156,6 +199,60 @@ export function reduceStripeEvent(event: Stripe.Event, cfg: BillingConfig): Bill
       // customer.subscription.updated → past_due event's job; doing it here too
       // would race that event and turn a retried card into a lost session.
       return { kind: 'payment_failed', ref, subscriptionId, mode: cfg.mode, eventCreated }
+    }
+
+    case 'charge.refunded': {
+      const charge = event.data.object
+
+      // PARTIAL REFUNDS DO NOT REVOKE. `charge.refunded` fires for both, and a
+      // partial refund is a goodwill credit against a plan the member still
+      // holds and is still paying for. Revoking on one would take away the
+      // thing we just apologised with.
+      if (!isFullRefund(charge)) {
+        return { kind: 'ignored', reason: 'partial_refund' }
+      }
+
+      // A charge in v22 carries NO invoice reference, so the customer is the
+      // path: it is stamped on every subscription charge, and
+      // findUserIdByRef only matches a member who already has that customer id
+      // stored, so an unrelated charge resolves to nobody.
+      const customerId = refId(charge.customer)
+      const userId = metadataUserId(charge.metadata)
+      if (!userId && !customerId) {
+        return { kind: 'ignored', reason: 'unattributable_charge' }
+      }
+
+      return {
+        kind: 'revoke',
+        ref: userId
+          ? { by: 'userId', userId }
+          : { by: 'customerId', customerId: customerId!, mode: cfg.mode },
+        customerId,
+        mode: cfg.mode,
+        reason: 'refund',
+        eventCreated,
+      }
+    }
+
+    case 'charge.dispute.created': {
+      const dispute = event.data.object
+
+      // ANY dispute revokes. Unlike a refund there is no partial case worth
+      // honouring: the bank has taken the money back pending the outcome, and
+      // Stripe keeps its fee either way. Waiting for `charge.dispute.closed`
+      // would hand out the whole disputed period for free while it ran.
+      const chargeId = chargeIdFromDispute(dispute)
+      if (!chargeId) return { kind: 'ignored', reason: 'unattributable_dispute' }
+
+      // A dispute knows only the charge id (webhook payloads are never
+      // expanded), so the customer hop happens in findUserIdByRef.
+      return {
+        kind: 'revoke',
+        ref: { by: 'chargeId', chargeId, mode: cfg.mode },
+        mode: cfg.mode,
+        reason: 'dispute',
+        eventCreated,
+      }
     }
 
     default:

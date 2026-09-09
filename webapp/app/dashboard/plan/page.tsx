@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 // SERVER COMPONENT, and that is the whole point of the split.
 //
@@ -15,6 +16,12 @@ import PlanPageClient from './PlanPageClient'
 
 export const metadata: Metadata = { title: 'Plan' }
 
+// Stripe returns a buyer here with `?checkout=success&session_id=…`, which the
+// client reads through useSearchParams — so the page is request-scoped and the
+// client half needs a Suspense boundary. Same shape as the other search-param
+// pages (mind/becoming, nutrition).
+export const dynamic = 'force-dynamic'
+
 const ROWS: PlanFeatureRow[] = FEATURES.map((feature) => ({
   feature,
   requiresTier: FEATURE_MIN_TIER[feature],
@@ -27,5 +34,9 @@ const ROWS: PlanFeatureRow[] = FEATURES.map((feature) => ({
 const MIND_TOTAL_SESSIONS = SESSIONS_PER_CHAPTER * MAX_CHAPTER
 
 export default function PlanPage() {
-  return <PlanPageClient rows={ROWS} mindTotalSessions={MIND_TOTAL_SESSIONS} />
+  return (
+    <Suspense fallback={null}>
+      <PlanPageClient rows={ROWS} mindTotalSessions={MIND_TOTAL_SESSIONS} />
+    </Suspense>
+  )
 }

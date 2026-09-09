@@ -35,6 +35,15 @@ export interface StripeLike {
   }
   subscriptions: {
     retrieve(id: string): Promise<Stripe.Subscription>
+    /** Ends it immediately. Used only when a refund or dispute has revoked
+     *  access, so Stripe stops billing someone we just cut off. */
+    cancel(id: string): Promise<Stripe.Subscription>
+  }
+  charges: {
+    /** A dispute names a charge and nothing else, and `Charge.invoice` no
+     *  longer exists in v22 — so this is the only way from a dispute to the
+     *  customer, and from there to the member. */
+    retrieve(id: string): Promise<Stripe.Charge>
   }
 }
 

@@ -14,7 +14,8 @@ import { customerIdField, type StripeMode } from './mode'
 import type { BillingConfig } from './config'
 import type { ApplyDeps, ExistingBillingState } from './apply'
 import type { UserRef } from './webhookEvents'
-import { getStripe } from './stripeClient'
+import { describeStripeError, getStripe } from './stripeClient'
+import { refId } from './subscriptionState'
 
 /** Resolve the member an event is about, by whichever handle it carried. */
 export async function findUserIdByRef(ref: UserRef): Promise<string | null> {
@@ -26,6 +27,29 @@ export async function findUserIdByRef(ref: UserRef): Promise<string | null> {
     const found = await User.findById(ref.userId).select('_id').lean<{ _id: unknown } | null>()
       .catch(() => null)
     return found ? String(found._id) : null
+  }
+
+  // A dispute carries a charge id and nothing else, so the customer has to come
+  // from Stripe before the ordinary customer lookup can run. This is the ONE
+  // ref that costs an API call, and it fails soft: no client, no charge, or a
+  // charge with no customer all mean "we cannot attribute this", which the
+  // caller reports as user_not_found rather than throwing mid-webhook.
+  if (ref.by === 'chargeId') {
+    let customerId: string | undefined
+    try {
+      const stripe = await getStripe()
+      if (!stripe) return null
+      const charge = await stripe.charges.retrieve(ref.chargeId)
+      customerId = refId(charge?.customer)
+    } catch (error) {
+      console.warn(
+        `[billing] could not resolve charge ${ref.chargeId}:`,
+        describeStripeError(error),
+      )
+      return null
+    }
+    if (!customerId) return null
+    return findUserIdByRef({ by: 'customerId', customerId, mode: ref.mode })
   }
 
   const filter =
@@ -199,6 +223,11 @@ export function mongoApplyDeps(cfg: BillingConfig): ApplyDeps {
       const stripe = await getStripe()
       if (!stripe) throw new Error('stripe_unconfigured')
       return stripe.subscriptions.retrieve(id)
+    },
+    async cancelSubscription(id) {
+      const stripe = await getStripe()
+      if (!stripe) throw new Error('stripe_unconfigured')
+      await stripe.subscriptions.cancel(id)
     },
     deriveTier,
     // Fail-soft by construction (see lib/redis.ts) — a cache miss just means

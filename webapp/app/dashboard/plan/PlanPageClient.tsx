@@ -28,12 +28,19 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ArrowRight, Check, Loader2, Sparkles } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { Card } from '@/components/ui'
+import LegalLinks from '@/components/legal/LegalLinks'
 import { useEntitlements } from '@/hooks/useEntitlements'
 import { getToken } from '@/lib/clientAuth'
+// The automatic-renewal wording is NOT written here. New York GBL 527-a wants
+// it in visual proximity to the request for consent, and the request for
+// consent is the button below — but it also has to be the same words the Terms
+// commit to, so both read one array in lib/legal.
+import { renewalLine } from '@/lib/legal'
 import {
   CheckoutAction,
   checkoutRefusalState,
@@ -271,15 +278,28 @@ export function PlanPricing({
       )
     }
     return (
-      <button
-        type="button"
-        onClick={() => onStart(plan)}
-        disabled={checkout === 'starting'}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-all hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60"
-      >
-        {checkout === 'starting' && <Loader2 className="h-4 w-4 animate-spin" />}
-        {PLAN_CTA_LABEL[plan]}
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => onStart(plan)}
+          disabled={checkout === 'starting'}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-3 text-sm font-semibold text-white transition-all hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60"
+        >
+          {checkout === 'starting' && <Loader2 className="h-4 w-4 animate-spin" />}
+          {PLAN_CTA_LABEL[plan]}
+        </button>
+        {/* Directly under the button, per plan, and never collapsed into one
+            shared line at the bottom of the card: "visual proximity to the
+            request for consent" is the whole requirement, and the two periods
+            renew on different terms. */}
+        <p className="mt-2 text-[11px] leading-snug text-zinc-600 dark:text-zinc-300">
+          {renewalLine(plan)}{' '}
+          <Link href="/terms#plans" className="font-medium underline underline-offset-2">
+            Full terms
+          </Link>
+          .
+        </p>
+      </>
     )
   }
 
@@ -396,6 +416,55 @@ export function CurrentPlan({ snapshot }: { snapshot: EntitlementsSnapshot }) {
   )
 }
 
+// ─── Just paid ───────────────────────────────────────────────────────────────
+
+/** Where the member is in the moments after Stripe sends them back. */
+export type CheckoutReturnState = 'none' | 'confirming' | 'confirmed'
+
+/**
+ * The one thing that acknowledges a payment.
+ *
+ * It never says "you're on Plus" unless the snapshot actually says so. The
+ * webhook may not have landed yet, and telling somebody they have been upgraded
+ * a beat before it is true is how a support ticket gets opened about a purchase
+ * that was in fact fine.
+ */
+export function CheckoutConfirmation({
+  state,
+  isPlus,
+}: {
+  state: Exclude<CheckoutReturnState, 'none'>
+  isPlus: boolean
+}) {
+  const confirming = state === 'confirming'
+  return (
+    <Card
+      variant="compact"
+      className="flex items-center gap-2.5 border-purple-300 bg-purple-50/60 dark:border-purple-500/40 dark:bg-purple-500/10"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
+        {confirming ? (
+          <Loader2 className="h-5 w-5 animate-spin text-purple-600 dark:text-purple-400" />
+        ) : (
+          <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+          {confirming ? 'Confirming your payment' : 'Payment received'}
+        </h2>
+        <p className="text-xs text-zinc-600 dark:text-zinc-300">
+          {confirming
+            ? 'One moment.'
+            : isPlus
+              ? 'Thanks. Everything below is unlocked.'
+              : 'Thanks. Your plan will update here in a moment.'}
+        </p>
+      </div>
+    </Card>
+  )
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export interface PlanPageClientProps {
@@ -405,7 +474,16 @@ export interface PlanPageClientProps {
 }
 
 export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClientProps) {
-  const { data } = useEntitlements()
+  const { data, refresh } = useEntitlements()
+  const searchParams = useSearchParams()
+  // Stripe's success_url lands HERE — this page is the only screen that tells a
+  // member which plan they are on, which is why the return path points at it
+  // rather than at settings.
+  const paidReturn = searchParams.get('checkout') === 'success'
+  const paidSessionId = searchParams.get('session_id')
+  const [checkoutReturn, setCheckoutReturn] = useState<CheckoutReturnState>(
+    paidReturn ? 'confirming' : 'none',
+  )
   const [checkout, setCheckout] = useState<CheckoutState>('checking')
   const [available, setAvailable] = useState<PlanAvailability>({ monthly: false, annual: false })
   const [portalState, setPortalState] = useState<PortalState>('idle')
@@ -462,6 +540,46 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
     }
   }, [checkoutAvailable])
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // CONSUME THE RETURN. Until this existed nothing in the app read
+  // `?checkout=success` at all: `activateFromSession` in the status route had no
+  // caller, so activation waited entirely on the webhook, and the entitlements
+  // hook went on serving its 60s snapshot — one taken BEFORE the purchase. A
+  // member who had just paid could sit on "Free plan" for a full minute, on the
+  // very page that exists to tell them what they are on.
+  //
+  // Two steps, and both are needed. The status call activates from the session
+  // (idempotent: it applies the same outcome the webhook would, through the same
+  // ordering guard). The refresh is what makes THIS screen show it — a forced
+  // read, so it cannot be served from the pre-purchase request still in flight.
+  useEffect(() => {
+    if (!paidReturn) return
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        if (paidSessionId) {
+          await fetch(`/api/billing/status?session_id=${encodeURIComponent(paidSessionId)}`, {
+            headers: authHeaders(),
+          })
+        }
+      } catch {
+        // Never fatal. The webhook remains the source of truth; this only saves
+        // the member the few seconds Stripe takes to call us.
+      }
+      await refresh()
+      if (cancelled) return
+      setCheckoutReturn('confirmed')
+      // Drop the query so a reload is not a second activation attempt. Next
+      // does not observe replaceState, so `paidReturn` stays true and this
+      // effect does not re-run.
+      window.history.replaceState(null, '', window.location.pathname)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [paidReturn, paidSessionId, refresh])
 
   const startCheckout = useCallback(
     async (plan: BillingPlan) => {
@@ -567,6 +685,10 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
     <PageTransition className="space-y-4 pb-10">
       {header}
 
+      {checkoutReturn !== 'none' && (
+        <CheckoutConfirmation state={checkoutReturn} isPlus={isPlus} />
+      )}
+
       <CurrentPlan snapshot={data} />
 
       {/* A member who already holds Plus is shown what they have, never a
@@ -584,6 +706,8 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
       <PlanComparison rows={rows} mindTotalSessions={mindTotalSessions} snapshot={data} />
 
       <FreeForever />
+
+      <LegalLinks className="pt-1" />
     </PageTransition>
   )
 }
