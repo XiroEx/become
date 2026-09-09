@@ -109,6 +109,50 @@ export function subscriptionRefFromInvoice(invoice: unknown): {
 }
 
 /**
+ * Was this charge refunded IN FULL?
+ *
+ * The distinction decides whether access is revoked, so it cannot be guessed
+ * from the event type: `charge.refunded` fires for a partial refund too, and a
+ * partial refund is a GOODWILL CREDIT — a week knocked off after a support
+ * conversation — not a cancellation. Revoking on one takes away the plan the
+ * member is still paying for and still expects.
+ *
+ * `refunded` is Stripe's own boolean and is the primary signal. The amount
+ * comparison is the fallback for a payload that predates it or omits it, and it
+ * compares against `amount_captured` rather than `amount`: on a partially
+ * captured charge only the captured part was ever money, so refunding all of it
+ * IS a full refund even though `amount_refunded < amount`.
+ *
+ * A zero-captured charge is not a refund of anything, and returns false.
+ */
+export function isFullRefund(charge: unknown): boolean {
+  const record = asRecord(charge)
+  if (!record) return false
+  if (record.refunded === true) return true
+
+  const captured = typeof record.amount_captured === 'number' ? record.amount_captured : undefined
+  const total = typeof record.amount === 'number' ? record.amount : undefined
+  const basis = captured ?? total
+  const refunded = typeof record.amount_refunded === 'number' ? record.amount_refunded : 0
+
+  if (typeof basis !== 'number' || !Number.isFinite(basis) || basis <= 0) return false
+  return refunded >= basis
+}
+
+/**
+ * The charge a dispute is against.
+ *
+ * `Dispute.charge` is typed `string | Charge`, but a WEBHOOK payload is never
+ * expanded, so in practice this is always the bare `ch_…` id — which is why a
+ * dispute cannot name the member on its own and has to be resolved through the
+ * charge. `refId` handles both shapes so an expanded object (a hand-built
+ * fixture, an API read) still resolves.
+ */
+export function chargeIdFromDispute(dispute: unknown): string | undefined {
+  return refId(asRecord(dispute)?.charge)
+}
+
+/**
  * Stripe's status vocabulary is wider than ours ('incomplete_expired',
  * 'paused'), and the type is an open union — a future status arrives as an
  * arbitrary string. Anything we do not recognise maps to 'none', which derives
