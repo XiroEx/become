@@ -16,6 +16,7 @@ import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt"
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
+import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import UpgradeSheet from "@/components/UpgradeSheet";
@@ -662,7 +663,11 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
         <QuickSessionNamePrompt
           initialName={title}
           confirmLabel="Save name & log"
+          // The prompt only opens for a past/today log, so logDate is always
+          // the day the work was actually done.
+          fallbackName={fallbackQuickSessionName(logDate)}
           onConfirm={saveLogOrPlan}
+          onSkip={saveLogOrPlan}
           onCancel={() => setShowNamePrompt(false)}
         />
       )}
