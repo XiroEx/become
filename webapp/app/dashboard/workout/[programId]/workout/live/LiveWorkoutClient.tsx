@@ -7,6 +7,7 @@ import { Dumbbell, X, Plus, Layers, Unlink, Trash2, ChevronUp, ChevronDown } fro
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
+import EquipmentAssumptionRow from "@/components/workout/EquipmentAssumptionRow";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
@@ -23,7 +24,7 @@ import { programScope, quickScope, readPosition, resolveStartStep, writePosition
 import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
-import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
+import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import DayChoiceModal from "@/components/workout/DayChoiceModal";
@@ -192,7 +193,12 @@ export default function LiveWorkoutPage() {
   // Newly-created sessions keep their default product copy until the first
   // completed save. Sessions named during creation never enter this flow.
   const [quickNeedsName, setQuickNeedsName] = useState(false);
-  const [pendingQuickCompletion, setPendingQuickCompletion] = useState<SetData[][] | null>(null);
+  // The finished set data held back at the naming gate, together with the local
+  // day the resulting log will be attributed to. The day is captured HERE
+  // rather than read at render time because saveWorkout consumes and clears
+  // logDateOverrideRef on the completing save, and the fallback name has to
+  // survive a failed save and a retry.
+  const [pendingQuickCompletion, setPendingQuickCompletion] = useState<{ data: SetData[][]; dayKey: string } | null>(null);
   // Which local calendar day this workout's log is currently attributed to.
   // Defaults to today (a fresh session has nothing to cross); a resumed
   // session overwrites it with the server-confirmed date once loaded. Used
@@ -1274,9 +1280,14 @@ export default function LiveWorkoutPage() {
 
   const requestQuickNameBeforeCompletion = useCallback((updatedData: SetData[][]): boolean => {
     if (!isQuick || !quickSessionId || !quickNeedsName) return false;
-    setPendingQuickCompletion(updatedData);
+    // Which day this log lands on: the one picked in the day-choice modal if it
+    // was asked, otherwise the day the workout already belongs to.
+    setPendingQuickCompletion({
+      data: updatedData,
+      dayKey: logDateOverrideRef.current ?? workoutOriginKey,
+    });
     return true;
-  }, [isQuick, quickSessionId, quickNeedsName]);
+  }, [isQuick, quickSessionId, quickNeedsName, workoutOriginKey]);
 
   // Advance to next step with appropriate rest
   const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
@@ -1448,7 +1459,7 @@ export default function LiveWorkoutPage() {
       throw new Error("This workout is no longer ready to finish");
     }
 
-    const saved = await saveWorkout(pendingQuickCompletion, true, undefined, title);
+    const saved = await saveWorkout(pendingQuickCompletion.data, true, undefined, title);
     if (!saved) throw new Error("Could not finish the workout. Try again.");
 
     // Keep the local model and completion summary in sync with the name that
@@ -1456,7 +1467,7 @@ export default function LiveWorkoutPage() {
     updateQuickSession(quickSessionId, { title });
     setWorkout((current) => current ? { ...current, day: title, title } : current);
     setQuickMeta((current) => current ? { ...current, title } : { title });
-    setExerciseData(pendingQuickCompletion);
+    setExerciseData(pendingQuickCompletion.data);
     setQuickNeedsName(false);
     setPendingQuickCompletion(null);
     clearQuickProgress(quickSessionId);
@@ -2303,6 +2314,18 @@ export default function LiveWorkoutPage() {
                   </button>
                 )}
               </div>
+              {/* What implement is this being logged as, and the same movement
+                  on other equipment — see components/workout/EquipmentAssumptionRow.
+                  Session scope only: switching to the machine for today's rear
+                  delt fly is not a statement about every future workout. */}
+              <EquipmentAssumptionRow
+                dark
+                slug={currentExercise?.exerciseSlug}
+                name={currentExercise?.name}
+                equipment={currentExercise?.equipment}
+                canSwitch={!(exerciseData[currentExerciseIndex] ?? []).some((set) => set.completed)}
+                onPick={(variation) => handleSwapExercise(variation, "session")}
+              />
               {/* Tip / cue */}
               {currentExercise?.tip && (
                 <p className="mt-1 text-sm text-green-400">{currentExercise.tip}</p>
@@ -2809,7 +2832,9 @@ export default function LiveWorkoutPage() {
           initialName={workout.title}
           confirmLabel="Save name & finish"
           tone="dark"
+          fallbackName={fallbackQuickSessionName(pendingQuickCompletion.dayKey)}
           onConfirm={finishNamedQuickSession}
+          onSkip={finishNamedQuickSession}
           onCancel={() => setPendingQuickCompletion(null)}
         />
       )}

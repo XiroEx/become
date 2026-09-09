@@ -8,6 +8,21 @@
 // plate-math quick-picks. The name/alias match is kept only as a fallback
 // for exercises with no equipment metadata (e.g. a member's own custom
 // exercise created before this shipped).
+//
+// ── The fallback used to override the metadata (fixed 2026-09-09) ──────────
+// "kept only as a fallback" was the intent, not the code: the name/alias match
+// ran whenever `equipment` merely LACKED dumbbell/kettlebell, including when it
+// said something else outright. Aliases are informal — the catalog's Barbell
+// Bench Press is aliased "Bench Press (DB/bar)" and Barbell Back Squat
+// "Barbell or Dumbbell Squat" — so the two most-logged lifts in the app were
+// labelled "Weight per DB (lbs)", offered 10/20/30/40/50 as quick picks, and
+// told anyone entering 135 that it was "= 270 lbs total". Cable Woodchopper
+// ("DB Woodchoppers…"), Crunch ("DB Crunch × 20") and Russian Twist went the
+// same way. The fallback now runs only when the equipment list says nothing
+// about what is being LOADED — a bench, a box or a rack leaves the question
+// open, a barbell or a cable answers it. See lib/workout/equipmentVariant.ts.
+
+import { loadStyleOf } from './equipmentVariant'
 
 export type BellStyle = 'dumbbell' | 'kettlebell' | null
 
@@ -50,8 +65,11 @@ export function getBellWeightInfo(exercise: BellExerciseInput | null | undefined
   let style: BellStyle = null
   if (equipment.includes('dumbbell')) style = 'dumbbell'
   else if (equipment.includes('kettlebell')) style = 'kettlebell'
-  else if (NAME_FALLBACK.test(haystack)) style = 'kettlebell'
-  else if (NAME_FALLBACK_DB.test(haystack)) style = 'dumbbell'
+  else if (loadStyleOf(equipment) === null) {
+    // Nothing here names a load, so the name is the only evidence there is.
+    if (NAME_FALLBACK.test(haystack)) style = 'kettlebell'
+    else if (NAME_FALLBACK_DB.test(haystack)) style = 'dumbbell'
+  }
 
   if (!style) return { style: null, showTotal: false }
 

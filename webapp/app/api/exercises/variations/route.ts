@@ -12,13 +12,20 @@ export interface ExerciseVariation {
   laterality: string
   difficulty: string
   trackingType: string
+  /** Needed to swap a variation IN as the live exercise — the live session
+   *  writes `category` onto the exercise's `type` and re-derives the
+   *  per-implement weight convention from `movementPatterns` + equipment.
+   *  Omitting them made an in-place variation switch drop metadata the
+   *  Swap Exercise modal has always carried. */
+  category: string
+  movementPatterns: string[]
 }
 
 // Fields the picker renders, plus the three the matcher needs to judge a
 // candidate. Kept in one place so the source lookup and the candidate lookup
 // can never select different shapes.
 const VARIATION_FIELDS =
-  'slug name equipment laterality difficulty trackingType movementPatterns primaryMuscles bodyRegion'
+  'slug name equipment laterality difficulty trackingType category movementPatterns primaryMuscles bodyRegion'
 
 // GET /api/exercises/variations?slug=xxx
 // Returns the exercise itself + all exercises that are variations of it:
@@ -95,6 +102,8 @@ export async function GET(request: NextRequest) {
       laterality: source.laterality as string,
       difficulty: source.difficulty as string,
       trackingType: source.trackingType as string,
+      category: source.category as string,
+      movementPatterns: (source.movementPatterns ?? []) as string[],
     },
   ]
 
@@ -108,6 +117,8 @@ export async function GET(request: NextRequest) {
       laterality: ex.laterality as string,
       difficulty: ex.difficulty as string,
       trackingType: ex.trackingType as string,
+      category: ex.category as string,
+      movementPatterns: (ex.movementPatterns ?? []) as string[],
     })
   }
 

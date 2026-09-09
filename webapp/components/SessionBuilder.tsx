@@ -16,8 +16,10 @@ import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt"
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
+import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
 import { setUnitLabel } from "@/lib/workout/tracking";
+import { implementLabel } from "@/lib/workout/equipmentVariant";
 import UpgradeSheet from "@/components/UpgradeSheet";
 import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
@@ -478,7 +480,12 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
                       <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{r.name}</p>
                       {r.isCustom && <CustomExerciseBadge variant="inline" />}
                     </div>
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500">{r.trackingType.replace(/_/g, " ")}</p>
+                    {/* Which implement this entry is, so "Rear Delt Fly" and
+                        "Rear Delt Fly Machine" are told apart BEFORE the live
+                        screen picks a weight convention off one of them. */}
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      {[implementLabel(r.equipment), r.trackingType.replace(/_/g, " ")].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                   <Plus className="ml-2 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
                 </button>
@@ -522,6 +529,9 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  {implementLabel(ex.equipment) && (
+                    <span className="mr-1">{implementLabel(ex.equipment)} ·</span>
+                  )}
                   {ex.reps ? `${ex.reps} reps` : ex.trackingType.replace(/_/g, " ")}
                   {ex.groupId && <span className="ml-1 font-semibold text-purple-500 dark:text-purple-400">· {ex.groupLabel || "Superset"}</span>}
                 </p>
@@ -662,7 +672,11 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
         <QuickSessionNamePrompt
           initialName={title}
           confirmLabel="Save name & log"
+          // The prompt only opens for a past/today log, so logDate is always
+          // the day the work was actually done.
+          fallbackName={fallbackQuickSessionName(logDate)}
           onConfirm={saveLogOrPlan}
+          onSkip={saveLogOrPlan}
           onCancel={() => setShowNamePrompt(false)}
         />
       )}

@@ -25,7 +25,7 @@ import { clearQuickProgress, readQuickProgress } from '@/lib/quickSession/progre
 import { FOCUS_DEFS, type DraftExercise } from '@/lib/quickSession/types'
 import { buildLoggedExercises } from '@/lib/quickSession/log'
 import { persistSourceQuickSessionRename } from '@/lib/quickSession/rename'
-import { shouldPromptForQuickSessionName } from '@/lib/quickSession/naming'
+import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from '@/lib/quickSession/naming'
 import { localDateStr, logPlanAvailability } from '@/lib/quickSession/logPlanDate'
 
 // YYYY-MM-DD only — guards against a malformed/garbage `date` query param
@@ -342,7 +342,9 @@ export default function QuickSessionOverviewPage() {
         <QuickSessionNamePrompt
           initialName={session.title}
           confirmLabel="Save name & log"
+          fallbackName={fallbackQuickSessionName(logDate)}
           onConfirm={(title) => saveLog(title, true)}
+          onSkip={(title) => saveLog(title, true)}
           onCancel={() => setShowNamePrompt(false)}
         />
       )}
