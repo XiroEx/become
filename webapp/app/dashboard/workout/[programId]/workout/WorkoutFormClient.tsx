@@ -28,7 +28,7 @@ import { programScope, quickScope, readPosition, writePosition } from "@/lib/wor
 import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, findPhantomPrefilledSets } from "@/lib/workout/tracking";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
-import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
+import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -875,6 +875,15 @@ export default function WorkoutFormPage() {
       setIsCompleting(false);
     }
   }, [autoSave, exerciseProgress, isQuick]);
+
+  // Finish under a name, whether the member typed one or exited the prompt and
+  // took the day it was done. Either way the workout completes and the summary
+  // follows — the prompt is a naming step, never a gate that can strand a
+  // finished session.
+  const finishNamedQuickSession = useCallback(async (title: string) => {
+    const saved = await finishWorkout(title);
+    if (!saved) throw new Error("Could not finish the workout. Try again.");
+  }, [finishWorkout]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -2195,10 +2204,11 @@ export default function WorkoutFormPage() {
         <QuickSessionNamePrompt
           initialName={workout.title}
           confirmLabel="Save name & finish"
-          onConfirm={async (title) => {
-            const saved = await finishWorkout(title);
-            if (!saved) throw new Error("Could not finish the workout. Try again.");
-          }}
+          // This screen sends no performedAt, so the server dates the log now —
+          // the fallback name is today, with no argument to disagree with.
+          fallbackName={fallbackQuickSessionName()}
+          onConfirm={finishNamedQuickSession}
+          onSkip={finishNamedQuickSession}
           onCancel={() => setShowQuickNamePrompt(false)}
         />
       )}
