@@ -7,6 +7,7 @@ import { Dumbbell, X, Plus, Layers, Unlink, Trash2, ChevronUp, ChevronDown } fro
 import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
+import EquipmentAssumptionRow from "@/components/workout/EquipmentAssumptionRow";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
@@ -2303,6 +2304,18 @@ export default function LiveWorkoutPage() {
                   </button>
                 )}
               </div>
+              {/* What implement is this being logged as, and the same movement
+                  on other equipment — see components/workout/EquipmentAssumptionRow.
+                  Session scope only: switching to the machine for today's rear
+                  delt fly is not a statement about every future workout. */}
+              <EquipmentAssumptionRow
+                dark
+                slug={currentExercise?.exerciseSlug}
+                name={currentExercise?.name}
+                equipment={currentExercise?.equipment}
+                canSwitch={!(exerciseData[currentExerciseIndex] ?? []).some((set) => set.completed)}
+                onPick={(variation) => handleSwapExercise(variation, "session")}
+              />
               {/* Tip / cue */}
               {currentExercise?.tip && (
                 <p className="mt-1 text-sm text-green-400">{currentExercise.tip}</p>
