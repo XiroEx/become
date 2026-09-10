@@ -25,6 +25,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { motion, useMotionValue, useTransform, animate, useReducedMotion, AnimatePresence, type MotionValue } from 'framer-motion'
 import { X, ChevronLeft, ChevronRight, Maximize2, Minimize2, LocateFixed } from 'lucide-react'
 import type { JourneyPayload } from '@/lib/becoming/journey'
+import { journeySignals } from '@/lib/becoming/signals'
 import {
   layoutWeeks, boundsOf, overviewCamera, neighbourFor, nearestCard, monthTicks, cardSize, scrubTarget, exitEdge, aggregate, peakIndexes,
   OVERVIEW_MAX_SCALE, OVERVIEW_MIN_SCALE, TILE_FADE_SCALE, TILE_FULL_SCALE, type CardPos, type Dir,
@@ -480,6 +481,13 @@ export default function JourneyCanvas({ data, onClose, onDetails, initialWeekKey
   }, [bounds])
 
   const peaks = useMemo(() => peakIndexes(weeks), [weeks])
+  // Which pillars each card may speak about, and how each number moved. Done
+  // here rather than in the card because it takes the whole journey to answer.
+  const signals = useMemo(() => journeySignals(weeks, data.unit), [weeks, data.unit])
+  const liveActive = useMemo(() => {
+    const i = weeks.findIndex(w => w.isCurrent)
+    return i >= 0 ? signals[i].active : undefined
+  }, [weeks, signals])
   const onHorizon = focus === horizonIndex
   const focusedWeek = weeks[Math.min(focus, weeks.length - 1)]
   const edge = exitEdge(positions, focus, size.row)
@@ -586,10 +594,11 @@ export default function JourneyCanvas({ data, onClose, onDetails, initialWeekKey
                   <div className="pointer-events-none absolute -inset-4 animate-pulse rounded-[40px] bg-violet-400/25 blur-2xl" />
                 )}
                 {p.horizon ? (
-                  <HorizonCard width={size.w} height={size.h} identity={data.identity} trend={liveTrend} next={data.next} focused={isFocused} landed={landed === i} reduced={reduced} />
+                  <HorizonCard width={size.w} height={size.h} identity={data.identity} trend={liveTrend} next={data.next} active={liveActive} focused={isFocused} landed={landed === i} reduced={reduced} />
                 ) : (
                   <WeekCard
                     week={weeks[i]}
+                    signals={signals[i]}
                     unit={data.unit}
                     width={size.w}
                     height={size.h}
